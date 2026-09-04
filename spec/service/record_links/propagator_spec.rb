@@ -369,6 +369,33 @@ RSpec.describe RecordLinks::Propagator do
     end
   end
 
+  # A completion recorded for somebody else still has to run the RECORDER's
+  # links. Prod, 04 Sep: "Pickup RX" credited to a housemate fired the trigger
+  # at her, she owns no links, and the item sat on the Chores list.
+  describe "a chore marked done on somebody else's behalf" do
+    let(:housemate) { create(:user, chore_household: household) }
+    let!(:chore)    { chore!("Pickup RX") }
+    let!(:list)     { list!("Chores") }
+
+    before {
+      link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores")
+      chore.update!(sharing_mode: :personal, marked_due_at: Time.current)
+      expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
+    }
+
+    it "takes the item off the list" do
+      ChoreCompleter.new(chore.reload, housemate, at: Time.current, recorded_by: user).call
+
+      expect(list.reload.list_items.map(&:name)).not_to include("Pickup RX")
+    end
+
+    it "leaves the item alone when nobody records it for them" do
+      ChoreCompleter.new(chore.reload, housemate, at: Time.current).call
+
+      expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
+    end
+  end
+
   describe "a chore and its agenda task" do
     let!(:agenda) { Agenda.create!(user: user, name: "Mine") }
     let!(:chore)  { chore!("Shower") }

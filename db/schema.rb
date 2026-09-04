@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_03_202240) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_04_215323) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -739,9 +739,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_03_202240) do
     t.boolean "anonymous", default: false, null: false
     t.string "client_mutation_id"
     t.bigint "parent_chore_id"
+    t.bigint "recorded_by_user_id"
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
     t.index ["parent_chore_id"], name: "index_chore_completions_on_parent_chore_id"
+    t.index ["recorded_by_user_id"], name: "index_chore_completions_on_recorded_by_user_id"
     t.index ["user_id", "client_mutation_id"], name: "index_chore_completions_on_user_and_mutation_id", unique: true, where: "(client_mutation_id IS NOT NULL)"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
@@ -1882,6 +1884,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_03_202240) do
   add_foreign_key "chore_completions", "chores"
   add_foreign_key "chore_completions", "chores", column: "parent_chore_id"
   add_foreign_key "chore_completions", "users"
+  add_foreign_key "chore_completions", "users", column: "recorded_by_user_id"
   add_foreign_key "chore_dailies", "chores", on_delete: :cascade
   add_foreign_key "chore_dailies", "users", on_delete: :cascade
   add_foreign_key "chore_goals", "chores"

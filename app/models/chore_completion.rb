@@ -20,6 +20,7 @@
 #  chore_id                  :bigint           not null
 #  client_mutation_id        :string
 #  parent_chore_id           :bigint
+#  recorded_by_user_id       :bigint
 #  user_id                   :bigint           not null
 #
 class ChoreCompletion < ApplicationRecord
@@ -27,6 +28,11 @@ class ChoreCompletion < ApplicationRecord
 
   belongs_to :chore
   belongs_to :user
+  # Who pressed the button, when that is somebody other than the person being
+  # credited — marking a chore done on a housemate's behalf. NULL whenever the
+  # two are the same, which is every ordinary tap, so `recorder` below is the
+  # one thing that ever needs asking.
+  belongs_to :recorded_by_user, class_name: "User", optional: true
   # `chore_id` is the ACTUAL chore that was tapped. When the tapped chore
   # is a sub-chore, `parent_chore_id` denormalizes `chore.parent_chore_id`
   # so parent-level aggregations (the parent card's "done today across all
@@ -35,6 +41,7 @@ class ChoreCompletion < ApplicationRecord
   belongs_to :parent_chore, class_name: "Chore", optional: true
 
   before_validation :sync_parent_chore_id
+  before_validation :drop_redundant_recorder
 
   # Fan out lifecycle as Jil triggers so users can wire automations
   # against chore completion + undo (e.g. log an ActionEvent, post to
@@ -110,6 +117,13 @@ class ChoreCompletion < ApplicationRecord
   # excluded from done_count_today, actor display, and streak math.
   scope :credited, -> { where(anonymous: false) }
 
+  # The person who marked it done. Falls back to the credited user, so this
+  # is safe to read on any row including every one written before the column
+  # existed.
+  def recorder = recorded_by_user || user
+
+  def credited_to_other? = recorded_by_user_id.present? && recorded_by_user_id != user_id
+
   # Snapshot of the fields a Jil task is most likely to want to read
   # off `chore_completion.*` — the chore name + paid amount + day key
   # + skipped reason. Keeps the trigger payload self-contained so
@@ -134,6 +148,13 @@ class ChoreCompletion < ApplicationRecord
       completed_at:          completed_at&.iso8601(3),
       completed_by_user_id:  user_id,
       completed_by_username: user&.username,
+      # Present on every payload so a listener can branch on it without
+      # having to know whether the key exists. `recorded_by_*` names the
+      # person who marked it, which is the same person unless somebody was
+      # credited for work they did but did not record.
+      recorded_by_user_id:   recorder&.id,
+      recorded_by_username:  recorder&.username,
+      credited_to_other:     credited_to_other?,
       metadata:              metadata || {},
     }
     base[:changes] = changes if changes.present?
@@ -141,6 +162,12 @@ class ChoreCompletion < ApplicationRecord
   end
 
   private
+
+  # An ordinary tap records itself; storing that is a second copy of `user_id`
+  # that every reader would then have to compare. NULL is the same person.
+  def drop_redundant_recorder
+    self.recorded_by_user_id = nil if recorded_by_user_id == user_id
+  end
 
   # Denormalized so sibling / parent-aggregate queries don't need a JOIN.
   # Refreshed on every save — a completion moved to a different chore
@@ -183,8 +210,17 @@ class ChoreCompletion < ApplicationRecord
     end
   end
 
+  # A personal chore reaches the credited user AND, when they are different,
+  # whoever recorded it. That second one is not the household — it is one
+  # named person who took an action and whose own automations should answer
+  # for it.
+  #
+  # Prod, 04 Sep: "Pickup RX" is Rocco's personal chore, marked done and
+  # credited to Eve. The trigger went to Eve alone, she owns no RecordLinks,
+  # and the item sat on the Chores list looking undone. Crediting somebody
+  # must not quietly hand your automations to them.
   def trigger_target_users
-    return [user] unless chore.share_household?
+    return [user, recorded_by_user].compact.uniq unless chore.share_household?
 
     User.where(chore_household_id: chore.chore_household_id).to_a
   end

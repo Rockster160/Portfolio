@@ -168,7 +168,14 @@ RSpec.describe "Buddy Today briefing" do
     it "still gets everything else it needs to write the thing" do
       names = names_in(run_briefing!)
 
-      expect(names).to include(:get_context, :complete_chore, :log_event)
+      expect(names).to include(:complete_chore, :log_event)
+    end
+
+    # The whole day arrives in the seed (Buddy::BriefingFacts), so there is
+    # nothing left to fetch — and a model that CAN fetch twenty sections reads
+    # some of them out whatever the prose above them says.
+    it "is offered no lookup, because it has nothing to look up" do
+      expect(names_in(run_briefing!)).not_to include(:get_context)
     end
 
     # The whole failure was a SECOND seed appearing behind the first.

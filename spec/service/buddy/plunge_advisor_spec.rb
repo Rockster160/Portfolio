@@ -28,12 +28,12 @@ RSpec.describe Buddy::PlungeAdvisor do
 
   it "stays silent when there's no rain and clouds are light" do
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28"))
-    expect(described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))).to eq("")
+    expect(described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00"))).to be_empty
   end
 
   it "reports rain windows when it's going to rain" do
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
-    block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
+    block = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00")).join("\n")
     expect(block).to include("Rain in the forecast").and include("12pm-2pm")
   end
 
@@ -41,7 +41,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     # Tuesday 2026-07-28; rain noon-2pm (down-time), sunrise 6 / sunset 20 so no
     # glare, drives at ~11:30 and ~2:30 miss rush hour.
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
-    block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
+    block = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00")).join("\n")
     expect(block).to include("Good plunge window")
   end
 
@@ -53,7 +53,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     )
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
 
-    block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
+    block = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00")).join("\n")
     expect(block).to include("Rain in the forecast") # still reports the rain
     expect(block).not_to include("plunge")           # but no plunge editorializing
   end
@@ -70,7 +70,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     )
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
 
-    block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
+    block = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00")).join("\n")
     expect(block).to include("Good plunge window")
   end
 
@@ -81,19 +81,25 @@ RSpec.describe Buddy::PlungeAdvisor do
     clouds = { 10 => 90, 11 => 88, 12 => 85 }
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", cloud_hours: clouds))
 
-    expect(described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))).to eq("")
+    expect(described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00"))).to be_empty
   end
 
-  it "still opens on the rain when there is some" do
+  # Facts, one per line, with no instruction anywhere in them. What to do with
+  # the hours is the briefing's business (Buddy::TodayBriefing::WRITING_RULES),
+  # and a rule embedded in a data line is a rule that only exists on rainy days.
+  it "opens on the rain and says nothing about how to say it" do
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
 
-    expect(described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))).to include("RAIN IN ALPINE TODAY")
+    lines = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00"))
+
+    expect(lines.first).to include("Rain in the forecast")
+    expect(lines.join(" ")).not_to match(/give these|float it/i)
   end
 
   # The week ahead, which is a different question from today's plunge window and
   # answered at two different resolutions: real hours for as far as the hourly
   # forecast reaches, and odds alone past that.
-  describe ".week_rain_block" do
+  describe ".week_rain_lines" do
     let(:now) { tz.parse("2026-08-20 07:00") } # a Thursday
 
     # `rain_at` and `daily_rain` are keyed by local date. `hours` decides how far
@@ -117,7 +123,7 @@ RSpec.describe Buddy::PlungeAdvisor do
 
     def block(**args)
       allow(WeatherService).to receive(:data).and_return(week_payload(**args))
-      described_class.week_rain_block(user, now: now)
+      described_class.week_rain_lines(user, now: now).join("\n")
     end
 
     it "gives tomorrow's rain as hours, not as a day" do
@@ -165,8 +171,12 @@ RSpec.describe Buddy::PlungeAdvisor do
       expect(block).to eq("")
     end
 
-    it "asks for the hours" do
-      expect(block(rain_at: { "2026-08-21" => [13] })).to include("Give the hours wherever there are hours")
+    # The instruction that used to close this block ("give the hours wherever
+    # there are hours") is a WRITING rule, and it lives in
+    # Buddy::TodayBriefing::WRITING_RULES now, where it reaches the model on
+    # every Alpine day rather than only on the ones with a week list.
+    it "hands over hours and nothing about how to use them" do
+      expect(block(rain_at: { "2026-08-21" => [13] })).to eq("tomorrow 1pm-2pm")
     end
 
     # Same rule as the weather block above: a phrase written down so it can be
@@ -194,13 +204,13 @@ RSpec.describe Buddy::PlungeAdvisor do
 
     it "reaches him" do
       travel_to(tz.parse("2026-08-20 07:00")) do
-        expect(Buddy::TodayBriefing.alpine_week_block(User.me)).to include("RAIN IN ALPINE")
+        expect(Buddy::BriefingFacts.alpine_lines(User.me, Time.current)[:week]).to be_present
       end
     end
 
     it "does not reach anybody else" do
       travel_to(tz.parse("2026-08-20 07:00")) do
-        expect(Buddy::TodayBriefing.alpine_week_block(user)).to eq("")
+        expect(Buddy::BriefingFacts.alpine?(user)).to be(false)
       end
     end
   end

@@ -99,12 +99,16 @@ import { dash_colors, clamp } from "../vars"
   // should not be a reckoning. Hovering the row swaps the label for the money —
   // the line itself changes, which is what a TUI does. No overlay, nothing
   // floating over the cell.
+  //
+  // The bar and the figure deliberately answer DIFFERENT questions: the bar
+  // drains as the money goes, the figure says how much has gone. Do not
+  // "fix" the number to match the fill.
   function spendBar(row, label, spent_cents, budget_cents) {
-    const left = budget_cents - spent_cents
-    const fraction = budget_cents > 0 ? left / budget_cents : 0
+    const fraction = budget_cents > 0 ? (budget_cents - spent_cents) / budget_cents : 0
+    const spent = money(spent_cents) + " / " + money(budget_cents) + "  "
     const text = (
       cell.data.hover === row
-        ? Text.justify(bar_width, "  " + label, money(left) + " / " + money(budget_cents) + "  ")
+        ? Text.justify(bar_width, "  " + label, spent)
         : "  " + label
     )
 

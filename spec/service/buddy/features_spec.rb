@@ -209,25 +209,40 @@ RSpec.describe Buddy::Features do
   # "what's on today". Pointed at someone without them, that guidance names
   # sections that aren't in their context at all.
   describe "the daily briefing" do
-    it "leads with chores for someone who has them" do
-      seed = Buddy::TodayBriefing.send(:seed, user)
-
-      expect(seed).to include("`chores_due_today` is the ONLY place chores come from")
-      expect(seed).to include("`hot` multiplier")
+    # The whole day is worked out before the model sees it (Buddy::BriefingFacts)
+    # and only the rules whose subject is on that day are carried, so chore
+    # guidance needs chores in front of it, not just the feature switched on.
+    def seed_with(facts)
+      allow(Buddy::BriefingFacts).to receive(:build).and_return(
+        { name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {} }.merge(facts),
+      )
+      Buddy::TodayBriefing.send(:seed, user)
     end
 
-    it "drops the chore guidance entirely rather than softening it" do
+    it "says how to say a job on a day that has one" do
+      seed = seed_with(jobs: [{ id: 1, name: "Take out trash bags", group: "trash" }])
+
+      expect(seed).to include("JOBS TODAY")
+      expect(seed).to include("Jobs listed under one name are one job")
+    end
+
+    it "says nothing about them at all on a day with none" do
+      seed = seed_with({})
+
+      expect(seed).not_to include("JOBS TODAY")
+      expect(seed).not_to include("Jobs listed under one name")
+    end
+
+    # Someone without the feature has no chores to be due, so the section and
+    # its rule are absent for exactly the same reason - one gate, not two.
+    it "is the same absence for someone who doesn't have chores at all" do
       revoke!(:chores)
+      seed = seed_with({})
 
-      seed = Buddy::TodayBriefing.send(:seed, user)
-
-      expect(seed).not_to include("chores_due_today")
-      expect(seed).not_to include("chores_pending_today")
-      expect(seed).not_to include("chores_hot_picks")
-      expect(seed).not_to include("chores_done_today")
+      expect(seed).not_to include("JOBS TODAY")
       # The rest of the briefing is untouched.
-      expect(seed).to include("`today_notable`")
-      expect(seed).to include("LEAD WITH what still needs to happen today")
+      expect(seed).to include("OPEN WITH A GREETING")
+      expect(seed).to include("Only what's above")
     end
   end
 

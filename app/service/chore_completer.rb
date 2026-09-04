@@ -11,7 +11,10 @@ class ChoreCompleter
     def skipped? = !!skipped_reason
   }
 
-  def initialize(chore, user, at: Time.current, note: nil)
+  # `recorded_by` is whoever pressed the button when that is not `user` —
+  # marking a chore done on a housemate's behalf. Left nil for an ordinary
+  # tap; ChoreCompletion drops it anyway when the two match.
+  def initialize(chore, user, at: Time.current, note: nil, recorded_by: nil)
     # `tapped` is the actual chore (leaf) — recorded on the completion's
     # `chore_id`. `credit` is the parent for a sub-chore tap, else tapped
     # itself; streak / cooldown / threshold semantics stay shared across
@@ -22,6 +25,7 @@ class ChoreCompleter
     @user = user
     @at = at
     @note = note
+    @recorded_by = recorded_by
     @day = ChoreDay.current(user, at: at)
   end
 
@@ -46,7 +50,7 @@ class ChoreCompleter
 
   private
 
-  attr_reader :credit, :tapped, :user, :at, :note, :day
+  attr_reader :credit, :tapped, :user, :at, :note, :day, :recorded_by
 
   def build_completion
     ChoreCompletion.new(
@@ -59,6 +63,7 @@ class ChoreCompleter
       streak_multiplier: 1.0,
       paid_pebbles:      0,
       note:              note.presence,
+      recorded_by_user:  recorded_by,
     )
   end
 

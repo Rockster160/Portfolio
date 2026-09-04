@@ -84,6 +84,11 @@ RSpec.describe Buddy::CheckIns do
     # check-in about a 6pm dinner, noted at 2pm the same day, was asked the
     # NEXT evening (prod: Suki to Eve, buddy_memories 128, message 5157).
     describe "the first one, with nothing to be spaced from" do
+      # Mid-morning. "3 hours from now" has to land inside the same day for the
+      # question to be about spacing at all - run in the evening it is pushed
+      # out by the quiet-hours clamp, which is a different rule doing its job.
+      around { |example| travel_to(Time.utc(2026, 9, 4, 15, 0)) { example.run } }
+
       it "is not pushed a day out when there is no previous check-in" do
         memory = followup("grandson's dinner tonight", check_in_at: 3.hours.from_now)
 

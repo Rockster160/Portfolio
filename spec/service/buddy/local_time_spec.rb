@@ -90,8 +90,11 @@ RSpec.describe "Buddy and local time" do
       expect(seed_at(20)).to include("Part of day")
     end
 
-    it "says outright that it isn't a morning thing" do
-      expect(seed_at(8)).to include("not a morning thing")
+    # A Today gets asked for at all hours, so the greeting is told to read the
+    # clock rather than the shape of the request.
+    it "sends it to the clock rather than to the shape of the ask" do
+      expect(seed_at(8)).to include("rather than from the shape of this request")
+      expect(seed_at(8)).to include("asked for at all hours")
     end
   end
 

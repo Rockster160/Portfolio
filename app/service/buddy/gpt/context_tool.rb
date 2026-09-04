@@ -89,9 +89,19 @@ module Buddy
       # morning it matters.
       BRIEFING_ALWAYS = %i[upcoming_reminders].freeze
 
-      # The two sections a briefing gets that can carry somebody else's
-      # calendar. See #without_uninvolved_partner_items.
-      PARTNER_FILTERED = %i[today_notable upcoming_notable].freeze
+      # The WEEK is the person's own. See #without_uninvolved_partner_items.
+      #
+      # Rocco, 2026-09-04: "we WANT the partner events to be visible, we do NOT
+      # want them treated as our own... (Although it should only be bringing up
+      # today's except for specifically noticeable events)". So today keeps
+      # everybody's and the week keeps only theirs.
+      PARTNER_FILTERED = %i[upcoming_notable].freeze
+
+      # Today's partner items stay, and lose the marker naming what they run
+      # into. Two different people doing two different things at the same hour
+      # is not a clash, and a tag naming what it collides with is an invitation
+      # to write one - prod 4524 read Chelsea's yoga out as Rocco's own.
+      PARTNER_UNTAGGED = %i[today_notable].freeze
 
       # Sections this turn may not have, for any reason: a feature the person
       # doesn't use, or a briefing that has no business with the full roster.
@@ -194,16 +204,7 @@ module Buddy
 
       # Returns the JSON string handed back as the function_call_output.
       def call(args)
-        # "Asked for nothing" and "asked only for things this turn can't have"
-        # are different, and collapsing them answered a refused request with the
-        # entire context: a briefing that asked for chores_all got every section
-        # there is, which is the opposite of withholding one.
-        payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
-        # Applied to the everything path too, which is the one a briefing takes.
-        payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
-        payload = without_other_days(without_routine_reminders(payload))
-        payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
-        payload = without_empty_chores(payload)
+        payload = filtered(named_sections(args).presence && requested_sections(args))
         @served = @served.merge(payload)
         JSON.generate(payload)
       rescue StandardError => e
@@ -214,6 +215,28 @@ module Buddy
           extra:     { conversation_id: @conversation.id },
         )
         JSON.generate({ error: "context lookup failed" })
+      end
+
+      # The payload after every filter, as a Hash. `sections` nil means
+      # everything this turn is allowed.
+      #
+      # Public because the BRIEFING SEED is built from it too: what the seed
+      # says the day contains and what the model can look up have to be the same
+      # answer, and re-deriving one of them from raw Context would mean the
+      # filters here (passed items, routine reminders, another day's reminders,
+      # a partner's uninvolved items, an empty chore list) silently applying to
+      # only one of the two. See Buddy::TodayBriefing.day_facts.
+      def filtered(sections=nil)
+        # "Asked for nothing" and "asked only for things this turn can't have"
+        # are different, and collapsing them answered a refused request with the
+        # entire context: a briefing that asked for chores_all got every section
+        # there is, which is the opposite of withholding one.
+        payload = sections.nil? ? context : context.slice(*sections)
+        # Applied to the everything path too, which is the one a briefing takes.
+        payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
+        payload = without_other_days(without_routine_reminders(payload))
+        payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
+        without_empty_chores(payload)
       end
 
       private
@@ -334,12 +357,18 @@ module Buddy
       def without_uninvolved_partner_items(payload)
         return payload unless @briefing
 
-        PARTNER_FILTERED.each_with_object(payload.dup) { |key, out|
+        out = payload.dup
+        PARTNER_FILTERED.each { |key|
           next unless out[key].is_a?(Array)
 
-          kept     = out[key].reject { |i| i[:mine] == false && i[:collides_with].blank? }
-          out[key] = kept.map { |i| i[:mine] == false ? i.except(:collides_with) : i }
+          out[key] = out[key].reject { |i| i[:mine] == false }
         }
+        PARTNER_UNTAGGED.each { |key|
+          next unless out[key].is_a?(Array)
+
+          out[key] = out[key].map { |i| i[:mine] == false ? i.except(:collides_with) : i }
+        }
+        out
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.partner_items", exception: e, user: @user)
         payload

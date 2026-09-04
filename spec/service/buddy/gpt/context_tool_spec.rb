@@ -216,7 +216,7 @@ RSpec.describe Buddy::GPT::ContextTool do
       }
       let(:mine) { user.agendas.order(:id).first }
 
-      def titles(tool, section = "today_notable")
+      def titles(tool, section="today_notable")
         JSON.parse(tool.call({ "sections" => [section] }))[section].to_a.pluck("title")
       end
 
@@ -229,12 +229,25 @@ RSpec.describe Buddy::GPT::ContextTool do
                            start_at: 3.hours.from_now + 30.minutes, end_at: 5.hours.from_now, status: :confirmed)
       end
 
-      it "drops the one that has no bearing on their day" do
-        expect(titles(briefing)).not_to include("Her Yoga")
+      # Rocco, 2026-09-04: "we WANT the partner events to be visible, we do NOT
+      # want them treated as our own. 'You have yoga tomorrow' is absolutely
+      # incorrect. 'Chelsea has yoga tomorrow' is accurate and acceptable."
+      #
+      # So the collision test stopped deciding what TODAY shows. What answers
+      # prod 4482 now is the shape of the line rather than its absence:
+      # Buddy::BriefingFacts puts the owner in front of the title, so the row
+      # reads as hers before the model has written a word.
+      it "keeps today's, whether or not it touches their own day" do
+        expect(titles(briefing)).to include("Her Yoga", "Her IT Call")
       end
 
-      it "keeps the one that runs into something of theirs" do
-        expect(titles(briefing)).to include("Her IT Call")
+      # "(Although it should only be bringing up today's except for
+      # specifically noticeable events)" — the week is their own.
+      it "keeps a partner out of the week" do
+        AgendaItem.create!(agenda: hers, name: "Her Thursday", kind: :event,
+                           start_at: 3.days.from_now, end_at: 3.days.from_now + 1.hour, status: :confirmed)
+
+        expect(titles(briefing, "upcoming_notable")).not_to include("Her Thursday")
       end
 
       it "never drops one of their own" do
@@ -386,6 +399,11 @@ RSpec.describe Buddy::GPT::ContextTool do
     # exceptions; the reminder half never was, so the same standing nudges came
     # back every morning with a clock time on each.
     describe "the standing daily nudges" do
+      # Mid-morning, because a briefing only sees TODAY's reminders now
+      # (#without_other_days) and "7 hours from now" is tomorrow if the suite
+      # happens to run in the evening.
+      around { |example| travel_to(Time.utc(2026, 9, 4, 15, 0)) { example.run } }
+
       def reminder_bodies(tool)
         rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
         rows.to_a.pluck("body")

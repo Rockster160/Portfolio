@@ -23,8 +23,12 @@ class ChoreCompletionsController < ApplicationController
       tapped = tapped.completion_leaf_for(credit_user)
       result = ChoreCompleter.new(
         tapped, credit_user,
-        at:   completed_at,
-        note: params[:note].presence
+        at:          completed_at,
+        note:        params[:note].presence,
+        # Credit goes to them; the trigger has to reach whoever marked it too,
+        # or a personal chore marked done for a housemate runs THEIR
+        # automations and none of the recorder's.
+        recorded_by: current_user
       ).call
       # ChoreCompleter already broadcasts against the credited user; also
       # broadcast to the recorder so their device refreshes (household

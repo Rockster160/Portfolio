@@ -40,29 +40,25 @@ module Buddy
     WET_KINDS = %w[rain snow storms].freeze
 
     # Returns the seed block string, or "" when there's nothing to report.
-    def briefing_block(user, now: Time.current)
+    # Today's Alpine rain, as FACTS. One line each, no instructions in them -
+    # what to do with them is the briefing's business (Buddy::BriefingFacts).
+    #
+    # The plunge is only ever mentioned when the window is genuinely good.
+    # There's no line for a bad one, because the reasons it read as bad are
+    # guesses at somebody's day and came out sounding presumptuous on days that
+    # were in fact wide open.
+    def briefing_lines(user, now: Time.current)
       data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
-      return "" if data.blank?
+      return [] if data.blank?
 
       tz = Buddy::Day.zone(user).name
       a  = analyze(data, user, tz, now)
-      return "" unless a[:notable]
+      return [] unless a[:notable]
 
-      lines = ["", "RAIN IN ALPINE TODAY:"]
-      lines << "- #{a[:headline]}"
-      lines << "- Rain windows today (give these times): #{a[:rain_windows].join(", ")}" if a[:rain_windows].any?
-      # The plunge is only ever mentioned when the window is genuinely good.
-      # There's no line for a bad one, because the reasons it read as bad are
-      # guesses at somebody's day and came out sounding presumptuous on days
-      # that were in fact wide open.
-      #
-      # The wording is positive for the reason the weather block is: this seed
-      # used to spell out what not to claim, and spelling it out is how the
-      # claim got made.
-      if a[:plunge]
-        lines << "- Good plunge window: #{a[:plunge_reason]}. Float it once, lightly, as something the day has room for."
-      end
-      lines.join("\n")
+      lines = [a[:headline]]
+      lines << "Rain in Alpine #{a[:rain_windows].join(", ")}" if a[:rain_windows].any?
+      lines << "Good plunge window: #{a[:plunge_reason]}" if a[:plunge]
+      lines
     end
 
     # Today's Alpine rain windows on their own, as the formatted strings
@@ -88,22 +84,16 @@ module Buddy
     # hours and gives real times; past its end there is one `pop` per day and
     # nothing at all about WHEN. Those days get their odds and no window rather
     # than a plausible-sounding hour.
-    def week_rain_block(user, now: Time.current)
+    def week_rain_lines(user, now: Time.current)
       data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
-      return "" if data.blank?
+      return [] if data.blank?
 
       tz     = Buddy::Day.zone(user).name
       first  = now.in_time_zone(tz).to_date + 1
       hourly = Array(data["hourly"]).map { |h| [Time.at(h["dt"].to_i).in_time_zone(tz), h] }
       days   = timed_days(first, hourly.last&.first)
 
-      entries = timed_rain(hourly, tz, days, first) + loose_rain(data, tz, days, first)
-      return "" if entries.empty?
-
-      lines = ["", "RAIN IN ALPINE THIS WEEK:"]
-      lines += entries.map { |entry| "- #{entry}" }
-      lines << "Give the hours wherever there are hours, and the day on its own where there aren't. Rain is the whole of what Alpine is here for."
-      lines.join("\n")
+      timed_rain(hourly, tz, days, first) + loose_rain(data, tz, days, first)
     end
 
     # The days the hourly forecast reaches all the way through. One it only half

@@ -25,23 +25,21 @@ module Buddy
     # padding: banning a phrase by quoting it is still handing over a phrase.
     # The rules below describe SHAPES, and nothing in them can be echoed.
     TONE = <<~TONE.strip.freeze
-      LAST AND MOST IMPORTANT: this is still YOU talking, not a status readout.
+      LAST AND MOST IMPORTANT: this is you talking. Everything above is WHAT to say; this is how it should sound, and a briefing with every fact right and no voice in it has still failed.
 
-      Everything above is about WHAT to say. This is about how it should sound. A briefing that reads like a dashboard summary is a failed briefing, even when every fact in it is right. You're a friend catching me up on my day and you're glad to be the one doing it, so open like a person, use natural phrasing over clinical phrasing, and where something genuinely earns a reaction, give it one. Real interest in a good day is exactly right - it's the thing that tells me a friend read this and not a script. Keep it in your register though: glad and warm more often than bouncy, always about something specific, never volume for its own sake.
+      Write it the way you'd catch a friend up on their day, glad to be the one doing it. Open like a person, take the natural phrasing over the clinical one, and where something genuinely earns a reaction, give it one - real interest in a good day is what tells them a friend read this and not a script. Keep it in your register: glad and warm more often than bouncy, always about something specific.
 
-      Cut PADDING, which is not the same as cutting warmth. **The greeting is exempt from everything in this paragraph** - it carries no information by design, so the test below deletes it every time, and a briefing that opens cold is the failure this whole section is trying to avoid. Padding is any clause that would leave the sentence saying exactly as much if you deleted it: a wry observation stapled on to round a line off, a comparison invented for rhythm, a flourish attached to an item because the sentence felt bare. It hides in three places - the end of a line, the start of the next one, and the middle of the sentence - and moving it between them doesn't retire it. The test is subtraction, applied to every clause you write: cut it, and if I still know everything I knew before, it was decoration. One genuinely good observation in a message is yours to keep; one attached to each item in turn is a tic, and it's the loudest way this stops sounding like you.
+      Make every clause carry something. The test is subtraction, applied to each one you write: cut it, and if they still know everything they knew before, it was decoration. One good observation in a message is yours to keep; one attached to each item in turn is a tic, and it's the loudest way this stops sounding like you. The greeting is exempt - it carries no information by design, and a briefing that opens cold is the failure the rest of this is trying to avoid.
 
-      Warmth belongs at the FRONT of a line as a real reaction to something specific, not on the end as commentary. If you're torn between flatter and warmer, go warmer - this should sound like someone who likes me, not someone filing a report.
+      Put warmth at the FRONT of a line, as a reaction to the thing itself. Torn between flatter and warmer, go warmer: this should sound like someone who likes them.
 
-      Do not narrate the SHAPE of the message. Announcing which category you're about to cover, or which part of the day, is a section header with the formatting filed off - the same report, read aloud. A friend doesn't say which bit is coming next, they just say the thing. If two briefings in a row could swap their connecting phrases without either changing meaning, you're assembling from a template instead of talking.
+      Just say the thing, and let the message move from one beat to the next on its own. What joins two beats comes out of what the day is, so no two briefings ever join up the same way.
 
-      Tight, not truncated. Every line earns its place and none of them run long, but the message is however many lines the day actually has in it - see SAY EVERYTHING UNUSUAL. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable, never one smushed block. Enthusiasm and clean breaks are not at odds; you get both. Prose with shape and a pulse, not a field report.
+      Tight, not truncated. Every line earns its place, none of them run long, and the message is however many lines the day actually has in it. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable.
 
-      Still avoid: em dashes (commas or short sentences instead) and bullet-listing what I already did.
+      Commas and short sentences carry the rhythm; keep em dashes out of it.
 
-      Round odd clock times rather than reading them off - a time to the minute is what a machine says. A time somebody actually scheduled on the hour or half hour can stay as it is.
-
-      An emoji, if you use one, has to be ABOUT something in the message: warmth you actually feel, or a reaction to one specific thing. If it could move to a different day's briefing unchanged, it isn't doing anything and it shouldn't be there.
+      An emoji, if you use one, has to be ABOUT something in the message: warmth you actually feel, or a reaction to one specific thing. If it could move to a different day's briefing unchanged, leave it out.
     TONE
 
     # A Today ALWAYS opens with a hello. There is no branch here and there
@@ -277,204 +275,103 @@ module Buddy
 
       "#{parts.join(". ")}."
     end
-
-    def greet_lines
-      [
-        "#{GREET_DIRECTIVE} Not optional, not a judgement call, and not conditional on anything. It is the FIRST thing in the message, before any news. Every Today opens with a hello - it's part of the shape of the thing, the way a letter opens with a name.",
-        "",
-        "**That holds even if we were talking a second ago, even if I just asked for one, even if this is the second in a row.** Two hellos back to back is fine and is not something to fix; skipping it because one feels redundant is the one way to get this wrong. Don't reason about whether it fits - it fits.",
-        "",
-        "Take the half of the day from `Part of day` at the top of your prompt, never from the shape of this request: a briefing is not a morning thing, I ask for these at all hours, and greeting me with the wrong half is one of the most obviously broken things you can do. The WORDS are yours: vary the opener, make it interesting, never the same hello twice running.",
-        "",
-        "**It has to land warm and lifted - end it on a `!`, a stretched vowel, or real warmth, never on a flat period.** A hello that stops on a period reads deadpan, and the line after it inherits that flatness for the whole briefing. The same words can do either job; the punctuation and the energy decide which.",
-      ].join("\n")
-    end
-
-    # The figures, plus whatever is actually notable, and nothing drawn from
-    # either. Time-aware: past ~4pm the day's high is no longer actionable, so we
-    # drop TODAY's weather and keep only the week outlook (upcoming days still
-    # matter). Empty when there's nothing worth saying.
+    # ---- the seed ----------------------------------------------------------
     #
-    # Two things this block has been wrong about, in order.
+    # Rocco, 2026-09-04: "We should re-write the entire prompt from scratch as
+    # needed. Revisit every piece of it and make sure every piece earns its
+    # mark."
     #
-    # It used to carry comfort bands off the dashboard's colour scale, each one
-    # attaching a suggestion — light layers, a coat, an umbrella. That advice
-    # isn't wanted: a high is a number, and being told how to dress for it is the
-    # part of a forecast that reads as being managed.
+    # The old one ran to about two thousand words, and most of it was about
+    # WHICH facts to use: where to look, what had already been filtered, what to
+    # leave out, what not to claim about the things it had left out. All of that
+    # is decided in Buddy::BriefingFacts now, in Ruby, where it's testable and
+    # the same every day. What's left here is how to SOUND, and every line of it
+    # is a rule about writing rather than about choosing.
     #
-    # The correction then overshot and told the model to say the rain chance
-    # every day. A sunny day with no rain in it is the BASELINE and has no line
-    # to give; only what's genuinely notable adds anything on top. Which is also
-    # why `today_notable` is in here: the summary has never carried wind, so a
-    # day of hard gusts arrived reading "currently 71°F, clear".
+    # Two consequences worth stating, because they're what makes the rest short:
     #
-    # Nothing here names a phrase to avoid, and nothing here may. A phrase quoted
-    # in order to forbid it is still a phrase handed over, and this prompt has
-    # been bitten by that repeatedly — see the note above TONE. Rules go in
-    # positively or they don't go in.
-    def weather_block(user=nil)
-      late = late_in_day?(user)
-      week = WeatherService.week_outlook(user: user)
-      unless late
-        summary = WeatherService.summary(user: user)
-        notable = WeatherService.today_notable(user: user)
-      end
+    # - Nothing has to be looked up, so the briefing turn is offered no
+    #   `get_context` at all (Buddy::GPT::Turn#tools). A model that can fetch
+    #   twenty sections will read some of them out, whatever the prompt above
+    #   them says.
+    # - Rules are only in front of the model when the day has their subject in
+    #   it. A paragraph about partners' calendars on a day with no partner item
+    #   teaches it to go looking for one.
+    #
+    # Written POSITIVELY. "notes to write from, not lines to read out" was the
+    # last anti-example standing and Rocco caught it: a rule phrased as the
+    # mistake still hands over the mistake. Say the thing to do.
 
-      return "" if summary.blank? && week.blank?
+    # Rules whose subject can be absent from a day.
+    WRITING_RULES = {
+      travel:    "A leave-by is a clock time to walk out of the door, with the drive and the get-there-early buffer already taken off. Say it in the same sentence that names the thing - it's the part they can act on without doing the arithmetic.",
+      # No sample sentence here, and there must not be one. The names in this
+      # house are real, and every illustration ever written into this prompt has
+      # come back out of it on a day it didn't fit. The SHAPE is the rule: name
+      # first, then what they have, then when.
+      partner:   "A line whose title starts with a name is that person's. Say it as theirs, in that order - who, what, when - so it lands as news about somebody they care about. One clause is plenty, and their own day is what the message is about.",
+      all_day:   "Something marked all day is simply ON today. Name it and say today; the clock has nothing to add to a date.",
+      cancelled: "A cancelled thing is one of the most useful lines in a briefing: a normal thing NOT happening is a real heads-up. Say it plainly.",
+      jobs:      "Jobs listed under one name are one job, and the job is what the DAY is: several bin chores make it trash day, so say \"it's trash day\".",
+      hot:       "A job with a multiplier on it is worth well above the usual today, which is worth some enthusiasm.",
+      # Carries WEATHER_DIRECTIVE verbatim, and has to: Buddy::GPT::Turn decides
+      # whether the briefing was GIVEN a forecast by looking for that exact
+      # string in the seed, and reads the figures back off the reply on the
+      # strength of it. Reword it without the constant and the repair silently
+      # stops firing - which is how eight briefings in a row went out with no
+      # weather in them.
+      weather:   "#{WEATHER_DIRECTIVE} Anything above an ordinary day goes in with its odds; an ordinary sunny day is the baseline and the figures already cover it.",
+      week_sky:  "Any day this week worth a heads-up gets a short one.",
+      alpine:    "Alpine only ever comes up when the canyon is wet, so it's news by the time you're reading it. Give the hours wherever there are hours and the day on its own where there aren't. A plunge window is floated once and lightly, as something the day has room for.",
+      waiting:   "Somebody in the house asked them something and it's still sitting there. Say who asked and what, so they can answer it.",
+      week:      "The week gets at most one line, and only for something close enough or remarkable enough to earn it.",
+      stash:     "Occasionally, and not most days, float one of the things on their mind. Light, one at a time, easy to wave off.",
+    }.freeze
 
-      lines = ["", "WEATHER:"]
-      if summary.present?
-        lines << "Today: #{summary}"
-        lines << "Notable today: #{notable}." if notable.present?
-        lines += [
-          WEATHER_DIRECTIVE,
-          "Anything above that is worth its own mention with its odds: rain, wind, storms, snow. Only ever what's in the lines just above - an ordinary sunny day is the baseline, and the baseline is already covered by the figures.",
-          "Weather gets reported here, not acted on.",
-        ]
-      end
-      lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
-      lines.join("\n")
+    def applicable_rules(facts)
+      rules = []
+      rules << :travel    if facts[:today].any? { |i| i[:leave_by].present? }
+      rules << :partner   if facts[:today].any? { |i| i[:mine] == false }
+      rules << :all_day   if facts[:today].any? { |i| i[:all_day] }
+      rules << :cancelled if (facts[:today] + facts[:week]).any? { |i| i[:cancelled] }
+      rules << :jobs      if facts[:jobs].any?
+      rules << :hot       if facts[:jobs].any? { |j| j[:hot].present? }
+      # On the HIGH, not on the block. Past mid-afternoon the figures are dropped
+      # and only the week's outlook is left, and a rule asking for a high there
+      # would put one back onto the briefing that decided it no longer mattered.
+      rules << :weather   if facts.dig(:weather, :high).present?
+      rules << :week_sky  if facts.dig(:weather, :week).present?
+      rules << :alpine    if facts[:alpine].present? && facts[:alpine].values.flatten.compact_blank.any?
+      rules << :week      if facts[:week].any?
+      rules << :waiting   if Array(facts[:waiting]).any?
+      rules << :stash     if facts[:stash].any?
+      rules.map { |key| "- #{WRITING_RULES.fetch(key)}" }.join("\n")
     end
 
-    # The briefing is chore-led for most people: what's still pending IS the
-    # answer to "what's on today". For someone without chores that guidance is
-    # worse than useless — it points the model at sections that aren't in their
-    # context at all, so it either invents something or spends a paragraph
-    # explaining an absence. The bullets come out entirely rather than being
-    # softened, which also gets the prompt space back.
-    def chores?(user)
-      user.present? && Buddy::Features.enabled?(user, :chores)
-    end
+    def seed(user=nil, conversation=nil, facts: nil)
+      conversation ||= (Buddy::CompanionRelay.conversation_for(user) if user)
+      facts ||= Buddy::BriefingFacts.build(user, conversation)
+      day     = Buddy::BriefingFacts.block(facts)
+      name    = facts[:name].presence || "them"
 
-    # `chores_due_today` is the only chore section this turn can reach at all —
-    # Buddy::GPT::ContextTool withholds the rest for a briefing. So these
-    # bullets no longer argue anyone out of the full roster; the roster isn't
-    # there. What's left is what to do with the exceptions.
-    def chores_lead_lines(user)
-      return "" unless chores?(user)
-
-      [
-        "",
-        "- `chores_due_today` is the ONLY place chores come from, and it's the whole chore section of your context. It has already been narrowed to the exceptions - the ones stamped for today, the ones flagged well above their usual value, and the ones whose SCHEDULE lands on today and isn't an everyday rhythm - so the filtering is done and none of it is yours to redo.",
-        "- **It is NOT everything they have to do today, and you must never say it is.** Their whole daily rotation is deliberately missing from it, so a list of one means one thing is UNUSUAL today, not that one thing is left. Saying the only thing on today is whatever happens to be in that list is false, and it's false in the direction that gets the rest of their day forgotten. Name what's in it; never count it, total it, or call it all there is.",
-        "- Say WHY each one is there, not just that it is. Its reason for being on that list is the only thing making it worth a sentence, and a name without one is a worse version of a screen I can open myself.",
-        "- Naming none of them is a perfectly good briefing. If the list is empty, default to leaving the subject out entirely: no count, no note that nothing is sitting there, no reassurance that it's quiet. Telling me the list is empty still makes the list the subject of a sentence, and an empty one has nothing in it to be worth one.",
-        "- BATCH related items: rows carrying the same `group` are one job, and they go out ONCE as that job rather than one by one. Five rows grouped as `trash` on a Wednesday is \"it's trash day\", not five sentences. Name the group, and only name a member of it when there's something odd about that one in particular.",
-        "- Never tell me I DID something. You can't see completions on this turn at all, and a shared chore counts the moment anyone in the house does it, so crediting me for one is a guess that's wrong often enough to matter.",
-        "- A chore that isn't in that list does not exist for this message. Don't reach back for one you saw earlier in the thread.",
-      ].join("\n")
-    end
-
-    def chores_hot_line(user)
-      return "" unless chores?(user)
-
-      "\n- A `hot` multiplier means well above the usual pebbles for that one today, which is worth " \
-        "saying with some enthusiasm. Only the exceptional ones reach you; the everyday pins are " \
-        "filtered out before you see them, so anything carrying one here is genuinely unusual."
-    end
-
-    # After ~4pm local the day's weather isn't actionable anymore.
-    def late_in_day?(user)
-      return false if user.nil?
-
-      hour = Buddy::Day.now(user).hour
-      hour >= 16 || hour < Buddy::Day::ROLLOVER_HOUR
-    end
-
-    # Alpine plunge / notable-weather block. Only speaks up for rain/snow or
-    # heavy dark clouds, and only when we have a user to localize + check the
-    # agenda against. Empty otherwise (including off-prod).
-    def plunge_block(user)
-      return "" if user.nil?
-
-      Buddy::PlungeAdvisor.briefing_block(user)
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::TodayBriefing] plunge block failed: #{e.class}: #{e.message}")
-      ""
-    end
-
-    # The week's rain in Alpine, and his alone. Alpine is a canyon he drives to;
-    # for everyone else in the house it's a town half an hour away that they
-    # have no reason to hear a forecast for, and their own weather is already in
-    # the block above.
-    def alpine_week_block(user)
-      return "" if user.nil? || !user.me?
-
-      Buddy::PlungeAdvisor.week_rain_block(user)
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::TodayBriefing] alpine week block failed: #{e.class}: #{e.message}")
-      ""
-    end
-
-    def seed(user=nil)
       prompt = <<~PROMPT.strip
-        WHAT YOU WRITE HERE IS THE BRIEFING. It goes to them exactly as you write it, as the message they've been waiting for. Nothing else is coming, and there is no step after this one.
+        You're writing #{name}'s Today, and what you write IS the message. It goes to them exactly as you write it, and nothing follows it.
 
-        So there is nothing to announce, confirm, send, deliver or hand over. Any sentence reporting that the briefing itself is finished, on its way, or has gone out is a message ABOUT a briefing standing where the briefing should be, and it leaves them holding a claim that something happened instead of the thing. If a reply further up this thread did that, it was wrong, and it is not a pattern to follow.
+        #{GREET_DIRECTIVE} It is the first thing in the message, before any news, and it holds even if you were talking a second ago and even if this is the second in a row - a Today opens with a hello the way a letter opens with a name. Take the half of the day from `Part of day` at the top of your prompt rather than from the shape of this request; these get asked for at all hours. The words are yours, different every time, and it has to land warm and lifted - on a `!`, a stretched vowel, or real warmth. Greet them by name, or with a plain hello.
 
-        What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
+        #{day.presence || "Nothing came back for today, so say so warmly, briefly, and stop."}
 
-        #{greet_lines}
+        Everything above is their day, already gathered and narrowed for you. It is the whole of it, so there's nothing to look up and nothing to work out - reframe it in your own words and pass it on.
 
-        Never address me as "you" in place of a name. That lands too intimate. Use my name, a plain greeting, or just dive in.
-        #{weather_block(user)}#{plunge_block(user)}#{alpine_week_block(user)}
-
-        FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
-        - Agenda items flagged `passed: true` are DONE for the day. Default to leaving them out entirely - not as a summary, not as a count, not as a passing note that the morning one already went. Naming one while something still ahead goes unmentioned is the wrong way round, no matter how quiet the day looks.
-        - Same for `upcoming_reminders` entries carrying `status: already_rang` or `status: off`. Those sit in your context so you can ANSWER about them when asked - did that one go off, is it still running - and for no other reason. One that already rang is not on deck, and a switched-off one isn't either. Only the ones still due are the briefing.
-        - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give whatever is actually left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
-
-        LEAD WITH what still needs to happen today, and open on whatever is most unlike an ordinary day.
-        #{chores_lead_lines(user)}
-        - `today_notable` - today's events and meetings with times. This is NOT the whole calendar. Everything that repeats on an ordinary daily or weekday rhythm has already been taken out, because I know my own standing schedule and hearing it read back is what makes a briefing worthless. What's left is what makes today different from any other day.
-        - `upcoming_reminders` is the OTHER HALF of the day and none of it is on the calendar. One that's still due is a thing that is going to happen to me, at a time, and it belongs here exactly as an agenda item does - a day with three of them on it is not an open day, however empty the calendar looks. Say what each is FOR, the way you would name an event: giving me the hour and leaving out the thing is that sentence with the useful half taken out. Everything that goes off every day or every weekday has been taken out of this one too, for the same reason it's taken out of the calendar: my standing nudges are the ones I know cold, and reading them back is padding with a clock time on it. What's here repeats rarely or not at all.
-        - An item tagged `mine: false` (with an `owner`) is on a partner's PERSONAL calendar. The ones with no bearing on my day have already been taken out, so there is no judgement left here - but what reaches you is BACKGROUND, not a demand on me. Say whose it is and when it runs, in one clause, and stop. Never call it a clash, a conflict or an overlap, never work out what of mine it lands on, and never let it lead the message or read as mine. Somebody else being busy is not a thing on my plate. It is still never the subject of the message.
-        - **My day is never described by comparison to theirs.** Framing it as light or busy next to somebody else's makes their calendar the subject of my briefing, and does it before naming a single thing of mine. How full their day is isn't a fact about mine. Tell me about mine.#{chores_hot_line(user)}
-
-        NAME THE THING, never just its category. Every item carries its real name, and the name is usually the entire reason it's worth mentioning: whose birthday, which meeting, who I'm collecting. Reducing one to its type strips out the only part I couldn't have guessed, and leaves me opening the agenda to find out what you meant - at which point the line did nothing but tell me I have plans. This goes just as hard for a one-line week mention as for today. Work in `where` whenever the place is the point, and a time whenever it changes what I'd do.
-
-        EVERY item you name has to be one that is actually in the lists above, on the day you put it on. Don't round a memory up into a plan. A briefing that adds one thing I don't have is worse than one that leaves out three that I do: the missing ones I'll find, and the invented one I'll act on. If it isn't in front of you, it isn't happening.
-
-        SAY EVERYTHING UNUSUAL. Brevity is about the WORDS, never about how many things get named: cut the padding around an item, never the item. Everything in front of you has already been narrowed to the exceptions - the standing repeats, the everyday reminders and the everyday chores were all taken out before you saw any of it - so what's left is the day itself, and nothing in it is safely droppable. A quiet day is two lines because the day is quiet. A day with seven real things is longer, and that is the correct briefing for that day. Deciding to leave one out to hit a length is the one failure I can't spot: I'd have to already know what was missing.
-
-        Being specific is the other half of that. A vague gesture at a busy morning, without naming what's in it, is the opposite failure and costs me just as much - I still have to go and look. And if the day genuinely holds nothing unusual, say so briefly and warmly and stop. That is a correct briefing, not a failed one, and padding it back out to length is the thing being avoided here.
-
-        WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
-
-        AN `all_day` ITEM HAS NO TIME, so don't give it one. Saying that one runs all day makes a duration out of a day, and reads like a scheduling detail rather than a thing that's happening; it is simply on today. Name it, say today, and leave the clock out of it. Same for anything else that runs the whole date - a birthday, a holiday, a travel day, a deadline.
-
-        WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
-        - A less-frequent cadence is something I may not have top of mind, so a light touch helps. Touch on it, don't dive into details.
-        - No `cadence` at all means a one-off. That's the most worth surfacing of anything you have.
-        - DO call out a routine that is NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up. A normal thing missing beats a normal thing present.
-        - Travel arrives already worked out: `drive_min` is how many minutes the drive takes, and `leave_by` is the clock time to walk out of the door, with the drive and the get-there-early buffer both already subtracted from the start. When an item carries them, they belong in the same sentence that names it - the minutes are how far away it is, and the `leave_by` is the part I can act on without doing the subtraction in my head. Both are figures; say the figures. Raise them while there's still enough of the day left to use them.
-
-        REST OF THE WEEK (`upcoming_notable`, tomorrow onward - the standing repeats are filtered out of this one too):
-        - Weight by proximity. The closer it is, the more it's worth mentioning; something a week out has to be genuinely remarkable to earn a line.
-        - At most a line. If nothing worth noting is coming, say nothing about the week.
-
-        SECONDARY (mention only if clearly relevant):
-        - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the moment. Light, one at a time, easy to wave off. Skip it entirely most of the time.
-
-        DO NOT USE:
-        - `recent_events` from before today started. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
-        - Any framing that starts from what I did yesterday. Yesterday is done.
-        - Motivational spin about how yesterday went. That's a review, not a briefing.
-
-        HARD NO:
-        - Never say the briefing is ready, sent, up, out, done or on its way. You are writing it; saying so instead of doing it is the one failure that leaves them with nothing.
-        - No filler adjectives about the day's general shape in place of a fact.
-        - No "based on what I have" / "your context shows" / any scaffolding-talk.
-
-        BEFORE YOU SEND, read it back against these three. Each one is stated above, and each one has still gone out missing on a day it mattered - they are here at the end because the middle of a prompt this long is where a rule goes to be forgotten:
-        - The high and the low are in it, and anything above the baseline carries its odds.
-        - Every item is called by its name, never by its type.
-        - Everything in it is still ahead of me.
+        HOW TO SAY IT
+        - All of it reaches them. Trim the words around a thing and keep the thing: a quiet day is two lines because the day is quiet, and a full one runs as long as the day does.
+        - Only what's above. If it isn't there, it isn't happening today.
+        - Call each thing by its name. Whose birthday, which meeting, who they're collecting - the name is the part they couldn't have guessed, and a category in its place sends them to the app to find out what you meant. Work in the place when the place is the point, and a time when it changes what they'd do.
+        - Round odd clock times. Say "tomorrow" for the next day, and a weekday name from two days out.
+        #{applicable_rules(facts)}
 
         #{TONE}
       PROMPT
-      # Weather, the plunge advisory and every chore line collapse to "" for
-      # someone who doesn't have them, leaving runs of blank lines behind.
       prompt.gsub(/\n{3,}/, "\n\n")
     end
 
@@ -493,16 +390,22 @@ module Buddy
     def deliver!(user, conversation, scheduled: true)
       return nil if scheduled && defined?(Buddy::SleepGuard) && Buddy::SleepGuard.sleeping?(user)
 
-      msg = conversation.byte_messages.create!(
+      facts = Buddy::BriefingFacts.build(user, conversation)
+      msg   = conversation.byte_messages.create!(
         user:      user,
         direction: :outbound,
         state:     :pending,
-        body:      seed(user),
+        body:      seed(user, conversation, facts: facts),
         metadata:  {
           "kind"         => "buddy_trigger",
           "hidden"       => true,
           "source"       => scheduled ? "today_scheduled" : "quick_action",
           "buddy_action" => "today",
+          # What the seed handed over, so a pre-send repair can check the reply
+          # against exactly that. It used to read whatever the model happened to
+          # fetch with `get_context`, which a briefing turn is no longer offered
+          # at all - see Buddy::GPT::Turn#tools.
+          "briefing"     => facts.as_json,
         },
       )
       MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })

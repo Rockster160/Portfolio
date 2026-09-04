@@ -1237,6 +1237,14 @@ module Buddy
       # The line's mood is deliberately NOT applied. The model already chose a
       # face for this reply, and overwriting a deliberate expression to deliver
       # a hello is the wrong trade.
+      # Run one repair and note it if it changed anything. See the stamp in
+      # finalize_success for why this is worth recording.
+      def repaired(name, body)
+        after = yield(body)
+        @repairs << name unless after == body
+        after
+      end
+
       def with_greeting(body)
         return body unless greeting_missing?(body)
 
@@ -1433,7 +1441,7 @@ module Buddy
 
       def without_empty_chore_note(body)
         return body unless today_briefing?
-        return body unless Array(served_context[:chores_due_today]).empty?
+        return body unless Array(briefing_facts[:jobs]).empty?
 
         kept = []
         # The capture group keeps the separators in the list, so the paragraph
@@ -1473,8 +1481,19 @@ module Buddy
         body
       end
 
+      # What the seed handed over, off the seed message itself. This used to be
+      # `served_context` - whatever the model happened to fetch - and a briefing
+      # turn is offered no lookup at all now, so there is nothing to have
+      # fetched. Buddy::TodayBriefing.deliver! stamps it.
+      def briefing_facts
+        @briefing_facts ||= (
+          meta = @inbound.metadata
+          (meta["briefing"] if meta.is_a?(Hash)).to_h.deep_symbolize_keys
+        )
+      end
+
       def unsaid_departures(body)
-        items = served_context[:today_notable]
+        items = briefing_facts[:today]
         return [] unless items.is_a?(Array)
 
         items.select { |i|
@@ -2023,13 +2042,17 @@ module Buddy
 
       def tools
         @tools ||= [
-          ContextTool.schema(user: @user, briefing: today_briefing?),
+          # A briefing is handed its whole day by Buddy::BriefingFacts and has
+          # nothing left to look up. Offering the lookup anyway is how twenty
+          # sections end up in front of a model that only needed six lines, and
+          # a list in context gets read out whatever the prose above it says.
+          (ContextTool.schema(user: @user, briefing: false) unless today_briefing?),
           PromptTool.schema,
           ImageTool.schema,
           ListenerTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
           *Buddy::Tools.function_schemas(user: @user, briefing: today_briefing?),
-        ]
+        ].compact
       end
 
       # The handful of always-needed values, inlined so a chat-only turn never
@@ -2092,6 +2115,7 @@ module Buddy
       end
 
       def finalize_success(outcome)
+        @repairs = []
         body = display_body(apply_leading_mood(outcome[:text]))
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
@@ -2099,17 +2123,17 @@ module Buddy
         # the question and then answered it again, reworded. See
         # Buddy::Restatement for why this compares word sets rather than
         # phrasing, and why the bar for dropping anything is as high as it is.
-        body = Buddy::Restatement.collapse(body)
+        body = repaired(:restatement, body) { |b| Buddy::Restatement.collapse(b) }
         # The weather repairs run today's figures first, then today's hours,
         # then the week, so what gets appended reads in the order a person
         # would say it. Each one only fills its own silence; see
         # Buddy::TodayBriefing.
-        body = with_weather(body)
-        body = with_corrected_temperatures(body)
-        body = with_rain_hours(body)
-        body = with_week_weather(body)
-        body = with_leave_times(body)
-        body = with_lifted_greeting(with_greeting(body))
+        body = repaired(:weather, body) { |b| with_weather(b) }
+        body = repaired(:temperatures, body) { |b| with_corrected_temperatures(b) }
+        body = repaired(:rain_hours, body) { |b| with_rain_hours(b) }
+        body = repaired(:week_weather, body) { |b| with_week_weather(b) }
+        body = repaired(:leave_times, body) { |b| with_leave_times(b) }
+        body = repaired(:greeting, body) { |b| with_lifted_greeting(with_greeting(b)) }
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn
@@ -2159,6 +2183,18 @@ module Buddy
         # tools, and silent is not the same as invisible. Stamped here rather
         # than at create_reply, which runs before any round has fired.
         @reply.update!(metadata: @reply.metadata.to_h.merge("kept" => true)) if @kept
+        # Which repairs FIRED, on the reply itself.
+        #
+        # Every one of them only fills a silence, so one firing is the model
+        # having dropped a fact it was handed. On 4 Sep all three briefings -
+        # three people, three companions - closed with the same two sentences
+        # byte for byte, because the weather and week fallbacks had written them
+        # all three times. That is what "the briefings have become robotic" is,
+        # and nothing in the data said how often it was happening. Now the daily
+        # audit can count it instead of anybody guessing.
+        if @repairs.present?
+          @reply.update!(metadata: @reply.metadata.to_h.merge("repairs" => @repairs.map(&:to_s)))
+        end
 
         stamp_usage_rollup
         settle_expression(acted: executed_anything?(result), landed: landed?)

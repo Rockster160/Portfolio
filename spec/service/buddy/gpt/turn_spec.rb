@@ -43,10 +43,20 @@ RSpec.describe Buddy::GPT::Turn do
       turn.send(:tools).first.dig(:parameters, :properties, :sections, :items, :enum)
     end
 
-    it "offers the briefing only the due-today chores" do
+    # The whole day arrives in the seed now (Buddy::BriefingFacts), so a briefing
+    # turn is offered no lookup at all. A model that CAN fetch twenty sections
+    # reads some of them out whatever the prompt above them says, and the chore
+    # roster was the loudest of them.
+    it "offers the briefing no lookup at all" do
       turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
 
-      expect(offered_sections(turn).grep(/\Achores_/)).to eq([:chores_due_today])
+      expect(turn.send(:tools).pluck(:name)).not_to include(Buddy::GPT::ContextTool::NAME)
+    end
+
+    it "still offers it to an ordinary turn, narrowed to the due-today chores" do
+      turn = turn_for({})
+
+      expect(offered_sections(turn).grep(/\Achores_/)).to include(:chores_due_today)
     end
 
     it "hands the same narrowing to the tool that answers the call" do
@@ -2042,22 +2052,28 @@ RSpec.describe Buddy::GPT::Turn do
   # days. Same answer as the weather line below: compose it in Ruby.
   describe "a briefing that named the item and not the clock" do
     let(:yoga) { { id: 1, time: "9:20 AM", title: "Yoga", leave_by: "8:46 AM", drive_min: 33 } }
+    let(:facts) { { name: "Rocco", today: [yoga], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {} } }
 
-    before { allow(Buddy::Context).to receive(:build).and_return(today_notable: [yoga]) }
+    before { allow(Buddy::BriefingFacts).to receive(:build).and_return(facts) }
 
+    # The repair reads what the SEED handed over, off the seed message itself.
+    # It used to read whatever the model had fetched, and a briefing turn is
+    # offered no lookup any more.
     def briefing(rounds)
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => facts.as_json,
+        }
       )
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
     def looked_then(text)
-      [
-        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["today_notable"] } }] },
-        { text: text },
-      ]
+      [{ text: text }]
     end
 
     it "puts the departure time on the end" do
@@ -2096,16 +2112,31 @@ RSpec.describe Buddy::GPT::Turn do
         { id: 2, time: "12:00 PM", title: "Pick up chai from LOC", leave_by: "11:21 AM", drive_min: 34 }
       }
 
-      before { allow(Buddy::Context).to receive(:build).and_return(today_notable: [chai]) }
+      before { allow(Buddy::BriefingFacts).to receive(:build).and_return(facts.merge(today: [chai])) }
+
+      # `briefing` stamps `facts` onto the seed, so this one needs the chai day
+      # on the message too.
+      def chai_briefing(rounds)
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
+          metadata: {
+            "kind"         => "buddy_trigger",
+            "hidden"       => true,
+            "buddy_action" => "today",
+            "briefing"     => facts.merge(today: [chai]).as_json,
+          }
+        )
+        described_class.run!(message, client: FakeBuddyClient.new(rounds))
+      end
 
       it "counts the item's own start time as naming it" do
-        briefing(looked_then("Morning! You've got chai pickup at 12:00 PM, so the midday is busy."))
+        chai_briefing(looked_then("Morning! You've got chai pickup at 12:00 PM, so the midday is busy."))
 
         expect(reply.body).to include("Pick up chai from LOC: leave by 11:21 AM, about 34 minutes' drive.")
       end
 
       it "counts the hour written without its minutes" do
-        briefing(looked_then("Morning! Chai pickup at 12 PM, then the afternoon is yours."))
+        chai_briefing(looked_then("Morning! Chai pickup at 12 PM, then the afternoon is yours."))
 
         expect(reply.body).to include("leave by 11:21 AM")
       end
@@ -2113,18 +2144,20 @@ RSpec.describe Buddy::GPT::Turn do
       # The guard is still a guard: a time that isn't this item's doesn't name
       # it, or every briefing with a clock in it would collect every departure.
       it "is not satisfied by some other item's time" do
-        briefing(looked_then("Morning! Swim's at 12:30 PM and that's the lot."))
+        chai_briefing(looked_then("Morning! Swim's at 12:30 PM and that's the lot."))
 
         expect(reply.body).not_to include("11:21")
       end
 
       it "still leaves a briefing that gave the figure alone" do
-        briefing(looked_then("Morning! Chai at 12:00 PM - out the door by 11:21 to make it."))
+        chai_briefing(looked_then("Morning! Chai at 12:00 PM - out the door by 11:21 to make it."))
 
         expect(reply.body).not_to include("leave by")
       end
     end
 
+    # One call, now: the day arrives in the seed, so there is no lookup round in
+    # front of the writing round.
     it "spends no extra round on it" do
       client = FakeBuddyClient.new(looked_then("Morning! You've got Yoga first thing."))
       message = convo.byte_messages.create!(
@@ -2133,7 +2166,7 @@ RSpec.describe Buddy::GPT::Turn do
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(2)
+      expect(client.calls.length).to eq(1)
     end
   end
 
@@ -2489,17 +2522,18 @@ RSpec.describe Buddy::GPT::Turn do
   # before that. Telling them the list is empty still makes the list the subject
   # of a sentence, and an empty one has nothing in it to be worth one.
   describe "a briefing that raised chores in order to say there were none" do
-    before { allow(Buddy::Context).to receive(:build).and_return(chores_due_today: []) }
-
-    def briefing(text)
+    # Read off the seed, which is where the day now arrives (Buddy::BriefingFacts).
+    def briefing(text, jobs: [])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => { "jobs" => jobs },
+        }
       )
-      described_class.run!(message, client: FakeBuddyClient.new([
-        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_due_today"] } }] },
-        { text: text },
-      ]))
+      described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
     end
 
     it "drops the sentence" do
@@ -2540,8 +2574,7 @@ RSpec.describe Buddy::GPT::Turn do
     # The count is only a non-fact when the list really was empty. A briefing
     # for someone with chores on it must never lose a true one.
     it "leaves it alone when the list wasn't empty" do
-      allow(Buddy::Context).to receive(:build).and_return(chores_due_today: [{ name: "Wipe Mirror" }])
-      briefing("Morning! Nothing showing up as due on chores right now.")
+      briefing("Morning! Nothing showing up as due on chores right now.", jobs: [{ name: "Wipe Mirror" }])
 
       expect(reply.body).to include("Nothing showing up as due on chores")
     end

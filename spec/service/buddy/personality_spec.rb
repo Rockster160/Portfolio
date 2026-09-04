@@ -728,8 +728,14 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("ahead of `now_local`")
     end
 
+    # Pinned to a clock, because the prompt PRINTS the real local time and the
+    # suite runs at whatever o'clock it runs at. It failed on 4 Sep at 4:45 PM
+    # against its own "Local time: Fri 2026-09-04 4:45 PM MDT" line, which is
+    # the one 4:45 that is supposed to be in there.
     it "shows no wrong time for the model to copy" do
-      expect(prompt).not_to match(/4:45|04:45|slipped a half-day|twelve hours|12 hours/i)
+      travel_to(Time.utc(2026, 9, 4, 17, 0)) do
+        expect(prompt).not_to match(/4:45|04:45|slipped a half-day|twelve hours|12 hours/i)
+      end
     end
   end
 

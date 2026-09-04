@@ -1378,7 +1378,8 @@ RSpec.describe ByteController, type: :controller do
       expect { send_command("/today") }.to change { seeds.count }.by(1)
 
       expect(response).to have_http_status(:ok)
-      expect(seeds.last.body).to include("What's on for TODAY")
+      expect(seeds.last.body).to include(Buddy::TodayBriefing::GREET_DIRECTIVE)
+      expect(seeds.last.metadata).to have_key("briefing")
     end
 
     # A hand-run is exempt from the sleep guard: someone typing this at 2am has

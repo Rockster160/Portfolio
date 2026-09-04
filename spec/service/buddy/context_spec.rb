@@ -540,11 +540,35 @@ RSpec.describe Buddy::Context do
       expect(due_names).to be_empty
     end
 
-    # "Every other day" has no label of its own - it is an interval, and it is
-    # as much a habit as a daily is.
-    it "counts every-other-day as a habit too" do
-      scheduled("Shower", { freq: "relative", unit: "day", interval: 2 })
+    # Rocco, 2026-09-04: "I DO want things like a weekly reminder for trash or
+    # laundry or mail to show up, despite happening every week." Weekly was
+    # never in question - but his Laundry runs on a two-day interval, and a
+    # rhythm with a gap in it makes today different from yesterday. Only an
+    # interval of one is genuinely every day.
+    it "keeps every-other-day, and drops the one that is really every day" do
+      scheduled("Laundry", { freq: "relative", unit: "day", interval: 2 })
       scheduled("Spray spiders", { freq: "relative", unit: "day", interval: 1 })
+
+      expect(due_names).to eq(["Laundry"])
+    end
+
+    # Rocco, 2026-09-04: "We should also just be removing the ChoreDaily rotation
+    # items from the briefing. Those never need to be brought up." ChoreDaily is
+    # the person's own answer to "what do I do every day", so it doesn't need a
+    # cadence to catch it and it doesn't matter how the row itself recurs.
+    it "leaves a chore in their daily rotation out however it recurs" do
+      chore = scheduled("Wordle", { freq: "weekly", by_day: ["wed"] })
+      user.chore_dailies.create!(chore: chore)
+
+      expect(due_names).to be_empty
+    end
+
+    # Not even a 5x. A hot pick is what makes an unusual chore worth a line, and
+    # a chore they were always going to do today isn't one.
+    it "leaves it out even when it is the day's biggest hot pick" do
+      chore = scheduled("Wordle", { freq: "weekly", by_day: ["wed"] })
+      user.chore_dailies.create!(chore: chore)
+      ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 5.0)
 
       expect(due_names).to be_empty
     end
@@ -562,8 +586,13 @@ RSpec.describe Buddy::Context do
       end
 
       before {
-        ["Gather trash", "Take out trash bags", "Take trash cans out",
-         "Gather recycling", "Take out recycling"].each { |name| weekly(name) }
+        [
+          "Gather trash",
+          "Take out trash bags",
+          "Take trash cans out",
+          "Gather recycling",
+          "Take out recycling",
+        ].each { |name| weekly(name) }
       }
 
       # The shared word IS the job, and it's what lets the briefing say "it's

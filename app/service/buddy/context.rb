@@ -681,6 +681,11 @@ module Buddy
         # different one-off jobs are stamped for today, eight is the honest
         # answer and the day really is like that.
         due_today_ids = pending_ids.select { |id|
+          # Rocco, 2026-09-04: "We should also just be removing the ChoreDaily
+          # rotation items from the briefing. Those never need to be brought
+          # up." That list is the person's own answer to "what do I do every
+          # day", so it leaves here unconditionally - a 5x hot pick on one is
+          # still a chore they were always going to do.
           next false if daily_ids.include?(id)
 
           marked_today.include?(id) || hot_mults[id].to_f > ROUTINE_HOT_MULTIPLIER
@@ -786,10 +791,25 @@ module Buddy
         [3, 0]
       end
 
-      # Does this come round often enough to be a habit rather than news? Daily
-      # and weekday answer by name; a relative or custom rhythm answers by how
-      # many days are between one and the next, which is where "every other
-      # day" lives - it has no label of its own, only an interval.
+      # Does this happen EVERY day? That is the whole test, and it is a low bar
+      # on purpose.
+      #
+      # It doesn't have to guess at habits, because the app already has an
+      # explicit answer for those: `ChoreDaily` is the person's own rotation,
+      # and `due_today_ids` drops those separately a few lines up. All that's
+      # left for a cadence to decide is whether something recurs so often that
+      # naming it is padding with a clock time on it.
+      #
+      # It briefly excluded every-other-day too. Rocco, 2026-09-04: "I don't
+      # know if routine_cadence? is good... I DO want things like a weekly
+      # reminder for trash or laundry or mail to show up, despite happening
+      # every week." Weekly was never excluded - but his Laundry runs on a
+      # two-day interval, and a rhythm with a gap in it is a day being different
+      # from the one before it, which is the definition of news here.
+      #
+      # `relative` and `custom` are the two freqs that carry an interval instead
+      # of a name; `after_chore` is deliberately not routine at any interval,
+      # since its anchor decides when it lands.
       def routine_cadence?(chore)
         return false if chore.nil?
 
@@ -798,7 +818,7 @@ module Buddy
         return false unless %w[relative custom].include?(data[:freq].to_s)
         return false unless data[:unit].to_s == "day"
 
-        data[:interval].to_i.between?(1, 2)
+        data[:interval].to_i <= 1
       end
 
       # Several chores that are plainly one job.

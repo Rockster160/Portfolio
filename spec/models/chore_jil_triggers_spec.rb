@@ -239,6 +239,65 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
 
         expect(completion_targets).to eq([other.id])
       end
+
+      # Prod, 04 Sep: a personal "Pickup RX" marked done and credited to a
+      # housemate sent the trigger to HER alone. She owns no RecordLinks, so
+      # the item stayed on the Chores list and the chore looked undone.
+      # Crediting somebody must not hand them your automations.
+      describe "a personal chore marked done on somebody else's behalf" do
+        let!(:personal) {
+          Chore.create!(
+            name: "Pickup RX", created_by_user_id: user.id,
+            chore_household: household, sharing_mode: :personal, reward_pebbles: 5,
+          )
+        }
+
+        def credit_other!
+          ChoreCompleter.new(personal, other, at: Time.current, recorded_by: user).call
+        end
+
+        it "fires for the credited user AND the person who recorded it" do
+          credit_other!
+
+          expect(completion_targets).to match_array([other.id, user.id])
+        end
+
+        it "does NOT reach the rest of the household" do
+          third = create(:user, chore_household: household)
+          credit_other!
+
+          expect(completion_targets).not_to include(third.id)
+        end
+
+        it "says who was credited and who marked it" do
+          credit_other!
+
+          expect(completion_attrs[:completed_by_user_id]).to eq(other.id)
+          expect(completion_attrs[:completed_by_username]).to eq(other.username)
+          expect(completion_attrs[:recorded_by_user_id]).to eq(user.id)
+          expect(completion_attrs[:recorded_by_username]).to eq(user.username)
+          expect(completion_attrs[:credited_to_other]).to be(true)
+        end
+
+        # The credit still belongs to them — this changes who HEARS about it,
+        # not who did it.
+        it "leaves the credit with the person named" do
+          completion = credit_other!.completion
+
+          expect(completion.user_id).to eq(other.id)
+          expect(completion.recorded_by_user_id).to eq(user.id)
+          expect(completion.paid_pebbles).to be > 0
+        end
+
+        it "reads the recorder off an ordinary tap without storing a second copy" do
+          completion = ChoreCompleter.new(personal, other, at: Time.current, recorded_by: other).call.completion
+
+          expect(completion.recorded_by_user_id).to be_nil
+          expect(completion.recorder).to eq(other)
+          expect(completion).not_to be_credited_to_other
+          expect(completion_targets).to eq([other.id])
+        end
+      end
     end
   end
 end
