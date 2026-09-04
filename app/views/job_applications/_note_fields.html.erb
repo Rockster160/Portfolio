@@ -2,7 +2,7 @@
    add form, and each note's own edit form. Everything below the body is
    optional and lives behind a <details> — a note is usually a sentence and a
    date, and a wall of empty inputs above it makes it feel like paperwork. %>
-<div class="note-fields">
+<div class="note-fields" data-note-fields>
   <div class="form-field">
     <%= f.label :body, "What happened" %>
     <%= f.text_area :body, rows: 3, placeholder: "Applied through their careers page. Job looks like mostly Rails." %>
@@ -11,7 +11,8 @@
   <div class="split-fields">
     <div class="form-field">
       <%= f.label :tag, "Type" %>
-      <%= f.select :tag, JobNote::TAG_LABELS.map { |value, label| [label, value] } %>
+      <%= f.select :tag, JobNote::TAG_LABELS.map { |value, label| [label, value] },
+            {}, data: { note_tag: true } %>
     </div>
 
     <div class="form-field">
@@ -48,14 +49,17 @@
       </div>
     </div>
 
-    <%# A follow-up is written straight onto the calendar as a task, so the
-       agenda's own notifications do the reminding. Clearing the field takes
-       the task back off. %>
+    <%# One date field, two meanings, and the label says which — on a Scheduled
+       note it's the interview and goes on the agenda as an event; on anything
+       else it's a chase you owe them and goes on as a task. Either way the
+       agenda's own notifications do the reminding, and clearing the field takes
+       the row back off. The label is swapped by JS; with none it reads as the
+       common case. %>
     <div class="form-field">
-      <%= f.label :follow_up_at, "Follow up on" %>
+      <%= f.label :follow_up_at, "Follow up on", data: { followup_label: true } %>
       <%= f.datetime_field :follow_up_at,
             value: f.object.follow_up_at&.strftime("%Y-%m-%dT%H:%M") %>
-      <span class="field-hint">Optional. Goes on your agenda as a task.</span>
+      <span class="field-hint" data-followup-hint>Optional. Goes on your agenda as a task.</span>
     </div>
   </details>
 </div>

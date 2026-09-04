@@ -41,6 +41,10 @@ Buddy::Tools.register(
     nothing named to follow it - is the ordinary countdown, and that one leaves
     the flag off.
 
+    A wait shows as a chip and counts down like any other, but it does NOT go
+    off: when it's up the held steps simply run. So don't tell them it will
+    alarm, ring or need dismissing - there's nothing for them to do.
+
     ROUND AND ROUND: `repeat: true` is for a rhythm rather than one countdown -
     "half an hour at a time", "30 on, 10 off until 6:30", "check the printer
     every 30 minutes until the print finishes", "keep nudging me back to it".

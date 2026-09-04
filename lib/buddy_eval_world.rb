@@ -518,7 +518,17 @@ class BuddyEvalWorld
       # is about. Without it the honest answer to prod 5244 really is a feature
       # request, and the probe would be testing the opposite of the lesson.
       [/before bed/i,       "Before Bed Flag",  %(item:list:name::"Before Bed")],
-    ].each { |rx, name, listener|
+      # The description is the WHOLE probe here: the function has always been
+      # able to lock the car and "Lock the car, please" still got "I don't have
+      # a Car Lock function wired up" (prod 5272-5273), because the index the
+      # model searches said Tesla and never said car. A stand-in carrying the
+      # generic "for the eval world" line would pass or fail on nothing.
+      [/tesla control/i,    "Tesla Control",
+       %(function("Action" TAB ["start" "stop" "unlock_doors" "lock_doors" "honk"]("start"))),
+       "Runs a basic command on the car (Tesla): start, stop, lock or unlock the doors, honk, " \
+       "flash lights, vent or close the windows, frunk/trunk, defrost, seat heaters. Car, " \
+       "vehicle and Tesla all mean this one."],
+    ].each { |rx, name, listener, description|
       wanted_function = listener.start_with?("function")
       found = mine.detect { |task|
         next false unless task.name.to_s.match?(rx)
@@ -528,7 +538,7 @@ class BuddyEvalWorld
       reuse(found) {
         Task.create!(
           user: user, name: name, listener: listener, buddy_enabled: true, enabled: true,
-          description: "#{name}, for the eval world"
+          description: description.presence || "#{name}, for the eval world"
         )
       }
     }

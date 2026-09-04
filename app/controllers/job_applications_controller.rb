@@ -19,11 +19,11 @@ class JobApplicationsController < ApplicationController
     # Search RANKS, the status chips NARROW, and they compose — JobSearch takes
     # whatever relation the filter left and orders it by how well each row
     # answers the query.
-    @jobs = JobSearch.call(filtered_jobs.includes(:notes), @query)
+    @jobs = surface_interviews(JobSearch.call(filtered_jobs.includes(:notes), @query))
     @counts = current_user.job_applications.group(:status).count
     @live_jobs = current_user.job_applications.live.order(:company).to_a
-    @follow_ups = upcoming_follow_ups
     @new_job = current_user.job_applications.new
+    load_upcoming
   end
 
   # Newest first. The page is read to answer "where is this now", and the answer
@@ -109,11 +109,32 @@ class JobApplicationsController < ApplicationController
     scope.live
   end
 
-  # The next things you owe someone, across every application. Nothing else
-  # gathers these — each one is a task on the calendar, which answers "what's
-  # today" but not "what am I chasing".
-  def upcoming_follow_ups
-    JobNote.follow_ups_for(current_user).limit(5).includes(:job_application).to_a
+  # A booked interview outranks recency. It's the one thing on this page with a
+  # deadline that isn't yours to move, and the wall is sorted by "what touched
+  # this most recently", which will happily bury Thursday's interview under an
+  # email you sent this morning.
+  #
+  # Not applied to a search: typing a company is asking "where is X", and the
+  # answer to that is the ranking JobSearch just did.
+  def surface_interviews(jobs)
+    return jobs if @query.present?
+
+    booked, rest = jobs.partition { |job| job.next_interview_at.present? }
+    booked.sort_by(&:next_interview_at) + rest
+  end
+
+  # Two different obligations, and running them together is what made this
+  # fiddly: an interview is an appointment you turn up to, a follow-up is a
+  # message you owe. They read differently and they're kept apart, so a booked
+  # interview never has to compete for a slot in a list of chases.
+  #
+  # An interview that has already happened leaves both strips — it's history,
+  # and the timeline on the job is where history goes.
+  def load_upcoming
+    notes = JobNote.follow_ups_for(current_user).includes(:job_application).to_a
+    booked, chases = notes.partition(&:scheduled?)
+    @interviews = booked.select { |note| note.follow_up_at.future? }
+    @follow_ups = chases.first(5)
   end
 
   # The index's one form does both jobs at once, so the note fields arrive

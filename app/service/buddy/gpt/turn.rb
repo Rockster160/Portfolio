@@ -2095,6 +2095,11 @@ module Buddy
         body = display_body(apply_leading_mood(outcome[:text]))
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
+        # One thing said twice. Prod 5296: a single call with no tools answered
+        # the question and then answered it again, reworded. See
+        # Buddy::Restatement for why this compares word sets rather than
+        # phrasing, and why the bar for dropping anything is as high as it is.
+        body = Buddy::Restatement.collapse(body)
         # The weather repairs run today's figures first, then today's hours,
         # then the week, so what gets appended reads in the order a person
         # would say it. Each one only fills its own silence; see

@@ -796,6 +796,18 @@ BUDDY_EDGE_PROBES = [
            "task's `listener` string. They are there now and nothing re-checks it",
   },
 
+  {
+    case:  "prod 5272-5273",
+    say:   "Lock the car, please.",
+    tool:  :call_jil_function,
+    needs: :car_fn,
+    args:  { call_jil_function: { action: "lock_doors" } },
+    note:  "answered \"I don't have a Car Lock function wired up\" and burned two " \
+           "model calls looking. Task 430 is enabled, buddy_enabled, and its " \
+           "listener carries lock_doors - but its description said Tesla and " \
+           "never said car, and there was no probe anywhere using the word",
+  },
+
   # --- the camera: seeing something, versus being told when ----------------
   {
     case:  "prod 3789, 3728, 3751",

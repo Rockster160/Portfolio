@@ -497,6 +497,107 @@ RSpec.describe Buddy::Context do
     end
   end
 
+  # Rocco, 2026-09-04: "again, I WOULD like Byte to mention the chores that are
+  # scheduled DUE TODAY, excluding the dailies, and maybe even the ones that are
+  # every other day. It CAN summarize, but should do so sensibly. For example,
+  # Wednesdays have a whole bunch of gather and take out items for the trash.
+  # Those can be grouped into just saying 'It's trash day'."
+  #
+  # A chore whose SCHEDULE lands on today went to `scheduled_today`, which a
+  # briefing never sees, so the Wednesday bin run had no way of reaching one.
+  describe "a chore the schedule puts on today" do
+    # A Wednesday, so the bin run is genuinely due. Mid-morning, well clear of
+    # the 3am-to-4am seam above.
+    around { |ex| travel_to(Time.find_zone("America/Denver").parse("2026-09-02 10:00")) { ex.run } }
+
+    let(:user) { create(:user) }
+    let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
+
+    before { user.update!(chore_household_id: household.id) }
+
+    def scheduled(name, recurrence)
+      create(:chore, name: name, created_by_user: user, chore_household: household, recurrence: recurrence)
+    end
+
+    def weekly(name)
+      scheduled(name, { freq: "weekly", by_day: ["wed"] })
+    end
+
+    def due_names
+      Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today].pluck(:name)
+    end
+
+    it "is named, where it used to be invisible" do
+      weekly("Take out trash bags")
+
+      expect(due_names).to include("Take out trash bags")
+    end
+
+    it "leaves the everyday rhythm out, which is what keeps the list short" do
+      scheduled("Kitty Litter", { freq: "daily" })
+      scheduled("Wash Water Bowls", { freq: "weekdays" })
+
+      expect(due_names).to be_empty
+    end
+
+    # "Every other day" has no label of its own - it is an interval, and it is
+    # as much a habit as a daily is.
+    it "counts every-other-day as a habit too" do
+      scheduled("Shower", { freq: "relative", unit: "day", interval: 2 })
+      scheduled("Spray spiders", { freq: "relative", unit: "day", interval: 1 })
+
+      expect(due_names).to be_empty
+    end
+
+    it "keeps a rhythm slow enough to be worth saying" do
+      scheduled("Trim Kitty Nails", { freq: "relative", unit: "week", interval: 2 })
+
+      expect(due_names).to include("Trim Kitty Nails")
+    end
+
+    describe "the Wednesday bin run" do
+      def groups
+        rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
+        rows.group_by { |row| row[:group] }.transform_values { |rs| rs.pluck(:name).sort }
+      end
+
+      before {
+        ["Gather trash", "Take out trash bags", "Take trash cans out",
+         "Gather recycling", "Take out recycling"].each { |name| weekly(name) }
+      }
+
+      # The shared word IS the job, and it's what lets the briefing say "it's
+      # trash day" instead of five sentences.
+      it "comes back as two jobs rather than five chores" do
+        expect(groups.keys).to contain_exactly("trash", "recycling")
+      end
+
+      it "puts every row in exactly one of them" do
+        expect(groups["trash"]).to eq(["Gather trash", "Take out trash bags", "Take trash cans out"])
+        expect(groups["recycling"]).to eq(["Gather recycling", "Take out recycling"])
+      end
+
+      # Nothing is dropped: the ids are what `complete_chore` matches on, and a
+      # summary that loses them makes "tick the trash off" unanswerable.
+      it "keeps every chore, with its id" do
+        rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
+
+        expect(rows.length).to eq(5)
+        expect(rows.pluck(:id).compact.uniq.length).to eq(5)
+      end
+    end
+
+    # A verb is not a job. Grouping on one puts the dog and the bins together.
+    it "doesn't group on what you do, only on what it's about" do
+      weekly("Take out trash bags")
+      weekly("Take the dog out")
+
+      rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
+
+      expect(rows.filter_map { |row| row[:group] }).to be_empty
+    end
+  end
+
   # Prod 3255. The morning after a one-off reminder rang at 7:00 PM, Suki said
   # "the swimming lesson schedule reminder is set for this evening" — the same
   # reminder, re-dated a day forward, announced as still coming.

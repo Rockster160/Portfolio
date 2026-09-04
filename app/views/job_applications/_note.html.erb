@@ -24,9 +24,12 @@
     <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>
   <% end %>
 
+  <%# The same field, saying two different things: on a scheduled note the date
+     is the interview itself, everywhere else it's a chase you owe them. %>
   <% if note.follow_up_at.present? %>
-    <div class="note-followup">
-      Follow up <%= note.follow_up_at.strftime("%b %-d at %-I:%M %p") %>
+    <div class="note-followup <%= "is-interview" if note.scheduled? %>">
+      <%= note.scheduled? ? "Interview" : "Follow up" %>
+      <%= interview_day(note.follow_up_at) %>
       <% if note.follow_up_item.present? %>
         <span class="field-hint">· on your agenda</span>
       <% end %>

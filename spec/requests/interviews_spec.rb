@@ -9,6 +9,11 @@ RSpec.describe "Interview tracker", type: :request do
 
   before { post login_path, params: { user: { username: user.username, password: "password123" } } }
 
+  # The order of the wall, by application id.
+  def card_order
+    response.body.scan(/<a class="interview-card[^>]*href="\/interviews\/(\d+)"/).flatten.map(&:to_i)
+  end
+
   describe "GET /interviews" do
     let!(:live) { user.job_applications.create!(company: "Acme") }
     let!(:dead) { user.job_applications.create!(company: "Initech", status: :rejected) }
@@ -62,6 +67,71 @@ RSpec.describe "Interview tracker", type: :request do
       expect(text.scan(/Applied/i).size).to eq(1)
     end
 
+    # The wall is sorted by "what touched this most recently", which will
+    # happily bury Thursday's interview under an email sent this morning.
+    it "lifts a booked interview to the front of the wall" do
+      stale = user.job_applications.create!(company: "Booked")
+      stale.notes.create!(
+        tag: :scheduled, occurred_at: 20.days.ago,
+        follow_up_at: 4.days.from_now
+      )
+      stale.touch_activity!
+      fresh = user.job_applications.create!(company: "Busy")
+      fresh.notes.create!(body: "Emailed them", occurred_at: 1.minute.ago)
+      fresh.touch_activity!
+
+      get interviews_path
+
+      expect(card_order.first).to eq(stale.id)
+      expect(card_order).to include(fresh.id)
+    end
+
+    it "sorts two booked interviews by which comes first" do
+      friday = user.job_applications.create!(company: "Friday")
+      friday.notes.create!(tag: :scheduled, follow_up_at: 5.days.from_now)
+      tuesday = user.job_applications.create!(company: "Tuesday")
+      tuesday.notes.create!(tag: :scheduled, follow_up_at: 2.days.from_now)
+
+      get interviews_path
+
+      expect(card_order.first(2)).to eq([tuesday.id, friday.id])
+    end
+
+    # An interview you attend and a message you owe are different obligations,
+    # and running them into one list is what made this fiddly.
+    it "keeps interviews out of the follow-ups strip" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :scheduled, follow_up_at: 2.days.from_now)
+
+      get interviews_path
+
+      expect(response.body).to include("Interviews booked")
+      expect(response.body).not_to include("Following up")
+    end
+
+    it "drops an interview that has already happened off both strips" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :scheduled, occurred_at: 10.days.ago, follow_up_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(response.body).not_to include("Interviews booked")
+      expect(response.body).not_to include("Following up")
+    end
+
+    # "Sep 7" needs a calendar lookup before it means anything.
+    it "names the weekday on a date you have to plan around" do
+      job = user.job_applications.create!(company: "Acme")
+      at = 3.days.from_now.change(hour: 14, min: 0)
+      job.notes.create!(tag: :scheduled, follow_up_at: at)
+
+      get interviews_path
+
+      # Rendered in the reader's zone — the controller wraps every request in it.
+      shown = at.in_time_zone(user.timezone).strftime("%A, %b %-d at %-I:%M %p")
+      expect(response.body).to include(shown)
+    end
+
     it "never shows someone else's applications" do
       create(:user).job_applications.create!(company: "SomeoneElseCo")
 
@@ -74,10 +144,6 @@ RSpec.describe "Interview tracker", type: :request do
   describe "GET /interviews?q=" do
     let!(:netflix) { user.job_applications.create!(company: "Netflix") }
     let!(:anrok) { user.job_applications.create!(company: "Anrok") }
-
-    def card_order
-      response.body.scan(/<a class="interview-card[^>]*href="\/interviews\/(\d+)"/).flatten.map(&:to_i)
-    end
 
     it "narrows the wall to what matches" do
       get interviews_path(q: "netflix")

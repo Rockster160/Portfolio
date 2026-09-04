@@ -78,6 +78,7 @@ class AgendaSchedule < ApplicationRecord
   # an UNDO of the move does it too.
   after_save :move_items_with_series!, if: :saved_change_to_agenda_id?
   after_commit :fire_jil_trigger, on: [:create, :update]
+  after_commit :broadcast_agenda_refresh, on: [:create, :update]
 
   belongs_to :agenda
   has_many :agenda_items, dependent: :destroy
@@ -417,6 +418,19 @@ class AgendaSchedule < ApplicationRecord
       attrs = { action: action }.merge(agenda.jil_viewer_attrs(viewer))
       ::Jil.trigger(viewer, :agenda_schedule, with_jil_attrs(attrs))
     }
+  end
+
+  # Same reason as AgendaItem#broadcast_agenda_refresh: an open Agenda repaints
+  # off this broadcast, and a series is where the OCCURRENCES come from — the
+  # week and month views draw phantoms straight off the rule. A repeat added by
+  # Byte whose first occurrence falls outside the 30-hour materialize window
+  # has no row to announce itself, so without this the page shows nothing at
+  # all until the tab is focused.
+  def broadcast_agenda_refresh
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+    return if metadata_only_change?
+
+    agenda.broadcast!
   end
 
   # See AgendaItem#metadata_only_change? — same rationale: skip refire on

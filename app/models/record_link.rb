@@ -83,12 +83,23 @@ class RecordLink < ApplicationRecord
   # narrows by kind and the propagator filters the rest in Ruby. There are tens
   # of these rows, not thousands.
   scope :sourced_from, ->(user, kind) {
-    live.where(user_id: user.id, source_kind: KINDS.fetch(kind.to_sym), reverse: false)
+    live.where(user_id: user.id, source_kind: KINDS.fetch(kind.to_sym))
   }
 
-  # The uphill escape hatch, read from the other end. Nothing sets `reverse`
-  # today; it exists so a specific pairing CAN be made to run backwards without
-  # reopening the design.
+  # The uphill escape hatch, read from the other end.
+  #
+  # `reverse` ADDS the backwards reading to a pairing; it does not replace the
+  # forwards one, and `sourced_from` deliberately does not filter it out. The
+  # uniqueness index is what decides that: it covers the two endpoints and
+  # pointedly NOT this column, so one pairing is one row and "both directions"
+  # could never have been two of them. A chore that both puts its item on the
+  # list and comes due when the item goes back on is one row with this set.
+  #
+  # The match modes belong to the row rather than to a direction, so an uphill
+  # reading matches the list item with whatever `source_name_match` says. Fine
+  # while both ends are `exactly`, which is every pairing that wants this so
+  # far; a pairing needing different strictness each way needs its own column
+  # before it needs a second row.
   scope :reversed_from, ->(user, kind) {
     live.where(user_id: user.id, target_kind: KINDS.fetch(kind.to_sym), reverse: true)
   }
@@ -105,11 +116,19 @@ class RecordLink < ApplicationRecord
   end
 
   def summary
-    "#{endpoint(source_kind, source_name, source_scope)} → #{endpoint(target_kind, target_name, target_scope)}"
+    arrow = reverse? ? "↔" : "→"
+    "#{endpoint(source_kind, source_name, source_scope)} #{arrow} #{endpoint(target_kind, target_name, target_scope)}"
   end
 
-  # What it does, in a sentence, for the manager and for receipts.
+  # What it does, in a sentence, for the manager and for receipts. A reverse row
+  # does two things and has to say both — the manager page is the only place a
+  # row explains itself, and half an explanation there is how a link ends up
+  # doing something nobody remembers asking for.
   def sentence
+    [downhill_sentence, (uphill_sentence if reverse?)].compact.join(", and back: ")
+  end
+
+  def downhill_sentence
     verb = (
       case target_kind
       when "chore"     then ask_who? ? "asks who did" : "completes"
@@ -122,9 +141,19 @@ class RecordLink < ApplicationRecord
       "#{" on #{target_scope}" if target_scope.present?}"
   end
 
-  def source_phrase
-    bits = ["#{KIND_LABELS[source_kind]} where name #{MATCH_LABELS[source_name_match]} #{source_name.inspect}"]
-    bits << "notes #{MATCH_LABELS[source_scope_match]} #{source_scope.inspect}" if source_scope.present?
+  # Uphill only ever lands on a chore, and it does NOT complete one — it marks
+  # it due. Different claim, so it reads as a different verb.
+  def uphill_sentence
+    "#{source_phrase(target_kind, target_name, target_scope)} marks due " \
+      "#{KIND_LABELS[source_kind]} #{source_name.inspect}"
+  end
+
+  # `scope` is a note on an event and a LIST on a list item, so it can't be
+  # called the same thing in both readings.
+  def source_phrase(kind=source_kind, name=source_name, scope=source_scope)
+    bits = ["#{KIND_LABELS[kind]} where name #{MATCH_LABELS[source_name_match]} #{name.inspect}"]
+    noun = kind == "list_item" ? "list" : "notes"
+    bits << "#{noun} #{MATCH_LABELS[source_scope_match]} #{scope.inspect}" if scope.present?
     bits.join(" and ")
   end
 

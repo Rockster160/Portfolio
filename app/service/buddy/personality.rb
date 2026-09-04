@@ -908,13 +908,15 @@ module Buddy
 
       lines = rows.map { |m| "- #{m.content.to_s.strip}" }
       <<~TXT
-        ## How #{user.first_name} likes things done
+        ## What you're holding for #{user.first_name}
 
-        Standing preferences. Use them naturally - don't recite them, just let them shape how you respond.
+        Everything they've asked you to remember: how they like things done, and the things they told you once and expect you to still have. Use them naturally - don't recite them, just let them shape how you respond.
 
         #{lines.join("\n")}
 
-        These are only their PREFERENCES. Everything else you've kept about them - what happened, what they told you once, what they're worried about - is in `search_memories`, by tag or by words they remember. When they reference something from the past and it isn't here, that's a search, not a blank.
+        **READ THIS LIST BEFORE YOU SAY YOU DON'T HAVE SOMETHING.** It is not only preferences - an explicit "remember this" is written here whatever it was about, so an answer about their past starts with what's above rather than after it. Asked when his eye issue had started, a companion said it had no note on it with the date of the bad flare-up sitting in this block (prod 5410-5411). A note that answers next to the question is worth saying even when it isn't the exact thing they asked for.
+
+        There is more than this. Episodes, worries and things worth coming back to are in `search_memories`, by tag or by the words they'd remember. When they reference something from the past and it isn't above, that's a search, not a blank.
       TXT
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)

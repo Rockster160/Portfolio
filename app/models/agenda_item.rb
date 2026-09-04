@@ -81,6 +81,8 @@ class AgendaItem < ApplicationRecord
   after_update_commit :purge_pending_derived_triggers, if: :saved_change_to_status?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
+  after_commit :broadcast_agenda_refresh, on: [:create, :update]
+  after_commit :broadcast_agenda_removal, on: :destroy
   after_commit :enqueue_travel_chain_sync, on: [:create, :update, :destroy]
 
   # State filters are mandatory `is:<state>` markers (or the `kind:` filter for
@@ -824,6 +826,35 @@ class AgendaItem < ApplicationRecord
     old_id = saved_changes[:agenda_id].first
     old_agenda = Agenda.find_by(id: old_id)
     Agenda.broadcast_changes!([old_agenda, agenda].compact)
+  end
+
+  # Every open Agenda repaints off this one broadcast, so it belongs to the
+  # record rather than to whoever wrote it. Byte adding an event, an undo
+  # putting one back, a script moving one — all of it is news to a page that
+  # is already on screen, and none of it went through the controller that
+  # used to be the only thing announcing a change. Without this the page
+  # caught up only when the tab regained focus and AgendaSync's resume-poll
+  # fired, which is why the Agenda looked like it updated when you clicked it.
+  #
+  # Duplicate announcements are harmless: the client coalesces broadcasts into
+  # one debounced delta fetch, and the delta is a diff either way.
+  def broadcast_agenda_refresh
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+    return if metadata_only_change?
+    # A move between calendars already fanned out to both sides in one
+    # payload — see broadcast_agenda_change!. On create the old value is nil.
+    return if saved_changes[:agenda_id]&.first.present?
+
+    agenda.broadcast!
+  end
+
+  # The delta endpoint is upsert-only, so a destroyed row can only reach an
+  # open page as an id to drop. Cancellations are NOT this path — they ride
+  # the normal delta as `status: "cancelled"`.
+  def broadcast_agenda_removal
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+
+    agenda.broadcast!(destroyed_item_ids: [display_id])
   end
 
   def clear_notified_at_on_future_reschedule

@@ -12,6 +12,21 @@ module Buddy
     PAGE_NAME = "Buddy".freeze
     MAX_SECONDS = 24 * 60 * 60
 
+    # A WAIT is Buddy holding the middle of a sequence the person asked for -
+    # "play the nap sound in 5 minutes" - rather than a countdown they set and
+    # are watching. The chip still shows, because it is the only sign the delay
+    # is real, but nothing rings and there is nothing to dismiss.
+    #
+    # Prod timer 98, 4 Sep: the nap-sound wait went off like a kitchen timer,
+    # blared, and sat there until it was tapped away - `confirmed_at` two
+    # seconds after the fire. Nothing was being asked of him; the sound was
+    # already playing.
+    #
+    # Written when the queue is actually attached (Buddy::ProposalBuilder
+    # .hold_for_timer!) rather than off the model's `then_continue`, so the flag
+    # can never be on a timer with nothing behind it.
+    WAIT = "wait".freeze
+
     # ---- the fast path -------------------------------------------------------
     #
     # "5m" and "5m pasta" are unambiguous enough to serve from Rails without
@@ -259,6 +274,26 @@ module Buddy
       page.present? && timer.timer_page_id == page.id
     end
 
+    # Is this a wait rather than a countdown they set? Read straight off the
+    # row, the same way Buddy::Alarms reads its own flag, so the serializer can
+    # answer it with nothing to look up.
+    def wait?(timer)
+      return false if timer.nil?
+
+      timer.metadata.to_h[WAIT].present?
+    end
+
+    # Broadcast, because the client rings off `end_at` rather than the server's
+    # fire (which lands seconds later) - so an open window has to know the chip
+    # is a wait BEFORE the countdown reaches zero, not when it goes off.
+    def mark_wait!(timer)
+      return nil if timer.nil? || wait?(timer)
+
+      timer.update!(metadata: timer.metadata.to_h.merge(WAIT => true))
+      timer.broadcast(reason: :updated)
+      timer
+    end
+
     # Called by TimerFireWorker right after a countdown fires. For Buddy's own
     # timers, Buddy speaks up in the conversation (and the same delivery pushes,
     # covering the away case). No-op + self-contained error handling for anything
@@ -302,8 +337,19 @@ module Buddy
         text:         alarm ? Buddy::Alarms.fired_text(timer) : fired_text(label, waiting: waiting),
         metadata:     { "kind" => "buddy", "source" => alarm ? "alarm" : "timer", "timer_id" => timer.id },
         push_title:   alarm ? Buddy::Alarms.fired_title(timer) : fired_title(label, waiting: waiting),
+        # A wait announces a mechanism, not something to act on. What it was
+        # holding lands directly underneath and pushes on its own account, so a
+        # buzz here is one notification for the delay and a second for the thing
+        # the delay was for.
+        push:         !waiting,
       )
-      Buddy::ProposalBuilder.resume_after!(timer) if waiting
+      return unless waiting
+
+      # There is nothing left to acknowledge, so the chip goes on its own rather
+      # than parking at 0:00 waiting for a tap. Archiving first means a resume
+      # that blows up can't strand it in the corner either.
+      stop!(timer)
+      Buddy::ProposalBuilder.resume_after!(timer)
     rescue StandardError => e
       Buddy::Errors.report(section: "timers.on_fired", exception: e, user: timer&.user)
     end

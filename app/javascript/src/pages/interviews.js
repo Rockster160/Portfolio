@@ -1,9 +1,10 @@
 // Interview tracker — /interviews.
 //
-// Three small jobs, none of which the page depends on: the capture form's
-// new-company fieldset, the status dropdown submitting itself, and the logo
-// square. Every one has a working no-JS path behind it (the fieldset is simply
-// visible, the status form keeps its submit button, and a job with no logo
+// Four small jobs, none of which the page depends on: the capture form's
+// new-company fieldset, the note's date field saying what it means, the status
+// dropdown submitting itself, and the logo square. Every one has a working
+// no-JS path behind it (the fieldset is simply visible, the label reads as the
+// common case, the status form keeps its submit button, and a job with no logo
 // shows its initials), so a failure here degrades rather than breaks.
 import { bindIconStack } from "../icon_stack";
 
@@ -33,6 +34,39 @@ $(document).ready(function () {
     picker.addEventListener("change", syncCapture)
     syncCapture()
   }
+
+  // ---- Note fields -------------------------------------------------------
+  // The date at the bottom of a note means two different things depending on
+  // the tag above it: the interview itself, or a chase you owe them. Same
+  // field, so the label has to say which — a form reading "Follow up on" while
+  // you book an interview is what made this fiddly. Without JS it reads as the
+  // common case and still saves the same date.
+  page.querySelectorAll("[data-note-fields]").forEach(function (fields) {
+    const tagSelect = fields.querySelector("[data-note-tag]")
+    const label = fields.querySelector("[data-followup-label]")
+    const hint = fields.querySelector("[data-followup-hint]")
+    if (!tagSelect || !label) { return }
+
+    const extras = fields.querySelector(".note-extras")
+
+    const syncFollowUp = function (opened) {
+      const booking = tagSelect.value === "scheduled"
+      label.textContent = booking ? "Interview on" : "Follow up on"
+      if (hint) {
+        hint.textContent = booking
+          ? "When it is. Goes on your agenda as an event."
+          : "Optional. Goes on your agenda as a task."
+      }
+
+      // The date is the entire point of a Scheduled note, and it lives behind
+      // a collapsed <details>. Only on a deliberate change — reopening it
+      // under someone mid-edit would be worse than leaving it shut.
+      if (booking && opened && extras) { extras.open = true }
+    }
+
+    tagSelect.addEventListener("change", function () { syncFollowUp(true) })
+    syncFollowUp(false)
+  })
 
   // ---- Status ------------------------------------------------------------
   const statusSelect = page.querySelector("[data-status-select]")

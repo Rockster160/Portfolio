@@ -30,7 +30,12 @@ module Buddy
       # snapshot above all. Attached BEFORE the broadcast, because `as_wire` is
       # what the socket carries and a message that goes out without its
       # attachment renders as an empty bubble that nothing broadcasts again.
-      def deliver_plain(user:, conversation:, text:, metadata:, push_title: nil, files: [])
+      #
+      # `push: false` for a line that is a MECHANISM rather than something to
+      # act on - a wait picking itself back up, where the step behind it posts
+      # and pushes on its own account. Everything else buzzes: silence is how
+      # somebody misses the thing they asked to be told about.
+      def deliver_plain(user:, conversation:, text:, metadata:, push_title: nil, files: [], push: true)
         message = conversation.byte_messages.create!(
           user:         user,
           direction:    :inbound,
@@ -41,7 +46,7 @@ module Buddy
         )
         message.files.attach(files) if files.present?
         broadcast(user, message)
-        notify(user, message, push_title: push_title || text)
+        notify(user, message, push_title: push_title || text) if push
         message
       end
 

@@ -355,11 +355,11 @@ module Buddy
 
       [
         "",
-        "- `chores_due_today` is the ONLY place chores come from, and it's the whole chore section of your context. It has already been narrowed to the exceptions - the ones stamped for today, and the ones flagged well above their usual value - so the filtering is done and none of it is yours to redo.",
+        "- `chores_due_today` is the ONLY place chores come from, and it's the whole chore section of your context. It has already been narrowed to the exceptions - the ones stamped for today, the ones flagged well above their usual value, and the ones whose SCHEDULE lands on today and isn't an everyday rhythm - so the filtering is done and none of it is yours to redo.",
         "- **It is NOT everything they have to do today, and you must never say it is.** Their whole daily rotation is deliberately missing from it, so a list of one means one thing is UNUSUAL today, not that one thing is left. Saying the only thing on today is whatever happens to be in that list is false, and it's false in the direction that gets the rest of their day forgotten. Name what's in it; never count it, total it, or call it all there is.",
         "- Say WHY each one is there, not just that it is. Its reason for being on that list is the only thing making it worth a sentence, and a name without one is a worse version of a screen I can open myself.",
         "- Naming none of them is a perfectly good briefing. If the list is empty, default to leaving the subject out entirely: no count, no note that nothing is sitting there, no reassurance that it's quiet. Telling me the list is empty still makes the list the subject of a sentence, and an empty one has nothing in it to be worth one.",
-        "- BATCH related items: several that are obviously one errand or one theme go out once as the theme, not one by one. A word shared across their names is the giveaway.",
+        "- BATCH related items: rows carrying the same `group` are one job, and they go out ONCE as that job rather than one by one. Five rows grouped as `trash` on a Wednesday is \"it's trash day\", not five sentences. Name the group, and only name a member of it when there's something odd about that one in particular.",
         "- Never tell me I DID something. You can't see completions on this turn at all, and a shared chore counts the moment anyone in the house does it, so crediting me for one is a guess that's wrong often enough to matter.",
         "- A chore that isn't in that list does not exist for this message. Don't reach back for one you saw earlier in the thread.",
       ].join("\n")

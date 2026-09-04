@@ -85,6 +85,15 @@ Buddy::Tools.register(
     Asking for the same thing again adds to the one that's already written down
     rather than making a second; you'll be told when that happens, and it's
     worth saying, because "you've asked for that before" is a real answer.
+
+    **"THAT'S NOT WHAT I MEANT" IS NOT A SECOND FILING.** When they tell you the
+    row you just wrote is wrong, sending the same words again writes nothing at
+    all - the merge sees text it already holds and there is no change to make.
+    Prod 5420-5422: told "that's not what's needed at all", a companion said it
+    had put the corrected request on the list and re-sent the identical body;
+    the row's `updated_at` never moved. Say back what is actually written down
+    and ask what it should say instead. Then file THAT - the part they say is
+    missing, in the words they just used.
   TXT
   args:        {
     title: { type: :string, required: true, description: "A few words naming the thing they wanted" },
@@ -116,8 +125,26 @@ Buddy::Tools.register(
     # once, and a list with the same gap on it four times is a list nobody reads.
     again = FeatureRequest.similar_to(ctx.user, title, body)
     if again
-      again.update!(body: [again.body, body].uniq.join("\n\n").first(2000))
-      next { request_id: again.id, title: again.title, again: true }
+      merged = [again.body, body].uniq.join("\n\n").first(2000)
+      added  = merged != again.body
+      again.update!(body: merged) if added
+      next {
+        request_id: again.id,
+        title:      again.title,
+        again:      true,
+        added:      added,
+        # Nothing was written, and the receipt underneath says so - but the
+        # sentence is written from here, before the receipt is read. Without
+        # this the reply is "I've put the corrected request on the list" over a
+        # row that never changed (prod 5420-5422).
+        note:       (
+          unless added
+            "NOTHING WAS WRITTEN. That is word for word what is already on the list, so there was " \
+              "no change to make. If they've just told you the row is wrong, read them what it " \
+              "actually says and ask what it should say instead - don't report a fresh filing."
+          end
+        ),
+      }.compact
     end
 
     request = FeatureRequest.create!(
@@ -135,6 +162,7 @@ Buddy::Tools.register(
     }
   },
   receipt:     ->(result, _ctx) {
+    next "Already on the list, word for word: **#{result[:title]}** ✓" if result[:again] && !result[:added]
     next "Added that to **#{result[:title]}**, which was already on the list ✓" if result[:again]
 
     "On the list: **#{result[:title]}** ✓"

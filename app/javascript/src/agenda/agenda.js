@@ -783,6 +783,94 @@
     return Math.max(15, (eh * 60 + em) - (sh * 60 + sm));
   }
 
+  // Start ⇄ end coupling, shared by the add and edit forms.
+  //
+  // The two rows are one range. While the user hasn't set an end themselves,
+  // moving the start carries the end along and keeps the duration the range
+  // had before that edit — measured across dates, so a multi-day span shifts
+  // as a unit and a time-of-day move drags the end with it. A kind that has
+  // no end of its own (task, trigger) gets one seeded an hour past its start,
+  // so switching to Event reveals a real range instead of whatever the
+  // hidden inputs were left holding.
+  //
+  // All-day is measured in whole days only: its time inputs are hidden and
+  // ignored on submit, and the end-date input is the INCLUSIVE last day, so
+  // running it through the minute math would stretch a one-day banner into
+  // two.
+  const DEFAULT_DURATION_MINUTES = 60;
+
+  function bindStartEndFollow({ dateInput, startTimeInput, endDateInput, endTimeInput, isAllDay }) {
+    const allDay = isAllDay || (() => false);
+    let duration = DEFAULT_DURATION_MINUTES;
+    let daySpan = 0;
+    let endTouched = false;
+
+    const pad = (n) => String(n).padStart(2, "0");
+
+    function timeToMinutes(value) {
+      const [h, m] = String(value || "").split(":").map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      return (h * 60) + m;
+    }
+
+    // Re-read the span the inputs currently describe. A same-day end at or
+    // before the start wraps to the next day — the same rule submit() uses
+    // when it builds end_at.
+    function measure() {
+      const startDate = dateInput?.value;
+      if (!startDate) return;
+      daySpan = isoDateDelta(startDate, endDateInput?.value || startDate);
+      const startMin = timeToMinutes(startTimeInput?.value);
+      const endMin = timeToMinutes(endTimeInput?.value);
+      if (startMin === null || endMin === null) return;
+      let mins = (daySpan * 1440) + (endMin - startMin);
+      if (mins <= 0 && daySpan === 0) mins += 1440;
+      if (mins > 0) duration = mins;
+    }
+
+    function applyFollow() {
+      const startDate = dateInput?.value;
+      if (!startDate) return;
+      if (allDay()) {
+        if (endDateInput) endDateInput.value = shiftIsoDate(startDate, daySpan);
+        return;
+      }
+      const startMin = timeToMinutes(startTimeInput?.value);
+      if (startMin === null) return;
+      const total = startMin + duration;
+      daySpan = Math.floor(total / 1440);
+      if (endDateInput) endDateInput.value = shiftIsoDate(startDate, daySpan);
+      if (endTimeInput) endTimeInput.value = `${pad(Math.floor((total % 1440) / 60))}:${pad(total % 60)}`;
+    }
+
+    [dateInput, startTimeInput].forEach((el) => {
+      ["input", "change"].forEach((evt) => {
+        el?.addEventListener(evt, () => { if (!endTouched) applyFollow(); });
+      });
+    });
+
+    [endDateInput, endTimeInput].forEach((el) => {
+      ["input", "change"].forEach((evt) => {
+        el?.addEventListener(evt, () => { endTouched = true; measure(); });
+      });
+    });
+
+    // Call after prefilling the inputs programmatically. `hasEnd: false`
+    // means the item carries no end of its own, so one gets seeded from the
+    // start. Either way the end is un-touched again: it follows the start
+    // until the user edits it in this sitting.
+    return function sync({ hasEnd = true } = {}) {
+      endTouched = false;
+      duration = DEFAULT_DURATION_MINUTES;
+      daySpan = 0;
+      if (hasEnd) {
+        measure();
+      } else {
+        applyFollow();
+      }
+    };
+  }
+
   function initAddModal(modal) {
     const form = $(".agenda-add-form", modal);
     if (!form) return;
@@ -885,12 +973,11 @@
       form.dataset.defaultDate = defaultDate;
       dateInput.value = defaultDate;
       if (endDateInput) endDateInput.value = defaultDate;
-      priorStartDate = dateInput.value;
       // Re-sync the picker's label/dot to the hidden input's reset value.
       const currentId = agendaPicker?.value();
       if (currentId) agendaPicker.setValue(currentId);
       colorTouched = false;
-      endTouched = false;
+      syncStartEnd({ hasEnd: true });
       syncKind();
       sched.syncFreq();
     }
@@ -900,30 +987,14 @@
     });
     alldayInput?.addEventListener("change", syncAllDay);
 
-    // End time auto-tracks start (+1h) until the user edits end themselves.
-    let endTouched = false;
-    endInput?.addEventListener("input", () => { endTouched = true; });
-    startInput?.addEventListener("input", () => {
-      if (endTouched || !startInput.value || !endInput) return;
-      const [h, m] = startInput.value.split(":").map(Number);
-      if (!Number.isFinite(h) || !Number.isFinite(m)) return;
-      const pad = (n) => String(n).padStart(2, "0");
-      endInput.value = `${pad((h + 1) % 24)}:${pad(m)}`;
-    });
-
-    // End date auto-tracks start date, preserving the day-delta the user
-    // already configured (so a multi-day span shifts as a unit when start
-    // moves). `priorStartDate` snapshots the value before the change so
-    // we can measure the delta against the prior end-date.
-    let priorStartDate = dateInput?.value || "";
-    dateInput?.addEventListener("change", () => {
-      const prev = priorStartDate;
-      const next = dateInput.value;
-      if (endDateInput && prev && next && prev !== next) {
-        const delta = isoDateDelta(prev, endDateInput.value || prev);
-        endDateInput.value = shiftIsoDate(next, delta);
-      }
-      priorStartDate = next;
+    // The end row follows the start (date and time, duration preserved)
+    // until the user sets an end themselves.
+    const syncStartEnd = bindStartEndFollow({
+      dateInput,
+      startTimeInput: startInput,
+      endDateInput,
+      endTimeInput: endInput,
+      isAllDay: () => !!alldayInput?.checked,
     });
 
     if (colorInput) {
@@ -952,8 +1023,8 @@
           form.dataset.defaultDate = defaultDate;
           dateInput.value = defaultDate;
           if (endDateInput) endDateInput.value = defaultDate;
-          priorStartDate = defaultDate;
           applyDefaultStartTime();
+          syncStartEnd({ hasEnd: true });
         }
         suppressDefaultTime = false;
         resetNotifyField(form);
@@ -1161,11 +1232,11 @@
       // for callers that haven't migrated yet (quick_add follow-up etc).
       const prefillEndDate = d.endDate || d.alldayEnd || d.date || dateInput?.value || "";
       if (endDateInput) endDateInput.value = prefillEndDate;
-      priorStartDate = dateInput?.value || "";
       if (startInput) startInput.value = d.startTime || "09:00";
       if (endInput) endInput.value = d.endTime || "10:00";
-      // Mark end as user-touched so input on start doesn't auto-bump it.
-      endTouched = true;
+      // The source event's duration is what the end follows from here; a
+      // task/trigger source has no end of its own, so seed one off the start.
+      syncStartEnd({ hasEnd: activeKind === "event" });
 
       $(".add-location", form).value = d.location || "";
       $(".add-notes", form).value = d.notes || "";
@@ -1260,7 +1331,6 @@
     let activeKind = "task";
     let currentRecurring = false;
     let currentScheduleData = null;
-    let priorStartDate = "";
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
@@ -1295,17 +1365,14 @@
 
     alldayInput?.addEventListener("change", syncAllDay);
 
-    // End date auto-tracks start date with delta-preservation (matches
-    // the add-modal behavior — a span configured by the user shifts as
-    // a unit when start moves).
-    dateInput?.addEventListener("change", () => {
-      const prev = priorStartDate;
-      const next = dateInput.value;
-      if (endDateInput && prev && next && prev !== next) {
-        const delta = isoDateDelta(prev, endDateInput.value || prev);
-        endDateInput.value = shiftIsoDate(next, delta);
-      }
-      priorStartDate = next;
+    // The end row follows the start (date and time, duration preserved)
+    // until the user sets an end themselves — same coupling as the add form.
+    const syncStartEnd = bindStartEndFollow({
+      dateInput,
+      startTimeInput,
+      endDateInput,
+      endTimeInput,
+      isAllDay: () => !!alldayInput?.checked,
     });
 
     $$(".kind-btn", form).forEach((btn) => {
@@ -1468,7 +1535,10 @@
         const allDayEnd = epochToIsoDate(d.endDate) || startDate;
         endDateInput.value = isAllDay ? allDayEnd : (endDateFromEnd || startDate);
       }
-      priorStartDate = startDate;
+      // A task or trigger has no end of its own; seeding one off the start
+      // means switching the kind to Event opens on a real range instead of
+      // the leftover defaults.
+      syncStartEnd({ hasEnd: !!d.endAt });
 
       $(".add-location", form).value = d.location || "";
       $(".add-arrive-early", form).value = parseInt(d.arriveEarlyMinutes, 10) || 0;

@@ -76,6 +76,17 @@ class JobApplication < ApplicationRecord
     rejected? || closed?
   end
 
+  # The soonest interview still ahead of us, off a `scheduled` note. This is the
+  # only fact on a card with a deadline attached, which is why it decides where
+  # the card sits on the wall rather than just how it looks.
+  #
+  # Read in memory: the index loads notes for every card anyway, and asking the
+  # database once per row to answer it would be a query per card.
+  def next_interview_at
+    booked = notes.select { |note| note.scheduled? && note.follow_up_at.present? }
+    booked.map(&:follow_up_at).select(&:future?).min
+  end
+
   private
 
   def normalize_fields

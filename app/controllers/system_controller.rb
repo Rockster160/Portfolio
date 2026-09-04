@@ -238,6 +238,9 @@ class SystemController < ApplicationController
       transaction.voided = params[:voided]
       transaction.save!
       ::SimpleFin::DashboardCache.refresh!
+      # A cancelled charge is money not spent, so it leaves the spending bars
+      # too — otherwise they keep counting it until the next purchase lands.
+      ::SpendingHealth.refresh!
       changed[:voided] = transaction.voided?
     end
 

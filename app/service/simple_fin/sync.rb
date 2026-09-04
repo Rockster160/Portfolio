@@ -43,6 +43,9 @@ module SimpleFin
       # Kept in lockstep with the rows deliberately — a dashboard reading a
       # balance the tables no longer agree with is the failure worth avoiding.
       ::SimpleFin::DashboardCache.refresh!
+      # And the spending bars, for the same reason: the rows this sync just
+      # wrote are what they are summed from.
+      ::SpendingHealth.refresh!
 
       Result.new(
         accounts:     accounts.size,

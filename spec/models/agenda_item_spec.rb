@@ -466,6 +466,73 @@ RSpec.describe AgendaItem do
         expect(attrs["end-date"]).to eq(attrs["start-at"] + (2 * 86_400))
       end
     end
+
+    # Rocco, 4 Sep 2026: *"if I add or move events, the UI itself doesn't
+    # update until I click on/focus the Agenda."*
+    #
+    # Every open Agenda repaints off one MonitorChannel broadcast, and until
+    # now only the request paths sent one — the two controllers, Jil, the
+    # Google importer. A row added or moved by Byte, by an undo, or by a
+    # script changed the database and told nobody, so the page sat stale
+    # until `focus` / `visibilitychange` fired its own catch-up poll. Hence
+    # "it updates when I click on it": the click WAS the refresh.
+    #
+    # The announcement belongs to the record, not to whoever wrote it.
+    describe "the live-update broadcast" do
+      def agenda_payloads
+        payloads = []
+        allow(MonitorChannel).to receive(:broadcast_to) { |_u, payload| payloads << payload }
+        yield
+        payloads.select { |p| p[:id] == :agenda }
+      end
+
+      it "announces a row created outside a controller" do
+        sent = agenda_payloads { create(:agenda_item, agenda: agenda, name: "Byte added this") }
+
+        expect(sent.size).to eq(1)
+        expect(sent.first[:data][:changed].map { |c| c[:agenda_id] }).to eq([agenda.id])
+      end
+
+      it "announces a move" do
+        item = create(:agenda_item, agenda: agenda)
+        sent = agenda_payloads { item.update!(start_at: 3.hours.from_now) }
+
+        expect(sent.size).to eq(1)
+      end
+
+      it "carries the id of a destroyed row, which no delta can return" do
+        item = create(:agenda_item, agenda: agenda)
+        id = item.id.to_s
+        sent = agenda_payloads { item.destroy! }
+
+        expect(sent.first[:data][:destroyed_item_ids]).to eq([id])
+      end
+
+      # Rails runs after_commit on a save that changed nothing, and the
+      # schedule worker re-saves every materialized occurrence each tick.
+      it "stays quiet on a save that changed nothing" do
+        item = create(:agenda_item, agenda: agenda)
+
+        expect(agenda_payloads { item.update!(name: item.name) }).to be_empty
+      end
+
+      # A Jil-side travel-time cache write is not news to the calendar.
+      it "stays quiet on a metadata-only write" do
+        item = create(:agenda_item, agenda: agenda)
+
+        expect(agenda_payloads { item.update!(metadata: { "travel" => { "seconds" => 600 } }) }).to be_empty
+      end
+
+      # The importer walks hundreds of rows and fans out once at the end.
+      it "leaves the Google importer's own single fan-out to it" do
+        key = ::GoogleCalendar::Sync::SUPPRESS_KEY
+        Thread.current[key] = true
+        sent = agenda_payloads { create(:agenda_item, agenda: agenda) }
+        Thread.current[key] = nil
+
+        expect(sent).to be_empty
+      end
+    end
   end
 
   describe "query — is:<state> markers" do

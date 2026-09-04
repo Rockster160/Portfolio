@@ -29,6 +29,9 @@ module SimpleFin
       # match against.
       match = ::SimpleFin::EventMatcher.call
       transfers = ::SimpleFin::TransferDetector.call
+      # Again, after the pairing: a transfer is not spending, and Sync's own
+      # refresh ran before TransferDetector had decided which rows those were.
+      ::SpendingHealth.refresh!
 
       Result.new(
         accounts:     sync.accounts,

@@ -138,6 +138,49 @@ RSpec.describe "Routines that call answering tools" do
     end
   end
 
+  # Prod 5401, 4 Sep. "Play whisper nap sound in 5 minutes" ended up as a
+  # scheduled function whose note was "Whisper nap sound." — and the task's own
+  # answer is "Playing the nap sound on Whisper". The two went out stacked, one
+  # message saying one thing twice.
+  #
+  # The header exists so a step has something to hang under and so silence
+  # doesn't read as nothing happening. Once the answer has said what happened,
+  # that job is done.
+  describe "a header the answer has already said" do
+    let!(:task) {
+      user.tasks.create!(
+        name:          "Whisper Sound",
+        listener:      %(function("Sound" TAB String)::String),
+        code:          "",
+        enabled:       true,
+        buddy_enabled: true,
+      )
+    }
+    let(:markers) {
+      [{ tool_name: :call_jil_function, payload: { name: "Whisper Sound", sound: "nap" } }]
+    }
+
+    def run_titled(body)
+      allow_any_instance_of(Task).to receive(:execute)
+        .and_return(instance_double(Execution, result: "Playing the nap sound on Whisper"))
+      Buddy::ProposalBuilder.run_markers!(user: user, conversation: convo, markers: markers, body: body)
+    end
+
+    it "drops it, leaving the answer to speak" do
+      run_titled("Whisper nap sound.")
+
+      expect(reply.body).to eq("Playing the nap sound on Whisper")
+    end
+
+    # Only when it adds nothing. A header naming something the answer doesn't
+    # is the line that tells them which routine just went.
+    it "keeps a header that says something of its own" do
+      run_titled("Lighting up **Yoga Lamp**")
+
+      expect(reply.body).to eq("Lighting up **Yoga Lamp**\n\nPlaying the nap sound on Whisper")
+    end
+  end
+
   # The half of the guard that was right, and has to stay right: with no model
   # turn there is nobody for a lookup to report to, and a chip saying a query
   # ran tells the person nothing they can act on.

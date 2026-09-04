@@ -94,6 +94,67 @@ RSpec.describe JobNote do
     end
   end
 
+  # A booked interview is a different animal from a chase: the date on the note
+  # is the appointment itself, so it goes on the calendar as a timed event
+  # rather than as a task called "Follow up".
+  describe "the scheduled tag" do
+    it "sits directly above interview in the dropdown" do
+      keys = JobNote::TAG_LABELS.keys
+
+      expect(keys[keys.index("scheduled") + 1]).to eq("interview")
+    end
+
+    it "writes the interview onto the agenda as an event" do
+      at = 3.days.from_now.change(hour: 14, min: 0)
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at, duration_minutes: 45)
+
+      item = note.follow_up_item
+      expect(item.name).to eq("Interview: Acme")
+      expect(item.kind).to eq("event")
+      expect(item.end_at).to be_within(1.second).of(at + 45.minutes)
+    end
+
+    it "books an hour when nobody said how long" do
+      at = 3.days.from_now.change(hour: 14, min: 0)
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+
+      expect(note.follow_up_item.end_at).to be_within(1.second).of(at + 1.hour)
+    end
+
+    it "still writes an ordinary follow-up as a task with no end" do
+      note = job.notes.create!(tag: :heard_back, follow_up_at: 2.days.from_now)
+
+      item = note.follow_up_item
+      expect(item.name).to eq("Follow up: Acme")
+      expect(item.kind).to eq("task")
+      expect(item.end_at).to be_nil
+    end
+
+    # Re-tagging has to convert the row it already wrote. Leaving an event
+    # wearing a task's fields is how one ends up on the calendar with no end.
+    it "converts the agenda row when the tag changes" do
+      note = job.notes.create!(tag: :heard_back, follow_up_at: 2.days.from_now)
+      note.update!(tag: :scheduled)
+
+      item = note.reload.follow_up_item
+      expect(item.kind).to eq("event")
+      expect(item.name).to eq("Interview: Acme")
+      expect(item.end_at).to be_present
+
+      note.update!(tag: :heard_back)
+
+      item = note.reload.follow_up_item
+      expect(item.kind).to eq("task")
+      expect(item.end_at).to be_nil
+    end
+
+    it "leaves the application active — being booked is not an outcome" do
+      job.notes.create!(tag: :scheduled, follow_up_at: 2.days.from_now)
+
+      expect(job.reload.status).to eq("active")
+    end
+  end
+
   describe "settling the application" do
     it "marks the job rejected when the newest note says so" do
       job.notes.create!(body: "No thanks", tag: :rejected)
@@ -232,7 +293,36 @@ RSpec.describe JobNote do
       expect(AgendaItem.count).to be_zero
     end
 
-    it "honours the calendar the person picked as their default" do
+    it "goes on the Tasks calendar" do
+      tasks = create(:agenda, user: user, name: "Tasks")
+
+      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
+
+      expect(AgendaItem.find(note.reload.agenda_item_id).agenda_id).to eq(tasks.id)
+    end
+
+    # A calendar name is typed by a person, and one on this account ends in a
+    # space — an exact match would quietly miss it and write somewhere else.
+    it "finds Tasks through stray case and whitespace" do
+      tasks = create(:agenda, user: user, name: " tasks ")
+
+      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
+
+      expect(AgendaItem.find(note.reload.agenda_item_id).agenda_id).to eq(tasks.id)
+    end
+
+    # Naming a destination beats a general "where do new items go" preference.
+    it "prefers Tasks over the agenda default" do
+      tasks = create(:agenda, user: user, name: "Tasks")
+      other = create(:agenda, user: user)
+      AgendaPreference.for(user).update!(default_agenda_id: other.id)
+
+      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
+
+      expect(AgendaItem.find(note.reload.agenda_item_id).agenda_id).to eq(tasks.id)
+    end
+
+    it "falls back to the chosen default when there is no Tasks calendar" do
       other = create(:agenda, user: user)
       AgendaPreference.for(user).update!(default_agenda_id: other.id)
 

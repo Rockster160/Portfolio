@@ -700,4 +700,43 @@ RSpec.describe AgendaSchedule do
       expect(sched.phantom_for(Date.new(2026, 5, 28))).to be_present # 3rd Thursday — within count
     end
   end
+
+  # The series half of AgendaItem's live-update broadcast. A repeat only
+  # materializes rows 30 hours out, so "remind me every Tuesday" said on a
+  # Thursday creates NO item — the week and month views draw it as a phantom
+  # off the rule. Without the rule reaching the page, nothing appears there
+  # until the tab is focused and AgendaSync polls on its own.
+  describe "the live-update broadcast" do
+    let(:user) { create(:user) }
+    let(:agenda) { create(:agenda, user: user) }
+
+    def agenda_payloads
+      payloads = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_u, payload| payloads << payload }
+      yield
+      payloads.select { |p| p[:id] == :agenda }
+    end
+
+    it "announces a series created outside a controller" do
+      sent = agenda_payloads {
+        create(:agenda_schedule, agenda: agenda, recurrence: { "freq" => "weekly", "by_day" => ["tue"] })
+      }
+
+      expect(sent).not_to be_empty
+    end
+
+    it "announces a rule edit" do
+      sched = create(:agenda_schedule, agenda: agenda)
+      sent = agenda_payloads { sched.update!(name: "Standup, moved") }
+
+      expect(sent).not_to be_empty
+    end
+
+    # JilScheduleWorker walks every schedule once a minute.
+    it "stays quiet on a save that changed nothing" do
+      sched = create(:agenda_schedule, agenda: agenda)
+
+      expect(agenda_payloads { sched.update!(name: sched.name) }).to be_empty
+    end
+  end
 end

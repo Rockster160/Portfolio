@@ -289,8 +289,14 @@ RSpec.describe AgendaItemsController, type: :controller do
     end
 
     describe "POST #create" do
+      # `at_least` because the row announces itself on commit as well — see
+      # AgendaItem#broadcast_agenda_refresh, which is what makes a create from
+      # Byte or a script reach an open page. The controller keeps its own
+      # broadcast for the paths that skip callbacks on purpose (`update_all`
+      # on a series move), so a controller create says it twice. The client
+      # coalesces both into one delta.
       it "creates a one-off task and broadcasts" do
-        expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda))
+        expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda)).at_least(:once)
         expect {
           post :create, params: {
             agenda_item: { agenda_id: agenda.id, name: "Walk dog", kind: "task", start_at: Time.current.to_i },
@@ -835,10 +841,13 @@ RSpec.describe AgendaItemsController, type: :controller do
         )
         new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 17, 0)
 
+        # Said twice, by the controller and by the destroyed row itself; the
+        # series edit fans out its own announcement alongside them.
+        allow(MonitorChannel).to receive(:broadcast_to)
         expect(MonitorChannel).to receive(:broadcast_to).with(
           user,
           hash_including(data: hash_including(destroyed_item_ids: include(detached.display_id))),
-        )
+        ).at_least(:once)
 
         patch :update, params: {
           id:    detached.id,

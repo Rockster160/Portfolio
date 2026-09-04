@@ -36,17 +36,22 @@ class JobNote < ApplicationRecord
     rejected:       7,
     withdrew:       8,
     responded:      9,
+    scheduled:      10,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
   # of `heard_back`: they wrote, then you wrote back. Which of those two a
   # timeline ends on is the whole question of whether the ball is in your court.
+  #
+  # `scheduled` sits above `interview` because that's the order they happen in:
+  # one books it, the other is it having happened.
   TAG_LABELS = {
     "note"           => "Note",
     "applied"        => "Applied",
     "heard_back"     => "Heard back",
     "responded"      => "Response",
     "recruiter_call" => "Recruiter call",
+    "scheduled"      => "Scheduled",
     "interview"      => "Interview",
     "take_home"      => "Take-home",
     "offer"          => "Offer",
@@ -64,6 +69,16 @@ class JobNote < ApplicationRecord
   }.freeze
 
   MAX_BODY = 10_000
+
+  # An event needs a length before the calendar will take it. `duration_minutes`
+  # is the answer whenever it was given; this is the slot to book when it
+  # wasn't, and it's editable on the agenda like any other event.
+  DEFAULT_INTERVIEW_MINUTES = 60
+
+  # Where follow-ups and interviews go. A person-facing calendar name, so it's a
+  # string, and it's a preference rather than a requirement — an account without
+  # one falls back through the agenda default to the oldest writable calendar.
+  FOLLOW_UP_AGENDA_NAME = "Tasks".freeze
 
   before_validation :normalize_fields
 
@@ -156,7 +171,7 @@ class JobNote < ApplicationRecord
     agenda = follow_up_agenda
     return if agenda.nil?
 
-    item = agenda.agenda_items.create(follow_up_attrs.merge(kind: :task, status: :confirmed))
+    item = agenda.agenda_items.create(follow_up_attrs.merge(status: :confirmed))
     return unless item.persisted?
 
     update_columns(agenda_item_id: item.id, updated_at: Time.current)
@@ -173,20 +188,43 @@ class JobNote < ApplicationRecord
     agenda.broadcast!
   end
 
+  # The row this puts on the agenda. The date means two different things
+  # depending on the tag above it: on a `scheduled` note it IS the interview, so
+  # it goes on as a timed event where an appointment belongs; on everything else
+  # it's a chase you owe them, which is a task.
+  #
+  # Both shapes are spelled out in full — including `end_at: nil` for a task —
+  # so that re-tagging a note converts the item it already wrote instead of
+  # leaving an event wearing half of a task's fields.
   def follow_up_attrs
+    minutes = duration_minutes || DEFAULT_INTERVIEW_MINUTES
+    prefix  = scheduled? ? "Interview" : "Follow up"
+
     {
-      name:     "Follow up: #{job_application.company}",
+      name:     "#{prefix}: #{job_application.company}",
+      kind:     scheduled? ? :event : :task,
       start_at: follow_up_at,
+      end_at:   (follow_up_at + minutes.minutes if scheduled?),
       notes:    body.to_s.truncate(500).presence,
       color:    job_application.color,
     }
   end
 
   # Somewhere local and writable. A Google-managed calendar is deliberately
-  # skipped: it only accepts events, and a follow-up is a task.
+  # skipped: a follow-up is a task and Google only takes events, and even the
+  # interview — which IS an event — would have to be written to Google first
+  # and mirrored back rather than created here.
+  #
+  # A calendar called "Tasks" wins outright, ahead of the general default: this
+  # code is naming a destination, and the preference is for when nobody does.
+  # Matched loosely because a calendar name is typed by a person — one on this
+  # account ends in a space.
   def follow_up_agenda
     agendas = job_application.user.editable_agendas.where(source: :user).order(:id).to_a
     return nil if agendas.empty?
+
+    named = agendas.find { |a| a.name.to_s.strip.casecmp?(FOLLOW_UP_AGENDA_NAME) }
+    return named if named
 
     preferred = AgendaPreference.for(job_application.user).default_agenda_id
     agendas.find { |a| a.id == preferred.to_i } || agendas.first

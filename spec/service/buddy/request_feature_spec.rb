@@ -123,6 +123,34 @@ RSpec.describe "request_feature" do
       expect(tool[:receipt].call(result, nil)).to include("already on the list")
     end
 
+    # Prod 5420-5422. Told "That's not what's needed at all", Byte said "I've
+    # put the conditional Whisper Quiet request on the list now" and re-sent the
+    # identical body. The merge had nothing to add, `update!` wrote no columns,
+    # and request 6's `updated_at` never moved off its `created_at` two minutes
+    # earlier. The correction went nowhere and the receipt said it had landed.
+    describe "sending the very same words again" do
+      it "writes nothing, and says nothing was written" do
+        ask!(eve, eve_convo, "Home check before Quiet", "If I'm not home by 12:50, set Quiet for an hour.")
+        before = FeatureRequest.last.updated_at
+
+        result = ask!(eve, eve_convo, "Home check before Quiet", "If I'm not home by 12:50, set Quiet for an hour.")
+
+        expect(FeatureRequest.last.updated_at).to eq(before)
+        expect(result[:added]).to be(false)
+        expect(tool[:receipt].call(result, nil)).to include("word for word")
+        expect(tool[:receipt].call(result, nil)).not_to include("Added that")
+      end
+
+      # The sentence is written from the tool result, before the receipt is
+      # read, so the result is where this has to say so.
+      it "tells the model to read back what's there rather than report a filing" do
+        ask!(eve, eve_convo, "Home check before Quiet", "If I'm not home by 12:50, set Quiet for an hour.")
+        result = ask!(eve, eve_convo, "Home check before Quiet", "If I'm not home by 12:50, set Quiet for an hour.")
+
+        expect(result[:note]).to include("NOTHING WAS WRITTEN")
+      end
+    end
+
     # One shared word is how unrelated asks collapse into each other — the
     # lesson from cancelled_like, which matched on one and told somebody they'd
     # switched off a reminder they never had.

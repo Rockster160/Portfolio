@@ -36,6 +36,9 @@ RSpec.describe AgendaTravelChain do
     before do
       allow_any_instance_of(::User).to receive(:address_book).and_return(address_book)
       allow(address_book).to receive(:home).and_return(home_address)
+      # Where the person is, for the resolver's distance sanity check. Every
+      # geocode here answers somewhere in the valley, so the bound never bites.
+      allow(address_book).to receive(:current_loc).and_return([40.0, -111.0])
       allow(address_book).to receive(:match_contact).and_return(nil)
       allow(address_book).to receive(:geocode) { |addr| [40.0 + addr.to_s.length * 0.001, -111.0] }
       allow(address_book).to receive(:traveltime_seconds).and_return(900)

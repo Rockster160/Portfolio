@@ -231,8 +231,17 @@ module Buddy
       # is only a matter of not dropping it on the floor. Verbatim, deliberately:
       # rephrasing it costs a model turn to say something the task already said.
       if result[:answers].present?
+        # The header is a label for something that has now described itself, so
+        # when the one answer says what the label said, the label goes. Prod
+        # 5401: "Whisper nap sound." over "Playing the nap sound on Whisper",
+        # which is one message saying one thing twice. Only with a SINGLE
+        # answer - over two or more the header is what groups them.
+        answers = result[:answers]
+        header  = msg.body.presence unless silent
+        header  = nil if header && answers.one? && Buddy::Restatement.restates?(header, answers.first, min_words: 2)
+
         msg.update!(
-          body:     [(msg.body.presence unless silent), *result[:answers]].compact.join("\n\n"),
+          body:     [header, *answers].compact.join("\n\n"),
           metadata: msg.metadata.to_h.except("hidden"),
         )
       end
@@ -855,7 +864,7 @@ module Buddy
       end
 
       def hold_for_timer!(user, byte_message, timer_id, deferred, vars)
-        ByteAction.create!(
+        action = ByteAction.create!(
           user:              user,
           byte_conversation: byte_message.byte_conversation,
           byte_message:      byte_message,
@@ -867,6 +876,11 @@ module Buddy
           # gate can never expire out from under a wait that's still running.
           expires_at:        PROPOSAL_TTL.from_now,
         )
+        # From here the chip is a WAIT rather than a countdown they set, and it
+        # stops ringing. Marked after the gate exists, so a flag can never end
+        # up on a timer with nothing behind it.
+        Buddy::Timers.mark_wait!(user.timers.find_by(id: timer_id))
+        action
       end
 
       def timer_gate(timer)

@@ -1,4 +1,5 @@
 require "rails_helper"
+require "timeout"
 
 # The Rails replacement for Jil tasks 362, 365, 366, 370, 374, 383 and 416.
 #
@@ -7,9 +8,12 @@ require "rails_helper"
 # matching, a renamed event taking its completion with it, and every write being
 # a no-op when the partner already agrees.
 #
-# Two of the old rules ran uphill and are deliberately gone. Completing a chore
-# no longer writes an ActionEvent (363), and adding a list item no longer marks
-# a chore due (382).
+# Completing a chore no longer writes an ActionEvent (363) and never will — the
+# cascade validation forbids it outright.
+#
+# Adding a list item marking a chore due (382) is gone as a GENERAL rule and
+# available per pairing, through `reverse`. Both halves are pinned below: a
+# plain link still refuses to run up, and a reverse one runs up and stops.
 RSpec.describe RecordLinks::Propagator do
   let(:user)      { User.me }
   let(:household) { user.chore_household }
@@ -274,6 +278,94 @@ RSpec.describe RecordLinks::Propagator do
       list.list_items.add("Pickup RX")
 
       expect(chore.reload).not_to be_marked_due
+    end
+  end
+
+  # The uphill escape hatch. `reverse` ADDS the backwards reading to a row
+  # rather than replacing the forwards one — the uniqueness index covers the
+  # two endpoints and not this column, so one pairing is one row either way.
+  # "Pickup RX" wants both: the chore's item comes off the list when it's done,
+  # and the chore comes due when the item goes back on.
+  describe "a reverse pairing running uphill" do
+    let!(:chore) { chore!("Pickup RX") }
+    let!(:list)  { list!("Chores") }
+    let!(:other) { list!("Todo") }
+
+    before {
+      link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores", reverse: true)
+    }
+
+    it "marks the chore due when the item is added to the list" do
+      list.list_items.add("Pickup RX")
+
+      expect(chore.reload).to be_marked_due
+    end
+
+    # The reason `Add Pickup RX to Chores` was reported broken: spoken adds go
+    # through Jarvis, which reaches the model rather than either controller.
+    it "marks it due for a model-path add, not just a controller one" do
+      ListItem.create!(list: list, name: "Pickup RX").notify_jil(:added)
+
+      expect(chore.reload).to be_marked_due
+    end
+
+    it "leaves the chore alone for the same words on a different list" do
+      other.list_items.add("Pickup RX")
+
+      expect(chore.reload).not_to be_marked_due
+    end
+
+    # Taking something off a list is as often a tidy-up as a claim it was done.
+    it "does not unmark the chore when the item is removed" do
+      chore.update!(marked_due_at: Time.current)
+
+      list.list_items.remove("Pickup RX")
+
+      expect(chore.reload).to be_marked_due
+    end
+
+    it "still carries the completion downhill off the same row" do
+      list.list_items.add("Pickup RX")
+      expect(chore.reload).to be_marked_due
+
+      ChoreCompleter.new(chore.reload, user, at: Time.current).call
+
+      expect(list.reload.list_items.map(&:name)).not_to include("Pickup RX")
+    end
+
+    # item -> chore -> item revisits the item endpoint and stops there. A
+    # runaway would be dozens of triggers, or no return at all.
+    it "terminates, adding the item exactly once" do
+      item_triggers = 0
+      allow(::Jil).to receive(:trigger).and_wrap_original { |orig, *args, **kw|
+        item_triggers += 1 if args[1].to_sym == :item
+        orig.call(*args, **kw)
+      }
+
+      Timeout.timeout(20) { list.list_items.add("Pickup RX") }
+
+      expect(chore.reload).to be_marked_due
+      expect(list.reload.list_items.where(name: "Pickup RX").count).to eq(1)
+      expect(item_triggers).to be_between(1, 4)
+    end
+
+    # The other way in: marking the chore due pushes the item down, and the
+    # item must not bounce a second stamp back up.
+    it "does not re-stamp a chore that is already due" do
+      chore.update!(marked_due_at: 2.hours.ago)
+      was = chore.reload.marked_due_at
+
+      Timeout.timeout(20) { list.list_items.add("Pickup RX") }
+
+      expect(chore.reload.marked_due_at).to be_within(1.second).of(was)
+    end
+
+    it "says both directions in the manager" do
+      reversed = RecordLink.find_by(reverse: true)
+
+      expect(reversed.summary).to eq("chore:Pickup RX ↔ list_item:Pickup RX (Chores)")
+      expect(reversed.sentence).to include("chore where name is exactly \"Pickup RX\" takes off the list list item \"Pickup RX\" on Chores")
+      expect(reversed.sentence).to include("and back: list item where name is exactly \"Pickup RX\" and list is exactly \"Chores\" marks due chore \"Pickup RX\"")
     end
   end
 

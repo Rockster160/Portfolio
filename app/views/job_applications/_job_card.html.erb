@@ -1,11 +1,14 @@
 <%
   latest = job.notes.max_by(&:occurred_at)
+  booked = job.next_interview_at unless job.dead?
   # No floor, for the same reason the strip on the index has none: a missed
-  # chase is the one most worth showing.
-  next_follow_up = job.notes.filter_map(&:follow_up_at).min unless job.dead?
+  # chase is the one most worth showing. A booked interview isn't a chase and
+  # gets its own line, so it's left out of this one.
+  chases = job.notes.reject(&:scheduled?)
+  next_follow_up = chases.filter_map(&:follow_up_at).min unless job.dead?
 %>
-<a class="interview-card status-<%= job.status %>" href="<%= interview_path(job) %>"
-   style="--job-color: <%= job.color %>;">
+<a class="interview-card status-<%= job.status %> <%= "has-interview" if booked %>"
+   href="<%= interview_path(job) %>" style="--job-color: <%= job.color %>;">
   <div class="card-head">
     <%= render "logo", job: job, size: "md" %>
     <div class="card-title">
@@ -16,6 +19,15 @@
     </div>
     <span class="status-pill"><%= job.status.humanize %></span>
   </div>
+
+  <%# The loudest thing on the card, because it's the only thing on it with a
+     date you have to be somewhere for. %>
+  <% if booked.present? %>
+    <div class="card-interview">
+      <span class="note-tag note-tag-scheduled">Interview</span>
+      <%= interview_day(booked) %>
+    </div>
+  <% end %>
 
   <%# Chip, then whatever was actually written. A tagged note often has nothing
      beside the tag, and printing an empty body left the chip stranded next to
@@ -35,7 +47,7 @@
       <span>· <%= time_ago_in_words(job.last_activity_at) %> ago</span>
     <% end %>
     <% if next_follow_up.present? %>
-      <span class="card-followup">· follow up <%= next_follow_up.strftime("%b %-d") %></span>
+      <span class="card-followup">· follow up <%= interview_day(next_follow_up, at_time: false) %></span>
     <% end %>
   </div>
 </a>

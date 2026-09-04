@@ -3,12 +3,22 @@ module RecordLinks
   #
   #     event  ->  chore  ->  agenda  ->  list_item
   #
-  # This is the Rails half of what Jil tasks 362, 365, 366, 370, 374, 383 and
-  # 416 used to do. Two of the old rules ran uphill and are gone: completing a
-  # chore no longer writes an ActionEvent, and adding a list item no longer
-  # marks a chore due. The cron and button tasks that relied on the second one
-  # now mark the chore due themselves, which pushes the item back down the
-  # cascade and arrives in the same place with the arrow pointing one way.
+  # This is the Rails half of what Jil tasks 362, 365, 366, 370, 374, 382, 383
+  # and 416 used to do. Both of the old uphill rules were dropped when this
+  # replaced them: completing a chore no longer writes an ActionEvent, and
+  # adding a list item no longer marked a chore due. The cron and button tasks
+  # that relied on the second one were converted to mark the chore due
+  # themselves, which pushes the item back down the cascade and arrives in the
+  # same place with the arrow pointing one way.
+  #
+  # What that conversion missed was the SPOKEN path. "Add Pickup RX to Chores"
+  # is a sentence a person says, not a task anybody could rewrite, and for a
+  # chore that is unscheduled and `when_scheduled` the mark is the only thing
+  # that can put it on Today — so it went on the list, stayed off the Chores
+  # app, and reported no error anywhere, because `item` was in SCOPES with no
+  # branch to land in. `on_item` is that branch. It runs for a pairing
+  # explicitly marked `reverse` and for nothing else, so the cascade is still
+  # one-way everywhere it was not deliberately opened.
   #
   # The behaviour that survived is deliberately identical to Jil's, including
   # the awkward parts, because these pairings run a real household and "slightly
@@ -49,6 +59,7 @@ module RecordLinks
       when "event"            then on_event(user, payload, action, changes: changes) if action
       when "chore"            then on_chore(user, payload, action) if action
       when "chore_completion" then on_completion(user, payload, action) if action
+      when "item"             then on_item(user, attrs, action) if action
       when "prompt"           then on_prompt(user, payload, attrs)
       end
     rescue StandardError => e
@@ -155,6 +166,55 @@ module RecordLinks
       }
     end
 
+    # ---- list_item -> chore (reverse pairings only) ----
+
+    # The one rung that runs UPHILL. Putting the item back on the list is how a
+    # person says the chore needs doing again, which is what Jil task 382 did
+    # before the cascade was made one-way.
+    #
+    # Only `:added` acts. Taking an item OFF a list is not a claim that the
+    # chore was done — it is as often a tidy-up — and `unmark_due` on a removal
+    # would quietly undo a mark somebody made on purpose.
+    #
+    # Nothing stops this pointing straight back at `on_chore`'s `add_item`
+    # except `Guard`, which is exactly the pair it was written for: the item
+    # endpoint is already visited by the time the mark cascades back down, so
+    # item -> chore -> item stops on the second item.
+    def on_item(user, attrs, action)
+      return unless action.to_sym == :added
+
+      name = fetch(attrs, :name).to_s
+      return if name.blank?
+
+      each_link(user, :list_item, [name]) { |link|
+        next unless link.target_chore?
+        next unless link.matches?(name, item_list_name(attrs))
+
+        mark_chore_due(user, link)
+      }
+    end
+
+    # The scope a list-item link is matched on is the LIST, which arrives
+    # nested because that is the shape `ListItem#jil_serialize` gives every
+    # `:item` listener. A link scoped to Chores must not fire for the same
+    # words typed onto Todo.
+    def item_list_name(attrs)
+      list = fetch(attrs, :list)
+      list.is_a?(Hash) ? fetch(list, :name).to_s : nil
+    end
+
+    # Idempotent for the same reason `Jil::Methods::Chore#mark_due` is: a chore
+    # already stamped writes nothing, so no `chore:marked_due` fires and the
+    # cascade has nothing to carry back down. Guard would stop the loop anyway;
+    # this stops the pointless write that starts it.
+    def mark_chore_due(user, link)
+      chore = find_chore(user, link.target_name)
+      return false if chore.nil? || chore.marked_due?
+
+      chore.update!(marked_due_at: Time.current)
+      true
+    end
+
     # ---- link iteration ----
 
     # `names` is a list because a rename has two. Each is visited separately, so
@@ -171,8 +231,10 @@ module RecordLinks
       end
     end
 
-    # Downhill links sourced here, plus any uphill one deliberately pointed
-    # back at this kind. Nothing sets `reverse` today.
+    # Downhill links sourced here, plus any uphill one deliberately pointed back
+    # at this kind. `reverse` is additive: the row keeps its downhill reading
+    # and gains the uphill one, so a `reverse` pairing appears in both halves of
+    # this and runs both ways off the same row.
     def links_for(user, kind)
       RecordLink.sourced_from(user, kind).to_a +
         RecordLink.reversed_from(user, kind).map { |l| flipped(l) }
@@ -485,6 +547,13 @@ module RecordLinks
     end
 
     # ---- shared ----
+
+    # `:item` payloads come off the bus as plain hashes and reach here through
+    # `overlay`, which symbolizes only the top level — a nested `list` still
+    # carries string keys.
+    def fetch(hash, key)
+      hash[key] || hash[key.to_s]
+    end
 
     def find_chore(user, name)
       user.accessible_chores.active.detect { |c| c.name.to_s.casecmp(name.to_s).zero? }

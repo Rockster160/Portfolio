@@ -90,6 +90,11 @@ class TimerSerializer
       )
     end
 
+    # A WAIT chip never rings (see Buddy::Timers::WAIT). The client decides that
+    # off `end_at`, seconds before the server's fire arrives, so it has to be
+    # here rather than something looked up when the countdown ends.
+    base[:wait] = true if @t.countdown? && Buddy::Timers.wait?(@t)
+
     base[:callbacks] = @t.callbacks unless @share&.view_only?
     base
   end

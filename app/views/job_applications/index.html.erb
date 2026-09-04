@@ -27,6 +27,25 @@
 
     <div class="app-card-body">
       <div class="app-card-inner">
+        <%# Above everything, including what you owe people: an interview is the
+           one thing here you have to turn up to. %>
+        <% if @interviews.any? %>
+          <div class="interview-booked">
+            <h3>Interviews booked</h3>
+            <ul>
+              <% @interviews.each do |note| %>
+                <li>
+                  <span class="booked-when"><%= interview_day(note.follow_up_at) %></span>
+                  <%= link_to note.job_application.label, interview_path(note.job_application) %>
+                  <% if note.spoke_to.present? %>
+                    <span class="field-hint">with <%= note.spoke_to %></span>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
         <% if @follow_ups.any? %>
           <%# What you owe someone, across every application. Each one is also
              a task on the calendar — that answers "what's today", not "what am
@@ -37,7 +56,7 @@
               <% @follow_ups.each do |note| %>
                 <li>
                   <span class="followup-when <%= "is-due" if note.follow_up_at <= Time.current.end_of_day %>">
-                    <%= note.follow_up_at.strftime("%b %-d") %>
+                    <%= interview_day(note.follow_up_at, at_time: false) %>
                   </span>
                   <%= link_to note.job_application.company, interview_path(note.job_application) %>
                   <%# A follow-up usually has words on it; when it doesn't, its

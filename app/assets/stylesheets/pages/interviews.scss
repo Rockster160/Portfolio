@@ -7,6 +7,14 @@
 // and `html.dark-mode`, and hard-coding either one is how a panel ends up
 // showing text the same colour as what's behind it.
 .interviews-page {
+  // A booked interview is the one thing on this page with a time you have to
+  // be somewhere, so it wears a colour nothing else on the wall uses — the
+  // palette here is otherwise blues, purples, greens and cyan. Deep enough to
+  // carry white chip text on the light theme; the dark block lifts it, because
+  // a burnt amber on a dark card is unreadable.
+  --iv-booked: #b45309;
+  --iv-booked-soft: #{rgba(#b45309, 0.09)};
+  --iv-booked-ink: #{white};
   --iv-surface: #{rgba(white, 0.55)};
   --iv-line: #{rgba($grey-blue, 0.35)};
   --iv-muted: #{$grey-blue};
@@ -40,6 +48,45 @@
     color: var(--iv-text);
     font-weight: bold;
     user-select: none;
+  }
+
+  // ---- Interviews booked -----------------------------------------------
+  // The one thing on this page you have to turn up to, so it gets the only
+  // solid fill above the fold and sits above what you merely owe people.
+  .interview-booked {
+    margin-bottom: 8px;
+    border: 1px solid var(--iv-booked);
+    border-left: 4px solid var(--iv-booked);
+    border-radius: 10px;
+    background: var(--iv-booked-soft);
+    padding: 10px 14px;
+
+    h3 {
+      margin: 0 0 6px;
+      color: var(--iv-booked);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      padding: 3px 0;
+      font-size: 15px;
+    }
+
+    .booked-when {
+      font-weight: bold;
+    }
   }
 
   // ---- Follow-ups ------------------------------------------------------
@@ -181,6 +228,24 @@
     &.status-rejected,
     &.status-closed {
       opacity: 0.62;
+    }
+
+    // Sorted to the front of the wall already; this is so it also LOOKS unlike
+    // its neighbours, rather than being first among a row of identical cards.
+    &.has-interview {
+      border-color: var(--iv-booked);
+      border-left-color: var(--iv-booked);
+    }
+
+    .card-interview {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+      margin-top: 10px;
+      color: var(--iv-booked);
+      font-size: 13px;
+      font-weight: bold;
     }
 
     .card-head {
@@ -582,6 +647,12 @@
       margin-top: 4px;
       color: $base-complementary;
       font-size: 12px;
+
+      &.is-interview {
+        color: var(--iv-booked);
+        font-size: 13px;
+        font-weight: bold;
+      }
     }
 
     .note-edit > summary {
@@ -612,6 +683,7 @@
   .note-tag-heard_back { background: #34d0e0; }
   .note-tag-responded { background: #1a8b96; }
   .note-tag-recruiter_call { background: #a371f7; }
+  .note-tag-scheduled { background: var(--iv-booked); color: var(--iv-booked-ink); }
   .note-tag-interview { background: #3fb950; }
   .note-tag-take_home { background: #e3b341; color: $grey-dark; }
   .note-tag-offer { background: $base-complementary; }
@@ -621,6 +693,11 @@
 }
 
 .dark-mode .interviews-page {
+  // Lifted well off the burnt amber the light theme uses: that colour on a
+  // dark card is a smudge. Chip text flips to dark ink to stay legible on it.
+  --iv-booked: #f0a35e;
+  --iv-booked-soft: #{rgba(#f0a35e, 0.14)};
+  --iv-booked-ink: #{$grey-dark};
   --iv-surface: #{rgba(black, 0.18)};
   --iv-line: #{rgba($grey-light, 0.22)};
   --iv-muted: #{rgba($grey-light, 0.62)};

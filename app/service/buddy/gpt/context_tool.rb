@@ -201,7 +201,7 @@ module Buddy
         payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
         # Applied to the everything path too, which is the one a briefing takes.
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
-        payload = without_routine_reminders(payload)
+        payload = without_other_days(without_routine_reminders(payload))
         payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
         payload = without_empty_chores(payload)
         @served = @served.merge(payload)
@@ -276,6 +276,33 @@ module Buddy
         payload.merge(upcoming_reminders: kept)
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.routine_reminders", exception: e, user: @user)
+        payload
+      end
+
+      # Reminders belonging to another day, on a briefing turn only.
+      #
+      # `upcoming_reminders` runs a 48-hour window and stamps each row "%a %-I:%M
+      # %p" - so tomorrow's arrives as "Fri 10:00 AM" and there is nothing in it
+      # that says tomorrow except a weekday name three words from a clock time.
+      # Prod 5254, 3 Sep: Suki opened with "your propagation check is back around
+      # again, and it's due at 10 AM". Reminder 52 is a four-day cadence, last
+      # fired 31 Aug, `fire_at` 4 Sep - it was not due that day, no 10 AM message
+      # ever went out, and the row itself had been right all along.
+      #
+      # `without_routine_reminders` above drops daily and weekday cadences, which
+      # is why the three 9 AM nudges were correctly absent that morning; a
+      # four-day rhythm isn't routine and sailed through carrying tomorrow.
+      #
+      # Same answer as every other cut here: what the model can't see, it can't
+      # read out. Briefing only - "what have I got coming up" is a question about
+      # the window, and everywhere else keeps all 48 hours.
+      def without_other_days(payload)
+        return payload unless @briefing
+        return payload unless payload[:upcoming_reminders].is_a?(Array)
+
+        payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| r[:not_today] })
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.other_days", exception: e, user: @user)
         payload
       end
 

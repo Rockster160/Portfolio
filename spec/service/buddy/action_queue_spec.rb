@@ -282,6 +282,56 @@ RSpec.describe "Buddy action queue" do
       expect(relays.pluck(:body)).to eq(["First.", "Second."])
     end
 
+    # Rocco, 4 Sep: "the timer went off as if I was supposed to go dismiss it.
+    # We do NOT want that. Showing the timer, yes. But once the timer ends, Byte
+    # should just quietly do whatever he was supposed to do."
+    #
+    # Prod timer 98: "play whisper nap sound in 5 minutes" put an ordinary chip
+    # on screen, blared at zero, and carries a `confirmed_at` two seconds after
+    # the fire - the tap that shut it up, with the sound already playing.
+    describe "the chip the wait puts on screen" do
+      it "is marked a wait, which is what stops the client ringing it" do
+        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
+
+        expect(Buddy::Timers.wait?(timers.first)).to be(true)
+        expect(TimerSerializer.new(timers.first, viewer: user).as_json[:wait]).to be(true)
+      end
+
+      # A countdown they set themselves is untouched: it rings, and it waits to
+      # be dealt with.
+      it "leaves an ordinary countdown alone" do
+        turn!("10 minute timer and tell Chelsea", [timer_call("c1", 600), tell_call("c2", "Going.")])
+
+        expect(Buddy::Timers.wait?(timers.first)).to be(false)
+        expect(TimerSerializer.new(timers.first, viewer: user).as_json).not_to have_key(:wait)
+      end
+
+      # Nothing is left to acknowledge once the held step has run, so the chip
+      # goes rather than parking at 0:00 waiting for a tap.
+      it "takes itself off screen once the step it was holding has run" do
+        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
+        timer = timers.first
+
+        Buddy::Timers.on_fired(timer)
+
+        expect(timer.reload.archived_at).to be_present
+        expect(Buddy::Timers.live_for(user)).to be_empty
+      end
+
+      # The step behind the wait posts and pushes on its own account. A buzz for
+      # the pick-up line too is one notification for the delay and a second for
+      # the thing the delay was for.
+      it "doesn't push to announce that it is picking the sequence back up" do
+        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
+
+        Buddy::Timers.on_fired(timers.first)
+
+        expect(WebPushNotifications).not_to have_received(:send_to_byte).with(
+          hash_including(title: a_string_matching(/picking it back up/i)),
+        )
+      end
+    end
+
     it "tells the model the held step happens on its own, not on a tap" do
       client = turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
 

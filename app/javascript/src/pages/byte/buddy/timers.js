@@ -49,6 +49,19 @@ function isPaused(t) {
   return !!t.paused_at;
 }
 
+// A WAIT is Buddy holding the middle of a sequence — "play the nap sound in 5
+// minutes" — rather than a countdown the person set and is watching. The chip
+// is the only sign the delay is real, so it shows and it ticks; what it must
+// not do is ring, or sit at 0:00 waiting to be dismissed. The server archives
+// it the moment the step it was holding runs, so it leaves on its own.
+//
+// Prod timer 98, 4 Sep: the nap-sound wait blared like a kitchen timer and was
+// tapped away two seconds later. Nothing was being asked of him — the sound
+// was already playing.
+function isWait(t) {
+  return !!t.wait;
+}
+
 // The countdown reaching zero IS the moment — so that's what rings, rather
 // than the server's word for it.
 //
@@ -104,10 +117,13 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     container.innerHTML = "";
 
     list.forEach((t) => {
+      // A wait that has reached zero is finished, not ringing — it never wears
+      // the fired face, and it is about to be archived out from under itself.
+      const ringing = isDue(t) && !isWait(t);
       const chip = document.createElement("div");
       chip.className = "byte-timer-chip";
       chip.dataset.timerId = t.id;
-      chip.dataset.state = isDue(t) ? "fired" : isPaused(t) ? "paused" : "running";
+      chip.dataset.state = ringing ? "fired" : isPaused(t) ? "paused" : "running";
       // Dimmed and untouchable while the DELETE is out, so a swipe reads as
       // "going" rather than "gone"; flashed if the server never took it.
       if (cancelling.has(t.id)) chip.dataset.pending = "cancel";
@@ -116,13 +132,13 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
 
       const icon = document.createElement("span");
       icon.className = "byte-timer-icon";
-      icon.textContent = isDue(t) ? "⏰" : isPaused(t) ? "⏸" : "⏲";
+      icon.textContent = ringing ? "⏰" : isPaused(t) ? "⏸" : "⏲";
       chip.appendChild(icon);
 
       const readout = document.createElement("span");
       readout.className = "byte-timer-readout";
       readout.dataset.readout = t.id;
-      readout.textContent = isDue(t) ? "0:00" : fmt(remainingMs(t));
+      readout.textContent = ringing ? "0:00" : fmt(remainingMs(t));
       chip.appendChild(readout);
 
       if (t.name) {
@@ -133,8 +149,10 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       }
 
       // A chip mid-cancel takes no gestures: a second swipe would fire a second
-      // DELETE, and a tap would pause a timer that is on its way out.
-      if (!cancelling.has(t.id)) wireChip(chip, t);
+      // DELETE, and a tap would pause a timer that is on its way out. A wait
+      // that has run out is in the same position — the archive is already on
+      // its way — and a tap on one would cancel a timer that has done its job.
+      if (!cancelling.has(t.id) && !(isDue(t) && isWait(t))) wireChip(chip, t);
       container.appendChild(chip);
     });
 
@@ -310,12 +328,26 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     return Array.from(timers.values()).filter(isDue);
   }
 
+  // The ones that actually make a noise. A wait is due like any other timer and
+  // sorts to the top of the stack like any other, but it has nothing to say and
+  // nothing to acknowledge — so it stays out of the alarm, out of the ack, and
+  // out of the silenced bookkeeping that exists to serve them.
+  function ringingTimers() {
+    return dueTimers().filter((t) => !isWait(t));
+  }
+
   // Ring while any timer is due; a single tap anywhere acknowledges them all.
+  //
+  // `dueCount` still counts every due timer, waits included — it is what `tick`
+  // compares against to notice the stack changed, and filtering it here would
+  // re-render four times a second for as long as a spent wait sat in the list.
+  // Only the RINGING set is narrowed.
   function syncAlarm() {
     const due = dueTimers();
     dueCount = due.length;
+    const ringing = ringingTimers();
 
-    if (due.some((t) => !silenced.has(t.id))) {
+    if (ringing.some((t) => !silenced.has(t.id))) {
       if (!alarmRunning()) startAlarm({ hero });
       armAck();
     } else if (alarmRunning()) {
@@ -360,7 +392,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   function acknowledgeAll() {
     stopAlarm({ hero });
     disarmAck();
-    dueTimers().forEach((t) => {
+    ringingTimers().forEach((t) => {
       if (isFired(t)) confirmTimer(t.id);
       else silenced.add(t.id);
     });
@@ -412,7 +444,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
         // were away — the push covered it — so it's silenced rather than blared
         // at them on open. syncAlarm confirms the ones the server has already
         // fired and holds the rest until it catches up.
-        dueTimers().forEach((t) => silenced.add(t.id));
+        ringingTimers().forEach((t) => silenced.add(t.id));
         render();
         ensureTicking();
         syncAlarm();

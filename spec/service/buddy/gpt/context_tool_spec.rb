@@ -97,6 +97,10 @@ RSpec.describe Buddy::GPT::ContextTool do
     # tomorrow the moment it goes off, landing back inside the 48h window while
     # the briefing it caused is still being written.
     describe "the reminder that caused the briefing" do
+      # Mid-morning, so "3 hours from now" is unambiguously still today and the
+      # day filter below has nothing to say about it.
+      around { |example| travel_to(Time.utc(2026, 9, 4, 15, 0)) { example.run } }
+
       def reminder_bodies(tool)
         rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
         rows.to_a.pluck("body")
@@ -143,6 +147,52 @@ RSpec.describe Buddy::GPT::ContextTool do
 
         expect(mine["own_briefing"]).to be(true)
         expect(rows.find { |r| r["body"] == "Cover the tomatoes." }).not_to have_key("own_briefing")
+      end
+    end
+
+    # Prod 5254, 3 Sep: Suki opened with "your propagation check is back around
+    # again, and it's due at 10 AM". Reminder 52 is a four-day cadence, last
+    # fired 31 Aug, next due the 4th - it was never due that day, and nothing
+    # arrived at 10. The row was right; the sentence built from it was not.
+    #
+    # `upcoming_reminders` runs a 48-hour window and stamps "%a %-I:%M %p", so
+    # tomorrow's arrived reading "Fri 10:00 AM" with nothing but a weekday name
+    # to say it wasn't this morning. A four-day rhythm isn't routine, so the
+    # cadence filter didn't touch it.
+    describe "a reminder that belongs to another day" do
+      around { |example| travel_to(Time.utc(2026, 9, 4, 15, 0)) { example.run } }
+
+      def reminder_bodies(tool)
+        rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+        rows.to_a.pluck("body")
+      end
+
+      let!(:today) {
+        BuddyReminder.create!(
+          user: user, byte_conversation: convo, kind: :reminder,
+          body: "Feed the fish.", fire_at: 3.hours.from_now
+        )
+      }
+      let!(:tomorrow) {
+        BuddyReminder.create!(
+          user: user, byte_conversation: convo, kind: :reminder,
+          body: "Check the propagations.", fire_at: 27.hours.from_now,
+          recurrence: { "freq" => "custom", "unit" => "day", "interval" => 4, "at" => "10:00" }
+        )
+      }
+
+      it "is not in front of a briefing about today" do
+        expect(reminder_bodies(briefing)).not_to include("Check the propagations.")
+      end
+
+      it "leaves today's alone" do
+        expect(reminder_bodies(briefing)).to include("Feed the fish.")
+      end
+
+      # "What have I got coming up" is a question about the window, and every
+      # turn that isn't a briefing keeps all 48 hours of it.
+      it "is still there on an ordinary turn" do
+        expect(reminder_bodies(tool)).to include("Check the propagations.")
       end
     end
 

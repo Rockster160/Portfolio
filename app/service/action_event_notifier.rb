@@ -34,7 +34,10 @@ class ActionEventNotifier
     # point, and is hours before SimpleFIN would have said anything. Skipped
     # for every event that is not a Transaction: both calls above answer blank
     # for those.
-    republish_balance if touched.present?
+    if touched.present?
+      republish_balance
+      republish_spending
+    end
 
     # An alert is the only real-time signal there is — SimpleFIN is polled and
     # can be a day behind. If this charge would tip the dashboard's floored
@@ -54,6 +57,15 @@ class ActionEventNotifier
     ::SimpleFin::DashboardCache.refresh!
   rescue ::StandardError => e
     ::Rails.logger.warn("[ActionEventNotifier] balance refresh failed: #{e.message}")
+  end
+
+  # The same moment moves the spending bars: a purchase is money off this
+  # month, this week and today all at once. Separate rescue from the balance
+  # so one failing does not swallow the other.
+  def self.republish_spending
+    ::SpendingHealth.refresh!
+  rescue ::StandardError => e
+    ::Rails.logger.warn("[ActionEventNotifier] spending refresh failed: #{e.message}")
   end
 
   # Removing an event breaks the action-streak chain for events of the same

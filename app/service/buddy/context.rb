@@ -19,6 +19,17 @@ module Buddy
     # this particular day — see notable?.
     ROUTINE_CADENCES = ["daily", "every weekday"].freeze
 
+    # What a chore's name has to share with another before the two count as one
+    # job — see `tag_groups`. VERBS are not jobs: "take out the trash" and "take
+    # the dog out" share nothing but the taking, and grouping on that puts the
+    # bins and the dog in one sentence.
+    GROUP_STOPWORDS = <<~WORDS.split.to_set.freeze
+      and are back down for from get into off out over the this with your
+      bring brush check clean empty gather make put read refill replace
+      spray take trim wash
+    WORDS
+    GROUP_MIN = 2
+
     # One link for the whole `lists` section, filled in per row from `id`. See
     # `lists` below for why it is one template rather than a url on every row,
     # and why it carries the host.
@@ -675,10 +686,28 @@ module Buddy
           marked_today.include?(id) || hot_mults[id].to_f > ROUTINE_HOT_MULTIPLIER
         }
 
+        # And what the SCHEDULE puts on today.
+        #
+        # Rocco, 4 Sep: "I WOULD like Byte to mention the chores that are
+        # scheduled DUE TODAY, excluding the dailies, and maybe even the ones
+        # that are every other day." The Wednesday bin run, the fortnightly
+        # nails, the two-monthly filter - none of them were reachable from a
+        # briefing at all. They land in `scheduled_today`, which a briefing
+        # never sees, so a whole shape of "today is not like other days" was
+        # missing from every one.
+        #
+        # What stops this becoming the read-out the rest of this method exists
+        # to prevent is the CADENCE. Anything that comes round every day or
+        # every other day is a habit, and a habit read back is what makes a
+        # briefing worthless; a Wednesday-only chore on a Wednesday is news by
+        # definition.
+        due_today_ids += scheduled_ids.reject { |id| routine_cadence?(by_id[id]) }
+        due_today_ids = due_today_ids.uniq
+
         {
-          due_today:       due_today_ids.filter_map { |id|
+          due_today:       tag_groups(due_today_ids.filter_map { |id|
             slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
-          }.first(20),
+          }.first(20)),
           pending_today:   pending_ids.filter_map { |id|
             slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
           }.first(20),
@@ -755,6 +784,59 @@ module Buddy
         return [2, 0] unless daily
 
         [3, 0]
+      end
+
+      # Does this come round often enough to be a habit rather than news? Daily
+      # and weekday answer by name; a relative or custom rhythm answers by how
+      # many days are between one and the next, which is where "every other
+      # day" lives - it has no label of its own, only an interval.
+      def routine_cadence?(chore)
+        return false if chore.nil?
+
+        data = chore.recurrence_data
+        return true if %w[daily weekdays].include?(data[:freq].to_s)
+        return false unless %w[relative custom].include?(data[:freq].to_s)
+        return false unless data[:unit].to_s == "day"
+
+        data[:interval].to_i.between?(1, 2)
+      end
+
+      # Several chores that are plainly one job.
+      #
+      # Wednesday is five rows - gather the trash, gather the recycling, take
+      # the bags out, take the cans out, bring them back in - and read one by
+      # one it buries a day that really only has one thing on it. Rocco, 4 Sep:
+      # "Those can be grouped into just saying 'It's trash day'."
+      #
+      # The shared word IS the job, so it becomes the label. The briefing prompt
+      # has asked for this batching in prose for a while and had nothing to
+      # batch ON; a word computed here is a fact the model can act on rather
+      # than a pattern it has to notice.
+      #
+      # VERBS are not labels, hence the stop list: "take out the trash" and
+      # "take the dog out" share nothing but the taking.
+      def tag_groups(rows)
+        by_word = Hash.new { |h, k| h[k] = [] }
+        rows.each { |row|
+          row[:name].to_s.downcase.scan(/[a-z]{3,}/).map(&:singularize).uniq.each { |word|
+            by_word[word] << row unless GROUP_STOPWORDS.include?(word)
+          }
+        }
+
+        # Biggest group first, and a row joins only one of them. A chore that
+        # ends up in two gets read out twice, which is the thing this is here
+        # to stop happening.
+        taken = Set.new
+        by_word.sort_by { |word, found| [-found.length, word] }.each { |word, found|
+          free = found.reject { |row| taken.include?(row[:id]) }
+          next if free.length < GROUP_MIN
+
+          free.each { |row|
+            row[:group] = word
+            taken << row[:id]
+          }
+        }
+        rows
       end
 
       def slim_chore(chore, typical_hour=nil, due_ids=nil, by: nil, hot: nil)
@@ -938,8 +1020,9 @@ module Buddy
       def upcoming_reminders(conversation, now)
         return [] unless defined?(BuddyReminder)
 
-        tz   = conversation.user.timezone
-        live = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
+        tz    = conversation.user.timezone
+        today = now.in_time_zone(tz).to_date
+        live  = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
             id:           r.id,
             fire_at:      r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
@@ -969,6 +1052,14 @@ module Buddy
             # is for every other turn, where it has to stay reachable: "move my
             # morning briefing to nine" is a real request and it needs the id.
             own_briefing: (true if Buddy::TodaySchedule.briefing?(r)),
+            # Whether it falls on the day being briefed. The window is 48 hours
+            # and the stamp is a weekday name, so a briefing turn had tomorrow's
+            # reminders in front of it wearing "Fri 10:00 AM" and read one out
+            # as "10 AM" — prod 5254, a four-day cadence promised for a morning
+            # it was never due on, and nothing arrived. A BRIEFING drops the
+            # other days on this tag (ContextTool.without_other_days); every
+            # other turn keeps them, because "what's coming up" means the window.
+            not_today:    (true unless r.fire_at.in_time_zone(tz).to_date == today),
           }.compact
         }
         live + already_rang(conversation, now) + switched_off(BuddyReminder, conversation)
