@@ -26,8 +26,11 @@ class JobApplicationsController < ApplicationController
     @new_job = current_user.job_applications.new
   end
 
+  # Newest first. The page is read to answer "where is this now", and the answer
+  # is the last thing that happened — putting it at the bottom of a long
+  # application means scrolling past the history to find it.
   def show
-    @notes = @job.notes.to_a
+    @notes = @job.notes.recent.to_a
     @note = @job.notes.new(occurred_at: Time.current)
   end
 

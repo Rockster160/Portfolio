@@ -102,18 +102,9 @@
           <% end %>
         </details>
 
-        <h3 class="notes-heading">Timeline</h3>
-
-        <% if @notes.empty? %>
-          <div class="interview-empty">Nothing logged yet. Write the first note below.</div>
-        <% else %>
-          <ul class="interview-notes">
-            <% @notes.each do |note| %>
-              <%= render "note", note: note, job: @job %>
-            <% end %>
-          </ul>
-        <% end %>
-
+        <%# Writing comes before reading on this page: you open it because
+           something just happened. The timeline below it runs newest first, so
+           what you just added lands directly under the form. %>
         <details class="note-new" open>
           <summary>+ Add a note</summary>
           <%= form_with model: @note, url: interview_notes_path(@job), method: :post, local: true do |f| %>
@@ -125,6 +116,18 @@
             </div>
           <% end %>
         </details>
+
+        <h3 class="notes-heading">Timeline</h3>
+
+        <% if @notes.empty? %>
+          <div class="interview-empty">Nothing logged yet. Write the first note above.</div>
+        <% else %>
+          <ul class="interview-notes">
+            <% @notes.each do |note| %>
+              <%= render "note", note: note, job: @job %>
+            <% end %>
+          </ul>
+        <% end %>
       </div>
     </div>
   </div>

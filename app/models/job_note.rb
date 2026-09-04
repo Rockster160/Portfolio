@@ -22,6 +22,9 @@ class JobNote < ApplicationRecord
   # The beats of an application. `note` is the default and carries no meaning
   # beyond "this happened"; the rest read as a status in the timeline, and
   # three of them decide the job is over (see `implied_status`).
+  #
+  # Numbered in the order they were added, never in reading order — the integer
+  # is what's in the column. TAG_LABELS below is the order a person sees.
   enum :tag, {
     note:           0,
     applied:        1,
@@ -32,12 +35,17 @@ class JobNote < ApplicationRecord
     offer:          6,
     rejected:       7,
     withdrew:       8,
+    responded:      9,
   }
 
+  # Reading order, and the order of the dropdown. `responded` is the other half
+  # of `heard_back`: they wrote, then you wrote back. Which of those two a
+  # timeline ends on is the whole question of whether the ball is in your court.
   TAG_LABELS = {
     "note"           => "Note",
     "applied"        => "Applied",
     "heard_back"     => "Heard back",
+    "responded"      => "Response",
     "recruiter_call" => "Recruiter call",
     "interview"      => "Interview",
     "take_home"      => "Take-home",
@@ -72,8 +80,14 @@ class JobNote < ApplicationRecord
     numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 24 * 60 },
     allow_nil:    true
 
-  # Oldest first. A thread read backwards is read wrong.
+  # Oldest first — the order it happened in, which is what everything that
+  # reasons about a timeline wants.
   scope :ordered, -> { order(occurred_at: :asc, id: :asc) }
+
+  # Newest first, for reading. `reorder` because the association already carries
+  # `ordered`, and appending to it would leave the ascending sort in front and
+  # this one doing nothing.
+  scope :recent, -> { reorder(occurred_at: :desc, id: :desc) }
 
   # Everything this person still owes someone, soonest first. Deliberately has
   # no floor: a follow-up you missed last Tuesday is MORE outstanding than one

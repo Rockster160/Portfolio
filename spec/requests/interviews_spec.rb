@@ -358,15 +358,28 @@ RSpec.describe "Interview tracker", type: :request do
       expect(back).to be < response.body.index("app-card-container")
     end
 
-    it "shows every note in the order they happened" do
+    # Where the application stands is the last thing that happened, so it goes
+    # at the top rather than at the end of a long scroll.
+    it "shows the newest note first" do
       job = user.job_applications.create!(company: "Acme")
-      job.notes.create!(body: "Second thing", occurred_at: 1.day.ago)
-      job.notes.create!(body: "First thing", occurred_at: 9.days.ago)
+      job.notes.create!(body: "Older thing", occurred_at: 9.days.ago)
+      job.notes.create!(body: "Newer thing", occurred_at: 1.day.ago)
 
       get interview_path(job)
 
       expect(response).to have_http_status(:ok)
-      expect(response.body.index("First thing")).to be < response.body.index("Second thing")
+      expect(response.body.index("Newer thing")).to be < response.body.index("Older thing")
+    end
+
+    # You open this page because something just happened. Writing comes first,
+    # and what you write lands directly beneath the form.
+    it "puts the add-note form above the timeline" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(body: "Something happened")
+
+      get interview_path(job)
+
+      expect(response.body.index("+ Add a note")).to be < response.body.index("Timeline")
     end
   end
 end

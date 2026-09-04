@@ -515,6 +515,12 @@
   }
 
   // ---- Timeline --------------------------------------------------------
+  // The add form sits above the thread, so it needs the gap that used to be
+  // between the last note and the form.
+  .note-new {
+    margin-bottom: 20px;
+  }
+
   .interview-notes {
     margin: 0;
     border-left: 2px solid var(--iv-line);
@@ -601,7 +607,10 @@
   }
 
   .note-tag-applied { background: $base-blue; }
+  // Their move and yours: the same hue, the outbound one darker, so a glance
+  // down the thread shows who it's waiting on.
   .note-tag-heard_back { background: #34d0e0; }
+  .note-tag-responded { background: #1a8b96; }
   .note-tag-recruiter_call { background: #a371f7; }
   .note-tag-interview { background: #3fb950; }
   .note-tag-take_home { background: #e3b341; color: $grey-dark; }

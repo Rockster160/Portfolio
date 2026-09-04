@@ -62,6 +62,38 @@ RSpec.describe JobNote do
     end
   end
 
+  # The other half of "heard back": they wrote, you wrote back. It reads as a
+  # beat, but it doesn't decide anything about the job.
+  describe "the response tag" do
+    it "reads as Response and needs no body" do
+      note = job.notes.create!(tag: :responded, occurred_at: 1.hour.ago)
+
+      expect(note.tag_label).to eq("Response")
+      expect(note.body).to be_nil
+    end
+
+    it "sits next to heard back in the dropdown" do
+      keys = JobNote::TAG_LABELS.keys
+
+      expect(keys[keys.index("heard_back") + 1]).to eq("responded")
+    end
+
+    it "leaves the application where it was" do
+      job.notes.create!(tag: :responded)
+
+      expect(job.reload.status).to eq("active")
+    end
+  end
+
+  describe ".recent" do
+    it "reverses the association's own order rather than stacking onto it" do
+      old = job.notes.create!(body: "Older", occurred_at: 9.days.ago)
+      new = job.notes.create!(body: "Newer", occurred_at: 1.day.ago)
+
+      expect(job.notes.recent.to_a).to eq([new, old])
+    end
+  end
+
   describe "settling the application" do
     it "marks the job rejected when the newest note says so" do
       job.notes.create!(body: "No thanks", tag: :rejected)
