@@ -646,15 +646,96 @@ module Buddy
       # one, and "logged it at 6:03" is then true.
       def start_over?(outcome, attempt)
         return false if attempt > 1
+        return false if Time.current > @deadline
         return false if @acted || @asked_choice || @read_actions
         return false if outcome[:proposals].any?
-        return false if Time.current > @deadline
 
+        # Behind the same guards as everything else. A briefing trips none of
+        # them - it calls nothing and proposes nothing - but a second attempt
+        # after something HAS run would run it twice, and that outranks a
+        # dropped sentence.
         body = outcome[:text].to_s
+        return true if dropped_briefing_facts(body).any?
+
         unbacked_claim(body).present? ||
           self.class.silent_turn_claim?(body) ||
           commanded_action_unanswered?(body)
       end
+
+      # Facts the seed handed over and the draft didn't say.
+      #
+      # Rocco, 2026-09-05, of prod 5445: "Weather still being injected rather
+      # than being talked about." He is reading a repair. That reply carries
+      # `repairs: ["week_weather", "greeting"]` - Byte wrote two sentences and
+      # `with_week_weather` stapled "Rain Sun & Mon this week." underneath, as
+      # its own paragraph, in a fixed string, last. Nothing about that can be
+      # made to read as talking.
+      #
+      # So a dropped fact goes BACK to the model with the draft and a note
+      # naming what's missing, which is the same machinery a lost turn already
+      # uses. The staples stay behind it: a second attempt that drops it again
+      # still gets it appended, because a briefing missing the weather is worse
+      # than one wearing it awkwardly. What changes is which of those is the
+      # normal case.
+      def dropped_briefing_facts(body)
+        return [] unless today_briefing?
+        return [] if body.blank?
+
+        [
+          ("the day's high and low" if weather_dropped?(body)),
+          ("the week's weather" if week_dropped?(body)),
+          ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
+          *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
+        ].compact
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] dropped-fact check failed: #{e.class}: #{e.message}")
+        []
+      end
+
+      def weather_dropped?(body)
+        return false unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
+
+        figures = WeatherService.today_figures(user: @user)
+        figures.present? && weather_missing?(body, figures)
+      end
+
+      def week_dropped?(body)
+        outlook = WeatherService.week_outlook(user: @user)
+        return false if Buddy::TodayBriefing.week_line(outlook).blank?
+
+        days = Buddy::TodayBriefing.flagged_days(outlook)
+        !Buddy::TodayBriefing.week_said?(body, days, today: Buddy::Day.now(@user).to_date)
+      end
+
+      def rain_hours_dropped?(body)
+        return false if @user.nil?
+
+        windows = Buddy::PlungeAdvisor.today_rain_windows(@user)
+        windows.present? && !Buddy::TodayBriefing.rain_hours_said?(body, windows)
+      end
+
+      # Named, so the second attempt knows which one it is answering.
+      def retry_nudge_for(previous)
+        missing = dropped_briefing_facts(previous[:text].to_s)
+        return SECOND_ATTEMPT_NUDGE if missing.empty?
+
+        format(MISSING_FACTS_NUDGE, missing: missing.map { |m| "- #{m}" }.join("\n"))
+      end
+
+      # Deliberately not a rewrite instruction. The draft is already in front of
+      # it (see DRAFT_PREFACE) and most of it was probably right; what's wanted
+      # is the same message with the missing part written INTO it, in its own
+      # sentence, rather than a line bolted on the end - which is precisely what
+      # happens if this doesn't work.
+      MISSING_FACTS_NUDGE = <<~TXT.freeze
+        That draft left something out that they were given. Missing:
+
+        %<missing>s
+
+        Write the message again with each of those in it, in a sentence that
+        belongs to the rest of what you wrote. Everything else about the draft
+        was fine, so keep it.
+      TXT
 
       # What the second attempt is told. The draft rides along through
       # `draft_item`, which already says it was never sent and that whatever
@@ -694,7 +775,7 @@ module Buddy
         input     = History.build(@conversation, upto: @inbound)
         input    += [{ role: :developer, content: routine_directive }] if routine_directive
         if previous
-          input += draft_item(previous[:text]) + [{ role: :developer, content: SECOND_ATTEMPT_NUDGE }]
+          input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
         end
         # Seeded with the words the last attempt ended on, under the same rule
         # that governs rounds: the LAST thing said wins, and a round that says
@@ -2124,6 +2205,11 @@ module Buddy
         # Buddy::Restatement for why this compares word sets rather than
         # phrasing, and why the bar for dropping anything is as high as it is.
         body = repaired(:restatement, body) { |b| Buddy::Restatement.collapse(b) }
+        # A trailing "which is <something charming>" carrying no fact. Briefing
+        # only, because that is where it lives and where the day it should have
+        # been talking about is available to check against. See Buddy::Flourish
+        # for why this is mechanism rather than a fourth wording of the rule.
+        body = repaired(:flourish, body) { |b| today_briefing? ? Buddy::Flourish.trim(b, briefing_facts) : b }
         # The weather repairs run today's figures first, then today's hours,
         # then the week, so what gets appended reads in the order a person
         # would say it. Each one only fills its own silence; see

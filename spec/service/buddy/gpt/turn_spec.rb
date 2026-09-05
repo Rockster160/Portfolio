@@ -2219,15 +2219,50 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to start_with("Hey! Just the noon supply run today.")
     end
 
-    it "spends no extra round on it" do
-      client = FakeBuddyClient.new([{ text: "Hey! Just the noon supply run today." }])
+    # Rocco, 2026-09-05, of prod 5445: "Weather still being injected rather than
+    # being talked about." That reply carries `repairs: ["week_weather",
+    # "greeting"]` - Byte wrote two sentences and the fallback stapled the week
+    # underneath as its own paragraph, in a fixed string, last. Nothing about
+    # that reads as talking.
+    #
+    # So a dropped fact goes back to the model with the draft and a note naming
+    # it. The staple stays behind that: a briefing missing the weather is worse
+    # than one wearing it awkwardly. What changed is which of the two is normal.
+    it "asks for it again rather than writing it on the end" do
+      client = FakeBuddyClient.new([
+        { text: "Hey! Just the noon supply run today." },
+        { text: "Hey! 93 out today, down to 69 tonight, and just the noon supply run." },
+      ])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: weather_seed,
         metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(1)
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("Hey! 93 out today, down to 69 tonight, and just the noon supply run.")
+      expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    it "tells the second attempt what it left out" do
+      client = FakeBuddyClient.new([{ text: "Hey! Just the noon supply run today." }, { text: "Hey! 93 out today, down to 69 tonight, and just the noon supply run." }])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: weather_seed,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: client)
+
+      nudges = client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
+
+      expect(nudges).to include("left something out that they were given")
+      expect(nudges).to include("the day's high and low")
+    end
+
+    # And only then. Silence twice over is still worse than an awkward line.
+    it "falls back to the end of the message when the second attempt drops it too" do
+      briefing([{ text: "Hey! Just the noon supply run today." }, { text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to include("High of 93°F today")
     end
 
     # The whole point is that the model's own sentence is better - it can put
@@ -2321,15 +2356,18 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Morning! Quiet one.")
     end
 
-    it "spends no extra round on it" do
-      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
+    # Same trade as the figures above: the model gets told what it left out and
+    # writes it in, and the append is what happens when that fails too.
+    it "asks for it again rather than writing it on the end" do
+      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }, { text: "Morning! Quiet one, with rain Thu." }])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
         metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(1)
+      expect(client.calls.length).to eq(2)
+      expect(reply.metadata["repairs"]).to be_blank
     end
 
     it "leaves ordinary turns alone" do
@@ -2396,15 +2434,18 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Morning! Quiet one.")
     end
 
-    it "spends no extra round on it" do
-      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
+    # Same trade as the figures above: the model gets told what it left out and
+    # writes it in, and the append is what happens when that fails too.
+    it "asks for it again rather than writing it on the end" do
+      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }, { text: "Morning! Quiet one, rain in Alpine 6pm-8pm." }])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
         metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(1)
+      expect(client.calls.length).to eq(2)
+      expect(reply.metadata["repairs"]).to be_blank
     end
 
     it "leaves ordinary turns alone" do
