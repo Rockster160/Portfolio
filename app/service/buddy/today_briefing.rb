@@ -5,9 +5,9 @@ module Buddy
   # that used to run one is long gone; comments here said otherwise for a while
   # and sent people looking for a button that isn't there.
   #
-  # A turn answering the seed is NOT offered the `today_briefing` tool — see
-  # Buddy::Tools::BRIEFING_WITHHELD. It could otherwise send itself another one,
-  # forever.
+  # A turn answering the seed is offered NO TOOLS — see Buddy::GPT::Turn#tools.
+  # It has its whole day already and nothing it called could reach anybody, and
+  # left with `today_briefing` it sent itself another seed, forever.
   #
   # The SCHEDULE is a morning thing. The briefing is not — the chip is there all
   # day and gets tapped at all hours, so nothing in the seed may assume which
@@ -194,6 +194,77 @@ module Buddy
         sentence.match?(WEATHER_WORDS_RX) &&
           words.any? { |word| sentence.match?(/\b#{Regexp.escape(word)}\b/i) }
       }
+    end
+
+    # A claim that the week is quiet, on a week that isn't.
+    #
+    # 5 Sep, all three morning briefings: the week staple fired on every one and
+    # on two of them landed directly under a sentence saying the opposite.
+    # 5456 - "the week looks pretty clear overall, so nothing spicy lurking out
+    # there" / "Rain Sun & Mon this week." 5459 - "The week ahead looks mostly
+    # steady from here, so nothing is shouting for attention just yet!" / the
+    # same line. Appending left both standing, so the briefing said two opposite
+    # things about the same week.
+    #
+    # The append was never the whole problem. `week_outlook` had already flagged
+    # the days, so a sentence calling the week clear is a FALSE FACT whether or
+    # not anything follows it, and this is `with_corrected_temperatures` for the
+    # week: the wrong claim comes out in place, the same way a wrong high does.
+    #
+    # It only ever runs on a briefing whose week Buddy::GPT::Turn has already
+    # judged unsaid, which means the model's account of the week is known to be
+    # wrong before a word is cut.
+    CALM_RX = /\b(?:clear|clears|calm|steady|quiet|mild|mellow|uneventful|settled|unremarkable|nothing|none)\b/i
+    WEEK_WORD_RX = /\bweek\b/i
+
+    # Where a clause about the week hangs off the sentence in front of it. The
+    # figures usually live in that first half - 5456 carried the high and the
+    # low there - so cutting the sentence whole would take real facts with it.
+    CONNECTOR_RX = /,\s+(?:and|but|so|though|although|while|with)\s+/i
+
+    SENTENCE_RX = /[^.!?\n]+[.!?]*/
+
+    def without_calm_week(body, days=[])
+      text = body.to_s
+      return text if text.blank?
+
+      words = day_words(days, Date.current)
+      out   = text.gsub(SENTENCE_RX) { |sentence|
+        next sentence unless calm_week_claim?(sentence, words)
+
+        cut_week_claim(sentence)
+      }
+      out = out.gsub(/[ \t]+/, " ").gsub(/ *\n */, "\n").gsub(/\n{3,}/, "\n\n").strip
+      out.match?(/[[:alpha:]]/) ? out : text
+    end
+
+    # A day the flagged list names is the model doing the job, however flatly it
+    # reads, and nothing here gets to touch it.
+    def calm_week_claim?(sentence, words)
+      sentence.match?(WEEK_WORD_RX) && sentence.match?(CALM_RX) &&
+        words.none? { |word| sentence.match?(/\b#{Regexp.escape(word)}\b/i) }
+    end
+
+    # From the connector in front of the week to the end of the sentence, or the
+    # whole sentence when the week is what it opens on.
+    def cut_week_claim(sentence)
+      head, tail = split_at_week_connector(sentence)
+      return "" if head.blank?
+
+      return sentence if tail.match?(CALM_RX) == false
+
+      "#{head.rstrip}#{sentence[/[.!?]+\z/] || "."}"
+    end
+
+    def split_at_week_connector(sentence)
+      week = sentence =~ WEEK_WORD_RX
+      return [nil, sentence] if week.nil?
+
+      cut = nil
+      sentence.enum_for(:scan, CONNECTOR_RX).each { cut = Regexp.last_match if Regexp.last_match.begin(0) < week }
+      return [nil, sentence] if cut.nil?
+
+      [sentence[0...cut.begin(0)], sentence[cut.begin(0)..]]
     end
 
     # Sentences, and also lines: a briefing is half prose and half bullets, and

@@ -316,6 +316,26 @@ class Jil::Methods::Global < Jil::Methods::Base
       data:           @jil.cast(data, :Hash),
       auth_type:      :trigger,
       auth_type_id:   @jil.task&.id,
+      # Re-arming a row that has ALREADY FIRED has to un-fire it, because
+      # `ScheduledTrigger.ready` is `not_started` - an execute_at moved into the
+      # future on a row still carrying `started_at` is a trigger that can never
+      # come due again, and nothing anywhere says so.
+      #
+      # Prod, 4 Sep, agenda item 1062: the leave-by went out at 10:10:02 for an
+      # 11:00 meeting, the meeting moved to 11:45 twenty-eight seconds later,
+      # and the corrected 10:52 leave-by was never spoken. "Time to go" landed
+      # correctly at 11:02 - that trigger had not fired yet, so its row was
+      # clean and the same upsert worked on it. Chelsea had a wrong walk-out
+      # time standing for 42 minutes.
+      #
+      # It only bites when the NAME is unchanged, which is what makes it look
+      # intermittent: `remove_triggers_by_scope` spares the row whose name
+      # matches and destroys the rest, so a re-arm that recomputes a DIFFERENT
+      # drive gets a fresh row and fires, and one that recomputes the same drive
+      # lands back on the spent one. Only the names carrying the figure
+      # ("🚙 TTT: 35m") escape it, and only when the traffic moved.
+      started_at:     nil,
+      completed_at:   nil,
     )
 
     ::Jil::Schedule.update(rec)
@@ -354,6 +374,10 @@ class Jil::Methods::Global < Jil::Methods::Base
       data:           @jil.cast(data, :Hash),
       auth_type:      :trigger,
       auth_type_id:   @jil.task&.id,
+      # Un-fired for the same reason trigger_for does it: `ready` is
+      # `not_started`, so a spent row re-armed to a future time never comes due.
+      started_at:     nil,
+      completed_at:   nil,
     )
 
     ::Jil::Schedule.update(rec)

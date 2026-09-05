@@ -17,14 +17,22 @@ FEED    = ENV.fetch("TELEMETRY_FEED", "/var/log/tesla-telemetry/feed.jsonl")
 WEBHOOK = URI(ENV.fetch("TELEMETRY_WEBHOOK", "http://localhost:3141/webhooks/tesla_telemetry"))
 
 # Whitelist of known Tesla vehicle-data telemetry fields. Mirrors the keys
-# requested in app/service/tesla_service.rb#fields. A record is forwarded
-# only if at least one of these keys appears (at the top level OR inside a
-# nested "data" envelope) — that's the unambiguous signal of real vehicle
-# data, as distinct from bridge/fleet-telemetry operational noise.
+# requested in app/service/tesla_service.rb#fields — and the mirror is exact,
+# because fleet-telemetry sends ONE FIELD PER RECORD. A requested field
+# missing from this list isn't merely unwhitelisted, it is unreachable: its
+# record carries no other vehicle key, so it is dropped as noise and Rails
+# never sees that field change again.
+# `spec/service/tesla_service_bridge_fields_spec.rb` holds the two lists together.
+#
+# A record is forwarded only if at least one of these keys appears (at the top
+# level OR inside a nested "data" envelope) — that's the unambiguous signal of
+# real vehicle data, as distinct from bridge/fleet-telemetry operational noise.
 VEHICLE_FIELDS = %w[
   VehicleName
   VehicleSpeed
+  Gear
   ChargeState
+  ChargePort
   Odometer
   Location
   GpsState

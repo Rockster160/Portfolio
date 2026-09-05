@@ -83,6 +83,41 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(offered_sections(turn)).to include(:chores_pending_today)
     end
+
+    it "offers the briefing nothing at all to call" do
+      turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+
+      expect(turn.send(:tools)).to be_empty
+    end
+
+    # Prod 5445, 5456, 5459 and 5461 - the first four briefings after
+    # Buddy::BriefingFacts shipped - named nothing they were handed and wrote a
+    # day out of the thread instead. The seed was being swapped for the bracket
+    # "[tapped Today]" on its way in, so the thread was the only thing any of
+    # them had. See Buddy::GPT::History::ACTION_STANDINS.
+    describe "what it is given to read" do
+      before {
+        convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "I'm sorting the Costco run")
+        convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "Nice, how's it going?", metadata: { "kind" => "buddy" })
+      }
+
+      def input_for(metadata)
+        seed   = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "ON TODAY", metadata: metadata)
+        client = FakeBuddyClient.new([{ text: "Morning!" }])
+        described_class.run!(seed, client: client)
+        client.calls.first.input
+      end
+
+      it "hands a briefing the day it was given" do
+        input = input_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+
+        expect(input.last[:content].to_s).to include("ON TODAY")
+      end
+
+      it "hands an ordinary turn the whole thread" do
+        expect(input_for({}).map { |i| i[:content].to_s }.join(" ")).to include("Costco")
+      end
+    end
   end
 
   describe "the reply bubble" do
@@ -2172,6 +2207,83 @@ RSpec.describe Buddy::GPT::Turn do
 
   # Eight briefings running went out with no weather in them, across two rounds
   # of prompt wording and a pre-send readback naming this exact line. The other
+  # The dropped-fact check had four subjects - the high, the week, Alpine's
+  # hours, and a leave-by for an item it had ALREADY NAMED - so a draft naming
+  # none of nine jobs and none of four events satisfied every one of them.
+  # 5456 and 5461 retried four and five times over the weather while Chelsea's
+  # 11 AM meeting and her 3:19 PM leave-by went unmentioned.
+  describe "a briefing that never mentioned the day" do
+    let(:facts) {
+      {
+        "name"  => "Rocco",
+        "today" => [
+          { "time" => "11:00 AM", "title" => "Care giver meeting", "mine" => false, "owner" => "Chelsea" },
+          { "time" => "9:00 PM", "title" => "Drinky with Carlos & Lil!" },
+        ],
+        "jobs"  => [
+          { "id" => 1, "name" => "Gather trash", "group" => "trash" },
+          { "id" => 2, "name" => "Fold Laundry" },
+        ],
+      }
+    }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today", "briefing" => facts,
+        },
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    def nudges(client)
+      client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
+    end
+
+    it "goes again, naming what it left out" do
+      full   = "Morning! Chelsea has a care giver meeting at 11, drinks with Carlos & Lil at 9, and it's trash day."
+      client = briefing([{ text: "Morning! Not much on deck from here." }, { text: full }])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("Care giver meeting")
+      expect(nudges(client)).to include("Drinky with Carlos & Lil!")
+      expect(nudges(client)).to include("the jobs on today")
+      expect(reply.body).to eq(full)
+    end
+
+    # Jobs are meant to be summarized - five bin rows becoming "it's trash day"
+    # is the rule working - so they are counted as a whole and by their words.
+    it "takes a summarized job as said" do
+      client = briefing([{ text: "Morning! Chelsea's care giver meeting is at 11:00 AM, drinks at 9:00 PM, and it's trash day." }])
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    it "takes a conjugated one as said" do
+      client = briefing([{ text: "Morning! Chelsea's care giver meeting is at 11:00 AM, drinks at 9:00 PM, and there's laundry to fold." }])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    # An item's own clock time counts as naming it - see named_in?.
+    it "takes the time as naming the item" do
+      client = briefing([{ text: "Morning! Chelsea's got something at 11:00 AM and you're out at 9:00 PM. Trash day too." }])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "leaves an ordinary turn out of it" do
+      client = FakeBuddyClient.new([{ text: "Not much on deck from here." }])
+      described_class.run!(user_says("what's up"), client: client)
+
+      expect(client.calls.length).to eq(1)
+    end
+  end
+
   # two checks in that readback held every time over the same run, so the model
   # is reading it - this one line is what keeps getting skipped. So the figures
   # get composed in Ruby and put on, the same way a missing hello does.

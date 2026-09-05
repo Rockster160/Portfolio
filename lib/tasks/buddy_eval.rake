@@ -1002,6 +1002,18 @@ BUDDY_EDGE_PROBES = [
                 "reminder rather than a missing one",
   },
   {
+    case:         "prod 5410-5411",
+    say:          "When did my eye issue start?",
+    tool:         :none,
+    needs:        :kept_eye_episode,
+    expect_reply: /20 August|20th of August|Aug(?:ust)? 20|Wednesday/i,
+    note:         "answered \"I don't have a note on when that started\" ONE SECOND later - " \
+                  "no search, no lookup - with the date sitting in memories_block, which is " \
+                  "kind_preference and therefore in the prompt on every turn. It then wrote a " \
+                  "memory recording that it had no note, so the wrong answer became a fact " \
+                  "about itself. A search here would be a miss too: the answer was already there",
+  },
+  {
     case: "eval run, 20 Aug",
     say:  "hey",
     tool: :none,

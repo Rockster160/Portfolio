@@ -685,8 +685,10 @@ module Buddy
           ("the day's high and low" if weather_dropped?(body)),
           ("the week's weather" if week_dropped?(body)),
           ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
+          *unnamed_agenda(body).map { |i| i[:title].to_s },
+          ("the jobs on today" if jobs_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
-        ].compact
+        ].compact_blank
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] dropped-fact check failed: #{e.class}: #{e.message}")
         []
@@ -1448,6 +1450,9 @@ module Buddy
         line = Buddy::TodayBriefing.week_line(outlook)
         return body if line.blank?
 
+        # Anything the draft claimed about the week is known wrong by here, and
+        # it goes before the true line lands under it. See without_calm_week.
+        body = Buddy::TodayBriefing.without_calm_week(body, days)
         "#{body.rstrip}\n\n#{line}"
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] week weather fallback failed: #{e.class}: #{e.message}")
@@ -1573,6 +1578,46 @@ module Buddy
         )
       end
 
+      # Items on today the draft never named.
+      #
+      # This is the hole the four dropped briefings went through. The check
+      # above it had exactly four subjects - the high, the week, Alpine's hours,
+      # and a leave-by for an item ALREADY NAMED - so a draft naming none of
+      # nine jobs and none of four events satisfied every one of them, and the
+      # only thing that could ever have forced a retry was a missing
+      # temperature. 5456 and 5461 both retried three and four times on the
+      # weather while Chelsea's 11 AM meeting sat unmentioned in the seed.
+      #
+      # Per item rather than "named none of them", because the seed asks for
+      # each by name - "the name is the part they couldn't have guessed" - and
+      # an appointment is not a thing a briefing gets to summarize.
+      def unnamed_agenda(body)
+        Array(briefing_facts[:today]).select { |i| i.is_a?(::Hash) && !named_in?(body, i) }
+      end
+
+      # Jobs are the opposite case and get counted as a whole: they ARE meant to
+      # be summarized, so five bin rows becoming "it's trash day" is the rule
+      # working (Buddy::TodayBriefing::WRITING_RULES[:jobs]) and naming each one
+      # would be the failure. What can't be right is a day with jobs in it whose
+      # briefing touches none of them.
+      #
+      # Matched on the words rather than the rows, since a job reaches a
+      # sentence conjugated - "Fold Laundry" arrives as "fold the laundry" - and
+      # the group word is what a summarized one leaves behind.
+      def jobs_dropped?(body)
+        words = job_words
+        words.any? && words.none? { |word| body.match?(/\b#{Regexp.escape(word)}/i) }
+      end
+
+      # Four letters and up, so "the", "out" and "and" don't make every draft
+      # look like it mentioned the jobs.
+      def job_words
+        rows = Array(briefing_facts[:jobs]).select { |row| row.is_a?(::Hash) }
+        rows.flat_map { |row|
+          [row[:group], row[:name]].compact_blank.join(" ").scan(/[[:alpha:]]{4,}/)
+        }.uniq
+      end
+
       def unsaid_departures(body)
         items = briefing_facts[:today]
         return [] unless items.is_a?(Array)
@@ -1677,13 +1722,13 @@ module Buddy
       # "Hiii! Your Today is ready ✨" is not a briefing, it's a claim that one
       # happened — and nothing else is coming, so the person is left with a
       # receipt for a message that was never written. It shows up two ways: the
-      # `today_briefing` tool used to be callable from the briefing turn (see
-      # Buddy::Tools::BRIEFING_WITHHELD), and once one reply lands like this it
-      # sits in history teaching every briefing after it.
+      # `today_briefing` tool used to be callable from the briefing turn, and once
+      # one reply lands like this it sits in history teaching every briefing
+      # after it.
       #
-      # That second half is why the seed's HARD NO isn't enough on its own. A
-      # thread that has said it once has a worked example in front of it, and
-      # prose has lost to a worked example every time it's been tried here.
+      # Both halves are shut now - the turn is offered no tools and is built
+      # from the seed alone - and this stays because it is cheap and because the
+      # repair is what proved the tool was the cause the first time.
       #
       # A REPAIR, in the same spirit as with_greeting: the claim is cut and
       # whatever real briefing followed it stands. Only when nothing is left does
@@ -2121,18 +2166,31 @@ module Buddy
         @inbound.metadata["buddy_action"].to_s
       end
 
+      # A briefing turn is offered NOTHING to call.
+      #
+      # It was already handed its whole day by Buddy::BriefingFacts, and what it
+      # writes IS the message with nothing following it - so there is no call it
+      # could make whose result could reach anybody. What the forty-odd schemas
+      # bought instead was rounds: 5456, 5459 and 5461 spent four, five and five
+      # calls and 300k+ tokens each on a turn with nothing to look up, and Moss
+      # spent one of Chelsea's filing `request_feature` id 7, "Weekly weather
+      # forecast", against a seed whose line 23 read `This week: rain Sun & Mon`.
+      # That one carried outward: a chip in her thread, and a push into Rocco's
+      # saying she had asked for something it couldn't do. She hadn't.
+      #
+      # Buddy::Tools made this argument for `today_briefing` alone, and it holds
+      # word for word for the rest: prose telling a model not to call a tool is
+      # advice, and not offering it is the enforcement.
       def tools
+        return [] if today_briefing?
+
         @tools ||= [
-          # A briefing is handed its whole day by Buddy::BriefingFacts and has
-          # nothing left to look up. Offering the lookup anyway is how twenty
-          # sections end up in front of a model that only needed six lines, and
-          # a list in context gets read out whatever the prose above it says.
-          (ContextTool.schema(user: @user, briefing: false) unless today_briefing?),
+          ContextTool.schema(user: @user, briefing: false),
           PromptTool.schema,
           ImageTool.schema,
           ListenerTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
-          *Buddy::Tools.function_schemas(user: @user, briefing: today_briefing?),
+          *Buddy::Tools.function_schemas(user: @user),
         ].compact
       end
 

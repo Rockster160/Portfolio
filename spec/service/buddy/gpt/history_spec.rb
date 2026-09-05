@@ -69,6 +69,29 @@ RSpec.describe Buddy::GPT::History do
       expect(build.first[:content]).to include("Today")
     end
 
+    # The standin is for HISTORY. The seed being answered right now is the
+    # prompt, and it stopped being 4.5KB of instructions the day
+    # Buddy::BriefingFacts moved the day into it and took `get_context` away.
+    #
+    # For one day it was still swapped for the bracket, so what reached the
+    # model was the words "[tapped Today]" and nothing else. Prod 5445, 5456,
+    # 5459 and 5461 - every briefing that ran on it - described a day out of the
+    # thread, because the thread was all they had.
+    it "never stands in for the seed being answered" do
+      seed = tapped("today", body: "ON TODAY\n- 11:00 AM Care giver meeting")
+
+      expect(build(upto: seed).last[:content]).to include("Care giver meeting")
+    end
+
+    it "still stands in for that same seed once it is history" do
+      seed = tapped("today")
+      said("Morning!", direction: :inbound, kind: "buddy")
+      later = said("thanks")
+
+      expect(build(upto: later).first[:content]).to eq("[tapped Today - asked for a briefing on the day ahead]")
+      expect(seed.reload).to be_present
+    end
+
     # Collapsing the seed stopped the instructions being re-taught, but left the
     # BRIEFINGS - and a run of past briefings is a worked example of how to
     # write the next one, which is why the same droning list of chore names
@@ -104,11 +127,12 @@ RSpec.describe Buddy::GPT::History do
         expect(build.pluck(:content)).to include("The only briefing.")
       end
 
-      # The turn being answered is live, not history, however it was started.
+      # The turn being answered is live, not history, however it was started -
+      # and it arrives whole, since it is the prompt.
       it "never drops the message being answered" do
         seed = tapped("today")
 
-        expect(build(upto: seed).last[:content]).to include("Today")
+        expect(build(upto: seed).last[:content]).to eq("a very long block of briefing instructions")
       end
     end
 

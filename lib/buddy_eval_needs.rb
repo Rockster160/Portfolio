@@ -168,6 +168,9 @@ module BuddyEvalNeeds
     # and the probe would pass for the wrong reason.
     before_bed_trigger:   { label: "a trigger hung off a list",    check: ->(u) { jil(u, /before bed/i, kind: :trigger) } },
     open_relay_question:  { label: "an open question from someone else", check: ->(u) { BuddyRelay.open_questions_for(u).exists? } },
+    # Prompt-resident by definition - `always_loaded` IS `kind_preference` - so
+    # the probe that needs it is asking whether a fact in the prompt gets read.
+    kept_eye_episode:     { label: "a kept note about the eye issue", check: ->(u) { BuddyMemory.where(user: u).always_loaded.any? { |m| m.content.to_s.match?(/eye issue/i) } } },
 
     # Live state, not rows. Nothing to seed and nothing to check.
     printer_reachable:    { label: "the printer answering", check: nil },

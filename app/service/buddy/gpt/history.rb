@@ -101,7 +101,8 @@ module Buddy
         rows = drop_stale_quick_actions(scope(conversation, upto), upto)
         described = descriptions_for(rows)
         rows.filter_map { |msg|
-          item_for(msg, replay_images: upto.present? && msg.id == upto.id, described: described)
+          current = upto.present? && msg.id == upto.id
+          item_for(msg, replay_images: current, described: described, current: current)
         }
       end
 
@@ -185,8 +186,8 @@ module Buddy
         [at, upto.created_at].min
       end
 
-      def item_for(message, replay_images: false, described: {})
-        body = seed_standin(message.metadata) || message.body.to_s.strip
+      def item_for(message, replay_images: false, described: {}, current: false)
+        body = (seed_standin(message.metadata) unless current) || message.body.to_s.strip
 
         if message.direction == "outbound"
           return user_item(message, outbound_body(message, body), replay_images, described)
@@ -220,6 +221,22 @@ module Buddy
       # as one ("Today" → the briefing) without re-teaching the old voice.
       # Seeds with no `buddy_action` - a watch firing, a relay - are left alone:
       # those are short and their words are the whole point.
+      #
+      # NEVER the seed being answered right now (`current:`), and that exemption
+      # is the whole of what went wrong on 5 Sep. This was written when a Today
+      # seed was 4.5KB of pure INSTRUCTION and the day itself arrived separately,
+      # through `get_context` - so throwing the block away cost nothing, because
+      # the facts were never in it. Buddy::BriefingFacts then moved the day INTO
+      # the seed body and took the lookup away, and this went on standing it in.
+      #
+      # What reached the model on prod 5445, 5456, 5459 and 5461 was one line
+      # reading "[tapped Today - asked for a briefing on the day ahead]" and a
+      # hundred messages of thread. Every symptom follows from that: 5445 said
+      # "not much on deck from here" on a day holding Game Night and eight jobs,
+      # Suki told Eve her day was packed out of Eve's messages from the previous
+      # morning, and Moss filed a feature request for the week's weather it had
+      # supposedly been given. None of them ignored the day. None of them was
+      # ever shown it.
       ACTION_STANDINS = {
         "today"       => "[tapped Today - asked for a briefing on the day ahead]",
         "checkin"     => "[tapped Check-in]",

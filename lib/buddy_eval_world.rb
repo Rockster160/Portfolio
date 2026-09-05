@@ -124,6 +124,7 @@ class BuddyEvalWorld
     reminders!
     agenda!
     ideas!
+    kept_episode!
     glossary!
     routines!
     links!
@@ -375,6 +376,24 @@ class BuddyEvalWorld
       BuddyMemory.create!(
         user: user, kind: :stash, status: :active, category: :me,
         content: "Sort out the greenhouse - the glass on the north side needs replacing"
+      )
+    }
+  end
+
+  # An explicit "remember this" about something in the past.
+  #
+  # It is `kind: :preference` on purpose, and that is the whole point of the
+  # probe rather than an oddity: everything written by an explicit remember is
+  # filed that way, so it lands in Buddy::Personality#memories_block and is in
+  # front of the model on every turn. Prod 5410 asked when an eye issue had
+  # started and 5411 said there was no note on it, one second later - no search,
+  # no lookup, with the date sitting in the prompt.
+  def kept_episode!
+    held = user.buddy_memories.kind_preference.to_a
+    reuse(held.detect { |m| m.content.to_s.match?(/eye issue/i) }) {
+      BuddyMemory.create!(
+        user: user, kind: :preference, status: :active,
+        content: "Rocco's eye issue flared up badly on Wednesday 20 August 2026, and the hole was about 6 inches from 6 feet away."
       )
     }
   end
