@@ -371,6 +371,39 @@ class Chore < ApplicationRecord
     end
   end
 
+  # `matches_day?` narrowed to the day the chore ACTUALLY comes round, with
+  # nothing that has merely been due since some earlier day.
+  #
+  # Both the relative and the after_chore branches of `matches_day?` answer
+  # `date >= due_on`, so an overdue chore matches every day from then on,
+  # forever. That is the right answer for "can this be done today" and the wrong
+  # one for "is today the day" - and the two questions have been sharing a
+  # method.
+  #
+  # ChoreSerializer#due_today? already tightened it for the Today tab, which is
+  # why the app splits "due today" from overdue carryover correctly and the
+  # briefing did not. The tightening lives here now so there is one answer.
+  #
+  # Rocco, 2026-09-06: "Chores should only be brought up if they are
+  # SPECIFICALLY DUE TODAY. Not over due. Not due next week. TODAY only."
+  def strictly_matches_day?(date, user=nil, last_completed_day: :unset, anchor_last_day: :unset)
+    return false unless matches_day?(date, user, last_completed_day: last_completed_day, anchor_last_day: anchor_last_day)
+
+    if relative?
+      due_on = relative_due_on(user, last_completed_day: last_completed_day)
+      return due_on.present? && due_on == date
+    end
+
+    if after_chore?
+      a_last = anchor_last_day == :unset ? lookup_anchor_last_day(user) : anchor_last_day
+      return false if a_last.nil?
+
+      return after_chore_due_on_for(a_last) == date
+    end
+
+    true
+  end
+
   def upcoming_days(from: Date.current, days: 7, user: nil)
     (from..(from + days)).select { |d| matches_day?(d, user) }
   end

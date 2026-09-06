@@ -19,6 +19,70 @@ RSpec.describe Chore, type: :model do
       end
     end
 
+    # `matches_day?` answers "can this be done today". `strictly_matches_day?`
+    # answers "is today the day it comes round". They had been the same method,
+    # and a briefing asking the second question got the first one's answer —
+    # prod 5500 read out ten jobs on a Saturday, one of them a trash follower
+    # whose anchor was done on the Wednesday.
+    describe "strictly_matches_day?" do
+      def relative(interval, last_done:)
+        chore = create(:chore, created_by_user: user,
+          recurrence: { freq: :relative, unit: :day, interval: interval })
+        create(:chore_completion, chore: chore, user: user, day_key: last_done)
+        chore
+      end
+
+      it "is true on the day it comes round" do
+        chore = relative(7, last_done: today - 7)
+
+        expect(chore.matches_day?(today, user)).to eq(true)
+        expect(chore.strictly_matches_day?(today, user)).to eq(true)
+      end
+
+      # The whole difference, in one example.
+      it "is false once it is merely overdue, where matches_day? stays true" do
+        chore = relative(7, last_done: today - 19)
+
+        expect(chore.matches_day?(today, user)).to eq(true)
+        expect(chore.strictly_matches_day?(today, user)).to eq(false)
+      end
+
+      it "is false before it is due at all" do
+        chore = relative(7, last_done: today - 2)
+
+        expect(chore.strictly_matches_day?(today, user)).to eq(false)
+      end
+
+      it "leaves a fixed recurrence exactly as matches_day? had it" do
+        chore = create(:chore, created_by_user: user, recurrence: { freq: :weekly, by_day: [Chore::WEEKDAY_KEYS[today.wday]] })
+
+        expect(chore.strictly_matches_day?(today, user)).to eq(chore.matches_day?(today, user))
+      end
+
+      describe "an after_chore follower" do
+        let(:anchor) { create(:chore, created_by_user: user, recurrence: { freq: :daily }) }
+
+        def follower(interval)
+          create(:chore, created_by_user: user,
+            recurrence: { freq: :after_chore, unit: :day, interval: interval, anchor_chore_id: anchor.id })
+        end
+
+        it "is true the day the anchor puts it on" do
+          create(:chore_completion, chore: anchor, user: user, day_key: today)
+
+          expect(follower(0).strictly_matches_day?(today, user)).to eq(true)
+        end
+
+        it "is false when the anchor was done days ago and it never got picked up" do
+          create(:chore_completion, chore: anchor, user: user, day_key: today - 3)
+          chore = follower(0)
+
+          expect(chore.matches_day?(today, user)).to eq(true)
+          expect(chore.strictly_matches_day?(today, user)).to eq(false)
+        end
+      end
+    end
+
     describe "matches_day? — fixed recurrences (user-independent)" do
       it "daily — always matches" do
         chore = create(:chore, created_by_user: user, recurrence: { freq: :daily })

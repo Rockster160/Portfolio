@@ -2,7 +2,7 @@ require "rails_helper"
 
 # Locks in the cache architecture and the projection from raw caches → the
 # clean :car_data schema:
-#   :tesla_telemetry → raw deep-merged telemetry (current + section_ts + history)
+#   :tesla_telemetry → raw deep-merged telemetry (current + section_ts + field_ts + history)
 #   :tesla_endpoint  → last vehicle_data poll response
 #   :car_data        → projected/normalized view: location, battery, charging,
 #                      drive, trip, climate, doors, windows, tires, odometer.
@@ -183,6 +183,33 @@ RSpec.describe TeslaCacheStore do
         expect(car_data.dig(:drive, :shift)).to eq("D")
         expect(car_data.dig(:drive, :parked)).to be(false)
         expect(car_data.dig(:drive, :speed_mph)).to eq(25)
+      end
+
+      # Gear is pushed on CHANGE only, so a missed record (bridge restart,
+      # downtime) strands the merged value until the next physical shift.
+      # A later endpoint poll is then the more truthful source.
+      it "a LATER endpoint poll overrides a stale telemetry Gear" do
+        described_class.record_telemetry(Gear: "ShiftStateP")
+        travel 1.hour
+        described_class.record_endpoint(drive_state: { shift_state: "D", speed: 61, timestamp: 2 })
+
+        expect(car_data.dig(:drive, :shift)).to eq("D")
+        expect(car_data.dig(:drive, :parked)).to be(false)
+      end
+
+      # The bug as it actually presented: 69mph in Park. VehicleSpeed shares
+      # the :drive section with Gear, so the section stamp kept looking fresh
+      # on every speed tick while Gear itself was an hour old.
+      it "a speed push does not refresh a stale Gear (69mph in Park)" do
+        described_class.record_telemetry(Gear: "ShiftStateP")
+        travel 1.hour
+        described_class.record_endpoint(drive_state: { shift_state: "D", speed: 0, timestamp: 2 })
+        travel 1.hour
+        described_class.record_telemetry(VehicleSpeed: 69)
+
+        expect(car_data.dig(:drive, :speed_mph)).to eq(69)
+        expect(car_data.dig(:drive, :shift)).to eq("D")
+        expect(car_data.dig(:drive, :parked)).to be(false)
       end
     end
 

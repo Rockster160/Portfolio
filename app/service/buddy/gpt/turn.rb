@@ -710,10 +710,31 @@ module Buddy
       end
 
       def rain_hours_dropped?(body)
-        return false if @user.nil?
-
-        windows = Buddy::PlungeAdvisor.today_rain_windows(@user)
+        windows = briefing_rain_windows
         windows.present? && !Buddy::TodayBriefing.rain_hours_said?(body, windows)
+      end
+
+      # Alpine's hours, but only if the SEED carried Alpine.
+      #
+      # A repair may only ever restore something the briefing was handed. Both
+      # halves of this one asked PlungeAdvisor directly instead, which is gated
+      # on nothing and answers for the canyon whoever is asking - so on the
+      # first morning with real rain windows in it, Eve and Chelsea were each
+      # told about a canyon half an hour away that neither of their seeds
+      # mentioned. Prod 5503 was worse than a stapled line: `rain_hours_dropped?`
+      # also feeds the retry nudge, so attempt one was told it had dropped
+      # "today's rain hours in Alpine" and attempt two rewrote Eve's whole
+      # briefing around them. The nudge invented the subject rather than
+      # restoring one.
+      #
+      # `Buddy::BriefingFacts.alpine?` is `user.me?` and the facts are empty on
+      # a dry day, so reading the decision off the seed covers both the person
+      # and the weather, and cannot reach past what was given.
+      def briefing_rain_windows
+        return [] if @user.nil?
+        return [] if briefing_facts[:alpine].blank?
+
+        Buddy::PlungeAdvisor.today_rain_windows(@user)
       end
 
       # Named, so the second attempt knows which one it is answering.
@@ -1465,21 +1486,15 @@ module Buddy
       # weather rule to need a fallback, and the one whose instruction in the
       # seed is the most literal of the three.
       #
-      # It asks PlungeAdvisor rather than the user, because PlungeAdvisor is
-      # what put the windows in the seed: on a day with no rain in the canyon,
-      # or off-prod, `today_rain_windows` hands back nothing for the same reason
-      # `briefing_block` writes nothing, and the repair doesn't run.
-      #
-      # This was gated `@user&.me?` for its first two days, reasoning from
-      # `alpine_week_block`, which IS his alone. Wrong sibling: today's windows
-      # come from `plunge_block`, which is gated on nothing and goes into every
-      # companion's seed. Suki's and Moss's briefings carried the instruction
-      # and dropped the hours for four mornings running while Byte's held.
+      # Sourced from the seed - see briefing_rain_windows. It was gated
+      # `@user&.me?` once, then ungated in Aug when the old seed builder put
+      # `plunge_block` into every companion's prompt, which was correct at the
+      # time. `BriefingFacts` replaced that builder with a per-user gate on
+      # 4 Sep and the repair never got one back.
       def with_rain_hours(body)
         return body unless today_briefing?
-        return body if @user.nil?
 
-        windows = Buddy::PlungeAdvisor.today_rain_windows(@user)
+        windows = briefing_rain_windows
         return body if Buddy::TodayBriefing.rain_hours_said?(body, windows)
 
         line = Buddy::TodayBriefing.rain_hours_line(windows)

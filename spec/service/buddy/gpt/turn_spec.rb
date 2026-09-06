@@ -2497,10 +2497,18 @@ RSpec.describe Buddy::GPT::Turn do
   describe "a briefing that dropped today's rain hours" do
     before { allow(Buddy::PlungeAdvisor).to receive(:today_rain_windows).and_return(["6pm-8pm", "11pm-12am"]) }
 
-    def briefing(rounds)
+    # A repair may only restore what the SEED carried, so the seed carries it.
+    def alpine_facts
+      { "today" => ["Rain in Alpine 6pm-8pm"], "week" => [] }
+    end
+
+    def briefing(rounds, alpine: alpine_facts)
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => { "alpine" => alpine },
+        },
       )
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
@@ -2552,7 +2560,10 @@ RSpec.describe Buddy::GPT::Turn do
       client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }, { text: "Morning! Quiet one, rain in Alpine 6pm-8pm." }])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => { "alpine" => alpine_facts },
+        },
       )
       described_class.run!(message, client: client)
 
@@ -2566,28 +2577,36 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Quiet one today.")
     end
 
-    # It shipped gated `@user&.me?`, reasoning from `alpine_week_block`, which
-    # IS his alone. Wrong sibling: today's windows come from `plunge_block`,
-    # which is gated on nothing and goes into every companion's seed. Suki's
-    # and Moss's briefings carried the instruction and dropped the hours for
-    # four mornings running (prod 4858/4860, then 4928/4930 after the deploy)
-    # while Byte's, on the identical block, held.
-    describe "for somebody who isn't the owner" do
-      let(:partner) { create(:user) }
-      let!(:her_convo) {
-        partner.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
-      }
+    # `BriefingFacts.alpine?` is `user.me?` - for everybody else the canyon is a
+    # town half an hour away whose forecast they have no reason to hear - and
+    # the facts are empty on a dry day. Reading that decision off the seed
+    # covers both, and it is the only thing a repair is allowed to look at.
+    #
+    # Prod 5503, 6 Sep: Eve's seed carried four lines of her own weather and
+    # `alpine: {}`. `rain_hours_dropped?` asked PlungeAdvisor anyway, told the
+    # first attempt it had dropped "today's rain hours in Alpine", and the
+    # second rewrote her whole briefing around a canyon she has nothing to do
+    # with. Chelsea's 5505 got the same. Only Rocco's seed had Alpine in it, and
+    # his was the one that came back with no repairs at all.
+    describe "a seed with no Alpine in it" do
+      it "leaves the briefing alone" do
+        briefing([{ text: "Morning! Quiet one." }], alpine: {})
 
-      it "puts the hours on the end of hers too" do
-        message = her_convo.byte_messages.create!(
-          user: partner, direction: :outbound, state: :sent,
-          body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-          metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        expect(reply.body).to eq("Morning! Quiet one.")
+      end
+
+      it "spends no second attempt asking for it" do
+        client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+          metadata: {
+            "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+            "briefing" => { "alpine" => {} },
+          },
         )
-        described_class.run!(message, client: FakeBuddyClient.new([{ text: "Morning! Quiet one." }]))
+        described_class.run!(message, client: client)
 
-        expect(her_convo.byte_messages.where(direction: :inbound).order(:created_at).last.body)
-          .to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
+        expect(client.calls.length).to eq(1)
       end
     end
   end

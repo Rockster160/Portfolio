@@ -1,7 +1,7 @@
 # Two raw source-of-truth caches + the formatted `:car_data` view that every
 # reader (dashboard, Jarvis, Jil tasks, tire check) consumes.
 #
-#   :tesla_telemetry → fleet-telemetry pushes (raw, deep-merged + section_ts)
+#   :tesla_telemetry → fleet-telemetry pushes (raw, deep-merged + section_ts/field_ts)
 #   :tesla_endpoint  → vehicle_data HTTP polls (raw, last response)
 #   :car_data        → small, flat, normalized projection of the above
 #
@@ -133,12 +133,18 @@ class TeslaCacheStore
       current  = (existing[:current] || {}).deep_merge(cleaned)
       section_ts = (existing[:section_ts] || {}).symbolize_keys
       sections_in_record(cleaned).each { |s| section_ts[s] = now_ms }
+      # Per-FIELD stamps too: a section stamp can't answer "how old is this one
+      # field", because any field in the section refreshes it. Gear needs the
+      # finer grain — see compose_drive.
+      field_ts = (existing[:field_ts] || {}).symbolize_keys
+      cleaned.each_key { |k| field_ts[k.to_sym] = now_ms }
       entry    = { timestamp: now_ms, data: data }
       history  = [entry, *(existing[:history] || [])].first(HISTORY_LIMIT)
 
       User.me.caches.set(TELEMETRY_KEY, {
         current:    current,
         section_ts: section_ts,
+        field_ts:   field_ts,
         history:    history,
       })
     end
@@ -196,6 +202,7 @@ class TeslaCacheStore
       ep = endpoint_cache_hash[:current] || {}
       tel = telemetry_cache_hash[:current] || {}
       sec_ts = (telemetry_cache_hash[:section_ts] || {}).symbolize_keys
+      field_ts = (telemetry_cache_hash[:field_ts] || {}).symbolize_keys
       ep_ts = endpoint_cache_hash[:timestamp]
 
       {
@@ -206,7 +213,7 @@ class TeslaCacheStore
         location:   compose_location(ep, tel, sec_ts),
         battery:    compose_battery(ep, sec_ts),
         charging:   compose_charging(ep, tel, sec_ts, ep_ts),
-        drive:      compose_drive(ep, tel, sec_ts),
+        drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts),
         trip:       compose_trip(ep, tel, sec_ts),
         climate:    compose_climate(ep, tel, sec_ts),
         doors:      compose_doors(ep, tel, sec_ts),
@@ -277,15 +284,28 @@ class TeslaCacheStore
       }.compact
     end
 
-    def compose_drive(ep, tel, sec_ts)
+    def compose_drive(ep, tel, sec_ts, field_ts, ep_ts)
       speed_raw = tel[:VehicleSpeed]
       speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
-      # Telemetry's Gear is the live source — endpoint poll's shift_state
-      # can be minutes/hours stale (poll-on-demand, not scheduled), so it's
-      # only a fallback for when telemetry hasn't pushed Gear yet. The
-      # normalizer absorbs whatever enum shape Tesla actually sends
-      # ("ShiftStateP" vs bare "P" vs unknown).
-      shift = normalize_shift(tel[:Gear]) || ep.dig(:drive_state, :shift_state)
+      # Gear is pushed on CHANGE, not on an interval — so a single missed
+      # record (bridge restart, downtime, a drop) leaves the merged value
+      # wrong until the next physical shift, which can be hours. That's how
+      # "69mph, in Park" happened: the P→D record was lost and nothing
+      # resent it. So Gear can't be trusted just because it exists; prefer
+      # whichever source is actually fresher, the same way charging does.
+      #
+      # It has to be the per-FIELD stamp, not sec_ts[:drive] — VehicleSpeed
+      # is in the same section and pushes constantly while driving, which
+      # would make a stale Gear look freshly-confirmed on every speed tick.
+      # The normalizer absorbs whatever enum shape Tesla sends ("ShiftStateP"
+      # vs bare "P" vs unknown).
+      tel_shift = normalize_shift(tel[:Gear])
+      ep_shift  = ep.dig(:drive_state, :shift_state)
+      shift = if tel_fresher?(field_ts[:Gear], ep_ts)
+        tel_shift || ep_shift
+      else
+        ep_shift || tel_shift
+      end
 
       {
         speed_mph: speed.to_i,

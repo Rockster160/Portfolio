@@ -37,6 +37,42 @@ RSpec.describe Buddy::BriefingFacts do
     end
   end
 
+  # Rocco, 2026-09-06: "Only Rocco sees the Alpine weather."
+  #
+  # It is a canyon he drives to. For everybody else in the house it is a town
+  # half an hour away whose forecast they have no reason to hear, and their own
+  # weather is already in the block above it. Prod 5503 and 5505 - the first
+  # morning with real rain windows in it - opened Eve's and Chelsea's briefings
+  # on Alpine, off a repair that asked PlungeAdvisor instead of reading the seed.
+  describe "whose forecast Alpine is" do
+    before {
+      allow(Buddy::PlungeAdvisor).to receive_messages(
+        briefing_lines:  ["Rain in the forecast for Alpine today.", "Rain in Alpine 7pm-1am"],
+        week_rain_lines: [],
+      )
+    }
+
+    it "is his, when it is wet" do
+      allow(user).to receive(:me?).and_return(true)
+
+      expect(described_class.build(user, convo)[:alpine]).to be_present
+    end
+
+    it "is nobody else's, however wet it is" do
+      allow(user).to receive(:me?).and_return(false)
+
+      expect(described_class.build(user, convo)[:alpine]).to eq({})
+    end
+
+    it "keeps the heading and the rule out of their seed with it" do
+      allow(user).to receive(:me?).and_return(false)
+      seed = Buddy::TodayBriefing.seed(user, convo)
+
+      expect(seed).not_to include("ALPINE")
+      expect(seed).not_to include("Alpine")
+    end
+  end
+
   # Rocco: "We don't want Alpine included every day - only the days with
   # precipitation during the desired hours, otherwise it gets ignored/dropped
   # from the data and the prompt entirely."

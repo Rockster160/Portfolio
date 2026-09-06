@@ -607,6 +607,19 @@ module Buddy
         matches_today_ids = chores.select { |c|
           c.respond_to?(:matches_day?) && c.scheduled? && (safe_matches_day(c, today, user))
         }.map(&:id)
+        # The same question asked strictly - is TODAY the day it comes round -
+        # rather than "has it been due since some earlier day".
+        #
+        # Rocco, 2026-09-06: "Chores should only ever appear if they are
+        # actually due on the current day." `matches_day?` answers
+        # `date >= due_on` for relative and after_chore schedules, so anything
+        # left undone matches every morning from then on, forever - and every
+        # bucket built from it inherited that. See Chore#strictly_matches_day?.
+        strictly_due_ids = matches_today_ids.select { |id| safe_strictly_due(by_id[id], today, user) }.to_set
+        # Due on some earlier day and still standing. It is a real backlog and
+        # it joins the one below rather than being dropped - what it is not is
+        # today.
+        schedule_overdue_ids = matches_today_ids.reject { |id| strictly_due_ids.include?(id) }
 
         # Average local-hour of the CURRENT USER's completions per
         # chore. Used to annotate pending items with a "typical_time"
@@ -630,11 +643,14 @@ module Buddy
         marked_today = marked.select { |c| window.cover?(c.marked_due_at) }.map(&:id)
         marked_past  = marked.select { |c| c.marked_due_at < window.begin }.map(&:id)
 
-        # "Due today" set: chores where TODAY specifically matters - the
-        # schedule matches (matches_day?), the user pinned it (hot pick), or
-        # they stamped it due today. Lets Buddy distinguish "on the rotation but
-        # not scheduled today" from "actually due today".
-        due_ids = (matches_today_ids + hot_ids + marked_today).uniq.to_set
+        # "Due today" set: chores where TODAY specifically matters - today is the
+        # day the schedule lands on, the user pinned it (hot pick), or they
+        # stamped it due today. This is the `due_today:` flag on every row in
+        # every bucket, so it has to be true wherever it is read: an overdue
+        # chore sitting in `scheduled_today` carried `due_today: true` and any
+        # turn reading that row would repeat it. Prod seed 5498 handed over ten
+        # jobs, all flagged, not one of them due.
+        due_ids = (strictly_due_ids.to_a + hot_ids + marked_today).uniq.to_set
 
         # PRIMARY today list: what the user actively decided is "for today".
         # Dailies are the user's personal rotation, hot_picks are explicit pins,
@@ -653,10 +669,17 @@ module Buddy
         # order somebody would want to hear it.
         pending_ids     = pending_ids.sort_by { |id| pending_rank(id, daily_ids, marked_today, hot_mults) }
         done_ids        = intentional_ids.select { |id| done_today_ids.include?(id) }
-        scheduled_ids   = (matches_today_ids - intentional_ids).reject { |id| done_today_ids.include?(id) }
+        # Named "scheduled TODAY", so it holds what the schedule puts on today
+        # and nothing that has merely been due since an earlier one.
+        scheduled_ids = (strictly_due_ids.to_a - intentional_ids).reject { |id| done_today_ids.include?(id) }
 
-        overdue = marked_past.reject { |id|
-          intentional_ids.include?(id) || matches_today_ids.include?(id)
+        # Both kinds of overdue, which used to be one kind. A chore STAMPED due
+        # on an earlier day was recognised as backlog; one whose SCHEDULE came
+        # round on an earlier day was not, and sat in `scheduled_today` claiming
+        # to be today's. Brush kitty, last done 19 July on a seven-day cycle,
+        # was in that bucket every morning for six weeks.
+        overdue = (marked_past + schedule_overdue_ids).uniq.reject { |id|
+          intentional_ids.include?(id) || strictly_due_ids.include?(id) || done_today_ids.include?(id)
         }
 
         # The short list, and the ONLY chores a Today briefing can see (see
@@ -706,6 +729,16 @@ module Buddy
         # every other day is a habit, and a habit read back is what makes a
         # briefing worthless; a Wednesday-only chore on a Wednesday is news by
         # definition.
+        #
+        # `scheduled_ids` is strictly today now (see strictly_due_ids), so what
+        # this line still does is drop the everyday rhythm. Prod 5500, Saturday
+        # 6 Sep: ten jobs handed over and Byte read out all of them, plus "It's
+        # trash day" off "Bring trash cans in" - which is not even the trash-day
+        # chore, it's the follower that comes round the day AFTER the cans go
+        # out, and its anchor had run on the Wednesday.
+        #
+        # An overdue chore is still on the Today tab, still completable, still
+        # in `overdue_backlog` and `all_names`. It is just not today.
         due_today_ids += scheduled_ids.reject { |id| routine_cadence?(by_id[id]) }
         due_today_ids = due_today_ids.uniq
 
@@ -936,6 +969,14 @@ module Buddy
       # data; a Buddy context build must never blow up over a single bad chore.
       def safe_matches_day(chore, day, user)
         chore.matches_day?(day, user)
+      rescue StandardError
+        false
+      end
+
+      def safe_strictly_due(chore, day, user)
+        return false unless chore.respond_to?(:strictly_matches_day?)
+
+        chore.strictly_matches_day?(day, user)
       rescue StandardError
         false
       end

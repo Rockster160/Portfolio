@@ -579,6 +579,89 @@ RSpec.describe Buddy::Context do
       expect(due_names).to include("Trim Kitty Nails")
     end
 
+    # Rocco, 2026-09-06: "Chores should only be brought up if they are
+    # SPECIFICALLY DUE TODAY. Not over due. Not due next week. TODAY only."
+    #
+    # `matches_day?` answers `date >= due_on` for relative and after_chore
+    # schedules, so anything left undone matched every morning from then on.
+    # Prod 5500, a Saturday: ten jobs handed over, every one stamped
+    # `due_today: true`, and Byte read out all of them plus "It's trash day"
+    # off "Bring trash cans in" - a follower whose anchor was done on WEDNESDAY.
+    describe "a chore that has been due since some earlier day" do
+      def relative_chore(name, interval, last_done:)
+        chore = scheduled(name, { freq: "relative", unit: "day", interval: interval })
+        create(:chore_completion, chore: chore, user: user, day_key: last_done)
+        chore
+      end
+
+      it "names one that comes round exactly today" do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 7)
+
+        expect(due_names).to include("Refill Softener Salt")
+      end
+
+      it "leaves out one that has been due for days" do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
+
+        expect(due_names).to be_empty
+      end
+
+      # Nothing is lost - it moves to the bucket whose name is true of it. A
+      # chore whose SCHEDULE came round on an earlier day used to be recognised
+      # nowhere as overdue, because only a marked-due STAMP counted, so it sat
+      # in `scheduled_today` claiming to be today's.
+      it "moves to the backlog rather than out of reach" do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
+        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
+
+        expect(buckets[:overdue_backlog].pluck(:name)).to include("Refill Softener Salt")
+        expect(buckets[:scheduled_today].pluck(:name)).to be_empty
+        expect(buckets[:all_names]).to include("Refill Softener Salt")
+      end
+
+      # The flag rides on every row in every bucket, so it has to be true
+      # wherever it is read. Prod seed 5498 stamped `due_today: true` on all ten.
+      it "never stamps due_today on one that isn't" do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
+        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
+        rows    = buckets.values_at(:scheduled_today, :overdue_backlog, :pending_today).flatten
+
+        expect(rows.map { |row| row[:due_today] }).to all(be_falsey)
+      end
+
+      it "does stamp it on one that is" do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 7)
+        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
+
+        expect(buckets[:due_today].first[:due_today]).to eq(true)
+      end
+
+      it "leaves out a follower whose anchor was done on an earlier day" do
+        anchor = weekly("Take out trash bags")
+        create(:chore_completion, chore: anchor, user: user, day_key: ChoreDay.current(user) - 3)
+        scheduled("Bring trash cans in", { freq: "after_chore", unit: "day", interval: 1, anchor_chore_id: anchor.id })
+
+        expect(due_names).not_to include("Bring trash cans in")
+      end
+
+      it "names a follower whose anchor came due today" do
+        anchor = weekly("Take out trash bags")
+        create(:chore_completion, chore: anchor, user: user, day_key: ChoreDay.current(user))
+        scheduled("Bring trash cans in", { freq: "after_chore", unit: "day", interval: 0, anchor_chore_id: anchor.id })
+
+        expect(due_names).to include("Bring trash cans in")
+      end
+
+      # A stamp is a person deciding, so the window it falls in is the whole
+      # test and this half was already right.
+      it "leaves out one stamped due weeks ago" do
+        create(:chore, name: "Trim Kitty Nails", created_by_user: user, chore_household: household,
+          marked_due_at: 19.days.ago)
+
+        expect(due_names).to be_empty
+      end
+    end
+
     describe "the Wednesday bin run" do
       def groups
         rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
