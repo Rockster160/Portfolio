@@ -76,7 +76,9 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
       const n = parseInt(target, 10);
       if (Number.isNaN(n)) { alert("Not a number."); return; }
       const delta = n - (timer.value || 0);
-      if (delta !== 0) await actions.increment(timer.id, delta);
+      // A raw delta, not a step count — "set to 61" must land on 61
+      // whatever the counter's step is.
+      if (delta !== 0) await actions.increment(timer.id, null, delta);
       return;
     }
     if (action === "reset") {

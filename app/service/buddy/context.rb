@@ -1333,8 +1333,13 @@ module Buddy
       def stashed_ideas(user)
         return [] unless user.respond_to?(:buddy_memories)
 
-        now = Time.current
-        user.buddy_memories.kind_stash.surfaceable.includes(:notes).order(created_at: :asc).limit(12).map { |i|
+        now  = Time.current
+        # Newest twelve, read oldest-first - same reason as
+        # Buddy::Personality#open_loops_block, which had the same bug. An
+        # ascending cap drops the tail, and the tail is what was just said.
+        rows = user.buddy_memories.kind_stash.surfaceable.includes(:notes)
+        rows = rows.order(created_at: :desc).limit(12).to_a.reverse
+        rows.map { |i|
           count = i.notes.size
           {
             id:           i.id,

@@ -154,4 +154,71 @@ RSpec.describe TimersController do
       }.to change { TimerShareToken.where(timer_id: timer.id).count }.from(1).to(0)
     end
   end
+
+  describe "POST /timers/items/:id/increment" do
+    let!(:counter) {
+      create(:timer, user: user, kind: :counter, duration_ms: nil, value: 43, step: 3)
+    }
+
+    it "scales `by` through the counter's step" do
+      post timer_routes_increment_item_path(counter), params: { by: 1 }, as: :json
+      expect(counter.reload.value).to eq(46)
+    end
+
+    it "applies `amount` as typed, whatever the step is" do
+      post timer_routes_increment_item_path(counter), params: { amount: 18 }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(counter.reload.value).to eq(61)
+      expect(response.parsed_body.dig("timer", "value")).to eq(61)
+    end
+
+    it "applies a negative `amount`" do
+      post timer_routes_increment_item_path(counter), params: { amount: -18 }, as: :json
+      expect(counter.reload.value).to eq(25)
+    end
+  end
+
+  describe "POST /timers/items/bulk" do
+    let!(:page) { create(:timer_page, user: user) }
+
+    def bulk(names, extra = {})
+      post timer_routes_bulk_items_path,
+        params: {
+          timer_page_id: page.id,
+          timers:        names.map { |n| { kind: :counter, name: n, value: 0 }.merge(extra) },
+        },
+        as: :json
+    end
+
+    it "creates one timer per row on the page in a single request" do
+      expect { bulk(%w[Rocco Eve Chelsea]) }.to change { page.timers.count }.from(0).to(3)
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body["timers"].map { |t| t["name"] }).to eq(%w[Rocco Eve Chelsea])
+    end
+
+    it "orders them so the first name typed sits at the top of the board" do
+      bulk(%w[Rocco Eve Chelsea])
+      expect(page.timers.ordered.map(&:name)).to eq(%w[Rocco Eve Chelsea])
+    end
+
+    it "puts a later batch above the first, the way a single create does" do
+      bulk(%w[Rocco Eve])
+      bulk(%w[Chelsea Jack])
+      expect(page.timers.ordered.map(&:name)).to eq(%w[Chelsea Jack Rocco Eve])
+    end
+
+    it "keeps callbacks sent with a row" do
+      bulk(%w[Steep], callbacks: [{ id: "cb", when: { type: :complete }, then: { type: :sound, chime: :soft } }])
+      expect(page.timers.first.callbacks.first["then"]["chime"]).to eq("soft")
+    end
+
+    it "writes nothing to a page belonging to someone else" do
+      other = create(:timer_page, user: create(:user))
+      post timer_routes_bulk_items_path,
+        params: { timer_page_id: other.id, timers: [{ kind: :counter, name: "Nope" }] },
+        as: :json
+      expect(response).not_to have_http_status(:created)
+      expect(other.timers.count).to eq(0)
+    end
+  end
 end

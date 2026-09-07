@@ -102,6 +102,35 @@ class TimersController < ApplicationController
     end
   end
 
+  # POST /timers/items/bulk — body { timer_page_id:, timers: [{...}] }
+  #
+  # One request for a whole board. Six players is one action, not six
+  # trips through the new-timer modal; and a per-timer POST would leave a
+  # half-built page behind the moment one of them failed.
+  def bulk_create
+    page = params[:timer_page_id].presence && current_user.timer_pages.find(params[:timer_page_id])
+    rows = Array(params[:timers])
+    return render(json: { timers: [], server_ts: Time.current.iso8601(3) }) if rows.empty?
+
+    created = Timer.transaction {
+      # Board order is pos_y DESC, so hand out DESCENDING ranks above
+      # whatever is already there — the first name typed sits at the top,
+      # in the order it was typed, and nothing existing has to move.
+      base = current_user.timers.live.where(timer_page_id: page&.id).maximum(:pos_y).to_i
+      rows.each_with_index.map { |row, i|
+        current_user.timers.create!(
+          bulk_timer_attrs(row).merge(timer_page_id: page&.id, pos_y: base + rows.length - i),
+        )
+      }
+    }
+
+    broadcast(reason: :bulk_created, timer_ids: created.map(&:id))
+    render json: {
+      timers:    created.map { |t| TimerSerializer.new(t, viewer: current_user).as_json },
+      server_ts: Time.current.iso8601(3),
+    }, status: :created
+  end
+
   # PATCH /timers/items/:id
   def update
     @timer.update!(timer_params)
@@ -163,8 +192,14 @@ class TimersController < ApplicationController
     render json: timer_payload(@timer)
   end
 
+  # `amount` is a raw delta (the bulk-adjust sheet, "set value to…");
+  # `by` counts steps (the ± buttons). Only one of the two is ever sent.
   def increment
-    @timer.apply_increment!(by: params[:by].to_i.nonzero? || 1)
+    if params[:amount].present?
+      @timer.apply_increment!(amount: params[:amount].to_i)
+    else
+      @timer.apply_increment!(by: params[:by].to_i.nonzero? || 1)
+    end
     @timer.reload
     broadcast_timer(:incremented)
     render json: timer_payload(@timer)
@@ -395,17 +430,8 @@ class TimersController < ApplicationController
       # added, so we permit the whole sub-hash via to_unsafe_h below.
       callbacks: [:id],
     )
-    # callbacks store a free-form (when, then) pair per row. The set of
-    # keys grows as new trigger / action types are added so we lift the
-    # raw arrays directly off params and to_unsafe_h them. Values are
-    # jsonb-only — no SQL, no HTML, nothing rendered un-escaped.
-    raw_callbacks = params.dig(:timer, :callbacks)
-    if raw_callbacks.is_a?(ActionController::Parameters) || raw_callbacks.is_a?(Array)
-      arr = raw_callbacks.respond_to?(:to_unsafe_h) ? raw_callbacks.to_unsafe_h.values : Array(raw_callbacks)
-      permitted[:callbacks] = arr.map do |cb|
-        cb.respond_to?(:to_unsafe_h) ? cb.to_unsafe_h : cb.to_h
-      end
-    end
+    lifted = lift_callbacks(params.dig(:timer, :callbacks))
+    permitted[:callbacks] = lifted if lifted
 
     # dial_config is free-form JSON (sections array of hashes, each with
     # a subs array of strings). Strong params' `dial_config: {}` form
@@ -418,6 +444,31 @@ class TimersController < ApplicationController
     when Hash then permitted[:dial_config] = raw_dial
     end
     permitted
+  end
+
+  # One row of a bulk create. Same field set as a single create minus the
+  # board geometry — `bulk_create` owns pos_y so the typed order survives.
+  def bulk_timer_attrs(row)
+    attrs = row.is_a?(ActionController::Parameters) ? row : ActionController::Parameters.new(row.to_h)
+    permitted = attrs.permit(
+      :name, :kind, :color, :section_id, :disabled,
+      :duration_ms, :repeat,
+      :value, :step, :min_value, :max_value, :reset_value
+    )
+    lifted = lift_callbacks(attrs[:callbacks])
+    permitted[:callbacks] = lifted if lifted
+    permitted
+  end
+
+  # callbacks store a free-form (when, then) pair per row. The set of keys
+  # grows as new trigger / action types are added, so we lift the raw
+  # arrays directly off params and to_unsafe_h them. Values are jsonb-only
+  # — no SQL, no HTML, nothing rendered un-escaped.
+  def lift_callbacks(raw)
+    return nil unless raw.is_a?(ActionController::Parameters) || raw.is_a?(Array)
+
+    arr = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h.values : Array(raw)
+    arr.map { |cb| cb.respond_to?(:to_unsafe_h) ? cb.to_unsafe_h : cb.to_h }
   end
 
   def layout_params

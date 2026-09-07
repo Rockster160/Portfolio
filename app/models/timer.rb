@@ -179,16 +179,24 @@ class Timer < ApplicationRecord
   # Counter / Dial
   # =========================
 
-  def apply_increment!(by:)
+  # `by` counts STEPS — the ± buttons and chain callbacks send ±1 and the
+  # timer's own `step` scales it. `amount` is a RAW delta that lands
+  # exactly as given: the bulk-adjust sheet sends a total the person
+  # typed ("+18"), and "set value to 61" sends the gap to 61. Neither
+  # means "18 steps", so neither may be multiplied by `step`.
+  def apply_increment!(by: 1, amount: nil)
     return unless counter?
 
     # Min/max are display-bounded only — the value is free to go past
     # either bound and the ring just clamps visually on the client.
-    direction = by.to_i
-    new_value = value + (direction * step)
+    delta = amount.nil? ? by.to_i * step : amount.to_i
+    direction = delta <=> 0
+    new_value = value + delta
     update!(value: new_value)
-    # :counter_change fires on every step. Match-clauses on the callback
-    # (value + optional direction) decide whether anything dispatches.
+    # :counter_change fires ONCE per adjustment, carrying where the
+    # counter landed. A bulk amount jumps: a `counter_reaches` clause for
+    # a value the jump passed over does not match, because the counter
+    # was never at it.
     fire_callbacks!(event: :counter_change, context: { value: new_value, direction: direction })
     maybe_fire_counter_event!(direction: direction)
   end

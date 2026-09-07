@@ -280,9 +280,63 @@
         <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
       </header>
       <div class="timers-pages-list" data-timers-pages-modal-list></div>
-      <footer class="timers-pages-add">
-        <input type="text" placeholder="New page name" data-timers-pages-modal-name>
-        <button type="button" class="timers-primary-btn" data-timers-pages-modal-add>+ Add</button>
+      <footer class="timers-page-builder">
+        <div class="builder-row">
+          <select data-timers-pages-modal-target hidden>
+            <option value="new">New page</option>
+            <option value="current">Add to this page</option>
+          </select>
+          <span class="builder-field" data-timers-pages-modal-name-field>
+            <input type="text" placeholder="Page name" data-timers-pages-modal-name>
+          </span>
+          <select data-timers-pages-modal-kind>
+            <option value="counter">Counters</option>
+            <option value="countdown">Countdowns</option>
+          </select>
+        </div>
+        <textarea rows="3"
+                  data-timers-pages-modal-names
+                  placeholder="One name per line — Rocco, Eve, Chelsea"></textarea>
+        <div class="builder-row builder-row-end">
+          <label class="builder-inline">
+            <span data-timers-pages-modal-arg-label>Each starts at</span>
+            <input type="text" data-timers-pages-modal-arg placeholder="0">
+          </label>
+          <label class="builder-inline" data-timers-pages-modal-temp-field>
+            <input type="checkbox" data-timers-pages-modal-temp>
+            <span>Temporary</span>
+          </label>
+          <span class="spacer"></span>
+          <button type="button" class="timers-primary-btn" data-timers-pages-modal-add>+ Create page</button>
+        </div>
+        <p class="field-hint" data-timers-pages-modal-hint></p>
+      </footer>
+    </form>
+  </dialog>
+
+  <%# ================= Counter bulk-adjust modal ================= %>
+  <dialog class="timers-modal timers-bulk-modal" data-timers-bulk-modal>
+    <form method="dialog" class="basic timers-form" data-timers-bulk-form>
+      <header class="timers-modal-header">
+        <h3 data-timers-bulk-title>Add to counter</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-bulk-body">
+        <div class="timers-bulk-sum is-idle" data-timers-bulk-sum></div>
+        <div class="timers-bulk-terms" data-timers-bulk-terms></div>
+        <%# No inputmode="numeric": the field takes a LIST, and a phone's
+          numeric keypad has no minus sign and no space to separate one
+          number from the next. %>
+        <input type="text" autocomplete="off" data-timers-bulk-input placeholder="18">
+        <p class="field-hint">
+          Several at once works too — <code>5 8 -2</code> — separated by spaces, commas or new lines.
+          A negative goes the other way.
+        </p>
+      </div>
+      <footer class="timers-modal-footer">
+        <span class="spacer"></span>
+        <button type="button" class="timers-secondary-btn" data-timers-modal-close>Cancel</button>
+        <button type="submit" class="timers-primary-btn" data-timers-bulk-apply>Apply</button>
       </footer>
     </form>
   </dialog>

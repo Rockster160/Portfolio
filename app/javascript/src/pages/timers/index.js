@@ -13,6 +13,7 @@ import { setupSaveToModal } from "./save_to_modal";
 import { setupSettingsModal } from "./settings_modal";
 import { setupLibraryModal } from "./library_modal";
 import { setupPagesModal } from "./pages_modal";
+import { setupCounterBulkModal } from "./counter_bulk_modal";
 import { setupCardMenu } from "./card_menu";
 import { subscribeTimersChannel } from "./monitor";
 import { flushQueue, saveStoreSnapshot, loadStoreSnapshot, lastSyncTs } from "./offline_queue";
@@ -108,7 +109,12 @@ function bootOwner(root) {
     getActivePage,
     openEdit: (ctx) => editModal.open(ctx),
   });
-  const pagesModal = setupPagesModal({ root, store, actions, activePageSlug: activeSlug });
+  const pagesModal = setupPagesModal({
+    root, store, actions,
+    activePageSlug: activeSlug,
+    getActivePage,
+  });
+  const bulkModal = setupCounterBulkModal({ root, store, actions });
   const cardMenu = setupCardMenu({
     root, store, actions,
     openEdit: (ctx) => editModal.open(ctx),
@@ -121,6 +127,7 @@ function bootOwner(root) {
     actions,
     getActivePageId: activePageId,
     onCardMenu: (id, btn) => cardMenu.open(id, btn),
+    onCounterBulk: (id, sign) => bulkModal.open(id, sign),
   });
   board.renderAll();
 

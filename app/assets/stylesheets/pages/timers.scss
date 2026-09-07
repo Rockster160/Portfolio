@@ -116,15 +116,27 @@ $t-danger:    #f85149;
   max-height: 360px;
   overflow-y: auto;
 
+  // Row = navigation link + its own actions. The link can't wrap the
+  // buttons (an <a> containing a <button> swallows the tap), so the row
+  // is a flex container and the link is one of its children.
   .timers-page-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 18px;
-    text-decoration: none;
-    color: $t-text;
+    gap: 8px;
+    padding-right: 10px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
+
+    .row-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 12px 6px 12px 18px;
+      text-decoration: none;
+      color: $t-text;
+    }
 
     .row-body { flex: 1 1 auto; min-width: 0; }
     .label { font-weight: 600; }
@@ -135,30 +147,92 @@ $t-danger:    #f85149;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .row-flag-temp { color: $t-muted; }
+
+    // Duplicate / delete stay quiet until the row is under the pointer —
+    // navigating to a page is the common act, copying and deleting are
+    // not, so they don't compete for attention at rest.
+    .row-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0.35;
+      transition: opacity 0.15s;
+
+      button {
+        background: transparent !important;
+        border: 1px solid $t-border !important;
+        color: $t-muted !important;
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
+        cursor: pointer;
+
+        &:hover { background: $t-card-hi !important; color: $t-text !important; }
+        &.danger:hover { color: $t-danger !important; border-color: $t-danger !important; }
+      }
     }
 
-    &:hover { background: $t-card-hi; }
+    &:hover {
+      background: $t-card-hi;
+      .row-actions { opacity: 1; }
+    }
     &.active { background: rgba(56, 139, 253, 0.08); }
   }
 }
 
-.timers-pages-add {
+// The builder that makes a page. Names go in as a list, one timer comes
+// out per line — so the whole board is described in one go.
+.timers-page-builder {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 14px 18px;
   border-top: 1px solid $t-border;
   background: $t-card-hi;
 
-  input {
-    flex: 1;
+  .builder-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    .spacer { flex: 1 1 auto; }
+  }
+
+  .builder-field { flex: 1 1 140px; display: flex; }
+
+  .builder-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: $t-muted;
+    margin: 0 !important;
+
+    input[type="text"] { width: 70px; }
+    input[type="checkbox"] { margin: 0 !important; }
+  }
+
+  input[type="text"],
+  textarea,
+  select {
     background: $t-bg !important;
     border: 1px solid $t-border !important;
     color: $t-text !important;
-    padding: 8px 12px !important;
+    padding: 8px 10px !important;
     border-radius: 6px !important;
-    font-size: 14px !important;
-    min-height: 38px;
+    font-size: 13px !important;
+    margin: 0 !important;
   }
+
+  input[type="text"] { flex: 1 1 auto; min-width: 0; min-height: 36px; }
+  textarea { width: 100%; resize: vertical; font-family: inherit; }
+
+  .field-hint { margin: 0; font-size: 12px; color: $t-muted; }
+
+  [hidden] { display: none !important; }
 }
 
 // ---------- quick pills ----------
@@ -242,6 +316,13 @@ $t-danger:    #f85149;
   gap: 6px;
 
   &:hover { background: $t-primary-hi !important; border-color: $t-primary-hi !important; }
+  // Nothing to apply / nothing to create yet — the button says what it
+  // would do but can't do it, so it reads as waiting rather than broken.
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+    &:hover { background: $t-primary !important; border-color: $t-primary !important; }
+  }
   .fa { color: inherit; }
 }
 
@@ -567,6 +648,9 @@ $t-danger:    #f85149;
     gap: 18px;
 
     .timer-counter-btn {
+      // Held, these open the bulk-adjust sheet — so the OS must not put
+      // its own callout over the top of a long press first.
+      -webkit-touch-callout: none;
       background: $t-card-hi !important;
       border: 1px solid $t-border !important;
       color: $t-text !important;
@@ -691,6 +775,53 @@ $t-danger:    #f85149;
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
 
   &::backdrop { background: rgba(0,0,0,0.65); }
+}
+
+// Bulk counter adjust — held the + or − on a counter card. The sum line
+// is the point of the sheet: it reads `43 + 18 = 61` as you type, so the
+// number you're about to commit to is visible before you commit to it.
+.timers-bulk-modal {
+  max-width: 380px;
+
+  .timers-bulk-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px;
+  }
+
+  .timers-bulk-sum {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    color: $t-text;
+
+    // Nothing typed yet: the current value alone, dimmed, so it reads as
+    // a starting point rather than a result.
+    &.is-idle { color: $t-muted; font-weight: 600; }
+  }
+
+  .timers-bulk-terms {
+    text-align: center;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: $t-muted;
+    min-height: 1em;
+  }
+
+  input[data-timers-bulk-input] {
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    font-size: 18px !important;
+    text-align: center;
+    margin: 0 !important;
+  }
+
+  .field-hint { margin: 0; font-size: 12px; color: $t-muted; text-align: center; }
 }
 
 .timers-modal-header {

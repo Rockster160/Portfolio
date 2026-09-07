@@ -120,6 +120,68 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # Prod 5593-5596, 6 Sep. "Reminder: Steak will be dinner." rang at 5:00 PM;
+  # at 5:42 Eve answered "let's try in about 90 minutes"; `move_reminder` was
+  # called with `match: "chat with Rocco about PC access for Suki"` - a
+  # different reminder she had set two hours earlier, whose text was sitting in
+  # the transcript. Her steak nudge never came back and the Rocco one went off
+  # at 7:12 saying the wrong thing. That turn spent two calls, so it never
+  # looked anything up; the row it needed was reachable and it never asked.
+  describe "the reminder they are answering" do
+    def rang!(body, id: 76, at: 2.minutes.ago)
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "Reminder: #{body}",
+        metadata: { "kind" => "buddy", "source" => "reminder", "reminder_id" => id }, created_at: at,
+      )
+    end
+
+    def instructions_for(text)
+      client = FakeBuddyClient.new([{ text: "Sure!" }])
+      described_class.run!(user_says(text), client: client)
+      client.calls.first.instructions
+    end
+
+    it "rides on every turn, so nothing has to be looked up" do
+      rang!("Steak will be dinner.")
+
+      expect(instructions_for("let's try in about 90 minutes")).to include("Steak will be dinner")
+    end
+
+    it "carries the id, which cannot be fuzzy-matched onto its neighbour" do
+      rang!("Steak will be dinner.")
+
+      expect(instructions_for("push it an hour")).to match(/answering_reminder.*76/)
+    end
+
+    it "says nothing when the last thing said was not a reminder" do
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "How's it going?",
+        metadata: { "kind" => "buddy" }, created_at: 2.minutes.ago,
+      )
+
+      expect(instructions_for("fine")).not_to include("answering_reminder")
+    end
+
+    # The same window the tool searches, so the two agree about what counts as
+    # "the one they're looking at".
+    it "lets go once it is well outside the snooze window" do
+      rang!("Steak will be dinner.", at: (Buddy::Tools::SNOOZE_WINDOW + 1.hour).ago)
+
+      expect(instructions_for("push it an hour")).not_to include("answering_reminder")
+    end
+
+    # A receipt posted under the reminder must not hide it.
+    it "looks past a chip sitting on top of it" do
+      rang!("Steak will be dinner.", at: 5.minutes.ago)
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "Buddy set a reminder",
+        metadata: { "kind" => "buddy_activity" }, created_at: 1.minute.ago,
+      )
+
+      expect(instructions_for("push it an hour")).to include("Steak will be dinner")
+    end
+  end
+
   describe "the reply bubble" do
     it "streams into one bubble and settles it to delivered" do
       run([{ text: "Hey there, good to hear from you." }])

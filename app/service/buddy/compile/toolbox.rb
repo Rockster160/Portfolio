@@ -159,7 +159,9 @@ module Buddy
             properties: {
               id:   { type: :integer },
               days: { type: :integer, description: "Days from now. Omit to clear." },
-              note: { type: :string },
+              # The only one of the note-taking arguments that had no
+              # description, and the only one that has landed on the wrong row.
+              note: { type: :string, description: "Why you're asking again about THIS one, one sentence. It is filed on that row and read back with it, so it has to be about that thing and nothing else." },
             },
             required:   %w[id],
           },
@@ -331,11 +333,26 @@ module Buddy
       # rubocop:disable Naming/AccessorMethodName -- these are tool NAMES the model
       # calls; the dispatch reads better matching the schema than translating
       # around a cop.
+      # The note goes on AFTER the arming, and only if the arming did something.
+      #
+      # It used to be written first and unconditionally, while `arm` is a no-op
+      # whenever `days` is blank - so a call that changed nothing still left a
+      # paragraph on the row. Prod, 6 Sep 2:29:19 PM: a note describing Eve's
+      # plants and yard work landed on `buddy_memories` 42, "Check spray cans
+      # for blue", a thought from 5 August about spray paint. 42's `check_in_at`
+      # is still null, so nothing else about the call happened at all, and
+      # `read_idea` will hand that paragraph back to whoever opens the spray-can
+      # thread next. Note 88 had put the Whisper Quiet conversation onto memory
+      # 46 the same way on 4 Sep.
+      #
+      # Checked before `save!`, because `arm` only assigns.
       def set_check_in(args)
         memory = find!(args)
-        memory.notes.create!(body: args["note"].to_s.strip, source: :companion) if args["note"].to_s.strip.present?
         arm(memory, args["days"])
+        armed = memory.check_in_at_changed?
         memory.save!
+        note = args["note"].to_s.strip
+        memory.notes.create!(body: note, source: :companion) if armed && note.present?
         @touched << memory
 
         memory.check_in_at ? "##{memory.id} due #{memory.check_in_at.to_date}" : "##{memory.id} not asking again"

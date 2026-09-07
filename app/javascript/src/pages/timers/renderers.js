@@ -316,7 +316,7 @@ export function renderCountdownCard(timer, actions) {
 // Counter — vertical layout: ring above, ± buttons below.
 // =========================
 
-export function renderCounterCard(timer, actions) {
+export function renderCounterCard(timer, actions, hooks = {}) {
   const card = makeCardFrame(timer, actions);
 
   const body = document.createElement("div");
@@ -350,13 +350,47 @@ export function renderCounterCard(timer, actions) {
   const ringSvg  = body.querySelector(".counter-ring");
   const progress = body.querySelector(".counter-ring .ring-progress");
 
-  function bump(by) {
+  // A tap sends ±1 STEP — the server scales it by the counter's own
+  // `step`. (Sending `±timer.step` here squared it: a step of 3 moved
+  // the counter by 9.)
+  function bump(steps) {
     if (timer.disabled) return;
     stopTimerSound(timer.id);
-    actions.increment(timer.id, by);
+    actions.increment(timer.id, steps);
   }
-  decBtn.addEventListener("click", () => bump(-timer.step));
-  incBtn.addEventListener("click", () => bump(timer.step));
+
+  // Hold either button to open the bulk sheet — one entry instead of one
+  // tap per unit. `sign` tells the sheet which way the amounts go, so the
+  // − button subtracts what you type without you signing every number.
+  const HOLD_MS = 450;
+  function wireBumpButton(btn, sign) {
+    let holdTimer = null;
+    let sheetOpened = false;
+
+    const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+
+    btn.addEventListener("pointerdown", () => {
+      if (!hooks.onCounterBulk || timer.disabled) return;
+      if (card.closest(".timers-app")?.classList.contains("edit-mode")) return;
+      sheetOpened = false;
+      holdTimer = setTimeout(() => {
+        sheetOpened = true;
+        hooks.onCounterBulk(timer.id, sign);
+      }, HOLD_MS);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => {
+      btn.addEventListener(ev, cancelHold);
+    });
+    btn.addEventListener("click", (e) => {
+      // The click that ends a long press must not ALSO bump by one —
+      // the hold already did something.
+      if (sheetOpened) { sheetOpened = false; e.preventDefault(); return; }
+      bump(sign);
+    });
+  }
+
+  wireBumpButton(decBtn, -1);
+  wireBumpButton(incBtn, 1);
 
   function update(t) {
     timer = t;
@@ -658,10 +692,10 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 // Dispatcher
 // =========================
 
-export function renderTimerCard(timer, actions) {
+export function renderTimerCard(timer, actions, hooks = {}) {
   switch (timer.kind) {
     case "countdown": return renderCountdownCard(timer, actions);
-    case "counter":   return renderCounterCard(timer, actions);
+    case "counter":   return renderCounterCard(timer, actions, hooks);
     case "dial":      return renderDialCard(timer, actions);
     default:          return renderCountdownCard(timer, actions);
   }

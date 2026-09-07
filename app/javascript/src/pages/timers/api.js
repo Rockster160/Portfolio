@@ -89,6 +89,7 @@ async function request(url, { method = "POST", body = null, queueOnFail = true }
 
 export const api = {
   create:    (attrs) => request("/timers/items", { body: { timer: attrs } }),
+  bulkCreate: (pageId, timers) => request("/timers/items/bulk", { body: { timer_page_id: pageId, timers } }),
   update:    (id, attrs) => request(`/timers/items/${id}`, { method: "PATCH", body: { timer: attrs } }),
   destroy:   (id) => request(`/timers/items/${id}`, { method: "DELETE" }),
   start:     (id) => request(`/timers/items/${id}/start`),
@@ -96,7 +97,12 @@ export const api = {
   resume:    (id) => request(`/timers/items/${id}/resume`),
   reset:     (id) => request(`/timers/items/${id}/reset`),
   confirm:   (id) => request(`/timers/items/${id}/confirm`),
-  increment: (id, by) => request(`/timers/items/${id}/increment`, { body: { by } }),
+  // `by` counts steps; `amount` is a raw delta. Exactly one is sent —
+  // the server multiplies `by` by the counter's step and takes `amount`
+  // as typed.
+  increment: (id, by, amount) => request(`/timers/items/${id}/increment`, {
+    body: amount == null ? { by } : { amount },
+  }),
   advance:   (id, by) => request(`/timers/items/${id}/advance`, { body: { by } }),
   layout:    (id, geom) => request(`/timers/items/${id}/layout`, { method: "PATCH", body: { timer: geom } }),
   reorder:   (ids) => request("/timers/order", { method: "PATCH", body: { ids } }),
@@ -107,6 +113,7 @@ export const api = {
   reorderQuick: (ids) => request("/timers/quick_buttons/order", { method: "PATCH", body: { ids } }),
 
   createPage:  (attrs) => request("/timers/pages", { body: { timer_page: attrs } }),
+  duplicatePage: (id, attrs) => request(`/timers/pages/${id}/duplicate`, { body: attrs || {} }),
   updatePage:  (id, attrs) => request(`/timers/pages/${id}`, { method: "PATCH", body: { timer_page: attrs } }),
   destroyPage: (id) => request(`/timers/pages/${id}`, { method: "DELETE" }),
 

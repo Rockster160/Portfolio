@@ -11,13 +11,14 @@ import { renderTimerCard } from "./renderers";
 import Sortable from "../../../jil/Sortable.min.js";
 
 export class Board {
-  constructor({ root, store, actions, getActivePageId, onCardMenu, app }) {
+  constructor({ root, store, actions, getActivePageId, onCardMenu, onCounterBulk, app }) {
     this.root = root;
     this.app = app;
     this.store = store;
     this.actions = actions;
     this.getActivePageId = getActivePageId;
     this.onCardMenu = onCardMenu;
+    this.onCounterBulk = onCounterBulk;
     this.renderers = new Map();
     this.sortable = null;
     this.editMode = false;
@@ -63,7 +64,7 @@ export class Board {
   }
 
   mount(timer) {
-    const r = renderTimerCard(timer, this.actions);
+    const r = renderTimerCard(timer, this.actions, { onCounterBulk: this.onCounterBulk });
     this.renderers.set(timer.id, r);
     // Mark home-page cards so CSS can selectively show the X-to-delete
     // button when the timer finishes. Custom pages don't get the X.

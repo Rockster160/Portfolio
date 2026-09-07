@@ -2222,7 +2222,56 @@ module Buddy
           user:                        @user.first_name,
           pet_expression:              @conversation.buddy_expression.presence || Buddy::Faces.default.to_s,
           open_questions_from_partner: open_relay_count,
-        }
+          answering_reminder:          answering_reminder,
+        }.compact
+      end
+
+      # The reminder they are replying to, when the last thing said in the
+      # thread was one going off.
+      #
+      # Here for exactly the reason `open_questions_from_partner` is here: it
+      # changes how an otherwise meaningless message should be read. "Not yet,
+      # let's try in about 90 minutes" is a snooze if something just rang and
+      # nothing at all if it didn't, and a turn that never calls `get_context`
+      # has no way to find that out.
+      #
+      # Prod 5593-5596, 6 Sep. "Reminder: Steak will be dinner." rang at 5:00
+      # PM, Eve answered it at 5:42 with "let's try in about 90 minutes", and
+      # `move_reminder` was called with `match: "chat with Rocco about PC access
+      # for Suki"` - a different reminder she had set two hours earlier, whose
+      # text was sitting in the transcript. The steak nudge never came back and
+      # the Rocco one went off at 7:12 saying the wrong thing.
+      #
+      # The reminder was findable: the tool searches `fired_at` inside
+      # SNOOZE_WINDOW and has since prod 2364, and the row was in
+      # `upcoming_reminders` under `already_rang`. That turn spent two calls -
+      # one tool round and the reply - so it never looked. This is the third
+      # wrong-row move (prod 2364, prod 4841/4842) and the first two were both
+      # fixed inside the tool's lookup, which is not where this one is: the
+      # lookup did what it was asked, with the wrong needle.
+      #
+      # The ID rather than the text, because `match` takes either and an id
+      # cannot be fuzzy-matched onto its neighbour.
+      def answering_reminder
+        msg = last_companion_message
+        return nil unless msg&.metadata.is_a?(Hash) && msg.metadata["source"].to_s == "reminder"
+
+        id = msg.metadata["reminder_id"]
+        return nil if id.blank?
+        return nil if msg.created_at < Buddy::Tools::SNOOZE_WINDOW.ago
+
+        { id: id, body: msg.body.to_s.delete_prefix("Reminder: ").first(120) }
+      rescue StandardError
+        nil
+      end
+
+      # The last thing the companion said before this message, receipts and
+      # cards skipped - a chip posted under the reminder must not hide it.
+      def last_companion_message
+        @conversation.byte_messages.where(direction: :inbound)
+          .where(byte_messages: { created_at: ...@inbound.created_at })
+          .where("metadata->>'kind' IS NULL OR metadata->>'kind' <> 'buddy_activity'")
+          .order(:created_at).last
       end
 
       def open_relay_count

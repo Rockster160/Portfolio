@@ -11,6 +11,15 @@ Buddy::Tools.register(
         appointment location ("TMS"), or a general place / city ("Moab",
         "Salt Lake"). It resolves saved places first, then looks the place up.
 
+    Home is a FIXED point and nothing here can move it. If they say the forecast
+    is for the wrong town, say plainly that home weather comes from one set
+    location you can't change from a chat, tell them which place you were
+    actually reading, and offer `request_feature`. Prod 5513: told "I don't live
+    in Alpine! We live in Herriman!", the answer was "I've got it corrected now,
+    and I'll stick to Herriman for your weather from here on out" - nothing was
+    corrected, nothing was recorded, and the Alpine line had come from a
+    briefing repair rather than from anybody's location.
+
     The reading comes straight back to you in this same turn, so tell them right
     away rather than saying you'll go peek - warm and brief, factoring in
     whatever they were asking about (biking, a jacket, rain timing). Don't

@@ -467,6 +467,53 @@ RSpec.describe "Buddy brain-dump (stash)" do
         expect(block.index("older thing")).to be < block.index("newer thing")
       end
 
+      # Prod, 6 Sep. Eve had 33 live stash items; the list ended at `#40` from
+      # 5 August and a month of stash was in front of no turn. Sixteen seconds
+      # after Suki stashed "Ask Rocco about PC access" she asked "Okay is it in
+      # Stash?" and was told no - it was there, in the bucket the same reply
+      # offered to move it to. Ascending order plus a cap takes the OLDEST N, so
+      # the tail is what falls off, and the tail is what was just said.
+      describe "when there are more than the cap" do
+        before {
+          (Buddy::Personality::OPEN_LOOP_LIMIT + 3).times { |i|
+            BuddyMemory.create!(
+              kind: :stash, user: user, status: :active,
+              content: "thing #{i}", created_at: (40 - i).days.ago
+            )
+          }
+        }
+
+        it "keeps the newest, which is the one just handed over" do
+          block = Buddy::Personality.open_loops_block(user)
+
+          expect(block).to include("thing #{Buddy::Personality::OPEN_LOOP_LIMIT + 2}")
+        end
+
+        # Bounded, because "thing 1" is a substring of "thing 10".
+        it "drops the oldest rather than the newest" do
+          block = Buddy::Personality.open_loops_block(user)
+
+          expect(block).not_to match(/\bthing 0\b/)
+          expect(block).not_to match(/\bthing 1\b/)
+          expect(block).not_to match(/\bthing 2\b/)
+        end
+
+        it "still reads oldest-first, the way the block says it does" do
+          block = Buddy::Personality.open_loops_block(user)
+          first = Buddy::Personality::OPEN_LOOP_LIMIT + 1
+
+          expect(block.index("thing 3")).to be < block.index("thing #{first}")
+        end
+
+        it "hands get_context the newest too" do
+          ideas = Buddy::Context.send(:stashed_ideas, user).pluck(:idea)
+
+          expect(ideas).to include("thing #{Buddy::Personality::OPEN_LOOP_LIMIT + 2}")
+          expect(ideas).not_to include("thing 0")
+          expect(ideas).not_to include("thing 5")
+        end
+      end
+
       it "reaches the real system prompt, not just the helper" do
         BuddyMemory.create!(kind: :stash, user: user, category: :work, content: "chase the invoice", status: :active)
 

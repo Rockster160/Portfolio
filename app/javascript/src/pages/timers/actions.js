@@ -25,10 +25,15 @@ export function makeActions({ api, store }) {
     resume:    async (id) => applyTimer(await api.resume(id)),
     reset:     async (id) => applyTimer(await api.reset(id)),
     confirm:   async (id) => applyTimer(await api.confirm(id)),
-    increment: async (id, by) => applyTimer(await api.increment(id, by)),
+    increment: async (id, by, amount) => applyTimer(await api.increment(id, by, amount)),
     advance:   async (id, by) => applyTimer(await api.advance(id, by)),
 
     create:    async (attrs) => applyTimer(await api.create(attrs)),
+    bulkCreate: async (pageId, timers) => {
+      const res = await api.bulkCreate(pageId, timers);
+      (res?.timers || []).forEach((t) => store.upsertTimer(t, { source: "action", force: true }));
+      return res;
+    },
     update:    async (id, attrs) => applyTimer(await api.update(id, attrs)),
     destroy:   async (id) => {
       await api.destroy(id);
@@ -61,6 +66,11 @@ export function makeActions({ api, store }) {
     updatePage:  async (id, attrs) => {
       const res = await api.updatePage(id, attrs);
       if (res) store.upsertPage(res);
+      return res;
+    },
+    duplicatePage: async (id, attrs) => {
+      const res = await api.duplicatePage(id, attrs);
+      if (res?.id) store.upsertPage(res);
       return res;
     },
     destroyPage: async (id) => {

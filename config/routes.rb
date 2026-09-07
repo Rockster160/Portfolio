@@ -239,8 +239,11 @@ Rails.application.routes.draw do
     post   "/items/:id/advance"  => "timers#advance",   as: :advance_item
     patch  "/items/:id/layout"   => "timers#layout",    as: :layout_item
     patch  "/order"              => "timers#reorder",   as: :reorder
+    # Collection-scoped, like /order: one request builds a whole board.
+    post "/items/bulk" => "timers#bulk_create", as: :bulk_items
 
     resources :pages, controller: :timer_pages, only: [:create, :update, :destroy] do
+      post :duplicate, on: :member
       resources :buttons, controller: :timer_page_buttons, only: [:create, :update, :destroy]
     end
     patch "/quick_buttons/order" => "timer_quick_buttons#reorder", as: :reorder_quick_buttons

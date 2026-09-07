@@ -178,6 +178,36 @@ RSpec.describe Timer do
       expect(timer.value).to eq(-1)
     end
 
+    it "scales `by` through the counter's step" do
+      timer.update!(step: 3)
+      timer.apply_increment!(by: 1)
+      expect(timer.value).to eq(3)
+    end
+
+    it "takes `amount` as a raw delta, unscaled by step" do
+      timer.update!(step: 3, value: 43)
+      timer.apply_increment!(amount: 18)
+      expect(timer.value).to eq(61)
+    end
+
+    it "treats a negative `amount` as a subtraction" do
+      timer.update!(value: 10)
+      timer.apply_increment!(amount: -4)
+      expect(timer.value).to eq(6)
+    end
+
+    it "reports the direction of an `amount` to counter_reaches clauses" do
+      target = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 0)
+      timer.update!(value: 10, callbacks: [
+        { id: "down", when: { type: "counter_reaches", value: 4, direction: "decreasing" },
+                      then: { type: "chain", target_timer_id: target.id, op: "increment", by: 1 } },
+      ])
+      allow(MonitorChannel).to receive(:broadcast_to)
+
+      timer.apply_increment!(amount: -6)
+      expect(target.reload.value).to eq(1)
+    end
+
     it "lets the value go past max_value (display-only bound)" do
       timer.update!(max_value: 2)
       3.times { timer.apply_increment!(by: 1) }

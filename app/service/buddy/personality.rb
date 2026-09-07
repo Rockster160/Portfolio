@@ -941,7 +941,19 @@ module Buddy
       return nil unless user.respond_to?(:buddy_memories)
 
       scope = user.buddy_memories.kind_stash.live.includes(:notes)
-      rows  = scope.order(created_at: :asc).limit(OPEN_LOOP_LIMIT).to_a
+      # NEWEST N, then back into oldest-first for reading. Ascending plus a cap
+      # takes the OLDEST fifteen, so the list is amputated at the new end and
+      # everything just handed over falls off it - which is the one thing that
+      # must never happen to a promise to hold something.
+      #
+      # Prod, 6 Sep: Eve had 33 live, her list ended at `#40` from 5 Aug, and a
+      # month of stash was invisible to every turn. She asked "Okay is it in
+      # Stash?" sixteen seconds after Suki stashed something and was told no -
+      # it was there, in the bucket the same reply offered to move it to. A
+      # correction to another item the same afternoon found no id to elaborate
+      # on and the turn was retracted. Rocco (8) and Chelsea (2) are under the
+      # cap, so it only ever showed in her thread.
+      rows  = scope.order(created_at: :desc).limit(OPEN_LOOP_LIMIT).to_a.reverse
       return nil if rows.empty?
 
       now   = Time.current

@@ -111,6 +111,45 @@ RSpec.describe Buddy::Compile::Toolbox do
 
       expect(memory.reload.check_in_at).to be_nil
     end
+
+    # Prod, 6 Sep 2:29:19 PM. A note describing Eve's plants and yard work landed
+    # on `buddy_memories` 42, "Check spray cans for blue" - a thought from 5
+    # August about spray paint. 42's `check_in_at` is still null, so nothing else
+    # about that call happened at all; the note was written first and
+    # unconditionally, while `arm` is a no-op whenever `days` is blank. Note 88
+    # had put the Whisper Quiet conversation onto memory 46 the same way on 4
+    # Sep. `read_idea` hands the paragraph back to whoever opens the thread next.
+    describe "the note it leaves" do
+      let!(:memory) {
+        user.buddy_memories.create!(kind: :concept, content: "Check spray cans for blue", severity: 60)
+      }
+
+      it "writes nothing when the call armed nothing" do
+        expect {
+          box.call("set_check_in", { "id" => memory.id, "note" => "Now includes the plants and yard work." })
+        }.not_to change { BuddyMemoryNote.count }
+      end
+
+      it "writes one when the call actually arms it" do
+        box.call("set_check_in", { "id" => memory.id, "days" => 3, "note" => "Waiting on the paint order." })
+
+        expect(memory.reload.notes.pluck(:body)).to eq(["Waiting on the paint order."])
+      end
+
+      it "writes one when the call clears an armed row" do
+        memory.update!(kind: :followup, check_in_at: 2.days.from_now)
+
+        box.call("set_check_in", { "id" => memory.id, "note" => "They sorted it themselves." })
+
+        expect(memory.reload.notes.pluck(:body)).to eq(["They sorted it themselves."])
+      end
+
+      it "tells the model what the note is for" do
+        schema = described_class.schemas.find { |t| t[:name] == "set_check_in" }
+
+        expect(schema.dig(:parameters, :properties, :note, :description)).to include("THIS one")
+      end
+    end
   end
 
   describe "tidying" do

@@ -7,9 +7,13 @@ Buddy::Tools.register(
 
     This also SNOOZES one that just went off. "Send me that again tomorrow at
     6", "remind me about this later", "not now, push it an hour" - said in
-    reply to a reminder landing - all mean this, with `match` taken from the
-    text of the reminder they're answering. Re-arming the one they're looking at
-    is right; making a fresh one from scratch loses whatever else was on it.
+    reply to a reminder landing - all mean this. **When `answering_reminder` is
+    in your RIGHT NOW block, that IS the one they mean: pass its `id` as
+    `match`.** It is there only when a reminder was the last thing said to them,
+    which is the only situation this paragraph is about, and an id cannot land
+    on the reminder next to the one they meant. Re-arming the one they're
+    looking at is right; making a fresh one from scratch loses whatever else was
+    on it.
 
     Reach for this instead of `schedule_reminder` any time the thing they're
     talking about already exists. Setting a second one leaves the first alive,
@@ -27,7 +31,7 @@ Buddy::Tools.register(
     move; cancel it and set a new one.
   TXT
   args: {
-    match: { type: :string, required: true,  description: "Substring of the reminder text, or its numeric id" },
+    match: { type: :string, required: true,  description: "The `answering_reminder` id when there is one; otherwise a substring of the reminder text, or its numeric id" },
     at:    { type: :string, required: true,  description: "New fire time (ISO-8601 datetime with offset)" },
     text:  { type: :string, required: false, description: "New wording, only if they changed what it should say" },
   },
@@ -128,6 +132,10 @@ Buddy::Tools.register(
   auto:    true,
   receipt: ->(result, ctx) {
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
-    "#{ctx.buddy_name} moved that reminder to #{ctx.friendly_future(fire_at)}"
+    # `friendly_future` already writes "at 7:12pm" / "tomorrow at 9am", so a
+    # "to" in front of it made prod 5596 read "moved that reminder to at
+    # 7:12pm". Every schedule_reminder chip in that window read correctly; this
+    # was the only one carrying the extra word.
+    "#{ctx.buddy_name} moved that reminder #{ctx.friendly_future(fire_at)}"
   },
 )
