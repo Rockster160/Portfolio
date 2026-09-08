@@ -373,10 +373,17 @@ RSpec.describe Buddy::Context do
         expect(due_today_names).to eq(["Gutters"])
       end
 
-      it "counts an unusually hot pick, which is real news" do
+      # Rocco, 8 Sep: "we should just dump all of the hot picks from the
+      # briefing entirely. They've never worked well." Not even a 5x. Every line
+      # drawn inside them failed in one direction or the other - all of them
+      # rebuilt the daily read-out, and only the big ones hid a chore that was
+      # pinned AND genuinely due, because the pin took it out of the schedule's
+      # reach. A pin is a scoring decision; it says nothing about whether today
+      # is different.
+      it "does not name one that is only a hot pick, however big the multiplier" do
         hot(create(:chore, name: "Litter", created_by_user: user), 5)
 
-        expect(due_today_names).to eq(["Litter"])
+        expect(due_today_names).to be_empty
       end
 
       it "drops a daily even when it's been pinned hot" do
@@ -395,12 +402,24 @@ RSpec.describe Buddy::Context do
         expect(due_today_names).to be_empty
       end
 
-      it "keeps a stamped one-off next to a big pick, and drops the 2x beside them" do
+      it "keeps the stamped one-off and leaves both pins out" do
         due_today("Gutters")
         hot(create(:chore, name: "Litter", created_by_user: user), 5)
         hot(create(:chore, name: "Dishes", created_by_user: user), 2)
 
-        expect(due_today_names).to contain_exactly("Gutters", "Litter")
+        expect(due_today_names).to contain_exactly("Gutters")
+      end
+
+      # It stops being a REASON without stopping being a DETAIL. A job that
+      # earned its place carries its multiplier through, which is what the
+      # briefing turns into "double points for getting that one done".
+      it "still carries the multiplier on a job that got there some other way" do
+        chore = due_today("Gutters")
+        hot(chore, 2)
+
+        row = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today].first
+        expect(row[:name]).to eq("Gutters")
+        expect(row[:hot]).to eq("2x")
       end
 
       # Deliberately uncapped. A ceiling was tried and either got ignored while
@@ -577,6 +596,30 @@ RSpec.describe Buddy::Context do
       scheduled("Trim Kitty Nails", { freq: "relative", unit: "week", interval: 2 })
 
       expect(due_names).to include("Trim Kitty Nails")
+    end
+
+    # Being pinned is not a reason to go unsaid. The two signals are separate -
+    # a plain 2x is not news on its own, and a Tuesday-only chore on a Tuesday
+    # is news on its own - and a chore that was BOTH used to fall down the gap:
+    # the pin moved it out of `scheduled_ids` as intentional, then it failed the
+    # routine-multiplier test as a plain 2x, and nothing added it back.
+    #
+    # Prod, Tue 8 Sep: "Go get mail" is weekly on Tuesdays and was one of seven
+    # 2x picks that morning. JOBS TODAY read "- Laundry" and nothing else.
+    # Rocco: "It's laundry day, yes, but I also need to go get the mail and
+    # that's a 'today' chore that got left off."
+    it "still names one whose day this is when it also got pinned at a routine 2x" do
+      chore = scheduled("Go get mail", { freq: "weekly", by_day: [ChoreDay.current(user).strftime("%a").downcase] })
+      ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 2.0)
+
+      expect(due_names).to include("Go get mail")
+    end
+
+    it "does not name a pinned one whose day this is not" do
+      chore = scheduled("Go get mail", { freq: "weekly", by_day: [(ChoreDay.current(user) + 1).strftime("%a").downcase] })
+      ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 2.0)
+
+      expect(due_names).not_to include("Go get mail")
     end
 
     # Rocco, 2026-09-06: "Chores should only be brought up if they are

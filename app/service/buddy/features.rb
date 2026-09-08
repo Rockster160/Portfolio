@@ -55,6 +55,7 @@ module Buddy
       # question nobody asks most days, and `search_inventory` reaches all of
       # it in one call when they do.
       inventory:  [],
+      job_search: %i[job_search],
     }.freeze
 
     # Granted rather than assumed, for the same reason `mac` is: both reach
@@ -63,8 +64,20 @@ module Buddy
     # handing this to a new account would point their companion at his packages.
     OWNER_ONLY = %i[mac deliveries].freeze
 
+    # Held only by somebody whose RECORDS show they need it - see
+    # lib/scripts/grant_job_search_feature.rb, which grants by evidence rather
+    # than by name, so a second person job hunting needs no second script.
+    #
+    # Out of DEFAULT for a different reason than OWNER_ONLY: the data here is
+    # perfectly per-user (JobApplication belongs to a user, and Eve would see
+    # her own board), so nothing leaks either way. It's that a companion handed
+    # a job-hunt tool for a search that doesn't exist will eventually reach for
+    # it, and "log that on the board" is a strange thing to hear from a pet
+    # belonging to somebody who has never applied anywhere.
+    ON_EVIDENCE = %i[job_search].freeze
+
     # What a new account is handed.
-    DEFAULT = (SECTIONS.keys - OWNER_ONLY).freeze
+    DEFAULT = (SECTIONS.keys - OWNER_ONLY - ON_EVIDENCE).freeze
 
     # What to call each one when telling the model (or a person) what's off.
     LABELS = {
@@ -78,6 +91,7 @@ module Buddy
       mac:        "commands on the Mac",
       deliveries: "packages on their way",
       inventory:  "the inventory of boxes and where things are stored",
+      job_search: "their job applications and the mail about them",
     }.freeze
 
     def all

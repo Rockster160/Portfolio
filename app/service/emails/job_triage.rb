@@ -86,70 +86,11 @@ module Emails
       /\.gov\z/i,
     ].freeze
 
-    RULES = <<~TEXT.freeze
-      You are triaging one email for someone who is job hunting. Decide whether
-      it is a real beat in THEIR OWN job search.
-
-      Answer true for: a recruiter or hiring manager writing to them, an
-      applicant tracking system about an application they submitted (Greenhouse,
-      Lever, Ashby, Workday, iCIMS, Clinch and friends), interview scheduling, a
-      take-home or assessment, a reference request, an offer, a rejection, or a
-      real person following up on any of those.
-
-      An automated message can still be true. What decides it is whether it is
-      about an application or a conversation that already exists, not whether a
-      human typed it.
-
-      MOST OF THIS INBOX IS COLD SALES, AND A LOT OF IT IS DRESSED AS
-      OPPORTUNITY. This address has been on scraped lists for years, so it gets
-      a steady run of mail about work, opportunities, growth, and "your
-      business" - written by a real person, sometimes quoting real details off
-      the website. Almost none of it is a job, and it is the thing this triage
-      exists to keep out.
-
-      The question that settles nearly all of it is WHICH WAY THE MONEY GOES. A
-      job means somebody is considering PAYING THEM to work. If the sender wants
-      to be paid, wants to sell them something, wants to be hired by them, or
-      wants them to sign up for anything, the answer is false however personally
-      it is written and however much real detail it quotes.
-
-      Answer false for, specifically:
-
-      - Web design, development, SEO, marketing, lead-generation and "I noticed
-        a few issues on your website" outreach. This is the single largest
-        category. "Opportunities" in one of these means opportunities to sell.
-      - Offshore development shops and agencies introducing their team, offering
-        to build, redesign, modernise or audit anything.
-      - Mail addressed to a company that is not theirs, or that has their name
-        or line of business wrong. A scraped list arrives with the wrong owner
-        attached, and that mismatch is by itself decisive.
-      - Advance-fee and phishing openers: "business proposition", a bare "Hi" or
-        "Good day" from an unknown address, an unexpected parcel notice or
-        account alert from a free mail account.
-      - Job alerts, saved-search digests, "jobs matching your profile", board
-        newsletters, sponsored listings, "upload your resume to unlock".
-      - Expert networks, paid research panels and consulting marketplaces. These
-        are the closest call on the list - personally written, genuinely
-        researched, and still not employment.
-
-      When it is genuinely unclear, answer false. A missed recruiter costs one
-      look at an inbox that is being watched anyway; a false one teaches them to
-      ignore these.
-    TEXT
-
-    OUTPUT = <<~TEXT.freeze
-      Reply with JSON and nothing else:
-      {"job": true|false, "kind": "<a few words: recruiter outreach, application
-      status, interview scheduling, take-home, offer, rejection, ...>",
-      "company": "<company name, or null if there isn't one>",
-      "headline": "<one short line saying what happened>"}
-    TEXT
-
     # ---- entry point ----------------------------------------------------------
 
     def triage!(email)
       return nil unless email&.inbound?
-      return nil if delivered?(email)
+      return nil if email.triaged?
 
       reason = skip_reason(email)
       if reason.present?
@@ -159,6 +100,10 @@ module Emails
 
       verdict = classify(email)
       return nil if verdict.nil?
+
+      # Stamped before anything is delivered, so a delivery that blows up leaves
+      # a triaged email rather than one re-classified on every retry.
+      stamp!(email, verdict)
 
       unless verdict[:job]
         Rails.logger.info("[Emails::JobTriage] not job [#{verdict[:kind]}] #{describe(email)}")
@@ -210,7 +155,11 @@ module Emails
     # the model has no way to answer. Company names only; there are tens of
     # them, and the role and status are nobody's business here.
     def instructions(user)
-      [RULES, "Their open applications:\n#{open_applications(user)}", OUTPUT].join("\n")
+      [
+        Prompt::RULES,
+        "Their open applications:\n#{open_applications(user)}",
+        Prompt::OUTPUT,
+      ].join("\n")
     end
 
     def open_applications(user)
@@ -253,10 +202,24 @@ module Emails
 
     # ---- delivery -------------------------------------------------------------
 
+    # Two shapes, and which one it is turns on whether the mail belongs to an
+    # application already on the board.
+    #
+    #   matched   - Buddy says it in her own voice and OFFERS to log the note.
+    #               A full turn, but this is a couple of messages a week and the
+    #               offer is the whole point: a beat that isn't written down
+    #               while it is in front of you is one the tracker never hears
+    #               about.
+    #   unmatched - a plain card. A recruiter's first contact is worth SEEING,
+    #               but there is no application to attach it to, so there is
+    #               nothing to offer.
     def deliver(email, verdict)
       user = email.user
       conversation = ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
       return nil if conversation.nil?
+
+      job = matching_application(user, verdict)
+      return offer(email, verdict, job, user, conversation) if job.present?
 
       Buddy::CompanionDelivery.deliver_plain(
         user:         user,
@@ -267,16 +230,72 @@ module Emails
         # index.js dispatches the body renderer on it, and a kind it doesn't
         # know falls through to textContent, which prints the asterisks. The
         # Mac watcher's cards carry the same one so the two read alike.
-        metadata:     {
-          kind:           :system,
-          self_initiated: true,
-          source:         :job_mail_triage,
-          email_id:       email.id,
-          sender:         sender_addresses(email).first,
-          subject:        email.subject,
-        },
+        metadata:     metadata_for(email, verdict),
         push_title:   verdict[:headline].presence || email.subject,
       )
+    end
+
+    # The company the model named, resolved against applications that are still
+    # live. Shared with add_job_note, because the name in an ATS footer is
+    # rarely the name on the board and both callers have to survive it.
+    def matching_application(user, verdict)
+      Buddy::JobHunt.resolve_application(user, verdict[:company])
+    end
+
+    # A seed, not a card: Buddy reads it and speaks. Everything she needs rides
+    # on it so the turn costs no lookups - see Buddy::BriefingFacts for why a
+    # self-initiated turn that has to go and fetch things is the one that
+    # wanders off the subject.
+    def offer(email, verdict, job, user, conversation)
+      Buddy::CompanionDelivery.deliver_prompt(
+        user:         user,
+        conversation: conversation,
+        seed:         seed(email, verdict, job),
+        metadata:     metadata_for(email, verdict).merge(job_application_id: job.id),
+      )
+    end
+
+    def seed(email, verdict, job)
+      [
+        "Job mail just arrived, and it belongs to an application already on their board.",
+        "",
+        "Company: #{job.company}#{" (#{job.role})" if job.role.present?}",
+        "What happened: #{verdict[:headline]}",
+        "Kind: #{verdict[:kind]}",
+        "Subject: #{email.subject}",
+        "From: #{sender_line(email)}",
+        "Email id: #{email.id}",
+        "",
+        "Tell them what came in, briefly, and offer to log it against " \
+        "#{job.company} as a note. If they say yes, that is add_job_note with " \
+        "email_id #{email.id}. Don't log it unless they ask - the offer is " \
+        "the point of telling them.",
+      ].join("\n")
+    end
+
+    def metadata_for(email, verdict)
+      {
+        kind:           :system,
+        self_initiated: true,
+        source:         :job_mail_triage,
+        email_id:       email.id,
+        sender:         sender_addresses(email).first,
+        subject:        email.subject,
+        job_kind:       verdict[:kind].presence,
+      }
+    end
+
+    # The verdict, kept on the email itself. `at` answers "when was this
+    # decided"; the rest is what the job_search context section reads, so a card
+    # that has scrolled out of the thread is still findable a week later.
+    def stamp!(email, verdict)
+      email.update!(job_triage: {
+        job:      verdict[:job],
+        kind:     verdict[:kind].presence,
+        company:  verdict[:company].presence,
+        headline: verdict[:headline].presence,
+        at:       Time.current.iso8601,
+      }.compact)
     end
 
     def card(email, verdict)
@@ -291,13 +310,6 @@ module Emails
         "",
         "[Open the email](#{email_url(email)})",
       ].join("\n")
-    end
-
-    # One email is one card. Sidekiq retries, and ReceiveEmailWorker re-run
-    # against the same S3 object finds the existing row and carries on, so this
-    # is reached again more often than it looks.
-    def delivered?(email)
-      ByteMessage.where(user_id: email.user_id).exists?(["byte_messages.metadata ->> 'source' = ? AND byte_messages.metadata ->> 'email_id' = ?", "job_mail_triage", email.id.to_s])
     end
 
     # ---- odds and ends --------------------------------------------------------

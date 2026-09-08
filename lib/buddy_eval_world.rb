@@ -133,6 +133,7 @@ class BuddyEvalWorld
     prompts!
     inventory!
     photos!
+    job_hunt!
     self
   end
 
@@ -185,6 +186,51 @@ class BuddyEvalWorld
 
   def manifest_path
     @manifest_path ||= self.class.manifest_path
+  end
+
+  # An application to hang a beat on, and one piece of mail about it.
+  #
+  # A made-up company rather than a reused one on purpose, and it is the
+  # exception to `reuse` preferring what they already have: Rocco has fifteen
+  # live applications, so "log that they emailed back" against any of them is
+  # ambiguous by construction, and a miss would read as a description problem
+  # when the question simply had fifteen right answers. "Halloway Systems"
+  # matches nothing real, so the probe has exactly one answer.
+  #
+  # The email is stamped as though Emails::JobTriage had already judged it,
+  # because that is the state the tool is reached from - `recent_mail` in the
+  # job_search context section reads `job_triage`, and without the stamp the
+  # message is invisible and `email_id` has nothing to name.
+  def job_hunt!
+    job = reuse(JobApplication.where(user: user).detect { |j| j.company.to_s.match?(/halloway/i) }) {
+      JobApplication.create!(
+        user:    user,
+        company: "Halloway Systems",
+        role:    "Senior Software Engineer",
+        status:  :active,
+        color:   JobApplication::COLORS.first,
+      )
+    }
+
+    reuse(Email.where(user: user).detect { |e| e.subject.to_s.match?(/halloway/i) }) {
+      Email.create!(
+        user:               user,
+        mail_id:            "buddy-eval-halloway-#{job.id}",
+        timestamp:          2.days.ago,
+        direction:          :inbound,
+        inbound_mailboxes:  [{ name: nil, address: "rocco@ardesian.com" }],
+        outbound_mailboxes: [{ name: "Priya Raman", address: "priya@halloway.example" }],
+        subject:            "Halloway Systems - next steps on your application",
+        blurb:              "Thanks for applying. We'd like to set up a first call.",
+        job_triage:         {
+          job:      true,
+          kind:     "application status",
+          company:  "Halloway Systems",
+          headline: "Halloway Systems wants to book a first call.",
+          at:       2.days.ago.iso8601,
+        },
+      )
+    }
   end
 
   def household
@@ -542,11 +588,14 @@ class BuddyEvalWorld
       # a Car Lock function wired up" (prod 5272-5273), because the index the
       # model searches said Tesla and never said car. A stand-in carrying the
       # generic "for the eval world" line would pass or fail on nothing.
-      [/tesla control/i,    "Tesla Control",
-       %(function("Action" TAB ["start" "stop" "unlock_doors" "lock_doors" "honk"]("start"))),
-       "Runs a basic command on the car (Tesla): start, stop, lock or unlock the doors, honk, " \
-       "flash lights, vent or close the windows, frunk/trunk, defrost, seat heaters. Car, " \
-       "vehicle and Tesla all mean this one."],
+      [
+        /tesla control/i,
+        "Tesla Control",
+        %(function("Action" TAB ["start" "stop" "unlock_doors" "lock_doors" "honk"]("start"))),
+        "Runs a basic command on the car (Tesla): start, stop, lock or unlock the doors, honk, " \
+        "flash lights, vent or close the windows, frunk/trunk, defrost, seat heaters. Car, " \
+        "vehicle and Tesla all mean this one.",
+],
     ].each { |rx, name, listener, description|
       wanted_function = listener.start_with?("function")
       found = mine.detect { |task|

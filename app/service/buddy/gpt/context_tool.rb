@@ -47,6 +47,7 @@ module Buddy
         record_links
         app_pages
         routines
+        job_search
       ].freeze
 
       # What a Today briefing does NOT get to see.
@@ -145,6 +146,12 @@ module Buddy
           thing. Check here whenever a request sounds like a thing they'd have
           set up ("prep my printer", "wind down"), and run the match with
           run_routine rather than doing the steps yourself.
+        - job_search: their live job applications AND the mail that has arrived
+          about them, with `logged` on each message saying whether it is
+          already on the board. Fetch it before add_job_note, and whenever they
+          ask where something stands - "did I hear back from anyone", "what's
+          happening with Netflix". A beat they mention that isn't on the board
+          is worth offering to log.
         - recent_actions: what you actually RAN in this thread, newest first.
           Request it the moment they say you didn't do something, or ask
           whether you did - your own words are not evidence, and this is. If

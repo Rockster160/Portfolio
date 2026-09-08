@@ -8,6 +8,7 @@
 #  direction          :integer          not null
 #  has_attachments    :boolean          default(FALSE), not null
 #  inbound_mailboxes  :jsonb            not null
+#  job_triage         :jsonb            not null
 #  outbound_mailboxes :jsonb            not null
 #  read_at            :datetime
 #  subject            :text             not null
@@ -26,7 +27,7 @@ class Email < ApplicationRecord
   belongs_to :user
 
   has_one_attached :mail_blob, service: :s3_emails, dependent: :destroy
-  json_attributes :inbound_mailboxes, :outbound_mailboxes
+  json_attributes :inbound_mailboxes, :outbound_mailboxes, :job_triage
 
   enum :direction, {
     inbound:  0, # Email sent to a registered domain
@@ -38,6 +39,15 @@ class Email < ApplicationRecord
   scope :archived,     -> { where.not(archived_at: nil) }
   scope :unread,       -> { where(read_at: nil) }
   scope :read,         -> { where.not(read_at: nil) }
+
+  # Inbound mail Emails::JobTriage has looked at. The "no" verdicts are kept
+  # alongside the "yes" ones for two reasons: they are the record of what was
+  # considered and turned down, which is the only way to tune the prompt
+  # afterwards, and they are what stops a retry paying to reach the same answer
+  # twice.
+  scope :triaged,     -> { where.not(job_triage: {}) }
+  scope :not_triaged, -> { where(job_triage: {}) }
+  scope :job_mail,    -> { where("(emails.job_triage ->> 'job') = 'true'") }
   scope :in, ->(*mailboxes) {
     mailboxes = Array.wrap(mailboxes).flatten
     next mailboxes.inject(self) { |obj, method| obj.in(method) } unless Array.wrap(mailboxes).one?
@@ -118,6 +128,13 @@ class Email < ApplicationRecord
       addresses.size == 1 ? addresses.first : "[#{addresses.join(" | ")}]"
     }
   end
+
+  def triaged? = job_triage.present?
+  def job_mail? = job_triage[:job] == true
+
+  # The JobNote this email was turned into, if somebody took the offer. Nil is
+  # the ordinary state - most job mail is read and needs nothing logged.
+  def job_note = (::JobNote.find_by(id: job_triage[:job_note_id]) if job_triage[:job_note_id])
 
   def archive! = update!(archived_at: ::Time.current)
   def archived? = archived_at?

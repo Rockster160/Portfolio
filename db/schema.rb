@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_08_164642) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_08_174521) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -994,7 +994,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_08_164642) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "mail_id", null: false
+    t.jsonb "job_triage", default: {}, null: false
     t.index ["mail_id", "timestamp"], name: "index_emails_on_mail_id_and_timestamp"
+    t.index ["user_id", "timestamp"], name: "index_emails_on_job_mail", where: "((job_triage ->> 'job'::text) = 'true'::text)"
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
 

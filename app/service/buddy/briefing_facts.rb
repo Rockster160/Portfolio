@@ -72,6 +72,12 @@ module Buddy
       trigger_shapes:         "automation plumbing",
       record_links:           "automation plumbing",
       pending_prompts:        "a form waiting in the app, which the app already badges",
+      # A board, not a day. The one part of it with a CLOCK on it - a follow-up
+      # they owe somebody - is already an AgendaItem (JobNote#sync_follow_up),
+      # so the briefing picks it up through the calendar like any other task.
+      # Carrying the board as well would say it twice and spend the budget that
+      # every other section is fighting over.
+      job_search:             "a board; an owed follow-up is already on the agenda",
     }.freeze
 
     SECTIONS = SECTION_DECISIONS.select { |_key, why| why.nil? }.keys.freeze

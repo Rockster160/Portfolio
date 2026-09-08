@@ -24,6 +24,7 @@ module Buddy
       { name: :links,          path: "/chores/links",    about: "Record links - which record follows which. Add, edit, and remove them here" },
       { name: :lists,          path: "/lists",           about: "The index of every list. ONE list is linked from the `lists` block instead - its `url` template with that list's id - so link that, not this" },
       { name: :agenda,         path: "/agenda",          about: "The calendar and agenda items" },
+      { name: :interviews,     path: "/interviews",      feature: :job_search, about: "The job-application board - every application and its timeline of notes. ONE application is linked from the `job_search` block instead - its `url` template with that application's id" },
       { name: :prompts,        path: "/prompts",         about: "Survey and question history" },
       { name: :jil_tasks,      path: "/jil",             about: "Jil automation tasks - the editor" },
       { name: :jil_runs,       path: "/jil/executions",  about: "Recent Jil execution history" },
@@ -33,8 +34,12 @@ module Buddy
     def for_user(user)
       return [] if user.nil?
 
-      PAGES.reject { |page| page[:owner_only] && !owner?(user) }
-        .map { |page| { name: page[:name], url: url_for(page[:path]), about: page[:about] } }
+      pages = PAGES.reject { |page| page[:owner_only] && !owner?(user) }
+      # A page for a feature they don't hold is the same mistake as an
+      # owner-only one: the tool and the context section behind it are already
+      # gone, so a link to it is an invitation to a page that can only be empty.
+      pages = pages.reject { |page| page[:feature] && !Buddy::Features.enabled?(user, page[:feature]) }
+      pages.map { |page| { name: page[:name], url: url_for(page[:path]), about: page[:about] } }
     end
 
     def url_for(path)

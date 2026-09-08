@@ -384,7 +384,11 @@ module Buddy
       all_day:   "Something marked all day is simply ON today. Name it and say today; the clock has nothing to add to a date.",
       cancelled: "A cancelled thing is one of the most useful lines in a briefing: a normal thing NOT happening is a real heads-up. Say it plainly.",
       jobs:      "Jobs listed under one name are one job, and the job is what the DAY is: several bin chores make it trash day, so say \"it's trash day\".",
-      hot:       "A job with a multiplier on it is worth well above the usual today, which is worth some enthusiasm.",
+      # It rides on a job that is already being mentioned; it never puts one
+      # there. A multiplier is worth a few words of "and there's extra in it for
+      # you", not a line of its own and not a reason the job came up - see
+      # Buddy::Context#build_chore_buckets, where the pin decides nothing.
+      hot:       "A job with a multiplier on it pays that much over the odds today. Tack it onto the job in a few words, the way you'd point out there's extra in it for them - double points for getting that one done.",
       # Carries WEATHER_DIRECTIVE verbatim, and has to: Buddy::GPT::Turn decides
       # whether the briefing was GIVEN a forecast by looking for that exact
       # string in the seed, and reads the figures back off the reply on the

@@ -375,7 +375,7 @@ RSpec.describe Buddy::Compile do
 
     it "forbids storing an instruction where a fact belongs" do
       expect(instructions).to include("WRITE THE FACT, NOT A NOTE ABOUT THE FACT")
-      expect(instructions).to match(/nothing reads content and acts on it/)
+      expect(instructions).to match(/nothing reads content and\s+acts on it/)
     end
 
     it "says a correction is applied rather than kept" do
@@ -769,11 +769,33 @@ RSpec.describe Buddy::Compile do
         "The layoff is happening sooner than we thought",
         "her surgery is in three weeks",
         "she's still in hospital, doing okay for now",
+        "forgot the sleeping bags",
+        "clear out the pantry",
+        "that's in the house words too",
+        "do not remind her about this",
+        "check on this next week",
       ].select { |line| rules.include?(line) }
 
       expect(planted).to be_empty,
         "this prompt's output is stored facts, so an illustration in it can be " \
         "filed against somebody as a real one: #{planted.inspect}"
+    end
+
+    # The phrases a claim is RECOGNISED by are the opposite case and have to
+    # stay. They are read out of the companion's own past messages, they assert
+    # nothing about anybody, and without them the pass cannot tell a promise
+    # from small talk.
+    it "keeps the bare phrases a claim is spotted by" do
+      expect(rules).to include("I'll remember that", "I've set that")
+    end
+
+    # Every rule the cut illustrations were carrying, still stated.
+    it "loses no rule to the cutting" do
+      expect(rules).to include("especially with a lesson attached")
+      expect(rules).to include("EVERY ROW HAS TO STAND ALONE")
+      expect(rules).to include("WRITE THE FACT, NOT A NOTE ABOUT THE FACT")
+      expect(rules).to include("ONE MESSAGE CAN CARRY SEVERAL THINGS")
+      expect(rules).to include("CHECK WHAT THE COMPANION SAID IT DID")
     end
 
     it "hands over no phrase to avoid" do

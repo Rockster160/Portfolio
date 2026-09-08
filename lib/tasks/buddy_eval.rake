@@ -170,6 +170,15 @@ BUDDY_TOOL_PROBES = {
     effect_label: "the recycling completion is still there",
     effect:       ->(u, before) { BuddyEvalNeeds.completions(u, /recycl/i) == before.to_i - 1 },
   },
+  # The board is a different kind of record from everything else here, and the
+  # sentence deliberately sounds like something worth LOGGING rather than
+  # something worth remembering - which is exactly where log_event and
+  # stash_idea reach in and take it.
+  add_job_note:           {
+    say:   "Halloway Systems emailed back about my application, put that on the board",
+    avoid: %i[log_event stash_idea add_agenda_item],
+    needs: :halloway_application,
+  },
   chore_progress:         "did I get all my dailies done yesterday?",
   withdraw_pebbles:       "took 20 pebbles for the arcade",
   # "this morning" is a claim about the clock, and asked at half past midnight

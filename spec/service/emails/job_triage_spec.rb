@@ -195,11 +195,85 @@ RSpec.describe Emails::JobTriage do
       expect { described_class.triage!(email) }.not_to change(ByteMessage, :count)
     end
 
+    it "remembers the verdict on the email itself, yes or no" do
+      stub_model(verdict_json(job: true, kind: "application status", headline: "Netflix has it."))
+      described_class.triage!(email)
+
+      expect(email.reload.job_triage).to include(
+        job: true, kind: "application status", company: "Netflix",
+      )
+      expect(email.job_mail?).to be(true)
+      expect(email.job_triage[:at]).to be_present
+    end
+
+    it "remembers a no as firmly as a yes" do
+      pitch = verdict_json(
+        job: false, kind: "web design outreach", company: nil,
+        headline: "Someone wants to redesign the site."
+      )
+      stub_model(pitch)
+      described_class.triage!(email)
+
+      expect(email.reload.triaged?).to be(true)
+      expect(email.job_mail?).to be(false)
+    end
+
     it "bills the call to its own kind" do
       stub_model(verdict_json(job: true))
       described_class.triage!(email)
 
       expect(BuddyUsage.last.kind).to eq("job_triage")
+    end
+  end
+
+  # Mail that belongs to something already on the board is worth more than a
+  # card: it is the one moment the beat can be written down while it is in
+  # front of them.
+  describe "when the company is already on the board" do
+    let(:email) {
+      email!(
+        address: "no-reply@hire.lever.co", name: "Lever",
+        subject: "Thank you for your time with CSC Generation"
+      )
+    }
+
+    before do
+      JobApplication.where(user: user).destroy_all
+      JobApplication.create!(
+        user: user, company: "CSC Generation", status: :active,
+        color: JobApplication::COLORS.first
+      )
+      stub_model(verdict_json(
+                   job: true, kind: "application status",
+                   company: "CSC Generation, Inc.", headline: "CSC Generation followed up."
+      ))
+    end
+
+    it "hands Buddy a seed to speak from instead of posting a card" do
+      message = described_class.triage!(email)
+
+      expect(message.direction).to eq("outbound")
+      expect(message.body).to include("CSC Generation")
+      expect(message.body).to include("Email id: #{email.id}")
+      expect(message.body).to include("add_job_note")
+      expect(message.metadata.to_h["job_application_id"]).to be_present
+    end
+
+    # The seed says to offer, not to do. A beat logged without being asked is a
+    # tracker editing itself.
+    it "tells Buddy to offer rather than to log" do
+      message = described_class.triage!(email)
+
+      expect(message.body).to include("Don't log it unless they ask")
+    end
+
+    it "still posts a plain card when nothing on the board matches" do
+      JobApplication.where(user: user).destroy_all
+
+      message = described_class.triage!(email)
+
+      expect(message.direction).to eq("inbound")
+      expect(message.metadata.to_h["kind"]).to eq("system")
     end
   end
 end

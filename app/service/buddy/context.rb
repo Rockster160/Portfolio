@@ -10,10 +10,6 @@ module Buddy
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
 
-    # The multiplier every auto-pinned hot pick carries. At or below this, being
-    # "hot" says nothing about today — see build_chore_buckets.
-    ROUTINE_HOT_MULTIPLIER = 2
-
     # Cadences frequent enough that the person knows them cold. An agenda item
     # repeating on one of these is the shape of an ordinary week, not news about
     # this particular day — see notable?.
@@ -101,6 +97,7 @@ module Buddy
         record_links:           record_links(user),           # chore <-> event / list item / agenda pairings
         app_pages:              Buddy::AppPages.for_user(user), # real URLs, for when they ask where something is managed
         routines:               routines(user),                      # saved sequences one phrase runs end to end
+        job_search:             Buddy::JobHunt.context_for(user),    # live applications + the mail about them, for add_job_note
       }
     end
 
@@ -687,16 +684,29 @@ module Buddy
         # read out loud, so the bar is "worth interrupting someone with", not
         # "technically on today".
         #
-        # Two things clear it. A chore STAMPED due today and not a daily habit
-        # is the one nobody remembers on their own. And a hot pick ABOVE the
-        # routine multiplier is real news.
+        # One thing clears it: a chore STAMPED due today and not a daily habit,
+        # which is the one nobody remembers on their own. The schedule adds the
+        # rest a few lines down.
         #
-        # A plain 2x hot pick is not. Seven chores get pinned at 2x every single
-        # day - 144 of them across the three weeks to Aug 10, against three 5x
-        # ever - so that set IS the daily rotation wearing a different name each
-        # morning. Handing all seven over rebuilt the exact list this was meant
-        # to kill: Aug 10's briefing named six of them in a row, having been
-        # told in the same breath that a plain 2x isn't news.
+        # BEING PINNED IS NOT A REASON TO BE HERE. Rocco, 8 Sep: "we should just
+        # dump all of the hot picks from the briefing entirely. They've never
+        # worked well." Every attempt to draw the line somewhere inside them
+        # failed in a different direction. Handing all of them over rebuilt the
+        # read-out this method exists to prevent - seven get pinned at 2x every
+        # single morning, 144 across the three weeks to 10 Aug against three 5x
+        # ever, so that set IS the daily rotation wearing another name, and
+        # 10 Aug's briefing named six in a row having been told in the same
+        # breath that a plain 2x isn't news. Taking only the ones above the
+        # routine multiplier then hid a chore that was pinned AND genuinely due
+        # (prod, Tue 8 Sep, "Go get mail"), because the pin pulled it out of the
+        # schedule's reach and the multiplier test dropped it again.
+        #
+        # So the pin decides nothing here. What it still does is RIDE ALONG:
+        # `slim_chore` keeps `hot` on any row that earned its place some other
+        # way, and the `hot` writing rule turns that into the double-points
+        # aside. The multiplier is a detail about a job, never the reason a job
+        # is mentioned.
+        #
         # No cap on the result. A count is not what makes a briefing readable -
         # being right about what belongs in it is - and every ceiling tried here
         # either got ignored while the list was in front of the model, or cut
@@ -707,11 +717,10 @@ module Buddy
           # Rocco, 2026-09-04: "We should also just be removing the ChoreDaily
           # rotation items from the briefing. Those never need to be brought
           # up." That list is the person's own answer to "what do I do every
-          # day", so it leaves here unconditionally - a 5x hot pick on one is
-          # still a chore they were always going to do.
+          # day", so it leaves here unconditionally.
           next false if daily_ids.include?(id)
 
-          marked_today.include?(id) || hot_mults[id].to_f > ROUTINE_HOT_MULTIPLIER
+          marked_today.include?(id)
         }
 
         # And what the SCHEDULE puts on today.
@@ -739,7 +748,20 @@ module Buddy
         #
         # An overdue chore is still on the Today tab, still completable, still
         # in `overdue_backlog` and `all_names`. It is just not today.
-        due_today_ids += scheduled_ids.reject { |id| routine_cadence?(by_id[id]) }
+        #
+        # Read off `strictly_due_ids` and NOT `scheduled_ids`: that one has
+        # already had `intentional_ids` taken out of it, so a chore that was
+        # pinned as well as due went missing entirely - the pin removed it from
+        # here, and the pin was the only thing that could have put it back.
+        #
+        # Prod, Tue 8 Sep: "Go get mail" (chore 21, weekly on Tuesdays) was
+        # pinned at 2x that morning along with six others, and JOBS TODAY read
+        # "- Laundry" and nothing else. Rocco: "It's laundry day, yes, but I
+        # also need to go get the mail and that's a 'today' chore that got left
+        # off." The first Tuesday since JOBS TODAY existed at all.
+        due_today_ids += strictly_due_ids.reject { |id|
+          daily_ids.include?(id) || done_today_ids.include?(id) || routine_cadence?(by_id[id])
+        }
         due_today_ids = due_today_ids.uniq
 
         {

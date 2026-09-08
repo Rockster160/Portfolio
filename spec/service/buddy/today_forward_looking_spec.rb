@@ -434,8 +434,13 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(seed).to include("trash day")
     end
 
-    it "treats a multiplier as something worth some enthusiasm" do
-      expect(seed).to include("worth well above the usual today")
+    # The pin no longer puts a job on the list at all (see
+    # Buddy::Context#build_chore_buckets), so the only multipliers reaching this
+    # rule are riding on a job that earned its place some other way. It is an
+    # aside on that job, not a beat of its own.
+    it "treats a multiplier as a bonus on a job that is already being said" do
+      expect(seed).to include("pays that much over the odds today")
+      expect(seed).to include("double points")
     end
 
     it "asks for an emoji that's about something" do

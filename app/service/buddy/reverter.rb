@@ -36,6 +36,17 @@ module Buddy
       "ChoreCompletion"       => "ChoreCompletion",
       "ChoreWithdrawal"       => "ChoreWithdrawal",
       "ListItem"              => "ListItem",
+      # One beat on a job application. Notes are append-only the same way idea
+      # notes are, so undoing one really does delete it - and a note logged off
+      # a misread email is exactly the sort of thing that gets unchecked a
+      # second later.
+      "JobNote"               => "JobNote",
+      # Never created by a tool, only UPDATED: an `offer`/`rejected`/`withdrew`
+      # note settles the whole application, and JobNote#settle_application bails
+      # on destroy, so undoing the note alone would take the row away and leave
+      # the job marked rejected. add_job_note stashes a second descriptor
+      # putting the status back.
+      "JobApplication"        => "JobApplication",
       # A box or an item in the physical inventory — the same row either way.
       # Removing one takes everything inside it, so `remove_inventory_item`
       # stashes a `reverts:` LIST covering the whole subtree, parents first.
@@ -195,6 +206,7 @@ module Buddy
       # pool, off the prompt, still there if the undo gets undone.
       when "BuddyMemory"     then rec.update!(status: :dropped)
       when "BuddyMemoryNote" then rec.destroy!
+      when "JobNote"         then rec.destroy!
       # Archived, not destroyed. A chore owns its completions and its streak
       # history, and undoing "you just made this" must not take a month of
       # someone's record with it. Archiving is also what the Chores app itself
