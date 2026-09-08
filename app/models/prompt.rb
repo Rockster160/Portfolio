@@ -19,6 +19,9 @@ class Prompt < ApplicationRecord
   # one that fires no Jil trigger — so the form Buddy posted has to be closed
   # from here rather than from Buddy::PromptDelivery.dispatch.
   after_destroy_commit :settle_buddy_forms
+  # The count only moves correctly if every ending broadcasts, not just the
+  # arrival — answering and deleting both take one off the dashboard title.
+  after_commit :broadcast_pending_count
 
   scope :unanswered, -> { where(response: nil) }
 
@@ -37,5 +40,9 @@ class Prompt < ApplicationRecord
 
   def settle_buddy_forms
     ::Buddy::PromptDelivery.discard!(user, id)
+  end
+
+  def broadcast_pending_count
+    ::JarvisChannel.broadcast({ prompt_count: user.prompts.unanswered.count }, user)
   end
 end

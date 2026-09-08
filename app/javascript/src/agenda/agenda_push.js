@@ -2,6 +2,8 @@
 // /push_notification_subscribe (channel: "agenda"). Auto-recovers from iOS
 // subscription drops, respects the explicit opt-out flag.
 
+import { pushDeviceId } from "../support/push_device_id.js";
+
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 
@@ -99,6 +101,7 @@ export async function ensureAgendaServiceWorker() {
     localStorage.removeItem(OPT_OUT_KEY);
     const subscriptionData = subscription.toJSON();
     subscriptionData.channel = "agenda";
+    subscriptionData.device_id = pushDeviceId();
 
     await fetch("/push_notification_subscribe", {
       method: "POST",
@@ -164,6 +167,7 @@ export async function registerAgendaNotifications() {
 
     const subscriptionData = subscription.toJSON();
     subscriptionData.channel = "agenda";
+    subscriptionData.device_id = pushDeviceId();
 
     const response = await fetch("/push_notification_subscribe", {
       method: "POST",
@@ -193,6 +197,7 @@ export async function unregisterAgendaNotifications() {
     if (subscription) {
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "agenda";
+      subscriptionData.device_id = pushDeviceId();
       await fetch("/push_notification_unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

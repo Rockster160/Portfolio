@@ -488,8 +488,13 @@ class User < ApplicationRecord
     push_subs.for_channel(channel).where.not(registered_at: nil).order(registered_at: :desc).first
   end
 
+  # Newest first, because the fan-out is SERIAL and the device most recently
+  # seen is the one most likely to still be listening. Unordered, this came back
+  # in insertion order — every abandoned endpoint ahead of the live one, each
+  # costing up to READ_TIMEOUT seconds, with the phone in their pocket last in
+  # the queue and first to be lost to anything that cuts the process short.
   def all_push_subs_for_channel(channel)
-    push_subs.for_channel(channel).where.not(registered_at: nil)
+    push_subs.for_channel(channel).where.not(registered_at: nil).order(registered_at: :desc)
   end
 
   CHORE_NOTIFY_KINDS = %i[transfer_received own_goal_achieved other_goal_achieved chore_assigned].freeze

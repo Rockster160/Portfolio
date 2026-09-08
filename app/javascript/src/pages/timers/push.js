@@ -3,6 +3,8 @@
 // auto-recovery path. The actual subscription body is POSTed to the
 // existing /push_notification_subscribe endpoint with channel: "timers".
 
+import { pushDeviceId } from "../../support/push_device_id.js";
+
 const VAPID_PUBLIC_KEY = "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 const WORKER_URL = "/timers_worker.js";
 const WORKER_SCOPE = "/timers";
@@ -66,6 +68,7 @@ async function postSubscription(sub) {
       p256dh:   json.keys?.p256dh,
       auth:     json.keys?.auth,
       channel:  "timers",
+      device_id: pushDeviceId(),
     }),
   }).catch(() => null);
 }
@@ -102,7 +105,11 @@ export async function unsubscribeTimers() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": await csrfHeader() },
-        body: JSON.stringify({ endpoint: sub.endpoint, channel: "timers" }),
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          channel: "timers",
+          device_id: pushDeviceId(),
+        }),
       }).catch(() => null);
       await sub.unsubscribe();
     }

@@ -1,6 +1,8 @@
 // Whisper Push Notification Module
 // Mirrors the Jarvis push subscription logic for consistency
 
+import { pushDeviceId } from "../support/push_device_id.js";
+
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 
@@ -102,6 +104,7 @@ export async function ensureWhisperServiceWorker() {
 
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "whisper";
+      subscriptionData.device_id = pushDeviceId();
 
       await fetch("/push_notification_subscribe", {
         method: "POST",
@@ -191,6 +194,7 @@ export async function registerWhisperNotifications() {
     // This ensures proper base64url encoding of keys
     const subscriptionData = subscription.toJSON();
     subscriptionData.channel = "whisper";
+    subscriptionData.device_id = pushDeviceId();
 
     const response = await fetch("/push_notification_subscribe", {
       method: "POST",
@@ -227,6 +231,7 @@ export async function unregisterWhisperNotifications() {
       // Notify server to clear the subscription
       const subscriptionData = subscription.toJSON();
       subscriptionData.channel = "whisper";
+      subscriptionData.device_id = pushDeviceId();
 
       await fetch("/push_notification_unsubscribe", {
         method: "POST",

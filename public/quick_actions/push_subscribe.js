@@ -5,6 +5,26 @@ const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 const OPT_OUT_KEY = "jarvis-push-opted-out";
 
+// A stable name for THIS install, sent with every subscription so a re-issued
+// endpoint updates the device's existing row instead of filing a new device.
+// Copied from app/javascript/src/support/push_device_id.js — this file is
+// served raw, outside the bundle, so it can't import it. The KEY must match:
+// Jarvis, Agenda, Timers and Chores share the apex origin and so share this id.
+const DEVICE_ID_KEY = "push-device-id";
+
+function pushDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function checkJarvisNotificationStatus() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
   if (Notification.permission === "denied") return "blocked";
@@ -44,7 +64,10 @@ export async function ensureJarvisServiceWorker() {
           "Content-Type": "application/json",
           JarvisPushVersion: "2",
         },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          ...subscription.toJSON(),
+          device_id: pushDeviceId(),
+        }),
         credentials: "same-origin",
       });
     }
@@ -92,7 +115,10 @@ export default function registerNotifications() {
             JarvisPushVersion: "2",
             // "UserJWT": window.jwt,
           },
-          body: JSON.stringify(subscription),
+          body: JSON.stringify({
+            ...subscription.toJSON(),
+            device_id: pushDeviceId(),
+          }),
           credentials: "same-origin",
         });
       })

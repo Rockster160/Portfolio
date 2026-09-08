@@ -102,8 +102,8 @@ module Buddy
               summary:       { type: :string, description: "Three to six words" },
               severity:      { type: :integer, description: "0-100" },
               tags:          { type: :array, items: { type: :string } },
-              check_in_days: { type: :integer, description: "Days until this is worth asking about. Omit for none." },
-              relevant_days: { type: :integer, description: "Days until this becomes live at all. Omit for now." },
+              check_in_days: { type: :integer, description: "Days until you'd ask THEM about it, unprompted. The heavier it is the SOONER - a job loss or a bereavement is 1 or 2, never the date it happens. Omit for none." },
+              relevant_days: { type: :integer, description: "Days until the thing it is about has happened. A date in the future goes HERE and never in check_in_days; nothing asks before it. Omit for now." },
               expires_days:  { type: :integer, description: "Days until it stops being true. Omit for a lasting fact." },
             },
             required:   %w[kind content],
@@ -153,15 +153,23 @@ module Buddy
           name:        "set_check_in",
           strict:      false,
           description: "Arm, move or clear when a follow-up is worth asking about. Pass no days " \
-                       "to stop asking.",
+                       "to stop asking. Moving one CLOSER is as much a use of this as pushing it " \
+                       "back: news that made something sooner, heavier or realer belongs here as " \
+                       "fewer days.",
           parameters:  {
             type:       :object,
             properties: {
-              id:   { type: :integer },
-              days: { type: :integer, description: "Days from now. Omit to clear." },
+              id:            { type: :integer },
+              days:          { type: :integer, description: "Days from now until you'd ask THEM about it. Omit to clear." },
+              # Without this, "her surgery moved to October" had nowhere to go:
+              # `days` is bounded by BuddyMemory::CHECK_IN_HORIZON for anything
+              # heavy, so a distance put there gets pulled back in. The distance
+              # to an EVENT belongs on this field, which the horizon cannot
+              # reach — the same split write_memory already has.
+              relevant_days: { type: :integer, description: "Days until the thing it is about has happened. Nothing asks before this. Use it for a date, never `days`." },
               # The only one of the note-taking arguments that had no
               # description, and the only one that has landed on the wrong row.
-              note: { type: :string, description: "Why you're asking again about THIS one, one sentence. It is filed on that row and read back with it, so it has to be about that thing and nothing else." },
+              note:          { type: :string, description: "Why you're asking again about THIS one, one sentence. It is filed on that row and read back with it, so it has to be about that thing and nothing else." },
             },
             required:   %w[id],
           },
@@ -348,8 +356,10 @@ module Buddy
       # Checked before `save!`, because `arm` only assigns.
       def set_check_in(args)
         memory = find!(args)
+        # Before `arm`, because `arm` maxes the check-in against it.
+        memory.relevant_at = Buddy::Compile.days_from(args["relevant_days"], @now) if args.key?("relevant_days")
         arm(memory, args["days"])
-        armed = memory.check_in_at_changed?
+        armed = memory.check_in_at_changed? || memory.relevant_at_changed?
         memory.save!
         note = args["note"].to_s.strip
         memory.notes.create!(body: note, source: :companion) if armed && note.present?
@@ -370,13 +380,21 @@ module Buddy
       # Asking about something is the expensive act here — it interrupts them —
       # so a check-in on trivia is refused however plainly it was asked for, and
       # never lands before the thing it is about is live.
+      #
+      # Bounded at BOTH ends. The floor refuses one on something too small to
+      # interrupt for; the horizon refuses to leave something big waiting for
+      # months. `relevant_at` is outside both, by the `max` below — a heavy
+      # thing dated three weeks out still lands on the far side of the thing it
+      # is about, because the distance is on THAT field and not on this one.
       def arm(memory, days)
         return memory.check_in_at = nil if days.blank?
 
         memory.kind = :followup if memory.kind_concept?
         return memory.check_in_at = nil if memory.severity.to_i < BuddyMemory::CHECK_IN_FLOOR
 
-        base = [Buddy::Compile.days_from(days, @now), memory.relevant_at].compact.max || @now
+        horizon = memory.check_in_horizon_days
+        asked   = horizon ? [days.to_i, horizon].min : days
+        base    = [Buddy::Compile.days_from(asked, @now), memory.relevant_at].compact.max || @now
         memory.check_in_at = Buddy::CheckIns.place(base, user: @user, now: @now)
       end
     end

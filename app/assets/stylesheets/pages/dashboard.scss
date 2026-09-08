@@ -8,6 +8,7 @@ $active: #337BCD;
 $passive: #1F4A7B;
 $grey-blue: #6481A1;
 $complimentary: #F8B05D;
+$red: #E91616; // dash_colors.red
 $text-color: darken($grey-blue, 20%);
 
 @mixin animate() {
@@ -182,6 +183,11 @@ $text-color: darken($grey-blue, 20%);
         padding: 0 5px;
         height: $dash-font-height;
         line-height: $dash-font-height;
+      }
+
+      .dash-title-count {
+        color: $red;
+        font-weight: normal;
       }
     }
 

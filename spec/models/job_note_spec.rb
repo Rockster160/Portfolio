@@ -27,6 +27,23 @@ RSpec.describe JobNote do
 
       expect(note.body).to be_nil
     end
+
+    # Indentation is how someone hangs sub-notes off a line. `strip` took it off
+    # the FIRST line and left it on the rest, which is ragged in exactly the
+    # case the indentation was there for.
+    it "keeps the indentation, including on the first line" do
+      note = job.notes.create!(body: "\n\n    Call notes:\n      - asked about Rails\n\n")
+
+      expect(note.body).to eq("    Call notes:\n      - asked about Rails")
+    end
+
+    # Pasted email arrives full of CRLF, and a stray \r is one more invisible
+    # character to reason about later.
+    it "normalizes Windows line endings" do
+      note = job.notes.create!(body: "Hi Rocco,\r\n\r\nMonday works.")
+
+      expect(note.body).to eq("Hi Rocco,\n\nMonday works.")
+    end
   end
 
   describe "defaults" do

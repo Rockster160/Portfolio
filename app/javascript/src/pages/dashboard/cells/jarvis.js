@@ -26,6 +26,14 @@ import { toggleMute } from "../vars";
     renderLines(history);
   };
 
+  // Runs on init and again whenever the socket reconnects, so a prompt that
+  // arrived or was answered while the dashboard was disconnected still lands.
+  let syncPending = function () {
+    Server.get("/jarvis/sync_badge").then(function (resp) {
+      cell.titleCount(JSON.parse(resp).count);
+    });
+  };
+
   cell = Cell.register({
     title: "Jarvis",
     wrap: true,
@@ -33,7 +41,12 @@ import { toggleMute } from "../vars";
       this.data.scroll = 0;
       renderLines();
     },
+    reloader: syncPending,
     socket: Server.socket("JarvisChannel", function (msg) {
+      if (msg.prompt_count != undefined) {
+        return cell.titleCount(msg.prompt_count);
+      }
+
       if (msg.data) {
         console.log(msg.data);
       }

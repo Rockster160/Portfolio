@@ -104,6 +104,93 @@ RSpec.describe Buddy::Compile::Toolbox do
       expect(memory.check_in_at).to be >= memory.relevant_at
     end
 
+    # Rocco, 8 Sep: "when I told Buddy I'd be losing my job, the check-in was
+    # scheduled months away. It's usually best to check in on somebody sooner
+    # rather than later." `buddy_memories` 61, severity 86, "out of a job before
+    # the end of the year" — read as a date the answer is December, read as a
+    # person it is tomorrow.
+    describe "how long something heavy may be left" do
+      it "will not leave one of the big ones sitting for months" do
+        box.call("write_memory", {
+          "kind"          => "followup",
+          "content"       => "Rocco was told he will be out of a job before the end of the year.",
+          "severity"      => 86,
+          "check_in_days" => 96,
+        })
+
+        memory = BuddyMemory.where(user: user).last
+        expect(memory.check_in_at).to be < 3.days.from_now
+      end
+
+      it "leaves a middling one a week and a light one a month" do
+        box.call("write_memory", { "kind" => "followup", "content" => "The deck project stalled.", "severity" => 60, "check_in_days" => 90 })
+        box.call("write_memory", { "kind" => "followup", "content" => "They are learning to bake bread.", "severity" => 30, "check_in_days" => 90 })
+
+        middling, light = BuddyMemory.where(user: user).order(:id).last(2)
+        expect(middling.check_in_at).to be_between(6.days.from_now, 9.days.from_now)
+        expect(light.check_in_at).to be_between(29.days.from_now, 32.days.from_now)
+      end
+
+      # The bound is on the freehand distance, never on the date. A dated thing
+      # keeps its slot on the far side of the thing it is about — which is the
+      # whole reason the prompt insists a future date goes in `relevant_days`.
+      it "still holds a heavy dated one until the thing has happened" do
+        box.call("write_memory", {
+          "kind"          => "followup",
+          "content"       => "Their mother has surgery on Wed 30 Sep 2026.",
+          "severity"      => 90,
+          "relevant_days" => 22,
+          "check_in_days" => 23,
+        })
+
+        memory = BuddyMemory.where(user: user).last
+        expect(memory.check_in_at).to be >= memory.relevant_at
+        expect(memory.check_in_at).to be > 21.days.from_now
+      end
+
+      it "asks sooner than it was told to, never later" do
+        box.call("write_memory", { "kind" => "followup", "content" => "A bereavement in the family.", "severity" => 95, "check_in_days" => 0 })
+
+        expect(BuddyMemory.where(user: user).last.check_in_at).to be < 2.days.from_now
+      end
+    end
+
+    # New information can make a waiting one urgent, and the tool has to be able
+    # to say so in both directions.
+    describe "moving one that is already waiting" do
+      let!(:memory) {
+        user.buddy_memories.create!(
+          kind: :followup, content: "Out of a job before the end of the year.",
+          severity: 86, check_in_at: 96.days.from_now,
+        )
+      }
+
+      it "pulls it in when the news got closer" do
+        box.call("set_check_in", { "id" => memory.id, "days" => 1, "note" => "The last day is now 11 Sep." })
+
+        expect(memory.reload.check_in_at).to be < 3.days.from_now
+        expect(memory.notes.pluck(:body)).to eq(["The last day is now 11 Sep."])
+      end
+
+      # Without this the horizon would have nowhere to yield to: `days` is
+      # bounded for anything heavy, so "her surgery moved to October" had no
+      # field left that could hold the distance.
+      it "can push one past an event that moved" do
+        box.call("set_check_in", { "id" => memory.id, "relevant_days" => 40, "days" => 1 })
+
+        memory.reload
+        expect(memory.relevant_at).to be_within(1.day).of(40.days.from_now)
+        expect(memory.check_in_at).to be >= memory.relevant_at
+      end
+
+      it "tells the model this is for moving one closer too" do
+        schema = described_class.schemas.find { |t| t[:name] == "set_check_in" }
+
+        expect(schema[:description]).to include("CLOSER")
+        expect(schema.dig(:parameters, :properties, :relevant_days, :description)).to include("never `days`")
+      end
+    end
+
     it "clears one when no days are given" do
       memory = user.buddy_memories.create!(kind: :followup, content: "Their cat is in hospital.", severity: 70, check_in_at: 2.days.from_now)
 

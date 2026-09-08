@@ -424,6 +424,17 @@ RSpec.describe "Interview tracker", type: :request do
       expect(back).to be < response.body.index("app-card-container")
     end
 
+    # `simple_format` collapsed leading spaces on sight, so aligned sub-notes
+    # arrived on the page squashed against the margin.
+    it "prints a note's indentation verbatim" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(body: "Call notes:\n      - asked about Rails")
+
+      get interview_path(job)
+
+      expect(response.body).to include("Call notes:\n      - asked about Rails")
+    end
+
     # Where the application stands is the last thing that happened, so it goes
     # at the top rather than at the end of a long scroll.
     it "shows the newest note first" do

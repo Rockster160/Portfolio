@@ -395,7 +395,16 @@ module Buddy
       week_sky:  "Any day this week worth a heads-up gets a short one.",
       alpine:    "Alpine only ever comes up when the canyon is wet, so it's news by the time you're reading it. Give the hours wherever there are hours and the day on its own where there aren't. A plunge window is floated once and lightly, as something the day has room for.",
       waiting:   "Somebody in the house asked them something and it's still sitting there. Say who asked and what, so they can answer it.",
-      week:      "The week gets at most one line, and only for something close enough or remarkable enough to earn it.",
+      # NOT a cap. `facts[:week]` is already `upcoming_notable` - the ordinary
+      # week has been taken out by `notable?` before the model ever sees it -
+      # so a second selection here throws away work that was already done, and
+      # it contradicts "All of it reaches them" three lines above it in the
+      # same prompt. There is no reading that satisfies both, and on 7 Sep the
+      # two companions split it two different ways off the identical section:
+      # Byte kept three of four and dropped `Jake 30th Surprise Bday` (5602),
+      # Moss kept all five (5610). Same event, same morning, told to one house
+      # and not the other.
+      week:      "The week's already down to its exceptions, so every one of them reaches them - a few words each, the name and the day.",
       stash:     "Occasionally, and not most days, float one of the things on their mind. Light, one at a time, easy to wave off.",
     }.freeze
 

@@ -206,6 +206,19 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(seed).to include("- tomorrow · 6:00 PM · Drinks out")
     end
 
+    # The section is already `upcoming_notable` — `notable?` has taken the
+    # ordinary week out before the model sees any of it — so a cap on top of
+    # it re-does a selection that was made, and it contradicts "All of it
+    # reaches them" three lines above in the same prompt. Prod, 7 Sep: off the
+    # identical section Byte kept three of four and dropped a surprise 30th
+    # birthday (5602), Moss kept all five (5610). Neither is wrong against the
+    # prompt as it was written, which is the tell.
+    it "does not also ask the week to be cut down" do
+      expect(seed).to include("All of it reaches them")
+      expect(seed).not_to include("at most one line")
+      expect(seed).to include("every one of them reaches them")
+    end
+
     # Rocco, 2026-09-04: "'You have yoga tomorrow' is absolutely incorrect.
     # 'Chelsea has yoga tomorrow' is accurate and acceptable." The owner leads
     # the title, so the row reads as hers before the model has written a word.

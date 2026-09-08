@@ -1,3 +1,14 @@
+# Prod 5513: told the forecast was for the wrong town, the reply agreed, said it
+# was corrected and promised to use the other town from then on. Nothing was
+# corrected and nothing was recorded — home weather is one hardcoded coordinate
+# (WeatherService::HOME_LAT/HOME_LNG) for every user, and the wrong town had
+# come out of a briefing repair rather than out of anybody's location.
+#
+# The incident is HERE and not in the description on purpose. What escaped was a
+# quoted sentence in Buddy's own voice, and quoting it into a prompt to warn
+# against it is how it gets said again — see
+# `spec/service/buddy/personality_spec.rb`, where a list of exactly these is
+# kept by hand.
 Buddy::Tools.register(
   name:        :check_weather,
   description: <<~TXT,
@@ -14,11 +25,9 @@ Buddy::Tools.register(
     Home is a FIXED point and nothing here can move it. If they say the forecast
     is for the wrong town, say plainly that home weather comes from one set
     location you can't change from a chat, tell them which place you were
-    actually reading, and offer `request_feature`. Prod 5513: told "I don't live
-    in Alpine! We live in Herriman!", the answer was "I've got it corrected now,
-    and I'll stick to Herriman for your weather from here on out" - nothing was
-    corrected, nothing was recorded, and the Alpine line had come from a
-    briefing repair rather than from anybody's location.
+    actually reading, and offer `request_feature`. Never accept a correction to
+    it - agreeing to use somewhere else records nothing and changes nothing, so
+    the next answer comes from the same place as the last one.
 
     The reading comes straight back to you in this same turn, so tell them right
     away rather than saying you'll go peek - warm and brief, factoring in

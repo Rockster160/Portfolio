@@ -34,8 +34,14 @@ RSpec.describe "Byte push badge" do
       expect(result["badgeCleared"]).to be(false)
     end
 
-    it "still suppresses the banner, as it always did" do
-      expect(result["notified"]).to be_nil
+    # It used to suppress the banner here, and that is what was eating the
+    # subscriptions: a push handler that shows nothing breaks the
+    # `userVisibleOnly` promise, and WebKit answers by revoking the whole
+    # subscription. The decision belongs on the server, where ByteNotifier
+    # already drops the devices actually reading the thread — so a push that
+    # reaches the worker at all has been judged worth showing.
+    it "shows the banner anyway, because the server already decided" do
+      expect(result["notified"]).to include("title" => "Kettle's done")
     end
   end
 

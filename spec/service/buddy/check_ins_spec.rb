@@ -271,6 +271,52 @@ RSpec.describe Buddy::CheckIns do
     end
   end
 
+  # Prod 5624-5628, 7 Sep: five hidden seeds byte-identical to each other,
+  # created inside 25 ms, all carrying memory_id 141, and five differently
+  # worded asks about the same recruiter request pushed to the phone at
+  # 6:00:0x PM. Five jobs, five model calls, one question.
+  describe "one question, asked once" do
+    it "does not stack a second job when the re-plan settled on the same moment" do
+      Sidekiq::Testing.fake! do
+        memory = followup("the cat is in hospital")
+        BuddyCheckInWorker.clear
+        described_class.replan!(user)
+        placed = memory.reload.check_in_at
+        expect(BuddyCheckInWorker.jobs.size).to eq(1)
+
+        described_class.replan!(user)
+
+        expect(BuddyCheckInWorker.jobs.size).to eq(1)
+        expect(memory.reload.check_in_at).to eq(placed)
+      end
+    end
+
+    it "still queues one when the placement actually moves" do
+      Sidekiq::Testing.fake! do
+        memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
+        BuddyCheckInWorker.clear
+
+        described_class.replan!(user)
+
+        expect(BuddyCheckInWorker.jobs.size).to eq(1)
+        expect(memory.reload.check_in_at).to be > Time.current
+      end
+    end
+
+    # The gate in BuddyCheckInWorker reads `check_in_at` and then acts on it,
+    # so two jobs that popped together are both past it before either clears
+    # the column. The clear has to be the claim.
+    it "delivers once when two jobs reach it holding the same time" do
+      memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
+      second = BuddyMemory.find(memory.id)
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+
+      expect(described_class.fire!(memory)).to eq(:fired)
+      expect(described_class.fire!(second)).to eq(:duplicate)
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).once
+    end
+  end
+
   describe "ignored dies, answered can re-arm" do
     it "does not ask a second time on its own once it has asked" do
       memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)

@@ -100,13 +100,32 @@ Cell.loadConfig = function (all_config) {
     Cell.initByName(name, config);
   }
 };
+Cell.prototype.renderTitle = function () {
+  var span = this.ele.children(".dash-title").children("span");
+  span.text(this.my_title);
+  if (this.my_title_count) {
+    span.append(
+      $("<b>", { class: "dash-title-count" }).text(
+        " (" + this.my_title_count + ")",
+      ),
+    );
+  }
+  return this;
+};
 Cell.prototype.title = function (new_title) {
   if (new_title == undefined) {
     return this.my_title;
   } else {
     this.my_title = new_title;
-    this.ele.children(".dash-title").children("span").text(new_title);
-    return this;
+    return this.renderTitle();
+  }
+};
+Cell.prototype.titleCount = function (new_count) {
+  if (new_count == undefined) {
+    return this.my_title_count;
+  } else {
+    this.my_title_count = parseInt(new_count) || 0;
+    return this.renderTitle();
   }
 };
 Cell.prototype.text = function (new_text) {

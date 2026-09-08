@@ -92,6 +92,28 @@ class BuddyMemory < ApplicationRecord
   # still be recalled, searched and used — it just isn't worth interrupting for.
   CHECK_IN_FLOOR = 25
 
+  # The mirror of the floor, and it exists for the same reason: the floor says
+  # a small thing is never worth interrupting for, and this says a big one is
+  # never left for months before anybody asks.
+  #
+  # Rocco, 8 Sep: "when I told Buddy I'd be losing my job, the check-in was
+  # scheduled months away. It's usually best to check in on somebody sooner
+  # rather than later." `buddy_memories` 61, severity 86, written 19 Aug — "out
+  # of a job before the end of the year." Read as a date, the answer is
+  # December; read as a person, the answer is tomorrow. The prompt now says so,
+  # and this is what holds when it doesn't.
+  #
+  # It bounds the FREEHAND distance only. `relevant_at` still wins the max in
+  # `Buddy::Compile::Toolbox#arm`, so a genuinely dated thing — surgery in three
+  # weeks — keeps its slot on the far side of the surgery. Which is also why
+  # the prompt insists a future date belongs in `relevant_days`: that is the
+  # field this deliberately cannot reach.
+  CHECK_IN_HORIZON = {
+    71..100 => 2,    # the big ones: job loss, illness, bereavement
+    51..70  => 7,
+    25..50  => 30,
+  }.freeze
+
   validates :content, presence: true, length: { maximum: MAX_CONTENT }
   validates :summary, length: { maximum: MAX_SUMMARY }, allow_nil: true
   validates :severity, inclusion: { in: SEVERITY_RANGE }
@@ -259,6 +281,12 @@ class BuddyMemory < ApplicationRecord
   # Worth PLANNING a check-in for: a live follow-up that clears the severity
   # floor. Deliberately says nothing about `relevant_at` — next week's surgery
   # very much needs a slot, it just needs one on the far side of the surgery.
+  # The longest this may wait before it is asked about, in days, or nil when
+  # nothing is heavy enough to bound.
+  def check_in_horizon_days
+    CHECK_IN_HORIZON.find { |band, _days| band.cover?(severity.to_i) }&.last
+  end
+
   def check_in_plannable?
     kind_followup? && (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR
   end

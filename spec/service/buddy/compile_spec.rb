@@ -714,6 +714,79 @@ RSpec.describe Buddy::Compile do
 
       expect(fake.calls.first.input.first[:content]).to include("##{mood_check.id}", "Rough day")
     end
+
+    # Rocco, 8 Sep: "when I gave more info saying that the layoff was happening
+    # sooner than anticipated, the check-in likely should have been moved to a
+    # much sooner time." It was shown the row and not the date on it, so it had
+    # nothing to judge "too far out" against and pulling it in was never a move
+    # it was in a position to make.
+    it "says when each pending follow-up is due, and how heavy it is" do
+      mood_check.update!(check_in_at: 96.days.from_now, severity: 86)
+      flare
+      fake = stub_quiet
+
+      described_class.run!(convo)
+
+      brief = fake.calls.first.input.first[:content]
+      expect(brief).to match(/in 9[56] days/)
+      expect(brief).to include("sev 86")
+    end
+
+    it "says so plainly when one is due tomorrow" do
+      mood_check.update!(check_in_at: 1.day.from_now.change(hour: 18))
+      flare
+      fake = stub_quiet
+
+      described_class.run!(convo)
+
+      expect(fake.calls.first.input.first[:content]).to include("[tomorrow,")
+    end
+  end
+
+  # What this pass writes is RECORDS, not replies, and that changes what a
+  # quoted illustration costs. A sample sentence in a reply prompt comes back
+  # out as a sentence somebody reads once; the same sentence here comes back out
+  # as a memory, a check-in or a note, filed against a real person and read as
+  # fact for weeks afterwards.
+  #
+  # The three below were written on 8 Sep and cut the same day, before they ever
+  # ran: two of them described Rocco's actual situation almost word for word, so
+  # a copy filed against Eve or Chelsea would have been indistinguishable from
+  # something they had said. The fourth is the older shape - a phrase named in
+  # order to forbid it, which `today_forward_looking_spec` has already
+  # established is still a phrase handed over.
+  #
+  # Every rule they were carrying survived being DESCRIBED instead of quoted,
+  # which is the whole of the fix and cost no rules. See
+  # `spec/service/buddy/personality_spec.rb` for the same list on the always-on
+  # prompt, where the sentences had actually escaped.
+  describe "what the pass is handed to write records from" do
+    let(:rules) { described_class::INSTRUCTIONS }
+
+    it "hands over no circumstance a person could be given by mistake" do
+      planted = [
+        "I'm out of a job on 11 Sep",
+        "The layoff is happening sooner than we thought",
+        "her surgery is in three weeks",
+        "she's still in hospital, doing okay for now",
+      ].select { |line| rules.include?(line) }
+
+      expect(planted).to be_empty,
+        "this prompt's output is stored facts, so an illustration in it can be " \
+        "filed against somebody as a real one: #{planted.inspect}"
+    end
+
+    it "hands over no phrase to avoid" do
+      expect(rules).not_to match(/do not ask about|never say|avoid saying/i)
+    end
+
+    # The point of cutting them: describing a rule keeps it.
+    it "still says which way heavy things go, and which field a date belongs in" do
+      expect(rules).to include("NOT TO THE DATE")
+      expect(rules).to include("The big ones")
+      expect(rules).to include("A DATE IN THE FUTURE IS `relevant_days`")
+      expect(rules).to include("FEWER days")
+    end
   end
 
   describe "the check-in floor" do

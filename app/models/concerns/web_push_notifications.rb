@@ -81,7 +81,13 @@ module WebPushNotifications
     # this line dropped every count-only push before it was sent.
     return if payload[:title].blank? && !payload[:dismiss] && !payload.key?(:count) && payload[:data].blank?
 
-    message = format_payload(user, payload, channel).to_json
+    formatted = format_payload(user, payload, channel)
+    # Whatever the badge is being set to, it is now what the device believes —
+    # which is what `push_badge` compares against to decide whether a clear is
+    # worth a push of its own.
+    record_badge(user, formatted.dig(:data, :count), channel: channel)
+
+    message = formatted.to_json
     urgency = payload[:dismiss] ? DISMISS_URGENCY : URGENCY
     # One device failing must not cost the others their notification, so each
     # send is isolated. A dead subscription is retired on the spot.
@@ -132,8 +138,51 @@ module WebPushNotifications
     send_to(user, { dismiss: true, tag: tag }, channel: channel)
   end
 
+  # Every subscription here is created with `userVisibleOnly: true`, which is a
+  # promise that a push results in something the person can see. WebKit enforces
+  # it: a worker that takes a push and shows no notification gets the whole
+  # SUBSCRIPTION revoked, and the device comes back with a new endpoint.
+  #
+  # A badge-only push shows nothing by design, so a stream of them is a stream
+  # of broken promises. That is what happened: from 2026-09-03, when a titleless
+  # payload was first let through and a silent push went out on every READ,
+  # endpoints stopped lasting weeks and started lasting minutes. A 845-day-old
+  # Jarvis subscription died the same evening.
+  #
+  # So the count RIDES ALONG on notifications that show something — `send_to`
+  # attaches it for Jarvis and ByteNotifier passes it for Byte — and the only
+  # push spent on the badge alone is the fall to zero, once, on the edge. A
+  # count that is still zero was already cleared; sending it again buys nothing
+  # and costs the subscription.
+  # `UserCache`, not `Rails.cache`: the number a device is currently wearing has
+  # to be readable from whichever process handles the next read, and it has to
+  # survive a restart. A badge that forgets itself is a badge that never clears.
+  BADGE_CACHE_KEY = :push_badge
+
   def update_count(user, count=nil)
-    send_to(user, { count: count || user_counts(user) })
+    push_badge(user, count || user_counts(user))
+  end
+
+  def push_badge(user, count, channel: :jarvis)
+    return if user.blank?
+
+    count    = count.to_i
+    previous = user.caches.dig(BADGE_CACHE_KEY, channel.to_sym)
+    # Recorded BEFORE the guards, so a second read landing at the same moment
+    # sees zero and doesn't send a second copy of the same clear.
+    record_badge(user, count, channel: channel)
+    return if count.positive?
+    # Unknown is not the same as non-zero. With nothing recorded there is no
+    # edge to be on, and guessing means a silent push on every read again.
+    return if previous.blank? || previous.to_i.zero?
+
+    send_to(user, { count: 0 }, channel: channel)
+  end
+
+  def record_badge(user, count, channel: :jarvis)
+    return if user.blank? || count.nil?
+
+    user.caches.dig_set(BADGE_CACHE_KEY, channel.to_sym, count.to_i)
   end
 
   def user_counts(user)

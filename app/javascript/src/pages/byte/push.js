@@ -5,6 +5,8 @@
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 
+import { pushDeviceId } from "../../support/push_device_id.js";
+
 const CHANNEL = "byte";
 const WORKER_URL = "/byte_worker.js";
 const OPT_OUT_KEY = "byte-push-opted-out";
@@ -32,6 +34,7 @@ async function getSubscription() {
 async function syncSubscription(subscription) {
   const data = subscription.toJSON();
   data.channel = CHANNEL;
+  data.device_id = pushDeviceId();
 
   return fetch("/push_notification_subscribe", {
     method: "POST",
@@ -147,6 +150,7 @@ export async function unregisterByteNotifications() {
     if (subscription) {
       const data = subscription.toJSON();
       data.channel = CHANNEL;
+      data.device_id = pushDeviceId();
       await fetch("/push_notification_unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

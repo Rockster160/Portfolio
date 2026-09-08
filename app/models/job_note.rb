@@ -148,10 +148,23 @@ class JobNote < ApplicationRecord
 
   def normalize_fields
     self.occurred_at ||= Time.current
-    self.body     = body.to_s.strip.presence
+    self.body     = tidy_body
     self.source   = source.to_s.strip.presence
     self.url      = url.to_s.strip.presence
     self.spoke_to = spoke_to.to_s.strip.presence
+  end
+
+  # Blank lines off the top and bottom, and nothing else. `strip` was doing this
+  # job and taking the FIRST line's indentation with it, so a block pasted in
+  # already indented came out with line one flush and the rest hanging — ragged
+  # in exactly the case the indentation was there to serve.
+  #
+  # CRLF is normalised because pasted email arrives full of it, and a stray \r
+  # is one more invisible character to reason about later.
+  def tidy_body
+    text = body.to_s.gsub(/\r\n?/, "\n")
+    text = text.sub(/\A(?:[ \t]*\n)+/, "")
+    text.sub(/\s+\z/, "").presence
   end
 
   # A follow-up isn't a second reminder system — it's an agenda task, so the

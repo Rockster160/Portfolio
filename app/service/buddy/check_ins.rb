@@ -119,11 +119,21 @@ module Buddy
       ordered(pending, now).each { |memory|
         earliest = [cursor && (cursor + MIN_GAP), memory.relevant_at, memory.check_in_at, now].compact.max
         placed   = place(earliest, user: user, now: now)
+        moved    = memory.check_in_at != placed
         memory.update_columns(check_in_at: placed, updated_at: Time.current)
-        # Scheduled per-record. A record whose time moved gets a second job; the
-        # worker re-reads the column, so the earlier one finds a time that has
-        # drifted and reschedules rather than firing early.
-        BuddyCheckInWorker.perform_at(placed, memory.id)
+        # Scheduled per-record, and ONLY when the placement actually moved. A
+        # record whose time moved gets a second job; the worker re-reads the
+        # column, so the earlier one finds a time that has drifted and exits.
+        #
+        # `place` is idempotent, so a re-plan that settled on the same moment
+        # used to stack another job at the identical `perform_at` - and a
+        # follow-up that survives several compile passes while armed collected
+        # one per pass. Prod: buddy_memories 141 was re-planned five times on
+        # 4 Sep and asked the same question five separate times at 6:00:0x PM
+        # on the 7th (5624-5628) - five model calls, five pushes, one question.
+        # A record that is genuinely due always moves, because `now` is in the
+        # `earliest` max, so nothing that needs a job goes without one.
+        BuddyCheckInWorker.perform_at(placed, memory.id) if moved
         cursor = placed
       }
     end
@@ -186,7 +196,7 @@ module Buddy
     #   2. No longer worth asking. Resolved, dropped, or severity fallen away
     #      since it was armed — then it closes rather than fires.
     #
-    # Returns :fired, :deferred, or :closed.
+    # Returns :fired, :deferred, :duplicate, or :closed.
     def fire!(memory, now: Time.current)
       user = memory.user
       return close!(memory) unless memory.check_in_candidate?(now)
@@ -200,7 +210,6 @@ module Buddy
       end
 
       deliver!(memory, user, now)
-      :fired
     rescue StandardError => e
       Buddy::Errors.report(
         section: "check_ins.fire", exception: e, user: memory.user, extra: { memory_id: memory.id },
@@ -218,9 +227,28 @@ module Buddy
     # view. `checked_in_at` is stamped here and is a LAST-CHECKED mark, not a
     # seal: an answer can re-arm `check_in_at` and ask again another day. What
     # never happens is a second unprompted ask about a check-in they ignored.
+    #
+    # The clear is also the CLAIM, and that is the only thing standing between
+    # one check-in and several deliveries of it. `BuddyCheckInWorker#perform`
+    # reads `check_in_at` and then acts on it with nothing in between, so two
+    # jobs for the same record both pass the gate. Conditioning the write on
+    # the value this worker read makes exactly one of them the winner; a loser
+    # finds no row to update and stops here rather than composing a second turn.
+    #
+    # Returns :fired, or :duplicate when it lost the claim.
     def deliver!(memory, user, now)
+      # A blank one is nothing to claim - somebody already took it - and
+      # `where(check_in_at: nil)` would happily match the row they cleared.
+      expected = memory.check_in_at
+      return :duplicate if expected.blank?
+
+      claimed = BuddyMemory.where(id: memory.id, check_in_at: expected).update_all(
+        check_in_at: nil, checked_in_at: now, updated_at: Time.current,
+      )
+      return :duplicate if claimed.zero?
+
+      memory.reload
       conversation = Buddy::CompanionRelay.conversation_for(user)
-      memory.update_columns(check_in_at: nil, checked_in_at: now, updated_at: Time.current)
 
       Buddy::CompanionDelivery.deliver_prompt(
         user:         user,
@@ -230,6 +258,7 @@ module Buddy
           kind: "buddy_trigger", hidden: true, source: "check_in", memory_id: memory.id
         },
       )
+      :fired
     end
 
     def seed(memory, now)

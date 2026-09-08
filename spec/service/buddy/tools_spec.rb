@@ -191,4 +191,37 @@ RSpec.describe Buddy::Tools do
       expect(out).to eq(chore: "dishes", count: 2)
     end
   end
+
+  # Every description here is prompt-resident on any turn that offers its tool,
+  # so it is the same surface `spec/service/buddy/personality_spec.rb` sweeps on
+  # the always-on prompt, and it fails the same way: a sentence in Buddy's own
+  # voice, quoted to warn against it, gets said again. `check_weather` carried
+  # the prod 5513 reply verbatim for a day - a promise to use a different town
+  # for the forecast, which nothing in the system can do.
+  #
+  # Quotes in THEIR voice are the opposite and belong here: `move_reminder` is
+  # mostly a list of ways somebody asks to move one, and every one of those is a
+  # recognition target the routing needs.
+  describe "what a tool description hands the model" do
+    let(:descriptions) {
+      described_class.registry.values.map { |spec| spec[:description].to_s }.join("\n")
+    }
+
+    it "quotes no reply of Buddy's own asserting something it cannot do" do
+      planted = [
+        "I've got it corrected now",
+        "I'll stick to Herriman for your weather from here on out",
+      ].select { |line| descriptions.include?(line) }
+
+      expect(planted).to be_empty,
+        "a sentence in Buddy's voice, quoted in a tool description, comes back " \
+        "out of it: #{planted.inspect}"
+    end
+
+    # The rule it was carrying survives being described.
+    it "still says home cannot be moved from a chat" do
+      expect(described_class[:check_weather][:description]).to include("FIXED point")
+      expect(described_class[:check_weather][:description]).to include("request_feature")
+    end
+  end
 end

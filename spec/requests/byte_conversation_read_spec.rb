@@ -71,6 +71,12 @@ RSpec.describe "Byte conversation read", type: :request do
       sent
     end
 
+    # The device has to be wearing a number for there to be one to take off. A
+    # push is only spent on the EDGE — see web_push_notifications_badge_spec.rb: every one of
+    # these shows nothing, and a worker that shows nothing has its subscription
+    # revoked by WebKit, which is what was quietly killing them.
+    before { WebPushNotifications.record_badge(user, 1, channel: :byte) }
+
     it "pushes the new count so the badge can clear" do
       expect(pushed.first&.dig("data", "count")).to eq(0)
     end
@@ -82,6 +88,14 @@ RSpec.describe "Byte conversation read", type: :request do
 
       expect(sent["title"]).to be_blank
       expect(sent["body"]).to be_blank
+    end
+
+    # The read that follows has nothing left to say, and saying it anyway is
+    # what cost the subscription.
+    it "spends nothing on a badge that is already clear" do
+      post byte_read_conversation_path(id: conversation.id)
+
+      expect(pushed).to be_empty
     end
   end
 end

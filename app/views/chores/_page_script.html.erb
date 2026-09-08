@@ -1793,6 +1793,26 @@
   const CHORES_VAPID_PUBLIC_KEY =
     "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 
+  // A stable name for THIS install, sent with the subscription so a re-issued
+  // endpoint updates the device's existing row instead of filing a new device.
+  // Copied from app/javascript/src/support/push_device_id.js — this script is
+  // inline and can't import it. The KEY must match: Chores shares the apex
+  // origin with Jarvis, Agenda and Timers, and so shares this id.
+  const PUSH_DEVICE_ID_KEY = "push-device-id";
+
+  function pushDeviceId() {
+    try {
+      let id = localStorage.getItem(PUSH_DEVICE_ID_KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem(PUSH_DEVICE_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function urlBase64ToUint8Array(base64String) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -1830,6 +1850,7 @@
     });
     const body = sub.toJSON();
     body.channel = "chores";
+    body.device_id = pushDeviceId();
     const res = await fetch("/push_notification_subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json", JarvisPushVersion: "2" },
@@ -1848,6 +1869,7 @@
     if (!sub) return;
     const body = sub.toJSON();
     body.channel = "chores";
+    body.device_id = pushDeviceId();
     await fetch("/push_notification_unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

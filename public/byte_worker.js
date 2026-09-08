@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v19";
+const CACHE = "byte-v20";
 
 // Every page that is a Byte shell in its own right. `/kiosk` is the wall
 // tablet: the same controller and the same markup, so it carries the shell
@@ -251,10 +251,20 @@ self.addEventListener("push", (evt) => {
       else navigator.clearAppBadge();
     }
 
-    // Suppress the OS notification when the PWA is already open — the in-app
-    // UI already renders the message via the WebSocket broadcast, so a system
-    // banner just double-alerts.
-    if (inForeground) return;
+    // Anything that arrives here gets shown.
+    //
+    // This used to return early when the PWA was open, to avoid double-alerting
+    // over the in-app WebSocket render. But a push handler that shows nothing
+    // breaks the `userVisibleOnly` promise the subscription was created under,
+    // and WebKit answers that by revoking the SUBSCRIPTION — not the push. So
+    // the layer that existed to spare you a duplicate banner was quietly
+    // costing you every notification after it.
+    //
+    // The decision belongs on the server, where it already lives: ByteNotifier
+    // checks per-device presence and drops the subscriptions actually looking
+    // at the thread (`absent_subs`), so a push arriving here means no screen of
+    // yours was reading. Suppressing it a second time only makes the promise a
+    // lie.
     if (data.title || data.body) {
       await self.registration.showNotification(data.title || "Byte", data);
     }

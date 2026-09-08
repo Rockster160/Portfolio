@@ -242,17 +242,29 @@ module Buddy
       A check-in is how long until this is worth ASKING about, unprompted.
       Leave it null unless a person who cared would actually follow up.
 
+      IT COMES BACK TO THE PERSON, NOT TO THE DATE. The heavier a thing is, the
+      SOONER you come back to it - never the later. News that upends somebody's
+      year wants asking after tomorrow, not on the day it finally lands. Waiting
+      for the event is how a companion is absent for the part that is actually
+      hard.
+
+      - The big ones - job loss, illness, bereavement, a relationship ending:
+        1 or 2. They are the SOONEST, not the furthest out.
       - A sick pet, a hard day, a hospital visit: 0 (later today) or 1.
       - A project, an interview, something they were excited about: 3 to 14.
-      - Something dated in the future - "surgery next week" - set
-        the check-in to just after it happens.
-        Do NOT ask about next week's surgery tomorrow.
+
+      A DATE IN THE FUTURE IS `relevant_days`, NOT `check_in_days`. They are
+      different questions, and a heavy thing dated ahead wants both.
+      `relevant_days` is the distance to the event, and nothing asks how it went
+      until it has. `check_in_days` is how soon you would ask after the PERSON,
+      which for anything heavy is now, however far off the event is.
+
+      When both are set, the check-in lands on the far side of `relevant_days`
+      whatever you asked for - so an event's distance only ever needs putting
+      there once.
 
       Most memories have no check-in. An unprompted question about something
       they mentioned in passing is worse than silence.
-
-      A check-in in the future is also how something becomes live later rather
-      than now.
 
       UPDATING WHAT IS ALREADY WAITING
 
@@ -269,11 +281,19 @@ module Buddy
         again. A pending emotional check-in is resolved by them simply telling
         you how they are - a good day reported unprompted answers "how are they
         doing" completely.
-      - "answered" - they gave an update and it is still going ("she's still in
-        hospital, doing okay for now"). `set_check_in` to when it would be
-        worth asking again. Clear it if their update reads
+      - "answered" - they gave an update and it is still going. `set_check_in`
+        to when it would be worth asking again. Clear it if their update reads
         like the end of it.
       - "dropped" - it stopped being worth asking about at all.
+      - "sooner" - new information made it closer, heavier or realer than it
+        was when it was armed. `set_check_in` with FEWER days. Each line above
+        says when the follow-up is currently due, so you can see when one is
+        waiting on something that has since moved nearer.
+
+      Moving one IN is as much a part of this as clearing it. Every other
+      action here either stops a question or pushes it further away, and a
+      companion that can only ever wait longer is one that turns up after it
+      mattered.
 
       `note` is what they actually said about it, and it gets kept on the
       thread, so write it even when the action is "resolved".
@@ -491,7 +511,7 @@ module Buddy
         #{existing(user)}
 
         FOLLOW-UPS ALREADY SCHEDULED (update these by id if the conversation touched them):
-        #{pending(user)}
+        #{pending(user, now: now)}
 
         ALREADY DONE IN THIS STRETCH - these were asked for and HANDLED, so keep nothing about them:
         #{receipts(conversation, messages)}
@@ -536,12 +556,42 @@ module Buddy
     # The open follow-ups, by id, so a conversation that answered one can say
     # so. Without this the compile can only ever add, and a person who tells
     # their companion they're feeling better still gets asked about it later.
-    def pending(user)
+    #
+    # WHEN each one is due, and how heavy it is, are on the line. They were not,
+    # and their absence is why a check-in could only ever be pushed further out.
+    # Rocco, 8 Sep: "when I told Buddy I'd be losing my job, the check-in was
+    # scheduled months away... when I gave more info saying that the layoff was
+    # happening sooner than anticipated, the check-in likely should have been
+    # moved to a much sooner time." The pass that read that second conversation
+    # was shown `- #61 out of a job before the end of the year` and nothing
+    # else. It could not have known the row was armed for December, so pulling
+    # it in was never a move it was in a position to make.
+    def pending(user, now: Time.current)
       rows = BuddyMemory.where(user: user).kind_followup.live.where.not(check_in_at: nil)
       rows = rows.order(:check_in_at).limit(20).to_a
       return "(none)" if rows.empty?
 
-      rows.map { |m| "- ##{m.id} #{m.summary.presence || m.content.to_s.truncate(90)}" }.join("\n")
+      zone = Buddy::Day.zone(user)
+      rows.map { |m| "- ##{m.id} #{pending_when(m, zone, now)} #{pending_label(m)}" }.join("\n")
+    end
+
+    # "in 96 days (Thu 11 Dec)" — both halves, because the distance is what
+    # reads as too far and the date is what makes it checkable.
+    def pending_when(memory, zone, now)
+      due  = memory.check_in_at.in_time_zone(zone)
+      days = (due.to_date - now.in_time_zone(zone).to_date).to_i
+      when_ = (
+        case days
+        when ..0 then "due now"
+        when 1   then "tomorrow"
+        else          "in #{days} days"
+        end
+      )
+      "[#{when_}, #{due.strftime("%a %-d %b")}#{", sev #{memory.severity}" if memory.severity.to_i.positive?}]"
+    end
+
+    def pending_label(memory)
+      memory.summary.presence || memory.content.to_s.truncate(90)
     end
 
     # What's already held, so the compile doesn't write a fourth copy of a fact

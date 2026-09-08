@@ -628,14 +628,16 @@
       font-size: 12px;
     }
 
+    // Verbatim. Line breaks and leading spaces are how a person hangs
+    // sub-notes off a line, and both die the moment HTML gets to collapse
+    // them. `anywhere` is the catch for a pasted URL with no space in it,
+    // which `pre-wrap` alone would run off the side of the card.
     .note-body {
       margin-top: 2px;
+      overflow-wrap: anywhere;
       font-size: 14px;
       line-height: 1.5;
-
-      p {
-        margin: 0 0 6px;
-      }
+      white-space: pre-wrap;
     }
 
     .note-link {
