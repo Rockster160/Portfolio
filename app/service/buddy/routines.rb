@@ -79,13 +79,38 @@ module Buddy
     # monitors by hand afterwards, by which point the other half of the routine
     # was never going to run at all. The name was in the prompt and matching it
     # was left entirely to reading, which works right up until it doesn't.
+    # People shorten their own names for things. Prod 5661, 8 Sep: **Puppy
+    # Window mode** was asked for as "puppy mode", so the whole of the above
+    # missed it, nothing forced the run, and the model wrote the tool call out
+    # as prose instead - a blind that stayed shut for three messages.
+    #
+    # An abbreviation is still the name and nothing else: there is no other
+    # content in it to act on, which is the entire test. So a message whose
+    # words are all IN one routine's name counts too, under two conditions that
+    # keep it from becoming a guess. ONE routine may match - "puppy" on its own
+    # matches nothing here if a second routine also carries the word - and at
+    # least two words have to be doing the matching, because a single word
+    # sitting inside a longer name is a topic, not a name. "Puppy" alone stays
+    # out on that rule, which is right: it is also three of his chores.
+    MIN_SHORTENED_WORDS = 2
+
     def named_outright(user, text)
       return nil unless user.respond_to?(:buddy_routines)
 
       asked = words(text) - NAME_FILLER
       return nil if asked.empty?
 
-      user.buddy_routines.enabled.ordered.to_a.find { |r| words(r.name).sort == asked.sort }
+      rows = user.buddy_routines.enabled.ordered.to_a
+      rows.find { |r| words(r.name).sort == asked.sort } || shortened_name(rows, asked)
+    end
+
+    # The one routine this is an abbreviation of, or nil when it is nobody's or
+    # more than one's.
+    def shortened_name(rows, asked)
+      return nil if asked.length < MIN_SHORTENED_WORDS
+
+      matches = rows.select { |r| (asked - words(r.name)).empty? }
+      matches.first if matches.one?
     end
 
     # The markers a call expands into, or nil when the call isn't a routine run.

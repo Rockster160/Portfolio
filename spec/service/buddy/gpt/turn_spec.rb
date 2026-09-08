@@ -3585,4 +3585,55 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("That's the dishes done.")
     end
   end
+
+  # A nudge is prompt text like any other, and nobody had ever swept these.
+  #
+  # CHECK_ACTIONS_NUDGE carried a ready-made concession for its "it isn't there"
+  # branch, with `then do it` as the two words after it. Prod 5664: a paraphrase
+  # of the quote went out, followed by a question asking what the routine was
+  # meant to do, and the thing took a third message. The quote was used; the
+  # instruction behind it was not.
+  #
+  # Same list-of-planted-sentences shape as the tool-description sweep, and for
+  # the reason recorded there: a general "quoted sentence" rule cannot tell
+  # whose voice a quote is in, and every nudge legitimately quotes THEIRS.
+  describe "what a nudge hands the model" do
+    let(:nudges) {
+      described_class.constants.grep(/NUDGE\z/).map { |c| described_class.const_get(c).to_s }
+    }
+
+    it "covers every one of them" do
+      expect(nudges.length).to be >= 9
+    end
+
+    it "quotes no reply of Buddy's own for the model to say back" do
+      planted = [
+        "You're right, that didn't go through",
+        "you're right, that one came off",
+        "Nothing got undone on my side, so you're still good",
+        "You've got this",
+        "you showed up today",
+      ].select { |line| nudges.any? { |n| n.include?(line) } }
+
+      expect(planted).to be_empty,
+        "a sentence in Buddy's voice, quoted in a nudge, comes back out of it: #{planted.inspect}"
+    end
+
+    # Every rule those quotes were carrying survives being described, which was
+    # the whole of the rewrite and cost nothing.
+    it "still says the doing is the answer on a disputed action" do
+      expect(described_class::CHECK_ACTIONS_NUDGE).to include("and then DO")
+      expect(described_class::CHECK_ACTIONS_NUDGE).to include("The doing")
+      expect(described_class::CHECK_ACTIONS_NUDGE).to include("having to ask a third time")
+    end
+
+    it "still says to put back what came off" do
+      expect(described_class::UNDO_REGRET_NUDGE).to include("PUT IT BACK")
+      expect(described_class::UNDO_REGRET_NUDGE).to include("Never reassure them that nothing happened")
+    end
+
+    it "still says an affirmation that fits anybody is the wrong one" do
+      expect(described_class::AFFIRMATION_NUDGE).to include("would fit anybody")
+    end
+  end
 end

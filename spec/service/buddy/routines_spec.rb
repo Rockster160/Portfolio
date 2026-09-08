@@ -235,6 +235,49 @@ RSpec.describe "Buddy routines" do
 
       expect(told).to be_empty
     end
+
+    # Prod 5661: **Puppy Window mode** asked for as "puppy mode". Nothing forced
+    # the run, and what came back was the tool call written out as prose over a
+    # blind that stayed shut for three messages.
+    #
+    # A shortening is still the name and nothing else, which is the only test
+    # this block has ever applied. The guards are that the words have to be
+    # entirely IN one name - so an extra word disqualifies it exactly as it
+    # always did - that only one routine may answer to them, and that a lone
+    # word is never enough.
+    it "runs it when they shortened their own name for it" do
+      routine!("Puppy Window mode", [tell_step("blind open")])
+
+      says!("puppy mode", "Puppy Window mode’s on.")
+
+      expect(told).to eq(["blind open"])
+    end
+
+    it "stays out when one word is all there is to go on" do
+      routine!("Puppy Window mode", [tell_step("blind open")])
+
+      says!("puppy", "What about the puppy?")
+
+      expect(told).to be_empty
+    end
+
+    it "stays out when two routines answer to the same shortening" do
+      routine!("Puppy Window mode", [tell_step("blind open")])
+      routine!("Puppy Window shut", [tell_step("blind shut")])
+
+      says!("puppy window", "Which one?")
+
+      expect(told).to be_empty
+    end
+
+    it "still takes the exact name over a routine it is also short for" do
+      routine!("good night", [tell_step("dark")])
+      routine!("good night early wind down", [tell_step("early")])
+
+      says!("good night", "Night!")
+
+      expect(told).to eq(["dark"])
+    end
   end
 
   # ---- a step that stopped pointing anywhere -------------------------------

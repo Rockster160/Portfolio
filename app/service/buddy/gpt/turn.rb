@@ -552,6 +552,26 @@ module Buddy
       # It took two more messages to get the four completions written.
       FORM_FRAMING_RX = /\[form you put up:[^\]\n]*\]/i
 
+      # The fourth of the family, and the plainest: the model wrote the tool
+      # CALL out as text instead of making it.
+      #
+      # Prod 5661-5667, 8 Sep. "puppy mode" came back as a line reading
+      # {"name":"Puppy Window mode"} followed by a sentence saying the mode was
+      # on. One model call, no tool call, and `Puppy Window mode` had never run
+      # - `buddy_routines.last_run_at` was still null. Told "You didn't do
+      # anything", it agreed and asked what puppy mode was meant to do; it took
+      # a third message to get the blind open.
+      #
+      # An argument object is never something a person reads, so this is
+      # stripped like the other three. Stripping is only half of it, though -
+      # exactly as it was for the relay, where the bracket came off and Chelsea
+      # still got nothing. See LEAKED_CALL_NUDGE for the half that calls it.
+      #
+      # Anchored per line and allowing one level of nesting, so a `data` object
+      # inside the arguments still matches as one blob. Pretty-printed JSON
+      # spans lines and is caught too.
+      TOOL_CALL_LEAK_RX = /^[ \t]*\{\s*"[a-z_][a-z0-9_]*"\s*:(?:[^{}]|\{[^{}]*\})*\}[ \t]*$/i
+
       # What the provider said is not something to say back.
       #
       # A failed turn posted the exception verbatim, which is how "You have no
@@ -656,6 +676,10 @@ module Buddy
         # dropped sentence.
         body = outcome[:text].to_s
         return true if dropped_briefing_facts(body).any?
+        # Survived its own corrective round. A second attempt is a fresh build
+        # with the calls that went wrong out of sight, which is the right shape
+        # for a model that has now written the same call as prose twice.
+        return true if body.match?(TOOL_CALL_LEAK_RX)
 
         unbacked_claim(body).present? ||
           self.class.silent_turn_claim?(body) ||
@@ -1179,6 +1203,21 @@ module Buddy
         Do not repeat the claim.
       TXT
 
+      # The strongest evidence there is that a call was meant: the model wrote
+      # one. Nothing has to be inferred from how the reply is worded, so this
+      # arm asks for the call rather than arguing about the sentence.
+      LEAKED_CALL_NUDGE = <<~TXT.freeze
+        STOP. You wrote a tool call out as text instead of making it. The
+        arguments are sitting in your reply where the person can read them, and
+        no tool ran, so nothing happened.
+
+        You already worked out which tool this is and what to pass it. Make that
+        exact call now, as a call, and let it run.
+
+        Then say your piece over the result, in your own voice. Arguments are
+        machinery; they never appear in the words.
+      TXT
+
       POINTER_NUDGE = <<~TXT.freeze
         STOP. Your whole reply is a lead-in pointing at something, and you called
         no tool, so there is nothing underneath it. The person is looking at a
@@ -1214,10 +1253,10 @@ module Buddy
         `today_agenda`, `stashed_ideas` - and find one true thing from their
         actual day or their week. Then say it.
 
-        Name what they DID. "You've got this" and "you showed up today" are the
-        shape to avoid; a specific effort, a stretch they've been keeping up, a
-        thing that went right this week, is the shape to write. Two sentences is
-        fine and usually better than one.
+        Name what they DID: a specific effort, a stretch they've been keeping up,
+        a thing that went right this week. If the sentence would fit anybody,
+        it isn't the one - go back to what you read and take something only they
+        could have done. Two sentences is fine and usually better than one.
       TXT
 
       # What goes out when everything the model wrote was framing it had been
@@ -1851,6 +1890,14 @@ module Buddy
         @inbound.body.to_s.match?(DISPUTED_ACTION_RX)
       end
 
+      # No sentence of Buddy's own is written out here, and that is not a style
+      # note. This nudge used to quote one - a ready-made concession for the
+      # "it isn't there" branch, with `then do it` as the two words after it.
+      # Prod 5664 is what came back: a paraphrase of the quote, and then a
+      # question asking what the routine was supposed to do. The quote was used,
+      # the instruction behind it wasn't, and it took a third message to get the
+      # thing done. Same failure as the camera line in `check_weather`, in a
+      # surface nobody had swept. See feedback_no_sample_replies_in_prompts.
       CHECK_ACTIONS_NUDGE = <<~TXT.freeze
         STOP. They are disputing something you said you did, and you answered
         without looking it up. What you remember about this turn is the thing
@@ -1862,8 +1909,11 @@ module Buddy
 
         Then answer from what you read, not from what you expect:
         - It IS there: say so plainly and name it, with the time it ran.
-        - It ISN'T there: "You're right, that didn't go through" - then do it.
-          One sentence. Never invent a reason why it didn't happen.
+        - It ISN'T there: agree in one short sentence of your own, and then DO
+          THE THING, in this same reply, with the tool that does it. The doing
+          is the answer. Conceding on its own leaves them exactly where they
+          were, still waiting, having to ask a third time. Never invent a reason
+          why it didn't happen.
 
         Agreeing with them is not the safe default. They can be wrong about
         this, and conceding something that really did happen leaves them with a
@@ -1908,16 +1958,16 @@ module Buddy
         there like any other action, and it names what came off.
 
         Then, in the same reply:
-        - It DID come off: say so plainly - "you're right, that one came off" -
-          and PUT IT BACK with the tool that created it in the first place. You
-          have the arguments; they're sitting in your own receipt. Don't ask
-          whether they want it back. They just told you.
+        - It DID come off: say so plainly, and PUT IT BACK with the tool that
+          created it in the first place. You have the arguments; they're sitting
+          in your own receipt. Don't ask whether they want it back. They just
+          told you.
         - It didn't: say what the undo actually removed, so they can point at
           the right one.
 
-        Never reassure them that nothing happened. "Nothing got undone on my
-        side, so you're still good" was said over a glossary term that was
-        already gone, and it left them believing they had something they don't.
+        Never reassure them that nothing happened. Telling somebody their record
+        is intact over one that is already gone leaves them believing they have
+        something they don't, and they find out weeks later.
       TXT
 
       # Asking to SEE what a camera has, as opposed to asking what happened.
@@ -2054,8 +2104,8 @@ module Buddy
           face, and a face is only ever in a picture.
 
           Once you have the frame, describe what's actually in it. If the
-          function comes back empty, say so plainly - "nothing since yesterday
-          evening" is a real answer, and it's one you can only give after
+          function comes back empty, say so plainly and say how far back you
+          looked - that is a real answer, and it's one you can only give after
           looking.
         TXT
       end
@@ -2086,6 +2136,13 @@ module Buddy
         # Same footing as the camera arm: not about how the reply is worded, but
         # about whether it was ever grounded in anything.
         return AFFIRMATION_NUDGE if hollow_affirmation?
+        # First of the arms that read the REPLY, because it is the only one
+        # holding proof of intent rather than an inference from wording. See
+        # TOOL_CALL_LEAK_RX for the prod turn, and note that the two halves are
+        # both needed: the scrub keeps JSON off the screen, this gets the thing
+        # the person asked for done inside the same turn instead of over three
+        # messages.
+        return LEAKED_CALL_NUDGE if spoken.to_s.match?(TOOL_CALL_LEAK_RX)
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         # The broad arm, on the same footing as the narrow one above it and for
         # the same purpose: get the call MADE, rather than only stopping the
@@ -3230,7 +3287,20 @@ module Buddy
       # bracket means Buddy imitated a bridged message instead of sending one.
       def display_body(text)
         raw   = text.to_s
-        stray = { marker: STRAY_MARKER_RX, relay: RELAY_FRAMING_RX, form: FORM_FRAMING_RX }.select { |_kind, rx| raw.match?(rx) }
+        all   = {
+          marker: STRAY_MARKER_RX,
+          relay:  RELAY_FRAMING_RX,
+          form:   FORM_FRAMING_RX,
+          call:   TOOL_CALL_LEAK_RX,
+        }
+        stray = all.select { |_kind, rx| raw.match?(rx) }
+        # A fenced block is the one place a JSON object is there on purpose. He
+        # asks about his own system, so an answer quoting the shape of a
+        # listener's data is a real reply, and scrubbing it would be the fix
+        # doing more damage than the fault. Across 60 days, every inbound
+        # message with a JSON object at the start of a line was fenced except
+        # one - 5662, this incident.
+        stray.delete(:call) if raw.include?("```")
         stray.each { |kind, rx| Rails.logger.warn("[Buddy::GPT::Turn] stray #{kind} in output: #{raw[rx]}") }
 
         cleaned = stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }
