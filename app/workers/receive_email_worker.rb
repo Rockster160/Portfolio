@@ -39,7 +39,12 @@ class ReceiveEmailWorker
       parse_usps && @email.archive! # Auto archive parsed USPS tracking emails
     end
 
-    notify_slack unless @email.archived?
+    return if @email.archived?
+
+    # Behind its own job: this is a model call, and the ingest path has an S3
+    # download and a Jil trigger sitting in front of it already.
+    ::JobMailTriageWorker.perform_async(@email.id)
+    notify_slack
   end
 
   def amazon_update?
