@@ -535,6 +535,7 @@
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean
   #checklist("List" String BR "Message" Text)::Numeric
+  #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 [Tesla]@me
   #start(content(TeslaStartOptions))::Boolean
   #stop::Boolean

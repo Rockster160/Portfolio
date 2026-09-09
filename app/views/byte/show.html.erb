@@ -112,6 +112,17 @@
     <%# Quiet syncing / offline badge. Empty when idle; the service %>
     <%# worker fills it via shell_synced / shell_sync_failed messages. %>
     <span class="byte-sync-badge" data-byte-sync data-state=""></span>
+    <%# Everything Buddy can be asked to do without typing. One button rather %>
+    <%# than a row of five chips: the row cost a strip of the hero the whole %>
+    <%# time it was on screen and was tapped a handful of times a week. %>
+    <button type="button" class="byte-actions-toggle" data-byte-actions-toggle
+            title="Actions" aria-label="Buddy actions"
+            aria-haspopup="true" aria-expanded="false"
+            <%= 'hidden'.html_safe unless @conversation.mode == 'buddy' %>>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path fill="currentColor" d="M13 2 4.5 13.2h6L9.8 22l8.7-11.4h-6L13 2Z"/>
+      </svg>
+    </button>
     <%# Reload — always tappable to force a hard refresh, and lights up %>
     <%# with a "!" badge when the SW has staged a new shell version. %>
     <button type="button" class="byte-reload-btn" data-byte-reload title="Reload" aria-label="Reload">
@@ -134,6 +145,73 @@
         <path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3Zm18.3-1.3-1.4-1.4L17 10.2 14.1 7.3l-1.4 1.4L15.6 12l-2.9 2.9 1.4 1.4L17 13.4l2.9 2.9 1.4-1.4L18.4 12l2.9-3.3Z"/>
       </svg>
     </button>
+
+    <%# The list, and every sub-list, in one popover hanging off the header's %>
+    <%# right edge. A choice that has its own options REPLACES the list in %>
+    <%# place rather than opening a second layer beside it, so there is only %>
+    <%# ever one thing on screen to read, and the back row says where you are. %>
+    <div class="byte-actions-menu" data-byte-actions-menu hidden>
+      <div class="byte-actions-panel" data-actions-panel="root">
+        <button type="button" data-buddy-action="quick">
+          Quick<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
+        </button>
+        <button type="button" data-buddy-action="suggest">
+          What now?<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
+        </button>
+        <button type="button" data-buddy-action="stash">
+          Stash<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
+        </button>
+        <button type="button" data-buddy-action="checkin">
+          Check-in<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
+        </button>
+        <button type="button" data-buddy-action="affirmation">Affirmation</button>
+      </div>
+
+      <%# Saved routines, starred ones first. The only panel whose contents come %>
+      <%# from the server, so it fills on open rather than being rendered here - %>
+      <%# which also means saving one shows up the next time this is opened. %>
+      <div class="byte-actions-panel" data-actions-panel="quick" hidden>
+        <button type="button" class="byte-actions-back" data-actions-back>
+          <span aria-hidden="true">&lsaquo;</span> Quick actions
+        </button>
+        <div class="byte-actions-list" data-buddy-quick-list></div>
+      </div>
+
+      <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>
+      <%# the unfiltered "just tell me what to do" ask. %>
+      <div class="byte-actions-panel" data-actions-panel="suggest" hidden>
+        <button type="button" class="byte-actions-back" data-actions-back>
+          <span aria-hidden="true">&lsaquo;</span> What now — which side?
+        </button>
+        <button type="button" data-suggest="me">Me</button>
+        <button type="button" data-suggest="home">Home</button>
+        <button type="button" data-suggest="work">Work</button>
+        <button type="button" data-suggest="anything">Anything</button>
+      </div>
+
+      <%# Brain-dump: pick a bucket, then the NEXT message you send is filed as %>
+      <%# an idea. "Anything" lets Buddy sort + summarize it for you. %>
+      <div class="byte-actions-panel" data-actions-panel="stash" hidden>
+        <button type="button" class="byte-actions-back" data-actions-back>
+          <span aria-hidden="true">&lsaquo;</span> Stash an idea to…
+        </button>
+        <button type="button" data-stash="me">Me</button>
+        <button type="button" data-stash="home">Home</button>
+        <button type="button" data-stash="work">Work</button>
+        <button type="button" data-stash="anything">Anything</button>
+      </div>
+
+      <div class="byte-actions-panel" data-actions-panel="checkin" hidden>
+        <button type="button" class="byte-actions-back" data-actions-back>
+          <span aria-hidden="true">&lsaquo;</span> How are you feeling?
+        </button>
+        <button type="button" data-mood="great">Great</button>
+        <button type="button" data-mood="good">Good</button>
+        <button type="button" data-mood="okay">Okay</button>
+        <button type="button" data-mood="low">Low</button>
+        <button type="button" data-mood="rough">Rough</button>
+      </div>
+    </div>
   </header>
 
   <%# Buddy hero — only visible when the active conversation is mode=:buddy. %>
@@ -159,52 +237,6 @@
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <div class="byte-buddy-face" aria-hidden="true"></div>
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
-    </div>
-    <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
-      <button type="button" data-buddy-action="quick">Quick</button>
-      <button type="button" data-buddy-action="suggest">What now?</button>
-      <button type="button" data-buddy-action="stash">Stash</button>
-      <button type="button" data-buddy-action="checkin">Check-in</button>
-      <button type="button" data-buddy-action="affirmation">Affirmation</button>
-    </nav>
-    <%# Saved routines, starred ones first. The only popover whose contents come %>
-    <%# from the server, so it fills on open rather than being rendered here - %>
-    <%# which also means saving one shows up the next time this is opened. %>
-    <div class="byte-buddy-mood-popover byte-buddy-quick-popover" data-buddy-quick-popover hidden>
-      <span class="byte-buddy-mood-label">Quick actions</span>
-      <div class="byte-buddy-mood-choices" data-buddy-quick-list></div>
-    </div>
-    <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>
-    <%# the unfiltered "just tell me what to do" ask. %>
-    <div class="byte-buddy-mood-popover" data-buddy-suggest-popover hidden>
-      <span class="byte-buddy-mood-label">What now — which side?</span>
-      <div class="byte-buddy-mood-choices">
-        <button type="button" data-suggest="me">Me</button>
-        <button type="button" data-suggest="home">Home</button>
-        <button type="button" data-suggest="work">Work</button>
-        <button type="button" data-suggest="anything">Anything</button>
-      </div>
-    </div>
-    <%# Brain-dump: pick a bucket, then the NEXT message you send is filed as %>
-    <%# an idea. "Anything" lets Buddy sort + summarize it for you. %>
-    <div class="byte-buddy-mood-popover" data-buddy-stash-popover hidden>
-      <span class="byte-buddy-mood-label">Stash an idea to…</span>
-      <div class="byte-buddy-mood-choices">
-        <button type="button" data-stash="me">Me</button>
-        <button type="button" data-stash="home">Home</button>
-        <button type="button" data-stash="work">Work</button>
-        <button type="button" data-stash="anything">Anything</button>
-      </div>
-    </div>
-    <div class="byte-buddy-mood-popover" data-buddy-mood-popover hidden>
-      <span class="byte-buddy-mood-label">How are you feeling?</span>
-      <div class="byte-buddy-mood-choices">
-        <button type="button" data-mood="great">Great</button>
-        <button type="button" data-mood="good">Good</button>
-        <button type="button" data-mood="okay">Okay</button>
-        <button type="button" data-mood="low">Low</button>
-        <button type="button" data-mood="rough">Rough</button>
-      </div>
     </div>
     <%# Debug-only picker: switch theme (Byte/Moss) and preview any face,
         including ones not wired into the mood system. Remove once done. %>

@@ -8,6 +8,19 @@ Buddy::Tools.register(
     fetch that before calling this so you're attaching to a company that's
     really there.
 
+    **This one WAITS FOR A TAP.** Nothing is written when you call it - the row
+    is an offer, and the tense rules for a tap-to-run row apply in full. Never
+    say you've got it, marked it, or logged it.
+
+    **Name the company they named, or name none.** `company` is matched against
+    what is really on the board, and if you pass something they didn't say, the
+    row offers to change the wrong application's history. Passing a DIFFERENT
+    company because the one they named isn't on the board is the specific
+    failure: it settled CSC Generation as rejected when the sentence was about
+    Corporate Tools, whose row wasn't visible because it was already closed. If
+    what they named isn't there, say so and ask - an application you can't see
+    is not the same thing as an application that isn't theirs.
+
     `company` is fuzzy - the name off an email footer is fine, "CSC Generation,
     Inc." finds "CSC Generation". Only LIVE applications can be matched, so a
     company they gave up on months ago won't resolve, and that is the right
@@ -86,9 +99,20 @@ Buddy::Tools.register(
   },
   # The same beat said twice in one turn is one beat.
   merge_key:   ->(payload) { "add_job_note:#{payload[:company]}:#{payload[:tag]}:#{payload[:note].to_s.downcase.strip}" },
-  # Level 2: kept the moment it's said, as a pre-checked row that doubles as the
-  # read-back. Unchecking removes the note and leaves the board as it was.
-  level:       2,
+  # Level 3: an offer that writes nothing until it's tapped.
+  #
+  # It was level 2 - written on arrival, pre-checked, undo by unchecking - and
+  # that is too much trust for this. The model picks WHICH application a beat
+  # lands on, and when the one they named isn't on the visible board it will
+  # pick a neighbour rather than stop: prod 5759 settled CSC Generation as
+  # rejected off a sentence about Corporate Tools. A pre-checked row makes the
+  # read-back the only defence, and reading "Rejected — CSC Generation" as a
+  # statement of fact is exactly what a level-2 row invites.
+  #
+  # A settling tag also moves the application's whole status, so the cost of
+  # being wrong isn't one stray row - it closes an application that is still
+  # open. That belongs behind a tap.
+  level:       3,
   # The value is one particular thing that happened on one particular day.
   # Replaying it inside a routine next month is meaningless.
   routinable:  false,

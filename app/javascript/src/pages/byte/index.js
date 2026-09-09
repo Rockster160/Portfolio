@@ -2286,11 +2286,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Mount the Buddy hero once the composer + input handles exist. The
-  // hero only shows itself on :buddy conversations; its quick-action
-  // chips POST to /buddy/quick_action so the resulting message is
+  // hero only shows itself on :buddy conversations; the actions menu in the
+  // header POSTs to /buddy/quick_action so the resulting message is
   // Buddy-authored rather than a fake user-typed sentence.
   buddyHero = initBuddyHero({
-    hero: heroEl,
+    hero:       heroEl,
+    menu:       app.querySelector("[data-byte-actions-menu]"),
+    menuToggle: app.querySelector("[data-byte-actions-toggle]"),
     conversationIdFn: () => currentConversationId,
     // Brain-dump: after a bucket is picked, hint in the composer that the next
     // message is the idea being stashed. Reset on send (see handleSend).

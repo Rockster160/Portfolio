@@ -204,10 +204,20 @@ BUDDY_TOOL_PROBES = {
   # --- time: the four that get confused with each other ---
   set_timer:              {
     say:          "5m",
-    avoid:        %i[schedule_reminder alarm],
+    avoid:        %i[schedule_reminder alarm set_rotation],
     run:          true,
     effect_label: "no five-minute countdown was actually started",
     effect:       ->(u) { u.timers.exists?(kind: :countdown, duration_ms: 300_000) },
+  },
+  # The one it will get confused with is `set_timer repeat:` — both go round,
+  # both wait on a button. The difference is what the end of a round ASKS: a
+  # work rhythm starts the next block, this one asks whether the JOB is done.
+  set_rotation:           {
+    say:          "remind me to rotate the laundry every 75 minutes until it's done",
+    avoid:        %i[set_timer schedule_reminder remind_when],
+    run:          true,
+    effect_label: "no rotation loop was actually started",
+    effect:       ->(u) { Buddy::Timers.live_for(u).any? { |t| Buddy::RotationTimer.rotation?(t) } },
   },
   alarm:                  { say: "wake me at 6:30 tomorrow", avoid: %i[schedule_reminder set_timer] },
   schedule_reminder:      { say: "remind me to call mom at 6", avoid: %i[alarm add_agenda_item] },
@@ -389,6 +399,7 @@ BUDDY_EVAL_EXECUTABLE = %i[
   edit_inventory_item
   remove_inventory_item
   set_timer
+  set_rotation
   cancel_timer
   alarm
   schedule_reminder
@@ -533,7 +544,7 @@ BUDDY_EDGE_PROBES = [
     case:  "Eve asked Suki for a work/break cycle",
     say:   "let's do 30 minutes on, 10 off",
     tool:  :set_timer,
-    avoid: %i[schedule_reminder alarm],
+    avoid: %i[schedule_reminder alarm set_rotation],
     args:  { set_timer: { repeat: true, break_minutes: 10 } },
     note:  "she was promised the cycle and given a reminder every 30 minutes, " \
            "which fires whether or not she's back at the desk",

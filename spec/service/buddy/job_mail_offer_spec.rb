@@ -73,6 +73,39 @@ RSpec.describe Buddy::JobMailOffer do
     end
   end
 
+  # The board was built by hand by pasting the mail in and setting a status.
+  # Buddy can only continue that if the mail itself reaches her.
+  context "when the message body came with it" do
+    let!(:job) { user.job_applications.create!(company: "iCapital") }
+    let(:mail_body) { "Hi Rocco,\n\nWe'd like to schedule a 30-minute Zoom.\n\nCordelia" }
+
+    it "quotes the message, fenced so its end is unambiguous" do
+      body = call(body: mail_body).body
+
+      expect(body).to include("--- the message ---")
+      expect(body).to include("We'd like to schedule a 30-minute Zoom.")
+      expect(body).to include("--- end ---")
+    end
+
+    it "spells out the trimming habit and asks for a real tag" do
+      body = call(body: mail_body).body
+
+      expect(body).to include("keep the message itself as the note")
+      expect(body).to include("quoted thread")
+      expect(body).to include("pick the `tag` that matches")
+    end
+
+    # Reading the body off disk is a soft failure upstream. An offer made from
+    # the headline alone must not promise a message it hasn't got.
+    it "promises nothing about a message it never received" do
+      body = call.body
+
+      expect(body).not_to include("--- the message ---")
+      expect(body).not_to include("keep the message itself")
+      expect(body).to include("pick the `tag` that matches")
+    end
+  end
+
   context "when nothing on the board matches" do
     # A recruiter's first contact is worth seeing and has nowhere to go.
     it "posts the card and offers nothing" do

@@ -278,7 +278,18 @@ RSpec.describe Buddy::VoiceLines do
     end
 
     it "wears something pleased when it did" do
-      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy neutral_blush nerd]) }
+      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy neutral_blush]) }
+    end
+
+    # Prod 5759: a rejection from the job he was most excited about got logged,
+    # the reply said "*sad*" in words, and the pet put its glasses on. This pool
+    # is a coin toss taken the moment a tool succeeds - nothing here reads the
+    # room - so every face in it has to mean "glad to have helped" and nothing
+    # else. `nerd` is about being CLEVER, which is a different thing entirely.
+    # It stays selectable; the model can still choose it deliberately.
+    it "never reaches for the clever face just because something ran" do
+      40.times { expect(described_class.acted_mood(:byte)).not_to eq(:nerd) }
+      expect(Buddy::Faces.selectable?(:byte, "nerd")).to be(true)
     end
   end
 end

@@ -59,6 +59,17 @@ RSpec.describe "POST /webhooks/byte/job_mail", type: :request do
     end
   end
 
+  it "carries the message body the watcher read off disk" do
+    user.job_applications.create!(company: "iCapital")
+
+    post_mail(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.\n\nCordelia")
+
+    body = user.byte_messages.order(:id).last.body
+    expect(body).to include("--- the message ---")
+    expect(body).to include("We'd like to schedule a Zoom.")
+    expect(body).to include("keep the message itself as the note")
+  end
+
   # A recruiter's first contact is worth seeing and has nothing to attach to.
   it "posts the watcher's own card when nothing matches" do
     post_mail

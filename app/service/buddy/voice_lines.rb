@@ -238,8 +238,19 @@ module Buddy
     # which is nearer the moment than anything either of them had. Glimmer was
     # wearing `surprised` here for want of a better face, and startled is not
     # the same thing as sorry.
+    # `nerd` is deliberately NOT in Byte's `ok` pool, though it stays a face the
+    # model can choose. Read its hint: glasses on, book out, just figured
+    # something out. That is a face about being CLEVER, and this pool is the
+    # fallback for "did a thing for you" - the two only overlap by accident.
+    #
+    # It landed on prod 5759, where the thing done was logging a rejection from
+    # the job he'd been most excited about. The reply said "*sad*" in words and
+    # the pet put its glasses on, because nothing here reads the words: this is
+    # a coin toss taken the moment a tool succeeds. Narrowing the pool doesn't
+    # make the toss smarter, but a pool of two faces that both mean "glad to
+    # have helped" can't land anywhere as far from the room as that did.
     ACTED_MOODS = {
-      byte:    { ok: %i[happy neutral_blush nerd], failed: %i[confused annoyed sad] },
+      byte:    { ok: %i[happy neutral_blush], failed: %i[confused annoyed sad] },
       moss:    { ok: %i[happy content], failed: %i[dismayed unamused queasy sad] },
       suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
       glimmer: { ok: %i[content happy], failed: %i[dismayed sad] },

@@ -58,26 +58,22 @@ module Buddy
       job_search: %i[job_search],
     }.freeze
 
-    # Granted rather than assumed, for the same reason `mac` is: both reach
-    # something that belongs to one person. The delivery list lives in the
-    # OWNER's cache (see Buddy::Deliveries) and there is no per-user one, so
-    # handing this to a new account would point their companion at his packages.
-    OWNER_ONLY = %i[mac deliveries].freeze
-
-    # Held only by somebody whose RECORDS show they need it - see
-    # lib/scripts/grant_job_search_feature.rb, which grants by evidence rather
-    # than by name, so a second person job hunting needs no second script.
+    # The owner's alone, and ENFORCED rather than merely withheld: `enabled_for`
+    # subtracts these from anybody else, so a stray grant - a script, a console,
+    # a hand-edited array - cannot switch one on for the wrong person. Being
+    # out of DEFAULT only ever meant "not handed over at signup", which is a
+    # different and much weaker promise than the comments here were making.
     #
-    # Out of DEFAULT for a different reason than OWNER_ONLY: the data here is
-    # perfectly per-user (JobApplication belongs to a user, and Eve would see
-    # her own board), so nothing leaks either way. It's that a companion handed
-    # a job-hunt tool for a search that doesn't exist will eventually reach for
-    # it, and "log that on the board" is a strange thing to hear from a pet
-    # belonging to somebody who has never applied anywhere.
-    ON_EVIDENCE = %i[job_search].freeze
+    # `mac` runs commands on the owner's machine. `deliveries` reads the
+    # OWNER's cache (see Buddy::Deliveries) and there is no per-user one, so a
+    # second holder would be looking at his packages. `job_search` is his job
+    # hunt: whether he's interviewing, where, and how each one went. The board
+    # itself is per-user and leaks nothing, but "only I have access to it" is
+    # the requirement, and an allow-list that anything can add to isn't that.
+    OWNER_ONLY = %i[mac deliveries job_search].freeze
 
     # What a new account is handed.
-    DEFAULT = (SECTIONS.keys - OWNER_ONLY - ON_EVIDENCE).freeze
+    DEFAULT = (SECTIONS.keys - OWNER_ONLY).freeze
 
     # What to call each one when telling the model (or a person) what's off.
     LABELS = {
@@ -109,7 +105,16 @@ module Buddy
     def enabled_for(user)
       return all unless user.respond_to?(:buddy_features)
 
-      Array(user.buddy_features).map { |f| f.to_s.to_sym } & all
+      held = Array(user.buddy_features).map { |f| f.to_s.to_sym } & all
+      owner?(user) ? held : held - OWNER_ONLY
+    end
+
+    # Gated here rather than in `enabled?` so every reader agrees: the tool
+    # list, `missing_for`, `hidden_sections` and the get_context enum all run
+    # off this one answer, and a gate applied further down would have left them
+    # describing a feature the person can't actually use.
+    def owner?(user)
+      user.respond_to?(:me?) && user.me?
     end
 
     def enabled?(user, feature)

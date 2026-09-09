@@ -128,13 +128,21 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::Features.enabled?(other, :job_search)).to be(false)
     end
 
-    it "keeps the tool out of the schema the model is even shown" do
+    # Out of DEFAULT only ever meant "not handed over at signup". The ask was
+    # that it be HIS, so it's OWNER_ONLY now and `enabled_for` subtracts it
+    # from everybody else - a grant that reaches this row does nothing.
+    it "keeps the tool out of the schema even if the feature is granted" do
       names = Buddy::Tools.function_schemas(user: other).pluck(:name)
       expect(names).not_to include(:add_job_note)
 
       other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
       granted = Buddy::Tools.function_schemas(user: other.reload).pluck(:name)
-      expect(granted).to include(:add_job_note)
+      expect(granted).not_to include(:add_job_note)
+      expect(Buddy::Features.enabled?(other, :job_search)).to be(false)
+    end
+
+    it "leaves it working for the owner" do
+      expect(Buddy::Tools.function_schemas(user: user).pluck(:name)).to include(:add_job_note)
     end
 
     it "keeps the section out of get_context and out of the built context" do
@@ -149,11 +157,13 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::AppPages.for_user(other).pluck(:name)).not_to include(:interviews)
 
       other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
-      expect(Buddy::AppPages.for_user(other.reload).pluck(:name)).to include(:interviews)
+      expect(Buddy::AppPages.for_user(other.reload).pluck(:name)).not_to include(:interviews)
+      expect(Buddy::AppPages.for_user(user).pluck(:name)).to include(:interviews)
     end
 
-    # Even with the feature on, the board is theirs. Nothing here reaches
-    # across users the way the delivery list does.
+    # Belt and braces under the feature gate: even if something reached the
+    # board directly, it is scoped by user, so nobody is one bug away from
+    # reading his applications the way the delivery list would have leaked.
     it "shows them their own empty board rather than anyone else's" do
       application!("Netflix")
       other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
@@ -164,6 +174,26 @@ RSpec.describe "Buddy job hunt tools" do
   end
 
   describe "add_job_note" do
+    # Prod 5759, and the reason this is the one job tool that must not write on
+    # arrival. He said Corporate Tools; the row that got settled as rejected was
+    # CSC Generation, because Corporate Tools was already closed and so wasn't
+    # on the visible board. At level 2 that wrote the moment it was said and
+    # the read-back was the only thing standing in the way.
+    it "waits for a tap instead of writing on arrival" do
+      expect(Buddy::Tools[:add_job_note][:level]).to eq(3)
+      expect(Buddy::Tools[:add_job_note][:auto]).to be(false)
+    end
+
+    # A settling tag doesn't just add a row - it closes the application. That
+    # is the half that made being wrong expensive.
+    it "still carries a way back once it has been tapped" do
+      application!("Netflix")
+      result, = run(:add_job_note, { company: "Netflix", tag: :rejected, note: "no thanks" })
+
+      expect(result[:settled]).to be(true)
+      expect(Buddy::Reverter.descriptors(result)).to be_present
+    end
+
     it "logs a beat against a fuzzily-named company" do
       application!("CSC Generation")
 

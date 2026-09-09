@@ -1,10 +1,17 @@
 // Buddy hero — the "Tamagotchi" area at the top of the Byte page when
-// the active conversation is mode=:buddy. Shows the character with
-// live expression state and two real quick-action chips (Today +
-// Check-in). Neither injects a fake user message; both fire server-
-// side actions that produce a genuine Buddy-authored reply.
+// the active conversation is mode=:buddy — plus the actions menu in the
+// header, which is where everything Buddy can be asked to do without typing
+// now lives. None of it injects a fake user message; they all fire server-side
+// actions that produce a genuine Buddy-authored reply.
+//
+// The menu is one button and one popover: a root list, and a panel per choice
+// that has its own options. A sub-panel REPLACES the root rather than opening
+// beside it, which is why they're all `[data-actions-panel]` under one element
+// and `showPanel` is the only thing that moves between them.
 
-import { quickOrder, NO_ROUTINES } from "./routine_order";
+// Extension spelled out so node can load this module directly — esbuild is
+// happy either way, and the actions-menu runner imports it unbundled.
+import { quickOrder, NO_ROUTINES } from "./routine_order.js";
 
 const ROUTINES_URL = "/buddy/routines";
 
@@ -45,26 +52,44 @@ async function fetchQuickRoutines() {
   return quickOrder(data?.routines);
 }
 
-export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
+export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStashArmed }) {
   if (!hero) return null;
 
-  const charEl        = hero.querySelector(".byte-buddy-char");
-  const quickActions  = hero.querySelector("[data-buddy-quick-actions]");
-  const moodPopover    = hero.querySelector("[data-buddy-mood-popover]");
-  const facePopover    = hero.querySelector("[data-buddy-face-popover]");
-  const stashPopover   = hero.querySelector("[data-buddy-stash-popover]");
-  const suggestPopover = hero.querySelector("[data-buddy-suggest-popover]");
-  const quickPopover   = hero.querySelector("[data-buddy-quick-popover]");
-  const quickList      = hero.querySelector("[data-buddy-quick-list]");
+  const charEl     = hero.querySelector(".byte-buddy-char");
+  const facePopover = hero.querySelector("[data-buddy-face-popover]");
+  const panels     = menu ? Array.from(menu.querySelectorAll("[data-actions-panel]")) : [];
+  const quickList  = menu ? menu.querySelector("[data-buddy-quick-list]") : null;
+
+  // Only one panel is ever on screen. Naming the one to show — rather than
+  // toggling `hidden` per panel at each call site — is what makes a sub-list
+  // REPLACE the root instead of stacking on top of it.
+  const showPanel = (name) => {
+    panels.forEach((panel) => { panel.hidden = panel.dataset.actionsPanel !== name; });
+  };
+
+  const closeMenu = () => {
+    if (!menu) return;
+    menu.hidden = true;
+    if (menuToggle) menuToggle.setAttribute("aria-expanded", "false");
+  };
+
+  // Always back to the root. The panel left showing belongs to a tap that has
+  // long since been answered, and reopening onto it would hide the other four.
+  const openMenu = () => {
+    if (!menu) return;
+    showPanel("root");
+    menu.hidden = false;
+    if (menuToggle) menuToggle.setAttribute("aria-expanded", "true");
+  };
 
   const setActive = (isBuddy) => {
     hero.dataset.buddyActive = isBuddy ? "true" : "false";
     hero.hidden = !isBuddy;
-    if (!isBuddy && moodPopover) moodPopover.hidden = true;
     if (!isBuddy && facePopover) facePopover.hidden = true;
-    if (!isBuddy && stashPopover) stashPopover.hidden = true;
-    if (!isBuddy && suggestPopover) suggestPopover.hidden = true;
-    if (!isBuddy && quickPopover) quickPopover.hidden = true;
+    // The actions are Buddy's, so the button that opens them is only offered
+    // on a Buddy thread — a claude/bash conversation has nothing behind it.
+    if (menuToggle) menuToggle.hidden = !isBuddy;
+    if (!isBuddy) closeMenu();
   };
 
   // The pet has two layers: a persistent MOOD and a transient "thinking"
@@ -98,24 +123,13 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   // that left a non-"thinking" face on screen, which clearThinking won't undo.
   const restExpression = () => paint(restingExpression);
 
-  const openMood  = () => { if (moodPopover) moodPopover.hidden = false; };
-  const closeMood = () => { if (moodPopover) moodPopover.hidden = true;  };
-
-  const openStash  = () => { if (stashPopover) stashPopover.hidden = false; };
-  const closeStash = () => { if (stashPopover) stashPopover.hidden = true;  };
-
-  const openSuggest  = () => { if (suggestPopover) suggestPopover.hidden = false; };
-  const closeSuggest = () => { if (suggestPopover) suggestPopover.hidden = true;  };
-
-  const closeQuick = () => { if (quickPopover) quickPopover.hidden = true; };
-
-  // The only popover filled from the server. Opened first and populated after,
-  // so a slow request shows the panel with "loading" rather than swallowing the
+  // The only panel filled from the server. Shown first and populated after, so
+  // a slow request shows the panel with "loading" rather than swallowing the
   // tap and looking broken.
   const openQuick = async () => {
-    if (!quickPopover || !quickList) return;
+    if (!quickList) return;
 
-    quickPopover.hidden = false;
+    showPanel("quick");
     quickList.textContent = "Loading…";
     let routines = [];
     try {
@@ -148,7 +162,7 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   const dispatchRoutine = async (id) => {
     const cid = currentConversationId();
     if (cid == null) return;
-    closeQuick();
+    closeMenu();
     try {
       await postJSON(`${ROUTINES_URL}/${id}/run`, { conversation_id: cid });
     } catch (_) { /* server logs the reason */ }
@@ -159,7 +173,7 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   const dispatchSuggest = async (category) => {
     const cid = currentConversationId();
     if (cid == null) return;
-    closeSuggest();
+    closeMenu();
     setExpression("thinking", { transient: true });
     try {
       await postQuickAction({ kind: "suggest", category, conversation_id: cid });
@@ -171,7 +185,7 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   const dispatchStash = async (category) => {
     const cid = currentConversationId();
     if (cid == null) return;
-    closeStash();
+    closeMenu();
     try {
       await postQuickAction({ kind: "stash", category, conversation_id: cid });
       if (onStashArmed) onStashArmed(category);
@@ -228,7 +242,7 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   const dispatchCheckin = async (mood) => {
     const cid = currentConversationId();
     if (cid == null) return;
-    closeMood();
+    closeMenu();
     setExpression("thinking", { transient: true });
     try {
       await postQuickAction({ kind: "checkin", mood: mood, conversation_id: cid });
@@ -236,107 +250,67 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   };
 
   // iOS reliability (mirrors the composer's Send-button fix): with the
-  // keyboard up, tapping a hero button would first blur the textarea — the
-  // keyboard retracts, the hero shrinks out of its focused side-by-side
-  // layout, and the button slides out from under the finger, so the click
-  // never lands. Cancelling the button's pointerdown default keeps the input
-  // focused; the click still fires and the keyboard stays up. Applied to the
-  // quick chips and the mood popover (Check-in) buttons they open.
+  // keyboard up, tapping a menu button would first blur the textarea — the
+  // keyboard retracts, the layout reflows, and the button slides out from
+  // under the finger, so the click never lands. Cancelling the button's
+  // pointerdown default keeps the input focused; the click still fires and the
+  // keyboard stays up.
   const keepFocusOnButtonTap = (el) => {
     el?.addEventListener("pointerdown", (e) => {
       if (e.target.closest("button")) e.preventDefault();
     });
   };
-  keepFocusOnButtonTap(quickActions);
-  keepFocusOnButtonTap(moodPopover);
+  keepFocusOnButtonTap(menu);
+  keepFocusOnButtonTap(menuToggle);
 
-  // Quick action chips. Zero-arg actions fire directly. Check-in opens
-  // the mood popover so we can attach the picked mood to the server call.
-  if (quickActions) {
-    quickActions.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-buddy-action]");
-      if (!btn) return;
-      const action = btn.dataset.buddyAction;
-      // Opening one closes the rest — they all cover the pet, so two at once is
-      // just a stack.
-      const others = { checkin: closeMood, stash: closeStash, suggest: closeSuggest, facepick: closeFace, quick: closeQuick };
-      Object.entries(others).forEach(([name, close]) => { if (name !== action) close(); });
-
-      if (action === "checkin") return openMood();
-      if (action === "stash") return openStash();
-      if (action === "suggest") return openSuggest();
-      if (action === "facepick") return openFace();
-      if (action === "quick") return openQuick();
-      dispatchAction(action);
+  if (menuToggle) {
+    menuToggle.addEventListener("click", () => {
+      if (menu && menu.hidden) openMenu();
+      else closeMenu();
     });
   }
 
-  // "What now?" bucket popover — one tap fires the focused suggestion.
-  if (suggestPopover) {
-    keepFocusOnButtonTap(suggestPopover);
-    suggestPopover.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-suggest]");
-      if (!btn) return;
-      dispatchSuggest(btn.dataset.suggest);
+  // One listener for the whole menu, because every panel is inside it. A
+  // choice that owns options swaps the panel; everything else acts and closes.
+  if (menu) {
+    menu.addEventListener("click", (e) => {
+      if (e.target.closest("[data-actions-back]")) return showPanel("root");
+
+      const action = e.target.closest("[data-buddy-action]");
+      if (action) {
+        const kind = action.dataset.buddyAction;
+        if (kind === "quick") return openQuick();
+        if (kind === "suggest") return showPanel("suggest");
+        if (kind === "stash") return showPanel("stash");
+        if (kind === "checkin") return showPanel("checkin");
+        // No markup offers this — the face picker is a debug tool with no
+        // entry in the list. Wired here so adding one is the only step.
+        if (kind === "facepick") { closeMenu(); return openFace(); }
+        closeMenu();
+        return dispatchAction(kind);
+      }
+
+      const routine = e.target.closest("[data-quick-routine]");
+      if (routine) return dispatchRoutine(routine.dataset.quickRoutine);
+
+      const suggest = e.target.closest("[data-suggest]");
+      if (suggest) return dispatchSuggest(suggest.dataset.suggest);
+
+      const stash = e.target.closest("[data-stash]");
+      if (stash) return dispatchStash(stash.dataset.stash);
+
+      const mood = e.target.closest("[data-mood]");
+      if (mood) return dispatchCheckin(mood.dataset.mood);
     });
 
+    // Tap anywhere outside closes it. The toggle is excluded because its own
+    // handler has already run by the time this fires, and closing here would
+    // undo the open it just did.
     document.addEventListener("click", (e) => {
-      if (suggestPopover.hidden) return;
-      if (suggestPopover.contains(e.target)) return;
-      if (e.target.closest('[data-buddy-action="suggest"]')) return;
-      closeSuggest();
-    });
-  }
-
-  // Pinned-routine grid — one tap runs it + closes.
-  if (quickPopover) {
-    keepFocusOnButtonTap(quickPopover);
-    quickPopover.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-quick-routine]");
-      if (!btn) return;
-      dispatchRoutine(btn.dataset.quickRoutine);
-    });
-
-    document.addEventListener("click", (e) => {
-      if (quickPopover.hidden) return;
-      if (quickPopover.contains(e.target)) return;
-      if (e.target.closest('[data-buddy-action="quick"]')) return;
-      closeQuick();
-    });
-  }
-
-  // Stash bucket popover — one tap arms the bucket + closes.
-  if (stashPopover) {
-    keepFocusOnButtonTap(stashPopover);
-    stashPopover.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-stash]");
-      if (!btn) return;
-      dispatchStash(btn.dataset.stash);
-    });
-
-    document.addEventListener("click", (e) => {
-      if (stashPopover.hidden) return;
-      if (stashPopover.contains(e.target)) return;
-      if (e.target.closest('[data-buddy-action="stash"]')) return;
-      closeStash();
-    });
-  }
-
-  // Mood popover — one tap posts + closes.
-  if (moodPopover) {
-    moodPopover.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-mood]");
-      if (!btn) return;
-      const mood = btn.dataset.mood;
-      dispatchCheckin(mood);
-    });
-
-    // Tap anywhere outside the popover closes it.
-    document.addEventListener("click", (e) => {
-      if (moodPopover.hidden) return;
-      if (moodPopover.contains(e.target)) return;
-      if (e.target.closest('[data-buddy-action="checkin"]')) return;
-      closeMood();
+      if (menu.hidden) return;
+      if (menu.contains(e.target)) return;
+      if (menuToggle && menuToggle.contains(e.target)) return;
+      closeMenu();
     });
   }
 

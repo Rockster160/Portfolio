@@ -34,10 +34,22 @@ RSpec.describe Buddy::Features do
       expect(offered).not_to include(:mac_command)
     end
 
-    it "offers the Mac tool once it's granted" do
+    # Granting it is no longer enough, and that is the point of OWNER_ONLY
+    # being enforced rather than merely withheld from DEFAULT: `mac`,
+    # `deliveries` and `job_search` are subtracted from anybody who isn't the
+    # owner, so a stray grant - a script, a console, a hand-edited array - is
+    # inert instead of a hole.
+    it "refuses the Mac tool to anyone but the owner, granted or not" do
       grant!(:mac)
 
-      expect(offered).to include(:mac_command)
+      expect(offered).not_to include(:mac_command)
+    end
+
+    it "offers it to the owner" do
+      owner = User.me
+      owner.grant_buddy_features!(:mac)
+
+      expect(Buddy::Tools.function_schemas(user: owner.reload).pluck(:name)).to include(:mac_command)
     end
 
     it "drops a revoked feature's tools and leaves the rest alone" do
@@ -258,10 +270,22 @@ RSpec.describe Buddy::Features do
       expect(prompt).to include("Don't offer it, don't ask about it")
     end
 
+    # The owner, because they're the only one who CAN hold everything now -
+    # anybody else is missing the three that are his by definition, and the
+    # block correctly says so.
     it "says nothing at all for someone holding everything" do
+      owner = User.me
+      owner.grant_buddy_features!(*described_class.all)
+      owner_convo = owner.byte_conversations.create!(mode: :buddy)
+
+      prompt = Buddy::Personality.for(owner.reload, conversation: owner_convo)
+      expect(prompt).not_to include("What this person doesn't have")
+    end
+
+    it "tells everyone else the owner's are not theirs" do
       grant!(*described_class.all)
 
-      expect(Buddy::Personality.for(user, conversation: convo)).not_to include("What this person doesn't have")
+      expect(described_class.missing_for(user)).to contain_exactly(:mac, :deliveries, :job_search)
     end
   end
 

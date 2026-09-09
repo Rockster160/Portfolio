@@ -27,8 +27,72 @@ for arg in "$@"; do
   fi
 done
 
-if (( ${#message[@]} > 0 )); then
-  gam "${message[@]}" || exit $?
+commit=("${message[@]}") # the words go to `gam` as they were typed
+
+# Anything `enqueue` stacked up since the last deploy gets merged with this
+# run's args and opened in $EDITOR first. With an empty queue none of this
+# happens and the deploy runs exactly as it always has.
+queued=0
+queue_file=""
+(( $+functions[_deployQueueFile] )) && queue_file=$(_deployQueueFile)
+
+if [[ -n "$queue_file" && -s "$queue_file" ]]; then
+  queued=1
+
+  _deployQueueLoad "$queue_file"
+  (( ${#message[@]} > 0 )) && _deployQueueAddMessage "${message[*]}"
+  for script in "${scripts[@]}"; do
+    _deployQueueAddScript "$script"
+  done
+  _deployQueueWrite "$queue_file"
+
+  print -r -- "# messages first, script paths last; empty this file to cancel the deploy" | cat - "$queue_file" > "$queue_file.tmp"
+  mv "$queue_file.tmp" "$queue_file"
+
+  ${EDITOR:-nano} "$queue_file" || exit $?
+
+  _deployQueueLoad "$queue_file" # the header and any reordering wash out here
+  _deployQueueWrite "$queue_file"
+  message=("${_DEPLOY_QUEUE_MESSAGES[@]}")
+  scripts=("${_DEPLOY_QUEUE_SCRIPTS[@]}")
+  commit=() # one line per enqueue, joined into the one commit message
+  (( ${#message[@]} > 0 )) && commit=("${(j:, :)message}")
+
+  if (( ${#message[@]} == 0 && ${#scripts[@]} == 0 )); then
+    print -P "%F{yellow}⚠ Queue emptied — nothing to deploy.%f"
+    exit 0
+  fi
+
+  for script in "${scripts[@]}"; do
+    if [[ ! -f "$script" ]]; then
+      print -P "%F{red}deploy: queued script '$script' no longer exists.%f"
+      exit 1
+    fi
+  done
+fi
+
+# Everything still owed stays in the queue, so an abandoned or half-finished
+# deploy resumes from where it stopped instead of losing the list.
+owed_messages=("${message[@]}")
+owed_scripts=("${scripts[@]}")
+saveQueue() {
+  (( queued )) || return
+  _DEPLOY_QUEUE_MESSAGES=("${owed_messages[@]}")
+  _DEPLOY_QUEUE_SCRIPTS=("${owed_scripts[@]}")
+  _deployQueueWrite "$queue_file"
+}
+
+head_before=$(git rev-parse HEAD)
+
+if (( ${#commit[@]} > 0 )); then
+  gam "${commit[@]}" || exit $?
+fi
+
+# Only once the messages are in a commit — `gam` walks away without one when
+# `committable` objects, and they would be owed still.
+if [[ "$(git rev-parse HEAD)" != "$head_before" ]]; then
+  owed_messages=()
+  saveQueue
 fi
 
 push_output=$(gpo 2>&1)
@@ -49,5 +113,7 @@ if (( ${#scripts[@]} == 0 )); then
 else
   for script in "${scripts[@]}"; do
     prodExec "$script" || exit $?
+    owed_scripts=("${owed_scripts[@]:1}") # dropped as each lands, in order
+    saveQueue
   done
 fi

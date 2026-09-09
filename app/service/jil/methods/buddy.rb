@@ -9,6 +9,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
   #   #checklist("List" String BR "Message" Text)::Numeric
+  #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
   # Byte/Moss says the text verbatim — a fixed inbound message dropped into the
   # user's Buddy conversation, plus a push. Use when the wording is yours and
@@ -83,6 +84,34 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     ::Buddy::ListChecklist.post!(user: recipient, list: list, text: text)
   end
 
+  # Same unit set the schema offers. Anything else is a typo rather than a
+  # duration, and a rotation silently landing in seconds when "minutes" was
+  # meant is 75 seconds of laundry.
+  ROTATE_UNITS = { "seconds" => 1, "minutes" => 60, "hours" => 3600 }.freeze
+
+  # A visible countdown that comes back and ASKS whether to go round again —
+  # the laundry, above all. `key` is the loop's identity: calling this again
+  # while one is live restarts it and answers any question already on screen,
+  # which is what makes a physical button press mean "I rotated it".
+  #
+  # `item`/`list` are the follow-up left behind when they answer Done ("Fold
+  # Laundry" onto TODO); leave either blank and Done just ends the loop.
+  # Returns false when there's nowhere to put the countdown — nobody's Buddy
+  # thread exists yet — so a task can tell that from a timer that ran.
+  def rotate(key, label, number, interval, again, item, list)
+    seconds = duration_seconds(number, interval)
+    return false if key.to_s.strip.empty? || seconds < 1
+
+    ::Buddy::RotationTimer.start!(
+      user:      recipient,
+      key:       key.to_s.strip,
+      label:     label.to_s.strip,
+      seconds:   seconds,
+      again:     again.to_s.strip.presence,
+      follow_up: { item: item.to_s.strip.presence, list: list.to_s.strip.presence },
+    ).present?
+  end
+
   # Re-dispatches a fresh in-character Buddy turn seeded by the text, so the
   # reply reads like Byte/Moss talking rather than a canned string. `buddy_trigger`
   # is what marks the resulting reply self-initiated (see Buddy::GPT::Turn), so it
@@ -102,6 +131,13 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   end
 
   private
+
+  def duration_seconds(number, interval)
+    unit = ROTATE_UNITS[interval.to_s.downcase.sub(/s?\z/, "s")]
+    return 0 if unit.nil?
+
+    @jil.cast(number, :Numeric).to_i * unit
+  end
 
   def deliver(text, files: [], push_title: nil)
     deliver_to(recipient, text, files: files, push_title: push_title)

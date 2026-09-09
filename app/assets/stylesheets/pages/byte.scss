@@ -478,6 +478,177 @@ html.html-ctr-byte body {
       .byte-mute-off { display: inline; }
     }
   }
+
+  // Actions. Sized with the reload/notify/mute row it sits in, and tinted with
+  // the accent while its list is open so the header says which button the
+  // panel below belongs to.
+  .byte-actions-toggle {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-muted);
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+
+    &[hidden] { display: none; }
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--bs-text);
+    }
+
+    &[aria-expanded="true"] {
+      color: var(--bs-accent-strong);
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+}
+
+// -------- Actions menu -----------------------------------------------------
+// Everything Buddy can be asked to do without typing, behind one header
+// button. It was a row of five chips under the pet, which cost a strip of the
+// hero every second it was on screen for a handful of taps a week.
+//
+// Anchored to the header, not the viewport: `.byte-header` is
+// `position: relative`, so `top: 100%` lands the panel on its bottom edge
+// whatever the safe-area inset works out to, and the header's `z-index: 2`
+// carries it over the hero and the thread. `right` rather than `left` because
+// the button is on that side and a list should drop out of the thing that
+// opened it.
+.byte-actions-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  // 16px is the header's own horizontal padding, so the panel's right edge
+  // lines up with the last button in the row rather than floating off it.
+  right: 16px;
+  z-index: 3;
+  width: 220px;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(11, 21, 36, 0.96);
+  border: 1px solid var(--bs-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  &[hidden] { display: none; }
+}
+
+// One panel at a time — the root list, or the options belonging to one of its
+// rows. Capped and scrollable because the routine panel is filled from the
+// server and there is no telling how many are pinned.
+.byte-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+
+  &[hidden] { display: none; }
+
+  // Full-width rows rather than a chip grid. Every label here is a phrase in
+  // the person's own words (a routine name, "What now?"), and a grid either
+  // truncates them or sizes itself to the longest one.
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 10px !important;
+    background: transparent !important;
+    color: var(--bs-text) !important;
+    border: 1px solid transparent !important;
+    border-radius: 9px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.07) !important;
+    }
+    &:active {
+      background: rgba(255, 255, 255, 0.12) !important;
+    }
+  }
+}
+
+// The row that gets you back, and says which list you're in. Quieter than the
+// options under it — it's a heading that happens to be tappable.
+//
+// Nested rather than flat: `.byte-actions-panel button` is (0,1,1) and every
+// field this overrides is `!important` there too, so a bare `.byte-actions-back`
+// at (0,1,0) loses every one of them and the row renders as an ordinary option.
+.byte-actions-panel .byte-actions-back {
+  color: var(--bs-muted) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid var(--bs-border) !important;
+  border-radius: 9px 9px 0 0 !important;
+  justify-content: flex-start !important;
+  margin-bottom: 2px !important;
+
+  span {
+    color: var(--bs-accent);
+    font-size: 15px;
+    line-height: 1;
+  }
+}
+
+// The "this one has its own options" mark.
+.byte-actions-more {
+  color: var(--bs-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+// Server-filled routine rows. A sentence while it's loading or empty, so it
+// reads as body text rather than a button nobody can press.
+.byte-actions-panel .byte-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: var(--bs-muted);
+
+  &:has(button) { padding: 0; }
+
+  button {
+    padding: 8px 10px !important;
+    color: var(--bs-text) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover { background: rgba(255, 255, 255, 0.07) !important; }
+  }
+}
+
+// Mood-tinted rows — the same subtle "how loaded is each choice" affordance
+// the check-in chips carried, as a left edge now that the options are rows.
+.byte-actions-panel button[data-mood] {
+  border-left: 2px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 4px 9px 9px 4px !important;
+}
+.byte-actions-panel button[data-mood="great"] {
+  border-left-color: rgba(79, 207, 124, 0.65) !important;
+}
+.byte-actions-panel button[data-mood="good"] {
+  border-left-color: rgba(63, 160, 255, 0.65) !important;
+}
+.byte-actions-panel button[data-mood="low"] {
+  border-left-color: rgba(232, 168, 92, 0.65) !important;
+}
+.byte-actions-panel button[data-mood="rough"] {
+  border-left-color: rgba(242, 107, 107, 0.65) !important;
 }
 
 // -------- Buddy timer chips ------------------------------------------------
@@ -4293,6 +4464,37 @@ dialog.byte-modal {
   --buddy-accent: #3FA0FF;
   --buddy-danger: #F26B6B;
 
+  // A very soft wash of the pet's own colour filling the hero, clearing as it
+  // reaches them — so the tint is what marks the area out and the pet sits in
+  // clean space at the middle of it rather than competing with a halo.
+  //
+  // **The radius is a LENGTH, and `circle`, on purpose.** Sized in percent it
+  // resolves against the box, and the hero is three or four times wider than
+  // it is tall: an ellipse `116% x 82%` of that is so much wider than the
+  // screen that only its vertical falloff is ever on show, and it renders as a
+  // plain top-to-bottom band. A circle in px is the same circle at any window
+  // width. Roughly `--buddy-glow-size` past the centre the last stop takes
+  // over and fills the corners, which is the flat tint the thread butts up
+  // against.
+  //
+  // `color-mix` off `--buddy-accent` rather than a per-theme rgba: the accent
+  // is already redefined for Moss/Suki/Glimmer a few lines up, so the glow
+  // follows the pet with nothing to keep in sync. Where it isn't supported the
+  // declaration is simply dropped and the hero is plain, which is what it was.
+  //
+  // Held in a custom property because the compact row needs the same layer
+  // over its panel fill; both knobs are substituted per element, so re-aiming
+  // it there is two lines rather than a second copy of this.
+  --buddy-glow-at: 50% 55%;
+  --buddy-glow-size: 340px;
+  --buddy-glow-layer: radial-gradient(
+    circle var(--buddy-glow-size) at var(--buddy-glow-at),
+    transparent 0%,
+    color-mix(in srgb, var(--buddy-accent) 4%, transparent) 62%,
+    color-mix(in srgb, var(--buddy-accent) 12%, transparent) 100%
+  );
+  background: var(--buddy-glow-layer);
+
   &[data-buddy-theme="moss"] {
     --buddy-primary: #1A3A2A;
     --buddy-accent: #4FCF7C;
@@ -4349,7 +4551,16 @@ dialog.byte-modal {
   // Buddy sits right on top of the message thread — give him his own zone:
   // a filled panel with a hard bottom edge so the two read as separate
   // surfaces instead of bleeding together.
-  background: linear-gradient(180deg, rgba(20, 40, 79, 0.6), rgba(11, 43, 78, 0.32));
+  // Pet centred rather than stood on the bottom edge, so the clear middle
+  // follows them, and a smaller one — the char is capped at 150px here against
+  // 260px in the tall layout, and a 340px hole would leave the whole bar
+  // clear. The panel fill sits under it, and here there IS a hard bottom edge
+  // as well, because the bar is short enough that a tint alone doesn't read.
+  --buddy-glow-at: 50% 50%;
+  --buddy-glow-size: 200px;
+  background:
+    var(--buddy-glow-layer),
+    linear-gradient(180deg, rgba(20, 40, 79, 0.6), rgba(11, 43, 78, 0.32));
   border-bottom: 1px solid var(--bs-border);
   padding-top: 8px; // override the Moss sky-padding in the compact row
 
@@ -4363,28 +4574,6 @@ dialog.byte-modal {
     min-height: 0;
     aspect-ratio: 1;
     margin: 0;
-  }
-  // Chips fill the space beside Buddy. auto-fit packs as many columns as the
-  // width allows, so a short-but-WIDE desktop window lands them on ONE short
-  // row (not a tall 3-row stack that overflows the bar); narrower windows add
-  // rows as needed. Small chips so they stay secondary to Buddy.
-  .byte-buddy-quick-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
-    gap: 5px;
-    flex: 1 1 0;
-    min-width: 0;
-    max-width: 60%;
-    width: auto;
-
-    button {
-      flex: 0 1 auto;
-      min-width: 0;
-      padding: 5px 6px !important;
-      font-size: 11px !important;
-      border-radius: 9px !important;
-      letter-spacing: 0 !important;
-    }
   }
 }
 
@@ -4643,158 +4832,6 @@ $suki_expr_aliases: (
   }
 }
 
-// Quick actions — real button feel. Beat the forms.scss button cascade
-// with !important on the fields it targets so we get the pill look. auto-fit
-// grid instead of a wrapping flex row: chips pack into as many columns as the
-// width allows (one tidy row on a normal screen, wrapping cleanly on narrow
-// phones) — never the horizontal overflow the flex row produced, and a small
-// vertical footprint so Buddy above stays big.
-.byte-buddy-quick-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
-  gap: 6px;
-  justify-content: center;
-  width: 100%;
-  max-width: 470px;
-
-  button {
-    min-width: 0;
-    white-space: nowrap;
-    padding: 6px 8px !important;
-    background: linear-gradient(
-      180deg,
-      rgba(63, 160, 255, 0.24),
-      rgba(63, 160, 255, 0.12)
-    ) !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(63, 160, 255, 0.5) !important;
-    border-radius: 10px !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.01em;
-    cursor: pointer;
-    transition:
-      transform 90ms ease,
-      background 100ms ease,
-      box-shadow 100ms ease;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.08) inset,
-      0 2px 6px rgba(0, 0, 0, 0.25);
-
-    &:hover {
-      background: linear-gradient(
-        180deg,
-        rgba(63, 160, 255, 0.34),
-        rgba(63, 160, 255, 0.18)
-      ) !important;
-    }
-    &:active {
-      transform: translateY(1px);
-      background: linear-gradient(
-        180deg,
-        rgba(63, 160, 255, 0.2),
-        rgba(63, 160, 255, 0.1)
-      ) !important;
-      position: static !important;
-      top: 0 !important;
-    }
-  }
-}
-
-// When a popover is open (Quick, Check-in mood, Stash bucket, What-now bucket,
-// or the debug face picker) it TAKES THE PLACE of the quick-action chips rather
-// than sitting alongside them. A popover is an in-flow flex child, so in the
-// compact side-by-side row it becomes a third column and squeezes the chip grid
-// down to one 78px-wide stack, which then overflows the bar top and bottom.
-//
-// `!important`, because this is an absolute rather than a preference and it was
-// losing an arms race it shouldn't have been in: at three classes it was
-// outranked by BOTH compact triggers (the short-viewport one and the
-// keyboard-focus one), which set `display: grid` on the same element from a
-// longer selector — so the layout this rule exists to prevent was exactly the
-// layout where it stopped applying.
-.byte-buddy-hero:has(
-    .byte-buddy-mood-popover:not([hidden]),
-    .byte-buddy-face-popover:not([hidden])
-  ) .byte-buddy-quick-actions {
-  display: none !important;
-}
-
-// Moss palette override for buttons.
-.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-quick-actions button {
-  background: linear-gradient(
-    180deg,
-    rgba(79, 207, 124, 0.28),
-    rgba(79, 207, 124, 0.14)
-  ) !important;
-  border-color: rgba(79, 207, 124, 0.5) !important;
-
-  &:hover {
-    background: linear-gradient(
-      180deg,
-      rgba(79, 207, 124, 0.38),
-      rgba(79, 207, 124, 0.2)
-    ) !important;
-  }
-  &:active {
-    background: linear-gradient(
-      180deg,
-      rgba(79, 207, 124, 0.22),
-      rgba(79, 207, 124, 0.12)
-    ) !important;
-  }
-}
-
-// Glimmer palette override for buttons.
-.byte-buddy-hero[data-buddy-theme="glimmer"] .byte-buddy-quick-actions button {
-  background: linear-gradient(
-    180deg,
-    rgba(242, 184, 75, 0.28),
-    rgba(242, 184, 75, 0.14)
-  ) !important;
-  border-color: rgba(242, 184, 75, 0.5) !important;
-
-  &:hover {
-    background: linear-gradient(
-      180deg,
-      rgba(242, 184, 75, 0.38),
-      rgba(242, 184, 75, 0.2)
-    ) !important;
-  }
-  &:active {
-    background: linear-gradient(
-      180deg,
-      rgba(242, 184, 75, 0.22),
-      rgba(242, 184, 75, 0.12)
-    ) !important;
-  }
-}
-
-// Suki palette override for buttons.
-.byte-buddy-hero[data-buddy-theme="suki"] .byte-buddy-quick-actions button {
-  background: linear-gradient(
-    180deg,
-    rgba(178, 102, 242, 0.28),
-    rgba(178, 102, 242, 0.14)
-  ) !important;
-  border-color: rgba(178, 102, 242, 0.5) !important;
-
-  &:hover {
-    background: linear-gradient(
-      180deg,
-      rgba(178, 102, 242, 0.38),
-      rgba(178, 102, 242, 0.2)
-    ) !important;
-  }
-  &:active {
-    background: linear-gradient(
-      180deg,
-      rgba(178, 102, 242, 0.22),
-      rgba(178, 102, 242, 0.12)
-    ) !important;
-  }
-}
-
 // Hide the pwd/session banner on Buddy conversations — it's a
 // Claude/bash concern that's just noise here.
 .byte-app[data-active-mode="buddy"] .byte-pwd-bar {
@@ -4821,11 +4858,10 @@ $suki_expr_aliases: (
   .byte-sleep-chip,
   .byte-reply-bar,
   .byte-slash-popover,
-  // The chip row and its popovers. Their contents either need a keyboard
-  // (Stash arms the next thing you type) or open a second layer over the pet,
-  // and the pinned grid they lead to is the whole bottom half here anyway.
-  .byte-buddy-quick-actions,
-  .byte-buddy-mood-popover,
+  // The debug face picker. The actions menu needs no entry here — it hangs
+  // off the header, which is already on this list, and its contents either
+  // need a keyboard (Stash arms the next thing you type) or lead to the
+  // pinned routines, which are the whole bottom half of a kiosk anyway.
   .byte-buddy-face-popover {
     display: none !important;
   }
@@ -5839,10 +5875,9 @@ $suki_expr_aliases: (
   &[data-status="working"] { opacity: 0.6; }
 }
 
-// -------- Buddy check-in mood popover -------------------------------------
-// Inline flyout below the quick-action chips. Rendered small and adjacent
-// so it feels like an extension of the chip rather than a full modal.
-.byte-buddy-mood-popover,
+// -------- Buddy debug face picker -----------------------------------------
+// Inline flyout inside the hero. Small and adjacent so it reads as part of
+// the pet rather than a full modal.
 .byte-buddy-face-popover {
   display: flex;
   flex-direction: column;
@@ -5925,77 +5960,6 @@ $suki_expr_aliases: (
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
-}
-
-// Pinned routines. The other popovers hold four or five one-word choices that
-// fit a single row; routine names are the person's own words and there can be
-// any number of them, so this one wraps into a grid and lets each button size
-// to its label instead of splitting the row evenly.
-.byte-buddy-quick-popover .byte-buddy-mood-choices {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  // Reads as body text while it's a sentence ("Nothing pinned yet…"), before
-  // any buttons replace it.
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
-
-  button {
-    flex: 0 1 auto;
-    padding: 8px 12px !important;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.byte-buddy-mood-choices {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-
-  button {
-    flex: 1 1 0;
-    padding: 8px 4px !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    border-radius: 10px !important;
-    font-size: 12.5px !important;
-    font-weight: 600 !important;
-    cursor: pointer;
-    transition:
-      transform 90ms ease,
-      background 100ms ease;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.12) !important;
-    }
-    &:active {
-      transform: translateY(1px);
-      background: rgba(255, 255, 255, 0.18) !important;
-      position: static !important;
-      top: 0 !important;
-    }
-  }
-
-  // Optional mood-tinted borders — subtle affordance for "how loaded is
-  // each choice" without turning it into a mood color wheel.
-  button[data-mood="great"] {
-    border-color: rgba(79, 207, 124, 0.45) !important;
-  }
-  button[data-mood="good"] {
-    border-color: rgba(63, 160, 255, 0.45) !important;
-  }
-  button[data-mood="okay"] {
-    border-color: rgba(255, 255, 255, 0.22) !important;
-  }
-  button[data-mood="low"] {
-    border-color: rgba(232, 168, 92, 0.45) !important;
-  }
-  button[data-mood="rough"] {
-    border-color: rgba(242, 107, 107, 0.45) !important;
-  }
 }
 
 // -------- Action chip (quick-action tap marker) ---------------------------

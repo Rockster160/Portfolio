@@ -259,11 +259,19 @@ module Buddy
     # callbacks, archive the row, and broadcast so the chip drops off every open
     # surface. Same three steps as a swipe-away in Buddy::TimersController, kept
     # here so the `cancel_timer` tool and the gesture can't drift apart.
+    #
+    # A ROTATION also has a question that may already be on screen (it rings and
+    # waits for an answer, so a cancel most often arrives with the card up).
+    # Taking the countdown away and leaving the card is a loop somebody thinks
+    # they switched off, still offering to go round again. Every path that ends
+    # a countdown for good goes through here, so it is the only place that
+    # closes both - the swipe, `cancel_timer`, and the tool alike.
     def stop!(timer)
       timer.cancel_fire!
       timer.cancel_countdown_callbacks!
       timer.update!(archived_at: Time.current)
       timer.broadcast(reason: :archived)
+      Buddy::RotationTimer.abandoned!(timer)
       timer
     end
 
@@ -322,6 +330,14 @@ module Buddy
       # a schedule of its own. See Buddy::TimerCycle.
       if !alarm && Buddy::TimerCycle.cycle?(timer)
         Buddy::TimerCycle.on_fired(timer, conversation)
+        return
+      end
+
+      # A rotation ends with a QUESTION rather than a full stop - "did you turn
+      # it over, is it finished, or drop it" - because the answer decides
+      # whether there is another round. See Buddy::RotationTimer.
+      if !alarm && Buddy::RotationTimer.rotation?(timer)
+        Buddy::RotationTimer.on_fired(timer, conversation)
         return
       end
 

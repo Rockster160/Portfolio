@@ -461,6 +461,11 @@ class ByteController < ApplicationController
     # impossible, since the action stops being pending.
     Buddy::TimerCycle.tapped!(action) if action.tool_name == Buddy::TimerCycle::TOOL_NAME
 
+    # Again / Done / Skip on a rotation that just rang. Same reasoning as the
+    # line above: the answer decides whether another round starts, and the
+    # decision recorded above is what makes a second tap impossible.
+    Buddy::RotationTimer.tapped!(action) if action.tool_name == Buddy::RotationTimer::TOOL_NAME
+
     # Fire-and-forget notification to the Mac so a blocked hook can
     # unblock. Silent on failure — the hook will time out and deny.
     #

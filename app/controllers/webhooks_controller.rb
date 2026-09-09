@@ -616,6 +616,7 @@ class WebhooksController < ApplicationController
         kind: :system, self_initiated: true, source: :job_mail_watcher,
       ),
       occurred_at: Time.zone.parse(params[:occurred_at].to_s),
+      body:        params[:body].presence,
     )
     return render json: { error: :"no buddy conversation" }, status: :not_found if message.nil?
 

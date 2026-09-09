@@ -26,7 +26,7 @@ module Buddy
     # `occurred_at` is when the MAIL arrived, not when this ran — it becomes the
     # note's timestamp, so mail that landed on Friday and got logged on Monday
     # sits on Friday.
-    def call(user:, verdict:, card:, metadata:, occurred_at: nil, email: nil)
+    def call(user:, verdict:, card:, metadata:, occurred_at: nil, email: nil, body: nil)
       conversation = ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
       return nil if conversation.nil?
 
@@ -36,7 +36,7 @@ module Buddy
       CompanionDelivery.deliver_prompt(
         user:         user,
         conversation: conversation,
-        seed:         seed(verdict, job, metadata, occurred_at, email),
+        seed:         seed(verdict, job, metadata, occurred_at, email, body),
         metadata:     metadata.merge(job_application_id: job.id),
       )
     end
@@ -55,7 +55,7 @@ module Buddy
     # on it so the turn costs no lookups — see Buddy::BriefingFacts for why a
     # self-initiated turn that has to go and fetch things is the one that
     # wanders off the subject.
-    def seed(verdict, job, metadata, occurred_at, email)
+    def seed(verdict, job, metadata, occurred_at, email, body=nil)
       [
         "Job mail just arrived, and it belongs to an application already on their board.",
         "",
@@ -68,10 +68,34 @@ module Buddy
         # inside the instruction below.
         (email.present? ? "Email id: #{email.id}" : "Arrived: #{occurred_at&.iso8601}"),
         "",
+        message_block(body),
         "Tell them what came in, briefly, and offer to log it against " \
-        "#{job.company}. If they say yes, that is add_job_note#{log_hint(occurred_at, email)}. " \
+        "#{job.company}. If they say yes, that is add_job_note#{log_hint(occurred_at, email)}, " \
+        "and pick the `tag` that matches what actually happened rather than " \
+        "leaving it a plain note.#{note_hint(body)} " \
         "Don't log it unless they ask - the offer is the point of telling them.",
       ].compact.join("\n")
+    end
+
+    # The mail itself, fenced so the end of it is unambiguous. Absent when it
+    # couldn't be read off disk, which is a soft failure upstream — the offer is
+    # still worth making from the headline alone.
+    def message_block(body)
+      return nil if body.blank?
+
+      ["", "--- the message ---", body, "--- end ---"].join("\n")
+    end
+
+    # The habit the board was built by hand with: the message's own words go in
+    # the note, trimmed the way a person would trim them. Said only when there
+    # IS a message to quote, so a headline-only offer doesn't promise one.
+    def note_hint(body)
+      return "" if body.blank?
+
+      " Their habit is to keep the message itself as the note, so pass the part " \
+        "that carries the substance as `note` - drop the signature block, the " \
+        "address and phone lines, the unsubscribe footer and any quoted thread " \
+        "underneath, and keep the sender's name where they signed off."
     end
 
     # Which handle the note should be pinned to. An email we hold gets its id,
