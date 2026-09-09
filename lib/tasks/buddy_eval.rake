@@ -444,6 +444,21 @@ BUDDY_EVAL_READERS = %i[
 #               both fine; setting a watch on the wrong person is not, and
 #               that's still what `avoid:` is for.
 BUDDY_EDGE_PROBES = [
+  # --- job mail announced without an email number to hand ------------------
+  # The Mac watcher reads the personal Gmail, so the beat is SPOKEN to Buddy
+  # rather than carried by a row she can look up. Without `occurred_at` the
+  # note lands on whenever they got round to answering, which for anything
+  # announced overnight is the wrong day — and the timeline is read in that
+  # order.
+  {
+    case:  "watcher mail, no email row behind it",
+    say:   "Halloway Systems emailed yesterday afternoon to set up a call — log that",
+    tool:  :add_job_note,
+    avoid: %i[log_event add_agenda_item],
+    args:  { add_job_note: { occurred_at: /./ } },
+    needs: :halloway_application,
+    note:  "the date is in the sentence and belongs on the note, not `now`",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",

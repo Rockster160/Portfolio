@@ -79,6 +79,13 @@ module Buddy
       # request being REJECTED, not what came back.
       PING_INSTRUCTIONS = "Reply with the single word: ok".freeze
 
+      # A turn that produced neither prose nor a tool call. Named because one
+      # caller has to be able to tell it apart from a real failure: a check-in
+      # is ASKED to say nothing when nothing needs asking, and reaching the one
+      # branch its seed most wants it to reach is not something to apologise
+      # for. See Turn#said_nothing_on_purpose?.
+      EMPTY_TURN = "model returned no text and no tool calls".freeze
+
       ACCOUNT_STATUSES = [401, 402, 403].freeze
       QUOTA_RX = /insufficient[_ ]quota|no credits|billing|payment|exceeded your current quota/i
 
@@ -215,7 +222,7 @@ module Buddy
           text:        text,
           tool_calls:  tool_calls,
           response_id: response_id,
-          error:       error || (empty ? "model returned no text and no tool calls" : nil),
+          error:       error || (empty ? EMPTY_TURN : nil),
           model:       model,
           usage:       usage,
         }

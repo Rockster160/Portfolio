@@ -99,6 +99,24 @@ RSpec.describe Buddy::AgendaSearch do
       expect(row).to include("on Mine")
     end
 
+    # The one place the WHOLE address appears. Everything ambient carries
+    # `Buddy::Place.short`, because a briefing reading out a ZIP is what got
+    # that changed — but "what's the address" is a real question, and a search
+    # is how it gets asked. Rows carried no place at all before this, so "where
+    # is the plunge" had nothing to answer from.
+    it "gives the address in full, which nothing ambient does" do
+      item = item!("Plunge with Wil", at: 5.days.from_now)
+      item.update!(location: "Horsetail Falls, Alpine, UT")
+
+      expect(described_class.rows([item], user).first).to include("at Horsetail Falls, Alpine, UT")
+    end
+
+    it "says nothing about a place when the item has none" do
+      item = item!("Dentist", at: 5.days.from_now)
+
+      expect(described_class.rows([item], user).first).not_to include("· at ")
+    end
+
     # Same distinction the briefing draws: a partner's shared item is awareness,
     # not a task of theirs.
     it "marks an item that belongs to somebody else" do

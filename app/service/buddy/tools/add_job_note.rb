@@ -24,6 +24,13 @@ Buddy::Tools.register(
     with that email's date, its sender, and a link straight back to it. Leave
     it off for something they told you about out loud.
 
+    `occurred_at` is WHEN it happened, and it matters for the same reason
+    `email_id` does. Mail that came in on Friday and got mentioned on Monday
+    belongs on Friday, and the timeline is read in that order. `email_id`
+    already carries its own date, so pass one or the other, never both. Use
+    this when a message was announced to you and there's no email number to
+    hand - the arrival time will be in what you were told.
+
     `follow_up_at` is for when they say they'll chase it - it puts a task on
     the agenda, so only set it if they actually said they'd come back to this.
   TXT
@@ -38,6 +45,7 @@ Buddy::Tools.register(
       description: "The kind of beat. offer/rejected/withdrew also settle the application",
     },
     email_id:     { type: :integer, required: false, description: "The email this came from, from recent_mail" },
+    occurred_at:  { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },
     spoke_to:     { type: :string, required: false, description: "Who they dealt with, if a person was named" },
     follow_up_at: { type: :iso_time, required: false, description: "Only if they said they'd chase it" },
   },
@@ -66,6 +74,7 @@ Buddy::Tools.register(
         tag:          tag,
         note:         body,
         email_id:     email&.id,
+        occurred_at:  payload[:occurred_at],
         spoke_to:     payload[:spoke_to].presence,
         follow_up_at: payload[:follow_up_at],
       },
@@ -93,10 +102,13 @@ Buddy::Tools.register(
     note = job.notes.create!(
       body:         payload[:note].presence,
       tag:          payload[:tag],
-      # The email's own clock, so the timeline reads in the order things
+      # The mail's own clock, so the timeline reads in the order things
       # actually happened rather than in the order they were logged. Mail that
-      # arrived on Friday and got mentioned on Monday belongs on Friday.
-      occurred_at:  email&.timestamp || Time.current,
+      # arrived on Friday and got mentioned on Monday belongs on Friday. An
+      # email we hold answers this itself; mail we were only told about has to
+      # be handed the time, and falling back to `now` is the last resort rather
+      # than the norm.
+      occurred_at:  email&.timestamp || payload[:occurred_at] || Time.current,
       source:       (email ? "Email" : nil),
       url:          (email ? Rails.application.routes.url_helpers.email_url(id: email.id) : nil),
       spoke_to:     payload[:spoke_to].presence,

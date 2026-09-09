@@ -326,4 +326,62 @@ RSpec.describe ByteStandupPrep do
       expect(described_class.forward!(report(sent_prompt, kind: "buddy_activity"))).to be(false)
     end
   end
+
+  # The -5 minute "Import Standup" step used to empty the list every morning.
+  # It was disabled on 3 Sep when this service replaced it and nothing took
+  # over the emptying, so `Yesterday: Worked on adding a memo to Allocations` —
+  # typed 3 Sep about work that merged 3 Sep — led "On my list" every morning
+  # for the six days after. Rocco: "Stand up should ONLY be what was worked on
+  # yesterday."
+  describe "spending the list" do
+    let(:prep)    { described_class.conversation(user) }
+    let(:primary) { ByteConversation.for_self_initiated(user) }
+    let(:list)    { create(:list, name: "Standup", user: user) }
+    let!(:item)   { create(:list_item, list: list, name: "Yesterday: memo on Allocations") }
+
+    before do
+      user.byte_conversations.create!(name: "Byte", mode: :buddy) if primary.nil?
+      described_class.run!(user)
+    end
+
+    def sent_prompt
+      prep.byte_messages.where(direction: :outbound).order(:id).last
+    end
+
+    def brief(parent)
+      prep.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :delivered,
+        body:      "- memo on Allocations",
+        metadata:  { "kind" => "claude", "in_reply_to" => parent&.id },
+      )
+    end
+
+    it "says it in the brief first" do
+      expect(sent_prompt.body).to include("Yesterday: memo on Allocations")
+    end
+
+    it "takes it off the list once the brief has landed" do
+      expect { described_class.forward!(brief(sent_prompt)) }
+        .to change { ListItem.find_by(id: item.id) }.to(nil)
+    end
+
+    # A run that fails never reaches the forward, and the items have to survive
+    # it — a morning with no brief must not also be a morning that quietly ate
+    # the only part he wrote by hand.
+    it "leaves it alone when no brief was delivered" do
+      expect { described_class.forward!(brief(nil)) }
+        .not_to(change { ListItem.find_by(id: item.id) })
+    end
+
+    # By the ids read when the prompt went out, not by re-reading the list:
+    # anything typed while the brief is being written belongs to tomorrow's.
+    it "does not take anything added after the prompt went out" do
+      later = create(:list_item, list: list, name: "Yesterday: the other thing")
+      described_class.forward!(brief(sent_prompt))
+
+      expect(ListItem.find_by(id: later.id)).to be_present
+    end
+  end
 end

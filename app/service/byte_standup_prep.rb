@@ -107,11 +107,40 @@ module ByteStandupPrep
   # The list as it stands, newest first. Empty is a real answer and says so in
   # the report rather than being hidden — a morning with nothing on the list is
   # a morning where the git half is all there is.
-  def list_items(user)
+  def list_records(user)
     list = ::List.by_name_for_user(LIST_NAME, user)
     return [] if list.nil?
 
-    list.list_items.map { |item| item.name.to_s.strip }.compact_blank
+    list.list_items.reject { |item| item.name.to_s.strip.blank? }
+  end
+
+  def list_items(user)
+    list_records(user).map { |item| item.name.to_s.strip }
+  end
+
+  # The list is spent once the brief has been read, and clearing it is what
+  # keeps the brief about YESTERDAY.
+  #
+  # It used to be cleared by the -5 minute "Import Standup" step (Jil task
+  # 380 -> 44), which copied each item into Todo and removed it from Standup.
+  # 380 was disabled on 3 Sep when this service replaced it, and nothing took
+  # over the second half: every item before that date was soft-deleted the
+  # next morning at 9:25, and `Yesterday: Worked on adding a memo to
+  # Allocations` — typed 3 Sep, merged 3 Sep — has been the whole of "On my
+  # list" every morning since. Six briefs reporting one day's work as though
+  # it were yesterday's.
+  #
+  # The Todo leg is NOT restored. All 133 items it ever moved there are
+  # soft-deleted; they went in and were swept out by hand, so it was churn
+  # rather than an archive. Emptying Standup was the useful half.
+  #
+  # By the ids read at prompt time, not by re-reading the list: anything typed
+  # in the minute the brief takes to write belongs to tomorrow's, and was
+  # never in this one.
+  def clear_list!(ids)
+    ::ListItem.where(id: Array(ids)).find_each { |item|
+      item.notify_jil(:removed) if item.soft_destroy
+    }
   end
 
   # Only one report per day, and a prompt that never reached the Mac does not
@@ -141,9 +170,9 @@ module ByteStandupPrep
   # The list is interpolated rather than left to be looked up: it is the one
   # input that is definitely relevant, it costs nothing to include, and a run
   # that fails to find it has failed at the only part the person wrote by hand.
-  def prompt(user, now: Time.current)
-    span  = window(user, now: now)
-    items = list_items(user)
+  def prompt(user, now: Time.current, items: nil)
+    span = window(user, now: now)
+    items ||= list_items(user)
     listed = (
       if items.any?
         items.map { |name| "- #{name}" }.join("\n")
@@ -210,11 +239,15 @@ module ByteStandupPrep
     ByteLocal.reset_claude_session(conversation_id: convo.id)
     convo.update!(metadata: convo.metadata.to_h.merge("claude_session_id" => nil, "claude_session_name" => nil))
 
+    # Read once, and the ids ride along so the clear afterwards can be about
+    # exactly these rows — see `clear_list!`.
+    items = list_records(user)
+
     ByteMessageIntake.call(
       user:         user,
       conversation: convo,
-      body:         prompt(user, now: now),
-      metadata:     { "standup_prep" => true, "hidden" => true },
+      body:         prompt(user, now: now, items: items.map { |item| item.name.to_s.strip }),
+      metadata:     { "standup_prep" => true, "hidden" => true, "list_item_ids" => items.map(&:id) },
     )
     :sent
   end
@@ -252,7 +285,9 @@ module ByteStandupPrep
     convo = message.byte_conversation
     return false unless convo&.name == NAME
     return false unless message.metadata.to_h["kind"] == "claude"
-    return false unless prompted?(message)
+
+    parent = prompt_message(message)
+    return false if parent.nil?
 
     target = ::ByteConversation.for_self_initiated(message.user)
     return false if target.nil? || target.id == convo.id
@@ -264,14 +299,22 @@ module ByteStandupPrep
       metadata:     { "kind" => "buddy", "source" => "standup_prep", "standup_prep" => true },
       push_title:   "Standup brief",
     )
+    # Only now, and only on the way out. A run that fails never reaches here,
+    # so the items stay on the list and land in tomorrow's brief instead of
+    # being spent on a morning with nothing to show for them.
+    clear_list!(parent.metadata.to_h["list_item_ids"])
     true
   end
 
-  def prompted?(message)
+  # The prompt this is answering, when it is answering one at all. Guarded
+  # because the prep thread is a real thread a person can type in: a reply
+  # written by hand the next morning answers a different parent and stays
+  # where it was written.
+  def prompt_message(message)
     parent_id = message.metadata.to_h["in_reply_to"]
-    return false if parent_id.blank?
+    return nil if parent_id.blank?
 
     parent = ::ByteMessage.find_by(id: parent_id)
-    parent.present? && parent.metadata.to_h["standup_prep"].present?
+    parent if parent && parent.metadata.to_h["standup_prep"].present?
   end
 end

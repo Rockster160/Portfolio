@@ -600,7 +600,13 @@ module Buddy
       def run!
         @reply = create_reply
         outcome = converse
-        outcome[:ok] ? finalize_success(outcome) : finalize_failure(outcome[:error], kind: outcome[:error_kind])
+        if outcome[:ok]
+          finalize_success(outcome)
+        elsif said_nothing_on_purpose?(outcome)
+          finalize_silence
+        else
+          finalize_failure(outcome[:error], kind: outcome[:error_kind])
+        end
         outcome[:ok]
       rescue StandardError => e
         Buddy::Errors.report(
@@ -710,6 +716,7 @@ module Buddy
           ("the week's weather" if week_dropped?(body)),
           ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
+          *unnamed_week(body).map { |i| "#{i[:title]} later this week" },
           ("the jobs on today" if jobs_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
         ].compact_blank
@@ -1649,6 +1656,27 @@ module Buddy
         Array(briefing_facts[:today]).select { |i| i.is_a?(::Hash) && !named_in?(body, i) }
       end
 
+      # The same, for LATER THIS WEEK, and it was the hole this check had.
+      #
+      # Nothing read `facts[:week]`, so a draft that named every item on today
+      # and dropped the week section whole passed clean and went out first try.
+      # Three mornings running - 7, 8 and 9 Sep - the week collapsed into the
+      # weather paragraph and the only item that survived was the one that was
+      # weather-adjacent. `Last Day at OCS` and `Jake 30th Surprise Bday` were
+      # in every seed and in none of the briefings. 5695 is the proof: `calls:
+      # 1`, `repairs: ["temperatures"]`, no second attempt.
+      #
+      # The seed prose was rewritten once to fix it ("every one of them reaches
+      # them") and lost twice more. A rule that loses is a rule that needs a
+      # check behind it.
+      #
+      # Per item, like today's, and safe to be: `facts[:week]` is already
+      # `upcoming_notable`, so everything in it is meant to be said - see the
+      # week's own no-second-cap rule.
+      def unnamed_week(body)
+        Array(briefing_facts[:week]).select { |i| i.is_a?(::Hash) && !named_in?(body, i) }
+      end
+
       # Jobs are the opposite case and get counted as a whole: they ARE meant to
       # be summarized, so five bin rows becoming "it's trash day" is the rule
       # working (Buddy::TodayBriefing::WRITING_RULES[:jobs]) and naming each one
@@ -2490,6 +2518,53 @@ module Buddy
       def scheduled_today?
         meta = @inbound.metadata
         meta.is_a?(Hash) && meta["source"].to_s == "today_scheduled"
+      end
+
+      # A check-in that had nothing left to ask, which its seed asks for by
+      # name: "If you no longer have anything useful to ask - it plainly
+      # resolved itself in the conversation since - say nothing at all rather
+      # than manufacturing a question."
+      #
+      # Prod 5671/5672, 8 Sep. Memory 142 fired on an eye follow-up whose own
+      # notes said he had already been to it. The model said nothing, which was
+      # exactly right, and the empty turn came back as a failure — so a
+      # check-in's reply, which IS the notification, went out as "Something
+      # went wrong on my end and that one didn't make it out." with nothing to
+      # point at. Four minutes and six model calls of "For what?" later, Byte
+      # had talked itself out of a statement that was true.
+      #
+      # Only for a check-in. A briefing or a reminder that comes back empty is
+      # a real failure and still says so.
+      def said_nothing_on_purpose?(outcome)
+        outcome[:error].to_s == Client::EMPTY_TURN && check_in?
+      end
+
+      def check_in?
+        meta = @inbound.metadata
+        meta.is_a?(Hash) && meta["source"].to_s == "check_in"
+      end
+
+      # Nothing was said, so there is nothing to show and nothing to push. The
+      # row stays — it is what the turn COST — but `hidden` takes it out of the
+      # thread, out of the unread count, and out of the notifier, which is only
+      # reached from the success path.
+      #
+      # Broadcast rather than left alone: `upsertMessage` removes the node for
+      # a message that arrives hidden, and that is what takes the pulsing "…"
+      # off any screen that was already watching for the answer.
+      #
+      # `checked_in_at` needs no stamping here. `Buddy::CheckIns#deliver!`
+      # stamps it before the turn starts, because the stamp is also the claim
+      # that stops a second worker delivering the same one.
+      def finalize_silence
+        @reply.update!(
+          state:    :delivered,
+          body:     "",
+          metadata: (@reply.metadata || {}).merge("hidden" => true, "silent" => true),
+        )
+        stamp_usage_rollup
+        settle_expression
+        broadcast(@reply.reload)
       end
 
       # `kind` is `:outage` only when the ACCOUNT is unusable — see

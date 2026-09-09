@@ -202,75 +202,17 @@ module Emails
 
     # ---- delivery -------------------------------------------------------------
 
-    # Two shapes, and which one it is turns on whether the mail belongs to an
-    # application already on the board.
-    #
-    #   matched   - Buddy says it in her own voice and OFFERS to log the note.
-    #               A full turn, but this is a couple of messages a week and the
-    #               offer is the whole point: a beat that isn't written down
-    #               while it is in front of you is one the tracker never hears
-    #               about.
-    #   unmatched - a plain card. A recruiter's first contact is worth SEEING,
-    #               but there is no application to attach it to, so there is
-    #               nothing to offer.
+    # The matched/unmatched fork lives in Buddy::JobMailOffer, because the Mac
+    # watcher's inbox reaches the same decision from the other side.
     def deliver(email, verdict)
-      user = email.user
-      conversation = ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
-      return nil if conversation.nil?
-
-      job = matching_application(user, verdict)
-      return offer(email, verdict, job, user, conversation) if job.present?
-
-      Buddy::CompanionDelivery.deliver_plain(
-        user:         user,
-        conversation: conversation,
-        text:         card(email, verdict),
-        # `system` is the client's kind for a message from the machinery rather
-        # than a person or the model, and it is load-bearing for FORMATTING:
-        # index.js dispatches the body renderer on it, and a kind it doesn't
-        # know falls through to textContent, which prints the asterisks. The
-        # Mac watcher's cards carry the same one so the two read alike.
-        metadata:     metadata_for(email, verdict),
-        push_title:   verdict[:headline].presence || email.subject,
+      Buddy::JobMailOffer.call(
+        user:        email.user,
+        verdict:     verdict,
+        card:        card(email, verdict),
+        metadata:    metadata_for(email, verdict),
+        occurred_at: email.timestamp,
+        email:       email,
       )
-    end
-
-    # The company the model named, resolved against applications that are still
-    # live. Shared with add_job_note, because the name in an ATS footer is
-    # rarely the name on the board and both callers have to survive it.
-    def matching_application(user, verdict)
-      Buddy::JobHunt.resolve_application(user, verdict[:company])
-    end
-
-    # A seed, not a card: Buddy reads it and speaks. Everything she needs rides
-    # on it so the turn costs no lookups - see Buddy::BriefingFacts for why a
-    # self-initiated turn that has to go and fetch things is the one that
-    # wanders off the subject.
-    def offer(email, verdict, job, user, conversation)
-      Buddy::CompanionDelivery.deliver_prompt(
-        user:         user,
-        conversation: conversation,
-        seed:         seed(email, verdict, job),
-        metadata:     metadata_for(email, verdict).merge(job_application_id: job.id),
-      )
-    end
-
-    def seed(email, verdict, job)
-      [
-        "Job mail just arrived, and it belongs to an application already on their board.",
-        "",
-        "Company: #{job.company}#{" (#{job.role})" if job.role.present?}",
-        "What happened: #{verdict[:headline]}",
-        "Kind: #{verdict[:kind]}",
-        "Subject: #{email.subject}",
-        "From: #{sender_line(email)}",
-        "Email id: #{email.id}",
-        "",
-        "Tell them what came in, briefly, and offer to log it against " \
-        "#{job.company} as a note. If they say yes, that is add_job_note with " \
-        "email_id #{email.id}. Don't log it unless they ask - the offer is " \
-        "the point of telling them.",
-      ].join("\n")
     end
 
     def metadata_for(email, verdict)

@@ -79,6 +79,26 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(today.find { |i| i[:title] == "Lunch" }[:where]).to eq("The Rose Establishment")
   end
 
+  # The 9 Sep briefing: "Monday's plunge with Wil is still on the board for
+  # Horsetail Falls, Alpine, UT". The context is the ambient surface — it is in
+  # front of the model on every turn — so it carries the form he wants said.
+  # Rocco: "I need a briefing, not a detailed breakdown."
+  it "carries the basic form of a place, not the mailing address" do
+    item(name: "Plunge with Wil", start_at: 5.days.from_now, location: "Horsetail Falls, Alpine, UT")
+
+    upcoming = described_class.build(user, conversation)[:upcoming_agenda]
+
+    expect(upcoming.find { |i| i[:title] == "Plunge with Wil" }[:where]).to eq("Horsetail Falls")
+  end
+
+  it "does the same for today" do
+    item(name: "Hair trim", start_at: 2.hours.from_now, location: "1234 E 9400 S, Sandy, UT 84070")
+
+    today = described_class.build(user, conversation)[:today_agenda]
+
+    expect(today.find { |i| i[:title] == "Hair trim" }[:where]).to eq("Sandy")
+  end
+
   it "leaves the key off entirely when there's no location to give" do
     item(name: "Dentist", start_at: Time.current + 3.days)
 

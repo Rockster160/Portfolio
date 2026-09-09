@@ -340,7 +340,10 @@ module Buddy
               time:           (i.all_day ? "today" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
               all_day:        (true if i.all_day),
               title:          i.name,
-              where:          i.location.to_s.strip.presence,
+              # The BASIC form, which is what gets said: "Horsetail Falls",
+              # not "Horsetail Falls, Alpine, UT". The full address is a
+              # deliberate question and goes through `search_agenda`.
+              where:          Buddy::Place.short(i.location),
               cancelled:      (true if i.cancelled?),
               cal:            i.agenda&.name,
               kind:           i.kind,
@@ -403,7 +406,7 @@ module Buddy
               # Often the difference between a mention that means something
               # and one that doesn't: "a pickup Saturday" was `Pickup B and
               # Saya`, 4pm, at the airport.
-              where:         i.location.to_s.strip.presence,
+              where:         Buddy::Place.short(i.location),
               cadence:       schedule_cadence(i),  # nil = one-off
               cancelled:     i.cancelled?,
               cal:           i.agenda&.name,

@@ -585,6 +585,43 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :created
   end
 
+  # POST /webhooks/byte/job_mail — job mail the Mac watcher found, handed over
+  # as a VERDICT rather than as a finished message.
+  #
+  # The watcher reads the personal Gmail, where the replies from actual people
+  # arrive: the recruiter naming a time, the coordinator confirming it. What it
+  # cannot know is whether the company is already on the board — that lives
+  # here. So it sends what it decided and the card it would have posted, and
+  # Buddy::JobMailOffer picks between speaking an offer and posting the card.
+  #
+  # Before this, the watcher posted the card itself through /webhooks/byte and
+  # there was no offer on that side at all; every beat it announced got typed
+  # onto the board by hand a few minutes later.
+  def byte_job_mail
+    return head :unauthorized unless byte_authorized?
+
+    user = User.find_by(id: params[:user_id].presence || User.me.id)
+    return head :not_found if user.blank?
+    return head :bad_request if params[:card].to_s.strip.empty?
+
+    message = Buddy::JobMailOffer.call(
+      user:        user,
+      verdict:     {
+        kind:     params[:kind].presence,
+        company:  params[:company].presence,
+        headline: params[:headline].presence,
+      },
+      card:        params[:card].to_s,
+      metadata:    byte_metadata(params).symbolize_keys.reverse_merge(
+        kind: :system, self_initiated: true, source: :job_mail_watcher,
+      ),
+      occurred_at: Time.zone.parse(params[:occurred_at].to_s),
+    )
+    return render json: { error: :"no buddy conversation" }, status: :not_found if message.nil?
+
+    render json: message.as_wire, status: :created
+  end
+
   # POST /webhooks/byte/photo — a picture from the house, straight into the
   # Buddy thread. The doorbell camera when the bell goes; a snapshot off any of
   # the others.

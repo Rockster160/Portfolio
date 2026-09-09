@@ -172,7 +172,7 @@ module Buddy
 
     def block(facts)
       sections = [
-        ["ON TODAY",        facts[:today].map { |i| agenda_line(i, facts[:name]) }],
+        ["ON TODAY",        facts[:today].map { |i| agenda_line(i) }],
         ["ALSO DUE TODAY",  facts[:due].map { |r| "#{r[:fire_at]} · #{r[:body]}" }],
         ["JOBS TODAY",      job_lines(facts[:jobs])],
         ["WEATHER",         weather_lines(facts[:weather])],
@@ -191,13 +191,17 @@ module Buddy
     # Whose it is leads the title, because that is the order somebody says it in
     # and it is the difference between "you have yoga at 4" and "Chelsea has
     # yoga at 4". Rocco, 4 Sep: the first is "absolutely incorrect".
-    def agenda_line(item, name)
+    def agenda_line(item)
       title = item[:title]
       title = "#{item[:owner]}: #{title}" if item[:mine] == false && item[:owner].present?
 
       bits = [item[:time], title]
       bits << item[:where] if item[:where].present?
-      bits << item[:cal] if item[:cal].present? && item[:cal] != name
+      # NOT the calendar. It sits where a place sits and gets read as one:
+      # "a hair trim for Chelsea at 10:00 AM at Alchemibluum" is the calendar
+      # the trim is written on, and Alchemibluum is not where anybody is
+      # going. Whose item it is already leads the title, which is the only
+      # thing the calendar was ever standing in for.
       bits << "cancelled" if item[:cancelled]
       bits << "all day" if item[:all_day]
       line = bits.compact_blank.join(" · ")

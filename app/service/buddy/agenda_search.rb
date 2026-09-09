@@ -136,6 +136,12 @@ module Buddy
       # asked him for an end time the app had, and then for a drive home it had
       # too. Both were one line away the whole time.
       parts << "home by #{clock(item.home_at, user)}" if item.home_at
+      # The FULL address, and the only place it appears. Everything ambient
+      # carries `Buddy::Place.short` because a briefing reading out a ZIP is
+      # the thing that got this changed - but "what's the address" is a real
+      # question, and a search is how it gets asked. Rows carried no place at
+      # all before this, so "where is the plunge" had nothing to answer from.
+      parts << "at #{item.location.to_s.strip}" if item.location.to_s.strip.present?
       parts << "on #{item.agenda&.name}" if item.agenda&.name.present?
       parts << "#{source[:owner]}'s, not theirs" if source && source[:mine] == false
       parts << "repeats" if item.agenda_schedule_id.present?

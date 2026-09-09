@@ -200,6 +200,65 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.metadata["error"]).to include("upstream exploded")
     end
 
+    # Prod 5671/5672, 8 Sep. A check-in fired on an eye follow-up whose own
+    # notes said he had already been to it, and its seed says in as many words:
+    # "If you no longer have anything useful to ask ... say nothing at all
+    # rather than manufacturing a question." The model said nothing, which was
+    # right, and the empty turn came back as a failure — so the notification
+    # (which for a check-in IS the reply) went out as "Something went wrong on
+    # my end". Four minutes and six model calls of "For what?" later, Byte had
+    # talked itself out of a statement that was true.
+    describe "a check-in with nothing left to ask" do
+      def check_in(rounds)
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Check in on it.",
+          metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "check_in" }
+        )
+        described_class.run!(message, client: FakeBuddyClient.new(rounds))
+      end
+
+      it "says nothing at all rather than apologising for it" do
+        check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
+
+        expect(reply.body).to eq("")
+        expect(reply.body).not_to eq(described_class::FAILURE_BODY)
+        expect(reply.state).to eq("delivered")
+      end
+
+      # Hidden is what keeps it out of the thread, out of the unread count and
+      # out of the notifier — and what takes the pulsing "…" off a screen that
+      # was already watching, since the client removes a node that arrives
+      # marked hidden.
+      it "leaves nothing behind on any screen" do
+        check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
+
+        expect(reply.metadata["hidden"]).to be(true)
+      end
+
+      it "never pushes it" do
+        expect(ByteNotifier).not_to receive(:notify)
+
+        check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
+      end
+
+      # A turn that went wrong is still a turn that went wrong.
+      it "still says so when the failure is a real one" do
+        check_in([{ error: "upstream exploded" }])
+
+        expect(reply.state).to eq("failed")
+        expect(reply.body).to eq(described_class::FAILURE_BODY)
+      end
+    end
+
+    # Only a check-in is asked for silence. A briefing that comes back with
+    # nothing has failed, and has to say so.
+    it "still reports an empty turn nobody asked to be silent" do
+      run([{ error: Buddy::GPT::Client::EMPTY_TURN }])
+
+      expect(reply.state).to eq("failed")
+      expect(reply.body).to eq(described_class::FAILURE_BODY)
+    end
+
     it "never leaves a bubble in streaming state after an unexpected crash" do
       client = FakeBuddyClient.new([
         { text: "whatever", tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
@@ -2341,6 +2400,85 @@ RSpec.describe Buddy::GPT::Turn do
     it "leaves an ordinary turn out of it" do
       client = FakeBuddyClient.new([{ text: "Not much on deck from here." }])
       described_class.run!(user_says("what's up"), client: client)
+
+      expect(client.calls.length).to eq(1)
+    end
+  end
+
+  # Nothing read `facts[:week]`, so a draft that named every item on today and
+  # dropped LATER THIS WEEK whole passed clean. Three mornings running the week
+  # collapsed into the weather paragraph, and the only item that survived was
+  # the one that was weather-adjacent: `Last Day at OCS` and `Jake 30th
+  # Surprise Bday` were in every seed and in none of the briefings. 5695 is the
+  # proof - `calls: 1`, no second attempt.
+  #
+  # The seed prose was rewritten to fix this and lost the next morning anyway.
+  describe "a briefing that dropped the rest of the week" do
+    let(:facts) {
+      {
+        "name"  => "Rocco",
+        "today" => [{ "time" => "10:00 AM", "title" => "Hair trim" }],
+        "week"  => [
+          { "day" => "Friday", "time" => "all day", "title" => "Last Day at OCS" },
+          { "day" => "Sunday", "time" => "6:00 PM", "title" => "Jake 30th Surprise Bday" },
+        ],
+      }
+    }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => facts,
+        }
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    def nudges(client)
+      client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
+    end
+
+    it "goes again, naming the ones it left out" do
+      full = "Morning! Hair trim at 10:00 AM. Friday is your last day at OCS, and Jake 30th Surprise Bday is Sunday."
+      client = briefing([{ text: "Morning! Hair trim at 10:00 AM, and rain later in the week." }, { text: full }])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("Last Day at OCS later this week")
+      expect(nudges(client)).to include("Jake 30th Surprise Bday later this week")
+      expect(reply.body).to eq(full)
+    end
+
+    # Every row in the week is already `upcoming_notable`, so every one of them
+    # is meant to be said - there is no second cap to pick a few.
+    it "is satisfied only when all of them are there" do
+      client = briefing([
+        { text: "Morning! Hair trim at 10:00 AM. Friday is your Last Day at OCS." },
+        { text: "Morning! Hair trim at 10:00 AM. Last Day at OCS Friday, Jake 30th Surprise Bday Sunday." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("Jake 30th Surprise Bday later this week")
+      expect(nudges(client)).not_to include("Last Day at OCS later this week")
+    end
+
+    it "goes out first try when the week is all there" do
+      client = briefing([
+        { text: "Morning! Hair trim at 10:00 AM. Last Day at OCS Friday, Jake 30th Surprise Bday Sunday." },
+      ])
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    it "says nothing about a week with nothing in it" do
+      facts["week"] = []
+      client = briefing([{ text: "Morning! Hair trim at 10:00 AM." }])
 
       expect(client.calls.length).to eq(1)
     end

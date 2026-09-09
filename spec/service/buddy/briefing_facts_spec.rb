@@ -165,24 +165,44 @@ RSpec.describe Buddy::BriefingFacts do
     # yoga tomorrow' is accurate and acceptable."
     it "puts whose it is in front of what it is" do
       line = described_class.agenda_line(
-        { time: "4:00 PM", title: "Yoga", mine: false, owner: "Chelsea" }, "Rocco"
+        { time: "4:00 PM", title: "Yoga", mine: false, owner: "Chelsea" },
       )
 
       expect(line).to eq("4:00 PM · Chelsea: Yoga")
     end
 
     it "leaves their own alone" do
-      line = described_class.agenda_line({ time: "9:00 AM", title: "Standup" }, "Rocco")
+      line = described_class.agenda_line({ time: "9:00 AM", title: "Standup" })
 
       expect(line).to eq("9:00 AM · Standup")
     end
 
     it "keeps the departure on the item it belongs to" do
       line = described_class.agenda_line(
-        { time: "11:40 AM", title: "Eye Follow Up", leave_by: "11:08 AM", drive_min: 22 }, "Rocco"
+        { time: "11:40 AM", title: "Eye Follow Up", leave_by: "11:08 AM", drive_min: 22 },
       )
 
       expect(line).to eq("11:40 AM · Eye Follow Up · leave by 11:08 AM (22 min drive)")
+    end
+
+    # 9 Sep: "a hair trim for Chelsea at 10:00 AM at Alchemibluum". Alchemibluum
+    # is the CALENDAR the trim is written on. The trim has no location at all,
+    # and the line put the calendar exactly where a place goes, so it was read
+    # as one. Rocco: "The calendar is not a replacement for location."
+    it "never says which calendar a thing is on" do
+      line = described_class.agenda_line(
+        { time: "10:00 AM", title: "Hair trim", mine: false, owner: "Chelsea", cal: "Alchemibluum" },
+      )
+
+      expect(line).to eq("10:00 AM · Chelsea: Hair trim")
+    end
+
+    # Whose it is was the only thing the calendar was ever standing in for, and
+    # the title already carries it.
+    it "still says whose it is without one" do
+      line = described_class.agenda_line({ time: "6:00 PM", title: "Salmon soyaki bowls", cal: "Ours 💕" })
+
+      expect(line).to eq("6:00 PM · Salmon soyaki bowls")
     end
 
     it "says a group of jobs as the group" do
