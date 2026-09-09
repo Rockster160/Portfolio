@@ -157,10 +157,20 @@ html.html-ctr-byte body {
       border: 1px solid transparent;
       cursor: pointer;
 
-      // The global button:active { position: relative; top: 1px } cascade
-      // would shove absolutely-positioned buttons out of place — pin.
+      // forms.scss nudges every pressed button down a pixel with
+      // `:active { position: relative; top: 1px }`. Only the OFFSET is
+      // unwanted here: `top: auto` makes the `position: relative` inert,
+      // because a relatively positioned box with no offsets occupies exactly
+      // the same space as a static one.
+      //
+      // This used to say `position: static` as well, and that WAS the jump.
+      // At (0,3,1) it outranks every anchor in this sheet, so pressing a
+      // button that was a containing block dropped whatever it anchored on
+      // the floor: the unread count flew from the hamburger's corner to the
+      // top-right of the header, and the bell's slash — `left: 8px;
+      // right: 8px` of a 36px button — stretched into a diagonal line across
+      // the whole app. Undoing the nudge must not also undo the positioning.
       &:active {
-        position: static;
         top: auto;
       }
     }
@@ -406,6 +416,11 @@ html.html-ctr-byte body {
 
     // Slash overlay for non-subscribed states. Drawn as a rotated
     // solid bar via ::after — currentColor so it matches the icon tint.
+    //
+    // Sized off the button's own box, so the `position: relative` above is
+    // load-bearing in every state including :active. Resolved against
+    // `.byte-header` instead, `left: 8px; right: 8px` is the full width of
+    // the app and the bar draws as a diagonal across the whole screen.
     &::after {
       content: "";
       position: absolute;
@@ -618,11 +633,9 @@ html.html-ctr-byte body {
 // off the bottom AND at least one new message has arrived below the fold.
 // The unread count sits inline; the button hides itself again as soon as
 // the user returns to the bottom.
-// Higher specificity than the app-wide `button:active { position: static }`
-// reset (which lives at `.ctr-byte .byte-app button:active`, specificity
-// (0,3,1)). This selector clocks in at (0,4,0/1) so :active can't drop
-// the jump button out of absolute positioning and collapse it into the
-// composer flex row.
+// Higher specificity than the app-wide press reset (which lives at
+// `.ctr-byte .byte-app button:active`, specificity (0,3,1)) so `top: auto`
+// can't reach the `bottom` this sits on.
 .ctr-byte .byte-app .byte-jump-btn {
   position: absolute;
   right: 16px;
@@ -2238,9 +2251,11 @@ html.html-ctr-byte body {
   justify-content: center;
   color: var(--bs-muted);
   border-radius: 8px;
-  // Anchor for the unread badge. NOT `position: relative` on :active — see
-  // forms.scss:201, which moves any positioned button on mousedown and would
-  // take the badge with it.
+  // Anchor for the unread badge, and it has to hold through a press: the
+  // badge is `position: absolute`, so the moment this stops being a
+  // containing block the badge resolves against `.byte-header` instead and
+  // lands in the top-right corner of the app. See the `:active` reset at the
+  // top of this file, which used to take it away.
   position: relative;
   transition:
     background 0.15s,
@@ -5028,8 +5043,8 @@ $suki_expr_aliases: (
 // Its own row at the top of the card rather than floated over the text, and
 // sticky so a long form can't scroll the only way out of itself off screen.
 // Carries the extra class for specificity for the same reason .byte-kiosk-who
-// does: the app-wide `button:active { position: static }` reset outranks a
-// three-class selector and would unstick it mid-press.
+// does: the app-wide press reset `button:active { top: auto }` outranks a
+// three-class selector and would drop the `top` this sticks to.
 .ctr-byte .byte-app .byte-kiosk .byte-kiosk-ask-close {
   position: sticky;
   top: 0;
@@ -5060,9 +5075,9 @@ $suki_expr_aliases: (
 // screen's corner, and its parent is the bottom half.
 //
 // Carries the extra `.byte-kiosk` for specificity, same as .byte-jump-btn and
-// for the same reason: the app-wide `.ctr-byte .byte-app button:active
-// { position: static }` reset is (0,3,1), so at (0,3,0) this dropped out of
-// `fixed` the moment it was pressed and collapsed into the pad below it.
+// for the same reason: the app-wide press reset `.ctr-byte .byte-app
+// button:active { top: auto }` is (0,3,1), so at (0,3,0) this lost the `top`
+// it hangs from the moment it was pressed and fell to the pad below it.
 .ctr-byte .byte-app .byte-kiosk .byte-kiosk-who {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 10px);

@@ -131,6 +131,62 @@ out.counts = {
   out.reseed_catches_up = t.countFor(1);
 }
 
+// ---- a thread the drawer has no row for -----------------------------------
+// `list_conversations` is `.active`, and so is the server's own total, but the
+// page counted anything that wasn't the thread on screen. Conversation 43 is
+// archived standup-prep plumbing that a scheduled job still posts into: its
+// 9:15 AM post on 9 Sep put a 1 on the hamburger that nothing could take off.
+{
+  const t = new UnreadTracker();
+  t.seedAll([{ id: 21, unread_count: 0 }, { id: 37, unread_count: 0 }]);
+  out.archived = {
+    counted: t.add(43, msg({ id: 900 })),
+    total:   t.total(),
+  };
+}
+
+// Before any list has arrived nothing is known about what exists, and counting
+// too much beats counting nothing — the kiosk never seeds at all.
+{
+  const t = new UnreadTracker();
+  out.unseeded_still_counts = t.add(43, msg({ id: 901 }));
+}
+
+// ---- the way back down for a badge that already drifted --------------------
+// What opening the drawer does now. The server's list is the whole truth about
+// which threads exist, so a count for one that isn't in it goes.
+{
+  const t = new UnreadTracker();
+  t.seedAll([{ id: 21, unread_count: 0 }, { id: 43, unread_count: 1 }]);
+  const before = t.total();
+  t.seedAll([{ id: 21, unread_count: 0 }]); // 43 archived out from under it
+  out.drifted = { before, after: t.total() };
+}
+
+// The same for a LIVE count, which is the shape the standup-prep post left
+// behind — and the badge has to be told to repaint, or the number stays on
+// screen after the thing behind it is gone.
+{
+  let changes = 0;
+  const t = new UnreadTracker({ onChange: () => { changes += 1; } });
+  t.seedAll([{ id: 21, unread_count: 0 }, { id: 43, unread_count: 0 }]);
+  t.add(43, msg({ id: 902 }));
+  const before = t.total();
+  const settled = changes;
+  t.seedAll([{ id: 21, unread_count: 0 }]);
+  out.live_drift = { before, after: t.total(), repainted: changes > settled };
+}
+
+// The thread on screen is skipped by seeding on purpose, so it must not be
+// swept by the same pass: its live count is the one thing a seed can't see.
+{
+  const t = new UnreadTracker();
+  t.seedAll([{ id: 21, unread_count: 0 }, { id: 37, unread_count: 0 }]);
+  t.add(37, msg({ id: 903 }));
+  t.seedAll([{ id: 21, unread_count: 0 }, { id: 37, unread_count: 0 }], { except: 37 });
+  out.current_kept = t.countFor(37);
+}
+
 // ---- preview --------------------------------------------------------------
 out.preview = {
   markdown: previewOf(msg({ body: "Sent **game_tray-vase** to the printer" })),

@@ -45,7 +45,28 @@ export class UnreadTracker {
   constructor({ onChange } = {}) {
     this.byConversation = new Map();
     this.base = new Map();
+    // The conversations the drawer lists, learned from the server on every
+    // seed. A badge is a claim that something is waiting in a thread you can
+    // open, so a count against anything NOT in here is one the person has no
+    // way to clear — see `knows`.
+    //
+    // Null until the first seed, which means "not told yet" rather than
+    // "nothing": the kiosk never seeds at all, and rejecting everything there
+    // would be worse than counting too much.
+    this.listed = null;
     this.onChange = onChange || (() => {});
+  }
+
+  // Is this a thread the drawer can show?
+  //
+  // The archived ones are what this is for. `list_conversations` is `.active`,
+  // and so is the server's own total — but the page counted anything that
+  // wasn't the thread on screen, archived included. Conversation 43 is the
+  // standup-prep thread: archived plumbing that a scheduled job still posts
+  // into. Its 9:15 AM post on 9 Sep put a 1 on the hamburger with no row under
+  // it, and nothing the person could tap would ever take it off.
+  knows(convId) {
+    return this.listed === null || this.listed.has(convId);
   }
 
   // Take the server's count for a conversation.
@@ -65,17 +86,52 @@ export class UnreadTracker {
     this.onChange();
   }
 
+  // The server's list, taken as the whole truth about which threads exist.
+  //
+  // That's the half that was missing. Seeding only ever ADDED, so a count
+  // could outlive the thread it was about — archived elsewhere, or counted
+  // live for a thread that was never listed — and then it sat on the
+  // hamburger with no row to open and no way down. The drawer refetches on
+  // open now, so this is the path back for a badge that has already drifted.
   seedAll(conversations, { except } = {}) {
+    const listed = new Set();
     (conversations || []).forEach((c) => {
+      if (c.id == null) return;
+
+      listed.add(c.id);
       if (c.id === except) return;
       this.seed(c.id, c.unread_count);
     });
+    // The thread on screen is deliberately not seeded, but it is still a
+    // thread — forgetting it here would drop a live count for the one
+    // conversation the person is actually in.
+    if (except != null) listed.add(except);
+
+    this.listed = listed;
+    this.forgetUnlisted(listed);
+  }
+
+  // Drop everything held for a conversation the server no longer lists.
+  forgetUnlisted(listed) {
+    const held = new Set([...this.base.keys(), ...this.byConversation.keys()]);
+    let dropped = 0;
+
+    held.forEach((convId) => {
+      if (listed.has(convId)) return;
+
+      dropped += this.countFor(convId);
+      this.base.delete(convId);
+      this.byConversation.delete(convId);
+    });
+    if (dropped > 0) this.onChange();
   }
 
   // Returns true only when this is genuinely new — the caller uses that to
   // decide whether to raise a notice, so a re-broadcast stays silent.
   add(convId, msg) {
-    if (convId == null || !countsAsUnread(msg) || msg.id == null) return false;
+    if (convId == null || !this.knows(convId) || !countsAsUnread(msg) || msg.id == null) {
+      return false;
+    }
 
     let ids = this.byConversation.get(convId);
     if (!ids) {

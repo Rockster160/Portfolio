@@ -534,6 +534,17 @@ export class ConversationManager {
 
   openDrawer() {
     if (!this.drawer) return;
+
+    // Opening the list is the moment the counts are about to be read, and the
+    // only moment the person has any way to act on one. Refetch so the badge
+    // on the hamburger and the numbers on the rows are the server's, not
+    // whatever this session has accumulated since it started — a count that
+    // has drifted is otherwise unclearable, because the row that would clear
+    // it is exactly the row that isn't there.
+    //
+    // Doesn't block the open: the drawer slides in on the cached list and the
+    // numbers correct themselves when the fetch lands.
+    this.refresh().catch(() => {});
     this.drawer.classList.add("open");
     this.drawer.setAttribute("aria-hidden", "false");
     this.backdrop?.classList.add("open");

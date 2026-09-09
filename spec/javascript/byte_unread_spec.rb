@@ -124,6 +124,35 @@ RSpec.describe "Byte unread counting" do
     end
   end
 
+  # A badge is a claim that something is waiting in a thread you can open. One
+  # about a thread with no row is unanswerable: the number sits there, the
+  # drawer shows nothing, and every way out of it has already been tried.
+  describe "a thread the drawer has no row for" do
+    it "does not count a message in an archived thread" do
+      expect(result["archived"]).to eq("counted" => false, "total" => 0)
+    end
+
+    it "still counts before any list has arrived, which is the kiosk" do
+      expect(result["unseeded_still_counts"]).to be(true)
+    end
+  end
+
+  # Opening the drawer refetches, and this is what that fetch is for: not only
+  # fresher numbers, but a way down for one that has already drifted.
+  describe "resyncing on the server's list" do
+    it "forgets a seeded count for a thread that has left the list" do
+      expect(result["drifted"]).to eq("before" => 1, "after" => 0)
+    end
+
+    it "forgets a live one too, and repaints the badge" do
+      expect(result["live_drift"]).to eq("before" => 1, "after" => 0, "repainted" => true)
+    end
+
+    it "keeps the thread on screen, which seeding skips on purpose" do
+      expect(result["current_kept"]).to eq(1)
+    end
+  end
+
   describe "the notice preview" do
     it "strips markdown, code and shell HTML" do
       preview = result["preview"]
