@@ -207,19 +207,24 @@ class BuddyMemory < ApplicationRecord
     where(id: notes.select(:buddy_memory_id))
   }
 
+  # The SQL half of `check_in_plannable?`, and it has to agree with it: both
+  # were `kind: followup` and both now read severity instead, so that a fact
+  # held inline can also be one somebody gets asked about. See the note on
+  # `check_in_plannable?` for why that had to stop being a kind.
+  scope :check_in_armed, -> { live.where(severity: CHECK_IN_FLOOR..) }
+
   # Records with a check-in armed and due. `relevant_at` gates whether it is
   # live yet at all — a parent's surgery next week is severe now and worth
   # nothing until the week turns.
   scope :check_in_due, ->(now=Time.current) {
-    live.where(kind: kinds[:followup])
-      .where.not(check_in_at: nil)
+    check_in_armed.where.not(check_in_at: nil)
       .where(check_in_at: ..now)
       .where("relevant_at IS NULL OR relevant_at <= ?", now)
   }
 
   # Everything with a check-in still ahead of it, for the re-planner.
   scope :check_in_pending, ->(now=Time.current) {
-    live.where(kind: kinds[:followup]).where("check_in_at > ?", now)
+    check_in_armed.where("check_in_at > ?", now)
   }
 
   PRIORITY_CAP = 100
@@ -278,17 +283,34 @@ class BuddyMemory < ApplicationRecord
     tag_list.include?(needle) || category.to_s == needle
   end
 
-  # Worth PLANNING a check-in for: a live follow-up that clears the severity
-  # floor. Deliberately says nothing about `relevant_at` — next week's surgery
-  # very much needs a slot, it just needs one on the far side of the surgery.
   # The longest this may wait before it is asked about, in days, or nil when
   # nothing is heavy enough to bound.
   def check_in_horizon_days
     CHECK_IN_HORIZON.find { |band, _days| band.cover?(severity.to_i) }&.last
   end
 
+  # Worth PLANNING a check-in for: live, and heavy enough to interrupt for.
+  # Deliberately says nothing about `relevant_at` — next week's surgery very
+  # much needs a slot, it just needs one on the far side of the surgery.
+  #
+  # KIND IS NOT PART OF IT. This required `kind_followup?`, which made "hold
+  # this AND come back to me about it" impossible to express: `preference` is
+  # the kind that ships inline in every prompt (`always_loaded`), `followup` is
+  # the kind that could be asked about, and a fact could be one or the other.
+  # Being told somebody has lost their job is both, and it is the ordinary
+  # case rather than an exotic one.
+  #
+  # Worse, it failed SILENTLY in the direction that looks like it worked.
+  # Compile::Toolbox#arm sets `check_in_at` on whatever it is handed and only
+  # promotes `concept` to `followup` — so a preference armed with
+  # `check_in_days` got a real timestamp, showed up nowhere in `replan!`, and
+  # was never asked. A row that says it will come back to you and doesn't.
+  #
+  # Severity is the gate that was always doing the work: it defaults to 0 and
+  # the floor is 25, so nothing acquires a check-in by losing this clause -
+  # something has to have been given weight on purpose.
   def check_in_plannable?
-    kind_followup? && (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR
+    (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR
   end
 
   # Worth ASKING about right now. Everything above, plus a `relevant_at` that

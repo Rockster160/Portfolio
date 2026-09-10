@@ -44,15 +44,13 @@ if [[ -n "$queue_file" && -s "$queue_file" ]]; then
   for script in "${scripts[@]}"; do
     _deployQueueAddScript "$script"
   done
-  _deployQueueWrite "$queue_file"
+  _deployQueueWrite "$queue_file" # saved before the editor, so nothing is lost
 
-  print -r -- "# messages first, script paths last; empty this file to cancel the deploy" | cat - "$queue_file" > "$queue_file.tmp"
-  mv "$queue_file.tmp" "$queue_file"
+  _deployQueueEdit deploy_queue.editing \
+    "messages first, script paths last — empty this file to cancel the deploy" \
+    "${_DEPLOY_QUEUE_MESSAGES[@]}" "${_DEPLOY_QUEUE_SCRIPTS[@]}" || exit $?
 
-  ${EDITOR:-nano} "$queue_file" || exit $?
-
-  _deployQueueLoad "$queue_file" # the header and any reordering wash out here
-  _deployQueueWrite "$queue_file"
+  _deployQueueWrite "$queue_file" # any reordering washes out here
   message=("${_DEPLOY_QUEUE_MESSAGES[@]}")
   scripts=("${_DEPLOY_QUEUE_SCRIPTS[@]}")
   commit=() # one line per enqueue, joined into the one commit message

@@ -1,6 +1,9 @@
-// Agenda Search modal controller. Two-phase search:
-//   1. Future / near-past — filtered live from AgendaStore.
-//   2. Older past — fetched from /agenda_items/search (only items older
+// Agenda Search modal controller. Three-phase search:
+//   1. Future / near-past — filtered live from AgendaStore's rows.
+//   2. Recurring occurrences — expanded from AgendaStore's schedule
+//      RULES, which is where a series that hasn't been materialised
+//      yet lives (see `recurringHits`).
+//   3. Older past — fetched from /agenda_items/search (only items older
 //      than the store's materialised window are pulled — everything after
 //      is already in memory).
 // Rows are built via AgendaItemRenderer so a search hit looks and behaves
@@ -11,6 +14,13 @@
   if (typeof window === "undefined") return;
 
   const DEBOUNCE_MS = 180;
+  // How far either side of today a recurrence rule is walked for hits,
+  // and how many occurrences of one rule are worth carrying: the row
+  // collapses to a single representative anyway, so the rest only feed
+  // the "+N upcoming, M past" count.
+  const FUTURE_DAYS    = 730;
+  const PAST_DAYS      = 365;
+  const OCCURRENCE_CAP = 12;
 
   function init() {
     const modal = document.getElementById("agenda-search");
@@ -70,6 +80,10 @@
     // remaining words are ANDed as case-insensitive substring matches
     // across name/notes/location. Mirrors the server dispatch so a query
     // that works on the endpoint also works locally.
+    //
+    // Returns `{ test, words }` rather than a bare function: the words
+    // are needed on their own to pre-filter SCHEDULES before expanding
+    // them, so a query never walks the recurrence rules it can't match.
     function compileMatcher(q) {
       const tokens = q.split(/\s+/);
       const isFlags = [];
@@ -84,7 +98,7 @@
         else kindFlags.push(val.replace(/s$/, ""));
       });
 
-      return (item) => {
+      const test = (item) => {
         if (!item) return false;
         if (item.status === "cancelled") return false;
         for (const kind of kindFlags) {
@@ -93,10 +107,15 @@
         for (const flag of isFlags) {
           if (!matchesIsFlag(item, flag)) return false;
         }
-        if (words.length === 0) return true;
-        const hay = [item.name, item.notes, item.location].filter(Boolean).join(" ").toLowerCase();
-        return words.every((w) => hay.includes(w));
+        return matchesWords(item, words);
       };
+      return { test, words };
+    }
+
+    function matchesWords(record, words) {
+      if (!words.length) return true;
+      const hay = [record.name, record.notes, record.location].filter(Boolean).join(" ").toLowerCase();
+      return words.every((w) => hay.includes(w));
     }
 
     function matchesIsFlag(item, flag) {
@@ -142,9 +161,41 @@
       const matcher = compileMatcher(q);
 
       groups = new Map();
-      items.filter(matcher).forEach(addToGroups);
+      items.filter(matcher.test).forEach(addToGroups);
+      recurringHits(matcher).forEach(addToGroups);
       renderGroups();
       fetchPast(q);
+    }
+
+    // The occurrences that exist only as a RULE. The store holds a
+    // recurring series as an AgendaSchedule plus whatever rows the
+    // server has materialized (30 hours' worth), so `state.items` is
+    // empty of a yearly birthday for 364 days a year — "Whisper's
+    // Birthday" drew fine on its own day in the calendar and could not
+    // be found by name from the search box, because the two were
+    // reading different things. The day view expands the rule; this
+    // now does the same, and everything downstream (grouping keyed on
+    // `sched-<id>`, the details modal, "Go to date") already treats a
+    // phantom like any other row.
+    //
+    // Bounded either side of today rather than open-ended: a search is
+    // "when is the next one" / "when was the last one", and expanding a
+    // daily rule to the end of time to answer that is wasted work.
+    function recurringHits(matcher) {
+      const store = window.AgendaStore;
+      const R     = window.AgendaRecurrence;
+      if (!store?.scheduleOccurrences || !R?.addDays) return [];
+
+      const today = store.localDayKey?.() || new Date().toISOString().slice(0, 10);
+      const pick  = (sched) => matchesWords(sched, matcher.words);
+      const found = [
+        ...store.scheduleOccurrences(pick, today, R.addDays(today, FUTURE_DAYS), { perSchedule: OCCURRENCE_CAP }),
+        ...store.scheduleOccurrences(pick, R.addDays(today, -PAST_DAYS), today, { perSchedule: OCCURRENCE_CAP, take: "last" }),
+      ];
+      // The two windows share today, so a rule that lands on it comes
+      // back from both — `addToGroups` keys on rule-plus-date and drops
+      // the second one.
+      return found.filter(matcher.test);
     }
 
     function addToGroups(item) {
@@ -155,12 +206,36 @@
         g = { key, items: [], seen: new Set(), scheduleId: item.agenda_schedule_id || null, futureCount: 0, pastCount: 0 };
         groups.set(key, g);
       }
-      const idStr = String(item.id);
-      if (g.seen.has(idStr)) return;
-      g.seen.add(idStr);
+      const dedupe = occurrenceKey(item);
+      if (g.seen.has(dedupe)) return;
+      g.seen.add(dedupe);
       g.items.push(item);
       if ((item.start_at || 0) >= now) g.futureCount++;
       else g.pastCount++;
+    }
+
+    // What makes two hits the SAME occurrence. An id alone doesn't: the
+    // store's suppression map only knows about rows the store holds, so
+    // an older materialized row arriving from the past fetch would sit
+    // beside the phantom this search expanded for the same date and
+    // count as two. For a series the identity is the rule plus the day
+    // it falls on — a detached override claims its ORIGINAL day, same
+    // rule the calendar uses to keep a moved occurrence from ghosting.
+    function occurrenceKey(item) {
+      if (!item.agenda_schedule_id) return `item-${item.id}`;
+      const anchor = (item.detached && item.original_start_at) || item.start_at;
+      return `${item.agenda_schedule_id}:${item.occurrence_date || dateISO(anchor)}`;
+    }
+
+    function dateISO(epochSeconds) {
+      if (!epochSeconds) return "";
+      const tz = window.AgendaStore?.getTimezone?.() || undefined;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date(epochSeconds * 1000));
+      const map = {};
+      parts.forEach((p) => { map[p.type] = p.value; });
+      return `${map.year}-${map.month}-${map.day}`;
     }
 
     function representative(group) {

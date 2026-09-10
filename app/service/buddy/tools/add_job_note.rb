@@ -165,11 +165,16 @@ Buddy::Tools.register(
       label:   note.tag_label,
       status:  job.status,
       settled: job.status != was,
+      url:     "#{Buddy::AppPages.url_for("/interviews")}/#{job.id}",
       reverts: reverts,
     }
   },
+  # The company is the link. A receipt that says a row changed and gives no way
+  # to go and look at it makes them go and find it, which is the trip the whole
+  # card was for.
   receipt:     ->(result, _ctx) {
-    base = "Logged **#{result[:label]}** on **#{result[:company]}** ✓"
+    company = result[:url].present? ? "[#{result[:company]}](#{result[:url]})" : "**#{result[:company]}**"
+    base    = "Logged **#{result[:label]}** on #{company} ✓"
     result[:settled] ? "#{base} — marked #{result[:status]}" : base
   },
 )

@@ -65,21 +65,29 @@ RSpec.describe "POST /webhooks/byte/job_mail", type: :request do
     post_mail(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.\n\nCordelia")
 
     body = user.byte_messages.order(:id).last.body
-    expect(body).to include("--- the message ---")
+    expect(body).to include("--- the message, for the NOTE only ---")
     expect(body).to include("We'd like to schedule a Zoom.")
     expect(body).to include("keep the message itself as the note")
   end
 
-  # A recruiter's first contact is worth seeing and has nothing to attach to.
-  it "posts the watcher's own card when nothing matches" do
+  # A recruiter's first contact has no row yet — so the suggestion is to make
+  # one, not to show a card and stop.
+  it "proposes tracking the company when nothing matches" do
     post_mail
 
     expect(response).to have_http_status(:created)
+    body = user.byte_messages.order(:id).last.body
+    expect(body).to include("CALL add_job_application")
+  end
+
+  it "falls back to the card when no company was named" do
+    post_mail(company: "")
+
     expect(user.byte_messages.order(:id).last.body).to eq("📬 Interview confirmed")
   end
 
   it "keeps the metadata the watcher sent, and the kind the client renders on" do
-    post_mail
+    post_mail(company: "")
 
     metadata = user.byte_messages.order(:id).last.metadata
     expect(metadata["source"]).to eq("job_mail_watcher")

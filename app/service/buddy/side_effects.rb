@@ -68,7 +68,7 @@ module Buddy
       case name.to_sym
       when :sort_stash then Buddy::Stash.apply_sort(user, args, conversation: conversation)
       when :add_note   then apply_note(conversation, args[:fact])
-      when :remember   then apply_remember(user, args[:fact], args[:expires_in])
+      when :remember   then apply_remember(user, args[:fact], args[:expires_in], args[:check_in_days])
       when :forget     then apply_forget(user, args[:match])
       else false
       end
@@ -99,15 +99,25 @@ module Buddy
           "Durable facts only - preferences, names, routines, ongoing projects, and anything they " \
           "tell you about THEMSELVES so you'll hold it in mind for a while: what they're going " \
           "through, what is coming up for them, how they want to be handled while it lasts. That " \
-          "last kind takes `expires_in`. Not conversational trivia, not this turn's mood, not " \
+          "last kind takes `expires_in`, and `check_in_days` too when it is the sort of thing you " \
+          "would ask a friend about again. Not conversational trivia, not this turn's mood, not " \
           "counts. One fact per call. Silent.",
           {
-            fact:       { type: :string, required: true, description: "A statement future-you can act on" },
-            expires_in: {
+            fact:          { type: :string, required: true, description: "A statement future-you can act on" },
+            expires_in:    {
               type:        :string,
               required:    false,
               description: "Set for a fact that's only true for a while, so it self-clears: " \
                            "\"today\", \"tomorrow\", or \"N days/weeks/months\". Null means it never expires",
+            },
+            check_in_days: {
+              type:        :integer,
+              required:    false,
+              description: "Days from now to come back to THEM about it, unprompted, on top of " \
+                           "holding it. For news you would ask a friend about later - a job lost, " \
+                           "a diagnosis, something they are dreading or waiting on. THE HEAVIER " \
+                           "IT IS THE SOONER: 1 or 2 for the big ones, never the date the thing " \
+                           "happens. Omit it for an ordinary fact, which is most of them",
             },
           },
         ),
@@ -168,7 +178,7 @@ module Buddy
     # claims. A reinforced near-duplicate counts: the person asked for it to be
     # remembered and it is remembered, and answering that with a retraction is
     # the wrong fact twice over.
-    def apply_remember(user, fact, expires_in=nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
+    def apply_remember(user, fact, expires_in=nil, check_in_days=nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
       fact = fact.to_s.strip
       return false if fact.empty?
 
@@ -199,14 +209,54 @@ module Buddy
       # The widened capture (episodes, worries, things worth revisiting) does
       # NOT come through here. Buddy::Compile writes those in the background as
       # `concept` and `followup`, tagged, and they're reached by search.
-      BuddyMemory.create!(
+      memory = BuddyMemory.create!(
         user:         user,
         kind:         :preference,
         content:      fact.first(BuddyMemory::MAX_CONTENT),
         expires_at:   ttl,
+        severity:     check_in_severity(check_in_days),
         last_used_at: Time.current,
       )
+      arm_check_in(memory, check_in_days)
       true
+    end
+
+    # "You lost your job?" is one fact and two jobs: hold it, and come back to
+    # them about it. Until now those were different KINDS of row and a fact
+    # could only be one - `preference` ships inline in every prompt,
+    # `followup` was the only kind `check_in_plannable?` would look at - so the
+    # common case had no way to be written. Buddy::Compile could reach both
+    # halves and this side, which is where somebody actually says it out loud,
+    # could reach neither.
+    #
+    # Severity is DERIVED from the distance rather than asked for. The rule is
+    # already written down in two places - "the heavier it is the SOONER", and
+    # BuddyMemory::CHECK_IN_HORIZON, which caps how long a heavy thing may wait
+    # - so the two numbers cannot disagree if only one of them is given. It
+    # also keeps this side-effect at three arguments instead of four, and a
+    # 0-100 scale is a knob nobody typing a sentence should have to turn.
+    #
+    # Past the widest horizon there is no severity that would keep it, and
+    # "ask me in three months" is not a check-in. It stays a plain held fact.
+    def check_in_severity(days)
+      return 0 if days.blank?
+
+      band = BuddyMemory::CHECK_IN_HORIZON.find { |_range, horizon| days.to_i <= horizon }
+      band ? band.first.min : 0
+    end
+
+    # Placed against everything else pending, never dropped straight onto the
+    # clock: Buddy::CheckIns spaces them so two never land in one sitting, and
+    # inside hours somebody is awake. The replan is the same call Compile makes
+    # after it writes.
+    def arm_check_in(memory, days)
+      return if days.blank? || memory.severity < BuddyMemory::CHECK_IN_FLOOR
+
+      at = Buddy::CheckIns.place(days.to_i.days.from_now, user: memory.user)
+      memory.update_columns(check_in_at: at, updated_at: Time.current)
+      Buddy::CheckIns.replan!(memory.user)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::SideEffects] check-in arm failed: #{e.class}: #{e.message}")
     end
 
     # A fact that says "today" in it is about today, whatever expiry the model

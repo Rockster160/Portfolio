@@ -617,6 +617,7 @@ class WebhooksController < ApplicationController
       ),
       occurred_at: Time.zone.parse(params[:occurred_at].to_s),
       body:        params[:body].presence,
+      outgoing:    params[:outgoing].present?,
     )
     return render json: { error: :"no buddy conversation" }, status: :not_found if message.nil?
 

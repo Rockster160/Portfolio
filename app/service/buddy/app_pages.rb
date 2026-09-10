@@ -16,18 +16,28 @@ module Buddy
   module AppPages
     module_function
 
+    # `feature:` is not decoration. The reject below has been here since the
+    # board arrived, and until 10 Sep only `interviews` used it - so somebody
+    # without `chores` was still offered the chore grid, the pebble balance and
+    # the completion history, three links to pages that can only be empty for
+    # them. Eve is exactly that person: agenda, events, inventory, jil, lists,
+    # prompts, relay, and no chores. Tag a page with the feature its data comes
+    # from, or it gets handed to people who have none of it.
+    #
+    # `links` is deliberately untagged: `link_records` is core, and a pairing
+    # can join a list item to an agenda task without a chore anywhere in it.
     PAGES = [
-      { name: :chores,         path: "/chores",          about: "The chore grid - every chore, tap to complete" },
-      { name: :chores_today,   path: "/chores/today",    about: "Just today's chores" },
-      { name: :chores_balance, path: "/chores/balance",  about: "Pebble balance and what's been earned" },
-      { name: :chores_history, path: "/chores/history",  about: "What's been completed, and by whom" },
+      { name: :chores,         path: "/chores",          feature: :chores,     about: "The chore grid - every chore, tap to complete" },
+      { name: :chores_today,   path: "/chores/today",    feature: :chores,     about: "Just today's chores" },
+      { name: :chores_balance, path: "/chores/balance",  feature: :chores,     about: "Pebble balance and what's been earned" },
+      { name: :chores_history, path: "/chores/history",  feature: :chores,     about: "What's been completed, and by whom" },
       { name: :links,          path: "/chores/links",    about: "Record links - which record follows which. Add, edit, and remove them here" },
-      { name: :lists,          path: "/lists",           about: "The index of every list. ONE list is linked from the `lists` block instead - its `url` template with that list's id - so link that, not this" },
-      { name: :agenda,         path: "/agenda",          about: "The calendar and agenda items" },
+      { name: :lists,          path: "/lists",           feature: :lists,      about: "The index of every list. ONE list is linked from the `lists` block instead - its `url` template with that list's id - so link that, not this" },
+      { name: :agenda,         path: "/agenda",          feature: :agenda,     about: "The calendar and agenda items" },
       { name: :interviews,     path: "/interviews",      feature: :job_search, about: "The job-application board - every application and its timeline of notes. ONE application is linked from the `job_search` block instead - its `url` template with that application's id" },
-      { name: :prompts,        path: "/prompts",         about: "Survey and question history" },
-      { name: :jil_tasks,      path: "/jil",             about: "Jil automation tasks - the editor" },
-      { name: :jil_runs,       path: "/jil/executions",  about: "Recent Jil execution history" },
+      { name: :prompts,        path: "/prompts",         feature: :prompts,    about: "Survey and question history" },
+      { name: :jil_tasks,      path: "/jil",             feature: :jil,        about: "Jil automation tasks - the editor" },
+      { name: :jil_runs,       path: "/jil/executions",  feature: :jil,        about: "Recent Jil execution history" },
       { name: :system,         path: "/system",          about: "System dashboards - connections, GPT spend, Sidekiq, PgHero", owner_only: true },
     ].freeze
 

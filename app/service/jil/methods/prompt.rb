@@ -16,6 +16,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   #   .deliver::Boolean
   # [PromptQuestion]
   #   #text(String:"Question Text" BR "Default" String)
+  #   #duration(String:"Question Text" BR "Default" String)
   #   #checkbox(String:"Question Text" BR "Default" Boolean)
   #   #choices(String:"Question Text" content(String))
   #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
@@ -152,6 +153,20 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     }
   end
 
+  # A minutes value the person may type in whatever shape it comes out of their
+  # head — "52", "1:32", "97m", "1h 32". It posts as a plain string and the
+  # `Parse Duration` Jil function turns it into minutes on submit; the widget's
+  # only job here is to render wide enough to hold "1h 32m" and to be findable
+  # by the script that shows what it read back. A `number` input cannot: it
+  # silently drops everything that is not a bare integer.
+  def duration(text, default)
+    {
+      type:     :duration,
+      question: text,
+      default:  format_duration(default),
+    }
+  end
+
   def textarea(text, default)
     {
       type:     :textarea,
@@ -190,6 +205,17 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     return nil if value.blank?
 
     value.in_time_zone(@jil.user.timezone).strftime("%Y-%m-%dT%H:%M")
+  end
+
+  # A stored duration arrives as a number of minutes (the workout ping writes
+  # one, task 232 computes one). Blank has to stay blank — `to_s` on nil would
+  # put "" through fine, but an Integer 0 must not become "0" and read as an
+  # answer nobody gave.
+  def format_duration(value)
+    return value if value.is_a?(String)
+    return nil if value.blank?
+
+    value.to_s
   end
 
   def format_time(value)

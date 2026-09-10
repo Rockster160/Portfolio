@@ -179,6 +179,13 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[log_event stash_idea add_agenda_item],
     needs: :halloway_application,
   },
+  # The other half of the pair, and the one they get confused with: a beat on a
+  # row that exists vs. a row that doesn't. Deliberately a company the board has
+  # never heard of, because "already there" is what makes this the wrong tool.
+  add_job_application:    {
+    say:   "A recruiter at Pellworth Dynamics reached out about a Rails job, start tracking them",
+    avoid: %i[add_job_note stash_idea log_event],
+  },
   chore_progress:         "did I get all my dailies done yesterday?",
   withdraw_pebbles:       "took 20 pebbles for the arcade",
   # "this morning" is a claim about the clock, and asked at half past midnight
@@ -225,6 +232,7 @@ BUDDY_TOOL_PROBES = {
   move_reminder:          { say: "move the tomato reminder to 3", needs: :pending_reminder },
   cancel_reminder:        { say: "never mind the vet reminder, drop it", needs: :vet_reminder },
   list_reminders:         "what reminders do I have?",
+  describe_screen:        { say: "what's the little bell at the top for?", avoid: %i[list_reminders request_feature] },
   cancel_timer:           "cancel all my timers",
   check_anchor:           "when's sunset?",
 
@@ -455,6 +463,18 @@ BUDDY_EVAL_READERS = %i[
 #               both fine; setting a watch on the wrong person is not, and
 #               that's still what `avoid:` is for.
 BUDDY_EDGE_PROBES = [
+  # --- a beat on a row that already exists ---------------------------------
+  # Two rows for one company splits its timeline in half, and nothing puts them
+  # back together. `add_job_application` refuses in `confirm` when the name
+  # resolves, but reaching for it at all is the miss worth catching.
+  {
+    case:  "mail from a company already on the board",
+    say:   "Halloway Systems just sent through an interview time, get that on the board",
+    tool:  :add_job_note,
+    avoid: %i[add_job_application],
+    needs: :halloway_application,
+    note:  "a second row would split the company's timeline",
+  },
   # --- job mail announced without an email number to hand ------------------
   # The Mac watcher reads the personal Gmail, so the beat is SPOKEN to Buddy
   # rather than carried by a row she can look up. Without `occurred_at` the
@@ -779,21 +799,37 @@ BUDDY_EDGE_PROBES = [
                  "one-off is redundant, not wrong",
   },
 
+  # --- hold it AND come back to it, which used to be a choice ----------------
+  {
+    case:  "check_in_days",
+    say:   "My best mate's dad died last night. I'm pretty shaken up about it.",
+    tool:  :remember,
+    once:  true,
+    avoid: %i[stash_idea schedule_reminder],
+    args:  { remember: { check_in_days: /\A[1-7]\z/ } },
+    note:  "one fact and two jobs - hold it, and ask them about it in a couple " \
+           "of days. A row could only do one until 10 Sep, because " \
+           "`check_in_plannable?` read the KIND and the inline-in-every-prompt " \
+           "kind was a different one. The argument is new, so this is the only " \
+           "thing that says whether it is ever reached; the heavier it is the " \
+           "SOONER, so a fortnight here is as wrong as omitting it",
+  },
+
   # --- telling you about themselves is not handing you a job -----------------
   {
     case:  "prod 5854",
-    say:   "My period is about 6 days away and I want to be mindful about how " \
-           "my hormones will affect me over the next little while.",
+    say:   "I've got my parents staying with us for the next couple of weeks " \
+           "and I'm going to be pretty stretched, so bear with me.",
     tool:  :remember,
     once:  true,
     avoid: %i[stash_idea sort_stash],
     args:  { remember: { expires_in: /./ } },
-    note:  "it went on the idea pile as \"Track hormone swing coming up\" - " \
-           "BuddyMemory 175, kind stash, no expiry - and the reply was the " \
-           "stash receipt, \"I'm holding that for you so it doesn't get lost\". " \
-           "She was not handing over a job. A stash row is prompt-resident " \
-           "nowhere, so being mindful of it was the one thing filing it there " \
-           "made impossible, and it now accrues \"waiting: N weeks\" in her " \
+    note:  "a sentence of this shape went onto the idea pile instead, as a " \
+           "held item with a to-do label and no expiry, answered with the " \
+           "stash receipt \"I'm holding that for you so it doesn't get lost\". " \
+           "Nobody was handing over a job. A stash row is prompt-resident " \
+           "nowhere, so holding it in mind is the one thing filing it there " \
+           "makes impossible, and it accrues \"waiting: N weeks\" in their " \
            "briefing beside the household errands",
   },
 
@@ -802,14 +838,15 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 5808",
     say:   "It looks like you have a lot of notifications how do I go through " \
            "those so they stop alerting me anymore",
-    tool:  :none,
+    tool:  :describe_screen,
     avoid: %i[list_reminders cancel_reminder],
     note:  "drew the reminder list, and the answer back was \"no they are not " \
            "the reminders they are like notifications on my phone maybe it's " \
-           "every time you speak\". The word does not appear anywhere in " \
-           "list_reminders' description - the model generalized off \"see / " \
-           "list / review / manage\" - and the sentence is genuinely ambiguous, " \
-           "so the honest first move is to ask which she means",
+           "every time you speak\". Then she was sent to her phone's settings " \
+           "and offered the sound toggle, which silences the timer alarm and " \
+           "nothing else. The control she wanted was the bell in the top bar " \
+           "of the window she was typing into, and the rule at the time said " \
+           "never to describe the screen - so there was no way to be right",
   },
 
   # --- a thing that failed, which is not a thing that is missing ------------

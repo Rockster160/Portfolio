@@ -5282,6 +5282,16 @@ $suki_expr_aliases: (
     opacity: 0.5;
   }
 
+  // A duration that could not be read has to out-shout the 0.5 above: the
+  // whole point of the line is that it is noticed before Send.
+  .byte-msg-form-hint[data-unreadable="true"] {
+    opacity: 1;
+    // `var(--bs-danger, …)`, not `$danger`: this file imports nothing, so the
+    // Sass variable in config/_variables.scss is not in scope here and SassC
+    // stops on it. Every other red in this file is already written this way.
+    color: var(--bs-danger, #e5484d);
+  }
+
   textarea.byte-msg-form-input,
   input.byte-msg-form-input,
   select.byte-msg-form-input {

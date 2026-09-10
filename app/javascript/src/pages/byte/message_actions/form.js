@@ -17,6 +17,11 @@
 // Field types mirror shared/_dynamic_form_fields, since the app's own Prompt
 // pages are the first thing this renders.
 
+import {
+  parseDurationMinutes,
+  formatDurationHint,
+} from "../../../support/parse_duration.js";
+
 // requestId -> { key: value }. Module-level so it survives any number of
 // repaints, and deliberately not localStorage: a draft is only interesting
 // while the thread is open, and a stale one resurfacing on another device would
@@ -25,6 +30,8 @@ const DRAFTS = new Map();
 
 const INPUT_TYPES = {
   text: "text",
+  // Not "number" — that widget refuses "1:32" and "1h 32" as they are typed.
+  duration: "text",
   number: "number",
   date: "date",
   datetime: "datetime-local",
@@ -175,7 +182,27 @@ function buildRow(field, { draft, locked }) {
   if (!control) return null;
   row.appendChild(control);
 
-  if (field.hint) {
+  // A duration writes its own hint and keeps rewriting it, so it never carries
+  // a static one. Everything else shows whatever the server sent.
+  if (field.type === "duration") {
+    const hint = document.createElement("span");
+    hint.className = "byte-msg-form-hint";
+    row.appendChild(hint);
+    const paint = () => {
+      const raw = readRow(row);
+      const minutes = parseDurationMinutes(raw);
+      if (minutes == null) {
+        const unreadable = String(raw).trim().length > 0;
+        hint.textContent = unreadable ? "Can't read that as a duration" : "";
+        hint.dataset.unreadable = unreadable ? "true" : "false";
+        return;
+      }
+      hint.textContent = formatDurationHint(minutes);
+      hint.dataset.unreadable = "false";
+    };
+    row.addEventListener("input", paint);
+    paint();
+  } else if (field.hint) {
     const hint = document.createElement("span");
     hint.className = "byte-msg-form-hint";
     hint.textContent = field.hint;

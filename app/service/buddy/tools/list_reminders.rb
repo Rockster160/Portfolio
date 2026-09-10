@@ -17,9 +17,9 @@ Buddy::Tools.register(
     To cancel ONE specific reminder by name, prefer cancel_reminder instead.
 
     **"Notifications" is not this word.** Somebody saying they get too many
-    notifications, or asking how to stop being alerted, may mean the alerts on
-    their phone - which are not reminders, are not listed here, and are not
-    something you can turn off. Ask which they mean before drawing anything.
+    notifications, or asking how to stop being alerted, probably means the
+    alerts arriving on their phone - which are not reminders and are not listed
+    here. There is a control for those; `describe_screen` is how you find it.
     Only "reminder" in their own words, or a reminder they name, reaches this.
   TXT
   # Prod 5808, and it cost a round: "It looks like you have a lot of

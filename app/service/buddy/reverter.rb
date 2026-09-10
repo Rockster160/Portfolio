@@ -207,6 +207,15 @@ module Buddy
       when "BuddyMemory"     then rec.update!(status: :dropped)
       when "BuddyMemoryNote" then rec.destroy!
       when "JobNote"         then rec.destroy!
+      # Its notes are `dependent: :destroy`. Undoing "you just started tracking
+      # this" is a gesture about the row, and the only thing on it is the first
+      # beat that arrived with it — so taking both leaves nothing half-made.
+      # A row that has been added to since is a different matter, and refusing
+      # loudly beats quietly eating a timeline.
+      when "JobApplication"
+        raise "#{rec.company} has a timeline now - remove the notes first" if rec.notes.count > 1
+
+        rec.destroy!
       # Archived, not destroyed. A chore owns its completions and its streak
       # history, and undoing "you just made this" must not take a month of
       # someone's record with it. Archiving is also what the Chores app itself

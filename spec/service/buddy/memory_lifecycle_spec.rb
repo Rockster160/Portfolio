@@ -7,8 +7,8 @@ RSpec.describe "BuddyMemory lifecycle" do
   describe "lifecycle" do
     let(:user) { create(:user) }
 
-    def remember(fact, expires_in: nil)
-      Buddy::SideEffects.apply_remember(user, fact, expires_in)
+    def remember(fact, expires_in: nil, check_in_days: nil)
+      Buddy::SideEffects.apply_remember(user, fact, expires_in, check_in_days)
     end
 
     describe "BuddyMemory scopes" do
@@ -90,6 +90,68 @@ RSpec.describe "BuddyMemory lifecycle" do
     # Reinforcement has to survive being said DIFFERENTLY, or it never fires for
     # someone who thinks out loud - nobody repeats themselves word for word, and
     # a fact re-mentioned five ways used to become five rows at priority zero.
+    # "Oh, you lost your job?" is one fact and two jobs - hold it, and come back
+    # to them about it - and until now a row could only do one. `preference` is
+    # the kind that ships inline in every prompt; `followup` was the only kind
+    # `check_in_plannable?` would look at. So the common case had nowhere to go,
+    # and Compile::Toolbox#arm made that worse by setting `check_in_at` on a
+    # preference anyway: a real timestamp, invisible to `replan!`, never asked.
+    describe "holding a fact AND coming back to it" do
+      it "carries both, on one row, in the prompt and in the queue" do
+        remember("Rocco was laid off at OCS", check_in_days: 2)
+        memory = BuddyMemory.last
+
+        expect(memory).to be_kind_preference
+        expect(BuddyMemory.always_loaded).to include(memory)
+        expect(memory.check_in_at).to be_present
+        expect(memory).to be_check_in_plannable
+      end
+
+      # The rule is written down twice already - "the heavier it is the SOONER",
+      # and CHECK_IN_HORIZON capping how long a heavy thing may wait - so asking
+      # for the weight separately is asking for the two numbers to disagree.
+      it "reads the weight off how soon they want to be asked" do
+        remember("Rocco was laid off at OCS", check_in_days: 2)
+        heavy = BuddyMemory.last
+        remember("Rocco is waiting to hear about the allotment", check_in_days: 21)
+        light = BuddyMemory.last
+
+        expect(heavy.severity).to be > light.severity
+        expect(heavy.check_in_horizon_days).to be <= 2
+      end
+
+      # "Ask me in three months" is not a check-in, and there is no severity
+      # that would keep it. It stays a plain held fact rather than becoming a
+      # heavy one to justify the distance.
+      it "declines a distance past the widest horizon" do
+        remember("Rocco's passport is up for renewal eventually", check_in_days: 200)
+        memory = BuddyMemory.last
+
+        expect(memory.check_in_at).to be_nil
+        expect(memory).not_to be_check_in_plannable
+      end
+
+      it "leaves an ordinary fact exactly as it was" do
+        remember("Rocco takes coffee 8oz oat milk")
+        memory = BuddyMemory.last
+
+        expect(memory.severity).to eq(0)
+        expect(memory.check_in_at).to be_nil
+        expect(memory).not_to be_check_in_plannable
+      end
+
+      # Placed against everything else pending rather than dropped onto the
+      # clock - two check-ins must never land in one sitting.
+      it "spaces it against the check-ins already queued" do
+        remember("Rocco was laid off at OCS", check_in_days: 1)
+        first = BuddyMemory.last.check_in_at
+        remember("Rocco's dad is having a scan", check_in_days: 1)
+        second = BuddyMemory.last.check_in_at
+
+        expect(second).to be > first
+      end
+    end
+
     describe "reinforcement across rewordings" do
       it "bumps the fact we hold when the same thing is said another way" do
         remember("Ryker has soccer on Tuesdays")

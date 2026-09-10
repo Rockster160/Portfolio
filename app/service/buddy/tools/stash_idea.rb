@@ -35,15 +35,6 @@ Buddy::Tools.register(
     home (household/family), or work. This CREATES a new held item - to file or
     relabel one that's already stashed, use sort_stash instead.
   TXT
-  # Prod 5854. Chelsea said her period was about six days off and that she
-  # wanted to be mindful of how her hormones would affect her over the next
-  # little while, and it became a held item - BuddyMemory 175, kind stash,
-  # category me, no expiry, labelled "Track hormone swing coming up". She was
-  # not handing over a job; she was telling her companion something about
-  # herself so it would be understood. A stash row reaches Moss again only when
-  # Chelsea next sorts her pile, which is the opposite of what she asked for,
-  # and until then it sits in her briefing accruing "waiting: N weeks" beside
-  # "Shift kennel for storage".
   args:        {
     idea:     { type: :string, required: true,  description: "The thing to hold onto, in their words" },
     category: { type: :enum,   required: false, values: %i[me home work], description: "Which bucket it belongs in" },

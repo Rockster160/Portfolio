@@ -449,6 +449,7 @@
   !.deliver::Boolean
 *[PromptQuestion]
   #text(String:"Question Text" BR "Default" String)
+  #duration(String:"Question Text" BR "Default" String)
   #textarea(String:"Question Text" BR "Default" String)
   #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #checkbox(String:"Question Text" BR "Default" Boolean)

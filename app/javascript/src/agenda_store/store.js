@@ -372,6 +372,65 @@ function inclusiveEnd(item) {
   return item.all_day ? raw - 1 : raw;
 }
 
+// Set of `<schedule_id>:<dateISO>` already answered by a materialized
+// row — a phantom on one of those dates would be the same occurrence
+// listed twice. Detached overrides claim their ORIGINAL date so the
+// source occurrence doesn't ghost alongside the relocated edit;
+// non-detached rows of a series claim the date they sit on.
+function suppressedOccurrences(items, tz) {
+  const suppressed = new Set();
+  items.forEach((it) => {
+    if (!it || !it.agenda_schedule_id) return;
+    if (it.detached) {
+      if (it.original_start_at) {
+        suppressed.add(`${it.agenda_schedule_id}:${epochToDateISO(it.original_start_at, tz)}`);
+      }
+      return;
+    }
+    suppressed.add(`${it.agenda_schedule_id}:${epochToDateISO(it.start_at, tz)}`);
+  });
+  return suppressed;
+}
+
+// Phantom occurrences of every schedule `predicate` accepts, expanded
+// across [fromISO..toISO] and capped at `perSchedule` per rule.
+//
+// `itemsForRange` answers "what is on this week" — a range the caller
+// is already looking at. Search asks the opposite question, "where in
+// time is this thing", with no range in hand, and a series lives here
+// as a RULE rather than rows: only the occurrences inside the server's
+// 30-hour materialize window have an AgendaItem. A yearly birthday
+// therefore has no row for 364 days of the year, so filtering
+// `state.items` — which is all the search modal used to do — could
+// never find one, while the day view sitting right beside it drew the
+// phantom perfectly.
+//
+// `take: "last"` keeps the tail instead of the head, which is what a
+// backwards window wants: the most recent occurrence, not the oldest.
+function scheduleOccurrences(predicate, fromISO, toISO, opts) {
+  const options     = opts || {};
+  const perSchedule = options.perSchedule || 12;
+  const fromEnd     = options.take === "last";
+  const tz          = state.timezone || guessLocalTimezone();
+  const localEpoch  = Tz.localEpochFn(tz);
+  const suppressed  = suppressedOccurrences(
+    Object.values(state.items).filter((it) => it && it.status !== "cancelled"), tz,
+  );
+
+  const out = [];
+  Object.values(state.schedules).forEach((sched) => {
+    if (!predicate(sched)) return;
+    const agenda = state.agendas[sched.agenda_id] || null;
+    let dates = Recurrence.expand(sched, fromISO, toISO);
+    dates = dates.filter((dateISO) => !suppressed.has(`${sched.id}:${dateISO}`));
+    dates = fromEnd ? dates.slice(-perSchedule) : dates.slice(0, perSchedule);
+    dates.forEach((dateISO) => {
+      out.push(Recurrence.buildPhantom(sched, dateISO, { localEpoch, agenda }));
+    });
+  });
+  return out.sort((a, b) => (a.start_at || 0) - (b.start_at || 0));
+}
+
 function itemsForRange(fromISO, toISO) {
   const tz = state.timezone || guessLocalTimezone();
   const epochAt = (iso) => isoToEpochSecondsFloor(iso);
@@ -386,22 +445,7 @@ function itemsForRange(fromISO, toISO) {
     return (start <= hi) && (end >= lo);
   });
 
-  // Map of [schedule_id, dateISO] suppressed by a materialized row.
-  // Detached overrides suppress the phantom at their ORIGINAL date so
-  // the source occurrence doesn't ghost alongside the relocated edit.
-  // Non-detached materialized rows of a recurring series suppress the
-  // phantom on the occurrence date they sit on.
-  const suppressed = new Set();
-  materialized.forEach((it) => {
-    if (!it.agenda_schedule_id) return;
-    if (it.detached) {
-      if (it.original_start_at) {
-        suppressed.add(`${it.agenda_schedule_id}:${epochToDateISO(it.original_start_at, tz)}`);
-      }
-      return;
-    }
-    suppressed.add(`${it.agenda_schedule_id}:${epochToDateISO(it.start_at, tz)}`);
-  });
+  const suppressed = suppressedOccurrences(materialized, tz);
 
   const localEpoch = Tz.localEpochFn(tz);
   const phantoms = [];
@@ -534,6 +578,7 @@ const AgendaStore = {
   setPreferences,
   // reads
   itemsForRange,
+  scheduleOccurrences,
   getAgendas,
   getAgenda,
   getItem,

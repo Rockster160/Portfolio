@@ -143,6 +143,19 @@
       ),
       class: "prompt-select-input"
     %>
+  <% when :duration %>
+    <%# A plain text box on purpose: `number` drops "1:32" and "1h 32" as you %>
+    <%# type them. What it was read as goes in the hint underneath, live. %>
+    <div class="prompt-duration-field">
+      <%=
+        text_field_tag base_key,
+          response&.dig(question).presence || default,
+          placeholder: "52 · 1:32 · 1h 32 · 97m",
+          autocomplete: "off",
+          class: "prompt-duration-input"
+      %>
+      <span class="prompt-duration-hint" aria-live="polite"></span>
+    </div>
   <% when :textarea %>
     <%= text_area_tag base_key,
       response&.dig(question).presence || default,

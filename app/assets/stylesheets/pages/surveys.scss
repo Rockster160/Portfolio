@@ -11,6 +11,26 @@
     }
   }
 
+  .prompt-duration-field {
+    // The hint sits directly under its own box rather than in the flow of
+    // questions, so a form with two durations never leaves you working out
+    // which one a stray line belongs to.
+    display: flex;
+    flex-direction: column;
+
+    .prompt-duration-hint {
+      min-height: 1.2em;
+      padding: 2px 4px 0;
+      font-size: 0.8em;
+      opacity: 0.75;
+      text-align: right;
+    }
+    .prompt-duration-hint[data-unreadable="true"] {
+      opacity: 1;
+      color: $danger;
+    }
+  }
+
   .centered-options {
     display: flex;
 

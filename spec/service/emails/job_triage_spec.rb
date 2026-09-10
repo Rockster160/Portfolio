@@ -148,8 +148,14 @@ RSpec.describe Emails::JobTriage do
       )
     }
 
+    # A plain card is what's left when the classifier named no company: there is
+    # no row to hang a beat on and nothing to propose starting, so seeing it is
+    # the whole of what can be offered.
     it "posts one card into the thread and pushes it" do
-      stub_model(verdict_json(job: true, kind: "application status", headline: "Netflix has it."))
+      stub_model(verdict_json(
+                   job: true, kind: "application status", company: nil,
+                   headline: "Netflix has it."
+      ))
 
       message = described_class.triage!(email)
 
@@ -157,7 +163,7 @@ RSpec.describe Emails::JobTriage do
       expect(message.byte_conversation).to eq(convo)
       expect(message.body).to include("Netflix has it.")
       expect(message.body).to include("We have received your application")
-      expect(message.body).to include("application status · Netflix")
+      expect(message.body).to include("application status")
       expect(message.body).to include("/emails/#{email.id}")
       expect(message.metadata.to_h).to include("kind" => "system", "source" => "job_mail_triage")
       expect(message.metadata.to_h["email_id"]).to eq(email.id)
@@ -189,7 +195,7 @@ RSpec.describe Emails::JobTriage do
     # A Sidekiq retry, or ReceiveEmailWorker running again over the same S3
     # object, both arrive back here.
     it "is one card per email however many times it runs" do
-      stub_model(verdict_json(job: true))
+      stub_model(verdict_json(job: true, company: nil))
 
       expect { described_class.triage!(email) }.to change(ByteMessage, :count).by(1)
       expect { described_class.triage!(email) }.not_to change(ByteMessage, :count)
@@ -219,7 +225,7 @@ RSpec.describe Emails::JobTriage do
     end
 
     it "bills the call to its own kind" do
-      stub_model(verdict_json(job: true))
+      stub_model(verdict_json(job: true, company: nil))
       described_class.triage!(email)
 
       expect(BuddyUsage.last.kind).to eq("job_triage")
@@ -259,21 +265,30 @@ RSpec.describe Emails::JobTriage do
       expect(message.metadata.to_h["job_application_id"]).to be_present
     end
 
-    # The seed says to offer, not to do. A beat logged without being asked is a
-    # tracker editing itself.
-    it "tells Buddy to offer rather than to log" do
+    # Nothing is written on arrival, but the question is the CARD, not a
+    # sentence: add_job_note is level 3, so calling it proposes and waits.
+    it "tells Buddy to propose it as a card rather than ask in prose" do
       message = described_class.triage!(email)
 
-      expect(message.body).to include("Don't log it unless they ask")
+      expect(message.body).to include("CALL add_job_note")
+      expect(message.body).to include("do not offer to, do not ask")
     end
 
-    it "still posts a plain card when nothing on the board matches" do
+    it "keeps the seed out of the thread" do
+      message = described_class.triage!(email)
+
+      expect(message.metadata.to_h["hidden"]).to be(true)
+    end
+
+    it "proposes starting a row when the company isn't on the board" do
       JobApplication.where(user: user).destroy_all
 
       message = described_class.triage!(email)
 
-      expect(message.direction).to eq("inbound")
-      expect(message.metadata.to_h["kind"]).to eq("system")
+      expect(message.direction).to eq("outbound")
+      expect(message.body).to include("NOT on their board yet")
+      expect(message.body).to include("CALL add_job_application")
+      expect(message.metadata.to_h["hidden"]).to be(true)
     end
   end
 end

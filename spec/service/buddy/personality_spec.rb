@@ -195,14 +195,18 @@ RSpec.describe Buddy::Personality do
     end
 
     # Prod 2612: "How do I see my agenda?" got "Open the **Agenda** or
-    # **Calendar** tab in Byte" — neither has ever existed. The drawer holds
-    # Conversations, Routines, Reminders and Settings, and the companion can't
-    # see the screen at all, so any answer about where a thing is is invented.
-    it "refuses to describe a screen it can't see" do
+    # **Calendar** tab in Byte" — neither has ever existed. The answer to that
+    # was a flat ban on describing the screen, and prod 5808 is what the ban
+    # cost: Eve asked how to stop the notifications, was sent to her phone's
+    # settings, and the bell was in the top bar of the window she was typing
+    # into. Both are the same mistake - answering from memory - so the rule is
+    # now to READ it, and `describe_screen` is the thing that can be read.
+    it "sends it to read the screen rather than recall it" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
-      expect(prompt).to include("You cannot see the screen")
-      expect(prompt).to include("No tabs, no buttons, no menus")
+      expect(prompt).to include("Never describe the screen from memory - read it first")
+      expect(prompt).to include("`describe_screen`")
+      expect(prompt).to include("name anything that comes back and nothing that doesn't")
     end
 
     # And the answer to "how do I see X" is X, not directions to it.
