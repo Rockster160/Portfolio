@@ -34,6 +34,20 @@ RSpec.describe "Agenda search modal (JS-side)" do
     expect(result[:future_section_shown]).to be(true)
   end
 
+  it "leaves out the duplicate the filter panel is hiding" do
+    # BirthdaySync finds a pre-existing "Whisper Birthday" on another
+    # calendar and hides it so the two don't stack. The calendar's own
+    # hide pass walks rendered .agenda-item / .cal-* nodes, which a
+    # search hit is neither of — so search used to be the one view that
+    # ignored every filter, and put the hidden copy right back under
+    # the one it was hidden for.
+    expect(result[:hits].length).to eq(1)
+  end
+
+  it "shows both again once the hide is lifted" do
+    expect(result[:unhidden_names]).to eq(["Whisper Birthday", "Whisper's Birthday"])
+  end
+
   it "still says nothing when nothing matches" do
     expect(result[:no_match_rows]).to eq(0)
     expect(result[:no_match_section_hidden]).to be(true)

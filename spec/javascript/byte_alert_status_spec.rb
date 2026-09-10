@@ -6,6 +6,10 @@ require "rails_helper"
 RSpec.describe "Byte alert status line" do
   let(:result) { JsRunner.output("spec/javascript/byte_alert_status_runner.js") }
 
+  # A fixed string under every open alert is a line that appears every single
+  # time the feature is used and never once says anything the reader didn't
+  # already have from the colour. The colour reading as an ERROR was a colour
+  # problem, and was fixed as one.
   it "says nothing under a condition seen once" do
     expect(result["open_once"]).to eq("state" => "open", "text" => "")
     expect(result["open_no_count"]).to eq("state" => "open", "text" => "")
@@ -68,6 +72,25 @@ RSpec.describe "Byte alert status line" do
       expect(row["blank"]).to eq("")
       expect(row["nothing"]).to eq("")
     end
+
+    # Scrolling a strip pinned over the pet put a full-height native scrollbar
+    # down his side — worse than the problem, and over a list nobody wants to
+    # scroll. Two are drawn and the rest are a count.
+    describe "when several are outstanding at once" do
+      let(:overflow) { result["overflow"] }
+
+      it "draws at most two and counts the rest" do
+        expect(overflow["max_rows"]).to eq(2)
+        expect(overflow["one_over"]).to eq("+1 more outstanding")
+        expect(overflow["many"]).to eq("+7 more outstanding")
+      end
+
+      it "says nothing while they all fit" do
+        expect(overflow["zero"]).to be_nil
+        expect(overflow["none"]).to be_nil
+        expect(overflow["exactly_full"]).to be_nil
+      end
+    end
   end
 
   # The label is only half of it. The other half is three files agreeing that
@@ -97,6 +120,16 @@ RSpec.describe "Byte alert status line" do
       expect(Rails.root.join("app/views/byte/show.html.erb").read).to include("data-byte-alert-bar")
       expect(index).to include("initAlertStrip")
       expect(index).to include('data.kind === "alerts"')
+    end
+
+    # In flow it took its height off `.byte-buddy-char`, which is `flex: 1` in a
+    # capped hero — so every open alert made the character smaller.
+    it "overlays the hero instead of taking its height off the character" do
+      css = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
+      bar = css[/\.byte-alert-bar \{(.*?)\n\}/m, 1].to_s
+
+      expect(bar).to include("position: absolute")
+      expect(bar).not_to include("overflow-y: auto")
     end
 
     # `update: true` is what stops a rewritten bubble reading as a new message:

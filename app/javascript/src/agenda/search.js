@@ -161,8 +161,8 @@
       const matcher = compileMatcher(q);
 
       groups = new Map();
-      items.filter(matcher.test).forEach(addToGroups);
-      recurringHits(matcher).forEach(addToGroups);
+      items.filter(matcher.test).filter(visible).forEach(addToGroups);
+      recurringHits(matcher).filter(visible).forEach(addToGroups);
       renderGroups();
       fetchPast(q);
     }
@@ -196,6 +196,35 @@
       // back from both — `addToGroups` keys on rule-plus-date and drops
       // the second one.
       return found.filter(matcher.test);
+    }
+
+    // The filter panel's hides, applied to search the same way
+    // `applyAgendaVisibility` applies them to the calendar. That pass
+    // walks rendered `.agenda-item` / `.cal-*` nodes, and a search hit
+    // is neither, so search was the one view in the app that ignored
+    // them — invisible while a hidden series had no rows to surface,
+    // and immediately visible once this file started expanding rules:
+    // "Whisper Birthday" on Ours 💕 is a duplicate BirthdaySync found
+    // and hid on the user's behalf, and it came back to sit directly
+    // under the "Whisper's Birthday" it was hidden for.
+    //
+    // Identity hides only — the agenda, the series, the one item, the
+    // name pattern. `hide_completed` / `hide_tentative` are declutter
+    // toggles about STATE, and search has explicit `is:completed` /
+    // `is:pending` tokens for that; honoring both would mean a query
+    // that contradicts itself and silently returns nothing.
+    function visible(item) {
+      const prefs = window.AgendaStore?.getPreferences?.() || {};
+      const has = (list, value) => (list || []).some((v) => String(v) === String(value));
+      if (has(prefs.hidden_agenda_ids, item.agenda_id)) return false;
+      if (item.agenda_schedule_id && has(prefs.hidden_schedule_ids, item.agenda_schedule_id)) return false;
+      // A phantom's id is `p-<schedule>-<date>`; only a real row can be
+      // hidden as a one-off, same guard applyAgendaVisibility uses.
+      if (/^\d+$/.test(String(item.id)) && has(prefs.hidden_item_ids, item.id)) return false;
+      return !(prefs.hidden_name_patterns || []).some((src) => {
+        try { return new RegExp(src, "i").test(item.name || ""); }
+        catch (err) { return false; }
+      });
     }
 
     function addToGroups(item) {
@@ -280,7 +309,7 @@
         .then((body) => {
           if (fetchId !== pastFetchId || q !== currentQuery) return;
           pastStatus.textContent = "";
-          (body.items || []).forEach(addToGroups);
+          (body.items || []).filter(visible).forEach(addToGroups);
           renderGroups();
         })
         .catch(() => {

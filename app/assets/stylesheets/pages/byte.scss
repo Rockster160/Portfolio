@@ -50,6 +50,10 @@ html.html-ctr-byte body {
   --bs-accent-grad: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
   --bs-them-bg: #2A3B5F;
   --bs-danger: #F87171;
+  // "Needs doing", which is NOT "broken". An alert wearing --bs-danger read
+  // as an error rather than a job, so conditions get their own warm amber -
+  // tuned per theme like danger is, because each surface is a different dark.
+  --bs-attention: #F2B84B;
   --bs-pending: #94A3B8;
 
   // Moss theme (Chelsea) — retint the ENTIRE surface (page, drawer, modals)
@@ -71,6 +75,7 @@ html.html-ctr-byte body {
     --bs-accent-grad: linear-gradient(135deg, #6FAE5A 0%, #86C765 100%);  // green buttons
     --bs-them-bg: #22381F;
     --bs-danger: #E88A5C;
+    --bs-attention: #E8C063;
     --bs-pending: #8CA886;
   }
 
@@ -93,6 +98,7 @@ html.html-ctr-byte body {
     --bs-accent-grad: linear-gradient(135deg, #8E44D8 0%, #B266F2 100%);  // violet buttons
     --bs-them-bg: #301B47;
     --bs-danger: #F4756B;
+    --bs-attention: #F0B45C;
     --bs-pending: #9B84B8;
   }
 
@@ -115,6 +121,7 @@ html.html-ctr-byte body {
     --bs-accent-grad: linear-gradient(135deg, #E0A038 0%, #F2B84B 100%);  // gold buttons
     --bs-them-bg: #3A2A12;
     --bs-danger: #E8825C;
+    --bs-attention: #F0A03A;
     --bs-pending: #B09A6E;
   }
 
@@ -1241,9 +1248,9 @@ html.html-ctr-byte body {
   // the bubbles that are already understood - the line underneath appears only
   // when it has something to add (a recurrence, or when it cleared).
   //
-  // `--bs-danger` rather than a warning colour of its own: every theme already
-  // tunes that one against its own surface, and an amber hardcoded here would
-  // disappear on Glimmer's amber one.
+  // `--bs-attention`, not `--bs-danger`: red reads as something BROKEN, and an
+  // open alert is a job that hasn't been done. Every theme tunes the token
+  // against its own surface, the way it already does for danger.
   &.byte-msg-alert-open,
   &.byte-msg-alert-resolved {
     border-left: 3px solid var(--bs-border);
@@ -1252,8 +1259,10 @@ html.html-ctr-byte body {
   }
 
   &.byte-msg-alert-open {
-    border-left-color: var(--bs-danger);
-    background: color-mix(in srgb, var(--bs-danger) 12%, var(--bs-them-bg));
+    border-left-color: var(--bs-attention);
+    background: color-mix(in srgb, var(--bs-attention) 12%, var(--bs-them-bg));
+
+    .byte-msg-alert { color: var(--bs-attention); }
   }
 
   // Dealt with, and receding. Not gone - that something WAS outstanding is
@@ -2150,26 +2159,45 @@ html.html-ctr-byte body {
   }
 }
 
-// Conditions still standing open (Buddy::Alerts), pinned above the composer.
+// Conditions still standing open (Buddy::Alerts), along the bottom of the hero.
 //
-// Same footprint as the reply bar deliberately - it is the same kind of thing, a
-// line of state that isn't a message - but it wears the alert's own colour so it
-// is not read as chrome. One row per open condition, which is also the answer to
-// "can several be outstanding at once": they stack, and each is let go of on its
-// own.
+// It sat above the composer first and was too big a thing down there - a bar
+// across the foot of the page reads as an app-level banner. Under the pet it is
+// where the timer chips already live: Buddy's own area, holding what Buddy is
+// carrying.
 //
-// Bounded height with its own scroll: a house that has got away from you should
-// not be able to push the composer off the screen.
+// It OVERLAYS the hero rather than sitting in its flow, exactly as the timer
+// chips do at the top-left and for the same reason: in flow it took its height
+// off `.byte-buddy-char`, which is `flex: 1` in a capped hero, so every open
+// alert made the character smaller.
+//
+// Two rows at most, and the rest are a count. The first version scrolled inside
+// a fixed height, which put a full-height native scrollbar down the side of the
+// pet - worse than the thing it was solving, and over a list nobody wants to
+// scroll anyway.
 .byte-alert-bar {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  margin: 0 auto;
+  max-width: 480px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 0 16px 6px;
-  max-height: 30vh;
-  overflow-y: auto;
+  overflow: hidden;
 
   &[hidden] { display: none; }
+}
+
+// Everything past the two that are drawn. Quiet on purpose - it is a count, not
+// a thing to act on, and each row dropped above it promotes the next into view.
+.byte-alert-more {
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--bs-muted);
+  text-align: center;
 }
 
 .byte-alert-row {
@@ -2180,8 +2208,8 @@ html.html-ctr-byte body {
   border-radius: 10px;
   font-size: 12px;
   color: var(--bs-text, #e8ecf6);
-  background: color-mix(in srgb, var(--bs-danger) 14%, transparent);
-  border-left: 2px solid var(--bs-danger);
+  background: color-mix(in srgb, var(--bs-attention) 16%, transparent);
+  border-left: 2px solid var(--bs-attention);
 
   // The label takes whatever's left and clips. The ✕ must never be pushed off
   // the edge by a long sentence - while this row is here, the key it holds is

@@ -261,6 +261,14 @@
         </div>
       <% end %>
     </div>
+    <%# Conditions still standing open (Buddy::Alerts), along the bottom of the %>
+    <%# hero. An alert owns ONE bubble for as long as it is open and a thread %>
+    <%# moves on around it, so without somewhere pinned, an outstanding thing %>
+    <%# is lost the moment it scrolls away. Bounded to about two rows with its %>
+    <%# own scroll — a house that has got away from you must not be able to %>
+    <%# push the character off the screen. Drawn from the database on every %>
+    <%# load; JS owns its rows. %>
+    <div class="byte-alert-bar" data-byte-alert-bar hidden></div>
   </section>
 
   <%= render "byte/kiosk", chrome: buddy_page_chrome if @kiosk %>
@@ -358,12 +366,6 @@
       </div>
     </article>
   </template>
-
-  <%# Conditions still standing open (Buddy::Alerts). Pinned above the composer %>
-  <%# because an alert owns ONE bubble for as long as it is open, and a thread %>
-  <%# moves on — without this, something outstanding is lost the moment it %>
-  <%# scrolls away. Drawn from the database on every load; JS owns its rows. %>
-  <div class="byte-alert-bar" data-byte-alert-bar hidden></div>
 
   <%# Persistent sleeping chip — pinned above the composer while Buddy is %>
   <%# asleep (usage cap) or the realtime channel is down. Stays until Byte %>

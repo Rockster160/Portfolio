@@ -85,20 +85,47 @@ AgendaStore.applyBootstrap({
   day_key:   TODAY,
   timezone:  TZ,
   items:     [],
-  agendas:   [{ id: 32, name: "Birthdays", color: "#e91e63", editable: false }],
-  schedules: [{
-    id:             149,
-    agenda_id:      32,
-    name:           "Whisper's Birthday",
-    kind:           "event",
-    freq:           "yearly",
-    interval:       1,
-    starts_on:      "2000-10-14",
-    until_on:       null,
-    all_day:        true,
-    start_time:     "00:00",
-    excluded_dates: [],
-  }],
+  agendas:   [
+    { id: 32, name: "Birthdays", color: "#e91e63", editable: false },
+    { id: 7,  name: "Ours",      color: "#8e44ad", editable: true },
+  ],
+  schedules: [
+    {
+      id:             149,
+      agenda_id:      32,
+      name:           "Whisper's Birthday",
+      kind:           "event",
+      freq:           "yearly",
+      interval:       1,
+      starts_on:      "2000-10-14",
+      until_on:       null,
+      all_day:        true,
+      start_time:     "00:00",
+      excluded_dates: [],
+    },
+    // The pre-existing copy on another calendar. BirthdaySync spotted
+    // it as a duplicate of the derived one and hid it on the user's
+    // behalf — so it must not come back through search.
+    {
+      id:             117,
+      agenda_id:      7,
+      name:           "Whisper Birthday",
+      kind:           "event",
+      freq:           "yearly",
+      interval:       1,
+      starts_on:      "2025-10-14",
+      until_on:       null,
+      all_day:        true,
+      start_time:     "00:00",
+      excluded_dates: [],
+    },
+  ],
+  preferences: {
+    hidden_agenda_ids:    [],
+    hidden_schedule_ids:  [117],
+    hidden_item_ids:      [],
+    hidden_name_patterns: [],
+  },
 });
 
 require(path.join(SRC, "agenda", "search.js"));
@@ -124,11 +151,22 @@ function typeQuery(q) {
   const shown = !futureSec.classList.contains("hidden");
 
   await typeQuery("dentist");
+  const noMatchRows = futureList.children.length;
+  const noMatchHidden = futureSec.classList.contains("hidden");
+
+  // Unhide the duplicate and the second row is back — proof the filter
+  // is what removed it, rather than the two rules colliding somewhere.
+  AgendaStore.setPreferences({
+    hidden_agenda_ids: [], hidden_schedule_ids: [], hidden_item_ids: [], hidden_name_patterns: [],
+  });
+  await typeQuery("whisper");
+  const unhidden = futureList.children.map((row) => row.children[0].children[1].textContent);
 
   process.stdout.write(JSON.stringify({
     hits,
     future_section_shown: shown,
-    no_match_rows:        futureList.children.length,
-    no_match_section_hidden: futureSec.classList.contains("hidden"),
+    no_match_rows:        noMatchRows,
+    no_match_section_hidden: noMatchHidden,
+    unhidden_names:       unhidden,
   }));
 })();

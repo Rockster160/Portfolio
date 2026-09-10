@@ -377,10 +377,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  // Conditions still standing open. Pinned, because an alert keeps ONE bubble
-  // for as long as it is open and a thread moves on around it — the strip is
-  // what stops an outstanding thing being lost by scrolling past. Same jump the
-  // unread notices use: switch if it's in another thread, then reveal.
+  // Conditions still standing open, along the bottom of the hero. An alert keeps
+  // ONE bubble for as long as it is open and a thread moves on around it — the
+  // strip is what stops an outstanding thing being lost by scrolling past. Same
+  // jump the unread notices use: switch if it's in another thread, then reveal.
   const alertStrip = initAlertStrip({
     root: isKiosk ? null : document.querySelector("[data-byte-alert-bar]"),
     onJump: (alert) => {

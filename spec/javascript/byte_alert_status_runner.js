@@ -7,7 +7,7 @@ import { alertStatusLabel } from "../../app/javascript/src/pages/byte/alert_stat
 // "" for a missing one — which is the case that decides half the branches here.
 const fmt = (iso) => (iso ? "5:04 PM" : "");
 
-const { alertRowLabel } = await import(
+const { alertRowLabel, overflowLabel, MAX_ROWS } = await import(
   "../../app/javascript/src/pages/byte/alert_strip.js"
 );
 
@@ -46,6 +46,17 @@ out.row = {
   no_count: alertRowLabel({ body: "The gate is open" }),
   blank: alertRowLabel({}),
   nothing: alertRowLabel(undefined),
+};
+
+// Two drawn, the rest a count. Scrolling a strip pinned over the pet put a
+// native scrollbar down his side, which was worse than the problem.
+out.overflow = {
+  max_rows: MAX_ROWS,
+  none: overflowLabel(1),
+  exactly_full: overflowLabel(2),
+  one_over: overflowLabel(3),
+  many: overflowLabel(9),
+  zero: overflowLabel(0),
 };
 
 process.stdout.write(JSON.stringify(out, null, 2));

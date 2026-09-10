@@ -1,11 +1,23 @@
-// The pinned strip of conditions still standing open (Buddy::Alerts).
+// The strip of conditions still standing open (Buddy::Alerts), along the bottom
+// of the hero.
 //
 // An alert owns ONE bubble for as long as it is open, which is what stops a
 // standing condition turning into a run of identical notifications — and is
 // also its one weakness: a thread moves on, and a bubble raised on Tuesday is a
 // hundred messages up by Thursday. The strip is the answer to that. It is drawn
-// from the database on every load and pinned above the composer, so an
-// outstanding thing cannot be lost by being scrolled past.
+// from the database on every load, so an outstanding thing cannot be lost by
+// being scrolled past.
+//
+// Under the pet rather than above the composer: a bar across the foot of the
+// page reads as an app-level banner, and this is Buddy's own area, holding what
+// Buddy is carrying. It OVERLAYS that area — absolutely positioned, the same
+// way the timer chips are — because in flow it took its height off the
+// character, and a bad night would shrink him.
+//
+// At most two rows are ever built, and the rest become a count. A scrolling
+// strip was the first attempt and was worse than the problem: a native
+// scrollbar down the side of the pet, over a list of two-line rows nobody
+// wanted to scroll.
 //
 // Two things a row does:
 //
@@ -32,6 +44,16 @@ async function post(url) {
 // What one row says. The body is the caller's own sentence, so it is the label;
 // the count rides along only when there IS one to report, for the same reason
 // the bubble's own status line stays empty on a condition seen once.
+// How many rows are ever drawn. The rest are a count — see the note up top on
+// why this doesn't scroll.
+export const MAX_ROWS = 2;
+
+// The line standing in for everything past MAX_ROWS, or null when they all fit.
+export function overflowLabel(total, max = MAX_ROWS) {
+  const hidden = Number(total || 0) - max;
+  return hidden > 0 ? `+${hidden} more outstanding` : null;
+}
+
 export function alertRowLabel(alert) {
   const body = (alert?.body || "").toString().trim();
   const count = Number(alert?.count || 0);
@@ -51,7 +73,7 @@ export function initAlertStrip({ root, onJump }) {
     root.hidden = alerts.length === 0;
     if (!alerts.length) return;
 
-    alerts.forEach((alert) => {
+    alerts.slice(0, MAX_ROWS).forEach((alert) => {
       const row = document.createElement("div");
       row.className = "byte-alert-row";
       row.dataset.alertId = String(alert.id);
@@ -88,6 +110,17 @@ export function initAlertStrip({ root, onJump }) {
       row.append(go, drop);
       root.appendChild(row);
     });
+
+    // Not tappable, and deliberately: there is nothing useful for a tap to do
+    // that clearing the two above it doesn't already do — each one dropped
+    // promotes the next into view.
+    const more = overflowLabel(alerts.length);
+    if (more) {
+      const note = document.createElement("div");
+      note.className = "byte-alert-more";
+      note.textContent = more;
+      root.appendChild(note);
+    }
   }
 
   function setAlerts(next) {

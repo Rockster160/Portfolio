@@ -1,18 +1,23 @@
-// The line under an alert bubble, and nothing more than that.
+// The line under an alert bubble.
 //
 // An alert is a message that stands for something OUTSTANDING until it's dealt
-// with (Buddy::Alerts). Open versus resolved is carried VISUALLY - the tint and
-// the marker on the corner - so this deliberately writes nothing for the
-// ordinary open case: a bubble that already looks outstanding does not need a
-// word saying so underneath it.
+// with (Buddy::Alerts). Open versus dealt-with is carried VISUALLY - the amber
+// tint and the bar down the side - so this deliberately writes nothing for the
+// ordinary open case. A fixed string under every one of them is a line that
+// appears every single time the feature is used and never once says anything
+// the reader didn't already have.
 //
-// What it does write is the part the bubble cannot show on its own:
+// (The colour did once read as an ERROR rather than as a job. The fix for that
+// was the colour - `--bs-attention` instead of `--bs-danger` - not a word
+// underneath explaining it.)
+//
+// What it does write is what the bubble genuinely cannot show on its own:
 //
 //   * how many times the condition has been seen since, and when it was last
 //     seen - because the message keeps ONE bubble across every occurrence, and
 //     without this the second and third times would be invisible
-//   * when it was resolved - which is not the bubble's own timestamp; that one
-//     is when the thing was first noticed, and the two are often days apart
+//   * when it stopped standing - which is not the bubble's own timestamp; that
+//     one is when the thing was first noticed, and the two are often days apart
 export function alertStatusLabel(alert, formatTime = () => "") {
   if (!alert || typeof alert !== "object") return null;
 
