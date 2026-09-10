@@ -2476,6 +2476,14 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .form-actions .danger {
     margin-right: auto;
   }
+  // Skip writes on the press, so it sits with Archive on the left edge
+  // rather than beside Save where a miss is cheap to make.
+  .form-actions .skip-action {
+    margin-right: auto;
+  }
+  .form-actions .danger:has(+ .skip-action) {
+    margin-right: 0;
+  }
   .form-actions button {
     padding: 8px 16px;
     border-radius: 8px;

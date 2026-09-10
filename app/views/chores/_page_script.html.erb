@@ -2229,7 +2229,9 @@
       if (actor) {
         if (e.anonymous) {
           actor.classList.add("anonymous");
-          actor.textContent = "Anonymous";
+          // A skip and an anonymous completion are both credited to
+          // nobody; only the pill says which of the two it was.
+          actor.textContent = e.skipped_occurrence ? "Skipped" : "Anonymous";
           actor.hidden = false;
         } else if (e.actor_username) {
           actor.textContent = e.actor_username;
@@ -4442,6 +4444,7 @@
     const createMarkDue = editModal.querySelector('[data-edit-mark-due-toggle]');
     if (createMarkDue) createMarkDue.hidden = true;
     refreshEditModalHeadActions(null);
+    refreshEditModalSkip(null);
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
@@ -4546,6 +4549,7 @@
     // The lock-hit early return above skips it on purpose: reopening a
     // modal keeps in-progress edits, and they're still edits.
     editFormBaseline = editFormSnapshot();
+    refreshEditModalSkip(c);
     editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
@@ -4746,6 +4750,40 @@
         submitBtn.classList.remove("loading");
       }
     }
+  });
+
+  // Skip / Unskip (edit modal footer). One press, no confirm — the
+  // button flips to "Unskip" the moment it lands, and that IS the way
+  // back. Nothing is credited and nothing is paid, so there's no
+  // record of anybody's at stake.
+  function refreshEditModalSkip(c) {
+    const btn = editForm?.querySelector("[data-skip-occurrence]");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !c);
+    const skipped = !!(c && c.skipped_today);
+    btn.dataset.skipped = String(skipped);
+    btn.textContent = skipped ? "Unskip" : "Skip";
+  }
+
+  editForm?.querySelector("[data-skip-occurrence]")?.addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    if (!currentChoreId) return;
+    if (!window.requireOnlineForChores()) return;
+    const id = currentChoreId;
+    const undo = btn.dataset.skipped === "true";
+    await withSavingState(btn, async () => {
+      try {
+        const data = await api(`/chores/items/${id}/skip`, undo ? "DELETE" : "POST", { tab_id: TAB_ID });
+        reconcile(data);
+        // Straight off the response: reconcile drops the payload while
+        // the chore is inside the tap-protection window, and the button
+        // has to say what the server just did either way.
+        refreshEditModalSkip(data.chore || ChoreStore.get(parseInt(id, 10)));
+        flash(undo ? "Skip undone" : "Skipped");
+      } catch (err) {
+        flash("Couldn't skip: " + err.message, "error");
+      }
+    });
   });
 
   editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {

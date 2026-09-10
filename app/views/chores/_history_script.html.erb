@@ -175,8 +175,10 @@
     fillNoteSlot(row, entry.note);
     const amt = row.querySelector("[data-history-amount]");
     if (entry.anonymous) {
-      amt.textContent = "(anonymous)";
-      amt.style.color = AMOUNT_COLOR.anonymous;
+      // Both are credited to nobody; the word is what separates "someone
+      // outside the household did it" from "we let this one go".
+      amt.textContent = entry.skipped_occurrence ? "(skipped)" : "(anonymous)";
+      amt.style.color = entry.skipped_occurrence ? AMOUNT_COLOR.skipped : AMOUNT_COLOR.anonymous;
     } else if (entry.payout_skipped) {
       amt.textContent = "(skipped)";
       amt.style.color = AMOUNT_COLOR.skipped;

@@ -29,8 +29,10 @@ import {
   readLegacyQueue,
   clearLegacyQueue,
   clearAll as clearQueue,
+  length as queuedCount,
   removeByLocalId as removeQueued,
 } from "./queue";
+import { initIdleReload } from "./idle_reload";
 import { configure as configureApi, sendMessage, drainQueue } from "./api";
 import {
   registerServiceWorker,
@@ -3324,15 +3326,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     syncBadge.dataset.state = state || "";
   }
 
+  // Everything that sits ON TOP of the thread. Reloading out from under one of
+  // these throws away whatever it was in the middle of — a conversation being
+  // renamed, a reminder half-edited, a photo being read.
+  const OVERLAYS = [
+    "dialog[open]",
+    ".byte-drawer.open",
+    "[data-byte-actions-menu]:not([hidden])",
+    "[data-buddy-face-popover]:not([hidden])",
+    "[data-byte-slash-popover]:not([hidden])",
+    ".byte-msg-menu:not([hidden])",
+    ".byte-image-viewer",
+  ];
+
+  function overlayOpen() {
+    return OVERLAYS.some((sel) => !!document.querySelector(sel));
+  }
+
+  // The app is in a state where losing the page costs nothing: parked at the
+  // newest message, nothing open over it, nothing typed and nothing waiting to
+  // go out. Scrolled UP is deliberately not quiet — somebody reading back
+  // through a conversation loses their place, and the scroll position is the
+  // one thing a reload cannot restore.
+  const idleReload = initIdleReload({
+    reload: hardReload,
+    quiet: () =>
+      atBottom &&
+      !overlayOpen() &&
+      !input?.value.trim() &&
+      queuedCount() === 0,
+  });
+
   function setUpdateAvailable(v) {
     if (!reloadBtn) return;
     reloadBtn.classList.toggle("has-update", !!v);
     if (v) {
       reloadBtn.setAttribute("title", "Update ready — tap to reload");
       reloadBtn.setAttribute("aria-label", "Update ready — tap to reload");
+      // Nobody may ever come back to press it. See idle_reload.js.
+      idleReload.arm();
     } else {
       reloadBtn.setAttribute("title", "Reload");
       reloadBtn.setAttribute("aria-label", "Reload");
+      idleReload.disarm();
     }
   }
 

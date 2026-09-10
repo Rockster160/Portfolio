@@ -192,6 +192,8 @@ Rails.application.routes.draw do
     post   "/items/:chore_id/completion" => "chore_completions#create", as: :complete_item
     delete "/items/:chore_id/completion" => "chore_completions#destroy"
     post   "/items/:chore_id/anonymous_completion" => "chore_completions#anonymous_completion", as: :anonymous_complete_item
+    post   "/items/:chore_id/skip"       => "chore_completions#skip", as: :skip_item
+    delete "/items/:chore_id/skip"       => "chore_completions#unskip"
     get    "/items/:id/state"            => "chores#state",              as: :item_state
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder

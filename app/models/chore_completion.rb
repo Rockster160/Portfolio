@@ -11,6 +11,7 @@
 #  hot_multiplier            :float            default(1.0), not null
 #  metadata                  :jsonb            not null
 #  note                      :text
+#  occurrence_skipped        :boolean          default(FALSE), not null
 #  paid_pebbles              :integer          default(0), not null
 #  payout_skipped            :boolean          default(FALSE), not null
 #  skipped_reason            :text
@@ -116,6 +117,14 @@ class ChoreCompletion < ApplicationRecord
   # done) but are NOT attributed to any household member, so they're
   # excluded from done_count_today, actor display, and streak math.
   scope :credited, -> { where(anonymous: false) }
+  # A skipped occurrence. `anonymous` is the wider category — "credited
+  # to nobody" — and every uncredited behavior (cooldown held, carryover
+  # satisfied, grey ring, no streak, no Jil trigger) already keys on it,
+  # so a skip carries it too. This column is the narrower claim: nobody
+  # did the thing, and the occurrence was let go on purpose. The two
+  # differ only in what they say — an anonymous row means somebody
+  # outside the household did it, a skipped one means it didn't happen.
+  scope :skipped_occurrences, -> { where(occurrence_skipped: true) }
 
   # The person who marked it done. Falls back to the credited user, so this
   # is safe to read on any row including every one written before the column

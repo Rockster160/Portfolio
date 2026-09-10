@@ -87,7 +87,10 @@ class ChoreSerializer
       # the first tap. `done` state stays binary (any tap counts) so
       # streaks, Today carryover, and Jil :completed are unchanged.
       target_count:         chore.target_count,
-      progress_count:       done_count_today,
+      progress_count:       progress_count,
+      # Was this occurrence let go? Drives the edit modal's Skip /
+      # Unskip button and the full-progress clamp above.
+      skipped_today:        skipped_today?,
       # Sharing-mode belongs to the parent for sub-chores — sub-chore
       # taps credit the parent, so the client must show the parent's
       # semantics to stay coherent. The cooldown VALUE is a sub-chore
@@ -249,6 +252,26 @@ class ChoreSerializer
       .where(user_id: cooldown_scope_user_ids, day_key: day)
       .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .count
+  end
+
+  # Visible progress toward the daily target. A skip settles the WHOLE
+  # occurrence — one press clears a 0-of-3 chore rather than nudging it
+  # to 1-of-3 and leaving it asking for two more. Anonymous completions
+  # keep counting one at a time: somebody did that one instance.
+  def progress_count
+    return [done_count_today, chore.target_count].max if skipped_today?
+
+    done_count_today
+  end
+
+  # True when this occurrence was skipped — the chore family carries a
+  # skip row on `day`, under the same user scope the card is drawn from.
+  def skipped_today?
+    return @skipped_today if defined?(@skipped_today)
+    return @skipped_today = ctx.skipped_today_chore_ids.include?(chore.id) if ctx
+
+    scope = ChoreCompletion.skipped_occurrences.where(user_id: cooldown_scope_user_ids, day_key: day)
+    @skipped_today = scope.exists?(["chore_id = :id OR parent_chore_id = :id", { id: chore.id }])
   end
 
   def last_completion

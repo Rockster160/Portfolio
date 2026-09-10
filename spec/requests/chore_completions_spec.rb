@@ -600,4 +600,111 @@ RSpec.describe "ChoreCompletions", type: :request do
       end
     end
   end
+
+  # Skipping an occurrence: the chore stops asking for the day, and
+  # nobody is credited with having done it. The anonymous path was
+  # standing in for this and says the wrong thing — it claims somebody
+  # outside the household did the work.
+  describe "POST skip" do
+    let(:owner) { create(:user) }
+    let(:household) { create(:chore_household, owner_user: owner) }
+    let(:member) { create(:user) }
+    let!(:membership) {
+      create(:chore_household_membership, chore_household: household, user: member, role: :member)
+    }
+    let(:chore) {
+      create(:chore, created_by_user: owner, chore_household: household, reward_pebbles: 7, target_count: 3)
+    }
+
+    before do
+      owner.reload
+      post login_path, params: { user: { username: owner.username, password: "password123" } }
+    end
+
+    def skip_chore = post("/chores/items/#{chore.id}/skip", params: {}.to_json, headers: json_headers)
+    def unskip_chore = delete("/chores/items/#{chore.id}/skip", params: {}.to_json, headers: json_headers)
+
+    def json_headers = { "Content-Type" => "application/json", "Accept" => "application/json" }
+
+    it "records a skipped, uncredited, unpaid occurrence" do
+      expect { skip_chore }.to change(ChoreCompletion, :count).by(1)
+
+      expect(response).to have_http_status(:created)
+      completion = ChoreCompletion.last
+      expect(completion.occurrence_skipped).to be true
+      expect(completion.anonymous).to be true
+      expect(completion.payout_skipped).to be true
+      expect(completion.paid_pebbles).to eq(0)
+      expect(completion.user_id).to eq(owner.id)
+      expect(owner.reload.chore_balance).to eq(0)
+    end
+
+    # The whole point of the button: one press settles the occurrence.
+    # A 0-of-3 chore reads done, not 1-of-3 still asking for two more.
+    it "clears the whole occurrence on a multi-count chore" do
+      skip_chore
+
+      body = response.parsed_body
+      expect(body.dig("chore", "progress_count")).to eq(3)
+      expect(body.dig("chore", "skipped_today")).to be true
+    end
+
+    it "holds the cooldown like a real completion" do
+      chore.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
+      skip_chore
+
+      expect(chore.reload.cooldown_elapsed?(owner)).to be false
+    end
+
+    it "credits nobody — no streak, no actor on the card" do
+      skip_chore
+
+      body = response.parsed_body
+      expect(body.dig("chore", "last_actor_username")).to be_nil
+      expect(body.dig("chore", "last_actor_anonymous")).to be true
+      expect(ChoreStreak.where(user: owner, chore: chore)).to be_empty
+    end
+
+    it "fires no Jil completion trigger" do
+      chore # created before the expectation — creating one is itself a trigger
+      expect(::Jil).not_to receive(:trigger)
+
+      skip_chore
+    end
+
+    it "does not stack a second row when pressed again" do
+      skip_chore
+
+      expect { skip_chore }.not_to change(ChoreCompletion, :count)
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body.dig("chore", "skipped_today")).to be true
+    end
+
+    it "clears the skip on DELETE" do
+      skip_chore
+
+      expect { unskip_chore }.to change(ChoreCompletion, :count).by(-1)
+      expect(response).to have_http_status(:ok)
+      body = response.parsed_body
+      expect(body.dig("chore", "skipped_today")).to be false
+      expect(body.dig("chore", "progress_count")).to eq(0)
+    end
+
+    # The row belongs to nobody, so it isn't anyone's record to protect —
+    # a housemate who disagrees with the skip can take it back.
+    it "lets another household member clear it" do
+      skip_chore
+      post login_path, params: { user: { username: member.username, password: "password123" } }
+
+      expect { unskip_chore }.to change(ChoreCompletion, :count).by(-1)
+    end
+
+    it "leaves a credited completion alone when clearing the skip" do
+      post "/chores/items/#{chore.id}/completion", params: {}.to_json, headers: json_headers
+      skip_chore
+
+      expect { unskip_chore }.to change(ChoreCompletion, :count).by(-1)
+      expect(ChoreCompletion.credited.count).to eq(1)
+    end
+  end
 end

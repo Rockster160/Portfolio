@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_08_174521) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_10_183801) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -740,6 +740,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_08_174521) do
     t.string "client_mutation_id"
     t.bigint "parent_chore_id"
     t.bigint "recorded_by_user_id"
+    t.boolean "occurrence_skipped", default: false, null: false
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
     t.index ["parent_chore_id"], name: "index_chore_completions_on_parent_chore_id"

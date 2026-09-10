@@ -60,7 +60,9 @@ module Buddy
           {
             hook:  "data-byte-reload",
             label: "The ↻ circular arrow",
-            does:  "Reloads the app. It grows a dot when a new version is ready to pick up.",
+            does:  "Reloads the app. It grows a dot when a new version is ready to pick up - " \
+                   "and if the app is left alone at the bottom of the thread with nothing " \
+                   "open, it picks the new version up on its own after a few minutes.",
           },
         ],
       },

@@ -439,6 +439,12 @@
 
       <div class="form-actions">
         <button type="button" class="danger hidden" data-action="archive">Archive</button>
+        <%# "Skip" — lets THIS occurrence go. The chore stops asking for
+          the day and nobody is credited or paid; unlike the secret-agent
+          button above it makes no claim that anyone did the work. Writes
+          on the press with no confirm, then flips to "Unskip", which is
+          the way back. %>
+        <button type="button" class="ghost skip-action hidden" data-skip-occurrence>Skip</button>
         <button type="button" class="ghost" data-action="cancel">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>

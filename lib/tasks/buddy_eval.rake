@@ -881,6 +881,29 @@ BUDDY_EDGE_PROBES = [
                 "plausibly meant were both sitting in the roster",
   },
 
+  # --- work somebody ELSE did ----------------------------------------------
+  # The points, the streak and the automations all follow `credit_to`, so
+  # getting it wrong writes a false record about a person who isn't in the
+  # conversation - in both directions.
+  {
+    case:  "a chore reported on a housemate's behalf",
+    say:   "Chelsea took the recycling out",
+    tool:  :complete_chore,
+    args:  { complete_chore: { credit_to: /chelsea/i } },
+    needs: :recycling_chore,
+    note:  "without it the pebbles and the streak land on whoever happened to " \
+           "be talking, and her card never reads done",
+  },
+  {
+    case:       "the ordinary case, which is nearly every case",
+    say:        "I took the recycling out",
+    tool:       :complete_chore,
+    never_args: { complete_chore: { credit_to: /\S/ } },
+    needs:      :recycling_chore,
+    note:       "crediting the speaker to themselves by name would route the row " \
+                "through the marked-for-someone-else path for no reason",
+  },
+
   # --- a house command with no verb in it -----------------------------------
   {
     case: "prod 4518",

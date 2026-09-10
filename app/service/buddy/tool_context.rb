@@ -258,7 +258,17 @@ module Buddy
       chore = chore_or_name.is_a?(Chore) ? chore_or_name : resolve_chore(chore_or_name)
       return [] if chore.nil?
 
-      scope = ChoreCompletion.where(chore_id: chore.id, user_id: user.id).order(completed_at: :desc)
+      # Theirs, plus any they RECORDED for a housemate. A completion credited to
+      # someone else carries THAT person's user_id, so a scope of the caller's
+      # own rows can't reach the one they just marked - and "no, undo that" a
+      # breath later is the likeliest next thing anyone says about it.
+      scope = ChoreCompletion.where(
+        chore_id: chore.id,
+      ).where(
+        "chore_completions.user_id = :id OR chore_completions.recorded_by_user_id = :id", id: user.id
+      ).order(
+        completed_at: :desc,
+      )
       scope = case hint.to_sym
       when :today     then scope.where(completed_at: Buddy::Day.range(user).first..)
       when :yesterday then scope.where(completed_at: yesterday_range(user))

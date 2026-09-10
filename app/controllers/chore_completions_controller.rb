@@ -65,6 +65,56 @@ class ChoreCompletionsController < ApplicationController
     render json: response_payload(tapped, completion).merge(anonymous: true), status: :created
   end
 
+  # POST /chores/items/:chore_id/skip
+  # Let this occurrence go. The chore stops asking — cooldown held,
+  # carryover satisfied, card reads done — and nobody is credited or
+  # paid. It is NOT the anonymous path, which says somebody outside the
+  # household did the work; a skip says the work didn't happen and
+  # that's fine.
+  #
+  # Idempotent: a second skip on a day that already has one returns the
+  # row that's already there rather than stacking duplicates.
+  def skip
+    chore = current_user.accessible_chores.find(params[:chore_id])
+    at = parse_client_time(params[:client_completed_at]) || Time.current
+    day = ChoreDay.current(current_user, at: at)
+
+    already = existing_skip(chore, day)
+    completion = already || ChoreCompletion.create!(
+      chore:              chore,
+      user:               current_user,
+      completed_at:       at,
+      day_key:            day,
+      payout_skipped:     true,
+      skipped_reason:     "Skipped — nobody did it",
+      anonymous:          true,
+      occurrence_skipped: true,
+      note:               params[:note].to_s,
+    )
+    # A skip stays on the container for the same reason an anonymous
+    # completion does: nobody is named, so there is no whose-sub to
+    # answer. The family still sees it through parent_chore_id.
+    related = (chore.parent_chore if chore.sub_chore?)
+    ChoreBroadcaster.broadcast_changes!(current_user, chore, related: related, actor_tab_id: params[:tab_id])
+    render json: response_payload(chore, completion).merge(skipped_occurrence: true),
+      status: (already ? :ok : :created)
+  end
+
+  # DELETE /chores/items/:chore_id/skip
+  # Undo of the above — the same button, having flipped to "Unskip".
+  # Any household member with reach can clear it: the row is credited to
+  # nobody, so it isn't anyone's record to protect.
+  def unskip
+    chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:chore_id])
+    day = ChoreDay.current(current_user)
+    skips = skip_scope(chore, day).to_a
+    skips.each(&:destroy!)
+
+    related = (chore.parent_chore if chore.sub_chore?)
+    ChoreBroadcaster.broadcast_changes!(current_user, chore, related: related, actor_tab_id: params[:tab_id])
+    render json: response_payload(chore, nil).merge(skipped_occurrence: false)
+  end
+
   def create
     tapped = current_user.accessible_chores.find(params[:chore_id])
     # A chore split into per-person sub-chores is tapped through its
@@ -162,6 +212,20 @@ class ChoreCompletionsController < ApplicationController
   end
 
   private
+
+  # Today's skips for the chore FAMILY, under the same user scope the
+  # card is drawn from — a household chore is skipped for everyone, so
+  # whoever pressed it doesn't change the answer.
+  def skip_scope(chore, day)
+    scope_chore = chore.parent_chore || chore
+    scope = ChoreCompletion.skipped_occurrences.where(
+      user_id: scope_chore.cooldown_scope_user_ids(current_user),
+      day_key: day,
+    )
+    scope.where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
+  end
+
+  def existing_skip(chore, day) = skip_scope(chore, day).order(completed_at: :desc).first
 
   # Anonymous-modal "Credit to" selector. Returns the target user only
   # when the id belongs to the same household — silently falls back to

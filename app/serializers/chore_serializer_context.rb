@@ -14,7 +14,7 @@
 # each completion into every accessible chore.id it belongs to.
 class ChoreSerializerContext
   attr_reader :viewer, :day, :hot_picks,
-    :completions_today, :last_completion_by_chore,
+    :completions_today, :skipped_today_chore_ids, :last_completion_by_chore,
     :last_completion_before_today_by_chore,
     :completion_actor_by_chore, :completion_days_by_chore,
     :completion_days_before_today_by_chore,
@@ -88,8 +88,14 @@ class ChoreSerializerContext
     # outside the household", count here so the card reads as done.
     # The grey-ring treatment (last_actor_anonymous) is what tells
     # the user nobody in the household got credit.
-    @completions_today = bulk_completions_today(@personal_chore_ids, [viewer.id])
-      .merge(bulk_completions_today(@household_chore_ids, household_user_ids))
+    # Second value out of the same pass: the chores whose occurrence was
+    # SKIPPED today. A skip counts as one row here like any other
+    # completion; the serializer is what clamps its progress to the
+    # chore's full target.
+    personal_today  = bulk_completions_today(@personal_chore_ids, [viewer.id])
+    household_today = bulk_completions_today(@household_chore_ids, household_user_ids)
+    @completions_today = personal_today[:counts].merge(household_today[:counts])
+    @skipped_today_chore_ids = personal_today[:skipped] | household_today[:skipped]
 
     # Carryover input for today_visible?: was the chore completed
     # since its last scheduled day? Household chores answer
@@ -158,19 +164,29 @@ class ChoreSerializerContext
     picks.transform_values { |c| actors[c.user_id] }
   end
 
+  # `{ counts: {chore_id => n}, skipped: Set[chore_id] }` — one pass over
+  # today's rows answering both "how many" and "was it skipped", since
+  # the skip flag rides along on the rows already being read.
   def bulk_completions_today(chore_ids, user_ids)
-    return {} if chore_ids.empty? || user_ids.empty?
+    return { counts: {}, skipped: Set.new } if chore_ids.empty? || user_ids.empty?
 
     target = chore_ids.to_set
     counts = Hash.new(0)
+    skipped = Set.new
     ChoreCompletion
       .where(day_key: day, user_id: user_ids)
       .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
-      .pluck(:chore_id, :parent_chore_id).each do |cid, pid|
-        counts[cid] += 1 if target.include?(cid)
-        counts[pid] += 1 if pid && target.include?(pid)
+      .pluck(:chore_id, :parent_chore_id, :occurrence_skipped).each do |cid, pid, skip|
+        if target.include?(cid)
+          counts[cid] += 1
+          skipped << cid if skip
+        end
+        next unless pid && target.include?(pid)
+
+        counts[pid] += 1
+        skipped << pid if skip
       end
-    counts
+    { counts: counts, skipped: skipped }
   end
 
   def bulk_completion_days(chore_ids, user_ids)

@@ -404,18 +404,19 @@ class ChoresController < ApplicationController
         # Send actor_username: nil so the JS renders the "Anonymous"
         # pill instead of the recorder's name.
         {
-          id:                c.id,
-          user_id:           c.user_id,
-          actor_username:    c.anonymous ? nil : c.user&.username,
-          anonymous:         c.anonymous,
-          paid_pebbles:      c.paid_pebbles,
-          base_pebbles:      c.base_pebbles,
-          hot_multiplier:    c.hot_multiplier.to_f,
-          streak_multiplier: c.streak_multiplier.to_f,
-          note:              c.note.to_s,
-          payout_skipped:    c.payout_skipped,
-          completed_at:      c.completed_at.iso8601(3),
-          when_label:        c.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+          id:                 c.id,
+          user_id:            c.user_id,
+          actor_username:     c.anonymous ? nil : c.user&.username,
+          anonymous:          c.anonymous,
+          skipped_occurrence: c.occurrence_skipped,
+          paid_pebbles:       c.paid_pebbles,
+          base_pebbles:       c.base_pebbles,
+          hot_multiplier:     c.hot_multiplier.to_f,
+          streak_multiplier:  c.streak_multiplier.to_f,
+          note:               c.note.to_s,
+          payout_skipped:     c.payout_skipped,
+          completed_at:       c.completed_at.iso8601(3),
+          when_label:         c.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
         }
       },
     }
@@ -734,20 +735,21 @@ class ChoresController < ApplicationController
     case entry
     when ChoreCompletion
       {
-        kind:              :completion,
-        id:                entry.id,
-        chore:             history_chore_json(entry.chore),
-        paid_pebbles:      entry.paid_pebbles,
-        base_pebbles:      entry.base_pebbles,
-        hot_pick:          !!entry.metadata["hot_pick"],
-        hot_multiplier:    entry.hot_multiplier.to_f,
-        streak_multiplier: entry.streak_multiplier.to_f,
-        note:              entry.note.to_s,
-        completed_at:      entry.completed_at.iso8601(3),
-        when_label:        entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
-        payout_skipped:    entry.payout_skipped,
-        skipped_reason:    entry.skipped_reason,
-        anonymous:         entry.anonymous,
+        kind:               :completion,
+        id:                 entry.id,
+        chore:              history_chore_json(entry.chore),
+        paid_pebbles:       entry.paid_pebbles,
+        base_pebbles:       entry.base_pebbles,
+        hot_pick:           !!entry.metadata["hot_pick"],
+        hot_multiplier:     entry.hot_multiplier.to_f,
+        streak_multiplier:  entry.streak_multiplier.to_f,
+        note:               entry.note.to_s,
+        completed_at:       entry.completed_at.iso8601(3),
+        when_label:         entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
+        payout_skipped:     entry.payout_skipped,
+        skipped_reason:     entry.skipped_reason,
+        anonymous:          entry.anonymous,
+        skipped_occurrence: entry.occurrence_skipped,
       }
     when ChoreWithdrawal
       {
