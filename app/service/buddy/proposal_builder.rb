@@ -259,7 +259,7 @@ module Buddy
         line = Buddy::VoiceLines.pick(
           conversation.buddy_theme, :routine_empty, avoid: conversation.buddy_expression
         )
-        Buddy::SideEffects.apply_mood(conversation, line[:mood]) if line[:mood]
+        Buddy::ExpressionState.wear(conversation, line[:mood]) if line[:mood]
         msg.update!(
           body:     [body.presence, line[:text]].compact.join("\n\n"),
           metadata: msg.metadata.to_h.except("hidden"),

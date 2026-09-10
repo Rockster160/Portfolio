@@ -146,7 +146,7 @@ module Buddy
         conversation&.buddy_theme, :routine_run,
         avoid: conversation&.buddy_expression, name: routine.name
       )
-      Buddy::SideEffects.apply_mood(conversation, line[:mood]) if line[:mood]
+      Buddy::ExpressionState.wear(conversation, line[:mood]) if line[:mood]
 
       Buddy::ProposalBuilder.run_markers!(
         user:         routine.user,

@@ -22,9 +22,8 @@ Buddy::Tools.register(
     is not the same thing as an application that isn't theirs.
 
     `company` is fuzzy - the name off an email footer is fine, "CSC Generation,
-    Inc." finds "CSC Generation". Only LIVE applications can be matched, so a
-    company they gave up on months ago won't resolve, and that is the right
-    answer rather than a bug.
+    Inc." finds "CSC Generation". SETTLED applications match too: one they were
+    rejected from is still a thing that happened to them and still takes a note.
 
     `tag` is what KIND of beat it was, and it does more than colour the row:
     logging `offer`, `rejected` or `withdrew` settles the whole application,
@@ -64,7 +63,7 @@ Buddy::Tools.register(
   },
   confirm:     ->(payload, ctx) {
     job = Buddy::JobHunt.resolve_application(ctx.user, payload[:company])
-    raise "no live application matching \"#{payload[:company]}\"" if job.nil?
+    raise "no application matching \"#{payload[:company]}\"" if job.nil?
 
     tag  = payload[:tag].presence || :note
     body = payload[:note].to_s.strip

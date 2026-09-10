@@ -53,17 +53,29 @@ RSpec.describe "Buddy job hunt tools" do
       expect(described_class.context_for(user)).to be_nil
     end
 
-    it "carries the live board with what last happened on each" do
+    it "carries the board with what last happened on each" do
       job = application!("Netflix", role: "Senior Engineer")
       job.notes.create!(tag: :applied, occurred_at: 3.days.ago, body: "Sent it")
-      application!("Visa", status: :rejected)
 
       payload = described_class.context_for(user)
-      companies = payload[:applications].pluck(:company)
+      row = payload[:applications].find { |a| a[:company] == "Netflix" }
 
-      expect(companies).to eq(["Netflix"])
-      expect(payload[:applications].first).to include(role: "Senior Engineer", notes: 1)
-      expect(payload[:applications].first[:last_beat]).to include("Applied on")
+      expect(row).to include(role: "Senior Engineer", notes: 1)
+      expect(row[:last_beat]).to include("Applied on")
+    end
+
+    # Prod 5759: "Corporate Tools rejected me" reached a board that had hidden
+    # Corporate Tools the moment it was rejected, so the model had no way to be
+    # right and settled CSC Generation instead. A closed application is still a
+    # thing they talk about; `status` is what stops it reading as a live lead.
+    it "carries the settled ones too, saying which is which" do
+      application!("Netflix")
+      application!("Visa", status: :rejected)
+
+      rows = described_class.context_for(user)[:applications]
+
+      expect(rows.pluck(:company)).to include("Netflix", "Visa")
+      expect(rows.find { |a| a[:company] == "Visa" }[:status]).to eq("rejected")
     end
 
     it "surfaces a follow-up that is owed" do
@@ -208,10 +220,23 @@ RSpec.describe "Buddy job hunt tools" do
       expect(JobNote.last.tag).to eq("heard_back")
     end
 
-    it "refuses a company that isn't on the live board" do
-      application!("Visa", status: :rejected)
+    it "refuses a company that isn't on the board at all" do
+      application!("Netflix")
 
-      expect { run(:add_job_note, { company: "Visa", note: "hi", tag: :note }) }.to raise_error(/no live application/)
+      expect {
+        run(:add_job_note, { company: "Wayfarer Labs", note: "hi", tag: :note })
+      }.to raise_error(/no application matching/)
+    end
+
+    # The other half of prod 5759. Talking about a rejection has to be able to
+    # land somewhere, or the model reaches for a company that IS resolvable.
+    it "logs against a settled application" do
+      application!("Corporate Tools", status: :rejected)
+
+      result, = run(:add_job_note, { company: "Corporate Tools", note: "no reason given", tag: :note })
+
+      expect(result[:company]).to eq("Corporate Tools")
+      expect(result[:status]).to eq("rejected")
     end
 
     it "does not log a bare note with nothing in it" do

@@ -187,15 +187,6 @@ RSpec.describe "BuddyMemory lifecycle" do
       expect(reply_to("Morning!").metadata["kept"]).to be_nil
     end
 
-    # Setting a face is not a change to what is held about them.
-    it "does not mark a turn that only changed the expression" do
-      reply = reply_to("Aw.", calls: [
-        { name: :set_mood, call_id: "c1", arguments: { "expression" => "sad" } },
-      ])
-
-      expect(reply.metadata["kept"]).to be_nil
-    end
-
     # A thread note is how ONE conversation behaves, not what is held about the
     # person, so it stays unmarked too.
     it "does not mark a note scoped to the thread" do

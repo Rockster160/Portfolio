@@ -272,58 +272,32 @@ RSpec.describe Buddy::GPT::Turn do
   end
 
   describe "expression handling" do
-    it "applies a mood the model chose even when the same reply proposes a tool" do
-      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
-
-      run([{
-        text:       "On it.",
-        tool_calls: [
-          { name: :set_mood, arguments: { "expression" => "sad" } },
-          { name: :log_event, arguments: { "name" => "Coffee" } },
-        ],
-      }])
-
-      expect(convo.reload.buddy_expression).to eq("sad")
-    end
-
-    it "leaves the persistent mood exactly where it was when no mood is chosen" do
-      # Nothing reverts the face to a default just because a turn ended - it
-      # stays put until Buddy, a check-in, or sleep deliberately moves it.
+    # The turn does not touch the face at all now. It hands Buddy::Sentiment two
+    # facts about the ERRAND - whether something ran and whether it worked - and
+    # the reading decides the rest.
+    it "leaves the persistent mood exactly where it was" do
       run([{ text: "Nice." }])
 
       expect(convo.reload.buddy_expression).to eq("happy")
     end
 
-    it "ignores a face the theme cannot render" do
-      run([{ text: "Hm.", tool_calls: [{ name: :set_mood, arguments: { "expression" => "celebrating" } }] }])
-
-      expect(convo.reload.buddy_expression).to eq("happy")
-    end
-
-    it "sets the face from a leading [[mood:]] marker and strips it from the body" do
+    # A marker on the front of the reply used to be the protocol: Turn read it,
+    # set the face, and stripped it. Nothing asks for one now, so one that turns
+    # up is stray output - stripped like any other leaked marker, and LOGGED,
+    # because a marker appearing at all means some prompt section still teaches
+    # the retired protocol.
+    it "treats a leading [[mood:]] as stray output rather than an instruction" do
       run([{ text: "[[mood:sad]] Oh no, that's rough." }])
 
-      expect(convo.reload.buddy_expression).to eq("sad")
+      expect(convo.reload.buddy_expression).to eq("happy") # unchanged
       expect(reply.body).to eq("Oh no, that's rough.")
     end
 
-    it "drops a leading marker naming a face the theme can't render, keeping the body" do
-      run([{ text: "[[mood:celebrating]] Woo!" }])
+    it "strips one from the middle of a line too" do
+      run([{ text: "Right. [[mood:happy]] Sorted." }])
 
-      expect(convo.reload.buddy_expression).to eq("happy") # unchanged
-      expect(reply.body).to eq("Woo!")
-    end
-
-    # The whole reason for the marker over the set_mood tool: the face has to
-    # reach the screen with (or before) the words, not a beat behind them.
-    it "broadcasts the face before the reply body" do
-      kinds = []
-      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| kinds << payload[:data][:kind] }
-
-      run([{ text: "[[mood:sad]] Sitting with you on that one." }])
-
-      expect(kinds).to include(:buddy_expression)
-      expect(kinds.index(:buddy_expression)).to be < kinds.rindex(:message)
+      expect(reply.body).not_to include("[[mood:")
+      expect(reply.body).to include("Right.", "Sorted.")
     end
 
     it "settles the expression even on a failed turn so thinking cannot stick" do
@@ -337,7 +311,10 @@ RSpec.describe Buddy::GPT::Turn do
     # pet, resting because the model picked no face, was handed a random
     # pleased one and drew `uwu`: an open-mouthed laugh over a shrug.
     #
-    # Only the words know, so the words are what decide which way it reacts.
+    # Only the words know, so the words are what decide `landed`. WHICH face
+    # that becomes is Buddy::Sentiment's problem now (it reads the room and
+    # blends the outcome in); what the turn owes it is an honest answer about
+    # whether the thing worked, which is what these pin.
     context "when the pet has no face of its own and something ran" do
       before do
         convo.update_columns(buddy_expression: "neutral")
@@ -351,23 +328,33 @@ RSpec.describe Buddy::GPT::Turn do
         ])
       end
 
-      it "wears the miss when the reply reports one" do
-        acts_then_says("Hmm. I couldn't get a frame from the backyard camera, and it didn't say why.")
+      it "says it didn't land when the reply reports a miss" do
+        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: false)
 
-        expect(convo.reload.buddy_expression).to be_in(%w[confused annoyed sad])
+        acts_then_says("Hmm. I couldn't get a frame from the backyard camera, and it didn't say why.")
       end
 
-      it "still looks pleased when the reply says it worked" do
-        acts_then_says("Kitchen lights are on now.")
+      it "says it landed when the reply says it worked" do
+        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
 
-        expect(convo.reload.buddy_expression).to be_in(%w[happy neutral_blush nerd])
+        acts_then_says("Kitchen lights are on now.")
       end
 
       # The one cheerful phrase that would otherwise read as a setback.
       it "does not read looking forward to something as a miss" do
-        acts_then_says("Timer's set. I can't wait to hear how it goes!")
+        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
 
-        expect(convo.reload.buddy_expression).to be_in(%w[happy neutral_blush nerd])
+        acts_then_says("Timer's set. I can't wait to hear how it goes!")
+      end
+
+      # It asks on every turn now, whatever face is on: the reading is the only
+      # thing that sets the face, so there is nothing to defer to.
+      it "asks whatever face the pet is already wearing" do
+        convo.update_columns(buddy_expression: "loving")
+
+        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
+
+        acts_then_says("Kitchen lights are on now.")
       end
     end
   end
@@ -859,17 +846,6 @@ RSpec.describe Buddy::GPT::Turn do
         run(
           [{ tool_calls: [{ name: :forget, arguments: { "match" => "nothing we hold" } }], text: "Done, dropped it." }],
           text: "forget that I'm allergic to shellfish",
-        )
-
-        expect(reply.metadata["retracted_claim"]).to be(true)
-      end
-
-      # A face is not a change to the world, and a claim about an action must
-      # never be backed by having looked pleased about it.
-      it "does not count a mood" do
-        run(
-          [{ tool_calls: [{ name: :set_mood, arguments: { "expression" => "excited" } }], text: "Done. Fan's on high now." }],
-          text: "set the fan to high",
         )
 
         expect(reply.metadata["retracted_claim"]).to be(true)
@@ -2065,6 +2041,8 @@ RSpec.describe Buddy::GPT::Turn do
         "Howdy! ",
         "☀️ Morning! ",
         "Happy Tuesday! ",
+        # A stray marker still has to be stripped before the hello is looked
+        # for, or a leaked one turns a greeting into a missing one.
         "[[mood:happy]]Hey there! ",
         # The dropped-g and comma forms still have to pass after the possessive
         # lookahead went on — they're the shapes it sits closest to.
@@ -2075,7 +2053,7 @@ RSpec.describe Buddy::GPT::Turn do
         # taking a possessive doesn't cost the hello.
         "Happy Friday's here! ",
       ].each { |opener|
-        body = opener.sub(described_class::LEADING_MOOD_RX, "")
+        body = opener.sub(described_class::STRAY_MARKER_RX, "")
         expect(body).to match(described_class::GREETING_OPENER_RX), "expected #{opener.inspect} to read as a greeting"
       }
     end
@@ -3046,34 +3024,23 @@ RSpec.describe Buddy::GPT::Turn do
       client = run([{ text: "ok" }])
 
       names = client.calls.first.tools.pluck(:name)
-      expect(names).to include(:get_context, :set_mood, :remember, :complete_chore, :log_event)
+      expect(names).to include(:get_context, :add_note, :remember, :complete_chore, :log_event)
     end
 
-    it "scopes the set_mood enum to faces this theme actually has" do
+    # The face is Buddy::Sentiment's now, so none of it is offered: no tool to
+    # set one, no vocabulary of faces to pick from, no marker protocol, and not
+    # even which face is currently on.
+    it "offers the model nothing at all about its own face" do
       client = run([{ text: "ok" }])
 
-      mood = client.calls.first.tools.find { |t| t[:name] == :set_mood }
-      faces = mood[:parameters][:properties][:expression][:enum]
-      expect(faces).to include(:nerd, :uwu)
-      expect(faces).not_to include(:sleeping, :thinking)
-    end
-
-    it "inlines the current face so a chat-only turn needs no context call" do
-      client = run([{ text: "ok" }])
-
-      expect(client.calls.first.instructions).to include("pet_expression:** happy")
+      expect(client.calls.first.tools.pluck(:name)).not_to include(:set_mood)
+      expect(client.calls.first.instructions).not_to include("[[mood:", "pet_expression")
     end
 
     it "does not leak genuinely-retired marker protocols into the prompt" do
       client = run([{ text: "ok" }])
 
       expect(client.calls.first.instructions).not_to include("[[propose:")
-    end
-
-    it "teaches the leading mood marker (the live face protocol)" do
-      client = run([{ text: "ok" }])
-
-      expect(client.calls.first.instructions).to include("[[mood:")
     end
   end
 
@@ -3192,16 +3159,15 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Nice, that counts.")
     end
 
-    it "answers a silent tool call so a mood-only turn still says something" do
-      # "today was genuinely rough" used to set the face and return an empty
-      # bubble, which is the worst possible moment for one.
+    it "answers a silent tool call so a housekeeping-only turn still says something" do
+      # "today was genuinely rough" used to spend its whole turn on housekeeping
+      # and return an empty bubble, which is the worst possible moment for one.
       run([
-        { text: "", tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad" } }] },
+        { text: "", tool_calls: [{ name: :add_note, arguments: { "fact" => "today was rough" } }] },
         { text: "Oof. I'm sorry, that sounds like a lot." },
       ])
 
       expect(reply.body).to eq("Oof. I'm sorry, that sounds like a lot.")
-      expect(convo.reload.buddy_expression).to eq("sad")
     end
 
     it "returns an output for every call in a round, not just the readable ones" do
@@ -3210,7 +3176,7 @@ RSpec.describe Buddy::GPT::Turn do
           text:       "",
           tool_calls: [
             { name: :get_context, call_id: "c1", arguments: { "sections" => ["chores_all"] } },
-            { name: :set_mood,    call_id: "c2", arguments: { "expression" => "happy" } },
+            { name: :add_note,    call_id: "c2", arguments: { "fact" => "likes it warm" } },
             { name: :log_event,   call_id: "c3", arguments: { "name" => "Coffee" } },
           ],
         },
@@ -3302,12 +3268,12 @@ RSpec.describe Buddy::GPT::Turn do
 
     it "runs a silent tool as its call arrives and speaks on the round after" do
       run([
-        { tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad" } }] },
+        { tool_calls: [{ name: :remember, arguments: { "fact" => "Takes it black." } }] },
         { text: "Oof, I'm sorry." },
       ])
 
       expect(reply.body).to eq("Oof, I'm sorry.")
-      expect(convo.reload.buddy_expression).to eq("sad")
+      expect(BuddyMemory.where(user: user).pluck(:content)).to include("Takes it black.")
     end
 
     it "answers from the round that saw the tool output, not the one before it" do
@@ -3502,12 +3468,12 @@ RSpec.describe Buddy::GPT::Turn do
       expect(Buddy::Progress.phrase_for(:some_new_tool)).to eq("Some new tool")
     end
 
-    # set_mood fires on most turns. A line reading "Set mood" every time is the
-    # noise this whole thing exists to replace.
+    # A line reading "Adding a note" every time it keeps something is the noise
+    # this whole thing exists to replace.
     it "says nothing for the housekeeping it does alongside the real work" do
       steps = broadcasts {
         run([
-          { tool_calls: [{ name: :set_mood, arguments: { "expression" => "happy" } }] },
+          { tool_calls: [{ name: :add_note, arguments: { "fact" => "keep this thread work" } }] },
           { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
           { text: "Here." },
         ])

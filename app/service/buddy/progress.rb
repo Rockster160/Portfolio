@@ -14,10 +14,10 @@ module Buddy
   module Progress
     module_function
 
-    # Housekeeping the model does alongside the real work — setting its own
-    # face, jotting a fact down. `set_mood` fires on most turns, and a line
-    # reading "Set mood" every time is precisely the noise this is meant to
-    # replace, so these pass without a word (see Buddy::SideEffects).
+    # Housekeeping the model does alongside the real work — jotting a fact down,
+    # filing a stashed idea. A line reading "Adding a note" every time it kept
+    # something is precisely the noise this is meant to replace, so these pass
+    # without a word (see Buddy::SideEffects).
     SILENT = Buddy::SideEffects::NAMES.to_set.freeze
 
     # `get_context` fronts two dozen unrelated sections, so naming it after any

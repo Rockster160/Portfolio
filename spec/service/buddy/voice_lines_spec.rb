@@ -42,15 +42,6 @@ RSpec.describe Buddy::VoiceLines do
       end
     end
 
-    Buddy::VoiceLines::ACTED_MOODS.each do |theme, sets|
-      sets.each do |outcome, moods|
-        it "#{theme}'s #{outcome} acted faces are all renderable, and none of them is neutral" do
-          expect(moods).to all(satisfy { |m| Buddy::Faces.selectable?(theme, m) })
-          expect(moods).not_to include(Buddy::Faces.default)
-        end
-      end
-    end
-
     it "gives every theme a line for every kind" do
       kinds = Buddy::VoiceLines::LINES.values.flat_map(&:keys).uniq
       Buddy::Themes::ALL.each_key { |theme|
@@ -192,12 +183,13 @@ RSpec.describe Buddy::VoiceLines do
       expect(convo.buddy_expression).not_to eq(Buddy::Faces.default.to_s)
     end
 
-    # The expression has to be there as the words land, not a beat behind them —
-    # same ordering a `[[mood:]]` marker gets on a real reply.
+    # The expression has to be there as the words land, not a beat behind them.
+    # A routine is the one place the face is still chosen in Ruby rather than
+    # read off the conversation — the line and its face are written together.
     it "sets the face before it posts the line" do
       convo = convo!(:glimmer)
       order = []
-      allow(Buddy::SideEffects).to receive(:apply_mood) { order << :face }
+      allow(Buddy::ExpressionState).to receive(:wear) { order << :face }
       allow(Buddy::ProposalBuilder).to receive(:run_markers!) {
         order << :words
         { action: nil, auto_ran: true, forms: [] }
@@ -225,71 +217,42 @@ RSpec.describe Buddy::VoiceLines do
     end
   end
 
-  # A companion that does the thing and keeps a flat face reads as a machine
-  # taking an order.
+  # The one face still chosen in Ruby: `wear` puts on a named one, and it is
+  # what a routine's own line hands over. Everything conversational goes
+  # through Buddy::Sentiment instead.
   describe Buddy::ExpressionState do
     before { allow(MonitorChannel).to receive(:broadcast_to) }
 
-    it "reacts when the pet was resting" do
+    it "wears a face this pet has" do
       convo = convo!(:glimmer)
 
-      described_class.react!(convo)
+      described_class.wear(convo, "grin")
 
-      expect(convo.reload.buddy_expression).not_to eq(Buddy::Faces.default.to_s)
-      expect(Buddy::Faces.selectable?(:glimmer, convo.buddy_expression)).to be(true)
+      expect(convo.reload.buddy_expression).to eq("grin")
     end
 
-    # The floor, not an override. A face the model chose this turn is a read of
-    # the room — sitting with something heavy while it quietly cancels an alarm
-    # — and stamping "pleased with myself" over it is the face-changed-on-its-own
-    # glitch the module exists to prevent.
-    it "leaves a face the model deliberately chose alone" do
+    # Byte's, not Glimmer's. A line asking for a face the theme can't render
+    # would leave the pet blank.
+    it "refuses one it cannot render" do
       convo = convo!(:glimmer)
-      convo.update_column(:buddy_expression, "sad")
 
-      described_class.react!(convo)
+      described_class.wear(convo, "nerd")
 
-      expect(convo.reload.buddy_expression).to eq("sad")
+      expect(convo.reload.buddy_expression).not_to eq("nerd")
+    end
+
+    # Transitional, never a delivered mood — the pet would rest on it.
+    it "refuses the thinking face" do
+      convo = convo!(:glimmer)
+
+      described_class.wear(convo, "thinking")
+
+      expect(convo.reload.buddy_expression).not_to eq("thinking")
     end
 
     it "no-ops on no conversation at all" do
-      expect { described_class.react!(nil) }.not_to raise_error
+      expect { described_class.wear(nil, "grin") }.not_to raise_error
     end
   end
 
-  # Prod 4594: "Hmm. I couldn't get a frame from the backyard camera, and it
-  # didn't say why." wore `uwu` — an eyes-closed open-mouthed laugh. Nothing
-  # picked it: the model chose no face, something had run, and this table was
-  # sampled blind.
-  describe "the face for having acted" do
-    # Picked without reading a word of the reply, so it has to be mild enough
-    # to sit under any sentence a completed action could produce. A laugh, a
-    # starstruck gaze or a cheeky wink is a claim about the moment, and a dice
-    # roll can't make one.
-    it "never reaches for a face too strong to be picked blind" do
-      strong = Buddy::VoiceLines::ACTED_MOODS.values.flat_map { |s| s[:ok] } &
-        %i[uwu star excited grin wink crying]
-
-      expect(strong).to be_empty
-    end
-
-    it "wears the miss when the turn didn't land" do
-      20.times { expect(described_class.acted_mood(:byte, ok: false)).to be_in(%i[confused annoyed sad]) }
-    end
-
-    it "wears something pleased when it did" do
-      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy neutral_blush]) }
-    end
-
-    # Prod 5759: a rejection from the job he was most excited about got logged,
-    # the reply said "*sad*" in words, and the pet put its glasses on. This pool
-    # is a coin toss taken the moment a tool succeeds - nothing here reads the
-    # room - so every face in it has to mean "glad to have helped" and nothing
-    # else. `nerd` is about being CLEVER, which is a different thing entirely.
-    # It stays selectable; the model can still choose it deliberately.
-    it "never reaches for the clever face just because something ran" do
-      40.times { expect(described_class.acted_mood(:byte)).not_to eq(:nerd) }
-      expect(Buddy::Faces.selectable?(:byte, "nerd")).to be(true)
-    end
-  end
 end

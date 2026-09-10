@@ -58,6 +58,7 @@ class BuddyUsage < ApplicationRecord
     compile:        4,
     image_describe: 5,
     job_triage:     6,
+    sentiment:      7,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend

@@ -25,7 +25,7 @@ module Buddy
 
     # Function names the model can call. Kept as a flat list so Turn can ask
     # `SideEffects.handles?(name)` to route a tool call without a registry hit.
-    NAMES = %i[set_mood add_note remember forget sort_stash].freeze
+    NAMES = %i[add_note remember forget sort_stash].freeze
 
     # The ones that change what is HELD about the person, as opposed to how one
     # thread behaves. A turn that fires any of these gets a small mark on the
@@ -61,9 +61,6 @@ module Buddy
     # it?" He had to ask a second time for a thing that was already saved. A
     # write that reports nothing is indistinguishable from a turn that did
     # nothing, and this is the half that knows.
-    #
-    # `set_mood` stays out: a face is not a change to the world, and a reply
-    # claiming an action must not be backed by having looked pleased about it.
     def call(conversation, name, args)
       user = conversation.user
       args = (args || {}).transform_keys(&:to_sym)
@@ -73,9 +70,6 @@ module Buddy
       when :add_note   then apply_note(conversation, args[:fact])
       when :remember   then apply_remember(user, args[:fact], args[:expires_in])
       when :forget     then apply_forget(user, args[:match])
-      when :set_mood
-        apply_mood(conversation, args[:expression])
-        false
       else false
       end
     rescue StandardError => e
@@ -87,25 +81,12 @@ module Buddy
     # of these are strict, so optional args are nullable and every property is
     # listed in `required`.
     #
-    # `theme` scopes set_mood's enum to the faces that theme actually has, which
-    # makes an unrenderable face structurally impossible rather than something
-    # apply_mood has to detect and discard.
-    def function_schemas(theme: :byte)
+    # `set_mood` was here, and it took the `theme:` argument with it: the theme
+    # was only ever used to scope that tool's face enum to the ones this pet can
+    # render. The face is no longer the model's to set at all - Buddy::Sentiment
+    # reads the conversation and chooses.
+    def function_schemas
       [
-        schema(
-          :set_mood,
-          "Set the pet's face to match the expression YOU are wearing as you deliver THIS reply - " \
-          "your own tone, not a readout of the user's mood. Call this whenever the face should " \
-          "change from its current value. At most once per reply. Silent: never mention it in prose.",
-          {
-            expression: {
-              type:        :enum,
-              required:    true,
-              values:      Buddy::Faces.selectable(theme),
-              description: "The face you're wearing as you say this",
-            },
-          },
-        ),
         schema(
           :add_note,
           "Record a note about THIS conversation only (how the person wants this thread to work, " \
@@ -158,31 +139,6 @@ module Buddy
         description: description,
         args:        args.transform_values { |v| v.transform_keys(&:to_sym) },
       })
-    end
-
-    # `[[mood: <one of the expressions>]]` — shifts this thread's pet face
-    # and broadcasts. The pet expression IS the mood state; the field
-    # (byte_conversations.buddy_expression) persists across turns and rides in
-    # every context block, so no shadow log or event trail is needed.
-    def apply_mood(conversation, body)
-      expression = body.to_s.downcase.strip
-      theme = conversation.buddy_theme
-      # `selectable?` not `valid?` — a delivered mood may never be a
-      # system/transitional face (e.g. `thinking`), even if the model emits
-      # one off-list. Those would leave the pet resting on a non-mood face.
-      valid = Buddy::Faces.selectable?(theme, expression)
-      # Observability: mood markers are otherwise trail-less (stripped from the
-      # body, set via update_column). This line is how we can actually answer
-      # "is Buddy using expressions?" — grep prod for `[Buddy::mood]`.
-      Rails.logger.info(
-        "[Buddy::mood] user=#{conversation.user_id} conversation=#{conversation.id} " \
-        "theme=#{theme} requested=#{expression.inspect} " \
-        "valid=#{valid} current=#{conversation.buddy_expression.inspect}",
-      )
-      return unless valid
-      return if conversation.buddy_expression == expression  # no-op if unchanged
-
-      Buddy::ExpressionState.set(conversation, expression)
     end
 
     # `[[note: <fact>]]` — appends a line to this conversation's small notes

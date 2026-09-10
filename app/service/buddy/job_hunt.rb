@@ -1,6 +1,6 @@
 module Buddy
-  # The job search, as Buddy sees it: the board of live applications, and the
-  # mail that has come in about them.
+  # The job search, as Buddy sees it: the board, and the mail that has come in
+  # about them.
   #
   # Two halves that only make sense together. The applications are what a note
   # can be attached to, and the mail is what there is to say. Handing over one
@@ -50,14 +50,25 @@ module Buddy
 
     # One place, because both callers get it wrong in the same way otherwise:
     # Emails::JobTriage matching a verdict's company to decide whether to offer,
-    # and add_job_note resolving what the model named. Live applications only -
-    # logging a beat on a job they closed months ago is nearly always a misfire.
+    # and add_job_note resolving what the model named.
+    #
+    # EVERY application, settled ones included. It was live-only, on the
+    # reasoning that a beat on a job closed months ago is nearly always a
+    # misfire - and the cost of that showed up as prod 5759. Rocco said
+    # "Corporate Tools rejected me"; Corporate Tools was already closed, so it
+    # wasn't on the board the model could see and it wasn't resolvable either.
+    # With no way to be right and no way to say so, the model reached for the
+    # nearest live company and settled the wrong one.
+    #
+    # A closed application is still a thing that happened to them and still a
+    # thing they talk about. Being unable to see it doesn't stop the sentence
+    # arriving - it just removes the correct answer.
     def resolve_application(user, company)
       name = company.to_s.strip
       return nil if name.empty?
 
-      live = JobApplication.where(user: user).live
-      hit  = JobSearch.call(live, normalize(name)).first
+      board = JobApplication.where(user: user)
+      hit   = JobSearch.call(board, normalize(name)).first
       return hit if hit
 
       # Still nothing: try the leading word on its own, for the "Netflix Talent
@@ -68,7 +79,7 @@ module Buddy
       head = normalize(name).split.first
       return nil if head.blank?
 
-      matches = JobSearch.call(live, head)
+      matches = JobSearch.call(board, head)
       matches.one? ? matches.first : nil
     end
 
@@ -81,24 +92,31 @@ module Buddy
     def context_for(user)
       return nil if user.nil?
 
-      applications = live_applications(user)
-      mail = recent_mail(user)
-      return nil if applications.empty? && mail.empty?
+      board = applications(user)
+      mail  = recent_mail(user)
+      return nil if board.empty? && mail.empty?
 
       {
         url:          "#{Buddy::AppPages.url_for("/interviews")}/{id}",
         about:        "Their job applications and the mail that has arrived about them. " \
-                      "`url` takes an application's `id`. Log a beat with add_job_note.",
-        applications: applications,
+                      "`status` says where each one stands - a settled one (rejected, " \
+                      "closed, offer) is still here to be talked about and can still take " \
+                      "a note. `url` takes an application's `id`. Log a beat with add_job_note.",
+        applications: board,
         recent_mail:  mail,
       }
     end
 
-    # Live only - rejected and closed applications are history, and a note on
-    # one is almost always a misfire. Anything genuinely about a settled
-    # application still reaches the board through the page itself.
-    def live_applications(user)
-      scope = JobApplication.where(user: user).live.includes(:notes).ordered
+    # The whole board. `status` rides on every row (see slim_application), so a
+    # settled one reads as settled rather than as one more open lead - which is
+    # the only thing hiding them was buying, and it cost the ability to talk
+    # about them at all.
+    #
+    # Uncapped on purpose: a person's job hunt is tens of rows, not thousands,
+    # and a cap here would silently drop the oldest - which is exactly the class
+    # of row that has just been settled.
+    def applications(user)
+      scope = JobApplication.where(user: user).includes(:notes).ordered
       scope.map { |job| slim_application(job) }
     end
 

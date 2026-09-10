@@ -19,8 +19,8 @@ module Buddy
     class Turn
       # The deepest legitimate chain is a prompt: list what's pending, open the
       # one they meant, submit it, then speak. That's four rounds - and the model
-      # reliably spends one more on something incidental (a set_mood, a repeat of
-      # the call it just made). Hitting the cap mid-chain means it never speaks
+      # reliably spends one more on something incidental (a stray note, a repeat
+      # of the call it just made). Hitting the cap mid-chain means it never speaks
       # at all and the person gets a filler line above their checklist, so the
       # spare round is only ever spent on turns that would have ended silent. The
       # wall-clock deadline still bounds a model that's genuinely spinning.
@@ -524,7 +524,6 @@ module Buddy
       # land (see the persona's "Your face"). Only a LEADING mood marker is the
       # supported protocol; it's parsed, applied, and stripped in finalize before
       # the body broadcasts, so the expression reaches the screen first.
-      LEADING_MOOD_RX = /\A\s*\[\[\s*mood\s*:\s*([a-z_]+)\s*\]\]\s*/i
 
       # Defensive. A leading mood marker is consumed before this ever runs, so a
       # marker reaching here is stray — a mood marker the model buried mid-text,
@@ -1869,7 +1868,7 @@ module Buddy
         return false if body.strip.empty?
         return false unless Buddy::TodayBriefing.greeting_ordered?(@inbound.body.to_s)
 
-        !body.sub(LEADING_MOOD_RX, "").match?(GREETING_OPENER_RX)
+        !body.sub(STRAY_MARKER_RX, "").match?(GREETING_OPENER_RX)
       end
 
       # They are telling Buddy it didn't do the thing it said it did.
@@ -2289,7 +2288,7 @@ module Buddy
           PromptTool.schema,
           ImageTool.schema,
           ListenerTool.schema,
-          *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
+          *Buddy::SideEffects.function_schemas,
           *Buddy::Tools.function_schemas(user: @user),
         ].compact
       end
@@ -2305,7 +2304,6 @@ module Buddy
       def at_glance
         {
           user:                        @user.first_name,
-          pet_expression:              @conversation.buddy_expression.presence || Buddy::Faces.default.to_s,
           open_questions_from_partner: open_relay_count,
           answering_reminder:          answering_reminder,
         }.compact
@@ -2404,7 +2402,7 @@ module Buddy
 
       def finalize_success(outcome)
         @repairs = []
-        body = display_body(apply_leading_mood(outcome[:text]))
+        body = display_body(outcome[:text])
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
         # One thing said twice. Prod 5296: a single call with no tools answered
@@ -3320,40 +3318,23 @@ module Buddy
         Buddy::ProposalBuilder.create(user: @user, byte_message: @reply, markers: markers)
       end
 
-      # Resolve the transient `thinking` overlay set at turn start. If Buddy
-      # called set_mood this turn, SideEffects already persisted and broadcast
-      # it; settle just re-asserts the stored mood so the overlay drops without
-      # changing the face.
+      # Resolve the transient `thinking` overlay set at turn start, and hand the
+      # face to Buddy::Sentiment, which reads what kind of moment this is and
+      # picks the nearest face to it. That is the WHOLE mood system now: the
+      # model used to lead its reply with a `[[mood:]]` marker, or call
+      # `set_mood`, and both are gone.
       #
-      # `acted` is a turn that DID something. React first: a pet still resting
-      # on neutral after doing something for someone is the flat-faced machine
-      # the persona's face rules are trying to avoid. react! leaves a mood the
-      # model chose alone, so this only fills a silence.
+      # `acted` and `landed` are passed through rather than deciding anything
+      # here: they say whether the thing worked, which blends the reading toward
+      # the miss faces (prod 4594's gleeful laugh over "I couldn't get a frame
+      # from the backyard camera") without pretending to know the room.
       #
-      # `landed` decides which WAY it reacts. Filling that silence with a
-      # pleased face regardless of outcome is how prod 4594 got a gleeful laugh
-      # over "I couldn't get a frame from the backyard camera".
+      # Asynchronous, so the reply is never waiting on it.
       def settle_expression(acted: false, landed: true)
-        Buddy::ExpressionState.react!(@conversation, ok: landed) if acted
+        Buddy::Sentiment.later(@conversation, acted: acted, landed: landed)
         Buddy::ExpressionState.settle!(@conversation)
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")
-      end
-
-      # A leading `[[mood:NAME]]` is the model setting its face for THIS reply.
-      # Apply it here — before the body is broadcast, so the expression reaches
-      # the screen ahead of the words — and strip it off the front so the person
-      # never sees the brackets. apply_mood validates the face against the theme
-      # and no-ops on an unchanged or unrenderable one, so a bad marker just
-      # vanishes. The set_mood tool remains the fallback when the model didn't
-      # (or couldn't) lead with a marker.
-      def apply_leading_mood(text)
-        raw   = text.to_s
-        match = raw.match(LEADING_MOOD_RX)
-        return raw if match.nil?
-
-        Buddy::SideEffects.apply_mood(@conversation, match[1])
-        raw.sub(LEADING_MOOD_RX, "")
       end
 
       # Framing the model was given to READ and echoed back into what it SAYS.

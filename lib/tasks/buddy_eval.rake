@@ -116,7 +116,7 @@ BUDDY_EVAL_SCENARIOS = [
     want: "just answers, no tools",
   },
   { say: "can you run a script to fix my chores?", want: "refuses warmly. No code, no \"let me run\"" },
-  { say: "today was genuinely rough", want: "a mood AND warm prose, never an empty bubble" },
+  { say: "today was genuinely rough", want: "warm prose, never an empty bubble" },
   { say: "I always drink oat milk lattes", want: "remember" },
   { say: "what time is it?", want: "12-hour local, never UTC" },
 ].freeze
@@ -426,7 +426,7 @@ BUDDY_EVAL_EXECUTABLE = %i[
 # Calling one of these alongside the right tool is ordinary - the model looks
 # things up before it acts - so they never count as "called something else".
 BUDDY_EVAL_READERS = %i[
-  get_context read_prompt view_image read_listener_guide set_mood add_note remember
+  get_context read_prompt view_image read_listener_guide add_note remember
 ].freeze
 
 # The ones that have already gone wrong, in the words they went wrong in.
@@ -1745,7 +1745,7 @@ namespace :buddy do
     instructions = Buddy::Personality.for(
       user,
       conversation: convo,
-      at_glance:    { user: user.first_name, pet_expression: "neutral" },
+      at_glance:    { user: user.first_name },
     )
     readers = {
       Buddy::GPT::ContextTool::NAME => Buddy::GPT::ContextTool.new(user, convo),
@@ -1883,18 +1883,18 @@ namespace :buddy do
 
   # What the person would actually have SEEN, and the face it set on the way.
   #
-  # A reply leading with `[[mood:happy]]` is the supported protocol: Turn reads
-  # it, applies the expression, and strips it before the words broadcast. This
-  # harness doesn't go through Turn, so it was judging text nobody would ever
-  # be shown — 18 of 26 turns flagged "stray marker" for a marker production
-  # consumes, and two flags that were real got lost in the noise. The stray
-  # check still stands for a marker that ISN'T leading, which is what it was
-  # written for.
+  # A leading `[[mood:happy]]` USED to be the supported protocol - Turn read it,
+  # applied the expression and stripped it - and this harness doesn't go through
+  # Turn, so it was judging text nobody would ever be shown: 18 of 26 turns
+  # flagged "stray marker" for a marker production consumed.
+  #
+  # Nothing consumes one now (Buddy::Sentiment chooses the face by reading the
+  # conversation), and nothing asks for one either. A marker that still turns up
+  # is genuinely stray output and production strips it as such, so the harness
+  # says so too - and one appearing at all means some prompt section is still
+  # teaching the retired protocol, which is worth being told about.
   def displayed(text)
-    raw  = text.to_s
-    mood = raw[Buddy::GPT::Turn::LEADING_MOOD_RX, 1]
-    body = Buddy::GPT::Turn.normalize_dashes(raw.sub(Buddy::GPT::Turn::LEADING_MOOD_RX, ""))
-    [body, mood]
+    [Buddy::GPT::Turn.normalize_dashes(text.to_s), nil]
   end
 
   # What the model gets back for each call. Reads return real context, and

@@ -84,13 +84,13 @@ RSpec.describe "Buddy end-to-end" do
     client = FakeBuddyClient.new([
       {
         text:       "Oof, that's rough.",
-        tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad" } }],
+        tool_calls: [{ name: :remember, arguments: { "fact" => "Today was a hard one." } }],
       },
     ])
 
     Buddy::GPT::Turn.run!(user_says("today was hard"), client: client)
 
-    expect(convo.reload.buddy_expression).to eq("sad")
+    expect(BuddyMemory.where(user: user).pluck(:content)).to include("Today was a hard one.")
     reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
     expect(reply.body).to eq("Oof, that's rough.")
     expect(ByteAction.find_by(byte_message_id: reply.id)).to be_nil

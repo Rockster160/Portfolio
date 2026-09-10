@@ -208,54 +208,6 @@ module Buddy
       },
     }.freeze
 
-    # The face for having DONE something, when the pet has nothing better to
-    # wear (see Buddy::ExpressionState#react!). Pleased, curious — never
-    # neutral, which is the whole point, and never a face about the PERSON,
-    # since all we know here is that something ran.
-    #
-    # **Nothing here has read the reply**, so every face on the list has to be
-    # mild enough to sit under any sentence a completed action could produce. A
-    # strong face is a claim about the moment and a dice roll cannot make one:
-    # `uwu` was on Byte's list and came up on prod 4594, an eyes-closed
-    # open-mouthed laugh over "I couldn't get a frame from the backyard camera,
-    # and it didn't say why." Moss's `star`/`grin`/`wink` and Suki's `excited`
-    # came off with it — starstruck, thrilled and cheeky are the same mistake
-    # waiting for a different sentence.
-    # `failed` is for having done something that DIDN'T land. A pet that beams
-    # while telling someone it couldn't do the thing is worse than one that sat
-    # still, and "puzzled, put out, closer to a frown" is what the moment is.
-    # Byte's `confused` was drawn for exactly this — small frown, uncertain
-    # eyes, a question mark — so it leads, with `annoyed` behind it for the
-    # times it's more exasperating than baffling.
-    #
-    # `focused` was on the ok side for a while on the theory that it's the face
-    # for being MID-TASK. It came off: Byte's is a hard slanted glare, and over
-    # "Kk! Tesla's off. *squish*" it read as cross at being asked. By the time a
-    # reply lands the task is DONE anyway — this slot is a reaction to how it
-    # went, and nothing here should be able to look annoyed by accident.
-    #
-    # Moss and Glimmer have `dismayed` for it now — worried brows, mouth open —
-    # which is nearer the moment than anything either of them had. Glimmer was
-    # wearing `surprised` here for want of a better face, and startled is not
-    # the same thing as sorry.
-    # `nerd` is deliberately NOT in Byte's `ok` pool, though it stays a face the
-    # model can choose. Read its hint: glasses on, book out, just figured
-    # something out. That is a face about being CLEVER, and this pool is the
-    # fallback for "did a thing for you" - the two only overlap by accident.
-    #
-    # It landed on prod 5759, where the thing done was logging a rejection from
-    # the job he'd been most excited about. The reply said "*sad*" in words and
-    # the pet put its glasses on, because nothing here reads the words: this is
-    # a coin toss taken the moment a tool succeeds. Narrowing the pool doesn't
-    # make the toss smarter, but a pool of two faces that both mean "glad to
-    # have helped" can't land anywhere as far from the room as that did.
-    ACTED_MOODS = {
-      byte:    { ok: %i[happy neutral_blush], failed: %i[confused annoyed sad] },
-      moss:    { ok: %i[happy content], failed: %i[dismayed unamused queasy sad] },
-      suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
-      glimmer: { ok: %i[content happy], failed: %i[dismayed sad] },
-    }.freeze
-
     # A line and the face that goes with it: `{ text:, mood: }`. `mood` is nil
     # when the theme can't render the one the line asked for, which reads as
     # "say this, leave the face alone".
@@ -281,12 +233,6 @@ module Buddy
       return false if text.blank?
 
       text.to_s.lstrip.start_with?(line[:say])
-    end
-
-    def acted_mood(theme, ok: true)
-      key   = key_for(theme)
-      table = ACTED_MOODS.fetch(key, ACTED_MOODS[Buddy::Themes::DEFAULT])
-      mood_for(theme, table[ok ? :ok : :failed].sample)
     end
 
     def lines_for(theme, kind)

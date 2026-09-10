@@ -802,12 +802,13 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
-    # set_mood moves a face and nothing else. Letting it count as having acted
-    # would hand every reply a free pass past the retraction guard, since Buddy
-    # sets its mood on nearly all of them.
-    describe "a side effect that changes nothing in the world" do
-      it "does not report a change for set_mood" do
-        expect(Buddy::SideEffects.call(convo, :set_mood, { expression: "happy" })).to be(false)
+    # A name nothing handles. It matters that this is FALSE rather than an
+    # error: `call` is reached from a live stream of tool calls, and a marker
+    # the model invents must not count as having acted or it hands the reply a
+    # free pass past the retraction guard.
+    describe "a marker nothing handles" do
+      it "reports no change" do
+        expect(Buddy::SideEffects.call(convo, :not_a_marker, { whatever: 1 })).to be(false)
       end
     end
 

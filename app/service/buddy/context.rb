@@ -793,11 +793,15 @@ module Buddy
         default_buckets
       end
 
-      # Emotional state block. `pet_expression` is the tracked mood —
-      # the LLM controls it via `[[mood: X]]` markers, it persists per
-      # conversation on byte_conversations.buddy_expression, it ships back in
-      # every context turn. `last_check_in` is optional richer detail from an
-      # explicit Check-in button tap if one exists in recent history.
+      # Emotional state block: what they said about themselves the last time
+      # they were asked, if they were.
+      #
+      # `pet_expression` was here too, and in the at-a-glance line, because the
+      # model set its own face and needed to know which one was on to decide
+      # whether to change it. It doesn't - Buddy::Sentiment reads the
+      # conversation and chooses - so telling it would be handing it a fact with
+      # nothing to do but describe out loud, and one derived from its own last
+      # reply at that.
       def emotional_state(conversation, now)
         user = conversation.user
         latest_check_in = user.action_events
@@ -818,10 +822,7 @@ module Buddy
           }
         end
 
-        {
-          pet_expression: conversation.buddy_expression,
-          last_check_in:  check_in_summary,
-        }
+        { last_check_in: check_in_summary }
       end
 
       def default_buckets

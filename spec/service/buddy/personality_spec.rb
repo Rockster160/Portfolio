@@ -50,75 +50,40 @@ RSpec.describe Buddy::Personality do
     end
   end
 
-  describe ".for mood vocabulary" do
-    it "injects Byte's own face set for a Byte conversation" do
-      convo = buddy_convo(User.me, "byte")
+  # The pet's face was the model's job: a `[[mood:NAME]]` marker on the front of
+  # the reply or a `set_mood` tool, and 4kb of face vocabulary in every prompt
+  # so it knew what it could wear. It missed often enough that the fallback
+  # reading became the normal path, so the whole protocol went and
+  # Buddy::Sentiment reads the conversation instead.
+  #
+  # Pinned as an ABSENCE because that is the shape of the change. Every one of
+  # these was an assertion in the other direction a moment ago, and 4kb is a
+  # tempting thing to put back.
+  describe ".for and the face it no longer picks" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
 
-      prompt = described_class.for(User.me, conversation: convo)
+    it "does not hand over a face vocabulary" do
+      expect(prompt).not_to include("`nerd`", "`uwu`", "`neutral_blush`")
+      expect(prompt).not_to include("Available faces")
+    end
 
-      expect(prompt).to include("`nerd`", "`uwu`", "`annoyed`")
+    it "does not teach the marker or the tool" do
+      expect(prompt).not_to include("[[mood:")
+      expect(prompt).not_to include("set_mood")
+    end
+
+    it "leaves no placeholder behind" do
       expect(prompt).not_to include("{{MOOD_BLOCK}}")
-      # Moss-only faces must not be offered to Byte.
-      expect(prompt).not_to include("`celebrating`")
     end
 
-    it "injects Moss's own (larger) face set for a Moss conversation" do
-      user  = create(:user)
-      convo = buddy_convo(user, "moss")
-
-      prompt = described_class.for(user, conversation: convo)
-
-      # Moss's distinctive faces are offered...
-      expect(prompt).to include("`loving`", "`star`", "`wink`", "`dizzy`")
-      expect(prompt).not_to include("{{MOOD_BLOCK}}")
-      # ...and Byte-only faces are not. Scoped to the face list rather than the
-      # whole prompt: Chelsea's voice profile mentions `nerd` as a pet name, and
-      # that has nothing to do with what Moss's face vocabulary offers.
-      expect(described_class.mood_block("moss")).not_to include("`nerd`", "`uwu`")
-    end
-
-    it "injects Suki's own sunbird face set for a Suki conversation" do
-      user  = create(:user)
-      convo = buddy_convo(user, "suki")
-
-      prompt = described_class.for(user, conversation: convo)
-
-      # Suki's distinctive faces are offered (cheery + offering + excited are hers)...
-      expect(prompt).to include("`cheery`", "`offering`", "`excited`", "`dizzy`", "`loving`")
-      expect(prompt).not_to include("{{MOOD_BLOCK}}")
-
-      # ...and nothing else is. Scoped to the face list: a voice profile is
-      # allowed to use any of these words for its own reasons.
-      faces = described_class.mood_block("suki")
-      expect(faces).not_to include("`nerd`", "`uwu`", "`star`", "`wink`")
-      # She has her own sad face now (2026-08-25) — before it, a check-in of
-      # "rough" had nothing to move her with. `crying` is still only an alias
-      # onto it, and an alias renders without being selectable.
-      expect(faces).to include("`sad`")
-      expect(faces).not_to include("`crying`")
-      # sleeping is system-driven, never a selectable mood.
-      expect(faces).not_to include("`sleeping`")
-      # dizzy carries the overwhelmed read for her.
-      expect(prompt).to include("overwhelmed")
-    end
-
-    it "does not offer sleeping as a selectable mood" do
-      convo = buddy_convo(User.me, "byte")
-      prompt = described_class.for(User.me, conversation: convo)
-      expect(prompt).not_to include("`sleeping`")
-    end
-
-    it "does not offer thinking as a selectable mood (transitional only)" do
-      convo = buddy_convo(User.me, "byte")
-      prompt = described_class.for(User.me, conversation: convo)
-      expect(prompt).not_to include("`thinking`")
-    end
-
-    it "keeps neutral as the resting default while pushing the face to move" do
-      convo = buddy_convo(User.me, "byte")
-      prompt = described_class.for(User.me, conversation: convo)
-      expect(prompt).to include("resting default")
-      expect(prompt).to include("your face should MOVE")
+    # And it is not told which face is on either. That rode in the at-a-glance
+    # line so the model could decide whether to CHANGE it; with nothing to
+    # decide, a face it can't set is a fact with nothing to do but get described
+    # out loud - and one derived from its own last reply at that. The rule
+    # forbidding "I'm looking concerned now!" went with the section, so the
+    # temptation goes too.
+    it "is not told which face is on" do
+      expect(prompt).not_to include("pet_expression")
     end
   end
 
@@ -1005,7 +970,6 @@ RSpec.describe Buddy::Personality do
     # these still pass; if one comes back as a quoted sentence, the sweep below
     # catches it.
     it "keeps the rules the examples used to carry" do
-      expect(prompt).to include("When you're telling them something DIDN'T work, wear it")
       expect(prompt).to include("Numeric counts you didn't verify")
       expect(prompt).to include("Past/present tense is CORRECT and expected here")
       expect(prompt).to include("Never name a record to explain why you left it alone")

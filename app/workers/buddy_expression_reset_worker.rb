@@ -17,13 +17,19 @@ class BuddyExpressionResetWorker
 
   sidekiq_options queue: :default, retry: 1
 
-  # Short, because the face now MOVES on every action (Buddy::ExpressionState
-  # #react!) rather than only when the model picks one — an expression that
-  # arrives more often has to clear more often, or the pet just accumulates the
-  # last thing that happened to it. Mid-exchange is protected by what this is
-  # keyed on rather than by the length: anything either of them says bumps
-  # `last_message_at`, so this can only fire on a thread nobody is using.
-  IDLE_AFTER = 2.minutes
+  # Mid-exchange is protected by what this is keyed on rather than by the
+  # length: every message bumps `last_message_at` (ByteMessage
+  # #bump_conversation_activity), so this can only fire on a thread nobody is
+  # using, and the face survives an exchange however long it runs.
+  #
+  # It was 2 minutes, chosen when the face moved on its own after every action
+  # and so had to clear often. It doesn't any more - Buddy::Sentiment reads the
+  # conversation and chooses - and 2 minutes turned out to be shorter than a
+  # conversation: 43% of the things Rocco typed over a fortnight arrived more
+  # than 2 minutes after the previous message, so the pet had already gone
+  # blank between nearly half of them. That is a lull to a cron job and a pause
+  # to a person.
+  IDLE_AFTER = 5.minutes
 
   def perform
     cutoff = IDLE_AFTER.ago

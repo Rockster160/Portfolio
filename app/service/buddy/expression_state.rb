@@ -38,6 +38,28 @@ module Buddy
       broadcast(conversation, conversation.buddy_expression, transient: false)
     end
 
+    # Put a named face on, if this pet has it and isn't already wearing it.
+    #
+    # Lived in Buddy::SideEffects as `apply_mood` while the model set the face
+    # by emitting `[[mood:]]`. It doesn't any more, and a mood helper inside the
+    # module for markers-the-model-emits was the leftover shape of that. The
+    # callers left are the ones that were never the model: a canned routine
+    # announcement and a proposal line, both of which come with a face already
+    # chosen in Ruby.
+    def wear(conversation, expression)
+      return if conversation.nil?
+
+      face  = expression.to_s.downcase.strip
+      theme = conversation.buddy_theme
+      # `selectable?` not `valid?` — a delivered mood may never be a
+      # system/transitional face (e.g. `thinking`). Those would leave the pet
+      # resting on a non-mood face.
+      return unless Buddy::Faces.selectable?(theme, face)
+      return if conversation.buddy_expression == face
+
+      set(conversation, face)
+    end
+
     # Persist + broadcast a real mood change. The ONLY writer of the column.
     # Used by `[[mood:]]` markers, check-ins, and sleep/wake.
     def set(conversation, expression)
@@ -51,31 +73,6 @@ module Buddy
 
       conversation.update_column(:buddy_expression, expression)
       broadcast(conversation, expression, transient: false)
-    end
-
-    # Something actually RAN this turn, so the pet reacts to it.
-    #
-    # A companion that does the thing and keeps a flat face reads as a machine
-    # accepting a command. Doing something for someone is the most expressive
-    # moment there is, so an action never leaves the pet on `neutral`.
-    #
-    # Only ever moves a pet that's RESTING. A face the model chose this turn is
-    # a deliberate read of the room - sitting with something heavy while it
-    # quietly cancels an alarm - and a generic pleased-with-itself face
-    # stamped over the top of that is the "face changed on its own" glitch this
-    # module exists to prevent. So this is a FLOOR, not an override.
-    #
-    # `ok:` is whether the turn LANDED. Without it every action wore a pleased
-    # face, including the ones that reported not managing the thing — prod 4594
-    # was a gleeful laugh over "I couldn't get a frame from the backyard
-    # camera". The face is picked without reading the words either way, so what
-    # this really buys is the direction being right.
-    def react!(conversation, ok: true)
-      return if conversation.nil?
-      return unless [nil, "", Buddy::Faces.default.to_s].include?(conversation.buddy_expression)
-
-      mood = Buddy::VoiceLines.acted_mood(conversation.buddy_theme, ok: ok)
-      set(conversation, mood) if mood
     end
 
     # Back to resting after a stretch of silence (BuddyExpressionResetWorker).

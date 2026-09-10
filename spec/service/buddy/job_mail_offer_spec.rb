@@ -115,10 +115,27 @@ RSpec.describe Buddy::JobMailOffer do
       expect(message.body).not_to include("add_job_note")
     end
 
-    it "does not match an application that is already over" do
-      user.job_applications.create!(company: "iCapital", status: :rejected)
+    # A recruiter for a company nobody has applied to.
+    it "does not invent a row for a company that isn't there" do
+      user.job_applications.create!(company: "Wayfarer Labs")
 
       expect(call.body).to eq("📬 the card")
+    end
+  end
+
+  # It used to refuse a settled one, and post a bare card with nowhere for the
+  # message to go. But the last word from a company is usually the rejection,
+  # and it arriving is the beat that closes the row - see prod 5759, where
+  # hiding closed applications from the model is what let it settle the wrong
+  # one. `status` is on the row either way, so a settled match reads as settled.
+  context "when the matching application is already settled" do
+    let!(:job) { user.job_applications.create!(company: "iCapital", status: :rejected) }
+
+    it "still offers, against the row it belongs to" do
+      message = call
+
+      expect(message.body).to include("belongs to an application already on their board")
+      expect(message.metadata["job_application_id"]).to eq(job.id)
     end
   end
 end
