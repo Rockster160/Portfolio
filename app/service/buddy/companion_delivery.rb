@@ -69,22 +69,14 @@ module Buddy
         outbound
       end
 
-      private
-
-      def frame(user)
-        format(SEED_FRAME, Buddy::TimeParser.friendly(Time.current, user: user))
-      end
-
-      def broadcast(user, message)
-        MonitorChannel.broadcast_to(user, {
-          id:      :byte,
-          channel: :byte,
-          data:    { kind: :message, message: message.as_wire },
-        })
-      end
-
       # Self-initiated pushes ignore presence - a reminder/watch fires when
       # it fires, regardless of whether the PWA thinks the user is looking.
+      #
+      # Public because of the one caller that has to buzz about a message it
+      # did NOT just create: Buddy::Alerts re-pushes a standing condition that
+      # has gone a long time without being dealt with, and the bubble it is
+      # pushing about was posted hours ago. Everything in here - the kiosk
+      # guard above all - is what that caller would otherwise copy.
       def notify(user, message, push_title:)
         # The wall tablet is a screen in a room, not a device that follows
         # anyone. It has the socket; a push here would only buzz a phone
@@ -101,6 +93,20 @@ module Buddy
           tag:   "byte-#{message.id}",
           users: [user],
         )
+      end
+
+      private
+
+      def frame(user)
+        format(SEED_FRAME, Buddy::TimeParser.friendly(Time.current, user: user))
+      end
+
+      def broadcast(user, message)
+        MonitorChannel.broadcast_to(user, {
+          id:      :byte,
+          channel: :byte,
+          data:    { kind: :message, message: message.as_wire },
+        })
       end
     end
   end

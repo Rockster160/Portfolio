@@ -209,6 +209,36 @@ export function removalHint(toolName, { status, undoable, override } = {}) {
   return status === "pending" ? words.tap : null;
 }
 
+// The line under a row saying what its tick DID. One slot, three sources, most
+// specific first.
+//
+// This is where the receipt lives now. It used to be a message of its own
+// posted under the card, which meant a checklist worked through one box at a
+// time produced one bubble per box — prod 5833-5835 were three of them saying
+// what the three ticked rows directly above already said. The row ticks, locks,
+// wears a ✓; repeating that in a broadcast is telling somebody something they
+// are looking at.
+//
+// The hint wins over the receipt where there is one, because it says what the
+// tick MEANS on a list ("Done - untick to put it back") and the receipt would
+// only say the mechanism again. Where there is no hint the receipt is the whole
+// news: "Added Shower to Rockster160 ✓" carries which list, and the row's label
+// is just "Shower".
+//
+// Exported so it can be tested without a DOM.
+export function rowNote(btn, { status, undoable } = {}) {
+  const hint = removalHint(btn?.tool_name, {
+    status,
+    undoable,
+    override: btn?.hint,
+  });
+  if (hint) return hint;
+  if (status === "executed") return (btn?.receipt || "").trim() || null;
+  if (status === "undone") return (btn?.undo_note || "").trim() || null;
+
+  return null;
+}
+
 // Render (or re-render) into a container element. Container is expected
 // to sit inside the message bubble, cleared each call so per-row state
 // updates don't leave stale nodes.
@@ -334,11 +364,7 @@ export function renderMultiSelect(container, message) {
     // Spelled out only where a tick doesn't mean what a tick usually means.
     // Inside the row's <label>, so reading it and tapping it are the same
     // gesture and screen readers pick it up as part of the box's name.
-    const hint = removalHint(btn.tool_name, {
-      status:   effectiveStatus,
-      undoable: undoable,
-      override: btn.hint,
-    });
+    const hint = rowNote(btn, { status: effectiveStatus, undoable: undoable });
     if (hint) {
       const note = document.createElement("span");
       note.className = "byte-msg-action-hint";

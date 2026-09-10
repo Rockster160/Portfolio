@@ -118,33 +118,37 @@ RSpec.describe Buddy::ProposalExecutor do
     expect(action.buttons.map { |b| b["status"] }).to all(eq("executed"))
   end
 
-  # ---- receipt wording ---------------------------------------------------
+  # ---- where the receipt goes ---------------------------------------------
   #
-  # Prod 1260-1261: adding "Shower" to the agenda produced "Done: Shower ✓",
-  # which reads as the shower having been taken. Each tool already writes a
-  # receipt that says what actually happened; use it.
-  describe "the receipt bubble" do
-    def receipts
+  # THE ROW IS THE RECEIPT. It ticks, it locks, it wears a ✓, and it carries the
+  # tool's own words underneath. A bubble repeating that is a second broadcast
+  # about something the person is looking at — and on a checklist worked through
+  # one box at a time it was one bubble per box (prod 5833-5835: three of them,
+  # under three ticked rows that already said the same thing).
+  #
+  # Prod 1260-1261 is why the WORDS are the tool's own rather than a generic
+  # "Done: Shower ✓", which read as the shower having been taken.
+  describe "the receipt" do
+    def receipt_bubbles
       convo.byte_messages.where("metadata->>'kind' = ?", "buddy_receipt").pluck(:body)
     end
 
-    it "speaks in the tool's own words rather than a generic Done" do
+    it "rides on the row, in the tool's own words" do
       action = two_button_action
 
       described_class.perform(action.id, [1])
 
-      expect(receipts).to eq(["Did A"])
+      expect(action.reload.buttons.find { |b| b["id"] == 1 }["receipt"]).to eq("Did A")
     end
 
-    it "gives each row its own line" do
+    it "posts nothing into the thread" do
       action = two_button_action
 
-      described_class.perform(action.id, [1, 2])
-
-      expect(receipts.first.split("\n")).to eq(["Did A", "Did B"])
+      expect { described_class.perform(action.id, [1, 2]) }.not_to change(ByteMessage, :count)
+      expect(receipt_bubbles).to be_empty
     end
 
-    it "falls back to the label for a tool that declines a receipt" do
+    it "leaves the row bare when the tool declines a receipt - the ✓ is the whole story" do
       Buddy::Tools.register(
         name:        :spec_quiet,
         description: "no receipt",
@@ -170,7 +174,40 @@ RSpec.describe Buddy::ProposalExecutor do
 
       described_class.perform(action.id, [1])
 
-      expect(receipts).to eq(["Done: Quiet ✓"])
+      expect(action.reload.buttons.first["status"]).to eq("executed")
+      expect(action.buttons.first["receipt"]).to be_blank
+      expect(receipt_bubbles).to be_empty
+    end
+
+    # A failed row is red with the error inline on it, which is more than the
+    # summary line ever carried.
+    it "posts nothing for a failure either" do
+      Buddy::Tools.register(
+        name:        :spec_boom,
+        description: "always fails",
+        args:        {},
+        confirm:     ->(_p, _) { { summary: "Boom?", resolved: {} } },
+        label:       ->(_p, _) { "Boom" },
+        execute:     ->(_p, _) { raise "nope" },
+        receipt:     ->(_r, _) { "never reached" },
+      )
+      action = ByteAction.create!(
+        user:              user,
+        byte_conversation: convo,
+        byte_message:      msg,
+        kind:              :custom,
+        tool_name:         "buddy_proposals",
+        multi_select:      true,
+        buttons:           [
+          { "id" => 1, "label" => "Boom", "tool_name" => "spec_boom", "payload" => {}, "count" => 1, "status" => "pending" },
+        ],
+        decision:          {},
+        tool_input:        {},
+      )
+
+      expect { described_class.perform(action.id, [1]) }.not_to change(ByteMessage, :count)
+      expect(action.reload.buttons.first["status"]).to eq("failed")
+      expect(action.buttons.first["error_message"]).to be_present
     end
   end
 end

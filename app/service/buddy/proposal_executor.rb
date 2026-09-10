@@ -22,9 +22,6 @@ module Buddy
       user = action.user
       incremental = !execute_ids.nil?
 
-      just_done = []
-      just_partial = []
-      just_failed = []
       buttons = nil
       deferred = []
 
@@ -55,7 +52,6 @@ module Buddy
           if tool.nil?
             btn["status"] = "failed"
             btn["error_message"] = "unknown tool #{btn["tool_name"]}"
-            just_failed << btn
             next
           end
 
@@ -79,16 +75,13 @@ module Buddy
             # Level 3 never did, which is how `undo` became a one-way door: it
             # removed a chore completion and there was no way back to it.
             btn["undoable"] = Buddy::Reverter.descriptors(outcomes.first[:data] || {}).any?
-            just_done << btn
           elsif outcomes.any? { |o| o[:ok] }
             btn["status"] = "partial"
             btn["result"] = outcomes.map { |o| o[:data] }
             btn["error_message"] = outcomes.reject { |o| o[:ok] }.map { |o| o[:error] }.first
-            just_partial << btn
           else
             btn["status"] = "failed"
             btn["error_message"] = outcomes.first[:error]
-            just_failed << btn
           end
         end
 
@@ -122,20 +115,15 @@ module Buddy
         broadcast(user, msg)
       end
 
-      # Receipt covers ONLY what ran this pass — incremental must not re-list
-      # the whole checklist on every tap.
-      summary = compose_summary(just_done, just_partial, just_failed, incremental ? [] : buttons.select { |b| b["status"] == "cancelled" })
-      if summary.present?
-        receipt = action.byte_conversation.byte_messages.create!(
-          user:         user,
-          direction:    :inbound,
-          state:        :delivered,
-          body:         summary,
-          metadata:     { kind: :buddy_receipt, action_id: action.id },
-          delivered_at: Time.current,
-        )
-        broadcast(user, receipt)
-      end
+      # No receipt bubble. THE ROW IS THE RECEIPT — it ticks, it locks, it wears
+      # a ✓, and it carries the tool's own words underneath (see `rowNote` in
+      # multi_select.js). A message repeating that is a second broadcast about
+      # something the person is already looking at, and on a checklist worked
+      # through one box at a time it is one per box: prod 5833-5835 were three
+      # bubbles saying what three ticked rows directly above them already said.
+      #
+      # A FAILURE needs no bubble either - a failed row is red with the error
+      # inline on it, which is more than the summary line ever carried.
 
       # Last, so it reads in the order it happened: the checklist result, then
       # whatever was waiting on it. Only runs if something actually executed — a
@@ -181,6 +169,10 @@ module Buddy
         result["undone"] = true
         btn["result"]    = result
         summary = summaries.first
+        # Onto the ROW, for the same reason the tool receipt goes there: the
+        # words are worth keeping ("unmarked Dishes" says which of three), and
+        # the row is where the person just tapped.
+        btn["undo_note"] = "Undone - #{summary}" if summary.present?
 
         action.buttons = buttons
         action.save!
@@ -190,18 +182,6 @@ module Buddy
       if msg
         msg.update!(metadata: (msg.metadata || {}).merge("buttons" => action.buttons))
         broadcast(user, msg)
-      end
-
-      if summary
-        receipt = action.byte_conversation.byte_messages.create!(
-          user:         user,
-          direction:    :inbound,
-          state:        :delivered,
-          body:         "Undone - #{summary}",
-          metadata:     { kind: :buddy_receipt, action_id: action.id },
-          delivered_at: Time.current,
-        )
-        broadcast(user, receipt)
       end
 
       action
@@ -232,24 +212,6 @@ module Buddy
       # Receipt is built from the rows that transitioned THIS pass (plus, for
       # the one-shot path, the rows it just cancelled) — never the whole
       # checklist, so an incremental tap only ever reports its own row.
-      def compose_summary(done, partial, failed, cancelled)
-        parts = []
-        # Prefer each tool's own receipt ("Added Shower to Rockster160 ✓"). The
-        # generic "Done: Shower ✓" describes the ROW, but reads as the shower
-        # having been taken — exactly backwards when the row was adding a task.
-        # Rows whose tool declined a receipt still fall back to the label.
-        receipted, plain = done.partition { |b| b["receipt"].to_s.strip.present? }
-        parts.concat(receipted.map { |b| b["receipt"].to_s.strip })
-        parts << "Done: #{plain.pluck("label").join(", ")} ✓" if plain.any?
-        parts << "Partial: #{partial.pluck("label").join(", ")}" if partial.any?
-        parts << "Skipped: #{cancelled.pluck("label").join(", ")}" if cancelled.any?
-        if failed.any?
-          fails = failed.map { |b| "#{b["label"]} - #{b["error_message"]}" }
-          parts << "Failed: #{fails.join("; ")}"
-        end
-        parts.join("\n")
-      end
-
       def broadcast(user, message)
         MonitorChannel.broadcast_to(user, {
           id:      :byte,

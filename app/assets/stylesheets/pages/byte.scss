@@ -1232,6 +1232,43 @@ html.html-ctr-byte body {
     }
   }
 
+  // A standing condition: something that needs doing, and the same bubble once
+  // it has been dealt with (Buddy::Alerts). One message per condition, rewritten
+  // in place, so these two are the same node at different points in its life.
+  //
+  // The state is a bar down the side rather than a word saying "open". Colour is
+  // what a glance reads, and a label under every one of them would be noise on
+  // the bubbles that are already understood - the line underneath appears only
+  // when it has something to add (a recurrence, or when it cleared).
+  //
+  // `--bs-danger` rather than a warning colour of its own: every theme already
+  // tunes that one against its own surface, and an amber hardcoded here would
+  // disappear on Glimmer's amber one.
+  &.byte-msg-alert-open,
+  &.byte-msg-alert-resolved {
+    border-left: 3px solid var(--bs-border);
+    border-bottom-left-radius: 4px;
+    padding-left: 10px;
+  }
+
+  &.byte-msg-alert-open {
+    border-left-color: var(--bs-danger);
+    background: color-mix(in srgb, var(--bs-danger) 12%, var(--bs-them-bg));
+  }
+
+  // Dealt with, and receding. Not gone - that something WAS outstanding is
+  // worth keeping - but it stops competing with whatever still isn't.
+  &.byte-msg-alert-resolved {
+    border-left-color: var(--bs-muted);
+    opacity: 0.72;
+  }
+
+  .byte-msg-alert {
+    margin-top: 4px;
+    font-size: 85%;
+    color: var(--bs-muted);
+  }
+
   // A turn narrating itself. Every tool the server resolves pushes one line, so
   // a wait that used to be a bare "…" reads as what's been done and what's
   // happening right now. Finished lines fade back so the eye lands on the live
@@ -2110,6 +2147,76 @@ html.html-ctr-byte body {
     cursor: pointer;
 
     &:active { top: auto; }
+  }
+}
+
+// Conditions still standing open (Buddy::Alerts), pinned above the composer.
+//
+// Same footprint as the reply bar deliberately - it is the same kind of thing, a
+// line of state that isn't a message - but it wears the alert's own colour so it
+// is not read as chrome. One row per open condition, which is also the answer to
+// "can several be outstanding at once": they stack, and each is let go of on its
+// own.
+//
+// Bounded height with its own scroll: a house that has got away from you should
+// not be able to push the composer off the screen.
+.byte-alert-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 16px 6px;
+  max-height: 30vh;
+  overflow-y: auto;
+
+  &[hidden] { display: none; }
+}
+
+.byte-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--bs-text, #e8ecf6);
+  background: color-mix(in srgb, var(--bs-danger) 14%, transparent);
+  border-left: 2px solid var(--bs-danger);
+
+  // The label takes whatever's left and clips. The ✕ must never be pushed off
+  // the edge by a long sentence - while this row is here, the key it holds is
+  // taken, and letting go is the only way to free it.
+  .byte-alert-row-label {
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .byte-alert-row-drop {
+    appearance: none;
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1;
+    opacity: 0.75;
+    cursor: pointer;
+
+    &:active { top: auto; }
+    &:disabled { opacity: 0.35; cursor: default; }
   }
 }
 

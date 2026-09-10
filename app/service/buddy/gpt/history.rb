@@ -21,7 +21,15 @@ module Buddy
       # chips (`buddy_activity`), action-request cards, and system/meta replies
       # are excluded: their outcomes already show up in the live context, and
       # replaying them as assistant turns teaches Buddy to narrate receipts.
-      PROSE_KINDS = ["buddy", "buddy_reply"].freeze
+      #
+      # `alert` is here for the same reason `buddy` is: it is Jil putting words
+      # in the thread, in Buddy's voice, and the person can see it and will
+      # refer back to it. Being blind to it is the relay-bridge problem again -
+      # asked about the thing on screen, the honest answer would be that no such
+      # message exists. What it replays is the CURRENT wording, so a condition
+      # that has since been resolved reads as resolved rather than as still
+      # outstanding.
+      PROSE_KINDS = ["buddy", "buddy_reply", "alert"].freeze
 
       # Cross-household bridged messages (Buddy::CompanionRelay#bridge!). These
       # are a third voice in the thread: text from the partner's companion, or a

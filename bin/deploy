@@ -9,7 +9,17 @@ if [[ "$branch" != "master" ]]; then
   exit 1
 fi
 
-source ~/.zshrc
+# The parent shell already ran ~/.zshrc and this process inherited its
+# environment, so all that is missing here are the function definitions —
+# 70ms. Re-sourcing ~/.zshrc costs 2.3s of compinit, nvm, rbenv and half a
+# dozen `brew --prefix` subshells before the editor can even open.
+success=0 # what the library returns with; the colors are for gpo's output
+failure=1
+source =(sed -n '/^success=0/,/^lcyan=/p' ~/.zshrc)
+# Silenced: `complete`/`compdef` and `unalias` chatter that only means
+# anything in an interactive shell.
+for _script in ~/code/scripts/**/*.sh(N); do source "$_script"; done 2>/dev/null
+unset _script
 
 # Split args: existing files are prodExec scripts (run after deploy), anything
 # else is treated as words/sentences for a `gam` commit (run before the push).
@@ -18,7 +28,7 @@ scripts=()
 message=()
 for arg in "$@"; do
   if [[ -f "$arg" ]]; then
-    scripts+=("$arg")
+    scripts+=("$(_deployQueueScriptPath "$arg")") # the spelling a queue line uses
   elif [[ "$arg" == */* || "$arg" == *.rb ]]; then
     print -P "%F{red}deploy: '$arg' looks like a script path but no such file exists.%f"
     exit 1
@@ -26,6 +36,10 @@ for arg in "$@"; do
     message+=("$arg")
   fi
 done
+
+# `deploy prodExec lib/scripts/x.rb` is the line pasted straight out of a
+# hand-off; the command word came with the path, so it is not commit message.
+(( ${#scripts[@]} > 0 )) && message=(${message:#prodExec})
 
 commit=("${message[@]}") # the words go to `gam` as they were typed
 

@@ -34,6 +34,12 @@ class ByteMessage < ApplicationRecord
   # a backfill halfway through the twelve looping briefings of 21 Aug, and it is
   # why tearing down an eval conversation used to fail.
   has_many :buddy_usages, dependent: :nullify
+  # NULLIFY, same as usages and for a related reason: a BuddyAlert is the record
+  # that a condition was outstanding, and that stays true after somebody clears
+  # the bubble out of the thread. Without this, deleting the message raises a
+  # foreign key violation instead — the alert owns a message, but it does not
+  # own the thread.
+  has_many :buddy_alerts, dependent: :nullify
   has_many :shared_conversations, through: :byte_message_shares, source: :byte_conversation
 
   has_many_attached :files

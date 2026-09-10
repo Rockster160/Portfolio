@@ -345,6 +345,10 @@
       <%# Activity-chip footnote: which tool ran and with what. Its own element %>
       <%# so it can sit quietly under the receipt instead of competing with it. %>
       <div class="byte-msg-activity-detail" data-activity-detail hidden></div>
+      <%# An alert's status line: how many times the condition has recurred, or %>
+      <%# when it was cleared. Open-versus-resolved itself is carried by the %>
+      <%# tint and the corner marker, so this stays empty on the plain case. %>
+      <div class="byte-msg-alert" data-alert hidden></div>
       <%# Tapbacks on a relayed message. Empty and hidden on everything else; %>
       <%# filled by renderReactions on every paint. %>
       <div class="byte-msg-reactions" data-reactions hidden></div>
@@ -354,6 +358,12 @@
       </div>
     </article>
   </template>
+
+  <%# Conditions still standing open (Buddy::Alerts). Pinned above the composer %>
+  <%# because an alert owns ONE bubble for as long as it is open, and a thread %>
+  <%# moves on — without this, something outstanding is lost the moment it %>
+  <%# scrolls away. Drawn from the database on every load; JS owns its rows. %>
+  <div class="byte-alert-bar" data-byte-alert-bar hidden></div>
 
   <%# Persistent sleeping chip — pinned above the composer while Buddy is %>
   <%# asleep (usage cap) or the realtime channel is down. Stays until Byte %>
@@ -775,6 +785,7 @@
     conversation:  @conversation.as_wire,
     conversations: @conversations.map(&:as_wire),
     messages:      @messages.map(&:as_wire),
+    alerts:        Buddy::Alerts.outstanding_wire(current_user),
     buddy_sleep: {
       sleep_until: (@conversation.buddy_sleep_until&.iso8601 if ::Buddy::SleepGuard.sleeping?(current_user)),
       wake_string: (::Buddy::SleepGuard.wake_string(current_user) if ::Buddy::SleepGuard.sleeping?(current_user)),

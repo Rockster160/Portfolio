@@ -103,4 +103,46 @@ RSpec.describe "Checklist removal hints" do
       expect(result["override"]["undone"]).to be_nil
     end
   end
+
+  # The line under a row saying what its tick DID. It used to be a message of
+  # its own posted under the card, which on a checklist worked through one box
+  # at a time meant one bubble per box - prod 5833-5835 were three of them,
+  # under three ticked rows that already said the same thing.
+  describe "what fills the slot under a row" do
+    let(:note) { result["note"] }
+
+    it "prefers the words that say what the tick MEANS over the tool's report" do
+      expect(note["hint_beats_receipt"]).to eq("Done - untick to put it back")
+    end
+
+    # The row's own label is just "Shower". Which list it went to is only in the
+    # receipt, and losing that was the risk in taking the bubble away.
+    it "gives the receipt the slot where nothing else claims it" do
+      expect(note["receipt_when_no_hint"]).to eq("Added Shower to Rockster160 ✓")
+    end
+
+    it "says nothing before the row has been tapped" do
+      expect(note["pending_says_nothing"]).to be_nil
+    end
+
+    it "leaves the ✓ to speak for a tool that declined a receipt" do
+      expect(note["quiet_tool"]).to be_nil
+    end
+
+    # Which of three got walked back is worth keeping, and the row is where the
+    # person just tapped.
+    it "keeps the undo's own words on the row" do
+      expect(note["undone"]).to eq("Undone - unmarked Dishes")
+    end
+
+    # A failed row is red with the error inline on it already.
+    it "stays out of the way of a failure" do
+      expect(note["failed"]).to be_nil
+    end
+
+    it "answers for a row carrying nothing at all" do
+      expect(note["empty"]).to be_nil
+      expect(note["nothing"]).to be_nil
+    end
+  end
 end

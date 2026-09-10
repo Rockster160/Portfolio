@@ -376,4 +376,75 @@ RSpec.describe Jil::Methods::Buddy do
       expect(message.metadata).to include("kind" => "buddy", "source" => "jil")
     end
   end
+
+  # Something OUTSTANDING, rather than something that happened. The thing that
+  # notices and the thing that clears are rarely the same trigger, so the key is
+  # the whole of the coupling between them.
+  describe "#alert / #resolve" do
+    let(:owner) { User.me }
+    let!(:owner_convo) { owner.byte_conversations.create!(mode: :buddy, name: "Byte") }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(WebPushNotifications).to receive(:send_to_byte)
+    end
+
+    it "validates" do
+      code = <<~'JIL'
+        a1 = Buddy.alert("laundry-gate", "The laundry gate is open")::Boolean
+        a2 = Buddy.resolve("laundry-gate", "Laundry gate is shut")::Boolean
+      JIL
+
+      expect { Jil::Validator.validate!(code) }.not_to raise_error
+    end
+
+    it "opens one, holds it to a single bubble, and closes it where it stands" do
+      ctx = Jil::Executor.call(owner, <<~'JIL', {})
+        opened = Buddy.alert("laundry-gate", "The laundry gate is open")::Boolean
+        again = Buddy.alert("laundry-gate", "The laundry gate is still open")::Boolean
+        closed = Buddy.resolve("laundry-gate", "Laundry gate is shut")::Boolean
+        nothing = Buddy.resolve("laundry-gate", "Laundry gate is shut")::Boolean
+      JIL
+
+      expect(ctx.ctx[:vars][:opened][:value]).to be(true)
+      expect(ctx.ctx[:vars][:again][:value]).to be(true)
+      expect(ctx.ctx[:vars][:closed][:value]).to be(true)
+      # Nothing was open by then, which is how a scheduled check tells that it
+      # cleared something from that it was already fine.
+      expect(ctx.ctx[:vars][:nothing][:value]).to be(false)
+
+      expect(owner_convo.byte_messages.count).to eq(1)
+      message = owner_convo.byte_messages.last
+      expect(message.body).to eq("Laundry gate is shut")
+      expect(message.metadata["kind"]).to eq("alert")
+      expect(message.metadata.dig("alert", "status")).to eq("resolved")
+      expect(message.metadata.dig("alert", "count")).to eq(2)
+    end
+
+    it "answers false when there is nothing to say" do
+      ctx = Jil::Executor.call(owner, <<~'JIL', {})
+        blank = Buddy.alert("   ", "The laundry gate is open")::Boolean
+        wordless = Buddy.alert("laundry-gate", "  ")::Boolean
+      JIL
+
+      expect(ctx.ctx[:vars][:blank][:value]).to be(false)
+      expect(ctx.ctx[:vars][:wordless][:value]).to be(false)
+      expect(ByteMessage.count).to eq(0)
+    end
+
+    # A shared task runs as its OWNER, and an alert raised on somebody else's
+    # behalf has to land in THEIR thread — same rule every other method here
+    # follows through `recipient`.
+    it "speaks to whoever asked, not to whoever owns the task" do
+      asker = create(:user)
+      asker.byte_conversations.create!(mode: :buddy, name: "Suki")
+
+      Jil::Executor.call(owner, <<~'JIL', {}, auth: :buddy, auth_id: asker.id)
+        opened = Buddy.alert("laundry-gate", "The laundry gate is open")::Boolean
+      JIL
+
+      expect(BuddyAlert.open_for(asker, "laundry-gate")).to be_present
+      expect(owner_convo.byte_messages.count).to eq(0)
+    end
+  end
 end

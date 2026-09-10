@@ -1,6 +1,9 @@
 // Feeds every (tool, status) pair through removalHint and prints the results as
 // JSON for removal_hint_spec.rb. No DOM — the wording is a pure function.
-import { removalHint } from "../../app/javascript/src/pages/byte/message_actions/multi_select.js";
+import {
+  removalHint,
+  rowNote,
+} from "../../app/javascript/src/pages/byte/message_actions/multi_select.js";
 
 const out = {};
 
@@ -62,6 +65,34 @@ out.override = {
   undone:   removalHint("remove_list_item", { status: "undone", override: CHECK_OFF }),
   // A tool with no words of its own can be given some.
   additive: removalHint("log_event", { status: "pending", override: CHECK_OFF }),
+};
+
+// ---- the one slot under a row, and what wins it ---------------------------
+// The receipt used to be a message of its own posted under the card, which on a
+// checklist worked through one box at a time meant one bubble per box.
+const CHECKED_OFF = {
+  tool_name: "remove_list_item",
+  receipt: "Removed Pickup Whisper Dinner ✓",
+  hint: CHECK_OFF,
+};
+const ADDED = { tool_name: "add_agenda_item", receipt: "Added Shower to Rockster160 ✓" };
+
+out.note = {
+  // The hint says what the tick MEANS on a list; the receipt would only say the
+  // mechanism over again.
+  hint_beats_receipt: rowNote(CHECKED_OFF, { status: "executed", undoable: true }),
+  // No hint, so the receipt is the whole news - and it carries which list,
+  // where the row's own label is just "Shower".
+  receipt_when_no_hint: rowNote(ADDED, { status: "executed" }),
+  // Nothing has happened yet, so there is nothing to report.
+  pending_says_nothing: rowNote(ADDED, { status: "pending" }),
+  // A tool that declined a receipt leaves the ✓ to say it.
+  quiet_tool: rowNote({ tool_name: "log_event" }, { status: "executed" }),
+  undone: rowNote({ tool_name: "log_event", undo_note: "Undone - unmarked Dishes" }, { status: "undone" }),
+  failed: rowNote(ADDED, { status: "failed" }),
+  // A row with no tool and no words at all still has to answer.
+  empty: rowNote({}, { status: "executed" }),
+  nothing: rowNote(undefined, { status: "executed" }),
 };
 
 console.log(JSON.stringify(out));

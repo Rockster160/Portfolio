@@ -71,6 +71,10 @@ Rails.application.routes.draw do
   get    "/byte/workspaces"        => "byte#workspaces",           as: :byte_workspaces
   post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
   post   "/buddy/quick_action"               => "buddy/quick_actions#create", as: :buddy_quick_action
+  # Conditions still standing open (Buddy::Alerts). `dismiss` lets go of one
+  # without claiming it cleared - see the controller for why that matters.
+  get    "/buddy/alerts"             => "buddy/alerts#index",   as: :buddy_alerts
+  post   "/buddy/alerts/:id/dismiss" => "buddy/alerts#dismiss", as: :buddy_alert_dismiss
   get    "/buddy/timers"            => "buddy/timers#index",   as: :buddy_timers
   post   "/buddy/timers/:id/pause"  => "buddy/timers#pause",   as: :buddy_timer_pause
   post   "/buddy/timers/:id/resume" => "buddy/timers#resume",  as: :buddy_timer_resume

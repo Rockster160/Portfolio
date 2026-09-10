@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_10_183801) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_10_191504) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -466,6 +466,28 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_10_183801) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "buddy_alerts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id", null: false
+    t.bigint "byte_message_id"
+    t.text "key", null: false
+    t.integer "status", default: 0, null: false
+    t.text "body", null: false
+    t.text "resolution"
+    t.integer "raised_count", default: 1, null: false
+    t.datetime "raised_at", null: false
+    t.datetime "last_raised_at", null: false
+    t.datetime "resolved_at"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_buddy_alerts_on_byte_conversation_id"
+    t.index ["byte_message_id"], name: "index_buddy_alerts_on_byte_message_id"
+    t.index ["user_id", "key"], name: "index_buddy_alerts_on_one_open_per_key", unique: true, where: "(status = 0)"
+    t.index ["user_id", "status", "last_raised_at"], name: "index_buddy_alerts_on_user_id_and_status_and_last_raised_at"
+    t.index ["user_id"], name: "index_buddy_alerts_on_user_id"
   end
 
   create_table "buddy_idea_notes", force: :cascade do |t|
@@ -1858,6 +1880,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_10_183801) do
   add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "bank_transactions", "bank_transactions", column: "transfer_counterpart_id", on_delete: :nullify
   add_foreign_key "boxes", "users"
+  add_foreign_key "buddy_alerts", "byte_conversations"
+  add_foreign_key "buddy_alerts", "byte_messages"
+  add_foreign_key "buddy_alerts", "users"
   add_foreign_key "buddy_ideas", "users"
   add_foreign_key "buddy_memories", "byte_messages", column: "source_message_id"
   add_foreign_key "buddy_memories", "users"

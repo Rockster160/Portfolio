@@ -33,6 +33,8 @@ import {
   removeByLocalId as removeQueued,
 } from "./queue";
 import { initIdleReload } from "./idle_reload";
+import { alertStatusLabel } from "./alert_status";
+import { initAlertStrip } from "./alert_strip";
 import { configure as configureApi, sendMessage, drainQueue } from "./api";
 import {
   registerServiceWorker,
@@ -375,6 +377,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
+  // Conditions still standing open. Pinned, because an alert keeps ONE bubble
+  // for as long as it is open and a thread moves on around it — the strip is
+  // what stops an outstanding thing being lost by scrolling past. Same jump the
+  // unread notices use: switch if it's in another thread, then reveal.
+  const alertStrip = initAlertStrip({
+    root: isKiosk ? null : document.querySelector("[data-byte-alert-bar]"),
+    onJump: (alert) => {
+      convoManager?.switchTo(alert.conversation_id);
+      revealMessage(alert.message_id);
+    },
+  });
+  alertStrip.setAlerts(bootstrap.alerts || []);
+
   const convoManager = new ConversationManager({
     conversationsUrl,
     claudeSessionsUrl,
@@ -688,6 +703,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         bodyEl.innerHTML = renderMarkdown(message.body || "");
       }
+    } else if (kind === "alert") {
+      // A standing condition - something outstanding until it's dealt with.
+      // Markdown for the same reason every other Buddy bubble gets it, and
+      // because the wording is the caller's: a Jil task writing "**gate** is
+      // open" means the bold.
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "watch") {
       // Watch bubbles carry a `wait_label` while running, then a plain
       // markdown completion body once done. Render markdown either way.
@@ -704,6 +725,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       node.classList.add("byte-msg-watching");
     } else {
       node.classList.remove("byte-msg-watching");
+    }
+
+    // An alert's own state: `byte-msg-alert-open` / `-resolved` drive the tint
+    // and the corner marker, and the line underneath carries only what the
+    // bubble can't show by itself (see alert_status.js). Both classes come off
+    // for every other kind, because className was rebuilt above from `kind`
+    // alone and a repaint has to be able to move a bubble from open to
+    // resolved.
+    const alertEl = node.querySelector("[data-alert]");
+    const status = kind === "alert" ? alertStatusLabel(message?.metadata?.alert, formatTime) : null;
+    node.classList.toggle("byte-msg-alert-open", status?.state === "open");
+    node.classList.toggle("byte-msg-alert-resolved", status?.state === "resolved");
+    if (alertEl) {
+      alertEl.textContent = status?.text || "";
+      alertEl.hidden = !status?.text;
     }
 
     // A turn that wrote to long-term memory gets a small brain in the corner.
@@ -3107,6 +3143,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         sleepReason = null;
         updateSleepChip();
         buddyWake();
+        return;
+      }
+      if (data.kind === "alerts") {
+        alertStrip.setAlerts(data.alerts);
         return;
       }
       if (data.kind === "font_scale") {

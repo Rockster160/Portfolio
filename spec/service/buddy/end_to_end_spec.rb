@@ -75,9 +75,10 @@ RSpec.describe "Buddy end-to-end" do
     expect(action.buttons.find { |b| b["id"] == coffee_row["id"] }["status"]).to eq("executed")
     expect(action.buttons.find { |b| b["id"] == walk_row["id"] }["status"]).to eq("cancelled")
 
-    receipts = convo.byte_messages.where("metadata->>'kind' = 'buddy_receipt'")
-    expect(receipts.count).to eq(1)
-    expect(receipts.first.body).to include("Coffee")
+    # The row is the receipt - it wears the tool's own words. Nothing is posted
+    # under the card, because the card already says it.
+    expect(action.buttons.find { |b| b["id"] == coffee_row["id"] }["receipt"]).to include("Coffee")
+    expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_receipt'")).to be_empty
   end
 
   it "fires a silent tool immediately and keeps it out of the visible reply" do

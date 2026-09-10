@@ -9,6 +9,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
   #   #checklist("List" String BR "Message" Text)::Numeric
+  #   #alert("Key" String BR "Message" Text)::Boolean
+  #   #resolve("Key" String BR "Message" Text)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
   # Byte/Moss says the text verbatim — a fixed inbound message dropped into the
@@ -82,6 +84,39 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     return 0 if list.nil? || text.empty?
 
     ::Buddy::ListChecklist.post!(user: recipient, list: list, text: text)
+  end
+
+  # Something that needs DOING, held open until it's dealt with.
+  #
+  # Everything else here is news - it happened, it's said, it's over. A
+  # condition isn't like that: "the laundry gate is open" goes on being true
+  # until somebody closes the gate, and saying it again an hour later doesn't
+  # help. This posts one message and keeps it: calling it again on the same key
+  # rewrites that same message rather than adding another notification for
+  # something already on screen, and counts the occurrence on it.
+  #
+  # `key` is the identity of the condition and is entirely yours. It is the only
+  # coupling between the thing that NOTICES and the thing that CLEARS, which are
+  # rarely the same sensor or even the same day.
+  #
+  # Returns false when there was nowhere to put it - no key, no words, or no
+  # companion thread yet - so a task can tell that from a message that landed.
+  def alert(key, message)
+    ::Buddy::Alerts.raise!(user: recipient, key: key, body: message).present?
+  end
+
+  # It's been dealt with. The message `alert` left in the thread is rewritten
+  # where it stands, so the thing that was outstanding now reads as handled -
+  # no second message, and nothing left saying a condition that has passed.
+  #
+  # `message` is what it should say now; leave it blank and it keeps its own
+  # words and simply stops reading as outstanding.
+  #
+  # Returns false when nothing was open under that key, which is how a check
+  # that runs on a schedule tells "I just cleared something" from "it was
+  # already fine" without keeping track itself.
+  def resolve(key, message)
+    ::Buddy::Alerts.resolve!(user: recipient, key: key, body: message).present?
   end
 
   # Same unit set the schema offers. Anything else is a typo rather than a
