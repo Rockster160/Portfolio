@@ -68,8 +68,9 @@ class JarvisController < ApplicationController
   end
 
   def handle_data(data)
-    data[:location]&.tap { |coord| LocationCache.set(coord.map(&:to_f)) }
-    data[:bluetooth_connected]&.tap { |bool| LocationCache.driving = bool }
+    coord = data[:location]&.map(&:to_f)
+    coord&.tap { |loc| LocationCache.set(loc) }
+    data[:bluetooth_connected]&.tap { |bool| LocationCache.set_driving(bool, coord: coord) }
   end
 
   def alexa_response(words)

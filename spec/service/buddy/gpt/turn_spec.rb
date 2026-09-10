@@ -90,6 +90,21 @@ RSpec.describe Buddy::GPT::Turn do
       expect(turn.send(:tools)).to be_empty
     end
 
+    # Same argument as the tools, one section over. What someone is carrying
+    # shapes how a companion TALKS to them, and a briefing isn't talking to
+    # them - it is one message about the day with nothing following it, so a
+    # rundown bending around the heaviest thing in their life is a rundown
+    # nobody asked for and there is no next turn to take it back in.
+    it "does not hand the briefing what they're carrying" do
+      BuddyMemory.create!(user: user, content: "Sandbox: the fig tree is dying", severity: 70)
+
+      briefing = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+      ordinary = turn_for({})
+
+      expect(briefing.send(:instructions)).not_to include("the fig tree is dying")
+      expect(ordinary.send(:instructions)).to include("the fig tree is dying")
+    end
+
     # Prod 5445, 5456, 5459 and 5461 - the first four briefings after
     # Buddy::BriefingFacts shipped - named nothing they were handed and wrote a
     # day out of the thread instead. The seed was being swapped for the bracket

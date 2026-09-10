@@ -33,6 +33,7 @@ class TeslaTelemetry
     detect_park_changes
     detect_charge_changes
     detect_hvac_changes
+    detect_travel_changes
     detect_trip_changes
     check_tire_pressure
     fire_general_trigger
@@ -132,6 +133,79 @@ class TeslaTelemetry
     scope = new_on ? :tesla_hvac_on : :tesla_hvac_off
     empty = {}
     ::Jil.trigger(@user, scope, empty)
+  end
+
+  # The car's own account of leaving home and coming back, which is the only
+  # thing in the house that knows the car went somewhere without Rocco. Scoped
+  # to the home boundary on purpose: every other place the car passes through
+  # is a city name changing mid-drive, and none of those are legs.
+  #
+  # Fires `trytravel` rather than recording anything itself, so every source
+  # arrives through the one Jil funnel the person can edit. `source: :tesla` is
+  # what keeps it quiet — TravelResolver only lets the phone announce. A second
+  # report goes out under `:phone` when the phone was aboard; see
+  # `carrying_him?`.
+  def detect_travel_changes
+    return unless field_present_in_record?(:Location)
+    # A car that has never reported a position has not crossed anything, so
+    # the first push after a deploy isn't read as an arrival.
+    return unless positioned?(@prev) && positioned?(@car_data)
+
+    was_home = car_at_home?(@prev)
+    now_home = car_at_home?(@car_data)
+    return if was_home == now_home
+
+    action = now_home ? :arrived : :departed
+    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla))
+    ::Jil.trigger(@user, :trytravel, travel_payload(action, :phone)) if carrying_him?
+  end
+
+  # Whether the phone went with the car, asked at the moment the car crosses
+  # the boundary — which is what makes it answerable without a timer or any
+  # pending state. The car's own crossing is the clock.
+  #
+  # Sound on geometry rather than luck: Bluetooth reaches about ten metres and
+  # the home boundary about a hundred. Riding in it, the pairing holds through
+  # the crossing. Left behind, it dropped at the end of the driveway,
+  # necessarily before. On 2026-09-10 the last edge was 10:22:15 and the car
+  # crossed around 10:23 unpaired — the car went, he didn't, and this says so.
+  # The same geometry answers the way back: Chelsea driving home crosses the
+  # boundary while his phone is still a hundred metres away in the house.
+  #
+  # This is what keeps `travel:depart:home` firing at all. A pairing in the
+  # garage no longer announces on its own (TravelResolver refuses it), and the
+  # geofence has never once sent a departure, so without this nothing would
+  # ever report him leaving his own house. On the arrival side the geofence
+  # does work, and this is the belt to its braces — the merge window collapses
+  # the two into one leg and only the first announces.
+  def carrying_him?
+    ::LocationCache.driving?
+  end
+
+  # No `via`: a pairing the car has corroborated by actually driving off is
+  # not the raw radio edge that gets refused at home. Different evidence.
+  def travel_payload(action, source)
+    {
+      action:    action,
+      source:    source,
+      location:  @car_data.dig(:location, :name),
+      lat:       @car_data.dig(:location, :lat),
+      lng:       @car_data.dig(:location, :lng),
+      action    => @car_data.dig(:location, :name),
+      timestamp: ::Time.current,
+    }
+  end
+
+  def positioned?(data)
+    coord_of(data).compact.length == 2
+  end
+
+  def car_at_home?(data)
+    ::LocationCache.at_home?(coord_of(data))
+  end
+
+  def coord_of(data)
+    [data.dig(:location, :lat), data.dig(:location, :lng)]
   end
 
   # Fires when a nav trip is started, updated, or ended. "Started" =

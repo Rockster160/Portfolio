@@ -9,8 +9,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
   #   #checklist("List" String BR "Message" Text)::Numeric
-  #   #alert("Key" String BR "Message" Text)::Boolean
-  #   #resolve("Key" String BR "Message" Text)::Boolean
+  #   #alert("Key" String BR "Message" Text BR "Who" String)::Boolean
+  #   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
   # Byte/Moss says the text verbatim — a fixed inbound message dropped into the
@@ -99,10 +99,19 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # coupling between the thing that NOTICES and the thing that CLEARS, which are
   # rarely the same sensor or even the same day.
   #
-  # Returns false when there was nowhere to put it - no key, no words, or no
-  # companion thread yet - so a task can tell that from a message that landed.
-  def alert(key, message)
-    ::Buddy::Alerts.raise!(user: recipient, key: key, body: message).present?
+  # `who` is who it is FOR, and blank is whoever's task this is - nearly always
+  # right, since a condition is usually noticed by somebody's own automation.
+  # A name reaches that person instead; "house" reaches everyone. See
+  # `recipients_for`.
+  #
+  # Returns false when it reached nobody - no key, no words, no companion thread
+  # yet, or a name nobody in the house goes by - so a task can tell that from a
+  # message that landed.
+  def alert(key, message, who=nil)
+    delivered = recipients_for(who).count { |user|
+      ::Buddy::Alerts.raise!(user: user, key: key, body: message).present?
+    }
+    delivered.positive?
   end
 
   # It's been dealt with. The message `alert` left in the thread is rewritten
@@ -112,12 +121,25 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # `message` is what it should say now; leave it blank and it keeps its own
   # words and simply stops reading as outstanding.
   #
-  # Returns false when nothing was open under that key, which is how a check
-  # that runs on a schedule tells "I just cleared something" from "it was
+  # `who` has to match whoever the alert was raised for, and the easy way to get
+  # that right is to pass the same thing both times.
+  #
+  # Returns false when nothing was open under that key for anybody, which is how
+  # a check that runs on a schedule tells "I just cleared something" from "it was
   # already fine" without keeping track itself.
-  def resolve(key, message)
-    ::Buddy::Alerts.resolve!(user: recipient, key: key, body: message).present?
+  def resolve(key, message, who=nil)
+    cleared = recipients_for(who).count { |user|
+      ::Buddy::Alerts.resolve!(user: user, key: key, body: message).present?
+    }
+    cleared.positive?
   end
+
+  # The words that mean the whole house rather than one person, and the ones that
+  # mean whoever the task already belongs to. Spelled out rather than
+  # pattern-matched because these are typed into a task once, and a near miss
+  # has to fail loudly instead of quietly meaning something else.
+  HOUSEHOLD = %w[house household home everyone everybody all].freeze
+  ME        = %w[me myself i owner].freeze
 
   # Same unit set the schema offers. Anything else is a typo rather than a
   # duration, and a rotation silently landing in seconds when "minutes" was
@@ -199,6 +221,49 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     return nil if id.blank?
 
     ::AgendaItem.locate_for_user(id, @jil.user)
+  end
+
+  # Who an alert is for: a comma-separated list of first names, "me", or a word
+  # meaning the whole house. Blank is the task's own recipient.
+  #
+  # A list rather than one name because the common case for a household
+  # condition is not "everybody" - it is the two people it concerns. An open
+  # gate is open for whoever walks past it and the person who can shut it is
+  # whoever happens to be home, but a housemate who has nothing to do with the
+  # dog does not need a warning about the dog. "me, chelsea" says that; "house"
+  # would say something bigger and slightly wrong, and the way that goes wrong
+  # is an alert somebody learns to swipe away.
+  #
+  # Each person gets their own bubble in their own thread under the same key -
+  # the one-open-per-key index is per user - so one `resolve` under that key
+  # clears every one of them and nobody is left looking at a warning about
+  # something already dealt with.
+  #
+  # A name that matches nobody reaches NOBODY, and the false that comes back is
+  # the whole report. Falling back to the owner would put somebody else's alert
+  # on his phone and look like it had worked.
+  #
+  # Same gate as `audience`: only people who already have a Buddy thread.
+  # Nobody gets a companion spun up for them by a notification.
+  def recipients_for(who)
+    names = who.to_s.downcase.split(",").map(&:strip).compact_blank
+    return [recipient] if names.empty?
+
+    house = @jil.user.chore_household
+    names.flat_map { |name|
+      if ME.include?(name)
+        [recipient]
+      elsif HOUSEHOLD.include?(name)
+        house ? with_companions(house.members) : [recipient]
+      else
+        Array(house&.member_named(name))
+      end
+    }.uniq
+  end
+
+  def with_companions(users)
+    ids = ::ByteConversation.where(mode: :buddy).select(:user_id)
+    users.where(id: ids).to_a
   end
 
   def audience(item)

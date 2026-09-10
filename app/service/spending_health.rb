@@ -40,8 +40,15 @@ module SpendingHealth
     # Cents spent per perceived day, plus the budget those days are measured
     # against. Dates are ISO strings because that is what survives the trip
     # through JSON and back out to the cell.
+    #
+    # The day's caffeine rides along: it is the bottom bar of the same cell,
+    # and one cell wants one payload and one broadcast rather than a second
+    # channel that can arrive out of step with this one.
     def payload(user)
-      { budget_cents: MONTHLY_CENTS, days: buckets(user) }
+      {
+        budget_cents: MONTHLY_CENTS,
+        days:         buckets(user),
+      }.merge(::CaffeineIntake.payload(user))
     end
 
     # Grouped in Ruby rather than SQL: a perceived day is local-3am to

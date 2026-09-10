@@ -446,5 +446,118 @@ RSpec.describe Jil::Methods::Buddy do
       expect(BuddyAlert.open_for(asker, "laundry-gate")).to be_present
       expect(owner_convo.byte_messages.count).to eq(0)
     end
+
+    # Rocco: "Let's send an alert to Moss/Chelsea for the Laundry Gate as well."
+    #
+    # An open gate is open for whoever walks past it, and the person who can
+    # shut it is whoever happens to be home - so a household condition is a real
+    # shape rather than a special case for this one sensor.
+    describe "who it is for" do
+      let(:housemate) { create(:user, username: "sandboxchelsea") }
+      let(:house) { owner.reload.chore_household }
+
+      before do
+        share_chore_household!(owner, housemate)
+        housemate.byte_conversations.create!(mode: :buddy, name: "Moss")
+      end
+
+      def run(code)
+        Jil::Executor.call(owner, code, {})
+      end
+
+      it "gives everyone in the house their own bubble under the same key" do
+        ctx = run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+        JIL
+
+        expect(ctx.ctx[:vars][:opened][:value]).to be(true)
+        expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_present
+        expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_present
+      end
+
+      # The point of doing it under one key: whoever shuts the gate clears it
+      # for both of them, and nobody is left looking at a warning about
+      # something already dealt with.
+      it "clears every one of them at once" do
+        ctx = run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          closed = Buddy.resolve("laundry-gate", "Laundry gate is shut", "house")::Boolean
+        JIL
+
+        expect(ctx.ctx[:vars][:closed][:value]).to be(true)
+        expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_nil
+        expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_nil
+        expect(housemate.byte_messages.last.body).to eq("Laundry gate is shut")
+      end
+
+      # The shape this was actually built for: the two people a condition
+      # concerns, not the whole roster. A housemate with nothing to do with the
+      # dog doesn't need a warning about the dog, and the way that goes wrong is
+      # an alert somebody learns to swipe away.
+      it "takes a list, so it can be the two people it concerns" do
+        outsider = create(:user, username: "sandboxlodger")
+        share_chore_household!(owner, outsider)
+        outsider.byte_conversations.create!(mode: :buddy, name: "Glimmer")
+
+        run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "me, chelsea")::Boolean
+        JIL
+
+        expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_present
+        expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_present
+        expect(BuddyAlert.open_for(outsider, "laundry-gate")).to be_nil
+      end
+
+      it "reaches one person by name" do
+        run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "chelsea")::Boolean
+        JIL
+
+        expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_present
+        expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_nil
+      end
+
+      # Reaching the wrong person is worse than reaching nobody, so a name that
+      # matches nobody is a false rather than a fallback onto the owner.
+      it "reaches nobody at all for a name nobody goes by" do
+        ctx = run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "nigel")::Boolean
+        JIL
+
+        expect(ctx.ctx[:vars][:opened][:value]).to be(false)
+        expect(BuddyAlert.count).to eq(0)
+      end
+
+      # Nobody gets a companion spun up for them by a notification - same gate
+      # `audience` uses for the travel alerts.
+      it "skips a housemate with no companion thread" do
+        outsider = create(:user, username: "sandboxlodger")
+        share_chore_household!(owner, outsider)
+
+        run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+        JIL
+
+        expect(BuddyAlert.open_for(outsider, "laundry-gate")).to be_nil
+      end
+
+      it "still means just them when the argument is left off" do
+        run(<<~'JIL')
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open")::Boolean
+        JIL
+
+        expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_present
+        expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_nil
+      end
+
+      it "validates with the audience given" do
+        code = <<~'JIL'
+          a1 = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          a2 = Buddy.resolve("laundry-gate", "Laundry gate is shut", "house")::Boolean
+        JIL
+
+        expect { Jil::Validator.validate!(code) }.not_to raise_error
+      end
+    end
   end
 end

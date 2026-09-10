@@ -115,8 +115,22 @@ class JobNote < ApplicationRecord
     scope.where.not(follow_up_at: nil).order(:follow_up_at)
   }
 
-  # Owed now: due today, or already missed.
-  scope :due_now, ->(at=Time.current) { where(follow_up_at: ..at.end_of_day) }
+  # Owed now: due today in THEIR day, or already missed.
+  #
+  # The zone is the whole of it. There is no `config.time_zone`, so a bare
+  # `Time.current.end_of_day` is midnight UTC - which is 6pm in MDT, and from
+  # 6pm onward a follow-up due later the same evening read as "still ahead" and
+  # dropped off the count somebody is working from. Nothing announced that; the
+  # number just went down for the rest of the evening and came back overnight.
+  # Same trap BuddyMemory#waiting_label documents, in the same direction.
+  #
+  # The user is a required argument rather than a defaulted zone because the
+  # only way to get this right is to know whose day is being asked about, and a
+  # default would quietly be UTC again.
+  scope :due_now, ->(user, at=Time.current) {
+    zone = ::ActiveSupport::TimeZone[user&.timezone.to_s] || ::Time.zone
+    where(follow_up_at: ..at.in_time_zone(zone).end_of_day)
+  }
 
   after_commit :sync_follow_up, on: [:create, :update]
   after_commit :retire_follow_up, on: :destroy

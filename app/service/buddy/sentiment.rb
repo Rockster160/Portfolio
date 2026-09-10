@@ -93,8 +93,9 @@ module Buddy
         weight - how much is at stake for them. 0 is trivial admin (a list, a
                  timer, a light on). 1 is something that genuinely matters -
                  work, health, money, family, a loss.
-        strain - how much friction is in the room. 0 is none. 1 is fed up,
-                 snapping, repeating themselves because they weren't heard.
+        strain - friction in THIS exchange, between them and the companion.
+                 0 is none. 1 is fed up with you, snapping, repeating
+                 themselves because they weren't heard.
 
       Read the whole stretch but weight the END of it: the last thing they said
       is the moment being described. Judge the PERSON's state, not the
@@ -104,6 +105,12 @@ module Buddy
       warmth and weight are independent. A calm sentence about a hard thing is
       low warmth and high weight. An excited sentence about nothing much is high
       warmth and low weight.
+
+      Pressure from their own life is NOT strain. Someone stressed, ill,
+      worried, grieving or worn down, who is talking to you perfectly civilly,
+      is LOW strain and HIGH weight with low warmth. strain only rises when the
+      friction is with YOU - being fed up with the answers, having to say it
+      twice, snapping at the companion itself.
 
       Answer with only this object, no prose, no code fence:
       {"warmth":0.0,"play":0.0,"weight":0.0,"strain":0.0}
@@ -158,7 +165,7 @@ module Buddy
       return if reading.nil?
 
       reading = blended(reading, landed) if acted
-      skip    = skipped(acted, landed)
+      skip    = skipped(reading, acted, landed)
       face    = ::Buddy::Faces.nearest(conversation.buddy_theme, reading, skip: skip)
       return if face.nil? || !worth_changing?(conversation, face, reading, skip)
 
@@ -239,8 +246,25 @@ module Buddy
     # and it is a rule about the pet rather than a reading of the room, so it
     # belongs here and not in the numbers. Nothing is skipped on a turn that
     # only talked: a flat conversation is allowed to look flat.
-    def skipped(acted, landed)
-      acted && landed ? [::Buddy::Faces.default] : []
+    def skipped(reading, acted, landed)
+      skip = acted && landed ? [::Buddy::Faces.default] : []
+      skip + (theirs_to_carry?(reading) ? ::Buddy::Faces::IRRITATED : [])
+    end
+
+    # Low warmth and real weight: whatever is wrong, it is wrong FOR THEM and it
+    # matters. That is the one reading a cross face must never answer - see
+    # Buddy::Faces::IRRITATED.
+    #
+    # Both halves are needed and the weight half is what makes this a rule
+    # rather than a mute button. Being briefly fed up with a companion that
+    # can't find a light switch is low warmth too, and there a scowl is the
+    # honest face; what separates them is whether anything is actually at stake.
+    # The bar sits just above where a stalled errand lands so that case keeps
+    # its face.
+    CARRYING = { warmth: 0.35, weight: 0.45 }.freeze
+
+    def theirs_to_carry?(reading)
+      reading[:warmth].to_f <= CARRYING[:warmth] && reading[:weight].to_f >= CARRYING[:weight]
     end
 
     def blended(reading, landed)

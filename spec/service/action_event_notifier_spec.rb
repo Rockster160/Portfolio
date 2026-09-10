@@ -80,6 +80,26 @@ RSpec.describe ActionEventNotifier do
     end
   end
 
+  # The Caffeine bar is the bottom of the Spending cell, off the same cache, so
+  # a drink has to redraw it the moment it is logged.
+  describe "republishing the spending cell for caffeine" do
+    it "rebuilds the cell when an event carrying milligrams lands" do
+      expect(::SpendingHealth).to receive(:refresh!)
+
+      ev = ActionEvent.create!(
+        user: user, name: "Drink", timestamp: Time.current, data: { "Caffeine" => 200 },
+      )
+      described_class.notify(user, ev, :added)
+    end
+
+    it "leaves an event without milligrams alone" do
+      expect(::SpendingHealth).not_to receive(:refresh!)
+
+      ev = ActionEvent.create!(user: user, name: "Drink", timestamp: Time.current)
+      described_class.notify(user, ev, :added)
+    end
+  end
+
   describe "Buddy event tools" do
     let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
     let(:msg) { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }

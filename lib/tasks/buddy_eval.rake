@@ -206,6 +206,14 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[add_list_item schedule_reminder request_feature],
   },
   remove_list_item:       { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
+  # The failure this one is watching for is not another tool - it is the model
+  # answering out of `lists` in prose, which reads fine and hands them something
+  # they still have to go and act on somewhere else.
+  show_list:              {
+    say:   "what's on my grocery list?",
+    needs: :oat_milk_listed,
+    avoid: %i[add_list_item remove_list_item schedule_list_items],
+  },
   edit_list_item:         { say: "flag the oat milk on the groceries as important", needs: :oat_milk_listed },
 
   # --- time: the four that get confused with each other ---

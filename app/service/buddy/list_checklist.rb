@@ -30,6 +30,15 @@ module Buddy
     # leaving the list is the consequence of that, not the thing they're doing.
     HINT = { "tap" => "Tap when it's done", "done" => "Done - untick to put it back" }.freeze
 
+    # A card is something somebody reads at a glance and taps. Thirty boxes is
+    # not that - it is a page, and it pushes whatever was said above it out of
+    # sight to show rows nobody is going to tick tonight.
+    #
+    # Capped rather than scrolled, and the cap SAYS SO. A truncated card that
+    # stays quiet about it reads as the whole list, which is worse than a long
+    # card: the person ticks off four things believing they are done.
+    MAX_ROWS = 10
+
     # Returns how many boxes went up. 0 means nothing was posted at all: an
     # empty list has nothing to check off, and a bubble saying so is a
     # notification about nothing.
@@ -38,7 +47,9 @@ module Buddy
       items = list.list_items.to_a
       return 0 if conversation.nil? || items.empty?
 
-      buttons = items.each_with_index.map { |item, i| button_for(list, item, i + 1) }
+      shown   = items.first(MAX_ROWS)
+      body    = [text, overflow_note(items.length)].compact_blank.join("\n\n")
+      buttons = shown.each_with_index.map { |item, i| button_for(list, item, i + 1) }
       action  = ByteAction.new(
         user:              user,
         byte_conversation: conversation,
@@ -59,12 +70,21 @@ module Buddy
       message = ::Buddy::CompanionDelivery.deliver_plain(
         user:         user,
         conversation: conversation,
-        text:         text,
+        text:         body,
         metadata:     metadata_for(action, buttons),
+        # The note about what didn't fit belongs on the card, not in a push
+        # notification, where it is a line of small print about nothing.
         push_title:   text,
       )
       action.update!(byte_message_id: message.id)
-      items.size
+      shown.size
+    end
+
+    def overflow_note(total)
+      hidden = total - MAX_ROWS
+      return nil if hidden < 1
+
+      "_+#{hidden} more on the list._"
     end
 
     # Shaped like ProposalBuilder#build_button, minus the label proc: "Remove

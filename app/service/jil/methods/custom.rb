@@ -19,6 +19,8 @@ class Jil::Methods::Custom < Jil::Methods::Base
       end
     when :refresh_travel_time
       return refresh_travel_time(evalargs(line.args).first)
+    when :travel
+      return ::TravelResolver.record(evalargs(line.args).first, user: @jil.user) if @jil.user.me?
     when :ups_package
       return ups_package(evalargs(line.args).first) if @jil.user.me?
     when :wayfair_package

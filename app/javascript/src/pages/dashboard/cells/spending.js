@@ -13,6 +13,10 @@ import { dash_colors, clamp } from "../vars"
 // here against the browser's own clock. That is what makes a dashboard left
 // open overnight roll onto the new day at 3am without anything being pushed to
 // it — nothing writes to the bank at 3am to say the day changed.
+//
+// The Caffeine bar at the bottom is the odd one out: it counts UP, filling as
+// the day's milligrams land rather than draining as they go. Its buckets
+// arrive in the same payload for the same reason — one cell, one broadcast.
 (function() {
   let cell = undefined
 
@@ -26,11 +30,13 @@ import { dash_colors, clamp } from "../vars"
 
   // A blank line, not "": the renderer measures line height off content.
   const blank = " ".repeat(cell_width)
-  // Where the three spending bars sit in the rendered lines — `hover` reports a
-  // line index, and only these three answer to it.
-  const month_row = 3
-  const week_row = 5
-  const today_row = 7
+  // Where the bars sit in the rendered lines — `hover` reports a line index,
+  // and only these four answer to it. Nine lines is what the cell can show, so
+  // the spacing is one blank between bars and none to spare.
+  const month_row = 2
+  const week_row = 4
+  const today_row = 6
+  const caffeine_row = 8
 
   const month_names = [
     "January", "February", "March", "April", "May", "June",
@@ -75,10 +81,13 @@ import { dash_colors, clamp } from "../vars"
     return sign + "$" + Math.abs(dollars).toLocaleString("en-US")
   }
 
-  // Green while there is room, yellow on the last quarter, red once it is
-  // gone. An overspent bar is drawn full rather than empty: an empty red
-  // sliver reads as "nearly out" when it means the opposite.
-  function spendColor(fraction) {
+  // Takes what is LEFT, not what has gone: green while there is room, yellow
+  // on the last quarter, red once it is gone. Both directions of bar read off
+  // this, so a full red bar means the same thing whichever way it filled.
+  //
+  // An overspent bar is drawn full rather than empty: an empty red sliver
+  // reads as "nearly out" when it means the opposite.
+  function roomColor(fraction) {
     if (fraction <= 0) { return dash_colors.red }
     if (fraction <= 0.25) { return dash_colors.yellow }
     return dash_colors.green
@@ -112,7 +121,28 @@ import { dash_colors, clamp } from "../vars"
         : "  " + label
     )
 
-    return bar(text, fraction <= 0 ? 1 : fraction, spendColor(fraction))
+    return bar(text, fraction <= 0 ? 1 : fraction, roomColor(fraction))
+  }
+
+  // Counts UP: it fills as the day's caffeine lands, where the three bars
+  // above it drain as the money goes. The color still reads off what is LEFT
+  // under the limit, so it turns yellow on the last quarter and red once the
+  // limit is passed, same as they do.
+  //
+  // Drawn blank until the server has said what the limit is — a bar measured
+  // against nothing is a shape that means nothing.
+  function caffeineBar(row, mg, limit_mg) {
+    if (!(limit_mg > 0)) { return blank }
+
+    const remaining = (limit_mg - mg) / limit_mg
+    const amount = mg + "mg / " + limit_mg + "mg  "
+    const text = (
+      cell.data.hover === row
+        ? Text.justify(bar_width, "  Caffeine", amount)
+        : "  Caffeine"
+    )
+
+    return bar(text, clamp(mg / limit_mg, 0, 1), roomColor(remaining))
   }
 
   // Which line the pointer is on. Redrawing replaces the line divs under the
@@ -155,13 +185,17 @@ import { dash_colors, clamp } from "../vars"
         dash_colors.lblue,
       ),
       blank,
-      blank,
       spendBar(month_row, "Month", spentOver(month_start, day_of_month), month_budget),
       blank,
       spendBar(week_row, "Week", spentOver(week_start, 7), week_budget),
       blank,
       spendBar(today_row, "Today", spentOver(today, 1), day_budget),
       blank,
+      caffeineBar(
+        caffeine_row,
+        (cell.data.caffeine || {})[cell.data.day_key] || 0,
+        cell.data.caffeine_limit_mg || 0,
+      ),
     ]
 
     cell.lines(lines.slice(0, cell_height))
@@ -170,7 +204,10 @@ import { dash_colors, clamp } from "../vars"
   cell = Cell.register({
     title: "Spending",
     text: "Loading...",
-    data: { budget_cents: 0, days: {}, day_key: undefined, hover: -1 },
+    data: {
+      budget_cents: 0, days: {}, caffeine_limit_mg: 0, caffeine: {},
+      day_key: undefined, hover: -1,
+    },
     // Only the clock moves between pushes, and it only matters at the 3am
     // rollover and the turn of the month. Redrawing is free; a resync runs a
     // Jil task, so it waits for the day to actually have changed.
@@ -205,6 +242,8 @@ import { dash_colors, clamp } from "../vars"
           cell.flash()
           cell.data.budget_cents = data.budget_cents
           cell.data.days = data.days || {}
+          cell.data.caffeine_limit_mg = data.caffeine_limit_mg || 0
+          cell.data.caffeine = data.caffeine || {}
           render()
         },
       })

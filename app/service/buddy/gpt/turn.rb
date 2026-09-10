@@ -2274,6 +2274,7 @@ module Buddy
           conversation: @conversation,
           at_glance:    at_glance,
           recap:        recap,
+          briefing:     today_briefing?,
         )
       end
 

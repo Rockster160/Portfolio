@@ -247,7 +247,26 @@ RSpec.describe JobNote do
         today  = job.notes.create!(body: "This evening", follow_up_at: 1.hour.from_now)
         job.notes.create!(body: "Friday", follow_up_at: 3.days.from_now)
 
-        expect(described_class.follow_ups_for(user).due_now.map(&:id)).to eq([missed.id, today.id])
+        due = described_class.follow_ups_for(user).due_now(user)
+
+        expect(due.map(&:id)).to eq([missed.id, today.id])
+      end
+
+      # It read `Time.current.end_of_day` with no zone, which is 6pm in MDT - so
+      # every evening from 6pm a follow-up due later that same evening read as
+      # "still ahead" and dropped off the count, silently, until midnight UTC
+      # put it back. The suite only caught it by running in the 46 minutes
+      # between 11pm UTC and the day rolling over.
+      # `User#timezone` is a method with America/Denver behind it, not a column,
+      # so there is nothing to set up - every user is already in the zone this
+      # was getting wrong.
+      it "reads the end of THEIR day, not of UTC" do
+        at = Time.utc(2026, 9, 10, 23, 30)  # 5:30pm MDT, and past UTC's evening
+        tonight = job.notes.create!(body: "Tonight", follow_up_at: Time.utc(2026, 9, 11, 2))
+
+        due = described_class.follow_ups_for(user).due_now(user, at)
+
+        expect(due.map(&:id)).to include(tonight.id)
       end
     end
   end

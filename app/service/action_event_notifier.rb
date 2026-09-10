@@ -39,6 +39,12 @@ class ActionEventNotifier
       republish_spending
     end
 
+    # A drink moves the Caffeine bar at the bottom of that same cell, off that
+    # same cache, so it takes the same republish. Keyed on the milligrams being
+    # on the event rather than on what the event is called — the bar sums
+    # whatever says how much caffeine it carried.
+    republish_spending if ::CaffeineIntake.logged?(event)
+
     # An alert is the only real-time signal there is — SimpleFIN is polled and
     # can be a day behind. If this charge would tip the dashboard's floored
     # balance into a different thousand, go and fetch the new figure rather

@@ -62,12 +62,17 @@ RSpec.describe SpendingHealth do
     it "stores the budget with the buckets and asks the cell to redraw" do
       travel_to(zone.local(2026, 9, 13, 10)) do
         spend(zone.local(2026, 9, 13, 9), 500)
+        user.action_events.create!(
+          name: "Drink", timestamp: zone.local(2026, 9, 13, 9), data: { "Caffeine" => 200 },
+        )
 
         described_class.refresh!(user: user)
 
         expect(user.caches.get(:spending)).to(eq({
-          budget_cents: described_class::MONTHLY_CENTS,
-          days:         { "2026-09-13": 500 },
+          budget_cents:      described_class::MONTHLY_CENTS,
+          days:              { "2026-09-13": 500 },
+          caffeine_limit_mg: ::CaffeineIntake::DAILY_LIMIT_MG,
+          caffeine:          { "2026-09-13": 200 },
         }))
         expect(::Jil).to have_received(:trigger).with(
           user, :monitor, { channel: :spending, refresh: true }, auth: :trigger

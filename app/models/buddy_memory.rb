@@ -145,6 +145,44 @@ class BuddyMemory < ApplicationRecord
   # and never repeated, which is precisely the kind most worth having kept.
   scope :always_loaded, -> { unexpired.kind_preference.order(Arel.sql("priority DESC, created_at DESC")) }
 
+  # How heavy something has to be before it rides in EVERY prompt instead of
+  # waiting to be searched for.
+  #
+  # `always_loaded` carries preferences for a reason that reads as narrow and
+  # isn't: the moment a thing applies is the moment nobody thinks to look it
+  # up. That is just as true of what is going on in someone's life. A person
+  # who says they feel awful is usually talking about the thing already on
+  # file, and a companion that has to decide to go and look will not - nothing
+  # in "feeling stressed today" says search. It asks what is wrong instead,
+  # which is the one answer that proves it wasn't holding anything (prod 5890).
+  #
+  # The floor is what keeps this from becoming the flat `limit(30)` the recall
+  # cap used to be. Severity is already the axis for "how much this matters to
+  # them", and above the halfway mark is a short list by construction - the
+  # things a friend would still have in mind, not every fact ever written down.
+  CARRY_FLOOR = 50
+
+  # And a ceiling, because a prompt-resident block has to stay bounded. Ordered
+  # by severity, so what falls off the end is the lightest of the heavy ones -
+  # the opposite of the old cap, which dropped by how OFTEN a thing had come up
+  # and so shed the mentioned-once fact first.
+  CARRY_LIMIT = 6
+
+  # What they are carrying right now. Excludes `preference` (already inline via
+  # `always_loaded`, and duplicating it would have the pet reading its own
+  # instructions twice) and `stash` (open loops, which have their own block and
+  # their own question). `surfaceable` is what holds back a dated one - next
+  # month's surgery is severe today and is not what is going on today.
+  scope :carried, ->(now=Time.current) {
+    surfaceable(now).unexpired(now).where(
+      kind: [:concept, :followup],
+    ).where(
+      severity: CARRY_FLOOR..,
+    ).order(
+      Arel.sql("severity DESC, created_at DESC"),
+    ).limit(CARRY_LIMIT)
+  }
+
   # Ordered for recall: severity first (what matters most), then reinforcement,
   # then recency.
   scope :for_recall, -> { unexpired.order(Arel.sql("severity DESC, priority DESC, created_at DESC")) }

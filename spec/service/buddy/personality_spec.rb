@@ -711,6 +711,125 @@ RSpec.describe Buddy::Personality do
   # Prod, Eve/Suki Aug 3: "wants everything scheduled between 10 AM and shower
   # time today" was stored durably, so a single day's shape became a standing
   # fact — and it was already wrong by that evening.
+  # Prod 5890-5894, 10 Sep. "Feeling stressed today" was answered with "want to
+  # tell me what's poking at you?" - with four live records on file about
+  # exactly what was poking at him, none of them reachable without a search that
+  # nothing in his sentence would prompt.
+  #
+  # Rocco: "A friend would just be there without needing to ask specific
+  # questions, and would remember what's going on with me."
+  describe ".for what they are carrying" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    def memory(content, **attrs)
+      BuddyMemory.create!({ user: User.me, content: content, severity: 70 }.merge(attrs))
+    end
+
+    it "carries the heavy things inline rather than behind a search" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+
+      expect(prompt).to include("the fig tree in the sandbox is dying")
+    end
+
+    # The whole point. Asking is what tells them nothing was being held.
+    it "says not to ask them what is wrong" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+
+      expect(prompt).to include("This is why you don't ask what's wrong")
+    end
+
+    # ...and the other failure mode, which is worse: proving you remembered by
+    # saying the hard thing out loud at them.
+    it "says not to name it back at them unprompted" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+
+      expect(prompt).to include("Do not name it back at them unprompted")
+    end
+
+    # "If I'm sick and then talk about not feeling great a month later, chances
+    # are it's not the same illness." Nothing sets `expires_at`, so what the
+    # model gets is the age and the instruction to weigh it.
+    it "shows how long ago it was said, and says an old one may have passed" do
+      memory("Sandbox: the fig tree in the sandbox is dying", created_at: 3.weeks.ago)
+
+      expect(prompt).to include("(3 weeks) Sandbox: the fig tree in the sandbox is dying")
+      expect(prompt).to include("Old ones may have passed")
+    end
+
+    # The line is between saying it and being shaped by it. An earlier draft
+    # forbade raising one on any turn the person didn't open, which swept up
+    # greetings - and a good morning answered with a bit more care is exactly
+    # what this is for. Rocco: "not bringing things up, just tweaking the
+    # emotional energy a bit when responding."
+    it "separates saying it from being shaped by it" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+
+      expect(prompt).to include("The line is between SAYING it and being SHAPED by it")
+      expect(prompt).to include("colour the energy you bring to an ordinary turn")
+    end
+
+    # ...and the one turn that IS about raising it.
+    it "keeps the check-in turn able to ask directly" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+
+      expect(prompt).to include("explicitly sent asking you to check in on a specific one")
+    end
+
+    # The briefing is a rundown of the day with nothing following it - it is
+    # offered no tools for the same reason. Not shipping the section is the
+    # enforcement; telling it to behave is advice.
+    it "is not shipped to the Today briefing at all" do
+      memory("Sandbox: the fig tree in the sandbox is dying")
+      briefing = described_class.for(
+        User.me, conversation: buddy_convo(User.me, "byte"), briefing: true
+      )
+
+      expect(briefing).not_to include("the fig tree in the sandbox is dying")
+      expect(briefing).not_to include("What #{User.me.first_name} is carrying")
+    end
+
+    it "leaves the light stuff to search" do
+      memory("Sandbox: a fig needs picking", severity: BuddyMemory::CARRY_FLOOR - 1)
+
+      expect(prompt).not_to include("a fig needs picking")
+    end
+
+    # A dated one is severe today and is not what is going on today.
+    it "holds back one that is not relevant yet" do
+      memory("Sandbox: the fig tree is being cut down", relevant_at: 2.weeks.from_now)
+
+      expect(prompt).not_to include("the fig tree is being cut down")
+    end
+
+    it "leaves a resolved one out" do
+      memory("Sandbox: the fig tree was dying", status: :done)
+
+      expect(prompt).not_to include("the fig tree was dying")
+    end
+
+    # Preferences are already inline via `always_loaded`; stash has its own
+    # block. Either one here would have the pet reading it twice.
+    it "does not repeat a preference or a stashed thought" do
+      memory("Sandbox: figs are to be picked by hand", kind: :preference)
+      memory("Sandbox: think about a second fig tree", kind: :stash)
+
+      expect(prompt.scan("figs are to be picked by hand").length).to eq(1)
+      expect(prompt.scan("think about a second fig tree").length).to eq(1)
+    end
+
+    it "stays bounded, heaviest first" do
+      (BuddyMemory::CARRY_LIMIT + 2).times { |i| memory("Sandbox: fig #{i}", severity: 51 + i) }
+
+      carried = (0...(BuddyMemory::CARRY_LIMIT + 2)).select { |i| prompt.include?("Sandbox: fig #{i}") }
+      expect(carried.length).to eq(BuddyMemory::CARRY_LIMIT)
+      expect(carried).not_to include(0)
+    end
+
+    it "adds nothing for someone carrying nothing" do
+      expect(prompt).not_to include("What #{User.me.first_name} is carrying")
+    end
+  end
+
   describe ".for what counts as a memory" do
     it "says today's shape is not a durable fact about the person" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))

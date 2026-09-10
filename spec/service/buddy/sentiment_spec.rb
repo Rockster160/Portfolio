@@ -70,6 +70,28 @@ RSpec.describe Buddy::Sentiment do
       expect(Buddy::Faces.nearest(:byte, { warmth: 0.25, play: 0.2, weight: 0.4, strain: 0.85 })).to eq(:annoyed)
     end
 
+    # Prod 5890-5894. Stressed read as high strain, `annoyed` was the nearest
+    # Byte face, and the pet wore a furrowed brow through its own offer to
+    # cheer him up. Two things were wrong and this is the second: the lookup
+    # MIRRORS a reading, and mirroring distress hands back a scowl aimed at the
+    # person in it.
+    it "never scowls at someone who is the one having the bad time" do
+      carrying = { warmth: 0.2, play: 0.2, weight: 0.6, strain: 0.7 }
+
+      expect(Buddy::Faces.nearest(:byte, carrying)).to eq(:annoyed)
+      skip = described_class.skipped(carrying, false, true)
+      expect(Buddy::Faces.nearest(:byte, carrying, skip: skip)).not_to be_in(Buddy::Faces::IRRITATED)
+    end
+
+    # ...and the other half, or the rule is a mute button. Being briefly fed up
+    # with a companion that can't find a light switch is low warmth too; what
+    # separates it is that nothing is at stake.
+    it "still scowls when the friction is with the pet over something small" do
+      niggle = { warmth: 0.25, play: 0.2, weight: 0.4, strain: 0.85 }
+
+      expect(described_class.skipped(niggle, false, true)).to be_empty
+    end
+
     # Each theme has a different set and must answer from its OWN — a reading
     # is theme-independent, a face never is.
     it "answers out of the theme's own faces" do
@@ -86,6 +108,16 @@ RSpec.describe Buddy::Sentiment do
         missing = Buddy::Faces.selectable(theme).reject { |face| Buddy::Faces.profile(face) }
         expect(missing).to be_empty, "#{theme} has no profile for #{missing.inspect}"
       }
+    end
+  end
+
+  describe "what the axes are asked for" do
+    # The first half of prod 5890. `strain` used to read "how much friction is
+    # in the room", which a stressed person satisfies without being in any
+    # friction with anybody - and every high-strain face is a scowl.
+    it "puts the person's own pressure on weight, not on strain" do
+      expect(described_class::PROMPT).to include("Pressure from their own life is NOT strain")
+      expect(described_class::PROMPT).to include("friction in THIS exchange")
     end
   end
 

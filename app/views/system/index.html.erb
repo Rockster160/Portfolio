@@ -11,7 +11,7 @@
   # Follow-ups owed today or already missed, on applications still in play.
   # Same idea as the requests blip: a number that means "go and do something",
   # not a count of how much is stored.
-  due_follow_ups  = JobNote.follow_ups_for(current_user).due_now.count
+  due_follow_ups  = JobNote.follow_ups_for(current_user).due_now(current_user).count
 
   links = [
     {

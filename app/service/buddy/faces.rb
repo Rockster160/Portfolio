@@ -150,6 +150,21 @@ module Buddy
       wink:          { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10 },
     }.freeze
 
+    # The faces that are the pet CROSS about something. Every one of them is a
+    # scowl or a flat stare, and every one is aimed outward.
+    #
+    # They exist for friction in the exchange - the reply that missed the point,
+    # the third go at the same request - and there they are honest. What they
+    # must never be is the pet's answer to somebody who is themselves having a
+    # bad time, because the nearest-face lookup MIRRORS the reading, and a
+    # mirror held up to distress returns a scowl pointed at the person in it.
+    # Nothing distinguishes that from being cross with them.
+    #
+    # Prod 5890-5894: a stretch about being stressed read as high strain, the
+    # nearest Byte face was `annoyed`, and the pet wore a furrowed brow through
+    # its own offer to cheer them up. See Buddy::Sentiment#skipped.
+    IRRITATED = %i[angry annoyed frustrated unamused].freeze
+
     AXES = %i[warmth play weight strain].freeze
 
     # `play` counts for less because it's the axis a reading is least sure

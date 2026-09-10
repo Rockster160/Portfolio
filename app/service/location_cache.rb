@@ -21,42 +21,63 @@ class LocationCache
   end
 
   def self.driving=(bool)
+    set_driving(bool)
+  end
+
+  # `coord` is the position the phone reported WITH this transition. It has to
+  # be passed in rather than read back out of the cache, because `set` drops a
+  # coordinate near the last one it kept — so the freshest thing in
+  # `recent_locations` can be days old while the phone is telling us exactly
+  # where it is right now. That is how a departure came to be stamped with the
+  # previous evening's arrival coordinate (action_event 52194).
+  def self.set_driving(bool, coord: nil)
     return if driving? == bool
 
     departed = bool
-    # At the transition moment `recent_locations[-1]` is the current stopped
-    # location — the arrival point for :arrived, the departure point for
-    # :departed. Same coord source for both actions.
-    here_loc = recent_locations[-1]&.dig(:loc)
+    here_loc = coord.presence&.map(&:to_f) || recent_locations[-1]&.dig(:loc)
 
     # The flag still flips, because the radio really is off — it's the TRIP
     # that didn't happen. Anything listening on travel is spared a round trip
     # to nowhere, and Task 50 keeps the arrival commands it would have drained.
-    if flap?(departed, here_loc)
-      remember_transition(departed, here_loc)
-      User.me.caches.dig_set(:driving, :is_driving, departed)
-      return
+    #
+    # A pairing that happens AT HOME is dropped too, but not here: the same
+    # automation queues a copy of this for replay when the phone is out of
+    # signal, and that copy arrives through task 185 having never touched this
+    # method. TravelResolver is where both of them meet.
+    unless flap?(departed, here_loc)
+      ::Jil.trigger(User.me, :trytravel, transition_payload(departed, here_loc))
     end
-
-    # Built into a local first. `Jil.trigger` carries keyword args of its own,
-    # and a hash literal sitting in that last position is one edit away from
-    # being read as those keywords instead of as the payload.
-    payload = {
-      coord: departed ? nil : recent_locations[-1], # If arrived, show current
-      from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
-      location: current_location_name, # Most recent stopped
-      lat: here_loc&.first,
-      lng: here_loc&.last,
-      source: :phone,
-      action: departed ? :departed : :arrived,
-      (departed ? :departed : :arrived) => current_location_name, # Add this for convenient matchers `travel:arrive:home`
-      timestamp: Time.current,
-    }
-
-    ::Jil.trigger(User.me, :trytravel, payload)
 
     remember_transition(departed, here_loc)
     User.me.caches.dig_set(:driving, :is_driving, departed)
+  end
+
+  # Whether a coordinate is at the house. Shared: TravelResolver asks it about
+  # a phone pairing, TeslaTelemetry about where the car is.
+  def self.at_home?(coord)
+    home = User.me.address_book.home&.loc
+    return false if home.blank? || coord.blank?
+
+    near?(coord.map(&:to_f), home.map(&:to_f))
+  end
+
+  # Built as a local first. `Jil.trigger` carries keyword args of its own, and
+  # a hash literal sitting in that last position is one edit away from being
+  # read as those keywords instead of as the payload.
+  def self.transition_payload(departed, here_loc)
+    name = current_location_name(here_loc)
+    {
+      coord: departed ? nil : recent_locations[-1], # If arrived, show current
+      from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
+      location: name, # Most recent stopped
+      lat: here_loc&.first,
+      lng: here_loc&.last,
+      source: :phone,
+      via: :bluetooth,
+      action: departed ? :departed : :arrived,
+      (departed ? :departed : :arrived) => name, # Add this for convenient matchers `travel:arrive:home`
+      timestamp: Time.current,
+    }
   end
 
   # Does this transition undo the one before it, in the same spot, within the

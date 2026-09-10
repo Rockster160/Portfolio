@@ -505,7 +505,7 @@ module Buddy
     # own message now, which is the most attended position in the prompt, and it
     # was moved for the cache rather than against the "impossible to miss" note
     # it used to carry.
-    def for(user, conversation:, at_glance: nil, recap: nil)
+    def for(user, conversation:, at_glance: nil, recap: nil, briefing: false)
       theme = conversation.buddy_theme.presence || Buddy::Themes::DEFAULT
       persona = load_persona(theme)
 
@@ -520,6 +520,7 @@ module Buddy
       parts << household_block(user)
       parts << routines_block(user)
       parts << memories_block(user)
+      parts << situation_block(user) unless briefing
       parts << open_loops_block(user)
       parts << conversation_notes_block(conversation)
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
@@ -670,7 +671,9 @@ module Buddy
           Each item has an `age` field ("just now", "12 min ago", "3h ago", "much earlier today") so you can weight recency naturally. Relevance decays with age: something from "just now" is a live signal you can lean on; something from "much earlier today" is fading context — a lookup answer if asked, not something to volunteer or lead a check-in with. Never treat a 3-hours-ago entry as if it just happened.
         - **`lists`** - `{ url, items }`. Each item is `{ id, name, sections? }` where `sections` is the ordered section names defined on that list (a store, an aisle, "Produce"/"Dairy"). Request it before any `add_list_item` where they said anything at all about organization, because sections are the real structure and you can't tell which ones exist without looking. Pass the exact section name as `section`; anything else about the item that isn't a place on the list - who it's for, what it's for - is `category`. Only fall back to `category` for the placement itself when no section matches. Also tells you which lists actually exist - if they name one that isn't here, say so rather than inventing it.
 
-          **To link one list, take the section's `url` and put that list's `id` where `{id}` is.** It is already a full address and you send it exactly as it comes, host and all - a link starting at `/` looks right in the message and goes nowhere, because you are on a different subdomain than the app. Every list in `items` is linkable this way, so "send me my grocery list" is answered with the link rather than with the name of a page they can go and find. The `/lists` entry in `app_pages` is the INDEX of all of them, which is the wrong answer to a question about one.
+          **To link one list, take the section's `url` and put that list's `id` where `{id}` is.** It is already a full address and you send it exactly as it comes, host and all - a link starting at `/` looks right in the message and goes nowhere, because you are on a different subdomain than the app. Every list in `items` is linkable this way, so "send me a link to my grocery list" is answered with the link rather than with the name of a page they can go and find. The `/lists` entry in `app_pages` is the INDEX of all of them, which is the wrong answer to a question about one.
+
+          **Asking to SEE a list is `show_list`, not this section and not prose.** "What's on TODO", "show me the grocery list", "read me what's left" all want the list itself, and it arrives as a box per item they can tick straight off. Reading the names out in a sentence hands them something they then have to go and act on somewhere else; a link does the same at one more remove. Reach for a link when they asked for one, or when they want the whole of a long list - and for the items themselves, draw them.
         - **`upcoming_reminders`** - `BuddyReminder` rows firing in the next 48h. Request when the person asks "did you remind me about X", "what reminders do I have" - and ALSO whenever they ask what's next or what's left today, since half of a day can live here and none of it shows up in `today_agenda`. Read it before setting a new one for something you've already discussed, too: a second copy of a reminder they already have fires twice, a minute apart, and neither of you notices until it does.
 
           A `last_fired` on a row means that reminder ALREADY WENT OFF, and `fire_at` is the next time round. Announcing a recurring one as upcoming without mentioning that is a small lie about the morning they just had - one was announced as upcoming half an hour after it rang. Say both, or say only the one that is true.
@@ -850,6 +853,62 @@ module Buddy
       TXT
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)
+      nil
+    end
+
+    # What is going on in their life right now, carried in every prompt but one.
+    #
+    # The Today briefing is the exception, and it is excluded rather than told
+    # to behave. That turn is not a conversation: it is handed its whole day by
+    # Buddy::BriefingFacts and writes one message with nothing following it,
+    # which is why it is offered no tools either - and the reason given there
+    # holds word for word here. Prose telling a model not to use a section is
+    # advice; not shipping the section is enforcement. A rundown of the day that
+    # bends around the heaviest thing in someone's life is a rundown nobody
+    # asked for, and there is no next turn in which to take it back.
+    #
+    # `memories_block` above is what they asked to be remembered. This is what
+    # they are living through, and it is here for a reason the other block
+    # cannot cover: everything outside preferences is reached by `search_memories`,
+    # and a search only happens when something in the words says to go looking.
+    # "Feeling stressed today" says nothing of the kind. So the pet asked what
+    # was wrong (prod 5890-5894) with four records on file about exactly that,
+    # and being asked is how a person finds out nothing was being held.
+    #
+    # The age on each line is doing real work rather than decorating. These
+    # facts are TIMED - an illness ends, a bad week passes - and a companion
+    # that treats a month-old one as today's explanation is wrong in the same
+    # confident way. There is no expiry to read because almost nothing sets one;
+    # what there is, is how long ago they said it, which is what a person would
+    # weigh too.
+    def situation_block(user)
+      return nil unless defined?(BuddyMemory)
+
+      rows = BuddyMemory.where(user: user).carried.to_a
+      return nil if rows.empty?
+
+      lines = rows.map { |m| "- (#{m.waiting_label}) #{m.content.to_s.strip}" }
+      <<~TXT
+        ## What #{user.first_name} is carrying
+
+        The heavy things they've told you about. You are not guessing at these - they said them to you. The bracket is how long ago.
+
+        #{lines.join("\n")}
+
+        **This is why you don't ask what's wrong.** When they say they feel awful, are worn out, or aren't up to much, the odds are it is one of these and not a new thing needing to be identified. Asking them to explain it makes them say it out loud again, and it tells them you were not holding it. Take it as read and go straight to being useful: sit with them, offer to listen, offer a distraction, take something off their plate, make the next thing easier. Let them decide whether the words get said.
+
+        **Do not name it back at them unprompted.** Bringing it up is theirs to do. Saying the hard thing out loud to prove you remembered can land as picking at a bruise, and they cannot un-hear it. Follow their lead - if they open it, you are in it with them; if they don't, you simply know.
+
+        The line is between SAYING it and being SHAPED by it, and only the first one is off limits. Answering a good morning with a bit more care than usual, asking how they slept and meaning it, keeping it gentle, leaving more room than you would on a bright day - that is what this is for, and none of it puts the thing into words. It should colour the energy you bring to an ordinary turn without ever becoming the subject of one.
+
+        The exception is a turn explicitly sent asking you to check in on a specific one. Then that one IS the subject and you ask about it directly.
+
+        **Old ones may have passed.** People get better and situations resolve. The longer ago you were told, the more it is background rather than the answer - and if it matters to what they're saying, let them tell you where it stands rather than assuming it is still true.
+
+        These are the heaviest few. Anything else they've mentioned is in `search_memories`.
+      TXT
+    rescue StandardError => e
+      Buddy::Errors.report(section: "personality.situation_block", exception: e, user: user)
       nil
     end
 

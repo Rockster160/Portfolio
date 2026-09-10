@@ -23,6 +23,48 @@ RSpec.describe Buddy::ListChecklist do
 
   before { allow(WebPushNotifications).to receive(:send_to_byte) }
 
+  # Rocco: "It should cap at probably 10 or so." A card is read at a glance and
+  # tapped; thirty boxes is a page, and it pushes whatever was said above it out
+  # of sight for rows nobody is going to tick.
+  context "with more items than fit on a card" do
+    before { 14.times { |i| create(:list_item, list: list, name: "Item #{i + 1}") } }
+
+    it "draws only the first ten" do
+      expect(post!).to eq(described_class::MAX_ROWS)
+      expect(action.buttons.length).to eq(10)
+      expect(action.buttons.pluck("label")).to include("Item 1", "Item 10")
+      expect(action.buttons.pluck("label")).not_to include("Item 11")
+    end
+
+    # A quiet truncation reads as the whole list, which is worse than a long
+    # card: four things get ticked off and the list is believed to be clear.
+    it "says how many did not fit" do
+      post!
+
+      expect(user.byte_messages.last.body).to include("+4 more on the list")
+    end
+
+    # ...and that small print is about the card, not something to buzz a phone
+    # with.
+    it "keeps it out of the push" do
+      expect(Buddy::CompanionDelivery).to receive(:deliver_plain).with(
+        hash_including(push_title: "Still to do:"),
+      ).and_call_original
+
+      post!
+    end
+  end
+
+  context "with a list that fits" do
+    before { create(:list_item, list: list, name: "Lock the back door") }
+
+    it "says nothing about what didn't fit" do
+      post!
+
+      expect(user.byte_messages.last.body).to eq("Still to do:")
+    end
+  end
+
   context "with items on the list" do
     before do
       create(:list_item, list: list, name: "Lock the back door")
