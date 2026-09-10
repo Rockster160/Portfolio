@@ -63,6 +63,18 @@ RSpec.describe "Buddy disputed-action turns" do
       expect(disputes?("I don't think you actually moved it to home. I think that's a lie.")).to be(true)
     end
 
+    # Prod 5760, and it is one word. "That's not correct" matched; "That's not
+    # THE correct company" did not, so no nudge went out, the model answered
+    # from memory, and `retract_false_claim!` told him nothing had run while
+    # the job note it had just written sat in the database. Four turns, a wrong
+    # company left settled, and "now I'm frustrated".
+    it "catches a correction with a determiner in the middle of it" do
+      expect(disputes?("That's not the correct company.")).to be(true)
+      expect(disputes?("that's not the right one")).to be(true)
+      expect(disputes?("That's not a correct reading of it")).to be(true)
+      expect(disputes?("that's not my right address")).to be(true)
+    end
+
     it "catches the plainer phrasings of the same complaint" do
       expect(disputes?("you never sent it")).to be(true)
       expect(disputes?("did you actually do that?")).to be(true)

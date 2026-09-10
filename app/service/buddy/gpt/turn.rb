@@ -1482,7 +1482,7 @@ module Buddy
         return body unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
         return body if body.blank?
 
-        figures = WeatherService.today_figures(user: @user)
+        figures = seed_figures
         return body if figures.blank?
 
         body = correct_figure(body, HIGH_FIGURE_RX, figures[:high])
@@ -1490,6 +1490,28 @@ module Buddy
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] temperature correction failed: #{e.class}: #{e.message}")
         body
+      end
+
+      # The figures the SEED carried, and a fresh forecast only when it carried
+      # none.
+      #
+      # This used to call WeatherService.today_figures here, which is a second
+      # forecast read minutes after the one Buddy::BriefingFacts built the seed
+      # from. On 9 Sep the forecast ticked a degree in between: seed 5694 said
+      # "High 81°F, low 54°F", the briefing faithfully wrote 54, and the repair
+      # "corrected" it to 55 - the one day in the week where the seed and the
+      # briefing disagree is the one day this ran.
+      #
+      # The repair is still worth having (prod 4790 printed the CURRENT
+      # temperature as the day's low), but its job is holding the draft to the
+      # seed. A seed the turn was told is the whole of it, argued with by a
+      # later read of the same service, is the repair manufacturing the
+      # disagreement it exists to catch.
+      def seed_figures
+        seeded = briefing_facts[:weather]
+        return seeded if seeded.is_a?(Hash) && (seeded[:high].present? || seeded[:low].present?)
+
+        WeatherService.today_figures(user: @user)
       end
 
       def correct_figure(body, regexp, actual)
@@ -1904,7 +1926,14 @@ module Buddy
         # A correction arrives at the FRONT of the message or not at all, so
         # anchoring keeps this off an ordinary sentence that happens to contain
         # the words. Prod 3208 opens exactly this way.
-        | \A\s*(?:no,?\s+|um,?\s+)?that(?:'|’)?s\s+not\s+(?:correct|right|true|what)\b
+        #
+        # The determiner is not optional decoration. "That's not THE correct
+        # company" (prod 5760) puts one word between `not` and `correct` and
+        # missed - so no nudge went out, the model answered from memory, said
+        # nothing had run, and `retract_false_claim!` agreed with it while the
+        # job note it had just written sat in the database. Four turns and
+        # "now I'm frustrated" for one missing alternation.
+        | \A\s*(?:no,?\s+|um,?\s+)?that(?:'|’)?s\s+not\s+(?:the\s+|an?\s+|my\s+)?(?:correct|right|true|what)\b
       /xi
 
       # Never on a self-initiated turn: nobody spoke, so there is no dispute to

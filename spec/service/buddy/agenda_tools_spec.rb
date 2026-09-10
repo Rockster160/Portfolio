@@ -300,6 +300,21 @@ RSpec.describe "Buddy agenda tools" do
         expect(early_of("Eye Follow Up")).to eq(0)
       end
 
+      # Prod 5725. "Add a Plunge with Christian today leaving at 4" - not a word
+      # about arriving - came back carrying `arrive_early: 0`, the first one the
+      # model has ever sent in nineteen calls. It was the only concrete value
+      # the argument description offered ("or 0 for 'no need to be early'"), so
+      # it got reached for, and it overrode the setting the default exists to
+      # honour. An option spelled out in a description is a suggestion to use
+      # it, which is why there is no worked example of a no-buffer case here.
+      it "shows the model no value to reach for when nobody named a buffer" do
+        arg = Buddy::Tools[:add_agenda_item][:args][:arrive_early][:description]
+
+        expect(arg).to include("NAMED one out loud")
+        expect(arg).not_to match(/\b0\b/)
+        expect(arg).not_to include("no need to be early")
+      end
+
       it "carries the default onto a series rather than zeroing it" do
         run(:add_agenda_item, { title: "Standup", at: at, repeat: "weekdays" })
 

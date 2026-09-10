@@ -28,6 +28,55 @@ RSpec.describe WeatherService do
     end
   end
 
+  # Weather Refresh is Rocco's task, so his is the only weather cache in the
+  # house - and this read only ever looked at the CALLING user's. Everyone else
+  # missed, fell through to `own`, and billed their own forecast at whatever
+  # moment their briefing happened to run.
+  #
+  # 10 Sep is what that costs: three briefings half an hour apart, Byte saying
+  # "low of 55°F" off the cache and Suki and Moss saying "low of 54°F" off
+  # fetches of their own. Three people, one house, one day, three answers.
+  describe ".shared" do
+    let(:owner) { User.me }
+    let(:housemate) { create(:user) }
+    let(:forecast) { { "daily" => [{ "temp" => { "max" => 86, "min" => 55 } }] } }
+
+    def hold!(user, at: Time.current, low: 55)
+      user.caches.dig_set(
+        :weather, { "fetched_at" => at.iso8601, "forecast" => { "daily" => [{ "temp" => { "max" => 86, "min" => low } }] } }
+      )
+    end
+
+    it "hands a housemate the household's forecast rather than nothing" do
+      hold!(owner)
+
+      expect(described_class.shared(described_class::HOME_LAT, described_class::HOME_LNG, housemate)).to eq(forecast)
+    end
+
+    it "prefers the person's own when they have one" do
+      hold!(owner, low: 55)
+      hold!(housemate, low: 41)
+
+      figures = described_class.shared(described_class::HOME_LAT, described_class::HOME_LNG, housemate)
+      expect(figures.dig("daily", 0, "temp", "min")).to eq(41)
+    end
+
+    # The point of the fallback is agreement, and a stale forecast agrees with
+    # nothing. Better a billed fetch than yesterday's weather.
+    it "refuses to fall back to a forecast that has gone stale" do
+      hold!(owner, at: (described_class::SHARED_TTL + 1.hour).ago)
+
+      expect(described_class.shared(described_class::HOME_LAT, described_class::HOME_LNG, housemate)).to be_nil
+    end
+
+    # It holds ONE location, so lending it out is only sound for that location.
+    it "says nothing about a place that isn't home" do
+      hold!(owner)
+
+      expect(described_class.shared(39.7392, -104.9903, housemate)).to be_nil
+    end
+  end
+
   # `summary` reports the temperature, the sky and the rain odds. Wind isn't in
   # any of those, so a day of hard gusts read "currently 71°F, clear" and the
   # gusts reached no chat surface at all.

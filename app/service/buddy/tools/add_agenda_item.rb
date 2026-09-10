@@ -24,9 +24,9 @@ Buddy::Tools.register(
     no location.
 
     `duration`: EVENTS only - set it to the activity's actual length, don't
-    leave the 30m default on something clearly longer. If your memory or the
-    person tells you how long a thing runs (e.g. "the plunge is ~2 hours"),
-    use that. It's ignored on a task; tasks are a single moment.
+    leave the 30m default on something clearly longer. If the household's own
+    words, your memory, or the person tells you how long a thing runs, use
+    that. It's ignored on a task; tasks are a single moment.
 
     **"Let's be 10 minutes early" is `arrive_early`, and nothing else.** It is a
     plain number of minutes on the row, it needs no drive time and no address,
@@ -35,6 +35,11 @@ Buddy::Tools.register(
     "add an Eye Follow Up tomorrow at 11:40, and let's be 10 minutes early",
     the reply added it and then asked whether 11:40 was the check-in or the
     appointment (prod 5338-5339) - there was no argument to put the 10 in.
+
+    **They said nothing about a buffer? Then the argument isn't in the call.**
+    Not a filled-in one, not a stated absence - out. A buffer nobody named is
+    an OMISSION, and only an omission reaches the setting they chose for
+    themselves; anything passed here overrides it with a guess (prod 5725).
 
     `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
     Matches the person's own + shared-editable LOCAL calendars. Omit for
@@ -76,8 +81,16 @@ Buddy::Tools.register(
     arrive_early: {
       type:        :duration_min,
       required:    false,
-      description: "Minutes to be there BEFORE it starts. Leave it out and it is #{AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES}; " \
-                   "pass a number only when they name one (\"let's be 10 minutes early\"), or 0 for \"no need to be early\"",
+      # No worked example of "they don't want a buffer" here on purpose. This
+      # read "or 0 for 'no need to be early'" until prod 5725, where "Add a
+      # Plunge with Christian today leaving at 4" - which says nothing about
+      # arriving at all - came back carrying `arrive_early: 0`. It was the only
+      # concrete value the description offered, so it got reached for, and it
+      # defeated the default the branch below exists to protect. An option
+      # spelled out in an argument description is a suggestion to use it.
+      description: "Minutes to be there BEFORE it starts. Only when they NAMED one out loud " \
+                   "(\"let's be 10 minutes early\") - otherwise omit the argument entirely and " \
+                   "they get #{AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES}, which is the setting they chose",
     },
     kind:         { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
     all_day:      { type: :string,       required: false, description: "'true' for all-day" },
@@ -219,6 +232,11 @@ Buddy::Tools.register(
     # than declining to guess at it. An explicit 0 still means 0: `present?` is
     # true of it, which is the whole reason this reads the key rather than
     # `.presence`.
+    #
+    # What changed after prod 5725 is upstream, not here: the argument no
+    # longer SHOWS the model a 0, so the branch is reached by a buffer somebody
+    # actually named rather than by the one value the description happened to
+    # spell out.
     attrs[:arrive_early_minutes] = (
       payload[:arrive_early].present? ? payload[:arrive_early].to_i : AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES
     )

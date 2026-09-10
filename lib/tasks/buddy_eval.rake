@@ -678,6 +678,23 @@ BUDDY_EDGE_PROBES = [
                 "Being early needs no drive, no address and no arithmetic",
   },
 
+  # --- and a buffer nobody named is an OMISSION, not a nought ---------------
+  {
+    case:       "prod 5725",
+    say:        "Add a Plunge with Christian today leaving at 4.",
+    tool:       :add_agenda_item,
+    once:       true,
+    never_args: { add_agenda_item: { arrive_early: /./ } },
+    note:       "not a word in it about arriving, and it came back carrying " \
+                "`arrive_early: 0` - the first one the model has ever sent in " \
+                "nineteen calls. It was the only concrete value the argument " \
+                "description offered (\"or 0 for 'no need to be early'\"), so it " \
+                "got reached for, and an explicit 0 is honoured: it overrode the " \
+                "5-minute setting the default exists to keep. A buffer nobody " \
+                "named is an OMISSION, and the description no longer shows a " \
+                "number for the other case",
+  },
+
   # --- the only date in the sentence is the one it is moving TO -------------
   {
     case:       "prod 5333",
@@ -760,6 +777,39 @@ BUDDY_EDGE_PROBES = [
                  "switch that to the Ours calendar?\" dead-ended on \"I need " \
                  "the single event version\" with nothing moved. `series` on a " \
                  "one-off is redundant, not wrong",
+  },
+
+  # --- telling you about themselves is not handing you a job -----------------
+  {
+    case:  "prod 5854",
+    say:   "My period is about 6 days away and I want to be mindful about how " \
+           "my hormones will affect me over the next little while.",
+    tool:  :remember,
+    once:  true,
+    avoid: %i[stash_idea sort_stash],
+    args:  { remember: { expires_in: /./ } },
+    note:  "it went on the idea pile as \"Track hormone swing coming up\" - " \
+           "BuddyMemory 175, kind stash, no expiry - and the reply was the " \
+           "stash receipt, \"I'm holding that for you so it doesn't get lost\". " \
+           "She was not handing over a job. A stash row is prompt-resident " \
+           "nowhere, so being mindful of it was the one thing filing it there " \
+           "made impossible, and it now accrues \"waiting: N weeks\" in her " \
+           "briefing beside the household errands",
+  },
+
+  # --- "notifications" is not "reminders" ------------------------------------
+  {
+    case:  "prod 5808",
+    say:   "It looks like you have a lot of notifications how do I go through " \
+           "those so they stop alerting me anymore",
+    tool:  :none,
+    avoid: %i[list_reminders cancel_reminder],
+    note:  "drew the reminder list, and the answer back was \"no they are not " \
+           "the reminders they are like notifications on my phone maybe it's " \
+           "every time you speak\". The word does not appear anywhere in " \
+           "list_reminders' description - the model generalized off \"see / " \
+           "list / review / manage\" - and the sentence is genuinely ambiguous, " \
+           "so the honest first move is to ask which she means",
   },
 
   # --- a thing that failed, which is not a thing that is missing ------------

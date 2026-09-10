@@ -53,8 +53,16 @@ module Buddy
       {
         term:    "The plunge",
         meaning: "Horsetail Falls Trailhead in Alpine, where they go cold plunging.",
-        aliases: ["plunge", "plunging", "the falls"],
+        aliases: ["plunge", "plunging", "the falls", "cold plunge"],
         kind:    :place,
+        # How long it takes is vocabulary too, and it lived in
+        # add_agenda_item's `duration` line as a worked example ("the plunge is
+        # ~2 hours"). The total was right and the split was missing: the drive
+        # is INSIDE the two hours, and drive time is computed onto the row
+        # AFTER it is added (AgendaItem#travel_hash), so a two-hour span plus a
+        # 49-minute leg each way is not what a two-hour outing looks like.
+        notes:   "Two hours all in, drive included - roughly 40 minutes each way, " \
+                 "so about 40 minutes at the water.",
       },
       {
         term:    "Muti",

@@ -31,10 +31,27 @@ module WeatherService
   #
   # Home only: the cache holds one location, and a named place still has to be
   # looked up.
+  #
+  # THE HOUSEHOLD'S, falling back to the person's own. It read only the calling
+  # user's cache, and Weather Refresh (task 491) is Rocco's - so nobody else in
+  # the house has ever had one to read. On 10 Sep the three morning briefings
+  # went out half an hour apart quoting three figures: Byte "low of 55°F" off
+  # the cache, Suki and Moss "low of 54°F" off their own live fetches, because
+  # `own` had billed a new forecast for each of them and the day had moved.
+  #
+  # Same numbers for everyone is the whole point of a shared read, and it is
+  # sound here for the same reason the coordinates are: this cache is the HOME
+  # point (see the `home?` guard above), which is one place for the whole
+  # household. See reference_weather_home_is_one_point for the part of that
+  # which is still open - the home itself is hardcoded.
   def shared(lat, lng, user)
     return nil unless home?(lat, lng)
 
-    cache = (user || ::User.me)&.caches&.dig(:weather)
+    [user, ::User.me].compact.uniq.filter_map { |reader| held_forecast(reader) }.first
+  end
+
+  def held_forecast(user)
+    cache = user&.caches&.dig(:weather)
     return nil if cache.blank?
 
     fetched_at = cache[:fetched_at].presence&.then { |at| ::Time.zone.parse(at.to_s) }

@@ -85,6 +85,18 @@ RSpec.describe HouseholdGlossaryTerm do
       expect(plunge.kind).to eq("place")
     end
 
+    # How long it takes was a worked example inside add_agenda_item's
+    # `duration` line - "the plunge is ~2 hours" - which is a household fact
+    # hiding in a tool description, where only that one tool can read it and
+    # nobody can correct it. The total was right and the split was missing: the
+    # drive is INSIDE the two hours, about 40 minutes each way (prod 5724).
+    it "says how long the plunge takes, drive and all" do
+      plunge = HouseholdGlossaryTerm.lookup(household, "the plunge")
+
+      expect(plunge.notes).to include("Two hours")
+      expect(plunge.notes).to include("40 minutes each way")
+    end
+
     # eve.md teaches the companion to SPEAK these; nothing taught it to
     # understand them, and bakkie is the one that actually bites — it means a
     # pickup truck to everybody outside this house.

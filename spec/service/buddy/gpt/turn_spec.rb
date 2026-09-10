@@ -2863,6 +2863,49 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(reply.body).to eq("High of 70 today.")
     end
+
+    # Prod 5694/5695, 9 Sep. The seed handed over "High 81°F, low 54°F", the
+    # briefing faithfully wrote 54, and it went out saying 55 with
+    # `repairs: ["temperatures"]` on it. The repair was reading
+    # WeatherService.today_figures a SECOND time, minutes after the read the
+    # seed was built from, and the forecast had ticked a degree in between.
+    #
+    # It is the only day that week where the seed and the briefing disagree,
+    # and it is the only one that ran this repair. A repair whose job is
+    # holding the draft to its seed cannot also be a fresh source of figures.
+    context "when the seed carried the figures itself" do
+      def seeded_briefing(text, weather:)
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent,
+          body: "#{Buddy::TodayBriefing::WEATHER_DIRECTIVE}\n#{Buddy::TodayBriefing::GREET_DIRECTIVE}",
+          metadata: {
+            "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+            "briefing" => { "weather" => weather },
+          }
+        )
+        described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
+      end
+
+      it "holds the draft to the seed, not to a fresher forecast" do
+        seeded_briefing("Morning! High of 81°F, low of 54°F.", weather: { "high" => 81, "low" => 54 })
+
+        expect(reply.body).to eq("Morning! High of 81°F, low of 54°F.")
+      end
+
+      it "still corrects a figure the seed disagrees with" do
+        seeded_briefing("Morning! High of 81°F, low of 70°F.", weather: { "high" => 81, "low" => 54 })
+
+        expect(reply.body).to eq("Morning! High of 81°F, low of 54°F.")
+      end
+
+      # Past mid-afternoon Buddy::BriefingFacts drops the figures and keeps the
+      # week, so `weather` can be present with nothing in it to correct from.
+      it "falls back to the forecast when the seed carried no figures" do
+        seeded_briefing("Morning! High of 93°F today, low of 70°F.", weather: { "week" => "rain Fri" })
+
+        expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
+      end
+    end
   end
 
   # Prod 4684, 08:00: "Nothing showing up as due on chores right now." The seed
