@@ -31,11 +31,13 @@ import { dash_colors, clamp } from "../vars"
   // A blank line, not "": the renderer measures line height off content.
   const blank = " ".repeat(cell_width)
   // Where the bars sit in the rendered lines — `hover` reports a line index,
-  // and only these four answer to it. Nine lines is what the cell can show, so
-  // the spacing is one blank between bars and none to spare.
-  const month_row = 2
+  // and only these four answer to it. The three money bars stack with nothing
+  // between them: they are one reading, and the gaps made them look like three
+  // unrelated ones. The blanks that are left separate the three GROUPS — the
+  // clock, the money, the caffeine.
+  const month_row = 3
   const week_row = 4
-  const today_row = 6
+  const today_row = 5
   const caffeine_row = 8
 
   const month_names = [
@@ -93,13 +95,30 @@ import { dash_colors, clamp } from "../vars"
     return dash_colors.green
   }
 
+  // Which ink the label can be read in ON a given fill. Off the fill's own
+  // luminance rather than a list of which palette colors are bright: the
+  // palette is someone else's and can change, the physics cannot. sRGB is
+  // gamma-encoded, so the channels are linearized before they are weighted —
+  // skipping that reads the greens as far brighter than the eye finds them,
+  // and flips bars that were perfectly legible in white.
+  function ink(hex) {
+    const channels = [1, 3, 5].map(function(at) {
+      const channel = parseInt(hex.slice(at, at + 2), 16) / 255
+      return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+    })
+    const luminance =
+      0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+    return luminance > 0.5 ? dash_colors.black : dash_colors.white
+  }
+
   function bar(text, fraction, color) {
     text = text.padEnd(bar_width, " ").slice(0, bar_width)
 
     const filled = clamp(Math.round(bar_width * fraction), 0, bar_width)
 
     return " " +
-      Text.bgColor(color, text.slice(0, filled)) +
+      Text.bgColor(color, Text.color(ink(color), text.slice(0, filled))) +
       Text.bgColor(dash_colors.darkgrey, text.slice(filled)) +
       " "
   }
@@ -185,11 +204,11 @@ import { dash_colors, clamp } from "../vars"
         dash_colors.lblue,
       ),
       blank,
+      blank,
       spendBar(month_row, "Month", spentOver(month_start, day_of_month), month_budget),
-      blank,
       spendBar(week_row, "Week", spentOver(week_start, 7), week_budget),
-      blank,
       spendBar(today_row, "Today", spentOver(today, 1), day_budget),
+      blank,
       blank,
       caffeineBar(
         caffeine_row,
