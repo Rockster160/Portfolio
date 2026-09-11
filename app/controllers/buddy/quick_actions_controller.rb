@@ -45,7 +45,25 @@ module Buddy
     # Prompts are DELIBERATELY tiny. Long structural instructions turn
     # Buddy into a checklist-reciter. Trust the tone profile + persona;
     # only supply the intent + hard constraints.
-    TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation.".freeze
+    TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'.".freeze
+
+    # Every one of these prompts was written for the owner and sent to whoever
+    # tapped the chip. Not everyone in the house has chores (Buddy::Features),
+    # and for those people the seed was pointing their companion at
+    # `chores_pending_today` - a section `get_context` doesn't offer them and
+    # won't answer - and teaching it, in the person's own voice, to talk about
+    # a part of the app they have no access to.
+    def chores?
+      ::Buddy::Features.enabled?(current_user, :chores)
+    end
+
+    # The chore sentence is the only part of the shared tone note that assumes
+    # chores, so it rides on the feature rather than on everybody.
+    def tone_reminder
+      return TONE_REMINDER unless chores?
+
+      "#{TONE_REMINDER} Don't recite chores by name unless one specific one is your recommendation."
+    end
 
     def trigger_today(conversation)
       seed = ::Buddy::TodayBriefing.seed(current_user)
@@ -71,7 +89,7 @@ module Buddy
 
         Don't echo my mood label back in a template shape ("X is a solid place to land", "ending it X") - that reads like variable interpolation.
 
-        #{TONE_REMINDER}
+        #{tone_reminder}
       PROMPT
       dispatch_trigger(conversation, body, buddy_action: "checkin", buddy_mood: mood)
     end
@@ -87,11 +105,11 @@ module Buddy
       body = <<~PROMPT.strip
         Give me one warm affirmation. 1 or 2 sentences. Something real and specific to ME, not a greeting-card line.
 
-        LOOK FIRST. Call `get_context` - `recent_events`, `chores_done_today`, `today_agenda`, `stashed_ideas` - and find one true thing out of my actual day or week to build it on. An affirmation written without looking is one that could have gone to anybody, and four in a row have been.
+        LOOK FIRST. Call `get_context` - #{affirmation_sections} - and find one true thing out of my actual day or week to build it on. An affirmation written without looking is one that could have gone to anybody, and four in a row have been.
 
         Do NOT fall back on the stock "you showed up today and that's enough" shape - if every affirmation sounds the same it stops meaning anything. Vary the angle each time: something concrete from the day, a trait of mine, effort I've been putting in, or just a genuinely kind thing said a new way. When something real from context fits, use it. If nothing honest comes to mind, keep it small and plain rather than reaching for a platitude.
 
-        #{TONE_REMINDER}
+        #{tone_reminder}
       PROMPT
       dispatch_trigger(conversation, body, buddy_action: "affirmation")
     end
@@ -102,14 +120,24 @@ module Buddy
     def suggest_focus_block(category)
       case category
       when "me"
-        "FOCUS - the person is asking about their **Me** bucket (personal). Prefer a `stashed_ideas` item with category \"me\"; else a personal / self-care chore from `chores_pending_today`. If nothing fits, keep it light and generic - don't force it."
+        "FOCUS - the person is asking about their **Me** bucket (personal). Prefer a `stashed_ideas` item with category \"me\"#{"; else a personal / self-care chore from `chores_pending_today`" if chores?}. If nothing fits, keep it light and generic - don't force it."
       when "home"
-        "FOCUS - the person is asking about their **Home** bucket (household). Prefer a `stashed_ideas` item with category \"home\"; else a household chore from `chores_pending_today`. If nothing fits, keep it light and generic."
+        "FOCUS - the person is asking about their **Home** bucket (household). Prefer a `stashed_ideas` item with category \"home\"#{"; else a household chore from `chores_pending_today`" if chores?}. If nothing fits, keep it light and generic."
       when "work"
-        "FOCUS - the person is asking about their **Work** bucket. There aren't work chores tracked here, so lean on `stashed_ideas` with category \"work\". If that's empty, just say so warmly and generically (\"nothing work-ish stashed - what's on your plate?\") - don't reach for household chores."
+        "FOCUS - the person is asking about their **Work** bucket. Lean on `stashed_ideas` with category \"work\". If that's empty, just say so warmly and generically (\"nothing work-ish stashed - what's on your plate?\")#{" - don't reach for household chores" if chores?}."
       else
         ""
       end
+    end
+
+    # Which sections there is any point sending them to. A section belonging to
+    # a feature they don't hold isn't merely empty - `get_context` won't offer
+    # it, so naming it spends a round trip on a refusal.
+    def affirmation_sections
+      sections = ["`recent_events`"]
+      sections << "`chores_done_today`" if chores?
+      sections << "`today_agenda`" << "`stashed_ideas`"
+      sections.join(", ")
     end
 
     def trigger_suggest(conversation, category=nil)
@@ -119,30 +147,56 @@ module Buddy
         #{"\n#{focus}\n" if focus.present?}
 
         WHERE TO LOOK (in this order):
+        #{suggest_where_to_look}
+
+        HOW TO ANSWER:
+        #{suggest_how_to_answer}
+        - Alternatively: pick one thing and recommend it directly. Either works. Read the vibe.
+
+        HARD NO on filler / dismissive phrasing:
+        - "Quiet Friday" / "not a bad thing" / "you can just be done" / "tomorrow's got catching up" - none of that. Meaningless if there are pending items sitting there.
+        - Never invent anything that isn't in context.
+
+        STASHED IDEAS: if I have `stashed_ideas`, one of them is often a great "what now" answer - "you'd stashed an idea about X, want to take a run at it?" Prefer one that fits the moment (a Work idea during a work lull, a Home one on a weekend). If a bucket I'm clearly asking about is empty, don't force it#{" - fall back to chores (household vs personal)" if chores?} or just answer generically.
+
+        #{suggest_empty_case}
+
+        Keep the reply short but SPECIFIC when there IS data. Call the actual things by name.
+
+        #{tone_reminder}
+      PROMPT
+      dispatch_trigger(conversation, body, buddy_action: "suggest")
+    end
+
+    def suggest_where_to_look
+      return <<~TXT.strip unless chores?
+        1. `today_agenda` - anything imminent that needs prep. Primary candidates.
+        2. `stashed_ideas` - what they've put aside to come back to.
+        3. `lists` and `pending_prompts` - anything actually waiting on them.
+      TXT
+
+      <<~TXT.strip
         1. `chores_pending_today` in context - these are the chores STILL OPEN for today (already-completed ones are in `chores_done_today` and are OFF the table). Primary candidates. Name them.
         2. `today_agenda` - anything imminent that needs prep.
         3. `chores_hot_picks` - flagged for attention today.
         4. Overdue backlog is LOW priority - don't push it unless nothing pending.
+      TXT
+    end
 
-        HOW TO ANSWER:
+    def suggest_how_to_answer
+      return "- Naming 2-4 real options is FINE and often the right shape. Short list, not a menu with descriptions." unless chores?
+
+      <<~TXT.strip
         - Naming 2-4 pending chores as options is FINE and often the right shape. Short list, not a menu with descriptions.
-        - Alternatively: pick one thing and recommend it directly. Either works. Read the vibe.
         - I frequently knock out end-of-day chores between 9 and 11 PM. That's normal, not a "should I rest?" moment. Late clock alone is NOT a reason to push rest.
         - Only lean rest if: it's genuinely past midnight, OR `chores_pending_today` is empty, OR I've been signaling drained.
+      TXT
+    end
 
-        HARD NO on filler / dismissive phrasing:
-        - "Quiet Friday" / "not a bad thing" / "you can just be done" / "tomorrow's got catching up" - none of that. Meaningless if there are pending items sitting there.
-        - Never invent chores/events not in context.
+    def suggest_empty_case
+      empty = chores? ? "IF `chores_pending_today` IS EMPTY and there's nothing on the agenda" : "IF there's nothing on the agenda and nothing stashed"
 
-        STASHED IDEAS: if I have `stashed_ideas`, one of them is often a great "what now" answer - "you'd stashed an idea about X, want to take a run at it?" Prefer one that fits the moment (a Work idea during a work lull, a Home one on a weekend). If a bucket I'm clearly asking about is empty, don't force it - fall back to chores (household vs personal) or just answer generically.
-
-        IF `chores_pending_today` IS EMPTY and there's nothing on the agenda: don't announce the emptiness. Just answer warmly like a friend when nothing specific is up - a stashed idea if one fits, else a gentle non-work suggestion (stretch, water, breath), or "not sure, what are you in the mood for?" One sentence. No scaffolding-talk.
-
-        Keep the reply short but SPECIFIC when there IS data. Name the actual chores by name.
-
-        #{TONE_REMINDER}
-      PROMPT
-      dispatch_trigger(conversation, body, buddy_action: "suggest")
+      "#{empty}: don't announce the emptiness. Just answer warmly like a friend when nothing specific is up - a stashed idea if one fits, else a gentle non-work suggestion (stretch, water, breath), or \"not sure, what are you in the mood for?\" One sentence. No scaffolding-talk."
     end
 
     # Brain-dump capture: arm a one-shot latch so the person's NEXT message in

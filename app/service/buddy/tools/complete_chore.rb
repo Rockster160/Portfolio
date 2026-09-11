@@ -12,6 +12,15 @@ Buddy::Tools.register(
     non-default time gets surfaced on the confirmation row so it's clear
     what will be recorded.
 
+    **Sending this call again after a correction keeps every argument you
+    already had.** A correction answers ONE thing you asked about — the name
+    you couldn't resolve, the person you couldn't place — and leaves the rest
+    of the request exactly as they made it. Re-send the same call with that one
+    argument replaced. Do not rebuild it from the correction alone: the time
+    they gave you is still the time, and the chore they named is still the
+    chore. Two completions landed on today instead of yesterday, under names
+    nobody has, because the second attempt was written from scratch.
+
     Pass `credit_to` — a household member's first name — when somebody ELSE
     did the work and they're telling you about it. The pebbles, the streak
     and that person's own automations all land on them, and the row records
@@ -57,6 +66,13 @@ Buddy::Tools.register(
     who_str  = resolved[:credit_user_id] ? " for #{credit.first_name}" : ""
     when_str = resolved[:completed_at] ? " (at #{Buddy::TimeParser.friendly(resolved[:completed_at], user: ctx.user)})" : ""
     { summary: "Mark #{chore.name} done#{who_str}#{when_str}?", resolved: resolved }
+  },
+  # Asked once the chore and the credited person are resolved, so it knows
+  # exactly which row would be written. See Buddy::ChoreDuplicate.
+  guard:       ->(payload, ctx) {
+    chore = Chore.find_by(id: payload[:chore_id])
+    credit = User.find_by(id: payload[:credit_user_id]) || ctx.user
+    Buddy::ChoreDuplicate.check!(chore, credit, at: payload[:completed_at]) if chore
   },
   label:       ->(payload, ctx) {
     chore = Chore.find_by(id: payload[:chore_id])

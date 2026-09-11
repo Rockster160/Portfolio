@@ -164,7 +164,14 @@ module Buddy
         # Keep what we got. Only complete items ever reach us (tool calls arrive
         # on `output_item.done`), so a truncated stream can't yield half-parsed
         # arguments — partial prose is the worst case, and that beats an error
-        # bubble. Usage is lost because the terminal event never arrived.
+        # bubble.
+        #
+        # `stream_error` survives because the clock is checked AFTER each event,
+        # terminal ones included: a response that failed or came back incomplete
+        # and only THEN blew the budget still knows why. Prod 5932 blamed a
+        # 90-second job-mail turn on "timed out" with usage sitting on the row —
+        # and usage only ever arrives on a terminal event, so something had
+        # reached the end and whatever it said was being overwritten.
         text = join_parts(parts)
         Rails.logger.warn("[Buddy::GPT::Client] stream exceeded its deadline; keeping #{text.length} chars")
         {
@@ -172,7 +179,7 @@ module Buddy
           text:        text,
           tool_calls:  tool_calls,
           response_id: response_id,
-          error:       ("timed out" if text.empty? && tool_calls.empty?),
+          error:       ((stream_error.presence || "timed out") if text.empty? && tool_calls.empty?),
           model:       model,
           usage:       usage,
         }

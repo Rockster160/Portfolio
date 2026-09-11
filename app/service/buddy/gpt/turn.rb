@@ -344,6 +344,11 @@ module Buddy
 
         confirm   = tool[:confirm].call(payload, ctx)
         resolved  = payload.merge(confirm[:resolved] || {})
+        # The one place a tool gets to refuse a call for a reason that isn't
+        # "that doesn't exist" - and the only place it should, because this is
+        # the model ASKING. The rescue below turns the raise into something it
+        # reads and answers from.
+        tool[:guard]&.call(resolved, ctx)
         signature = [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]
 
         # An answering tool runs HERE, and what comes back IS the output. It

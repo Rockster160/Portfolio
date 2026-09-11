@@ -241,6 +241,23 @@ RSpec.describe Buddy::GPT::Client do
       expect(result[:error]).to eq("timed out")
     end
 
+    # Prod 5932: a 90-second job-mail turn came back "timed out" with usage on
+    # the row — and usage only ever rides a TERMINAL event, so something had
+    # reached the end and whatever it said was being thrown away. The clock is
+    # checked after every event, terminal ones included, so a response that
+    # failed and only then blew the budget landed in this rescue.
+    it "keeps the reason the stream gave rather than blaming the clock" do
+      stub_sse(sse({
+        type:     "response.failed",
+        response: { id: "resp_1", error: { message: "model overloaded" }, usage: usage_payload },
+      }))
+
+      result = stream_with_deadline(1.hour.ago)
+
+      expect(result[:ok]).to be(false)
+      expect(result[:error]).to include("model overloaded")
+    end
+
     it "does not interfere with a stream that finishes in time" do
       stub_sse(sse(text_delta("All good"), completed))
 

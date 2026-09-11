@@ -22,6 +22,9 @@ RSpec.describe "Buddy credited chore completion" do
     tool     = Buddy::Tools[:complete_chore]
     confirm  = tool[:confirm].call(payload, Buddy::ToolContext.new(user))
     resolved = payload.merge(confirm[:resolved])
+    # Buddy::GPT::Turn asks this between resolving and running, and it is the
+    # only thing standing between a clarification and a duplicate row.
+    tool[:guard]&.call(resolved, Buddy::ToolContext.new(user))
     result   = tool[:execute].call(resolved, Buddy::ToolContext.new(user))
     [result, resolved, confirm, tool]
   end
@@ -114,5 +117,56 @@ RSpec.describe "Buddy credited chore completion" do
     found = Buddy::ToolContext.new(recorder).resolve_chore_completion("Recycling")
 
     expect(found&.id).to eq(result[:chore_completion_id])
+  end
+  # Prod 5879: "Chelsea also did the gather versions for both" was a sentence
+  # saying WHICH pair had been hers, and it got read as fresh work. Two
+  # completions already written two minutes earlier were written again.
+  # `merge_key` settles this within one card and cannot see the card above it.
+  describe "recording the same one twice" do
+    it "refuses a second completion for the same person on the same day" do
+      run({ chore: "Recycling", credit_to: "wren" })
+
+      expect { run({ chore: "Recycling", credit_to: "wren" }) }
+        .to raise_error(/already marked done for wren/)
+      expect(chore.chore_completions.count).to eq(1)
+    end
+
+    it "points at the tools that change one instead" do
+      run({ chore: "Recycling" })
+
+      expect { run({ chore: "Recycling" }) }
+        .to raise_error(/edit_chore_completion.*undo_chore_completion/m)
+    end
+
+    # Two people doing the same chore is two rows, and always was - the
+    # duplicate is per PERSON.
+    it "lets a housemate do the one the recorder already did" do
+      run({ chore: "Recycling" })
+
+      expect { run({ chore: "Recycling", credit_to: "wren" }) }.not_to raise_error
+      expect(chore.chore_completions.count).to eq(2)
+    end
+
+    # The day the row would LAND on, not today - so backdating one to a day
+    # that is already covered is caught, and backdating to a free one isn't.
+    it "reads the backdated day rather than the clock" do
+      yesterday = (Time.current - 1.day).change(hour: 14).iso8601
+
+      run({ chore: "Recycling", at: yesterday, credit_to: "wren" })
+
+      expect { run({ chore: "Recycling", at: yesterday, credit_to: "wren" }) }
+        .to raise_error(/already marked done/)
+      expect { run({ chore: "Recycling", credit_to: "wren" }) }.not_to raise_error
+    end
+
+    # A chore meant to be done several times a day says so, and for those a
+    # second row IS the point.
+    it "leaves a chore with a daily target alone" do
+      water = household.chores.create!(created_by_user: recorder, name: "Water", target_count: 4)
+      run({ chore: "Water" })
+
+      expect { run({ chore: "Water" }) }.not_to raise_error
+      expect(water.chore_completions.count).to eq(2)
+    end
   end
 end

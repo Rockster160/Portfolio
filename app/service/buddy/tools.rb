@@ -123,7 +123,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -244,6 +244,14 @@ module Buddy
         # can't run it if the model asks for it anyway. `core` is the default
         # and can't be switched off.
         feature:          feature.to_sym,
+        # Asked AFTER confirm, on the model's own turn only, and raising is how
+        # it says no. `confirm` cannot carry this: it is a RESOLVER, and it is
+        # called in three roles - resolving a live call, checking a routine step
+        # still points at something, and validating one at save. Only the first
+        # of those is a request to DO the thing, so a "you already did this"
+        # answer inside confirm refuses to save a routine for a chore the person
+        # just finished. A replayed routine is deliberate and never asks.
+        guard:            guard,
       }
       registry[name.to_sym] = spec
     end

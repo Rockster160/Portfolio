@@ -1458,19 +1458,34 @@ module Buddy
         []
       end
 
+      # `summary` is the row's LABEL, which for most tools is the bare name of
+      # the thing - a chore, a list item. Everything that makes one row differ
+      # from another identical one is in the `sublabel`: who it was credited to,
+      # what time it will be recorded at, the note attached. Without it, prod
+      # 5881 ("those were all marked as done yesterday, right?") had four rows
+      # in context reading `Take trash cans out` and no way to tell that two of
+      # them said "at yesterday 2 pm" and two did not, so it answered that it
+      # couldn't see. It could; the field had been dropped on the way in.
+      #
+      # `status` rides along for the same reason: an undone row still sits on
+      # the card, and a list of them with no state reads as work that stands.
       def active_proposals(conversation)
-        ByteAction.active
-          .where(byte_conversation_id: conversation.id, tool_name: "buddy_proposals")
-          .limit(5)
-          .flat_map { |a|
-            Array(a.buttons).map { |b|
-              {
-                id:      b["id"],
-                tool:    b["tool_name"],
-                summary: b["label"],
-              }
-            }
+        rows = ByteAction.active.where(
+          byte_conversation_id: conversation.id,
+          tool_name:            "buddy_proposals",
+        ).limit(5)
+
+        rows.flat_map { |a|
+          Array(a.buttons).map { |b|
+            {
+              id:      b["id"],
+              tool:    b["tool_name"],
+              summary: b["label"],
+              detail:  b["sublabel"].to_s.presence,
+              status:  b["status"].to_s.presence,
+            }.compact
           }
+        }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.active_proposals", exception: e, user: conversation.user)
         []

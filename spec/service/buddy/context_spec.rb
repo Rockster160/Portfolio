@@ -981,4 +981,59 @@ RSpec.describe Buddy::Context do
       expect(entry("Grocery")).not_to have_key(:url)
     end
   end
+  # Prod 5881: "those were all marked as done yesterday, right?" was answered
+  # with "I can't verify yesterday's timestamps from here", while all four rows
+  # sat in `active_proposals` with the date on them. `label` is the bare chore
+  # name; everything that told one row from another was on `sublabel`, and this
+  # section dropped it on the way in.
+  describe "what a live proposal row says about itself" do
+    let(:user) { create(:user) }
+    let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
+
+    def button(**overrides)
+      {
+        "id"        => 1,
+        "label"     => "Take trash cans out",
+        "sublabel"  => "credited to Wren\nat yesterday 2 pm",
+        "tool_name" => "complete_chore",
+        "status"    => "executed",
+      }.merge(overrides)
+    end
+
+    def rows(*buttons)
+      ByteAction.create!(
+        user:              user,
+        byte_conversation: conversation,
+        kind:              :custom,
+        tool_name:         "buddy_proposals",
+        multi_select:      true,
+        buttons:           buttons,
+        expires_at:        1.day.from_now,
+      )
+      described_class.send(:active_proposals, conversation.reload)
+    end
+
+    it "carries the detail that tells two identical-looking rows apart" do
+      expect(rows(button).first[:detail]).to eq("credited to Wren\nat yesterday 2 pm")
+    end
+
+    # A level-2 row ran the moment it was drawn, so this is a record of
+    # something that HAPPENED - and `recent_actions` reads `buddy_activity`
+    # chips, which these never leave.
+    it "says whether the row already ran" do
+      expect(rows(button).first[:status]).to eq("executed")
+    end
+
+    it "says when one has been unticked, so it doesn't read as work that stands" do
+      expect(rows(button("status" => "undone")).first[:status]).to eq("undone")
+    end
+
+    it "leaves the keys off entirely when a row has neither" do
+      row = rows(button("sublabel" => nil, "status" => nil)).first
+
+      expect(row).not_to have_key(:detail)
+      expect(row).not_to have_key(:status)
+      expect(row[:summary]).to eq("Take trash cans out")
+    end
+  end
 end

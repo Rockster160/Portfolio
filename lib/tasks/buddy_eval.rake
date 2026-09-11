@@ -498,6 +498,24 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the date is in the sentence and belongs on the note, not `now`",
   },
+  # --- the mail's own words, not a precis of them --------------------------
+  # Prod 5934, 11 Sep. Alethia's four-sentence rejection was proposed as
+  # "They said they can't provide feedback, but thanked you for your time and
+  # wished you well" — accurate, and not the record. The board was built by
+  # hand out of pasted mail; a paraphrase can't be read back later to work out
+  # what was actually said, and the seed's "pass the part that carries the
+  # substance" was what invited one.
+  {
+    case:  "prod 5934",
+    say:   "Halloway Systems wrote back: \"Hi Rocco, I'm not able to provide feedback " \
+           "per the advice from our legal team. I do appreciate the time you took to " \
+           "chat with me. Alethia\" - log that on their timeline",
+    tool:  :add_job_note,
+    avoid: %i[stash_idea log_event],
+    args:  { add_job_note: { note: /not able to provide feedback/i } },
+    needs: :halloway_application,
+    note:  "the words are the record; a summary of them is not",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",

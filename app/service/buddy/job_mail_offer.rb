@@ -202,16 +202,25 @@ module Buddy
     end
 
     # The habit the board was built by hand with: the message's own words go in
-    # the note, trimmed the way a person would trim them. Said only when there
-    # IS a message to quote, so a headline-only offer doesn't promise one.
+    # the note, VERBATIM, trimmed only the way a person would trim them. Said
+    # only when there IS a message to quote, so a headline-only offer doesn't
+    # promise one.
+    #
+    # "pass the part that carries the substance" read as permission to
+    # SUMMARISE, and prod 5934 duly proposed "They said they can't provide
+    # feedback, but thanked you for your time and wished you well" in place of
+    # what Alethia actually wrote. A summary of a rejection is not a record of
+    # one: the words are the thing being kept, and a paraphrase can't be read
+    # back later to work out what was said.
     def note_hint(body)
       return "" if body.blank?
 
-      " Their habit is to keep the message itself as the note, so pass the part " \
-        "that carries the substance as `note` - drop the signature block, the " \
-        "address and phone lines, the unsubscribe footer and any quoted thread " \
-        "underneath, and keep the sender's name where they signed off. That text " \
-        "belongs in the note only - never in what you say."
+      " Their habit is to keep the message itself as the note. Copy its words " \
+        "into `note` VERBATIM - do not summarise it, shorten it or put it in " \
+        "your own words. Trim only what a person would: the signature block, " \
+        "the address and phone lines, the unsubscribe footer and any quoted " \
+        "thread underneath, keeping the sender's name where they signed off. " \
+        "That text belongs in the note only - never in what you say."
     end
 
     # Which handle the note should be pinned to. An email we hold gets its id,

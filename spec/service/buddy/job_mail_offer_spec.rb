@@ -114,6 +114,16 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).to include("Pick the `tag` that matches")
     end
 
+    # Prod 5934 proposed a one-sentence precis of a rejection instead of the
+    # rejection. "pass the part that carries the substance" was read as an
+    # invitation to summarise, and the words are the whole point of keeping it.
+    it "asks for the words themselves, not a precis of them" do
+      body = call(body: mail_body).body
+
+      expect(body).to include("VERBATIM")
+      expect(body).to include("do not summarise it")
+    end
+
     # They read the card, not the mail. Pasting it into the spoken line puts the
     # thing they asked to be spared right back in front of them.
     it "keeps the message out of what she says" do

@@ -98,7 +98,10 @@ RSpec.describe Buddy::Supersede do
     # "the same thing forever". A second glass of water an hour later is a
     # second completion, and retiring the first would erase it.
     it "keeps a repeatable action that happens to carry the same merge_key" do
-      chore = create(:chore, created_by_user: user, name: "8oz Water")
+      # `target_count` is what says out loud that this one is meant to be done
+      # several times a day - and it is what keeps the duplicate guard off it
+      # (see Buddy::ChoreDuplicate).
+      chore = create(:chore, created_by_user: user, name: "8oz Water", target_count: 4)
       2.times { |i|
         turn!("drank water", [{ name: :complete_chore, call_id: "w#{i}", arguments: { "chore" => "water" } }])
       }
