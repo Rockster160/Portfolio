@@ -1,7 +1,11 @@
 // Feeds fixtures through the thread's markdown-lite renderer and prints the
 // results as JSON for byte_markdown_spec.rb. No DOM — renderMarkdown is a pure
 // string function.
-import { renderMarkdown, renderIconRefs } from "../../app/javascript/src/pages/byte/markdown.js";
+import {
+  renderMarkdown,
+  renderIconRefs,
+  renderInline,
+} from "../../app/javascript/src/pages/byte/markdown.js";
 
 const cases = {
   underscore_em: "Mostly the household stuff I’d want more of is the _glue_.",
@@ -64,7 +68,21 @@ const refCases = {
   ref_none: "just plain text",
 };
 
+// One line, no block constructs: the receipt under a ticked checklist row.
+const inlineCases = {
+  inline_receipt: "Logged **Rejected** on [Corporate Tools](https://ardesian.com/interviews/12) \u2713",
+  inline_bold: "Tracking **Pellworth** \u2713",
+  inline_bare_url: "see https://ardesian.com/interviews/12",
+  inline_dash_is_not_a_list: "- Done - untick to put it back",
+  inline_newline_stays_flat: "first\nsecond",
+  inline_heading_is_not_a_heading: "## not a heading",
+  inline_escapes_html: "<b>x</b> logged",
+  inline_javascript_href: "[tap me](javascript:alert(1))",
+  inline_hicon: "fed [hicon Fae] \u2713",
+};
+
 const out = {};
 for (const [name, input] of Object.entries(cases)) out[name] = renderMarkdown(input);
 for (const [name, input] of Object.entries(refCases)) out[name] = renderIconRefs(input);
+for (const [name, input] of Object.entries(inlineCases)) out[name] = renderInline(input);
 process.stdout.write(JSON.stringify(out));

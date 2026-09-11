@@ -54,6 +54,13 @@ export function renderIconRefs(raw) {
   return t.replace(/@ICONREF@(\d+)@ICONREF@/g, (_m, i) => iconSpan(refs[Number(i)]));
 }
 
+// `_blank` because Byte is an installed PWA (display: standalone). Without it a
+// tap replaces the conversation with a page that has no back button and no way
+// home.
+function anchor({ url, text }) {
+  return `<a class="byte-md-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
+}
+
 // Only these become anchors. `renderMarkdown` writes to innerHTML and the body
 // it renders is model output, so a `javascript:` or `data:` href would be a
 // script the model got to choose. Anything else falls through as plain text.
@@ -205,12 +212,44 @@ export function renderMarkdown(raw) {
     return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
   });
   t = t.replace(/@HICON@(\d+)@HICON@/g, (_m, i) => iconSpan(stash[Number(i)].ref));
-  // `_blank` because Byte is an installed PWA (display: standalone). Without
-  // it a tap replaces the conversation with a page that has no back button and
-  // no way home.
-  t = t.replace(/@LINK@(\d+)@LINK@/g, (_m, i) => {
-    const b = stash[Number(i)];
-    return `<a class="byte-md-link" href="${escapeAttr(b.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(b.text)}</a>`;
+  t = t.replace(/@LINK@(\d+)@LINK@/g, (_m, i) => anchor(stash[Number(i)]));
+  return t;
+}
+
+// One LINE of markdown, for the places that are not a message body: the receipt
+// under a ticked row, a tool-argument preview. Bold, emphasis, links and icon
+// refs — what those lines actually carry — and none of the block constructs. A
+// receipt opening with a dash must not become a bullet list inside a checkbox
+// label, and a stray newline must not become a <br> in the middle of a row.
+//
+// Receipts started carrying links when a logged job note began pointing at the
+// row it wrote. Rendered as textContent, "Logged **Rejected** on [Corporate
+// Tools](https://...)" arrived exactly as written — which is worse than no
+// link, because the address is now in front of the person, twice the length of
+// the words, and still not clickable.
+export function renderInline(raw) {
+  const stash = [];
+  let t = String(raw ?? "");
+  // Icons before links, or `[hicon Fae]` followed by a parenthetical reads as a
+  // markdown link — the same ordering renderMarkdown documents.
+  t = t.replace(ICON_REF_RX, (_m, id, tabler, name) => {
+    const ref = id ? `hicon:${id}` : (tabler || name).trim();
+    return `@HICON@${stash.push({ kind: "hicon", ref }) - 1}@HICON@`;
   });
+  const stashLink = (url, text) => {
+    if (!SAFE_URL.test(url)) return null;
+    return `@LINK@${stash.push({ kind: "link", url, text }) - 1}@LINK@`;
+  };
+  t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, text, url) => stashLink(url, text) ?? m);
+  t = t.replace(/(^|[\s(])(https?:\/\/[^\s<>"')\]]+)/g, (m, pre, url) => {
+    const trimmed = url.replace(TRAILING_PUNCT, "");
+    const token = stashLink(trimmed, trimmed);
+    return token ? `${pre}${token}${url.slice(trimmed.length)}` : m;
+  });
+  t = escapeHtml(t);
+  t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  t = t.replace(/@HICON@(\d+)@HICON@/g, (_m, i) => iconSpan(stash[Number(i)].ref));
+  t = t.replace(/@LINK@(\d+)@LINK@/g, (_m, i) => anchor(stash[Number(i)]));
   return t;
 }

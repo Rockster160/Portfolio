@@ -14,8 +14,13 @@ amazon:
   region: us-east-1
   bucket: ardesian-storage
 
+# Disk in test, and this cannot be done by config.active_storage.service: the
+# attachment pins its own service (`has_one_attached :mail_blob, service:
+# :s3_emails` on Email), so the test setting never reaches it and any spec that
+# attaches one writes into the real mail bucket. Same service NAME, local root.
 s3_emails:
-  service: S3
+  service: <%= Rails.env.test? ? "Disk" : "S3" %>
+  root: <%= Rails.root.join("tmp/storage") %>
   access_key_id: <%= ENV["PORTFOLIO_S3_ACCESS_KEY"] %>
   secret_access_key: <%= ENV["PORTFOLIO_S3_SECRET_KEY"] %>
   region: us-east-1

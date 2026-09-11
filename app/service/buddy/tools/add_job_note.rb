@@ -45,10 +45,17 @@ Buddy::Tools.register(
 
     `follow_up_at` is for when they say they'll chase it - it puts a task on
     the agenda, so only set it if they actually said they'd come back to this.
+
+    `summary` is one line saying what the note SAYS, and it exists so `note`
+    never has to be shortened. It is what the card shows them; `note` is what
+    gets kept. When you are logging a message word for word, the card reading
+    "Hi Rocco," tells them nothing - put the gist here and leave the words
+    where they belong. Nothing stores it.
   TXT
   args:        {
     company:      { type: :string, required: true, description: "Which application - fuzzy, the company name" },
     note:         { type: :string, required: false, description: "What happened, in their words. Required unless a tag says it" },
+    summary:      { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
     tag:          {
       type:        :enum,
       required:    false,
@@ -85,6 +92,7 @@ Buddy::Tools.register(
         company:      job.company,
         tag:          tag,
         note:         body,
+        summary:      payload[:summary].presence,
         email_id:     email&.id,
         occurred_at:  payload[:occurred_at],
         spoke_to:     payload[:spoke_to].presence,
@@ -92,9 +100,14 @@ Buddy::Tools.register(
       },
     }
   },
+  # `summary` wins over `note` on the CARD and nowhere else. What gets kept is
+  # the message's own words, and the first eighty characters of those are a
+  # greeting — "Hi Rocco, I'm not able to provide feedback per the advice from"
+  # is the part of a rejection that says least about it.
   label:       ->(payload, _ctx) {
     label = JobNote::TAG_LABELS[payload[:tag].to_s] || "Note"
-    { title: "💼 #{label} — #{payload[:company]}", sub: payload[:note].to_s.truncate(80).presence }
+    sub   = payload[:summary].presence || payload[:note]
+    { title: "💼 #{label} — #{payload[:company]}", sub: sub.to_s.truncate(80).presence }
   },
   # The same beat said twice in one turn is one beat.
   merge_key:   ->(payload) { "add_job_note:#{payload[:company]}:#{payload[:tag]}:#{payload[:note].to_s.downcase.strip}" },

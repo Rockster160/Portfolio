@@ -265,6 +265,52 @@ RSpec.describe "Byte thread markdown" do
     end
   end
 
+  # The receipt under a ticked row went in as textContent, so when a logged job
+  # note started linking the row it wrote, the person got "Logged **Rejected**
+  # on [Corporate Tools](https://ardesian.com/interviews/12)" on screen exactly
+  # as written. Worse than no link: the address is in front of them, twice the
+  # length of the words, and still not clickable.
+  describe "the one-line pass" do
+    it "renders bold and a link in a receipt" do
+      html = rendered["inline_receipt"]
+
+      expect(html).to include("<strong>Rejected</strong>")
+      expect(html).to include(%(href="https://ardesian.com/interviews/12"))
+      expect(html).to include(">Corporate Tools</a>")
+    end
+
+    it "links a bare url" do
+      expect(rendered["inline_bare_url"]).to include(%(href="https://ardesian.com/interviews/12"))
+    end
+
+    # A checkbox label is one line. Every block construct is left as the
+    # punctuation it was written with.
+    it "leaves a leading dash as a dash" do
+      expect(rendered["inline_dash_is_not_a_list"]).not_to include("<ul")
+    end
+
+    it "leaves a newline flat" do
+      expect(rendered["inline_newline_stays_flat"]).not_to include("<br>")
+    end
+
+    it "leaves hashes alone" do
+      expect(rendered["inline_heading_is_not_a_heading"]).to eq("## not a heading")
+    end
+
+    it "escapes html it did not render" do
+      expect(rendered["inline_escapes_html"]).to eq("&lt;b&gt;x&lt;/b&gt; logged")
+    end
+
+    # Same rule as the body: a receipt is assembled from model output.
+    it "refuses an unsafe scheme" do
+      expect(rendered["inline_javascript_href"]).not_to include("<a")
+    end
+
+    it "still substitutes an icon" do
+      expect(rendered["inline_hicon"]).to include(%(data-icon-ref="Fae"))
+    end
+  end
+
   describe "what already worked" do
     it "still does asterisk italics" do
       expect(rendered["asterisk_em_still_works"]).to include("<em>very</em>")

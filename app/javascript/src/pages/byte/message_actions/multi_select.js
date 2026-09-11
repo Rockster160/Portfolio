@@ -14,6 +14,8 @@
 // stays checked and locked; the server broadcast re-renders it with its
 // ✓ status. A row the user never checks simply expires with the action.
 
+import { renderInline } from "../markdown.js";
+
 // Small inline fetch — the shared apiCall lives inside conversations.js
 // as a private helper and there's no v1 reason to lift it. Duplication
 // is small and self-contained.
@@ -239,6 +241,23 @@ export function rowNote(btn, { status, undoable } = {}) {
   return null;
 }
 
+// The row IS a <label>, so a click anywhere inside it toggles the checkbox —
+// and on an executed, undoable row that toggle UNDOES what the row did. Opening
+// the link a receipt offers would therefore delete the note it is pointing at.
+//
+// Cancelling the click is what stops the label activating (that forwarding is
+// the click's default action, not propagation), so the navigation has to be
+// made to happen by hand.
+function linkifyWithoutTicking(el) {
+  el.querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(a.href, "_blank", "noopener");
+    });
+  });
+}
+
 // Render (or re-render) into a container element. Container is expected
 // to sit inside the message bubble, cleared each call so per-row state
 // updates don't leave stale nodes.
@@ -368,7 +387,12 @@ export function renderMultiSelect(container, message) {
     if (hint) {
       const note = document.createElement("span");
       note.className = "byte-msg-action-hint";
-      note.textContent = hint;
+      // A receipt links the thing it wrote ("Logged Rejected on Corporate
+      // Tools"), so this line is markdown rather than plain words. renderInline
+      // escapes everything it doesn't render, so a removal hint — which is only
+      // ever words — comes through unchanged.
+      note.innerHTML = renderInline(hint);
+      linkifyWithoutTicking(note);
       body.appendChild(note);
     }
     row.appendChild(body);

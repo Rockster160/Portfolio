@@ -59,14 +59,39 @@ if [[ -n "$queue_file" && -s "$queue_file" ]]; then
     _deployQueueAddScript "$script"
   done
   _deployQueueWrite "$queue_file" # saved before the editor, so nothing is lost
+  taken_messages=("${_DEPLOY_QUEUE_MESSAGES[@]}")
+  taken_scripts=("${_DEPLOY_QUEUE_SCRIPTS[@]}")
 
   _deployQueueEdit deploy_queue.editing \
     "messages first, script paths last — empty this file to cancel the deploy" \
-    "${_DEPLOY_QUEUE_MESSAGES[@]}" "${_DEPLOY_QUEUE_SCRIPTS[@]}" || exit $?
+    "${taken_messages[@]}" "${taken_scripts[@]}" || exit $?
 
-  _deployQueueWrite "$queue_file" # any reordering washes out here
   message=("${_DEPLOY_QUEUE_MESSAGES[@]}")
   scripts=("${_DEPLOY_QUEUE_SCRIPTS[@]}")
+
+  # Checked before the queue is cleared. The edit goes back as it stands so the
+  # bad path can be fixed, rather than reverting to what was queued before the
+  # editor opened and losing every other change made in it.
+  for script in "${scripts[@]}"; do
+    if [[ ! -f "$script" ]]; then
+      print -P "%F{red}deploy: queued script '$script' no longer exists.%f"
+      _deployQueueLoad "$queue_file"
+      _deployQueueCull exact "${taken_messages[@]}" "${taken_scripts[@]}"
+      _deployQueuePrepend "${message[@]}" "${scripts[@]}"
+      _deployQueueWrite "$queue_file"
+      exit 1
+    fi
+  done
+
+  # Handed to this run and struck off the file right here, before any of the
+  # slow part: the build alone runs for minutes, and `eq` has to stay usable
+  # throughout for the next round of changes. Only what this run took is
+  # removed — anything queued while the editor was open is left alone.
+  _deployQueueLoad "$queue_file"
+  _deployQueueCull exact "${taken_messages[@]}" "${taken_scripts[@]}" \
+    "${message[@]}" "${scripts[@]}"
+  _deployQueueWrite "$queue_file"
+
   commit=() # one line per enqueue, joined into the one commit message
   (( ${#message[@]} > 0 )) && commit=("${(j:, :)message}")
 
@@ -74,25 +99,27 @@ if [[ -n "$queue_file" && -s "$queue_file" ]]; then
     print -P "%F{yellow}⚠ Queue emptied — nothing to deploy.%f"
     exit 0
   fi
-
-  for script in "${scripts[@]}"; do
-    if [[ ! -f "$script" ]]; then
-      print -P "%F{red}deploy: queued script '$script' no longer exists.%f"
-      exit 1
-    fi
-  done
 fi
 
-# Everything still owed stays in the queue, so an abandoned or half-finished
-# deploy resumes from where it stopped instead of losing the list.
+# What this run has not got through yet. It goes back on the queue if the run
+# stops short — merged in above whatever `eq` has added in the meantime, never
+# written over the top of it, which is how a mid-deploy `eq` used to vanish.
 owed_messages=("${message[@]}")
 owed_scripts=("${scripts[@]}")
-saveQueue() {
-  (( queued )) || return
-  _DEPLOY_QUEUE_MESSAGES=("${owed_messages[@]}")
-  _DEPLOY_QUEUE_SCRIPTS=("${owed_scripts[@]}")
+owed_back=0
+owe() {
+  (( queued && ! owed_back )) || return
+  (( ${#owed_messages[@]} + ${#owed_scripts[@]} > 0 )) || return
+  owed_back=1
+
+  _deployQueueLoad "$queue_file"
+  _deployQueuePrepend "${owed_messages[@]}" "${owed_scripts[@]}"
   _deployQueueWrite "$queue_file"
+
+  print -P "%F{yellow}⚠ Back on the queue: ${#owed_messages[@]} message(s), ${#owed_scripts[@]} script(s).%f"
 }
+trap owe EXIT
+trap 'exit 130' INT
 
 head_before=$(git rev-parse HEAD)
 
@@ -104,7 +131,6 @@ fi
 # `committable` objects, and they would be owed still.
 if [[ "$(git rev-parse HEAD)" != "$head_before" ]]; then
   owed_messages=()
-  saveQueue
 fi
 
 push_output=$(gpo 2>&1)
@@ -126,6 +152,5 @@ else
   for script in "${scripts[@]}"; do
     prodExec "$script" || exit $?
     owed_scripts=("${owed_scripts[@]:1}") # dropped as each lands, in order
-    saveQueue
   done
 fi

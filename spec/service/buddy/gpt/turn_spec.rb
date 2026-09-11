@@ -265,6 +265,91 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 5932, 11 Sep. A job-mail seed blew the 90-second budget and the
+    # person got "Something went wrong on my end" over a hidden message — no
+    # way to tell what had gone missing, and the mail itself was already marked
+    # read on the Mac, so nothing ever came back to it.
+    describe "a seed nobody asked for" do
+      # Queued, not run: Sidekiq is inline here, and a retry that actually runs
+      # posts a second reply that every assertion below would then read instead.
+      before { allow(BuddyDeliverWorker).to receive(:perform_in) }
+
+      def seed(rounds, label: "the email from ApartmentIQ", extra: {})
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Job mail arrived.",
+          metadata: {
+            "kind" => "buddy_trigger", "hidden" => true,
+            "source" => "job_mail_watcher", "seed_label" => label,
+          }.merge(extra),
+        )
+        described_class.run!(message, client: FakeBuddyClient.new(rounds))
+        message
+      end
+
+      it "names what it was reading, and how long it waited" do
+        seed([{ error: "timed out" }])
+
+        expect(reply.body).to include("timed out after 90s")
+        expect(reply.body).to include("the email from ApartmentIQ")
+      end
+
+      it "names it for a failure that was not the clock" do
+        seed([{ error: "upstream exploded" }])
+
+        expect(reply.body).to include("reading the email from ApartmentIQ")
+      end
+
+      # The mail is not theirs to ask for again — they never saw it arrive.
+      it "queues one more go at the same seed" do
+        expect(BuddyDeliverWorker).to receive(:perform_in).once
+
+        original = seed([{ error: "timed out" }])
+        copy = convo.byte_messages.where(direction: :outbound).order(:id).last
+
+        expect(copy.id).not_to eq(original.id)
+        expect(copy.body).to eq(original.body)
+        expect(copy.metadata["retry_of"]).to eq(original.id)
+        expect(reply.body).to include("another go in a minute")
+      end
+
+      # Once. A copy that fails again is a provider that is down, not a stall.
+      it "does not have a third go" do
+        expect(BuddyDeliverWorker).not_to receive(:perform_in)
+
+        seed([{ error: "timed out" }], extra: { "retry_of" => 1 })
+
+        expect(reply.body).to include("Want me to try that one again?")
+      end
+
+      # The guard start_over? carries, for the same reason: re-running a seed
+      # whose first attempt already logged something logs it twice.
+      it "leaves it alone when something already ran" do
+        allow(Buddy::Tools).to receive(:acts?).and_return(true)
+        expect(BuddyDeliverWorker).not_to receive(:perform_in)
+
+        seed([
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          { error: "timed out" },
+        ])
+      end
+
+      # The next sixty seconds are no likelier to work, and Buddy::Outage is
+      # already the thing tracking it.
+      it "does not retry into an outage" do
+        expect(BuddyDeliverWorker).not_to receive(:perform_in)
+
+        seed([{ error: "insufficient_quota", error_kind: :outage }])
+      end
+
+      # A turn the person started needs none of this: they can see what they
+      # sent, and the words for asking again are their own.
+      it "leaves a typed message with the plain apology" do
+        run([{ error: "timed out" }])
+
+        expect(reply.body).to eq(described_class::FAILURE_BODY)
+      end
+    end
+
     # Only a check-in is asked for silence. A briefing that comes back with
     # nothing has failed, and has to say so.
     it "still reports an empty turn nobody asked to be silent" do

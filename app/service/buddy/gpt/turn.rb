@@ -590,6 +590,11 @@ module Buddy
       # there for whoever looks into it - it just stops being the reply.
       FAILURE_BODY = "Something went wrong on my end and that one didn't make it out. Give me another go?".freeze
 
+      # How long to wait before having another go at a seed nobody asked for.
+      # Long enough that a provider having a bad half-minute has stopped having
+      # it, short enough that the person is still looking at the thread.
+      SEED_RETRY_DELAY = 60
+
       def self.run!(message, client: nil)
         new(message, client: client).run!
       end
@@ -2606,9 +2611,10 @@ module Buddy
       def finalize_failure(error, kind: nil)
         Rails.logger.warn("[Buddy::GPT::Turn] turn failed: #{error}")
         Buddy::Outage.down!(detail: error.to_s) if kind == :outage
+        retrying = retry_seed!(kind)
         @reply.update!(
           state:    :failed,
-          body:     FAILURE_BODY,
+          body:     failure_body(error, retrying: retrying),
           metadata: (@reply.metadata || {}).merge(
             "kind"  => "buddy",
             "error" => error.to_s.truncate(600),
@@ -2618,6 +2624,75 @@ module Buddy
         stamp_usage_rollup
         settle_expression
         broadcast(@reply.reload)
+      end
+
+      # What the failure SAYS.
+      #
+      # "Something went wrong on my end" is enough for a turn the person
+      # started: they can see what they sent. A self-initiated one is the
+      # opposite — the seed is hidden, so the apology arrives attached to
+      # nothing at all. Prod 5932 sat above an ApartmentIQ confirmation the
+      # person had no way of knowing existed, and the only way to find out what
+      # had gone missing was to read the message row in the database.
+      #
+      # Naming it is also what makes asking for it again SAYABLE. "Have another
+      # go at the ApartmentIQ one" needs the words to have been on screen.
+      def failure_body(error, retrying: false)
+        label = seed_label
+        return FAILURE_BODY if label.blank?
+
+        opener = (
+          if error.to_s == "timed out"
+            "Looks like I timed out after #{TURN_BUDGET_SECONDS}s trying to read #{label}."
+          else
+            "Something went wrong on my end reading #{label}."
+          end
+        )
+        "#{opener} #{retrying ? "I'll have another go in a minute." : "Want me to try that one again?"}"
+      end
+
+      # One line saying what a self-initiated turn is ABOUT, set by whoever
+      # built the seed. Nothing else can work it out: the seed's body is
+      # instructions, and the first sentence of an instruction is not a subject.
+      def seed_label
+        meta = @inbound.metadata
+        return nil unless meta.is_a?(Hash)
+
+        meta["seed_label"].presence
+      end
+
+      # Another go at a seed nobody asked for, once.
+      #
+      # Prod 5932 ended there: the mail was gone. The watcher had already marked
+      # it read, the seed was spent, and nothing came back to it — the beat that
+      # confirmation carried was simply never logged. A turn the PERSON started
+      # needs none of this; they can see what they sent and say it again.
+      #
+      # Guarded exactly the way start_over? is, and for the same reason: a turn
+      # that already ran something would run it twice. Once only — the copy
+      # carries `retry_of`, and a copy never makes another. Never during an
+      # outage, where the next sixty seconds are no more likely to work than the
+      # last, and Buddy::Outage is already the thing tracking it.
+      def retry_seed!(kind)
+        return false if seed_label.blank?
+        return false if kind == :outage
+        return false if @acted || @asked_choice
+        return false if @inbound.metadata["retry_of"].present?
+
+        copy = @conversation.byte_messages.create!(
+          user:      @user,
+          direction: :outbound,
+          state:     :pending,
+          body:      @inbound.body,
+          metadata:  @inbound.metadata.merge("retry_of" => @inbound.id),
+        )
+        BuddyDeliverWorker.perform_in(SEED_RETRY_DELAY, copy.id)
+        true
+      rescue StandardError => e
+        # The apology has to go out either way. A retry that couldn't be queued
+        # is worth knowing about and is not worth losing the message over.
+        Rails.logger.warn("[Buddy::GPT::Turn] could not queue a retry: #{e.class}: #{e.message}")
+        false
       end
 
       # Phrases that assert the thing ALREADY HAPPENED. Kept deliberately narrow

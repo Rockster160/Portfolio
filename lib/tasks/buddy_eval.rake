@@ -512,9 +512,9 @@ BUDDY_EDGE_PROBES = [
            "chat with me. Alethia\" - log that on their timeline",
     tool:  :add_job_note,
     avoid: %i[stash_idea log_event],
-    args:  { add_job_note: { note: /not able to provide feedback/i } },
+    args:  { add_job_note: { note: /not able to provide feedback/i, summary: /./ } },
     needs: :halloway_application,
-    note:  "the words are the record; a summary of them is not",
+    note:  "the words are the record; the summary belongs on the card, not in it",
   },
   # --- a thing put off, which is the one that keeps coming back -------------
   {

@@ -604,24 +604,51 @@ class WebhooksController < ApplicationController
     return head :not_found if user.blank?
     return head :bad_request if params[:card].to_s.strip.empty?
 
+    verdict     = {
+      kind:     params[:kind].presence,
+      company:  params[:company].presence,
+      headline: params[:headline].presence,
+    }
+    occurred_at = Time.zone.parse(params[:occurred_at].to_s)
+    outgoing    = params[:outgoing].present?
+
+    # The mail itself, kept the way domain mail is. Nil when the watcher sent no
+    # raw copy or it was too big to be worth one, and everything below carries
+    # on without it — an email row makes the beat referable, it is not what
+    # makes it worth announcing.
+    email = Emails::StoreRaw.call(
+      user:        user,
+      raw:         decoded_mail(params[:raw_b64]),
+      direction:   outgoing ? :outbound : :inbound,
+      occurred_at: occurred_at,
+      triage:      verdict.compact.merge(job: true, at: Time.current.iso8601),
+    )
+
     message = Buddy::JobMailOffer.call(
       user:        user,
-      verdict:     {
-        kind:     params[:kind].presence,
-        company:  params[:company].presence,
-        headline: params[:headline].presence,
-      },
+      verdict:     verdict,
       card:        params[:card].to_s,
       metadata:    byte_metadata(params).symbolize_keys.reverse_merge(
         kind: :system, self_initiated: true, source: :job_mail_watcher,
       ),
-      occurred_at: Time.zone.parse(params[:occurred_at].to_s),
+      occurred_at: occurred_at,
+      email:       email,
       body:        params[:body].presence,
-      outgoing:    params[:outgoing].present?,
+      outgoing:    outgoing,
     )
     return render json: { error: :"no buddy conversation" }, status: :not_found if message.nil?
 
     render json: message.as_wire, status: :created
+  end
+
+  # The raw message, base64 on the wire. A mail body is only ASCII by
+  # convention — an 8-bit Latin-1 part is legal and turns up — and JSON.generate
+  # raises outright on a string that isn't valid UTF-8, which would lose the
+  # whole announcement over an accented name in a signature.
+  def decoded_mail(encoded)
+    return nil if encoded.blank?
+
+    Base64.decode64(encoded.to_s).presence
   end
 
   # POST /webhooks/byte/photo — a picture from the house, straight into the

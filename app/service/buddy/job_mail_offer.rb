@@ -50,7 +50,7 @@ module Buddy
           user:         user,
           conversation: conversation,
           seed:         new_company_seed(verdict, metadata, occurred_at, email, body, outgoing),
-          metadata:     prompt_metadata(metadata, nil),
+          metadata:     prompt_metadata(metadata, nil, verdict, outgoing),
         )
       end
 
@@ -58,7 +58,7 @@ module Buddy
         user:         user,
         conversation: conversation,
         seed:         seed(verdict, job, metadata, occurred_at, email, body, outgoing),
-        metadata:     prompt_metadata(metadata, job),
+        metadata:     prompt_metadata(metadata, job, verdict, outgoing),
       )
     end
 
@@ -69,10 +69,27 @@ module Buddy
     # Carrying the card's `kind: :system` here instead printed the entire seed
     # — framing, instructions and the full text of the email — into the
     # conversation as a message addressed to them.
-    def prompt_metadata(metadata, job)
+    def prompt_metadata(metadata, job, verdict, outgoing)
       base = metadata.slice(:source, :sender, :subject, :email_id, :job_kind)
       base = base.merge(job_application_id: job.id) if job
-      base.merge(kind: :buddy_trigger, hidden: true)
+      base.merge(
+        kind:       :buddy_trigger,
+        hidden:     true,
+        seed_label: seed_label(job, verdict, outgoing),
+      )
+    end
+
+    # What this seed is ABOUT, in the words a failure would have to use. The
+    # seed itself is instructions and its first sentence is not a subject, so
+    # a turn that dies has nothing to name unless it is told — see
+    # Buddy::GPT::Turn#failure_body, and prod 5932, where "Something went wrong
+    # on my end" was the entire record of a mail that had already been marked
+    # read on the Mac.
+    def seed_label(job, verdict, outgoing)
+      company = job&.company.presence || verdict[:company].presence
+      return "that email" if company.blank?
+
+      outgoing ? "your email to #{company}" : "the email from #{company}"
     end
 
     def deliver_card(user, conversation, card, metadata, verdict)
@@ -113,6 +130,7 @@ module Buddy
          else
            "#{outgoing ? "Sent" : "Arrived"}: #{occurred_at&.iso8601}"
          end),
+        ("Mail: #{mail_url(email)}" if email.present?),
         message_block(body),
         "",
         instruction(job, occurred_at, email, body, outgoing),
@@ -135,7 +153,9 @@ module Buddy
             "Say in ONE short sentence what this mail actually says - they have not read it, " \
               "so lead with the substance rather than that mail arrived. Do not quote it back " \
               "at them and do not paste any of it into your reply; the card carries it. " \
-              "You can link the row as #{job_url(job)} if it reads naturally."
+              "You can link the row as #{job_url(job)} if it reads naturally" \
+              "#{", or the mail itself as #{mail_url(email)}" if email.present?}. One link, " \
+              "not both."
           end
         ),
         "",
@@ -192,6 +212,13 @@ module Buddy
       "#{AppPages.url_for("/interviews")}/#{job.id}"
     end
 
+    # The mail itself. Only exists once Emails::StoreRaw has kept a copy — mail
+    # announced without one has nothing to link to and the seed says nothing
+    # about it, rather than promising a page that would 404.
+    def mail_url(email)
+      Rails.application.routes.url_helpers.email_url(id: email.id)
+    end
+
     # The mail itself, fenced so the end of it is unambiguous. Absent when it
     # couldn't be read off disk, which is a soft failure upstream — the offer is
     # still worth making from the headline alone.
@@ -220,6 +247,8 @@ module Buddy
         "your own words. Trim only what a person would: the signature block, " \
         "the address and phone lines, the unsubscribe footer and any quoted " \
         "thread underneath, keeping the sender's name where they signed off. " \
+        "Put the gist in `summary` instead - one line, and the only short " \
+        "version there is room for, because that is what the card shows. " \
         "That text belongs in the note only - never in what you say."
     end
 

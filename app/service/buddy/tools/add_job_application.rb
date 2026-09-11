@@ -18,11 +18,16 @@ Buddy::Tools.register(
 
     `source` is where the application came from if it's known (LinkedIn, their
     careers page, a recruiter's name); `url` is the listing.
+
+    `summary` is one line saying what the note SAYS, and it exists so `note`
+    never has to be shortened. It is what the card shows them; `note` is what
+    gets kept. Nothing stores it.
   TXT
   args:        {
     company:      { type: :string, required: true, description: "The company, as they'd say it" },
     role:         { type: :string, required: false, description: "The job title, if the mail names one" },
     note:         { type: :string, required: false, description: "What happened, in the mail's own words" },
+    summary:      { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
     tag:          {
       type:        :enum,
       required:    false,
@@ -56,6 +61,7 @@ Buddy::Tools.register(
         company:      company,
         role:         payload[:role].presence,
         note:         body,
+        summary:      payload[:summary].presence,
         tag:          tag,
         occurred_at:  payload[:occurred_at],
         source:       payload[:source].presence,
@@ -65,9 +71,12 @@ Buddy::Tools.register(
       },
     }
   },
+  # `summary` wins over `note` on the CARD and nowhere else — see add_job_note
+  # for why the first seventy characters of a kept message are the wrong seventy.
   label:       ->(payload, _ctx) {
     label = JobNote::TAG_LABELS[payload[:tag].to_s] || "Note"
-    sub   = [payload[:role].presence, "#{label} — #{payload[:note].to_s.truncate(70)}"].compact
+    gist  = payload[:summary].presence || payload[:note]
+    sub   = [payload[:role].presence, "#{label} — #{gist.to_s.truncate(70)}"].compact
     { title: "💼 Track #{payload[:company]}", sub: sub.join("\n").presence }
   },
   merge_key:   ->(payload) { "add_job_application:#{payload[:company].to_s.downcase.strip}" },
