@@ -18,13 +18,21 @@ amazon:
 # attachment pins its own service (`has_one_attached :mail_blob, service:
 # :s3_emails` on Email), so the test setting never reaches it and any spec that
 # attaches one writes into the real mail bucket. Same service NAME, local root.
+#
+# The whole block swaps, rather than one `service:` line: every key here is
+# handed to the adapter, and S3Service passes what it does not recognize to
+# Aws::S3::Resource, which rejects a stray `root:` outright.
 s3_emails:
-  service: <%= Rails.env.test? ? "Disk" : "S3" %>
+<% if Rails.env.test? %>
+  service: Disk
   root: <%= Rails.root.join("tmp/storage") %>
+<% else %>
+  service: S3
   access_key_id: <%= ENV["PORTFOLIO_S3_ACCESS_KEY"] %>
   secret_access_key: <%= ENV["PORTFOLIO_S3_SECRET_KEY"] %>
   region: us-east-1
   bucket: ardesian-emails
+<% end %>
 
 # Remember not to checkin your GCS keyfile to a repository
 # google:
