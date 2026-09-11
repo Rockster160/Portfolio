@@ -80,10 +80,10 @@ class AgendaItem < ApplicationRecord
   after_update_commit :propagate_start_at_to_derived_triggers, if: :saved_change_to_start_at?
   after_update_commit :purge_pending_derived_triggers, if: :saved_change_to_status?
   after_commit :fire_jil_trigger, on: [:create, :update]
-  after_commit :fire_jil_destroy_trigger, on: :destroy
+  after_commit :fire_jil_destroy_trigger, on: :destroy, unless: :agenda_gone?
   after_commit :broadcast_agenda_refresh, on: [:create, :update]
-  after_commit :broadcast_agenda_removal, on: :destroy
-  after_commit :enqueue_travel_chain_sync, on: [:create, :update, :destroy]
+  after_commit :broadcast_agenda_removal, on: :destroy, unless: :agenda_gone?
+  after_commit :enqueue_travel_chain_sync, on: [:create, :update, :destroy], unless: :agenda_gone?
 
   # State filters are mandatory `is:<state>` markers (or the `kind:` filter for
   # type). Bare words like "upcoming" or "today" are treated as ordinary text
@@ -151,7 +151,7 @@ class AgendaItem < ApplicationRecord
     end
   }
 
-  delegate :user, to: :agenda
+  delegate :user, to: :agenda, allow_nil: true
 
   # Resolves an id (digits) or a phantom_id ("p-{schedule_id}-{date}")
   # against an Agenda. Returns a persisted AgendaItem, an unsaved phantom,
@@ -855,6 +855,21 @@ class AgendaItem < ApplicationRecord
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
     agenda.broadcast!(destroyed_item_ids: [display_id])
+  end
+
+  # The calendar itself is going away, not this one item. Every destroy-time
+  # callback here speaks ABOUT an agenda — it broadcasts a removal against it,
+  # fires a Jil trigger at everyone who can see it, resolves the owner through
+  # it — and by the time after_commit runs there is no agenda left to speak
+  # about. Items swept in through the schedule cascade (agenda → schedules →
+  # items) don't even carry a loaded one, so `agenda` is a fresh lookup that
+  # finds nothing: removing a Google calendar with recurring events raised
+  # DelegationError from `user` and 500'd AFTER the delete had committed.
+  #
+  # Whoever is watching gets the agenda-level removal; a per-item notification
+  # naming a calendar that no longer exists adds nothing.
+  def agenda_gone?
+    agenda.nil? || agenda.destroyed?
   end
 
   def clear_notified_at_on_future_reschedule

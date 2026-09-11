@@ -66,8 +66,19 @@ class GoogleCalendar::WatchManager
         channel_id:  @agenda.watch_channel_id,
         resource_id: @agenda.watch_resource_id,
       )
-    rescue ::RestClient::NotFound, ::RestClient::Gone
-      # Channel was already cleaned up server-side — nothing to undo.
+    rescue ::RestClient::Exception, ::SocketError, ::OpenSSL::SSL::SSLError, ::Errno::ECONNREFUSED => e
+      # Best-effort, always. Google may have cleaned the channel up already
+      # (404/410), may reject the call on a token it has since invalidated,
+      # or may simply be unreachable — and NONE of that is a reason to leave
+      # the user stuck with a calendar they asked to remove. The disconnect
+      # path calls this immediately before destroying the agenda, so a raise
+      # here took the whole request down with a 500 and the calendar stayed
+      # connected. An abandoned channel expires on Google's side within the
+      # 7-day TTL anyway, and its deliveries stop resolving to an agenda the
+      # moment the row is gone.
+      ::Rails.logger.warn(
+        "[GoogleCalendar::WatchManager] stop failed agenda=#{@agenda.id} #{e.class}: #{e.message}",
+      )
     end
 
     @agenda.update!(watch_channel_id: nil, watch_resource_id: nil, watch_expires_at: nil)

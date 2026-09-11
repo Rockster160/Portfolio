@@ -71,6 +71,27 @@ RSpec.describe GoogleCalendar::WatchManager do
       expect { described_class.stop!(agenda) }.not_to raise_error
       expect(agenda.reload.watch_channel_id).to be_nil
     end
+
+    # The disconnect path destroys the agenda the instant this returns, so
+    # anything raised here is a 500 on a button whose whole job is removal —
+    # and the calendar stays connected.
+    it "swallows a token Google no longer accepts" do
+      agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
+      allow(api).to receive(:stop_watch).and_raise(
+        RestClient::Unauthorized.new(instance_double(RestClient::Response, code: 401, body: "")),
+      )
+
+      expect { described_class.stop!(agenda) }.not_to raise_error
+      expect(agenda.reload.watch_channel_id).to be_nil
+    end
+
+    it "swallows Google being unreachable" do
+      agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
+      allow(api).to receive(:stop_watch).and_raise(SocketError.new("getaddrinfo"))
+
+      expect { described_class.stop!(agenda) }.not_to raise_error
+      expect(agenda.reload.watch_resource_id).to be_nil
+    end
   end
 
   describe ".token_for" do

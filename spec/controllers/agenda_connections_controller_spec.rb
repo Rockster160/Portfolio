@@ -155,6 +155,25 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       delete :disconnect_calendar, params: { google_account_id: account.id, external_id: "nope" }
       expect(flash[:alert]).to match(/not connected/i)
     end
+
+    # Items reached through the schedule cascade (agenda → schedules → items)
+    # carry no loaded agenda, so their destroy-time after_commit callbacks ran
+    # against a calendar that had just been deleted out from under them. The
+    # DELETE had already committed by then, so removing any Google calendar
+    # with a recurring event took the delete AND returned a 500.
+    it "removes a calendar carrying recurring events" do
+      allow(::GoogleCalendar::WatchManager).to receive(:stop!)
+      schedule = gcal_agenda.agenda_schedules.create!(
+        name: "Standup", kind: :event, start_time: "09:00", duration_minutes: 30,
+        starts_on: Date.current, recurrence: { freq: :daily }
+      )
+      expect(schedule.agenda_items.count).to be_positive
+
+      delete :disconnect_calendar, params: { google_account_id: account.id, external_id: "primary" }
+      expect(response).to have_http_status(:redirect)
+      expect(Agenda.exists?(gcal_agenda.id)).to be(false)
+      expect(AgendaItem.where(agenda_id: gcal_agenda.id)).to be_empty
+    end
   end
 
   describe "DELETE #destroy" do
