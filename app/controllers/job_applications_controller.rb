@@ -20,6 +20,13 @@ class JobApplicationsController < ApplicationController
     # whatever relation the filter left and orders it by how well each row
     # answers the query.
     @jobs = surface_interviews(JobSearch.call(filtered_jobs.includes(:notes), @query))
+    # JSON is the local job hunter asking what is already on the board so it
+    # never applies to the same company twice. It wants the rows and nothing
+    # else, so it returns before the page's own furniture is loaded.
+    if request.format.json?
+      return render json: { jobs: @jobs.map { |job| serialize(job) } }
+    end
+
     @counts = current_user.job_applications.group(:status).count
     @live_jobs = current_user.job_applications.live.order(:company).to_a
     @new_job = current_user.job_applications.new
@@ -43,16 +50,17 @@ class JobApplicationsController < ApplicationController
   # is optional here, and required nowhere else.
   def create
     @job = pick_or_build_job
-    return redirect_to(interviews_path) if @job.nil?
+    return render_create_error(@create_error) if @job.nil?
 
     note = build_note(@job)
-    if note && !note.save
-      flash[:alert] = note.errors.full_messages.to_sentence
-      return redirect_to interview_path(@job)
-    end
+    return render_create_error(note.errors.full_messages.to_sentence, @job) if note && !note.save
 
     @job.touch_activity!
-    redirect_to interview_path(@job), notice: created_notice(@job)
+
+    respond_to do |format|
+      format.html { redirect_to interview_path(@job), notice: created_notice(@job) }
+      format.json { render json: serialize(@job).merge(note_id: note&.id), status: :created }
+    end
   end
 
   def update
@@ -80,6 +88,19 @@ class JobApplicationsController < ApplicationController
 
   private
 
+  # One failure path for both shapes. A redirect carrying a flash is unreadable
+  # to anything that is not a browser, and the local job hunter needs to know
+  # WHY a row it tried to write was refused.
+  def render_create_error(message, job=nil)
+    respond_to do |format|
+      format.html {
+        flash[:alert] = message if message.present?
+        redirect_to(job ? interview_path(job) : interviews_path)
+      }
+      format.json { render json: { errors: Array(message) }, status: :unprocessable_entity }
+    end
+  end
+
   def load_job
     @job = current_user.job_applications.find(params[:id])
   end
@@ -93,7 +114,7 @@ class JobApplicationsController < ApplicationController
     job = current_user.job_applications.new(job_params)
     return job if job.save
 
-    flash[:alert] = job.errors.full_messages.to_sentence
+    @create_error = job.errors.full_messages.to_sentence
     nil
   end
 

@@ -23,6 +23,42 @@ RSpec.describe "BuddyMemory lifecycle" do
       end
     end
 
+    # What ships inline in every prompt. Prod 6047, 12 Sep: a briefing told
+    # Chelsea her period was "about 6 days away" - reading back, word for word, a
+    # preference written on the 10th and dated to the 16th. It was four days
+    # early, and stated as though she had just said it.
+    describe "what always_loaded will and will not carry" do
+      def preference(content, **attrs)
+        BuddyMemory.create!(user: user, content: content, kind: :preference, **attrs)
+      end
+
+      it "holds back one whose day has not come" do
+        early = preference("Period about 6 days away", relevant_at: 4.days.from_now)
+
+        expect(BuddyMemory.where(user: user).always_loaded).not_to include(early)
+      end
+
+      it "carries it once that day arrives" do
+        due = preference("Period about 6 days away", relevant_at: 1.hour.ago)
+
+        expect(BuddyMemory.where(user: user).always_loaded).to include(due)
+      end
+
+      it "carries an undated one, which is most of them" do
+        plain = preference("Takes coffee 8oz oat milk")
+
+        expect(BuddyMemory.where(user: user).always_loaded).to include(plain)
+      end
+
+      # Undoing a `remember` sets exactly this status (Buddy::Reverter), so
+      # without the filter taking a memory back left it in every prompt.
+      it "drops one that was taken back" do
+        dropped = preference("Wrong thing", status: :dropped)
+
+        expect(BuddyMemory.where(user: user).always_loaded).not_to include(dropped)
+      end
+    end
+
     describe ".apply_remember" do
       it "stores a durable fact with no expiry" do
         expect { remember("Rocco takes coffee 8oz oat milk") }.to change { BuddyMemory.count }.by(1)

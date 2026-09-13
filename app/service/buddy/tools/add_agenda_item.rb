@@ -28,6 +28,16 @@ Buddy::Tools.register(
     words, your memory, or the person tells you how long a thing runs, use
     that. It's ignored on a task; tasks are a single moment.
 
+    **"LEAVE at 4:15" IS NOT "start at 4:15" - use `leave_at`, never `at`.**
+    For anywhere with a drive, the time they say out loud is often the one they
+    walk out of the door, and `at` is always the START. Pass `leave_at` and the
+    start is worked back from the drive and how early they like to arrive -
+    which is arithmetic this app HAS and you do not. Never both in one call, and
+    never do the sum yourself: "Add Insidious movie today, leaving at 4:15"
+    became a 4:40 start with `arrive_early: 25` and no drive time anywhere in
+    the 25 (prod 5935-5939). A leave time needs somewhere to drive TO, so pass
+    `location` with it.
+
     **"Let's be 10 minutes early" is `arrive_early`, and nothing else.** It is a
     plain number of minutes on the row, it needs no drive time and no address,
     and it is what the app's own "min early" setting holds. Leave it out and
@@ -75,7 +85,8 @@ Buddy::Tools.register(
   feature:     :agenda,
   args:        {
     title:        { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
-    at:           { type: :iso_time,     required: true,  description: "Local wall-clock start, 24-hour. Something happening today goes AHEAD of the current time" },
+    at:           { type: :iso_time,     required: false, description: "Local wall-clock START, 24-hour. Something happening today goes AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
+    leave_at:     { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local, INSTEAD of `at`. The start is worked back from the drive and the arrive-early minutes. Needs a `location` to drive to. Never pass this together with `at`" },
     duration:     { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
     location:     { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
     arrive_early: {
@@ -110,7 +121,41 @@ Buddy::Tools.register(
     raise "no writable calendar available" if agenda.nil? && payload[:calendar].blank?
     raise "no calendar named #{payload[:calendar].inspect} that you can write to" if agenda.nil?
 
-    start = ctx.resolve_calendar_time(payload[:at])
+    # A leave time is not a start time, and the difference is the drive. The
+    # same rule edit_agenda_item has carried since prod 5145, for the same
+    # reason: asked for a leave time the model does the sum in its head, and
+    # when it did it here the whole drive went missing (prod 5935-5939).
+    #
+    # Worked back HERE rather than at execute so the row on the card shows the
+    # start that actually lands, and so a drive it can't measure is a raise the
+    # model can still answer - once the item exists there is nothing to do about
+    # it but leave the leave time silently treated as a start.
+    leave_from = nil
+    if payload[:leave_at].present?
+      raise "give me either a start (`at`) or a leave time (`leave_at`), not both" if payload[:at].present?
+      raise "a leave time needs somewhere to drive to - pass `location` too, or ask whether they meant the start" if payload[:location].blank?
+
+      leave_from = ctx.resolve_calendar_time(payload[:leave_at])
+      raise "couldn't work out when they want to leave" if leave_from.nil?
+
+      drive = ctx.drive_seconds_to(payload[:location], at: leave_from).to_i
+      if drive.zero?
+        raise "I can't work out the drive to #{payload[:location]}, so I can't work back from a " \
+              "leave time - ask whether they meant the start instead. If what they actually asked " \
+              "for was to be there a few minutes EARLY, that's `arrive_early` and it needs no drive"
+      end
+
+      # The buffer they NAMED, or the setting they chose for themselves - never
+      # a number invented to make the clock land. See `arrive_early` below.
+      early = (payload[:arrive_early].presence || AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES).to_i
+      start = leave_from + drive + (early * 60)
+    else
+      # `at` stopped being a required argument the moment `leave_at` could stand
+      # in for it, so the schema no longer catches a call carrying neither.
+      raise "give me a start (`at`) or a leave time (`leave_at`)" if payload[:at].blank?
+
+      start = ctx.resolve_calendar_time(payload[:at])
+    end
     raise "couldn't work out when to start" if start.nil?
 
     local      = start.in_time_zone(ctx.user.timezone)
@@ -137,7 +182,7 @@ Buddy::Tools.register(
     # collide, and refusing a real add is worse than a duplicate. This runs in
     # Turn.resolve_call BEFORE the model writes a word, so being told is enough —
     # it can switch to edit_agenda_item in the same turn.
-    twin = ctx.existing_agenda_twin(payload[:title], payload[:at])
+    twin = ctx.existing_agenda_twin(payload[:title], start)
     warning = twin && "#{twin.name} already exists at that time on #{twin.agenda.name}. " \
                       "If they meant to MOVE it, use edit_agenda_item with calendar instead - " \
                       "adding leaves the original in place and makes a second one."
@@ -153,6 +198,7 @@ Buddy::Tools.register(
         agenda_name:    agenda.name,
         agenda_default: is_default,
         at:             start,
+        leave_from:     leave_from,
         recurrence:     recurrence,
       }.compact,
     }
@@ -182,6 +228,16 @@ Buddy::Tools.register(
         "#{start.strftime("%a %b %-d")}, #{start.strftime("%-I:%M %p")}–#{finish.strftime("%-I:%M %p")}"
       end
 
+    # The leave time is the thing they ASKED for, and the start is what the app
+    # worked out from it. Showing only the start makes the card look like an
+    # answer to a question nobody asked - edit_agenda_item's row says
+    # "leave 4:15 PM -> starts Fri 4:40 PM" for the same reason.
+    if payload[:leave_from].present?
+      leave     = payload[:leave_from]
+      leave     = leave.in_time_zone(ctx.user.timezone) if leave.respond_to?(:in_time_zone)
+      when_line = "leave #{leave.strftime("%-I:%M %p")} → #{when_line}"
+    end
+
     lines = [when_line]
     if payload[:recurrence].present?
       lines << "🔁 #{Buddy::ReminderPresenter.repeat_phrase(payload[:recurrence])}"
@@ -192,6 +248,22 @@ Buddy::Tools.register(
     lines << "📅 #{payload[:agenda_name]}" if payload[:agenda_name].present? && !payload[:agenda_default]
 
     { title: payload[:title].to_s, sub: lines.join("\n") }
+  },
+  # Asked once the calendar and the start are resolved, so it knows exactly which
+  # row would be written. See Buddy::AgendaDuplicate.
+  #
+  # A `repeat` is exempt: it writes an AgendaSchedule rather than a row, and its
+  # occurrences are materialized by the series, so there is no single start to
+  # compare. `existing_agenda_twin`'s note still covers that case.
+  guard:       ->(payload, ctx) {
+    next if payload[:recurrence].present?
+
+    Buddy::AgendaDuplicate.check!(
+      payload[:agenda_id],
+      payload[:title],
+      payload[:at],
+      zone: ctx.user.timezone,
+    )
   },
   # Level 2: goes on the calendar the moment it's proposed, as a pre-checked row
   # that unchecks back off. Putting something on a calendar is easy to see and

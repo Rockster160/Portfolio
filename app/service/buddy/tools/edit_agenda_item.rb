@@ -79,8 +79,17 @@ Buddy::Tools.register(
     arrive_early: {
       type:        :duration_min,
       required:    false,
-      description: "Minutes to be there BEFORE it starts - the app's \"min early\" setting. A plain number on the row; " \
-                   "it needs no drive time. 0 means no need to be early. Not the same as `leave_at`",
+      # Only ever a buffer somebody NAMED. Passed alongside `leave_at` it is
+      # read instead of the row's own (see confirm), which is right for "leave
+      # at 4 and let's be 10 minutes early" and wrong for every number invented
+      # to make a clock land: asked only to leave at 4:15, this came back
+      # carrying 14, which is the buffer that keeps a start already on the row
+      # where it was (prod 5940). `leave_at` moves the START - that is the whole
+      # job - so there is never a buffer to solve for.
+      description: "Minutes to be there BEFORE it starts - the app's \"min early\" setting. A plain number " \
+                   "on the row; it needs no drive time. Only when they NAMED one out loud; omit it and the " \
+                   "row keeps the buffer it has. Never a number worked out to make a `leave_at` come out " \
+                   "right - passing `leave_at` alone already does that. Not the same as `leave_at`",
     },
     calendar:     { type: :string, required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
     kind:         {

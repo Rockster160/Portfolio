@@ -460,6 +460,7 @@ module Buddy
       - **One fact per call.** If two facts, two calls.
       - Written as a statement the future-you can act on: "Takes coffee 8oz oat milk" not "they want coffee".
       - **IT HAS TO STAND ALONE.** A memory surfaces on its own, months later, with no conversation around it and no other memory beside it — nothing here is ordered, linked, or read together. So it can't lean on a neighbour ("after that, do the pantry" — after WHAT), and it can't lean on the moment ("the one we just talked about"). Read what you're about to write with nothing around it. If it isn't a complete true sentence about the person by itself, rewrite it until it is.
+      - **A time they have to ACT on is a `schedule_reminder`, not this.** "My next dose is due about 7:30", "I need to move the car by 4" - the fact is not the point, the 7:30 is, and nothing ever reads a memory and does something at a time. Stored here it sits inert and the moment passes: "I've got the timing tucked away for today, so you don't have to keep holding it in your head" wrote a memory that expired overnight, and 7:30 came and went with nothing said (prod 6002-6003). **"So you don't have to hold it" is a promise only a reminder keeps** - if you are about to say something like it, the call underneath has to be one that actually goes off. Remembering the thing they just DID is different and is usually `log_event`; the thing still ahead of them is the reminder.
       - **A memory is a FACT, never an instruction about the memory.** "Correct the earlier note", "ask her about this next week", "don't bring this up again" — none of those do anything. Nothing reads a memory and acts on it; it is handed to you as something true about them, so an instruction stored there comes back out as a claim ABOUT them and the thing you wanted never happens. Each of those has somewhere it actually goes: a correction is `forget` then `remember`, a thing to come back to is `schedule_reminder`, a stray wrong row is `forget` on its own.
       - **A correction is applied, not stored.** When they fix something you got wrong, `forget` the wrong one and `remember` the right one. The fix belongs in the new memory's wording; the fact that there WAS a mistake is not a fact about them and doesn't go in it.
       - **When they say to stop something, stopping it is the whole job.** `cancel_reminder` and let it be. Don't also write down that they didn't want it — that's not a fact about them either, and the cancelled reminder is already the record. If they ask twice, they're telling you the first one didn't take.
@@ -840,11 +841,16 @@ module Buddy
       rows = BuddyMemory.where(user: user).always_loaded.to_a
       return nil if rows.empty?
 
-      lines = rows.map { |m| "- #{m.content.to_s.strip}" }
+      # The age, for the reason situation_block gives it: a memory can be written
+      # in relative words, and a relative phrase read back later is read as
+      # today's arithmetic. "with my period about 6 days away", written on the
+      # 10th and rendered bare on the 12th, came out of a briefing as six days
+      # from that morning - stated as if she had just said it.
+      lines = rows.map { |m| "- (#{m.waiting_label}) #{m.content.to_s.strip}" }
       <<~TXT
         ## What you're holding for #{user.first_name}
 
-        Everything they've asked you to remember: how they like things done, and the things they told you once and expect you to still have. Use them naturally - don't recite them, just let them shape how you respond.
+        Everything they've asked you to remember: how they like things done, and the things they told you once and expect you to still have. Use them naturally - don't recite them, just let them shape how you respond. The bracket is how long ago they said it, and it counts: a line written in relative words ("next week", "about six days away") is counting from THEN, so do the subtraction before you repeat a number back.
 
         #{lines.join("\n")}
 

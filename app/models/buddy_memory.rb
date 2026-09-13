@@ -143,7 +143,16 @@ class BuddyMemory < ApplicationRecord
   # flat `limit(30)` on all memories ordered by reinforcement count, which
   # silently dropped the tail — and dropped it worst for a fact mentioned once
   # and never repeated, which is precisely the kind most worth having kept.
-  scope :always_loaded, -> { unexpired.kind_preference.order(Arel.sql("priority DESC, created_at DESC")) }
+  #
+  # `surfaceable` is doing two jobs here, and it was missing from both. It holds
+  # back a memory whose `relevant_at` has not arrived - the `carried` scope below
+  # has always had that gate and says why - and on 12 Sep a preference written on
+  # the 10th, dated to the 16th, was read out in a briefing four days early and
+  # with its own relative wording ("about 6 days away") taken as today's
+  # arithmetic. It also drops a `dropped` one, which matters because undoing a
+  # `remember` sets exactly that status (Buddy::Reverter) - so until now, taking
+  # a memory back left it riding in every prompt.
+  scope :always_loaded, -> { surfaceable.unexpired.kind_preference.order(Arel.sql("priority DESC, created_at DESC")) }
 
   # How heavy something has to be before it rides in EVERY prompt instead of
   # waiting to be searched for.

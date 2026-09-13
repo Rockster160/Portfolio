@@ -25,6 +25,19 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("A memory is a FACT, never an instruction about the memory")
     end
 
+    # Prod 6002-6003: "my next dose is due at about 7:30" was answered with "I've
+    # got the timing tucked away for today", and what that wrote was a memory
+    # that expired overnight. 7:30 came and went with nothing said - `remember`
+    # has no clock, so a time stored in it is a time nobody is waiting on.
+    it "sends a time they have to act on to schedule_reminder" do
+      expect(prompt).to include("A time they have to ACT on is a `schedule_reminder`")
+      expect(prompt).to match(/nothing ever reads a memory and does something at a time/)
+    end
+
+    it "says the promise not to hold it is one only a reminder keeps" do
+      expect(prompt).to match(/is a promise only a reminder keeps/)
+    end
+
     # Every shape it forbids has to have somewhere to go, or the rule just
     # loses the intent instead of redirecting it.
     it "names where each kind of instruction actually goes" do
@@ -827,6 +840,43 @@ RSpec.describe Buddy::Personality do
 
     it "adds nothing for someone carrying nothing" do
       expect(prompt).not_to include("What #{User.me.first_name} is carrying")
+    end
+  end
+
+  # Prod 6047, 12 Sep: a briefing repeated a preference written two days earlier,
+  # in the relative words it was written in, as though the count started that
+  # morning. situation_block has carried the age on every line for exactly this
+  # reason; the block right above it rendered them bare.
+  describe ".for how old the thing it is holding is" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    def preference(content, **attrs)
+      BuddyMemory.create!({ user: User.me, content: content, kind: :preference }.merge(attrs))
+    end
+
+    it "says how long ago they said it" do
+      preference("Sandbox: the figs are about 6 days off", created_at: 2.days.ago)
+
+      expect(prompt).to include("(2 days) Sandbox: the figs are about 6 days off")
+    end
+
+    it "says so on one they said today" do
+      preference("Sandbox: figs are picked by hand")
+
+      expect(prompt).to include("(today) Sandbox: figs are picked by hand")
+    end
+
+    it "tells it what the bracket is for" do
+      preference("Sandbox: figs are picked by hand")
+
+      expect(prompt).to include("counting from THEN")
+    end
+
+    # The other half of the same fix, in BuddyMemory.always_loaded.
+    it "does not carry one whose day has not come" do
+      preference("Sandbox: the fig tree comes down next week", relevant_at: 4.days.from_now)
+
+      expect(prompt).not_to include("the fig tree comes down next week")
     end
   end
 

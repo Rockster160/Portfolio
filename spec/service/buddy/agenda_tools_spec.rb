@@ -24,9 +24,12 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     def run(tool_name, payload)
-      tool    = Buddy::Tools[tool_name]
-      confirm = tool[:confirm].call(payload, ctx)
-      [tool[:execute].call(payload.merge(confirm[:resolved] || {}), ctx), confirm]
+      tool     = Buddy::Tools[tool_name]
+      confirm  = tool[:confirm].call(payload, ctx)
+      resolved = payload.merge(confirm[:resolved] || {})
+      # Where Turn#resolve asks it, and the only place it is asked.
+      tool[:guard]&.call(resolved, ctx)
+      [tool[:execute].call(resolved, ctx), confirm]
     end
 
     def costco_on(agenda)
@@ -382,6 +385,73 @@ RSpec.describe "Buddy agenda tools" do
         run(:add_agenda_item, { title: "Costco Run", at: at, calendar: "Ours" })
 
         expect(AgendaItem.where(name: "Costco Run").count).to eq(2)
+      end
+    end
+
+    # The note above is the right answer for a NEAR miss. This is the exact one,
+    # and being told about it was not enough: prod 6035-6039 put Eve's "Clear
+    # kitchen" on twice at noon and "Start kitchen" on twice at 9, in three turns
+    # over three minutes, with the replies naming the row they were duplicating.
+    describe "adding the row that is already there" do
+      it "refuses instead of making a second copy" do
+        costco_on(personal)
+
+        expect {
+          run(:add_agenda_item, { title: "Costco Run", at: at })
+        }.to raise_error(/already on/)
+
+        expect(AgendaItem.where(name: "Costco Run").count).to eq(1)
+      end
+
+      it "names the tool that changes the one already there" do
+        costco_on(personal)
+
+        expect {
+          run(:add_agenda_item, { title: "Costco Run", at: at })
+        }.to raise_error(/edit_agenda_item/)
+      end
+
+      it "does not care how the name was capitalized" do
+        costco_on(personal)
+
+        expect {
+          run(:add_agenda_item, { title: "costco run", at: at })
+        }.to raise_error(/already on/)
+      end
+
+      it "lets the same thing through at a different time" do
+        costco_on(personal)
+
+        run(:add_agenda_item, { title: "Costco Run", at: at + 1.hour })
+
+        expect(AgendaItem.where(name: "Costco Run").count).to eq(2)
+      end
+
+      # Scoped to the calendar, because "put it on Ours as well" is a real ask
+      # and the twin note is what speaks to it.
+      it "lets the same thing through on another calendar" do
+        costco_on(personal)
+
+        run(:add_agenda_item, { title: "Costco Run", at: at, calendar: "Ours" })
+
+        expect(AgendaItem.where(name: "Costco Run").count).to eq(2)
+      end
+
+      it "ignores a cancelled row, which is a tombstone rather than a plan" do
+        costco_on(personal).update!(status: :cancelled)
+
+        run(:add_agenda_item, { title: "Costco Run", at: at })
+
+        expect(AgendaItem.where(name: "Costco Run", status: :confirmed).count).to eq(1)
+      end
+
+      # A repeat writes a rule, not a row, so there is no single start to compare.
+      it "leaves a series alone" do
+        costco_on(personal)
+
+        run(:add_agenda_item, { title: "Costco Run", at: at, repeat: "weekly:monday" })
+
+        expect(AgendaSchedule.where(name: "Costco Run").count).to eq(1)
       end
     end
 
@@ -1098,6 +1168,144 @@ RSpec.describe "Buddy agenda tools" do
 
         expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:00 PM")
         expect(merged[:leave_from]).to be_nil
+      end
+    end
+  end
+
+  # "Add Insidious movie to Our agenda today, leaving at 4:15" (prod 5935-5939).
+  # `add_agenda_item` had no `leave_at`, so the only argument the 4:15 could
+  # reach was `arrive_early`, and it landed as 25 minutes-early with the drive
+  # nowhere in the sum. The distinction was taught on edit and unreachable on
+  # add.
+  describe "a leave time on something that does not exist yet" do
+    let(:user) { create(:user) }
+    let(:zone) { ActiveSupport::TimeZone["America/Denver"] }
+    let(:now)  { zone.local(2026, 8, 3, 11, 4) }
+    let(:tool) { Buddy::Tools[:add_agenda_item] }
+
+    before {
+      allow(AgendaTravelChainSyncWorker).to receive(:perform_async)
+      # Outside production AddressBook#traveltime_seconds answers 2700 flat, so
+      # the drive is a fixed 45 minutes and the arithmetic is what is on trial.
+      # Home only has to be findable; the chain has its own specs for choosing it.
+      allow_any_instance_of(AgendaTravelChain::Resolver).to receive(:home)
+        .and_return(Struct.new(:street).new("123 Home St"))
+    }
+
+    def ctx = Buddy::ToolContext.new(user)
+
+    def leave!(payload)
+      Timecop.freeze(now) {
+        cast, errors = Buddy::Tools.validate_payload(tool, payload, zone: Buddy::Day.zone(user))
+        raise errors.join("; ") if errors.any?
+
+        confirm  = tool[:confirm].call(cast, ctx)
+        resolved = cast.merge(confirm[:resolved] || {})
+        tool[:guard]&.call(resolved, ctx)
+        [resolved, confirm]
+      }
+    end
+
+    def base(**extra)
+      {
+        title:    "Insidious Movie",
+        leave_at: "2026-08-03T16:15:00",
+        location: "Cinemark in Herriman",
+        duration: 120,
+        **extra,
+      }
+    end
+
+    it "works the start back from the drive, instead of putting the leave time on the row" do
+      resolved, = leave!(base)
+
+      # 4:15 out of the door + 45 minutes driving + the 5 they chose = 5:05.
+      expect(resolved[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("5:05 PM")
+    end
+
+    it "leaves the buffer they never named at the setting they chose" do
+      resolved, = leave!(base)
+
+      expect(resolved[:arrive_early]).to be_nil
+    end
+
+    it "works back through a buffer they did name" do
+      resolved, = leave!(base(arrive_early: 20))
+
+      expect(resolved[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("5:20 PM")
+    end
+
+    it "writes that start to the row, and the leave time lands where they asked" do
+      resolved, = leave!(base)
+      item      = Timecop.freeze(now) { AgendaItem.find(tool[:execute].call(resolved, ctx)[:agenda_item_id]) }
+
+      leave = item.start_at - item.arrive_early_minutes.minutes - 2700.seconds
+      expect(leave.in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:15 PM")
+    end
+
+    it "refuses a start and a leave time in the same call" do
+      expect { leave!(base(at: "2026-08-03T16:15:00")) }.to raise_error(/not both/)
+    end
+
+    # Refused rather than guessed, and refused BEFORE anything is created - once
+    # the row exists there is nothing to do but let the leave time stand as a
+    # start, which is the mistake the argument exists to stop.
+    it "refuses a leave time with nowhere to drive to" do
+      expect { leave!(base(location: nil)) }.to raise_error(/needs somewhere to drive/)
+    end
+
+    it "shows the leave time on the confirm row, not just the start it worked out" do
+      resolved, = leave!(base)
+      label     = Timecop.freeze(now) { tool[:label].call(resolved, ctx) }
+
+      expect(label[:sub]).to include("leave 4:15 PM")
+      expect(label[:sub]).to include("5:05 PM")
+    end
+
+    it "leaves a plain `at` alone" do
+      resolved, = leave!({ title: "Insidious Movie", at: "2026-08-03T16:40:00", location: "Cinemark" })
+
+      expect(resolved[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:40 PM")
+      expect(resolved[:leave_from]).to be_nil
+    end
+
+    # AgendaTravelChain measures each leg from the PREVIOUS stop. The row does
+    # not exist yet, so there is nothing to chain and the origin is worked out
+    # here - the last place they are due to be before then, home otherwise.
+    describe "where they are coming from" do
+      it "takes the last place they are due to be that day" do
+        user.agendas.first.agenda_items.create!(
+          name:     "Lunch",
+          kind:     :event,
+          start_at: zone.local(2026, 8, 3, 12, 0),
+          end_at:   zone.local(2026, 8, 3, 13, 0),
+          location: "Lucky Ones",
+        )
+
+        expect(ctx.previous_stop_location(zone.local(2026, 8, 3, 16, 15))).to eq("Lucky Ones")
+      end
+
+      it "ignores one with nowhere to be, which is not a place they drove to" do
+        user.agendas.first.agenda_items.create!(
+          name:     "Read",
+          kind:     :event,
+          start_at: zone.local(2026, 8, 3, 12, 0),
+          end_at:   zone.local(2026, 8, 3, 13, 0),
+        )
+
+        expect(ctx.previous_stop_location(zone.local(2026, 8, 3, 16, 15))).to be_nil
+      end
+
+      it "ignores one that has not happened yet" do
+        user.agendas.first.agenda_items.create!(
+          name:     "Dinner",
+          kind:     :event,
+          start_at: zone.local(2026, 8, 3, 19, 0),
+          end_at:   zone.local(2026, 8, 3, 20, 0),
+          location: "Home",
+        )
+
+        expect(ctx.previous_stop_location(zone.local(2026, 8, 3, 16, 15))).to be_nil
       end
     end
   end

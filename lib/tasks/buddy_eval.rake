@@ -741,6 +741,55 @@ BUDDY_EDGE_PROBES = [
                 "number for the other case",
   },
 
+  # --- a leave time given when the thing is first added ---------------------
+  {
+    case:       "prod 5935",
+    say:        "Add the Insidious movie to today, leaving at 4:15. It's at the Cinemark in Herriman.",
+    tool:       :add_agenda_item,
+    once:       true,
+    args:       { add_agenda_item: { leave_at: /./, location: /cinemark/i } },
+    never_args: { add_agenda_item: { arrive_early: /./ } },
+    note:       "`leave_at` was taught on edit and did not exist on add, so the " \
+                "only argument the 4:15 could reach was `arrive_early` - it went " \
+                "in as 25 minutes early with the drive nowhere in the sum, and " \
+                "the correction was \"you didn't account for drive time in the " \
+                "early arrival that you set\" (5939). The argument exists on add " \
+                "now and works the start back itself; a buffer here is still a " \
+                "number nobody named",
+  },
+
+  # --- something already on the day, named beside something new -------------
+  {
+    case:       "prod 6037",
+    say:        "Add a Grocery Run three days from now at 2pm - and the family " \
+                "party is still at 10 that morning, right?",
+    tool:       :add_agenda_item,
+    once:       true,
+    args:       { add_agenda_item: { title: /grocery/i } },
+    never_args: { add_agenda_item: { title: /family party/i } },
+    needs:      :family_party,
+    note:       "three turns in three minutes put Eve's kitchen items on twice " \
+                "each, and the replies named the row they were duplicating while " \
+                "the call made the copy - \"that 9am kitchen start is already " \
+                "sitting there nicely\" (6039). Her briefing read all four the " \
+                "next morning. Buddy::AgendaDuplicate refuses the exact repeat " \
+                "now; this is the half that stops it being reached for",
+  },
+
+  # --- a time they have to ACT on is not a memory ---------------------------
+  {
+    case:  "prod 6003",
+    say:   "The next coat of stain is due at about 7:30 - I did the midday one " \
+           "a bit late by accident",
+    tool:  :schedule_reminder,
+    avoid: %i[remember],
+    note:  "answered \"I've got the timing tucked away for today, so you don't " \
+           "have to keep holding it in your head\" and wrote a memory that " \
+           "expired overnight. 7:30 came and went with nothing said. `remember` " \
+           "has no clock, so a time stored in it is a time nobody is waiting on - " \
+           "and \"so you don't have to hold it\" is a promise only a reminder keeps",
+  },
+
   # --- the only date in the sentence is the one it is moving TO -------------
   {
     case:       "prod 5333",

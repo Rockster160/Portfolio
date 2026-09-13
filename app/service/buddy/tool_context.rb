@@ -493,6 +493,47 @@ module Buddy
       nil
     end
 
+    # How long the drive to `location` takes, for an item that does not exist
+    # yet.
+    #
+    # AgendaTravelChain owns this once the row is there: it links the day into a
+    # chain and measures each leg from the PREVIOUS stop, which is why
+    # edit_agenda_item can work a leave time back off `item.travel_seconds` and
+    # add_agenda_item cannot - at creation there is nothing to chain. So this
+    # takes the last place they are due to be before then, falling back to home,
+    # which is what the chain itself uses for the first item of a day.
+    #
+    # It decides the START only. The real leg is recomputed by the chain a
+    # moment later (AgendaItem's after_commit enqueues it), so a wrong guess at
+    # the origin moves the leave-by ping and never the row.
+    def drive_seconds_to(location, at:)
+      return nil if location.blank? || at.blank?
+
+      resolver = ::AgendaTravelChain::Resolver.new(user)
+      from     = previous_stop_location(at).presence || resolver.home&.street.to_s
+      return nil if from.blank?
+
+      resolver.travel_seconds(from, location, at: at)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] drive lookup failed: #{e.class}: #{e.message}")
+      nil
+    end
+
+    # Where they are coming FROM: the last thing on any calendar they can see
+    # that starts before this and has somewhere to be. Anything without a
+    # location is not a place they had to drive to, so it can't be an origin.
+    def previous_stop_location(at)
+      day = at.in_time_zone(user.timezone).to_date
+      AgendaItem.where(
+        agenda_id: user.accessible_agendas.select(:id),
+        start_at:  day.in_time_zone(user.timezone)...at,
+      ).where.not(
+        status: :cancelled,
+      ).where.not(
+        location: [nil, ""],
+      ).order(:start_at).last&.location
+    end
+
     # A watch already listening for exactly this condition. Same purpose as
     # existing_agenda_twin: surface it before Buddy speaks, so a second one is a
     # choice rather than a surprise.

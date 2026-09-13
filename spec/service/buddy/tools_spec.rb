@@ -112,7 +112,10 @@ RSpec.describe Buddy::Tools do
 
       agenda = schema_for(:add_agenda_item)[:parameters][:properties]
       expect(agenda[:duration][:type]).to eq([:integer, :null])   # :duration_min
-      expect(agenda[:at][:type]).to eq(:string)                   # :iso_time
+      # `at` stopped being required when `leave_at` became able to stand in for
+      # it, so it comes through nullable like any other optional - the mapping
+      # being pinned here is :iso_time onto a string.
+      expect(agenda[:at][:type]).to eq([:string, :null])          # :iso_time
       expect(agenda[:at][:description]).to include("ISO8601")
     end
 
