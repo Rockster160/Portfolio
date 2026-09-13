@@ -220,12 +220,12 @@ Buddy::Tools.register(
       elsif all_day
         start.strftime("%a %b %-d, all day")
       elsif payload[:kind].to_s != "event"
-        "#{start.strftime("%a %b %-d")}, #{start.strftime("%-I:%M %p")}"
+        Buddy::Clock.date_at(start)
       else
         dur    = payload[:duration].to_i
         dur    = 30 if dur <= 0
         finish = start + dur.minutes
-        "#{start.strftime("%a %b %-d")}, #{start.strftime("%-I:%M %p")}–#{finish.strftime("%-I:%M %p")}"
+        "#{start.strftime("%a %b %-d")}, #{Buddy::Clock.range(start, finish)}"
       end
 
     # The leave time is the thing they ASKED for, and the start is what the app
@@ -235,7 +235,7 @@ Buddy::Tools.register(
     if payload[:leave_from].present?
       leave     = payload[:leave_from]
       leave     = leave.in_time_zone(ctx.user.timezone) if leave.respond_to?(:in_time_zone)
-      when_line = "leave #{leave.strftime("%-I:%M %p")} → #{when_line}"
+      when_line = "leave #{Buddy::Clock.at(leave)} → #{when_line}"
     end
 
     lines = [when_line]
@@ -344,7 +344,7 @@ Buddy::Tools.register(
     item  = AgendaItem.find_by(id: result[:agenda_item_id])
     where = item&.agenda&.name.presence
     start = item&.start_at&.in_time_zone(ctx.user.timezone)
-    when_ = start&.strftime("%a %-I:%M %p")
+    when_ = Buddy::Clock.day_at(start)
     # The time is the half most worth reading back. Without it the receipt
     # agreed with a reply that said "later this afternoon" while the row went
     # on at 4:45 AM.

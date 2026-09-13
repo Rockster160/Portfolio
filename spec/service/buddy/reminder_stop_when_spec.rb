@@ -270,7 +270,7 @@ RSpec.describe "a reminder that stops when something happens" do
 
         row = Buddy::ReminderPresenter.rows(user).find { |r| r[:type] == :reminder }
 
-        expect(row[:sublabel]).to include("every day at 9:00 AM")
+        expect(row[:sublabel]).to include("every day at 9am")
       end
 
       it "doesn't show up as its own togglable row" do

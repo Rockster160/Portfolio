@@ -165,4 +165,49 @@ RSpec.describe ListItem do
       expect(fired).to be_empty
     end
   end
+
+  # Every commit broadcasts the WHOLE list, and ActionCable dispatches each
+  # broadcast on its own worker-pool thread, so three items added in a row can
+  # reach a socket in any order. The client redraws from whichever lands last,
+  # so the snapshots have to be datable or a one-item one overtaking the
+  # three-item one leaves two items missing until something bumps the list.
+  describe "broadcast ordering" do
+    let(:list) { create(:list) }
+
+    def json_broadcasts
+      sent = []
+      allow(ActionCable.server).to receive(:broadcast) { |channel, data|
+        sent << data if channel.to_s == "list_#{list.id}_json_channel"
+      }
+      yield
+      sent
+    end
+
+    it "stamps every snapshot, in the order the snapshots were read" do
+      sent = json_broadcasts {
+        list.list_items.add("One")
+        list.list_items.add("Two")
+        list.list_items.add("Three")
+      }
+
+      stamps = sent.pluck(:timestamp)
+
+      expect(sent.map { |d| d[:list_data][:items].length }).to eq([1, 2, 3])
+      expect(stamps).to eq(stamps.sort)
+      expect(stamps.uniq.length).to eq(3)
+    end
+
+    it "still broadcasts the item's own channel alongside the list's" do
+      channels = []
+      allow(ActionCable.server).to receive(:broadcast) { |channel, _data| channels << channel }
+
+      item = list.list_items.add("Solo")
+
+      expect(channels).to include(
+        "list_item_#{item.id}_channel",
+        "list_#{list.id}_json_channel",
+        "list_#{list.id}_html_channel",
+      )
+    end
+  end
 end

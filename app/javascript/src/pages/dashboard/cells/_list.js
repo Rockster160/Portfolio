@@ -1,5 +1,6 @@
 import { Text } from "../_text";
 import { beep } from "../vars";
+import { snapshotGate } from "../../../lists/snapshot_order";
 
 export class ListCell {
   constructor(list_name) {
@@ -17,6 +18,7 @@ export class ListCell {
         });
 
       cell.title(cell.list.name);
+      const fresh = snapshotGate();
       cell.socket = new CellWS(
         cell,
         Server.socket(
@@ -26,6 +28,9 @@ export class ListCell {
           },
           function (msg) {
             if (!msg.list_data) {
+              return;
+            }
+            if (!fresh(msg.timestamp)) {
               return;
             }
 

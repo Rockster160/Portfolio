@@ -195,8 +195,7 @@ module Buddy
     end
 
     def format_window(win)
-      fmt = ->(t) { t.strftime("%-I%P").sub(":00", "") }
-      "#{fmt.call(win[0])}-#{fmt.call(win[1])}"
+      Buddy::Clock.range(win[0], win[1])
     end
 
     def sun_times(data, tz, today)

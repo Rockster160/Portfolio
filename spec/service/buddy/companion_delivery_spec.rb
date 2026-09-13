@@ -37,7 +37,7 @@ RSpec.describe Buddy::CompanionDelivery do
     it "stamps the clock in the person's own zone, not UTC" do
       message = travel_to(Time.zone.parse("2026-07-31 02:54 UTC")) { fire("put your Loops away") }
 
-      expect(message.body).to include("8:54 pm")
+      expect(message.body).to include("8:54pm")
     end
 
     it "says the reply is the notification, since nobody is waiting on a conversation" do

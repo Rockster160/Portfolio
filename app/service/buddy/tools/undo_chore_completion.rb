@@ -29,7 +29,7 @@ Buddy::Tools.register(
 
     # Destructive: show the full date + time it was marked so the person knows
     # exactly which completion is being reversed.
-    when_str = completion.completed_at.in_time_zone(ctx.user.timezone).strftime("%a %b %-d, %-I:%M %p")
+    when_str = Buddy::Clock.date_at(completion.completed_at, zone: ctx.user.timezone)
     { title: "Undo #{completion.chore.name}", sub: when_str }
   },
   execute:     ->(payload, ctx) {

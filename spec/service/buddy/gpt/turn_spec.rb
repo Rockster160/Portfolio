@@ -2889,6 +2889,117 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # Prod 6052, 12 Sep. The seed gave four Alpine days with odds - Monday 27%,
+  # Wednesday 30%, Thursday 100%, Friday 77% - and the briefing returned "the
+  # rest of the week there's rain odds on Monday, Wednesday, Thursday, and
+  # Friday": every day, not one number, against a seed that says "Anything
+  # above an ordinary day goes in with its odds". It closed on "Monday at 3:40
+  # PM is Plunge with Wil at Horsetail Falls. Nice little canyon weather for
+  # that one", which is Monday's 27% read as an all-clear.
+  describe "a briefing that dropped the odds on Alpine's week" do
+    before { allow(Buddy::PlungeAdvisor).to receive(:today_rain_windows).and_return([]) }
+
+    # As Buddy::PlungeAdvisor.loose_rain writes them, and read off the seed -
+    # there is nothing to re-forecast, so the repair cannot invent a figure.
+    def alpine_facts
+      {
+        "today" => [],
+        "week"  => [
+          "Monday, rain at 27% - the forecast has no hours that far out, so the day on its own is the whole of it",
+          "Thursday, rain at 100% - the forecast has no hours that far out, so the day on its own is the whole of it",
+        ],
+      }
+    end
+
+    def briefing(rounds, alpine: alpine_facts)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => { "alpine" => alpine },
+        },
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    it "puts the figures on the end when the draft gave only the days" do
+      briefing([
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+      ])
+
+      expect(reply.body).to include("In Alpine, Monday rain at 27% and Thursday rain at 100%.")
+    end
+
+    it "names only the day whose figure went missing" do
+      briefing([
+        { text: "Morning! Alpine is 27% Monday and wet again later in the week." },
+        { text: "Morning! Alpine is 27% Monday and wet again later in the week." },
+      ])
+
+      expect(reply.body).to include("In Alpine, Thursday rain at 100%.")
+      expect(reply.body).not_to include("27% and Thursday")
+    end
+
+    it "leaves a briefing that gave every figure alone" do
+      briefing([{ text: "Morning! Alpine sits at 27% Monday and a flat 100% Thursday." }])
+
+      expect(reply.body).to eq("Morning! Alpine sits at 27% Monday and a flat 100% Thursday.")
+    end
+
+    it "says nothing about a week the seed never carried" do
+      briefing([{ text: "Morning! Quiet one." }], alpine: { "today" => [], "week" => [] })
+
+      expect(reply.body).to eq("Morning! Quiet one.")
+    end
+
+    # Same trade as the three weather repairs above it: the model gets told what
+    # it left out and writes it in, and the append is what happens when that
+    # fails too.
+    it "asks for it again rather than writing it on the end" do
+      client  = FakeBuddyClient.new([
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+        { text: "Morning! Alpine is 27% Monday, and Thursday is a flat 100%." },
+      ])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => { "alpine" => alpine_facts },
+        },
+      )
+      described_class.run!(message, client: client)
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    it "tells the second attempt which fact it was" do
+      client  = FakeBuddyClient.new([
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+        { text: "Morning! Alpine is 27% Monday, and Thursday is a flat 100%." },
+      ])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => { "alpine" => alpine_facts },
+        },
+      )
+      described_class.run!(message, client: client)
+
+      nudges = client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
+
+      expect(nudges).to include("the rain odds on Alpine's week")
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Quiet one today." }], text: "what are the odds in alpine this week")
+
+      expect(reply.body).to eq("Quiet one today.")
+    end
+  end
+
   # Prod 4790, 27 Aug. The seed said "currently 70°F ... today high 93°F / low
   # 69°F" and the briefing said "High of 93°F today, low of 70°F" - it printed
   # the CURRENT temperature as the low, which is the one confusion three

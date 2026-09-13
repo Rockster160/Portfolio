@@ -724,6 +724,7 @@ module Buddy
           ("the day's high and low" if weather_dropped?(body)),
           ("the week's weather" if week_dropped?(body)),
           ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
+          ("the rain odds on Alpine's week" if week_odds_dropped?(body)),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
           *unnamed_week(body).map { |i| "#{i[:title]} later this week" },
           ("the jobs on today" if jobs_dropped?(body)),
@@ -754,6 +755,10 @@ module Buddy
         windows.present? && !Buddy::TodayBriefing.rain_hours_said?(body, windows)
       end
 
+      def week_odds_dropped?(body)
+        Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week).any?
+      end
+
       # Alpine's hours, but only if the SEED carried Alpine.
       #
       # A repair may only ever restore something the briefing was handed. Both
@@ -775,6 +780,17 @@ module Buddy
         return [] if briefing_facts[:alpine].blank?
 
         Buddy::PlungeAdvisor.today_rain_windows(@user)
+      end
+
+      # Alpine's week, read straight off the seed rather than asked for again.
+      #
+      # The same rule the comment above works out, and this one can obey it
+      # literally: the figures are IN the facts, so there is nothing to
+      # re-forecast and no way to hand back a number the briefing never had.
+      def briefing_alpine_week
+        return [] if @user.nil?
+
+        Array(briefing_facts.dig(:alpine, :week))
       end
 
       # Named, so the second attempt knows which one it is answering.
@@ -1580,6 +1596,29 @@ module Buddy
         "#{body.rstrip}\n\n#{line}"
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] rain hours fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      # The odds on Alpine's week, which the briefing named the days of and
+      # gave the figures for.
+      #
+      # See Buddy::TodayBriefing.week_odds_line. The fourth piece of the same
+      # weather rule to need a fallback, and the only one where the silence
+      # doesn't read as a silence: a day list with the numbers taken out is a
+      # complete-looking sentence, so nothing downstream - not the reader, not
+      # the flourish trim - has a reason to doubt it.
+      #
+      # Sourced from the seed, for the reason briefing_alpine_week gives.
+      def with_alpine_week_odds(body)
+        return body unless today_briefing?
+
+        missing = Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week)
+        line    = Buddy::TodayBriefing.week_odds_line(missing)
+        return body if line.blank?
+
+        "#{body.rstrip}\n\n#{line}"
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] alpine week odds fallback failed: #{e.class}: #{e.message}")
         body
       end
 
@@ -2456,13 +2495,14 @@ module Buddy
         # for why this is mechanism rather than a fourth wording of the rule.
         body = repaired(:flourish, body) { |b| today_briefing? ? Buddy::Flourish.trim(b, briefing_facts) : b }
         # The weather repairs run today's figures first, then today's hours,
-        # then the week, so what gets appended reads in the order a person
-        # would say it. Each one only fills its own silence; see
-        # Buddy::TodayBriefing.
+        # then the week at home, then the week in the canyon, so what gets
+        # appended reads in the order a person would say it. Each one only fills
+        # its own silence; see Buddy::TodayBriefing.
         body = repaired(:weather, body) { |b| with_weather(b) }
         body = repaired(:temperatures, body) { |b| with_corrected_temperatures(b) }
         body = repaired(:rain_hours, body) { |b| with_rain_hours(b) }
         body = repaired(:week_weather, body) { |b| with_week_weather(b) }
+        body = repaired(:alpine_week_odds, body) { |b| with_alpine_week_odds(b) }
         body = repaired(:leave_times, body) { |b| with_leave_times(b) }
         body = repaired(:greeting, body) { |b| with_lifted_greeting(with_greeting(b)) }
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS

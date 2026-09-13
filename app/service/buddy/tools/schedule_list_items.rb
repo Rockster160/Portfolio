@@ -96,7 +96,7 @@ Buddy::Tools.register(
     raise "couldn't work out when to add them" if fire_at.nil?
     raise "that time has already passed" if fire_at < Time.current
 
-    when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+    when_str = Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
     count    = "#{rows.length} #{"item".pluralize(rows.length)}"
     summary  = (
       if recurrence
@@ -122,7 +122,7 @@ Buddy::Tools.register(
       if payload[:recurrence]
         "repeats #{payload[:repeat]}"
       else
-        fire_at&.in_time_zone(ctx.user.timezone)&.strftime("%a %-I:%M %p")
+        Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
       end
     )
     items = Array(payload[:rows]).map { |r| r.to_h.symbolize_keys[:item] }.compact

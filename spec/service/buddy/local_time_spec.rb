@@ -33,7 +33,7 @@ RSpec.describe "Buddy and local time" do
       text = preamble_at(9)
 
       expect(text).to include("**Part of day:** morning")
-      expect(text).to include("9:00 AM MDT")
+      expect(text).to include("9am MDT")
       expect(text).to include("CONTEXT for your opener")
       expect(text).not_to include("Good morning")
     end

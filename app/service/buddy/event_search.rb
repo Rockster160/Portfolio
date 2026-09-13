@@ -103,7 +103,7 @@ module Buddy
     end
 
     def when_phrase(time, user)
-      time.in_time_zone(user.timezone).strftime("%a %-m/%-d %-I:%M%P").sub(":00", "")
+      "#{time.in_time_zone(user.timezone).strftime("%a %-m/%-d")} #{Buddy::Clock.at(time, zone: user.timezone)}"
     end
   end
 end

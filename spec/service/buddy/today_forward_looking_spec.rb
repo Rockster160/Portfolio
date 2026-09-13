@@ -618,7 +618,7 @@ RSpec.describe "Buddy Today forward-looking" do
         item = Buddy::Context.build(user, conversation)[:today_agenda].first
 
         expect(item[:drive_min]).to eq(32)
-        expect(item[:leave_by]).to eq("9:23 AM")
+        expect(item[:leave_by]).to eq("9:23am")
       end
     end
 
@@ -843,6 +843,28 @@ RSpec.describe "Buddy Today forward-looking" do
         it "leaves an unremarkable week alone" do
           expect(Buddy::TodayBriefing.week_said?("Quiet one.", [], today: today)).to be(true)
         end
+
+        # Prod 6052, 12 Sep. One sentence about a canyon thirty minutes away,
+        # carrying a weather word and every flagged day, and the home week went
+        # out unsaid. Eve's briefing came off an identical WEATHER block with no
+        # ALPINE one and said the line fine, which is what says this is the
+        # place and not the phrasing.
+        it "does not count a forecast for the canyon as the one for home" do
+          alpine = "Alpine looks rainy tomorrow from 8:00 AM to 1:00 PM, and the rest of the " \
+                   "week there's rain odds on Monday, Thu, and Fri."
+
+          expect(said?(alpine)).to be(false)
+        end
+
+        it "does not count the trailhead by its own name either" do
+          expect(said?("Horsetail Falls is looking wet Thu and Fri.")).to be(false)
+        end
+
+        it "still counts a home sentence sitting next to an Alpine one" do
+          body = "Alpine is soaked tomorrow morning. Rain here Thu and Fri as well."
+
+          expect(said?(body)).to be(true)
+        end
       end
     end
 
@@ -855,6 +877,75 @@ RSpec.describe "Buddy Today forward-looking" do
 
       expect(seed).not_to include("BEFORE YOU SEND")
       expect(seed.length).to be < 6_000
+    end
+  end
+
+  # Prod 6052, 12 Sep: the seed gave four Alpine days with odds - Monday 27%,
+  # Wednesday 30%, Thursday 100%, Friday 77% - and the briefing returned the
+  # four day names with not one figure among them. It then closed on "Monday at
+  # 3:40 PM is Plunge with Wil at Horsetail Falls. Nice little canyon weather
+  # for that one", which is Monday's 27% read as an all-clear.
+  describe "the odds on Alpine's week" do
+    # As Buddy::PlungeAdvisor.loose_rain writes them.
+    let(:lines) {
+      [
+        "tomorrow 8am-1pm",
+        "Monday, rain at 27% - the forecast has no hours that far out, so the day on its own is the whole of it",
+        "Thursday, rain at 100% - the forecast has no hours that far out, so the day on its own is the whole of it",
+      ]
+    }
+
+    def missing(body)
+      Buddy::TodayBriefing.week_odds_missing(body, lines)
+    end
+
+    it "reads the day and the figure off a day-level line" do
+      expect(missing("").pluck(:pop)).to eq([])
+      expect(Buddy::TodayBriefing.alpine_week_odds(lines).pluck(:pop)).to eq(%w[27 100])
+    end
+
+    it "ignores a timed window, which carries no odds of its own" do
+      expect(Buddy::TodayBriefing.alpine_week_odds(["tomorrow 8am-1pm"])).to be_empty
+    end
+
+    it "calls every figure missing when the briefing gave only the days" do
+      body = "The rest of the week there's rain odds on Monday and Thursday."
+
+      expect(missing(body).pluck(:pop)).to eq(%w[27 100])
+    end
+
+    # The opposite call from week_said? - three figures out of four is the
+    # failure, because the one that goes missing is as likely to be the 100%.
+    it "still names the one that went missing when the others were given" do
+      body = "Alpine has a 27% chance Monday, and the rest of the week is wet."
+
+      expect(missing(body).pluck(:pop)).to eq(%w[100])
+    end
+
+    it "counts a figure written out in words" do
+      body = "Monday sits at 27 percent and Thursday is 100 percent."
+
+      expect(missing(body)).to be_empty
+    end
+
+    it "is not satisfied by a longer number ending in the same digits" do
+      expect(missing("A 127% effort on Monday.").pluck(:pop)).to eq(%w[27 100])
+    end
+
+    it "composes a line out of only the days that went missing" do
+      body = "Alpine has a 27% chance Monday."
+
+      expect(Buddy::TodayBriefing.week_odds_line(missing(body))).to eq("In Alpine, Thursday rain at 100%.")
+    end
+
+    it "composes nothing when every figure was given" do
+      body = "Monday is 27% and Thursday 100%."
+
+      expect(Buddy::TodayBriefing.week_odds_line(missing(body))).to be_nil
+    end
+
+    it "says nothing about a week the seed never carried" do
+      expect(Buddy::TodayBriefing.week_odds_missing("Quiet one.", [])).to be_empty
     end
   end
 

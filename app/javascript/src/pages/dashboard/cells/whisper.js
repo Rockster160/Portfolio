@@ -2,6 +2,7 @@ import { Time } from "./_time";
 import { Text } from "../_text";
 import { Monitor } from "./monitor";
 import { dash_colors } from "../vars";
+import { snapshotGate } from "../../../lists/snapshot_order";
 
 (function () {
   var cell = undefined;
@@ -212,6 +213,7 @@ import { dash_colors } from "../vars";
   }
 
   function subscribeToList() {
+    const fresh = snapshotGate();
     cell.listSocket = new CellWS(
       cell,
       Server.socket(
@@ -221,6 +223,7 @@ import { dash_colors } from "../vars";
         },
         function (msg) {
           if (!msg.list_data) return;
+          if (!fresh(msg.timestamp)) return;
 
           cell.data.listItems = msg.list_data.items || [];
           cell.flash();

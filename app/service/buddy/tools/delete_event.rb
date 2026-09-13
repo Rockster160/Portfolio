@@ -28,7 +28,7 @@ Buddy::Tools.register(
     # snippet so the person can confirm it's the right record before it's gone.
     subs = []
     if event
-      subs << event.timestamp.in_time_zone(ctx.user.timezone).strftime("%a %b %-d, %-I:%M %p")
+      subs << Buddy::Clock.date_at(event.timestamp, zone: ctx.user.timezone)
       subs << "“#{event.notes.to_s.truncate(40)}”" if event.notes.present?
     end
     { title: "Delete #{event&.name || payload[:event]}", sub: subs.join(" · ").presence }

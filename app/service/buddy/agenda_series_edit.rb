@@ -83,7 +83,7 @@ module Buddy
       return "Moved every #{name} to #{schedule&.agenda&.name} ✓" if fields.include?("agenda_id")
       return "Updated #{name} ✓" unless fields.include?("start_time") && schedule
 
-      "#{name} #{phrase} → #{schedule.start_time.strftime("%-I:%M %p")} ✓"
+      "#{name} #{phrase} → #{Buddy::Clock.at(schedule.start_time)} ✓"
     end
   end
 end

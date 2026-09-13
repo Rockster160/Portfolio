@@ -773,9 +773,9 @@ RSpec.describe "Buddy agenda tools" do
         task  = run(:add_agenda_item, { title: "Shower", at: at, kind: :task })
         event = run(:add_agenda_item, { title: "Dinner", at: at, kind: :event, duration: 90 })
 
-        expect(task[:label][:sub]).to include(local.strftime("%-I:%M %p"))
+        expect(task[:label][:sub]).to include(Buddy::Clock.at(local))
         expect(task[:label][:sub]).not_to include("–")
-        expect(event[:label][:sub]).to include("#{local.strftime("%-I:%M %p")}–#{(local + 90.minutes).strftime("%-I:%M %p")}")
+        expect(event[:label][:sub]).to include(Buddy::Clock.range(local, local + 90.minutes))
       end
     end
 
@@ -925,7 +925,7 @@ RSpec.describe "Buddy agenda tools" do
         payload, tool = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
         label = tool[:label].call(payload, ctx)
 
-        expect(label[:sub]).to include("8:47 AM")
+        expect(label[:sub]).to include("8:47am")
         expect(label[:sub]).not_to include("4:45")
       end
 
@@ -933,7 +933,7 @@ RSpec.describe "Buddy agenda tools" do
         payload, tool = Timecop.freeze(now) { settled("2026-08-03T17:15:00") }
         result = Timecop.freeze(now) { tool[:execute].call(payload, ctx) }
 
-        expect(tool[:receipt].call(result, ctx)).to include("Mon 5:15 PM")
+        expect(tool[:receipt].call(result, ctx)).to include("Mon 5:15pm")
       end
     end
 
@@ -962,7 +962,7 @@ RSpec.describe "Buddy agenda tools" do
         merged  = Timecop.freeze(now) { payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
         result  = Timecop.freeze(now) { tool[:execute].call(merged, ctx) }
 
-        expect(tool[:receipt].call(result, ctx)).to include("7:00 PM")
+        expect(tool[:receipt].call(result, ctx)).to include("7pm")
       end
     end
 
@@ -999,7 +999,7 @@ RSpec.describe "Buddy agenda tools" do
         tool[:execute].call(merged, ctx)
       end
 
-      def clock(time) = time.in_time_zone(zone).strftime("%-I:%M %p")
+      def clock(time) = Buddy::Clock.at(time, zone: zone)
 
       it "reports a drive it already knows without going back out for it" do
         orchard!(travel: { "travel_seconds" => 1860, "travel_minutes" => 31 })
@@ -1127,14 +1127,14 @@ RSpec.describe "Buddy agenda tools" do
         _merged, result = leave!("2026-08-03T16:00:00")
         receipt = tool[:receipt].call(result.symbolize_keys, ctx)
 
-        expect(receipt).to include("leave 4:00 PM")
-        expect(receipt).to include("4:31 PM")
+        expect(receipt).to include("leave 4pm")
+        expect(receipt).to include("4:31pm")
       end
 
       it "shows both on the chip too" do
         merged, = leave!("2026-08-03T16:00:00")
 
-        expect(tool[:label].call(merged, ctx)[:sub]).to include("leave 4:00 PM", "starts")
+        expect(tool[:label].call(merged, ctx)[:sub]).to include("leave 4pm", "starts")
       end
 
       it "refuses when there is no drive time to work back from" do
@@ -1258,8 +1258,8 @@ RSpec.describe "Buddy agenda tools" do
       resolved, = leave!(base)
       label     = Timecop.freeze(now) { tool[:label].call(resolved, ctx) }
 
-      expect(label[:sub]).to include("leave 4:15 PM")
-      expect(label[:sub]).to include("5:05 PM")
+      expect(label[:sub]).to include("leave 4:15pm")
+      expect(label[:sub]).to include("5:05-7:05pm")
     end
 
     it "leaves a plain `at` alone" do

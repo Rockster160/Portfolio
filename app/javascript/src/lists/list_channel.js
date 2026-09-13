@@ -1,4 +1,5 @@
 import consumer from "./../channels/consumer";
+import { snapshotGate } from "./snapshot_order";
 
 document.addEventListener("DOMContentLoaded", () => {
   const listsRoot = document.querySelector(".ctr-lists.act-show");
@@ -298,6 +299,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.dispatchEvent(new Event("lists:rebind"));
   }
 
+  let fresh = snapshotGate();
+
   window.listWS = consumer.subscriptions.create(
     {
       channel: "ListHtmlChannel",
@@ -306,6 +309,9 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       connected() {
         window.__listWsConnected = true;
+        // Reconnecting re-fetches the list below, so the high-water mark from
+        // the old connection would swallow the first snapshot after it.
+        fresh = snapshotGate();
         const err = document.querySelector(".list-error");
         if (err) err.classList.add("hidden");
 
@@ -362,6 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       received(data) {
         if (!data || typeof data.list_html !== "string") return;
+        if (!fresh(data.timestamp)) return;
 
         // Defer DOM updates while a drag is in progress to avoid
         // corrupting jQuery UI Sortable state (which causes items

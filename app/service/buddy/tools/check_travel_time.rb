@@ -68,7 +68,7 @@ Buddy::Tools.register(
 
     zone  = ctx.user.timezone
     drive = item.travel_seconds
-    clock = ->(t) { t&.in_time_zone(zone)&.strftime("%-I:%M %p") }
+    clock = ->(t) { Buddy::Clock.at(t, zone: zone) }
 
     {
       name:       item.name,

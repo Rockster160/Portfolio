@@ -327,7 +327,7 @@ Buddy::Tools.register(
     raise "couldn't determine a fire time" if fire_at.nil?
     raise "fire time is in the past" if fire_at < Time.current
 
-    when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+    when_str = Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
 
     # Who it's FOR. Naming someone we can't place is refused rather than
     # quietly aimed back at the asker - a reminder that reaches the wrong
@@ -376,7 +376,7 @@ Buddy::Tools.register(
   },
   label: ->(payload, ctx) {
     fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
-    when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
+    when_str = fire_at ? Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone) : payload[:at].to_s
     sub      = payload[:recurrence] ? "repeats #{payload[:repeat] || payload.dig(:recurrence, 'kind')}" : when_str
     sub      = "to #{payload[:recipient_name]} · #{sub}" if payload[:recipient_name].present?
     { title: payload[:text].to_s.truncate(60), sub: sub.presence }
@@ -464,13 +464,13 @@ Buddy::Tools.register(
 
     if rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
-      tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
+      tstr  = hhmm ? Buddy::Clock.at(hhmm) : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
       verb  = who ? "send this to #{who}" : "remind you"
       # An intraday rule has a start AND an end to its day, and "at 5:19pm"
       # names only the first of fourteen fires. Unless it runs round the clock,
       # in which case it has no window to name and saying one is the lie.
-      shut  = (Time.zone.parse(rec["until_at"].to_s)&.strftime("%-I:%M%P")&.sub(":00", "") rescue nil)
+      shut  = Buddy::Clock.at(rec["until_at"])
       band  = (
         if Buddy::ReminderPresenter.all_day?(rec) then ""
         elsif rec["every_minutes"].to_i.positive? && shut then " from #{tstr} to #{shut}"

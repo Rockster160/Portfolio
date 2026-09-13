@@ -168,7 +168,7 @@ module Buddy
 
       until_time
         .in_time_zone(user.timezone)
-        .strftime("%-I:%M %p")
+        .then { |t| Buddy::Clock.at(t) }
     end
 
     # Buddy's in-character reply while asleep, named for whichever pet is asleep.

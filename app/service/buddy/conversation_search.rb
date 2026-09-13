@@ -92,8 +92,8 @@ module Buddy
     def ago(at, now)
       days = (now.to_date - at.to_date).to_i
       case days
-      when ..0   then at.strftime("today %-I:%M %p")
-      when 1     then at.strftime("yesterday %-I:%M %p")
+      when ..0   then "today #{Buddy::Clock.at(at)}"
+      when 1     then "yesterday #{Buddy::Clock.at(at)}"
       when 2..13 then "#{days}d ago"
       when 14..60 then "#{days / 7}w ago"
       else at.strftime("%b %-d")

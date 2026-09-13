@@ -186,14 +186,38 @@ module Buddy
     # cost is the mirror of the old one: a heads-up phrased around a word not on
     # the list ("Monday looks grim") earns a second line. That trade goes this
     # way because a duplicate is visible and a silence isn't.
+    #
+    # And the sentence has to be about the right PLACE. Prod 6052, 12 Sep: the
+    # seed said "This week: rain Wed & Thu, windy Sun" and the briefing said
+    # none of it, because it had written "Alpine looks rainy tomorrow from 8:00
+    # AM to 1:00 PM, and the rest of the week there's rain odds on Monday,
+    # Wednesday, Thursday, and Friday" - one sentence about a canyon, carrying
+    # a weather word and every flagged day, and the repair stood down. Eve's
+    # briefing, built from an identical WEATHER block and no ALPINE one, said
+    # the week's line fine. The Alpine block is gated to one person
+    # (Buddy::BriefingFacts.alpine?), so this loses on exactly the briefing
+    # nobody has a second copy of.
     def week_said?(body, days, today: Date.current)
       return true if body.blank? || days.empty?
 
       words = day_words(days, today)
-      sentences(body).any? { |sentence|
+      home_sentences(body).any? { |sentence|
         sentence.match?(WEATHER_WORDS_RX) &&
           words.any? { |word| sentence.match?(/\b#{Regexp.escape(word)}\b/i) }
       }
+    end
+
+    # The canyon by either of the names the seed and the glossary give it -
+    # "Alpine" the place, "Horsetail" the trailhead they actually drive to.
+    ALPINE_PLACE_RX = /\b(?:alpine|horsetail)\b/i
+
+    # Sentences that are about the weather where they LIVE.
+    #
+    # Dropping a sentence naming the canyon costs a briefing that mentions both
+    # in one breath ("Rain Wed and Thu here, and Alpine's wet too") a second
+    # line. Same trade as everything else in this file: a duplicate is visible.
+    def home_sentences(body)
+      sentences(body).grep_v(ALPINE_PLACE_RX)
     end
 
     # A claim that the week is quiet, on a week that isn't.
@@ -321,6 +345,50 @@ module Buddy
         mer = m[:mer].downcase.chars.join("\\.?")
         body.match?(/(?<!\d)#{m[:hour]}\s*(?::\d{2})?\s*#{mer}\.?/i)
       }
+    end
+
+    # A day in Alpine's WEEK, as PlungeAdvisor.loose_rain writes one:
+    # "Monday, rain at 27% - the forecast has no hours that far out, so the day
+    # on its own is the whole of it". Its timed siblings ("tomorrow 8am-1pm")
+    # carry no figure and are `rain_hours_line`'s business, not this one's.
+    ALPINE_ODDS_RX = /\A(?<day>[A-Za-z]+),\s*(?<kind>[a-z]+)\s+at\s+(?<pop>\d{1,3})%/i
+
+    def alpine_week_odds(lines)
+      Array(lines).filter_map { |line| ALPINE_ODDS_RX.match(line.to_s) }
+    end
+
+    # The Alpine days whose ODDS the briefing didn't give.
+    #
+    # Prod 6052, 12 Sep: the seed listed Monday 27%, Wednesday 30%, Thursday
+    # 100% and Friday 77%, and the briefing returned "the rest of the week
+    # there's rain odds on Monday, Wednesday, Thursday, and Friday" - every day,
+    # not one number, against a seed that says "Anything above an ordinary day
+    # goes in with its odds". It then closed on "Monday at 3:40 PM is Plunge
+    # with Wil at Horsetail Falls. Nice little canyon weather for that one",
+    # which is Monday's 27% read as an all-clear. With the odds stripped a hedge
+    # became an endorsement, and that is why this is worth a repair rather than
+    # a wording change.
+    #
+    # Per day rather than `any?`, which is the opposite call from `week_said?`
+    # and `rain_hours_said?` above. Those two ask whether a SUBJECT was raised;
+    # this one asks whether four specific figures are present, and three out of
+    # four is the failure - the one that goes missing is as likely to be the
+    # 100% as not.
+    def week_odds_missing(body, lines)
+      return [] if body.blank?
+
+      alpine_week_odds(lines).reject { |m|
+        body.match?(/(?<!\d)#{m[:pop]}\s*(?:%|percent)/i)
+      }
+    end
+
+    # Only the ones that went missing, so a briefing that gave two of four
+    # doesn't get both of them read back at it.
+    def week_odds_line(missing)
+      parts = Array(missing).map { |m| "#{m[:day]} #{m[:kind].downcase} at #{m[:pop]}%" }
+      return nil if parts.empty?
+
+      "In Alpine, #{parts.to_sentence}."
     end
 
     # The departure time, composed here for the same reason the weather line is.

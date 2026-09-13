@@ -924,7 +924,7 @@ module Buddy
 
       return (day_prefix.strip.presence || "today").to_s.strip if all_day
 
-      time_str = local.strftime("%-I:%M%P").sub(":00", "")  # "6:01pm" / "6pm"
+      time_str = Buddy::Clock.at(local) # "6:01pm" / "6pm"
       "#{day_prefix}at #{time_str}"
     end
 

@@ -46,7 +46,7 @@ Buddy::Tools.register(
 
     reading = ->(anchor) {
       at = Anchor.resolve("#{anchor.key}#{offset}", user: ctx.user)
-      { anchor: anchor.key, next: at&.in_time_zone(zone)&.strftime("%A %-d %B, %-I:%M%P") }
+      { anchor: anchor.key, next: (at && "#{at.in_time_zone(zone).strftime("%A %-d %B")}, #{Buddy::Clock.at(at, zone: zone)}") }
     }
 
     if key.present?

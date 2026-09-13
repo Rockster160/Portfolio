@@ -126,7 +126,7 @@ module Buddy
 
     def row(item, user, source=nil)
       local = item.start_at.in_time_zone(user.timezone)
-      when_str = item.all_day ? local.strftime("%a %b %-e, %Y (all day)") : local.strftime("%a %b %-e, %Y at %-I:%M%P")
+      when_str = item.all_day ? local.strftime("%a %b %-e, %Y (all day)") : "#{local.strftime("%a %b %-e, %Y")} at #{Buddy::Clock.at(local)}"
       parts = [handle(item), item.name, when_str.sub(":00", "")]
       parts << "until #{clock(item.end_at, user)}" if ends_later?(item)
       # When they are back through the door, which for somebody else's item is
@@ -159,7 +159,7 @@ module Buddy
     def clock(time, user)
       return nil if time.blank?
 
-      time.in_time_zone(user.timezone).strftime("%-I:%M%P").sub(":00", "")
+      Buddy::Clock.at(time, zone: user.timezone)
     end
   end
 end

@@ -190,7 +190,7 @@ module Buddy
     # are indistinguishable in the list, and "did that go to Chelsea or to me?"
     # has no answer short of opening it.
     def when_text(reminder, user)
-      base = reminder.recurring? ? recurrence_text(reminder) : reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
+      base = reminder.recurring? ? recurrence_text(reminder) : Buddy::Clock.day_at(reminder.fire_at, zone: user.timezone)
       base = "#{base}, #{stops_at(reminder)}" if stops_at(reminder)
       return base if reminder.notify_user_id.blank?
 
@@ -212,7 +212,7 @@ module Buddy
     def recurrence_text(reminder)
       rec  = reminder.normalized_recurrence
       hhmm = (Time.zone.parse(rec["at"].to_s) rescue nil)
-      tstr = hhmm ? hhmm.strftime("%-I:%M %p") : rec["at"].to_s
+      tstr = hhmm ? Buddy::Clock.at(hhmm) : rec["at"].to_s
       ends = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
       # A window covering the whole day is not a window, and naming its edges
       # is how "until 11:59pm" turned up on a rule that ends when a print does.

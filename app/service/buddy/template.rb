@@ -85,7 +85,7 @@ module Buddy
       now  = Time.current.in_time_zone(zone)
 
       {
-        now:      now.strftime("%-I:%M %p"),
+        now:      Buddy::Clock.at(now),
         today:    now.strftime("%A, %B %-e"),
         date:     now.strftime("%Y-%m-%d"),
         time:     now.strftime("%H:%M"),

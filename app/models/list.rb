@@ -315,12 +315,33 @@ class List < ApplicationRecord
     end
   end
 
+  # Every broadcast carries the WHOLE list, so the last one to arrive is what
+  # the page shows — and ActionCable hands each broadcast to its own
+  # worker-pool thread (four by default), so snapshots published milliseconds
+  # apart can reach a socket in any order. Three items added in a row (the
+  # Before Bed reminder does exactly that at 9pm) publish three snapshots, and
+  # the one-item snapshot landing after the three-item one leaves two items
+  # missing until something else bumps the list.
+  #
+  # `timestamp` is what lets a client throw away a snapshot older than the one
+  # it has already drawn. It is MILLISECONDS: the whole point is telling apart
+  # broadcasts that fall inside the same second, which the seconds it used to
+  # carry could not do.
   def broadcast!
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{id}_json_channel", { list_data: serialize, timestamp: Time.current.to_i }
+    json = serialize
+    ActionCable.server.broadcast "list_#{id}_json_channel", { list_data: json, timestamp: broadcast_stamp }
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
-    ActionCable.server.broadcast "list_#{id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    ActionCable.server.broadcast "list_#{id}_html_channel", { list_html: rendered_message, timestamp: broadcast_stamp }
+  end
+
+  # Stamped AFTER the read that produced the snapshot, never before. The stamp
+  # has to order the READS: taken first, a slow serialize would carry an early
+  # stamp and lose to the staler snapshot that overtook it, which is the bug
+  # again with extra steps.
+  def broadcast_stamp
+    (Time.current.to_f * 1000).round
   end
 end

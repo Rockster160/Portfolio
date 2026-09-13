@@ -94,7 +94,7 @@ Buddy::Tools.register(
     raise "that time has already gone by" if fire_at < Time.current
 
     zoned    = fire_at.in_time_zone(ctx.user.timezone)
-    when_str = zoned.strftime("%a %-I:%M %p")
+    when_str = Buddy::Clock.day_at(zoned)
     # A recurring reminder keeps its shape and only the hour moves, so the
     # recurrence carries the new HH:MM and `fire_at` is recomputed from it.
     recurrence = (reminder.recurrence.merge("at" => zoned.strftime("%H:%M")) if reminder.recurring?)
@@ -105,13 +105,13 @@ Buddy::Tools.register(
         reminder_id: reminder.id,
         fire_at_iso: fire_at.iso8601,
         recurrence:  recurrence,
-        was:         reminder.fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p"),
+        was:         Buddy::Clock.day_at(reminder.fire_at, zone: ctx.user.timezone),
       },
     }
   },
   label: ->(payload, ctx) {
     fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
-    when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
+    when_str = fire_at ? Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone) : payload[:at].to_s
     reminder = BuddyReminder.find_by(id: payload[:reminder_id])
     { title: (reminder&.body).to_s.truncate(60), sub: "moved to #{when_str}" }
   },

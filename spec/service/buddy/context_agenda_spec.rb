@@ -495,7 +495,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
 
       expect(row("Her Yoga")).not_to include(:leave_by)
       expect(row("Her Yoga")[:home_by]).to eq(
-        4.hours.from_now.advance(minutes: 31).in_time_zone(user.timezone).strftime("%-I:%M %p"),
+        Buddy::Clock.at(4.hours.from_now.advance(minutes: 31), zone: user.timezone),
       )
       expect(row("Her Yoga")[:drive_home_min]).to eq(31)
     end

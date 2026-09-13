@@ -204,10 +204,10 @@ Buddy::Tools.register(
     # what put "leave at 4:28" on a 4:28 start (prod 5147).
     if payload[:leave_from].respond_to?(:strftime) && payload[:at].respond_to?(:strftime)
       zone = ctx.user.timezone
-      diffs << "leave #{payload[:leave_from].in_time_zone(zone).strftime("%-I:%M %p")} → " \
-               "starts #{payload[:at].in_time_zone(zone).strftime("%a %-I:%M %p")}"
+      diffs << "leave #{Buddy::Clock.at(payload[:leave_from], zone: zone)} → " \
+               "starts #{Buddy::Clock.day_at(payload[:at], zone: zone)}"
     elsif payload[:at].respond_to?(:strftime)
-      diffs << "time → #{payload[:at].in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")}"
+      diffs << "time → #{Buddy::Clock.day_at(payload[:at], zone: ctx.user.timezone)}"
     end
     diffs << "duration → #{payload[:duration]}m" if payload[:duration].present?
     diffs << "@ #{payload[:location]}" if payload[:location].present?
@@ -330,11 +330,11 @@ Buddy::Tools.register(
     return "Updated #{name} ✓" unless fields.include?("start_at") && item&.start_at
 
     zone  = ctx.user.timezone
-    start = item.start_at.in_time_zone(zone).strftime("%a %-I:%M %p")
+    start = Buddy::Clock.day_at(item.start_at, zone: zone)
     # They asked to LEAVE at a time, so lead with that - it is the half they
     # said and the half they act on. The start is the consequence.
     leave = (ctx.resolve_time(result[:leave_from]) if result[:leave_from].present?)
-    return "#{name} - leave #{leave.in_time_zone(zone).strftime("%-I:%M %p")}, starts #{start} ✓" if leave
+    return "#{name} - leave #{Buddy::Clock.at(leave, zone: zone)}, starts #{start} ✓" if leave
 
     "#{name} → #{start} ✓"
   },

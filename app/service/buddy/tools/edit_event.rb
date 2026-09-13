@@ -26,7 +26,7 @@ Buddy::Tools.register(
     diffs = []
     diffs << "name → #{payload[:name]}" if payload[:name].present?
     diffs << "notes → #{payload[:notes].to_s.first(30)}" if payload[:notes].present?
-    diffs << "time → #{payload[:at].strftime("%-I:%M %p")}" if payload[:at].respond_to?(:strftime)
+    diffs << "time → #{Buddy::Clock.at(payload[:at])}" if payload[:at].respond_to?(:strftime)
     { title: base, sub: diffs.join("\n").presence }
   },
   execute:     ->(payload, ctx) {

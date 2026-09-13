@@ -8,7 +8,8 @@ module Buddy
   #     the user's TZ, or yesterday if that's already in the future
   #
   # Always returns a Time in the user's zone, or nil if unparseable.
-  # `friendly` renders "3:14 PM" style for confirmation UIs.
+  # `friendly` renders "3:14pm" style for confirmation UIs - see Buddy::Clock,
+  # which owns the digits.
   module TimeParser
     module_function
 
@@ -41,7 +42,7 @@ module Buddy
       when today - 1      then "yesterday "
       else                     "#{time.strftime('%a')} "
       end
-      "#{day_label}#{time.strftime('%-I:%M %p').sub(':00', '').downcase.sub(/(am|pm)/) { $1 }}"
+      "#{day_label}#{Buddy::Clock.at(time)}"
     end
 
     class << self

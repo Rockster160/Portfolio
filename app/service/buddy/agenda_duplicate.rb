@@ -45,7 +45,7 @@ module Buddy
 
       when_ = row.start_at.in_time_zone(zone || ::Time.zone)
       raise "#{row.name} is already on #{row.agenda&.name || "that calendar"} at " \
-            "#{when_.strftime("%a %b %-d, %-I:%M %p")} - adding it again leaves the first one " \
+            "#{Buddy::Clock.date_at(when_)} - adding it again leaves the first one " \
             "where it is and gives them two. If something about it is changing, that's " \
             "edit_agenda_item; if nothing is, it's already done and you can just say so"
     end

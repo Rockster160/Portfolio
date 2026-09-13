@@ -199,15 +199,15 @@ class ListItem < ApplicationRecord
     true
   end
 
+  # The list-wide snapshots go out through List#broadcast! rather than a second
+  # copy of it here. They have to be stamped, and a stamp applied in two places
+  # is a stamp that drifts.
   def broadcast_commit
     return if do_not_broadcast
-
-    ActionCable.server.broadcast "list_#{list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
 
     list_item_attrs = attributes.symbolize_keys.slice(:important, :permanent, :category, :name)
     ActionCable.server.broadcast "list_item_#{id}_channel", { list_item: list_item_attrs }
 
-    rendered_message = ListsController.render template: "list_items/index", locals: { list: list }, layout: false
-    ActionCable.server.broadcast "list_#{list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    list.broadcast!
   end
 end

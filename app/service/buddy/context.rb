@@ -55,7 +55,7 @@ module Buddy
       upcoming      = upcoming_agenda(user, now)
 
       {
-        now_local:              now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
+        now_local:              "#{now.strftime("%a %Y-%m-%d")} #{Buddy::Clock.at(now)} #{now.strftime("%Z")}",
         timezone:               tz,
         user_first_name:        user.first_name,
         emotional_state:        emotional_state(conversation, now),  # current mood + pet expression
@@ -337,7 +337,7 @@ module Buddy
               # is a duration where the sentence wanted a day. Everything in
               # this list IS today, so that's what the field says, and the flag
               # below is where "no clock time" lives now.
-              time:           (i.all_day ? "today" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              time:           (i.all_day ? "today" : Buddy::Clock.at(i.start_at, zone: user.timezone)),
               all_day:        (true if i.all_day),
               title:          i.name,
               # The BASIC form, which is what gets said: "Horsetail Falls",
@@ -401,7 +401,7 @@ module Buddy
           tag_ownership(
             {
               day:           day_label(local, user, now),
-              time:          (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
+              time:          (i.all_day ? "all day" : Buddy::Clock.at(local)),
               title:         i.name,
               # Often the difference between a mention that means something
               # and one that doesn't: "a pickup Saturday" was `Pickup B and
@@ -526,14 +526,14 @@ module Buddy
         epoch  = travel.is_a?(Hash) ? travel["leave_at"].to_i : 0
         return nil unless epoch.positive?
 
-        Time.zone.at(epoch).in_time_zone(user.timezone).strftime("%-I:%M %p")
+        Buddy::Clock.at(Time.zone.at(epoch), zone: user.timezone)
       end
 
       # The other end of the same drive: what time they are back through the
       # door. `leave_by` answers "when do I go", this answers "when am I free
       # again", and lining one thing up behind another needs the second one.
       def home_by(item, user)
-        item.home_at&.in_time_zone(user.timezone)&.strftime("%-I:%M %p")
+        Buddy::Clock.at(item.home_at, zone: user.timezone)
       end
 
       def drive_home_minutes(item)
@@ -1029,7 +1029,7 @@ module Buddy
             {
               id:    e.id,
               name:  e.name,
-              at:    e.timestamp.in_time_zone(user.timezone).strftime("%-I:%M %p"),
+              at:    Buddy::Clock.at(e.timestamp, zone: user.timezone),
               # Relative age label. Buddy weights recency by this: "just
               # now" and "N min ago" are live signals, older ones fade.
               # No hard cutoff - Buddy decides based on the label.
@@ -1112,7 +1112,7 @@ module Buddy
         live  = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
             id:           r.id,
-            fire_at:      r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
+            fire_at:      Buddy::Clock.day_at(r.fire_at, zone: tz),
             kind:         r.kind,
             body:         r.body.to_s.first(120),
             # A recurring reminder rolls `fire_at` forward the moment it fires,
@@ -1447,7 +1447,7 @@ module Buddy
         rows.map { |msg|
           meta = msg.metadata.to_h
           {
-            at:   msg.created_at.in_time_zone(conversation.user.timezone).strftime("%-I:%M %p"),
+            at:   Buddy::Clock.at(msg.created_at, zone: conversation.user.timezone),
             did:  msg.body.to_s.gsub(/\*\*/, ""),
             tool: meta["tool_name"],
             ok:   meta["ok"] != false,

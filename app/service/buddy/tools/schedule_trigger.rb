@@ -96,7 +96,7 @@ Buddy::Tools.register(
       ScheduleCondition.met?(condition, user: ctx.user)
     end
 
-    when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+    when_str = Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
     summary  = "Fire `#{scope}` #{when_str}?"
     summary += " (#{data.map { |k, v| "#{k}: #{v}" }.join(", ")})" if data.any?
     summary  = "#{summary.chomp("?")}, #{ScheduleCondition.describe(condition)}?" if condition
@@ -113,7 +113,7 @@ Buddy::Tools.register(
   },
   label:       ->(payload, ctx) {
     fire_at = (Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil)
-    subs = [fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s]
+    subs = [fire_at ? Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone) : payload[:at].to_s]
     subs << ScheduleCondition.describe(payload[:condition])
     { title: payload[:scope].to_s, sub: subs.compact_blank.join("\n").presence }
   },

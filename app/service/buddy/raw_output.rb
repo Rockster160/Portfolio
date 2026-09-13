@@ -36,7 +36,7 @@ module Buddy
       return nil if time.nil?
 
       local = time.in_time_zone(zone_for(user))
-      clock = local.strftime("%-I:%M %p")
+      clock = Buddy::Clock.at(local)
       case (local.to_date - today).to_i
       when 0  then "#{clock} today"
       when -1 then "#{clock} yesterday"

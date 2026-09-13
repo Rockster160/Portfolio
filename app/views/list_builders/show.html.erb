@@ -742,6 +742,20 @@
     })
 
     // ---------- WebSocket setup ----------
+    // A list broadcast carries the whole list and ActionCable dispatches each
+    // one on its own worker thread, so snapshots published milliseconds apart
+    // can arrive in either order. `timestamp` is milliseconds, stamped after
+    // the read, so an older snapshot overtaking a newer one gets dropped
+    // instead of redrawing the list as it was two items ago.
+    let drawnAt = -Infinity
+    const fresh = (stamp) => {
+      const ts = Number(stamp)
+      if (!Number.isFinite(ts)) { return true }
+      if (ts < drawnAt) { return false }
+      drawnAt = ts
+      return true
+    }
+
     listSocket = new AuthWS(
       { channel: "ListJsonChannel", channel_id: `list_${LIST_ID}` },
       {
@@ -755,7 +769,7 @@
           elWsStatus.classList.remove("hidden")
         },
         onmessage(msg) {
-          if (msg.list_data && msg.list_data.items) {
+          if (msg.list_data && msg.list_data.items && fresh(msg.timestamp)) {
             LIST_ITEMS = new Set(
               msg.list_data.items
                 .filter(item => !item.deleted_at)

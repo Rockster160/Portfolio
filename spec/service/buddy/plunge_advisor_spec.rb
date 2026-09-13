@@ -34,7 +34,7 @@ RSpec.describe Buddy::PlungeAdvisor do
   it "reports rain windows when it's going to rain" do
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
     block = described_class.briefing_lines(user, now: tz.parse("2026-07-28 07:00")).join("\n")
-    expect(block).to include("Rain in the forecast").and include("12pm-2pm")
+    expect(block).to include("Rain in the forecast").and include("12-2pm")
   end
 
   it "calls it a good plunge day when weekday rain lands in a down-time with a clear agenda" do
@@ -127,7 +127,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     end
 
     it "gives tomorrow's rain as hours, not as a day" do
-      expect(block(rain_at: { "2026-08-21" => [13, 14, 15] })).to include("tomorrow 1pm-4pm")
+      expect(block(rain_at: { "2026-08-21" => [13, 14, 15] })).to include("tomorrow 1-4pm")
     end
 
     it "names a further day by weekday" do
@@ -176,7 +176,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     # Buddy::TodayBriefing::WRITING_RULES now, where it reaches the model on
     # every Alpine day rather than only on the ones with a week list.
     it "hands over hours and nothing about how to use them" do
-      expect(block(rain_at: { "2026-08-21" => [13] })).to eq("tomorrow 1pm-2pm")
+      expect(block(rain_at: { "2026-08-21" => [13] })).to eq("tomorrow 1-2pm")
     end
 
     # Same rule as the weather block above: a phrase written down so it can be

@@ -73,7 +73,7 @@ RSpec.describe "call_jil_function tool" do
         run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
       }
 
-      expect(result[:answer]).to include("8:14 PM on Jul 29")
+      expect(result[:answer]).to include("8:14pm on Jul 29")
       expect(result[:answer]).not_to include("02:14:14")
       expect(result[:answer]).not_to include("+00:00")
     end

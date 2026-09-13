@@ -86,7 +86,7 @@ Buddy::Tools.register(
     raise "couldn't work out when to run that" if fire_at.nil?
     raise "that time has already passed" if fire_at < Time.current
 
-    when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+    when_str = Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
     summary  = (
       if recurrence
         "Run **#{payload[:name]}** repeatedly, starting #{when_str}?"
@@ -106,7 +106,7 @@ Buddy::Tools.register(
   },
   label:            ->(payload, ctx) {
     fire_at = (Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil)
-    subs    = [payload[:recurrence] ? "repeats #{payload[:repeat]}" : fire_at&.in_time_zone(ctx.user.timezone)&.strftime("%a %-I:%M %p")]
+    subs    = [payload[:recurrence] ? "repeats #{payload[:repeat]}" : Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)]
     subs << Array(payload[:fn_args]).map { |k, v| "#{k}: #{v}" }.join(", ").presence
     { title: payload[:name].to_s, sub: subs.compact_blank.join("\n").presence }
   },

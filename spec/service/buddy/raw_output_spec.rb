@@ -17,7 +17,7 @@ RSpec.describe Buddy::RawOutput do
       at("2026-08-05 14:00:00") {
         out = described_class.localize("kennel is closed (last changed: 2026-08-05T18:58:03.888986+00:00)", user)
 
-        expect(out).to include("12:58 PM today")
+        expect(out).to include("12:58pm today")
         expect(out).not_to include("6:58 PM")
         expect(out).not_to include("18:58")
       }
@@ -25,15 +25,15 @@ RSpec.describe Buddy::RawOutput do
 
     it "says which day when it wasn't today" do
       at("2026-08-05 14:00:00") {
-        expect(described_class.localize("2026-08-04T18:58:03+00:00", user)).to eq("12:58 PM yesterday")
-        expect(described_class.localize("2026-07-30T02:14:14+00:00", user)).to eq("8:14 PM on Jul 29")
+        expect(described_class.localize("2026-08-04T18:58:03+00:00", user)).to eq("12:58pm yesterday")
+        expect(described_class.localize("2026-07-30T02:14:14+00:00", user)).to eq("8:14pm on Jul 29")
       }
     end
 
     it "handles a Z suffix and an offset that isn't zero" do
       at("2026-08-05 14:00:00") {
-        expect(described_class.localize("2026-08-05T18:58:03Z", user)).to eq("12:58 PM today")
-        expect(described_class.localize("2026-08-05T14:58:03-04:00", user)).to eq("12:58 PM today")
+        expect(described_class.localize("2026-08-05T18:58:03Z", user)).to eq("12:58pm today")
+        expect(described_class.localize("2026-08-05T14:58:03-04:00", user)).to eq("12:58pm today")
       }
     end
 
@@ -60,7 +60,7 @@ RSpec.describe Buddy::RawOutput do
       at("2026-08-05 14:00:00") {
         out = described_class.localize("opened 2026-08-05T18:00:00Z, closed 2026-08-05T18:58:03Z", user)
 
-        expect(out).to eq("opened 12:00 PM today, closed 12:58 PM today")
+        expect(out).to eq("opened 12pm today, closed 12:58pm today")
       }
     end
   end
