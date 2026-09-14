@@ -20,6 +20,18 @@
 #
 #     { kind: :jil, task: "Is The Car Plugged In", expect: :truthy }
 #
+#   LOCATION — where the person is, right now:
+#
+#     { kind: :location, place: "home", expect: :away }
+#
+#   That last one is FeatureRequest 6, written 4 Sep: "If I'm not home by
+#   12:50, set Whisper Quiet for an hour." Byte set the 12:50 part and said it
+#   had no home-away check wired, which was true, and Rocco's answer was "that's
+#   not what's needed at all" - an unconditional version of a conditional
+#   request is a different request. It COULD have been written as a `jil`
+#   condition, and that is the tell that it should not have to be: a phone
+#   position is not a bespoke automation, it is a fact the app already keeps.
+#
 # `expect` is the polarity and both directions of each are real: skip the nudge
 # once the thing is DONE (`missing`), or hold it until it HAS happened
 # (`found`); fire while a sensor says yes (`truthy`), or while it says no.
@@ -40,6 +52,11 @@
 #     renaming a task degrades to an unanswerable condition rather than quietly
 #     running the nearest thing to it.
 module ScheduleCondition
+  # `near?` / `distance`, for the location kind. DistanceHelper is a plain
+  # module of instance methods - AddressBook and BuddyWatch include it,
+  # LocationCache extends it - so there is no `DistanceHelper.near?` to call.
+  extend DistanceHelper
+
   module_function
 
   # What a condition may search, and the rows it may search within.
@@ -72,8 +89,18 @@ module ScheduleCondition
     boxes:             ->(user) { Box.where(user_id: user.id) },
   }.freeze
 
-  KINDS   = %i[search jil].freeze
-  EXPECTS = { search: %i[found missing], jil: %i[truthy falsy] }.freeze
+  KINDS   = %i[search jil location].freeze
+  EXPECTS = {
+    search:   %i[found missing],
+    jil:      %i[truthy falsy],
+    location: %i[at away],
+  }.freeze
+
+  # How close counts as being there. `DistanceHelper`'s own default is 0.001°
+  # (~110m), which is the radius LocationCache and TravelResolver already treat
+  # as "at the house" - so "am I home" answers the same way here as it does
+  # everywhere else in the app rather than drawing a second, private boundary.
+  AT_PLACE_THRESHOLD = 0.001
 
   # What a Jil function has to come back with to count as NO. Everything else,
   # including a number, a name or a sentence, is yes.
@@ -121,6 +148,9 @@ module ScheduleCondition
     when :jil
       truthy = truthy?(ran(data, user))
       data[:expect] == :falsy ? !truthy : truthy
+    when :location
+      here = at_place?(data[:place], user)
+      data[:expect] == :away ? !here : here
     end
   end
 
@@ -169,6 +199,58 @@ module ScheduleCondition
     FALSY.exclude?(result.to_s.strip.downcase)
   end
 
+  # ---- the location kind ---------------------------------------------------
+
+  # Raises on all three ways of not knowing, and that is the point: a position
+  # nobody has reported, a place with no address on it, and somebody other than
+  # the owner are each an UNANSWERED question, not a "no". Reading any of them
+  # as "not there" would make "if I am not home, do X" fire hardest exactly when
+  # the app has no idea - and the caller already has a documented answer for an
+  # unanswerable condition (ReminderFirer fires and says so).
+  def at_place?(place, user)
+    raise "only the owner's position is tracked" unless user.me?
+
+    here = ::LocationCache.last_coord
+    raise "no position has been reported yet" if here.blank?
+
+    validate_place!({ place: place }, user)
+    near_place?(here, place, user)
+  end
+
+  # Is this coordinate at that place? Public because `check_location` asks the
+  # same question about a position it is already holding.
+  #
+  # FALSE for a place that resolves to nothing, which is why every caller runs
+  # `validate_place!` first: "no" and "no idea" are different answers and this
+  # one cannot tell them apart.
+  def near_place?(coord, place, user)
+    there = place_coord(place, user)
+    return false if there.blank? || coord.blank?
+
+    near?(coord.map(&:to_f), there.map(&:to_f), AT_PLACE_THRESHOLD)
+  end
+
+  # The half of a location check that can be wrong FOREVER: whether the place
+  # resolves at all. Both scheduling tools validate a condition on the way in
+  # and neither may run this kind - that needs a position the phone may not
+  # have reported yet - so this is what they call instead.
+  def validate_place!(condition, user)
+    place = condition[:place]
+    raise "nowhere called #{place.inspect} has an address on it" if place_coord(place, user).blank?
+  end
+
+  # "home" is the one name that must always work, and it is the one the address
+  # book already answers directly. Everything else goes through `match_contact`,
+  # which is what resolves "Chelsea's", "Chelsea's place" and "Chelseas" onto
+  # the one contact - the same cascade `remind_when` uses to place a travel
+  # watch, so a condition and a watch agree about where somewhere is.
+  def place_coord(place, user)
+    book = user.address_book
+    return book.home&.loc if place.to_s.strip.downcase == "home"
+
+    book.match_contact(place.to_s)&.primary_address&.loc
+  end
+
   # ---- storing + explaining ------------------------------------------------
 
   # Storable form: symbol keys, validated, or nil for "no condition".
@@ -178,7 +260,12 @@ module ScheduleCondition
   # than at 9pm three weeks later.
   def normalize(condition)
     data = (condition.presence || {}).to_h.symbolize_keys
-    return nil if data.values_at(:find, :query, :task).all?(&:blank?)
+    # A location condition is the one kind whose whole payload is optional -
+    # `place` defaults to home - so it is the only one that has to be recognised
+    # by its `kind` alone. Every other caller leaves `kind` out and lets it be
+    # inferred, which is why this can't simply ask whether `kind` is set.
+    return nil if data.values_at(:find, :query, :task, :place).all?(&:blank?) &&
+      data[:kind].to_s != "location"
 
     kind = (data[:kind].presence || (data[:task].present? ? :jil : :search)).to_s.to_sym
     raise "no condition kind called #{kind.inspect} (have: #{KINDS.join(", ")})" unless KINDS.include?(kind)
@@ -208,6 +295,13 @@ module ScheduleCondition
     { task: data[:task].to_s.strip, args: (data[:args].presence || {}).to_h }
   end
 
+  # Defaults to home, because it is the place nearly every one of these is
+  # about and the one nobody says out loud - "if I'm not back by 12:50" names
+  # no place at all.
+  def normalize_location(data)
+    { place: data[:place].to_s.strip.presence || "home" }
+  end
+
   # One line for a person: what this is waiting on, in the order they'd say it.
   def describe(condition)
     data = normalize(condition)
@@ -218,6 +312,8 @@ module ScheduleCondition
       "only if #{data[:expect] == :missing ? "no" : "any"} #{data[:find].to_s.humanize.downcase} match `#{data[:query]}`"
     when :jil
       "only if **#{data[:task]}** comes back #{data[:expect] == :falsy ? "false" : "true"}"
+    when :location
+      "only if you're #{data[:expect] == :away ? "not at" : "at"} #{data[:place]}"
     end
   rescue StandardError => e
     "condition unreadable (#{e.message})"

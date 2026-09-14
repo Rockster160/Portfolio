@@ -274,10 +274,19 @@ RSpec.describe RecordLinks::Propagator do
 
     # 382 is gone: the list is the bottom of the cascade and nothing runs up
     # from it.
+    #
+    # Deliberately NOT the "Chores" list, which `ChoreListSync` now mirrors
+    # wholesale — an item typed onto THAT one does mark its chore due, by a
+    # rule that lives outside RecordLinks entirely. This example is about the
+    # cascade staying one-way, so it uses a list the mirror doesn't own.
     it "does NOT touch the chore when the item is added by hand" do
-      list.list_items.add("Pickup RX")
+      todo = list!("Todo")
+      link!(:chore, "Go get mail", :list_item, "Go get mail", target_scope: "Todo")
+      mail = chore!("Go get mail")
 
-      expect(chore.reload).not_to be_marked_due
+      todo.list_items.add("Go get mail")
+
+      expect(mail.reload).not_to be_marked_due
     end
   end
 

@@ -285,7 +285,10 @@ RSpec.describe Buddy::Features do
     it "tells everyone else the owner's are not theirs" do
       grant!(*described_class.all)
 
-      expect(described_class.missing_for(user)).to contain_exactly(:mac, :deliveries, :job_search)
+      # Named off OWNER_ONLY rather than listed out, so the next one added to it
+      # is covered on the day it lands instead of failing this and being pasted
+      # into the expectation.
+      expect(described_class.missing_for(user)).to contain_exactly(*described_class::OWNER_ONLY)
     end
   end
 

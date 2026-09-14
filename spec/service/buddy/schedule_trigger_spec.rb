@@ -168,14 +168,85 @@ RSpec.describe "schedule_trigger" do
       expect(chip.metadata["detail"]).to include("any chore completions")
     end
 
-    it "refuses a check that is both a search and a task" do
-      expect { confirm(checked.merge(check_task: "Something")) }.to raise_error(/not both/)
+    it "refuses a check that is more than one kind of check" do
+      expect { confirm(checked.merge(check_task: "Something")) }.to raise_error(/not more than one/)
+      expect { confirm(checked.merge(check_place: "home")) }.to raise_error(/not more than one/)
     end
 
     it "leaves an unchecked trigger with no condition at all" do
       create!(scope: "villager")
 
       expect(scheduled.first.condition).to be_nil
+    end
+  end
+
+  # FeatureRequest 6, written 4 Sep: "If I'm not home by 12:50, set Whisper
+  # Quiet for an hour." Byte set the 12:50 part, said out loud that it had no
+  # home-away check wired, and was told "that's not what's needed at all" - an
+  # unconditional version of a conditional instruction is a different
+  # instruction, and doing the safe half of it is not a partial answer.
+  describe "gating on where they are" do
+    let(:home) { [40.48049, -111.99816] }
+
+    before do
+      allow(user).to receive(:me?).and_return(true)
+      contact = user.contacts.create!(name: "Home")
+      contact.addresses.create!(user: user, street: "1 Home St", lat: home[0], lng: home[1], primary: true)
+      allow(::LocationCache).to receive(:last_coord).and_return(home)
+    end
+
+    def run! = JilRunnerWorker.new.execute_continually(user)
+
+    def quiet(over = {})
+      { scope: "whisper:quiet", check_place: "home", check_expect: :away }.merge(over)
+    end
+
+    it "stores the place and the side of it that has to be true" do
+      create!(quiet)
+
+      expect(scheduled.first.condition).to include(
+        "kind" => "location", "place" => "home", "expect" => "away",
+      )
+    end
+
+    it "says what it is waiting on before they tap yes" do
+      expect(confirm(quiet)[:summary]).to include("only if you're not at home")
+    end
+
+    it "holds the trigger back while they are home" do
+      create!(quiet)
+      ScheduledTrigger.where(user_id: user.id).update_all(execute_at: 1.minute.ago)
+
+      run!
+
+      expect(::Jil).not_to have_received(:trigger).with(user, "whisper", hash_including("data" => "quiet"), any_args)
+    end
+
+    it "fires it once they are not" do
+      create!(quiet)
+      allow(::LocationCache).to receive(:last_coord).and_return([40.7608, -111.8910])
+      ScheduledTrigger.where(user_id: user.id).update_all(execute_at: 1.minute.ago)
+
+      run!
+
+      # `whisper:quiet` is split into a scope and its filter by confirm, which
+      # is how a listener reads one and how a person says one.
+      expect(::Jil).to have_received(:trigger).with(user, "whisper", hash_including("data" => "quiet"), any_args)
+    end
+
+    # The half that can be wrong forever, caught while the person is still in
+    # the conversation.
+    it "refuses a place it has never heard of" do
+      expect { confirm(quiet(check_place: "Narnia")) }.to raise_error(/Narnia/)
+    end
+
+    # The mirror of the `jil` rule: running THIS one needs a position the phone
+    # may not have reported yet, and not knowing where somebody is right now is
+    # no argument against scheduling something for 12:50.
+    it "does not need a current position to be scheduled at all" do
+      allow(::LocationCache).to receive(:last_coord).and_return(nil)
+
+      expect { confirm(quiet) }.not_to raise_error
     end
   end
 end

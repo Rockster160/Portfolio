@@ -39,6 +39,16 @@ class ChoreDailyResetWorker
     reset_stale_streaks!(day)
     archive_completed_one_offs!(day)
     clear_completed_marked_due!
+    resync_chore_lists!
+  end
+
+  # The rollover is the one moment the due set changes with nothing writing a
+  # record — yesterday's chores become overdue, today's come due, and the two
+  # sweeps above clear marks with `update_all`, which fires no callback. Without
+  # this the "Chores" list would keep yesterday's answer until something else
+  # happened to touch a chore.
+  def resync_chore_lists!
+    ChoreListSync.subscribers_everywhere.each { |user| ChoreListSync.enqueue(user) }
   end
 
   def generate_hot_picks!(day)

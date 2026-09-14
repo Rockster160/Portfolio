@@ -1042,16 +1042,10 @@ module Buddy
     # Turn an agenda location string into coordinates, local-first: it may be a
     # contact name ("Serenity") or a street ("3300 N Triumph Blvd ..."). Only
     # falls back to a (cached) geocode when neither is on file.
+    # Moved onto AddressBook on 2026-09-14, when SuiteOnArrival needed the same
+    # answer. None of it was ever about Buddy.
     def coords_for_location(location)
-      ab = user.address_book
-      loc = ab.match_contact(location)&.primary_address&.loc
-      return loc if valid_loc?(loc)
-
-      loc = user.addresses.where("street ILIKE ?", location.to_s.strip).first&.loc
-      return loc if valid_loc?(loc)
-
-      geo = ab.geocode(location)
-      geo if valid_loc?(geo)
+      user.address_book.coords_for_location(location)
     end
 
     def levenshtein(a, b)

@@ -284,4 +284,136 @@ RSpec.describe ScheduleCondition do
       expect(described_class.describe(jil)).to include("Is The Car Plugged In", "true")
     end
   end
+
+  # FeatureRequest 6, 4 Sep: "If I'm not home by 12:50, set Whisper Quiet for an
+  # hour." Byte set the 12:50 part, said it had no home-away check wired, and
+  # was told "that's not what's needed at all" - an unconditional version of a
+  # conditional instruction is a different instruction.
+  describe "where the person is" do
+    let(:home_coord) { [40.48049, -111.99816] }
+
+    def place!(name, coord)
+      contact = Contact.create!(user: user, name: name)
+      Address.create!(
+        user: user, contact: contact, street: "#{name} St",
+        lat: coord[0], lng: coord[1], primary: true,
+      )
+      contact
+    end
+
+    def at(coord)
+      allow(::LocationCache).to receive(:last_coord).and_return(coord)
+    end
+
+    def where(over = {})
+      { kind: :location, place: "home", expect: :at }.merge(over)
+    end
+
+    before do
+      allow(user).to receive(:me?).and_return(true)
+      place!("Home", home_coord)
+    end
+
+    it "says yes when they are there" do
+      at(home_coord)
+
+      expect(described_class.met?(where, user: user)).to be(true)
+    end
+
+    it "says no when they are not" do
+      at([40.7608, -111.8910])
+
+      expect(described_class.met?(where, user: user)).to be(false)
+    end
+
+    # The polarity the request was actually written in.
+    it "reads the away side" do
+      at([40.7608, -111.8910])
+      expect(described_class.met?(where(expect: :away), user: user)).to be(true)
+
+      at(home_coord)
+      expect(described_class.met?(where(expect: :away), user: user)).to be(false)
+    end
+
+    # Same radius LocationCache and TravelResolver already treat as the house,
+    # so "am I home" answers one way across the whole app rather than drawing a
+    # second private boundary.
+    it "counts the driveway as home" do
+      at([home_coord[0] + 0.0005, home_coord[1]])
+
+      expect(described_class.met?(where, user: user)).to be(true)
+    end
+
+    it "does not count the next suburb" do
+      at([home_coord[0] + 0.02, home_coord[1]])
+
+      expect(described_class.met?(where, user: user)).to be(false)
+    end
+
+    it "takes a place by name" do
+      place!("The Gym", [40.5, -111.9])
+      at([40.5, -111.9])
+
+      expect(described_class.met?(where(place: "The Gym"), user: user)).to be(true)
+      expect(described_class.met?(where, user: user)).to be(false)
+    end
+
+    # The same cascade `remind_when` resolves a travel watch through, so a
+    # condition and a watch agree about where somewhere is.
+    it "takes the way a person says a place" do
+      place!("Chelsea", [40.5, -111.9])
+      at([40.5, -111.9])
+
+      expect(described_class.met?(where(place: "Chelsea's place"), user: user)).to be(true)
+    end
+
+    it "defaults to home when no place is named" do
+      at(home_coord)
+
+      expect(described_class.met?({ kind: :location }, user: user)).to be(true)
+    end
+
+    # Three ways of NOT KNOWING, and none of them may read as "no". "If I am
+    # not home, do X" would otherwise fire hardest exactly when the app has no
+    # idea where they are. The caller decides what an unanswerable condition
+    # means - see ReminderFirer, which fires anyway and says so.
+    it "raises rather than answering when nothing has reported a position" do
+      at(nil)
+
+      expect { described_class.met?(where, user: user) }.to raise_error(/no position/)
+    end
+
+    it "raises rather than answering when the place is nowhere it knows" do
+      at(home_coord)
+
+      expect { described_class.met?(where(place: "Narnia"), user: user) }.to raise_error(/Narnia/)
+    end
+
+    it "raises for anybody but the owner, whose position is the only one kept" do
+      at(home_coord)
+      allow(user).to receive(:me?).and_return(false)
+
+      expect { described_class.met?(where, user: user) }.to raise_error(/owner/)
+    end
+
+    it "refuses a polarity that belongs to another kind" do
+      expect { described_class.met?(where(expect: :truthy), user: user) }.to raise_error(/at or away/)
+    end
+
+    it "says what it is checking in words" do
+      expect(described_class.describe(where(expect: :away))).to eq("only if you're not at home")
+      expect(described_class.describe(where)).to eq("only if you're at home")
+    end
+
+    # Every other kind is recognised by its payload; this one has no required
+    # payload at all, so it has to be recognised by its `kind`.
+    it "is still a condition with nothing but a kind on it" do
+      expect(described_class.present?({ kind: :location })).to be(true)
+    end
+
+    it "leaves an empty condition as no condition" do
+      expect(described_class.present?({})).to be(false)
+      expect(described_class.met?({}, user: user)).to be(true)
+    end
+  end
 end

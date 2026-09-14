@@ -204,7 +204,8 @@ Buddy::Tools.register(
     check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
     check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
     check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
-    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy], description: "found/missing for a search, truthy/falsy for a task" },
+    check_place:  { type: :string, required: false, description: "Check where they are instead. A place name, or home." },
+    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy at away], description: "found/missing for a search, truthy/falsy for a task, at/away for a place" },
     kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
     notify: { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
@@ -296,12 +297,15 @@ Buddy::Tools.register(
     # evaluated is an authoring mistake, and the moment to catch one is while
     # the person is still in the conversation - not at 9pm three weeks later,
     # when the only symptom is a reminder that quietly never came.
-    raise "a check is either a search or a task, not both" if payload[:check].present? && payload[:check_task].present?
+    checks = payload.values_at(:check, :check_task, :check_place).count(&:present?)
+    raise "a check is a search, a task or a place - not more than one" if checks > 1
 
     condition = ScheduleCondition.normalize({
+      kind:   (:location if payload[:check_place].present?),
       find:   payload[:check],
       query:  payload[:check_query],
       task:   payload[:check_task],
+      place:  payload[:check_place],
       expect: payload[:check_expect],
     })
     # Run it once, here. A search that blows up in SQL, a task name that
@@ -312,9 +316,16 @@ Buddy::Tools.register(
     # Deliberately not run for a `jil` check: asking a function is not free, and
     # a reminder set for next Tuesday would fire it today just to prove it can.
     # `resolve_task` still runs, which is the half that can be wrong forever.
-    if condition
-      condition[:kind] == :jil ? ScheduleCondition.resolve_task(condition[:task], ctx.user) :
-                                 ScheduleCondition.met?(condition, user: ctx.user)
+    #
+    # Nor for a `location` check, for the mirror reason: running it needs a
+    # position the phone may not have reported yet, and not knowing where
+    # somebody is right now is no argument against setting a reminder for
+    # Tuesday. Resolving the PLACE is the half that can be wrong forever.
+    case condition&.dig(:kind)
+    when :jil      then ScheduleCondition.resolve_task(condition[:task], ctx.user)
+    when :location then ScheduleCondition.validate_place!(condition, ctx.user)
+    when nil       then nil
+    else ScheduleCondition.met?(condition, user: ctx.user)
     end
 
     fire_at = ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0

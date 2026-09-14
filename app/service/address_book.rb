@@ -257,6 +257,36 @@ class AddressBook
     }
   end
 
+  # [lat, lng] for whatever a person wrote in a location field, which is
+  # routinely a saved place's NAME rather than an address - "the gym", "TMS",
+  # "Serenity". Three passes, cheapest first, and only the last one costs
+  # anything: a saved contact, one of their own addresses by street, then a
+  # geocode (which `nonnil_cache`s, so the same location asked twice is one
+  # call).
+  #
+  # Lived in Buddy::ToolContext as a private method until 2026-09-14 and is
+  # here now because a second caller wanted it and none of it was ever about
+  # Buddy - SuiteOnArrival has to turn an appointment's location into a point
+  # to compare a phone against. ToolContext delegates.
+  def coords_for_location(location)
+    return if location.blank?
+
+    loc = match_contact(location)&.primary_address&.loc
+    return loc if valid_loc?(loc)
+
+    loc = @user.addresses.where("street ILIKE ?", location.to_s.strip).first&.loc
+    return loc if valid_loc?(loc)
+
+    geo = geocode(location)
+    geo if valid_loc?(geo)
+  end
+
+  # A pair of real numbers. A row with a null lat, or a 0.0 left over from a
+  # failed geocode, is not a place.
+  def valid_loc?(loc)
+    loc.is_a?(Array) && loc.compact.length == 2 && loc.all? { |v| v.to_f.nonzero? }
+  end
+
   # Get [lat,lng] from address
   def geocode(address)
     return if address.blank?

@@ -388,6 +388,10 @@ BUDDY_TOOL_PROBES = {
   skip_prompt:            { say: "skip that check-in for now", needs: :pending_prompt },
   set_font_size:          "this text is too small, bump it up",
   check_weather:          "how's the weather right now? I may take the bike",
+  # `avoid: check_weather` because the two are the only "look something up
+  # about where I am" tools and the weather one has had the place argument for
+  # months - "am I home" reaching it would answer with a forecast.
+  check_location:         { say: "am I home right now?", avoid: %i[check_weather remind_when] },
   undo:                   { say: "undo that", needs: :undoable_in_thread },
   request_feature:        { say: "can you order me a pizza?", avoid: %i[call_jil_function trigger_jil_task] },
 }.freeze

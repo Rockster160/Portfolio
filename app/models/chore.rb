@@ -51,6 +51,10 @@ class Chore < ApplicationRecord
   # controller path all reach the same fanout without each call site
   # having to remember it.
   after_commit :broadcast_chore_change, on: [:create, :update, :destroy]
+  # A chore coming due, getting archived, being renamed or created all change
+  # what the "Chores" list should say. Enqueued rather than run inline — the
+  # reconcile walks every chore the household can see.
+  after_commit :sync_chore_list, on: [:create, :update, :destroy]
 
   WEEKDAY_KEYS = AgendaSchedule::WEEKDAY_KEYS
   FREQUENCIES = [:never, :daily, :weekdays, :weekly, :monthly, :yearly, :custom, :relative, :after_chore].freeze
@@ -568,6 +572,10 @@ class Chore < ApplicationRecord
 
   def broadcast_chore_change
     ChoreBroadcaster.broadcast_changes!(created_by_user, self)
+  end
+
+  def sync_chore_list
+    ChoreListSync.enqueue_for_household(chore_household_id)
   end
 
   # Sub-chore rules:

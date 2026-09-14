@@ -61,6 +61,12 @@ class Jil::Executor
     # One set lookup for any scope that can't be linked.
     ::RecordLinks::Propagator.dispatch(user, trigger, raw_trigger_data)
 
+    # The "Chores" list mirror, uphill half. An item typed onto that list is a
+    # chore that needs doing; an item ticked off it is one that got done. Rides
+    # the bus rather than the model for the same reason above — the list UI
+    # ticks over a socket, and neither controller goes through ListItem.
+    ::ChoreListSync.dispatch(user, trigger, raw_trigger_data)
+
     # A prompt Buddy posted into the thread as a form, answered or skipped
     # somewhere else. Settles that form so the thread stops offering a question
     # that's already been dealt with. One trigger-name comparison otherwise.

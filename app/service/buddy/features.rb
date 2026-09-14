@@ -56,6 +56,10 @@ module Buddy
       # it in one call when they do.
       inventory:  [],
       job_search: %i[job_search],
+      # No section of its own. A position in every prompt is a fact that goes
+      # stale between one message and the next, and `check_location` reaches
+      # the live one in a single call when it actually matters.
+      location:   [],
     }.freeze
 
     # The owner's alone, and ENFORCED rather than merely withheld: `enabled_for`
@@ -70,7 +74,12 @@ module Buddy
     # hunt: whether he's interviewing, where, and how each one went. The board
     # itself is per-user and leaks nothing, but "only I have access to it" is
     # the requirement, and an allow-list that anything can add to isn't that.
-    OWNER_ONLY = %i[mac deliveries job_search].freeze
+    # `location` is here for the same reason as `deliveries`: LocationCache is
+    # User.me's and there is no per-user one, so a second holder would be
+    # reading the owner's position rather than their own. ScheduleCondition
+    # refuses it a second time at fire time - a location check is reachable
+    # from tools that are NOT gated on this one.
+    OWNER_ONLY = %i[mac deliveries job_search location].freeze
 
     # What a new account is handed.
     DEFAULT = (SECTIONS.keys - OWNER_ONLY).freeze
@@ -88,6 +97,7 @@ module Buddy
       deliveries: "packages on their way",
       inventory:  "the inventory of boxes and where things are stored",
       job_search: "their job applications and the mail about them",
+      location:   "where they are right now",
     }.freeze
 
     def all

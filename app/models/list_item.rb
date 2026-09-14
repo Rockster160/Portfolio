@@ -34,8 +34,16 @@ class ListItem < ApplicationRecord
   scope :important, -> { where(important: true) }
   scope :unimportant, -> { where.not(important: true) }
 
+  # The shape a name is COMPARED in — lowercase, and the punctuation people
+  # vary on dropped. `formatted_name` is this applied and stored; anything
+  # matching an outside name against an item has to apply the same thing or it
+  # is comparing against a column it can't reproduce.
+  def self.format_name(name)
+    name.to_s.downcase.gsub(/[ '",.]/i, "")
+  end
+
   def self.by_formatted_name(name)
-    find_by(formatted_name: name.to_s.downcase.gsub(/[ '",.]/i, ""))
+    find_by(formatted_name: format_name(name))
   end
 
   def self.by_name_then_update(params)
@@ -194,7 +202,7 @@ class ListItem < ApplicationRecord
   end
 
   def normalize_values
-    self.formatted_name = name.downcase.gsub(/[ '",.]/i, "")
+    self.formatted_name = self.class.format_name(name)
     self.category = category.squish.titleize.presence if category
     true
   end

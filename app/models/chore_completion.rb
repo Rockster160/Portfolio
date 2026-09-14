@@ -50,6 +50,11 @@ class ChoreCompletion < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  # Every completion moves a chore in or out of the due set, so the "Chores"
+  # list has to be redrawn. Deliberately NOT on the Jil bus like the trigger
+  # above: an anonymous completion (and a skip, which is one) fires no trigger
+  # at all, and those are exactly the two that take a chore off the list.
+  after_commit :sync_chore_list, on: [:create, :update, :destroy]
   # Note: marked_due_at is NOT cleared here on completion. Same-day
   # mutations would shift the chore's slot in the Today tab, violating
   # the "locked at 4am" contract. ChoreDailyResetWorker clears it at
@@ -234,4 +239,7 @@ class ChoreCompletion < ApplicationRecord
     User.where(chore_household_id: chore.chore_household_id).to_a
   end
 
+  def sync_chore_list
+    ChoreListSync.enqueue_for_household(chore&.chore_household_id)
+  end
 end

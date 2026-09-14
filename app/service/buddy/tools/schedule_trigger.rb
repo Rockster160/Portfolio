@@ -39,10 +39,18 @@ Buddy::Tools.register(
               match things nobody asked about.
       check_task / check_expect           - ask one of their Jil functions
               instead, and read what it says.
+      check_place / check_expect          - where they ARE when it fires.
+              `at` or `away`. The place defaults to home, which is what
+              somebody means when they name no place at all.
 
     "if I've done X by 8" is `check: chore_completions`,
     `check_query: 'name:"X" is:today'`, `check_expect: found` - fire only when
     the completion IS there. "if I still haven't" is the same with `missing`.
+
+    "if I'm not back by 12:50" is `check_place: home`, `check_expect: away`.
+    A sentence that says "if I'm not home" is a CHECK, not a hedge - setting
+    the time half and leaving the condition out is a different instruction from
+    the one they gave.
 
     Without a check this is just a delayed trigger, which is fine and is what a
     plain "fire X at 8" means.
@@ -58,7 +66,8 @@ Buddy::Tools.register(
     check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
     check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space." },
     check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
-    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy], description: "found/missing for a search, truthy/falsy for a task" },
+    check_place:  { type: :string, required: false, description: "Check where they are instead. A place name, or home." },
+    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy at away], description: "found/missing for a search, truthy/falsy for a task, at/away for a place" },
   },
   auto:        true,
   confirm:     ->(payload, ctx) {
@@ -77,12 +86,15 @@ Buddy::Tools.register(
     raise "couldn't work out when to fire that" if fire_at.nil?
     raise "that time has already passed" if fire_at < Time.current
 
-    raise "a check is either a search or a task, not both" if payload[:check].present? && payload[:check_task].present?
+    checks = payload.values_at(:check, :check_task, :check_place).count(&:present?)
+    raise "a check is a search, a task or a place - not more than one" if checks > 1
 
     condition = ScheduleCondition.normalize({
+      kind:   (:location if payload[:check_place].present?),
       find:   payload[:check],
       query:  payload[:check_query],
       task:   payload[:check_task],
+      place:  payload[:check_place],
       expect: payload[:check_expect],
     })
     # Validated on the way in, same as schedule_reminder: a search that won't
@@ -90,8 +102,16 @@ Buddy::Tools.register(
     # the moment to catch one is while the person is still here. A `jil` check
     # is resolved but NOT run - asking a function isn't free, and one scheduled
     # for next week shouldn't fire today to prove it can.
+    #
+    # A `location` check resolves the PLACE and stops there, for the same reason
+    # in the other direction: running it needs a position the phone may not have
+    # reported yet, and "we don't know where you are right now" is no reason to
+    # refuse to schedule something for 12:50. A place that resolves to nothing
+    # IS an authoring mistake and is caught here.
     if condition && condition[:kind] == :jil
       ScheduleCondition.resolve_task(condition[:task], ctx.user)
+    elsif condition && condition[:kind] == :location
+      ScheduleCondition.validate_place!(condition, ctx.user)
     elsif condition
       ScheduleCondition.met?(condition, user: ctx.user)
     end

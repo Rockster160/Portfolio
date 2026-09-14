@@ -360,9 +360,9 @@ RSpec.describe "Buddy conditional reminders" do
         expect(task).not_to have_received(:execute)
       end
 
-      it "refuses a check that is both a search and a task" do
+      it "refuses a check that is more than one kind of check" do
         expect { confirm(repeat: "daily:21:00", check: :chore_completions, check_query: "x", check_task: "y") }
-          .to raise_error(/not both/)
+          .to raise_error(/not more than one/)
       end
     end
 
