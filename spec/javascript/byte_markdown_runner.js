@@ -56,6 +56,24 @@ const cases = {
   hicon_then_parens: "[hicon Fae](not a link)",
   hicon_in_code_untouched: "write `[hicon Fae]` for that",
   hicon_unknown_shape_left_alone: "[hicon]",
+
+  // Addresses. The first two are the travel notices verbatim - the messages
+  // Rocco was looking at when he asked for this.
+  addr_time_to_go:
+    "Time to go - Eye Follow Up. 21m drive to 11820 S State St Suite 320 Draper, UT, United States.",
+  addr_leave_by:
+    "Leave by 11:09am for Eye Follow Up - 21m drive to 11820 S State St Suite 320 Draper, UT, United States.",
+  addr_grid_style: "Its at 13389 S 5600 W, Herriman, UT 84096 today",
+  addr_with_zip4: "13401 Aintree Ave, Draper UT 84020-8887, United States",
+  addr_no_zip_comma_state: "220 W 10600 S, Sandy UT 84070",
+  addr_at_start: "10014 Opal Cir, Sandy UT 84094, United States",
+  addr_in_table: "| Where | When |\n|---|---|\n| 220 W 10600 S, Sandy UT 84070 | 3pm |",
+  addr_as_link_text: "[11820 S State St Draper, UT](https://ardesian.com/x)",
+  addr_in_code_untouched: "run `curl https://x.com/11820 S State St Draper, UT` first",
+  // The sentence boundary: lowercase `pm` is what stops the span.
+  addr_not_across_a_sentence: "meet at 5 pm. The clinic is in Draper, UT",
+  addr_state_alone_is_not_one: "Ill be there in 20 minutes, UT is fine",
+  addr_no_state_no_link: "its at 11820 S State St Suite 320 today",
 };
 
 // The narrow pass, for text that is not markdown - a tool-argument preview.
@@ -79,6 +97,7 @@ const inlineCases = {
   inline_escapes_html: "<b>x</b> logged",
   inline_javascript_href: "[tap me](javascript:alert(1))",
   inline_hicon: "fed [hicon Fae] \u2713",
+  inline_address: "Leaving for 220 W 10600 S, Sandy UT 84070 \u2713",
 };
 
 const out = {};

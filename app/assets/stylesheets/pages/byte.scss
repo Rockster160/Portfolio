@@ -1359,6 +1359,15 @@ html.html-ctr-byte body {
       }
     }
 
+    // An address found in the prose, which opens maps rather than a page.
+    // Dotted, because a tap here leaves the app for a different one and that
+    // is worth telegraphing - and because a travel notice is mostly address,
+    // so a solid underline across most of the line is a lot of line.
+    .byte-md-map {
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+    }
+
     // Bullet list. The body is `white-space: pre-wrap`, which would otherwise
     // indent every marker by the literal spaces in the source, so the list
     // resets it and does its own spacing.

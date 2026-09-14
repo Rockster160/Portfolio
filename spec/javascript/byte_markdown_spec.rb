@@ -325,4 +325,88 @@ RSpec.describe "Byte thread markdown" do
         .to include("<code class=\"byte-md-inline\">item:name:/Permission/</code>")
     end
   end
+
+  # FeatureRequest 4, written 4 Sep four minutes after a "Time to go" notice
+  # read out a clinic's address in full: "addresses should be linked so that I
+  # can click to open them in maps."
+  #
+  # The agenda's details modal has done this since June, but that reads a
+  # location FIELD whose whole value is the address. Here it has to be found
+  # inside a sentence a Jil task composed, which is why the rule lives in the
+  # renderer and why half of these examples are about what must NOT match.
+  describe "addresses" do
+    def href(html)
+      html[/href="([^"]+)"/, 1]
+    end
+
+    it "links the address out of a Time to go notice" do
+      html = rendered["addr_time_to_go"]
+
+      expect(html).to include(">11820 S State St Suite 320 Draper, UT, United States</a>")
+      expect(href(html)).to start_with("https://maps.apple.com/?q=11820")
+    end
+
+    it "links the one in a Leave by notice too" do
+      expect(rendered["addr_leave_by"]).to include("byte-md-map")
+    end
+
+    # Utah numbers its streets, so a great many real addresses carry no
+    # street-type word at all - which is why the pattern can't require one.
+    it "links a grid address with no street type in it" do
+      expect(rendered["addr_grid_style"]).to include(">13389 S 5600 W, Herriman, UT 84096</a>")
+    end
+
+    it "takes a zip+4" do
+      expect(rendered["addr_with_zip4"]).to include(">13401 Aintree Ave, Draper UT 84020-8887, United States</a>")
+    end
+
+    it "takes a city and state with no zip" do
+      expect(rendered["addr_no_zip_comma_state"]).to include(">220 W 10600 S, Sandy UT 84070</a>")
+    end
+
+    it "takes one that opens the message" do
+      expect(rendered["addr_at_start"]).to start_with("<a class=\"byte-md-link byte-md-map\"")
+    end
+
+    it "links one inside a table cell" do
+      expect(rendered["addr_in_table"]).to include("<td><a class=\"byte-md-link byte-md-map\"")
+    end
+
+    it "carries a class of its own, so it can be told from an ordinary link" do
+      expect(rendered["addr_at_start"]).to include("byte-md-link byte-md-map")
+      expect(rendered["bare_url"]).not_to include("byte-md-map")
+    end
+
+    # Stashed first, so the address pass only ever sees a token.
+    it "leaves an address that is already a link's text alone" do
+      html = rendered["addr_as_link_text"]
+
+      expect(href(html)).to eq("https://ardesian.com/x")
+      expect(html).not_to include("maps.apple.com")
+    end
+
+    it "leaves one inside code untouched" do
+      expect(rendered["addr_in_code_untouched"]).not_to include("<a")
+    end
+
+    # The span has to stop at a sentence boundary or it swallows the sentence
+    # before it. Every token between the number and the state must start
+    # uppercase, and "pm" does not.
+    it "does not run a match across a full stop" do
+      expect(rendered["addr_not_across_a_sentence"]).not_to include("<a")
+    end
+
+    # Without the state list, "in 20 minutes ... UT" is an address.
+    it "does not treat a bare state mention as one" do
+      expect(rendered["addr_state_alone_is_not_one"]).not_to include("<a")
+    end
+
+    it "wants a state, not just a street" do
+      expect(rendered["addr_no_state_no_link"]).not_to include("<a")
+    end
+
+    it "links one in a receipt line as well" do
+      expect(rendered["inline_address"]).to include(">220 W 10600 S, Sandy UT 84070</a>")
+    end
+  end
 end

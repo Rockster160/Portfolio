@@ -57,14 +57,63 @@ export function renderIconRefs(raw) {
 // `_blank` because Byte is an installed PWA (display: standalone). Without it a
 // tap replaces the conversation with a page that has no back button and no way
 // home.
-function anchor({ url, text }) {
-  return `<a class="byte-md-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
+function anchor({ url, text, map }) {
+  const cls = map ? "byte-md-link byte-md-map" : "byte-md-link";
+  return `<a class="${cls}" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
 }
 
 // Only these become anchors. `renderMarkdown` writes to innerHTML and the body
 // it renders is model output, so a `javascript:` or `data:` href would be a
 // script the model got to choose. Anything else falls through as plain text.
 const SAFE_URL = /^https?:\/\/[^\s<>"']+$/i;
+
+// A street address in prose, turned into a tap that opens maps.
+//
+// Rocco, 4 Sep, four minutes after "Time to go - Eye Follow Up. 21m drive to
+// 11820 S State St Suite 320 Draper, UT, United States": "addresses should be
+// linked so that I can click to open them in maps". The agenda's details modal
+// has done this since June, but that reads a LOCATION FIELD whose whole value
+// is the address; here it has to be found inside a sentence, and the sentence
+// was composed by a Jil task rather than by anything in this repo.
+//
+// Apple Maps is a universal redirector - Apple devices launch the native app,
+// everything else lands on maps.apple.com - which is the same call agenda.js
+// documents and made for the same reason.
+//
+// THE STATE CODE IS WHAT MAKES THIS SAFE. Bounded at the front by a house
+// number and at the back by a real two-letter state, a false positive needs
+// prose that has both in that order, and the tokens between them have to read
+// like an address (see below). Without the state list, "in 20 minutes ... UT"
+// is a match.
+const US_STATES =
+  "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|" +
+  "MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|" +
+  "WI|WY|DC";
+
+// Every token between the number and the state has to START uppercase or with
+// a digit. Addresses are title-cased ("11820 S State St Suite 320 Draper") and
+// ordinary prose is not, which is what stops a span running through a sentence
+// boundary: "meet at 5 pm. The clinic is in Draper, UT" dies on `pm`.
+//
+// The cost is an address written mid-sentence in lower case, which is a miss
+// rather than a wrong link - the right way round for something that opens an
+// app.
+const ADDRESS_RX = new RegExp(
+  String.raw`\b\d{1,6}\s+` +
+    String.raw`(?:[A-Z0-9#][A-Za-z0-9#.'&/-]*[ ,]+){1,10}` +
+    String.raw`(?:${US_STATES})\b` +
+    String.raw`(?:\s+\d{5}(?:-\d{4})?)?` +
+    String.raw`(?:,\s*United States)?`,
+  "g",
+);
+
+// A backstop on the span rather than on the pattern: whatever slips past the
+// rules above, an 80-character "address" is a sentence that got eaten.
+const ADDRESS_MAX = 80;
+
+function mapsUrl(text) {
+  return `https://maps.apple.com/?q=${encodeURIComponent(text.replace(/\s+/g, " "))}`;
+}
 
 // Punctuation that ends the sentence rather than the address. "see https://x.com."
 // should link the site, not a URL with a full stop welded on.
@@ -114,9 +163,9 @@ export function renderMarkdown(raw) {
   // middle of any URL carrying one — the same trap its own comment describes
   // for `laundry_gate`. An unsafe scheme returns null and the match is left as
   // the literal text it was.
-  const stashLink = (url, text) => {
+  const stashLink = (url, text, map) => {
     if (!SAFE_URL.test(url)) return null;
-    return `@LINK@${stash.push({ kind: "link", url, text }) - 1}@LINK@`;
+    return `@LINK@${stash.push({ kind: "link", url, text, map }) - 1}@LINK@`;
   };
   // `[hicon Fae]` / `[hicon:12]` / `[ticon:ti-broom]` — the household's own
   // uploads and Tabler icons, dropped inline in the prose. Same syntax the
@@ -137,6 +186,11 @@ export function renderMarkdown(raw) {
     const token = stashLink(trimmed, trimmed);
     return token ? `${pre}${token}${url.slice(trimmed.length)}` : m;
   });
+  // Addresses, last of the three, so a URL and a markdown link are both tokens
+  // by now and neither can be matched into the middle of one.
+  t = t.replace(ADDRESS_RX, (m) =>
+    m.length > ADDRESS_MAX ? m : (stashLink(mapsUrl(m), m, true) ?? m),
+  );
   t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
@@ -236,9 +290,9 @@ export function renderInline(raw) {
     const ref = id ? `hicon:${id}` : (tabler || name).trim();
     return `@HICON@${stash.push({ kind: "hicon", ref }) - 1}@HICON@`;
   });
-  const stashLink = (url, text) => {
+  const stashLink = (url, text, map) => {
     if (!SAFE_URL.test(url)) return null;
-    return `@LINK@${stash.push({ kind: "link", url, text }) - 1}@LINK@`;
+    return `@LINK@${stash.push({ kind: "link", url, text, map }) - 1}@LINK@`;
   };
   t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, text, url) => stashLink(url, text) ?? m);
   t = t.replace(/(^|[\s(])(https?:\/\/[^\s<>"')\]]+)/g, (m, pre, url) => {
@@ -246,6 +300,9 @@ export function renderInline(raw) {
     const token = stashLink(trimmed, trimmed);
     return token ? `${pre}${token}${url.slice(trimmed.length)}` : m;
   });
+  t = t.replace(ADDRESS_RX, (m) =>
+    m.length > ADDRESS_MAX ? m : (stashLink(mapsUrl(m), m, true) ?? m),
+  );
   t = escapeHtml(t);
   t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
