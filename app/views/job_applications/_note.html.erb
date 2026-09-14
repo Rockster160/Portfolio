@@ -25,9 +25,10 @@
 
   <%# Printed verbatim, not through `simple_format`. The indentation someone
      typed to hang sub-notes under a line is part of what they wrote, and HTML
-     collapses it on sight — the CSS holds it instead. %>
+     collapses it on sight — the CSS holds it instead. `note_body` changes
+     nothing about the text; it only makes the links in it clickable. %>
   <% if note.body.present? %>
-    <div class="note-body"><%= note.body %></div>
+    <div class="note-body"><%= note_body(note.body) %></div>
   <% end %>
 
   <%# The same field, saying two different things: on a scheduled note the date
