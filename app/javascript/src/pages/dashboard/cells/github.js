@@ -22,6 +22,7 @@ import { beeps, beep } from "../vars";
     }
   };
   var gitSearch = async function (filter, repo, prefix) {
+    return []; // No external repo for now.
     var url = "https://api.github.com/search/issues";
     var uri = url + "?q=" + encodeURIComponent(filter + ` repo:${repo}`);
     let json = await gitGet(uri);
