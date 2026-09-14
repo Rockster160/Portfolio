@@ -16,15 +16,18 @@
     <% end %>
   </div>
 
+  <%# Above the body, not under it. A note that keeps the whole message runs to
+     several screens, and a link to the mail it came from is no use at the far
+     end of it. %>
+  <% if note.url.present? %>
+    <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>
+  <% end %>
+
   <%# Printed verbatim, not through `simple_format`. The indentation someone
      typed to hang sub-notes under a line is part of what they wrote, and HTML
      collapses it on sight — the CSS holds it instead. %>
   <% if note.body.present? %>
     <div class="note-body"><%= note.body %></div>
-  <% end %>
-
-  <% if note.url.present? %>
-    <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>
   <% end %>
 
   <%# The same field, saying two different things: on a scheduled note the date

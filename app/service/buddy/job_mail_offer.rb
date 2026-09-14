@@ -39,6 +39,14 @@ module Buddy
       return nil if conversation.nil?
 
       job = JobHunt.resolve_application(user, verdict[:company])
+      # The watcher hands the words over because it read the message off disk.
+      # The domain inbox doesn't, and for its first week that meant the seed
+      # carried no message at ALL — so the trimming habit below was never even
+      # said, and what got proposed as the note was a paraphrase of the
+      # headline. Prod 6162 logged a GitLab confirmation as "Greenhouse
+      # confirmed receipt of your application", which is the seed's own summary
+      # line read back. The mail is right there on the email; read it.
+      body = body.presence || mail_text(email)
 
       # No row, but a company name: the suggestion is to START one. A plain card
       # is only right when there is nothing to propose at all — mail the
@@ -217,6 +225,24 @@ module Buddy
     # about it, rather than promising a page that would 404.
     def mail_url(email)
       Rails.application.routes.url_helpers.email_url(id: email.id)
+    end
+
+    # Trimmed the way the Mac watcher trims what it reads, so a seed looks the
+    # same whichever inbox it came from. Capped at the same 4k: past that it is
+    # quoted thread, and the model is told to drop that anyway.
+    MAX_BODY = 4_000
+
+    # The mail's own words, off the copy on S3. Soft on purpose — a beat
+    # announced without its message is worth far more than one not announced at
+    # all, and this runs inside the delivery path.
+    def mail_text(email)
+      return nil if email.nil?
+
+      text = email.text_body.to_s.gsub(/\r\n?/, "\n").gsub(/[ \t]+$/, "")
+      text.gsub(/\n{3,}/, "\n\n").strip.presence&.first(MAX_BODY)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::JobMailOffer] no body for email #{email.id}: #{e.class}: #{e.message}")
+      nil
     end
 
     # The mail itself, fenced so the end of it is unambiguous. Absent when it

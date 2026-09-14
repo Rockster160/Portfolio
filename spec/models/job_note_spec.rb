@@ -102,6 +102,33 @@ RSpec.describe JobNote do
     end
   end
 
+  # Prod 6162: a GitLab "thanks for applying, a human will review this" landed
+  # as Applied on an application that was already applied to. Neither neighbour
+  # is honest about a machine's receipt, so it got a tag of its own.
+  describe "the acknowledged tag" do
+    it "reads as Acknowledged and needs no body" do
+      note = job.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)
+
+      expect(note.tag_label).to eq("Acknowledged")
+      expect(note.body).to be_nil
+    end
+
+    # Between the thing they did and the first time a person answers it, which
+    # is the order the three happen in.
+    it "sits between applied and heard back in the dropdown" do
+      keys = JobNote::TAG_LABELS.keys
+
+      expect(keys[keys.index("applied") + 1]).to eq("acknowledged")
+      expect(keys[keys.index("acknowledged") + 1]).to eq("heard_back")
+    end
+
+    it "leaves the application where it was" do
+      job.notes.create!(tag: :acknowledged)
+
+      expect(job.reload.status).to eq("active")
+    end
+  end
+
   describe ".recent" do
     it "reverses the association's own order rather than stacking onto it" do
       old = job.notes.create!(body: "Older", occurred_at: 9.days.ago)

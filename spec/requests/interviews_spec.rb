@@ -435,6 +435,19 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).to include("Call notes:\n      - asked about Rails")
     end
 
+    # A note that keeps the whole message runs to several screens, and a link to
+    # the mail it came from is no use at the far end of it.
+    it "puts the mail's link above the note it came from" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(
+        body: "Thanks for applying.", source: "Email", url: "https://ardesian.com/emails/51703",
+      )
+
+      get interview_path(job)
+
+      expect(response.body.index("emails/51703")).to be < response.body.index("Thanks for applying.")
+    end
+
     # Where the application stands is the last thing that happened, so it goes
     # at the top rather than at the end of a long scroll.
     it "shows the newest note first" do

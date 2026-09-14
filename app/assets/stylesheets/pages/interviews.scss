@@ -640,7 +640,12 @@
       white-space: pre-wrap;
     }
 
+    // Sits above the body now, so it needs its own line in its own right — as
+    // an inline element it used to get one only by virtue of the block that
+    // happened to precede it.
     .note-link {
+      display: block;
+      margin-top: 2px;
       font-size: 12px;
       word-break: break-all;
     }
@@ -680,6 +685,9 @@
   }
 
   .note-tag-applied { background: $base-blue; }
+  // The machine's receipt for it — the same blue, drained, so it reads as a
+  // quieter echo of the beat above rather than as news of its own.
+  .note-tag-acknowledged { background: #4c6a8a; }
   // Their move and yours: the same hue, the outbound one darker, so a glance
   // down the thread shows who it's waiting on.
   .note-tag-heard_back { background: #34d0e0; }

@@ -37,6 +37,7 @@ class JobNote < ApplicationRecord
     withdrew:       8,
     responded:      9,
     scheduled:      10,
+    acknowledged:   11,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
@@ -45,9 +46,16 @@ class JobNote < ApplicationRecord
   #
   # `scheduled` sits above `interview` because that's the order they happen in:
   # one books it, the other is it having happened.
+  #
+  # `acknowledged` is the ATS auto-reply, and it needed a tag of its own because
+  # neither neighbour is honest about it. `applied` is a thing THEY did, and
+  # stamping it on a machine's receipt says they applied twice; `heard_back` is
+  # a person writing, which is the beat actually being waited on, and a robot
+  # wearing it makes a live application look answered.
   TAG_LABELS = {
     "note"           => "Note",
     "applied"        => "Applied",
+    "acknowledged"   => "Acknowledged",
     "heard_back"     => "Heard back",
     "responded"      => "Response",
     "recruiter_call" => "Recruiter call",

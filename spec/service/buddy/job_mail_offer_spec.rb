@@ -92,6 +92,59 @@ RSpec.describe Buddy::JobMailOffer do
     end
   end
 
+  # Prod 6162, 14 Sep. A GitLab confirmation off the DOMAIN inbox was logged as
+  # "Greenhouse confirmed receipt of your application" — the seed's own headline
+  # read back. The watcher hands the words over because it read them off disk;
+  # this side never did, so the seed carried no message at all and the trimming
+  # habit was never even said. The mail was on S3 the whole time.
+  context "when only the email came with it" do
+    let!(:job) { user.job_applications.create!(company: "iCapital") }
+    let(:email) {
+      user.emails.create!(
+        mail_id: "m-#{SecureRandom.hex(4)}", timestamp: arrived, direction: :inbound,
+        subject: "Zoom", blurb: "Availability?"
+      )
+    }
+
+    it "reads the mail's own words off it" do
+      allow_any_instance_of(Email).to receive(:text_body)
+        .and_return("Hi Rocco,\n\n\n\nWe'd like to schedule a Zoom.  \n\nCordelia\n")
+
+      body = call(email: email).body
+
+      expect(body).to include("--- the message, for the NOTE only ---")
+      expect(body).to include("We'd like to schedule a Zoom.")
+      expect(body).to include("VERBATIM")
+      # Trimmed the way the watcher trims what it reads, so a seed looks the
+      # same whichever inbox it came from.
+      expect(body).not_to include("Zoom.  \n")
+      expect(body).not_to include("\n\n\n")
+    end
+
+    # What the watcher sends wins: it read the message off disk before Mail.app
+    # had finished with it, and it is the one that knows about a sent copy.
+    it "leaves a body it was handed alone" do
+      allow_any_instance_of(Email).to receive(:text_body).and_return("off the blob")
+
+      body = call(email: email, body: "what the watcher read").body
+
+      expect(body).to include("what the watcher read")
+      expect(body).not_to include("off the blob")
+    end
+
+    # The blob lives on S3. A beat announced without its message is worth far
+    # more than one not announced at all.
+    it "still speaks the offer when the copy cannot be read" do
+      allow(Rails.logger).to receive(:warn)
+      allow_any_instance_of(Email).to receive(:text_body).and_raise("no such key")
+
+      body = call(email: email).body
+
+      expect(body).to include("CALL add_job_note")
+      expect(body).not_to include("--- the message")
+    end
+  end
+
   # The board was built by hand by pasting the mail in and setting a status.
   # Buddy can only continue that if the mail itself reaches her.
   context "when the message body came with it" do

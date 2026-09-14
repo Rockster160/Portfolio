@@ -31,6 +31,13 @@ Buddy::Tools.register(
     how a tracker goes stale. Reach for those three only when the mail actually
     says so. `note` is the default and just means "this happened".
 
+    **An ATS receipt is `acknowledged`, not `applied` and not `heard_back`.**
+    "Thanks for applying, a real human will review this" is a machine saying it
+    arrived. `applied` is a thing THEY did, so putting it on a robot's reply
+    says they applied twice; `heard_back` means a PERSON wrote, which is the
+    beat actually being waited on, and a robot wearing it makes a live
+    application look answered.
+
     `email_id` is the piece that makes this worth doing from a message rather
     than the page: pass the number from `recent_mail` and the note is stamped
     with that email's date, its sender, and a link straight back to it. Leave
@@ -61,7 +68,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat. An ATS receipt is `acknowledged`. offer/rejected/withdrew also settle the application",
     },
     email_id:     { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:  { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

@@ -520,6 +520,22 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the words are the record; the summary belongs on the card, not in it",
   },
+  # --- a machine's receipt is not a beat anybody is waiting on --------------
+  # Prod 6162, 14 Sep. GitLab's "thanks for applying, a real human will review
+  # this" was logged as Applied on an application that had already been applied
+  # to. `applied` is a thing THEY did, so a robot's reply wearing it says they
+  # applied twice; `heard_back` means a PERSON wrote, which is the beat being
+  # waited on, and a robot wearing that makes a live application look answered.
+  {
+    case:  "prod 6162",
+    say:   "Halloway Systems just auto-replied that they got my application and " \
+           "a real person will review it - log that",
+    tool:  :add_job_note,
+    avoid: %i[add_job_application],
+    args:  { add_job_note: { tag: "acknowledged" } },
+    needs: :halloway_application,
+    note:  "an ATS receipt is neither applying again nor hearing back",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",
