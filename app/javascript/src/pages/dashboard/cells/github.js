@@ -1,47 +1,54 @@
-import { Time } from "./_time"
-import { Text } from "../_text"
-import { Timer } from "./timers"
-import { beeps, beep } from "../vars"
+import { Time } from "./_time";
+import { Text } from "../_text";
+import { Timer } from "./timers";
+import { beeps, beep } from "../vars";
 
-(function() {
-  var cell = undefined
-  let gitGet = async function(url) {
-    if (!cell.config.github_apikey) { return }
+(function () {
+  var cell = undefined;
+  let gitGet = async function (url) {
+    if (!cell.config.github_apikey) {
+      return;
+    }
     let res = await fetch(url, {
       method: "GET",
       headers: {
         accept: "application/vnd.github.v3+json",
         Authorization: "token " + cell.config.github_apikey,
-      }
-    })
+      },
+    });
 
     if (res.ok) {
-      return await res.json()
+      return await res.json();
     }
-  }
-  var gitSearch = async function(filter, repo, prefix) {
-    var url = "https://api.github.com/search/issues"
-    var uri = url + "?q=" + encodeURIComponent(filter + ` repo:${repo}`)
-    let json = await gitGet(uri)
-    if (!json) { return }
+  };
+  var gitSearch = async function (filter, repo, prefix) {
+    var url = "https://api.github.com/search/issues";
+    var uri = url + "?q=" + encodeURIComponent(filter + ` repo:${repo}`);
+    let json = await gitGet(uri);
+    if (!json) {
+      return;
+    }
 
     return Promise.all(
-      json.items.map(async function(issue) {
-        let status = undefined
+      json.items.map(async function (issue) {
+        let status = undefined;
         if (issue.pull_request) {
-          let pr = await gitGet(issue.pull_request.url)
+          let pr = await gitGet(issue.pull_request.url);
           if (pr) {
-            if (pr.mergeable_state == "clean") { // All checks good, approved
-              status = Text.green("✓")
-            } else if (pr.mergeable_state == "blocked") { // Something not ready
-              status = Text.red("𐄂")
-            } else if (pr.mergeable_state == "unstable") { // Approved, but not all checks passed
-              status = Text.red("✓")
+            if (pr.mergeable_state == "clean") {
+              // All checks good, approved
+              status = Text.green("✓");
+            } else if (pr.mergeable_state == "blocked") {
+              // Something not ready
+              status = Text.red("𐄂");
+            } else if (pr.mergeable_state == "unstable") {
+              // Approved, but not all checks passed
+              status = Text.red("✓");
             } else {
-              let state = pr.mergeable_state
-              state = state == "unknown" ? "?" : state
-              state = state == "dirty" ? "~" : state
-              status = Text.yellow(state)
+              let state = pr.mergeable_state;
+              state = state == "unknown" ? "?" : state;
+              state = state == "dirty" ? "~" : state;
+              status = Text.yellow(state);
             }
           }
         }
@@ -52,146 +59,162 @@ import { beeps, beep } from "../vars"
           id: String(issue.number),
           title: issue.title,
           prefix: prefix,
-        }
-      })
-    )
-  }
-  let findGit = function(id) {
-    id = String(id)
+        };
+      }),
+    );
+  };
+  let findGit = function (id) {
+    id = String(id);
     // const sections = ["pending_review", "issues", "prs"]
-    const sections = ["pending_review", "prs"]
+    const sections = ["pending_review", "prs"];
 
     for (let section of sections) {
-      let found = (cell?.data[section] || []).find(git => git.id === id)
-      if (found) { return found }
+      let found = (cell?.data[section] || []).find((git) => git.id === id);
+      if (found) {
+        return found;
+      }
     }
-    return null
-  }
+    return null;
+  };
 
-  var getLines = async function(cell) {
-    let pending_review = []
-    pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-backend", "OCS"))
-    // pending_review = pending_review.concat(await gitSearch("is:open is:pr review-requested:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
+  var getLines = async function (cell) {
+    let pending_review = [];
+    pending_review = pending_review.concat(
+      await gitSearch("is:open is:pr review-requested:Rockster160"),
+    );
 
     // let issues = []
-    // issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS:B"))
-    // issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
+    // issues = issues.concat(await gitSearch("is:open is:issue assignee:Rockster160", "OCS:B"))
 
-    let prs = []
-    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-backend", "OCS"))
-    // prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160", "oneclaimsolution/ocs-frontend", "OCS:F"))
+    let prs = [];
+    prs = prs.concat(await gitSearch("is:open is:pr assignee:Rockster160"));
     // When changing from 𐄂 to ✓:
     // readyBeep()
 
-    cell.data.pending_review = pending_review
+    cell.data.pending_review = pending_review;
     // cell.data.issues = issues
-    cell.data.prs = prs
+    cell.data.prs = prs;
 
-    render(cell)
-    cell.flash()
-  }
+    render(cell);
+    cell.flash();
+  };
 
-  let renderGit = function(git) {
-    return [
-      git.status,
-      Text.rocco(git.id),
-      `${git.prefix}:${git.title}`
-    ].filter(i => i).join(" ")
-  }
+  let renderGit = function (git) {
+    return [git.status, Text.rocco(git.id), `${git.prefix}:${git.title}`]
+      .filter((i) => i)
+      .join(" ");
+  };
 
-  let currentTime = function() {
-    const now = new Date()
-    const month = now.getMonth() + 1
-    const day = now.getDate()
-    let hours = now.getHours()
-    const minutes = now.getMinutes()
-    const ampm = hours >= 12 ? "p" : "a"
-    hours = hours % 12 || 12
+  let currentTime = function () {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    let hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? "p" : "a";
+    hours = hours % 12 || 12;
 
-    const formattedHours = String(hours).padStart(2, "0")
-    const formattedMinutes = String(minutes).padStart(2, "0")
+    const formattedHours = String(hours).padStart(2, "0");
+    const formattedMinutes = String(minutes).padStart(2, "0");
 
-    return `${day}/${formattedHours}:${formattedMinutes}${ampm}`
-  }
+    return `${day}/${formattedHours}:${formattedMinutes}${ampm}`;
+  };
 
-  let findOrCreateTimer = function(sha, message) {
-    let existing = cell.data.deploy_timers.find(t => t.sha === sha)
-    if (existing) { return existing }
+  let findOrCreateTimer = function (sha, message) {
+    let existing = cell.data.deploy_timers.find((t) => t.sha === sha);
+    if (existing) {
+      return existing;
+    }
 
     let timer = new Timer({
       name: (message || sha.slice(0, 7)).slice(0, 24),
       sha: sha,
       message: message,
-    })
-    timer.start.minutes += 2
-    timer.start.seconds += 50
-    timer.go()
-    cell.data.deploy_timers.unshift(timer)
-    cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5)
-    return timer
-  }
+    });
+    timer.start.minutes += 2;
+    timer.start.seconds += 50;
+    timer.go();
+    cell.data.deploy_timers.unshift(timer);
+    cell.data.deploy_timers = cell.data.deploy_timers.slice(0, 5);
+    return timer;
+  };
 
-  let deployMonitor = function() {
+  let deployMonitor = function () {
     cell.monitor = Monitor.subscribe(cell.config.deploy_uuid, {
-      connected: function() {
-        cell.monitor?.resync()
+      connected: function () {
+        cell.monitor?.resync();
       },
-      received: function(data) {
-        let json = data.data || {}
-        let sha = json.sha
-        if (!sha) { return }
-
-        cell.flash()
-        if (!cell.data.monitor_schedule) {
-          cell.data.monitor_schedule = setInterval(function() { render(cell) }, 1000)
+      received: function (data) {
+        let json = data.data || {};
+        let sha = json.sha;
+        if (!sha) {
+          return;
         }
 
-        let timer = findOrCreateTimer(sha, json.message)
-        let wasCompleted = timer.completed
+        cell.flash();
+        if (!cell.data.monitor_schedule) {
+          cell.data.monitor_schedule = setInterval(function () {
+            render(cell);
+          }, 1000);
+        }
+
+        let timer = findOrCreateTimer(sha, json.message);
+        let wasCompleted = timer.completed;
 
         if (json.status === "success") {
-          timer.complete(true)
-          if (!wasCompleted) { victoryBeep() }
-          cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
+          timer.complete(true);
+          if (!wasCompleted) {
+            victoryBeep();
+          }
+          cell.data.monitor_schedule = clearInterval(
+            cell.data.monitor_schedule,
+          );
         } else if (json.status === "failed") {
-          timer.error(true)
-          if (!wasCompleted) { failureBeep() }
-          cell.data.monitor_schedule = clearInterval(cell.data.monitor_schedule)
+          timer.error(true);
+          if (!wasCompleted) {
+            failureBeep();
+          }
+          cell.data.monitor_schedule = clearInterval(
+            cell.data.monitor_schedule,
+          );
         }
 
-        localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
-        render(cell)
+        localStorage.setItem(
+          "deploy_timers",
+          JSON.stringify(cell.data.deploy_timers),
+        );
+        render(cell);
       },
-    })
-  }
+    });
+  };
 
-  let readyBeep = function() {
-    beep(150, 1800, 0.8, "triangle")
-  }
+  let readyBeep = function () {
+    beep(150, 1800, 0.8, "triangle");
+  };
 
-  let victoryBeep = function() {
+  let victoryBeep = function () {
     beeps([
       [100, 1000, 0.1, "sine"], // Short and high-pitched
-      [150,  800, 0.2, "sine"], // Slightly longer and lower-pitched
+      [150, 800, 0.2, "sine"], // Slightly longer and lower-pitched
       [300, 1200, 0.4, "sine"], // Even longer and higher-pitched
-    ])
-  }
+    ]);
+  };
 
-  let failureBeep = function() {
+  let failureBeep = function () {
     beeps([
       [200, 600, 0.4, "sine"],
       [200, 500, 0.2, "sine"],
       [150, 400, 0.1, "sine"],
-    ])
-  }
+    ]);
+  };
 
-  var render = function(cell) {
-    var lines = []
+  var render = function (cell) {
+    var lines = [];
     if (cell.data.pending_review?.length > 0) {
-      lines.push("-- Pending Review:")
-      cell.data.pending_review.forEach(function(review) {
-        lines.push(renderGit(review))
-      })
+      lines.push("-- Pending Review:");
+      cell.data.pending_review.forEach(function (review) {
+        lines.push(renderGit(review));
+      });
     }
     // if (cell.data.issues?.length > 0) {
     //   lines.push("-- Issues:")
@@ -200,20 +223,20 @@ import { beeps, beep } from "../vars"
     //   })
     // }
     if (cell.data.prs?.length > 0) {
-      lines.push("-- My PRs:")
-      cell.data.prs.forEach(function(pr) {
-        lines.push(renderGit(pr))
-      })
+      lines.push("-- My PRs:");
+      cell.data.prs.forEach(function (pr) {
+        lines.push(renderGit(pr));
+      });
     }
-    lines.push("-- Deploys:")
+    lines.push("-- Deploys:");
     if (cell.data.deploy_timers?.length) {
-      cell.data.deploy_timers.forEach(deploy => {
-        lines.push(deploy.render())
-      })
+      cell.data.deploy_timers.forEach((deploy) => {
+        lines.push(deploy.render());
+      });
     }
 
-    cell.lines(lines)
-  }
+    cell.lines(lines);
+  };
 
   cell = Cell.register({
     title: "Github",
@@ -223,29 +246,33 @@ import { beeps, beep } from "../vars"
     data: {
       deploy_timers: [],
     },
-    onload: function() {
-      let stored = JSON.parse(localStorage.getItem("deploy_timers") || "[]").filter(t => t.sha)
-      this.data.deploy_timers = Timer.loadFromJSON(stored)
-      localStorage.setItem("deploy_timers", JSON.stringify(this.data.deploy_timers))
-      deployMonitor()
+    onload: function () {
+      let stored = JSON.parse(
+        localStorage.getItem("deploy_timers") || "[]",
+      ).filter((t) => t.sha);
+      this.data.deploy_timers = Timer.loadFromJSON(stored);
+      localStorage.setItem(
+        "deploy_timers",
+        JSON.stringify(this.data.deploy_timers),
+      );
+      deployMonitor();
     },
-    reloader: function() {
-      getLines(this)
+    reloader: function () {
+      getLines(this);
     },
-    command: function(msg) {
+    command: function (msg) {
       if (/\d+/.test(msg)) {
-        let git = findGit(msg)
+        let git = findGit(msg);
         if (git) {
-          window.open(git.url, "_blank")
+          window.open(git.url, "_blank");
         } else {
-          var url = "https://github.com/oneclaimsolution/ocs-backend/pull/" + msg
-          window.open(url, "_blank")
+          // var url = "https://github.com/oneclaimsolution/ocs-backend/pull/" + msg
+          // window.open(url, "_blank")
         }
       }
-    }
-  })
-})()
-
+    },
+  });
+})();
 
 // | Stats
 // │ PRs: 12  Issues: 0  Stars: 1
