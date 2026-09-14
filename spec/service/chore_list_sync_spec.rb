@@ -56,7 +56,7 @@ RSpec.describe ChoreListSync do
 
   describe "chores appearing on the list" do
     it "puts a chore that is due today on the list" do
-      chore!("Water Plants", recurrence: { freq: :daily })
+      chore!("Water Plants", one_off: true, starts_on: day)
 
       described_class.push(user)
 
@@ -64,13 +64,34 @@ RSpec.describe ChoreListSync do
     end
 
     it "puts an overdue carryover on the list" do
-      chore!("Vacuum", recurrence: { freq: :daily }, starts_on: day - 5)
+      chore!("Vacuum")
       chore = Chore.find_by(name: "Vacuum")
       chore.update!(marked_due_at: ChoreDay.starts_at(day - 3, user) + 1.hour)
 
       described_class.push(user)
 
       expect(item_names).to include("Vacuum")
+    end
+
+    # Almost every Dailies pin is `freq: daily`, so it IS due today every day.
+    # The pin still wins — the list is what needs doing, not a copy of Today.
+    it "leaves off a daily chore the viewer has pinned to Dailies" do
+      chore = chore!("8oz Water", recurrence: { freq: :daily })
+      ChoreDaily.create!(user: user, chore: chore)
+
+      described_class.push(user)
+
+      expect(item_names).not_to include("8oz Water")
+    end
+
+    # The recurrence says the same thing the pin does. A chore that comes round
+    # every single day is a standing routine, pinned or not.
+    it "leaves off a daily-recurring chore that is not pinned" do
+      chore!("Kitty Litter", recurrence: { freq: :daily })
+
+      described_class.push(user)
+
+      expect(item_names).not_to include("Kitty Litter")
     end
 
     it "leaves off a chore that is on Today but not due" do
@@ -82,7 +103,7 @@ RSpec.describe ChoreListSync do
     end
 
     it "leaves off a chore that has already been done today" do
-      chore = chore!("Dishes", recurrence: { freq: :daily })
+      chore = chore!("Dishes", one_off: true, starts_on: day)
       ChoreCompleter.new(chore, user).call
 
       described_class.push(user)
@@ -91,7 +112,7 @@ RSpec.describe ChoreListSync do
     end
 
     it "leaves off an occurrence that was skipped" do
-      chore = chore!("Mop", recurrence: { freq: :daily })
+      chore = chore!("Mop", one_off: true, starts_on: day)
       ChoreCompletion.create!(
         chore: chore, user: user, completed_at: Time.current, day_key: day,
         payout_skipped: true, anonymous: true, occurrence_skipped: true,
@@ -103,7 +124,7 @@ RSpec.describe ChoreListSync do
     end
 
     it "takes the item off again once the chore is completed" do
-      chore = chore!("Feed Cat", recurrence: { freq: :daily })
+      chore = chore!("Feed Cat", one_off: true, starts_on: day)
       described_class.push(user)
       expect(item_names).to include("Feed Cat")
 
@@ -126,7 +147,7 @@ RSpec.describe ChoreListSync do
     # "Most recently due chores appear at the top" — today's work first, the
     # thing that has been sitting for weeks at the bottom.
     it "sorts most-recently-due first" do
-      chore!("Today Job", recurrence: { freq: :daily })
+      chore!("Today Job", one_off: true, starts_on: day)
       old = chore!("Ancient Job", one_off: true, starts_on: day - 20)
       mid = chore!("Middling Job", one_off: true, starts_on: day - 2)
       expect([old, mid]).to all(be_persisted)
@@ -134,6 +155,96 @@ RSpec.describe ChoreListSync do
       described_class.push(user)
 
       expect(item_names.first(3)).to eq(["Today Job", "Middling Job", "Ancient Job"])
+    end
+  end
+
+  describe "sections" do
+    def section_layout
+      list.reload.sectioned_objects.map { |obj|
+        next [:loose, obj[:object].name] if obj[:type] == :item
+
+        [obj[:object].name, obj[:items].map(&:name)]
+      }
+    end
+
+    it "files each item under Today or Overdue" do
+      chore!("Fresh Job", one_off: true, starts_on: day)
+      chore!("Stale Job", one_off: true, starts_on: day - 4)
+
+      described_class.push(user)
+
+      expect(section_layout).to eq([
+        ["Today", ["Fresh Job"]],
+        ["Overdue", ["Stale Job"]],
+      ])
+    end
+
+    # A row predating the mirror, or one whose chore has since gone. Typing onto
+    # the list normally MAKES a chore, so `writing` is how you get a row here
+    # that the mirror doesn't own.
+    it "puts Today above Overdue, and anything it doesn't own below both" do
+      chore!("Fresh Job", one_off: true, starts_on: day)
+      chore!("Stale Job", one_off: true, starts_on: day - 4)
+      described_class.writing { list.list_items.add("call the vet") }
+
+      described_class.push(user)
+
+      expect(section_layout).to eq([
+        ["Today", ["Fresh Job"]],
+        ["Overdue", ["Stale Job"]],
+        [:loose, "call the vet"],
+      ])
+    end
+
+    # A header for a state the list has never been in is noise.
+    it "does not create a section it has never had an item for" do
+      chore!("Stale Job", one_off: true, starts_on: day - 4)
+
+      described_class.push(user)
+
+      expect(section_layout).to eq([["Overdue", ["Stale Job"]]])
+      expect(list.reload.sections.where_soft_name("Today")).to be_empty
+    end
+
+    # Once it exists it stays, empty or not — tearing it down and rebuilding it
+    # would hand every item under it a new section id every morning.
+    it "keeps an existing section in place when it empties out" do
+      chore = chore!("Drifter", one_off: true, starts_on: day)
+      stale = chore!("Stale Job", one_off: true, starts_on: day - 4)
+      described_class.push(user)
+      expect(section_layout).to eq([["Today", ["Drifter"]], ["Overdue", ["Stale Job"]]])
+
+      ChoreCompleter.new(chore, user).call
+      described_class.push(user)
+
+      expect(section_layout).to eq([["Today", []], ["Overdue", ["Stale Job"]]])
+      expect(stale).to be_persisted
+      expect(list.reload.sections.count).to eq(2)
+    end
+
+    it "moves an item between sections without making a second section" do
+      chore = chore!("Drifter", one_off: true, starts_on: day)
+      described_class.push(user)
+      expect(section_layout).to eq([["Today", ["Drifter"]]])
+
+      chore.update!(starts_on: day - 3)
+      described_class.push(user)
+
+      expect(section_layout).to eq([["Today", []], ["Overdue", ["Drifter"]]])
+      expect(list.reload.sections.where_soft_name("Overdue").count).to eq(1)
+    end
+
+    # Renumbering the whole list every pass is what keeps `sort_order` from
+    # walking upward by the size of the list forever.
+    it "does not inflate sort_order on a repeat reconcile" do
+      chore!("Fresh Job", one_off: true, starts_on: day)
+      chore!("Stale Job", one_off: true, starts_on: day - 4)
+
+      described_class.push(user)
+      first = list.reload.list_items.ordered.map(&:sort_order)
+      3.times { described_class.push(user) }
+
+      expect(list.reload.list_items.ordered.map(&:sort_order)).to eq(first)
     end
   end
 
@@ -163,7 +274,7 @@ RSpec.describe ChoreListSync do
 
   describe "an item ticked off the list" do
     it "completes the chore it names" do
-      chore = chore!("Take Out Trash", recurrence: { freq: :daily })
+      chore = chore!("Take Out Trash", one_off: true, starts_on: day)
       described_class.push(user)
 
       expect { tick_item!("Take Out Trash") }.to change { chore.chore_completions.count }.by(1)
@@ -179,7 +290,7 @@ RSpec.describe ChoreListSync do
     # A stale item — the chore was finished somewhere else and the row is still
     # sitting on the list. Ticking it must not write a second completion.
     it "does not complete a chore that is already done today" do
-      chore = chore!("Wipe Counters", recurrence: { freq: :daily })
+      chore = chore!("Wipe Counters", one_off: true, starts_on: day)
       described_class.push(user)
       ChoreCompleter.new(chore, user).call
       list.list_items.add("Wipe Counters") # put the stale row back by hand
@@ -193,7 +304,7 @@ RSpec.describe ChoreListSync do
     # The mirror removes the item BECAUSE the chore was completed. If that
     # removal were read as a tick, it would write a second completion.
     it "writes exactly one completion when a completion clears the item" do
-      chore = chore!("Laundry", recurrence: { freq: :daily })
+      chore = chore!("Laundry", one_off: true, starts_on: day)
       described_class.push(user)
       expect(item_names).to include("Laundry")
 
@@ -205,7 +316,7 @@ RSpec.describe ChoreListSync do
     # that add were read as "a person typed this", it would stamp marked_due on
     # a chore whose schedule already answered for it.
     it "does not stamp marked_due on a chore it placed itself" do
-      chore = chore!("Sweep", recurrence: { freq: :daily })
+      chore = chore!("Sweep", one_off: true, starts_on: day)
 
       described_class.push(user)
 

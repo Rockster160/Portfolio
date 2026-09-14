@@ -22,6 +22,13 @@
 class ChoreListSync
   LIST_NAME = "Chores".freeze
 
+  # The two sections the list is drawn in, top first. A chore is in exactly one
+  # of them: due on this chore-day, or due on an earlier one and still not done.
+  SECTIONS = [
+    { key: :today,   name: "Today",   color: "#0160ff" },
+    { key: :overdue, name: "Overdue", color: "#df0d15" },
+  ].freeze
+
   # Set while this class is doing its own writing. Every write it makes fires
   # the same `:item` triggers a person's tap does, so each one arrives back at
   # `dispatch` asking to be interpreted.
@@ -162,7 +169,7 @@ class ChoreListSync
       (wanted.keys - present.keys).each { |k| list.list_items.add(wanted[k][:name]) }
       present.each { |k, item| list.list_items.remove(item.name) if !wanted.key?(k) && known_chore?(k) }
 
-      restamp!(due.map { |row| key(row[:name]) })
+      restamp!(due)
     }
     list.broadcast!
     list
@@ -244,6 +251,12 @@ class ChoreListSync
   def due_or_overdue?(row)
     return false if row[:archived] || row[:skipped_today]
     return false if row[:done_count_today].to_i >= row[:target_count].to_i
+    # Dailies are out, by the pin OR by the recurrence, and being genuinely due
+    # today buys neither of them back in. A `freq: daily` chore is due every
+    # single day, so reading dueness first put the whole standing routine at the
+    # top of the list — the one thing this was asked not to carry. The pin and
+    # the recurrence each answer on their own.
+    return false if row[:on_dailies] || daily?(row)
     return true  if row[:due_today]
     return false unless row[:today_visible] && row[:scheduled_due_on].present?
 
@@ -254,21 +267,71 @@ class ChoreListSync
     row[:scheduled_due_on].present? ? ::Date.parse(row[:scheduled_due_on]) : day
   end
 
+  # `recurrence` rides the payload as the chore's raw jsonb, so its keys are
+  # strings however the rest of the row reads.
+  def daily?(row)
+    rec = row[:recurrence]
+    return false unless rec.is_a?(::Hash)
+
+    (rec[:freq] || rec["freq"]).to_s == "daily"
+  end
+
+  def section_key(row)
+    row[:due_today] ? :today : :overdue
+  end
+
   # Renumbered whole rather than pushed above the previous maximum: a mirror
   # that runs every time a chore moves would otherwise walk `sort_order` up by
   # the size of the list forever. Items the mirror doesn't own keep their order
   # relative to each other and settle underneath.
-  def restamp!(ordered_keys)
+  # Lay the whole list out in one pass: Today's section and its items, then
+  # Overdue's and its items, then anything the mirror doesn't own.
+  #
+  # Renumbered whole rather than pushed above the previous maximum — a mirror
+  # that runs every time a chore moves would otherwise walk `sort_order` up by
+  # the size of the list forever. Sections and items share the one sequence
+  # because `List#sectioned_objects` merges them into a single descending sort
+  # before it groups; a section only has to outrank the items underneath it.
+  def restamp!(due)
     by_key = list.list_items.ordered.to_a.index_by { |item| key(item.name) }
-    mine = ordered_keys.filter_map { |k| by_key[k] }
-    rest = by_key.values - mine
-    ordered = mine + rest
+    by_section = due.group_by { |row| section_key(row) }
 
-    ordered.each_with_index { |item, idx|
-      next if item.sort_order == ordered.size - idx
+    # [record, section it belongs under] in final top-to-bottom order.
+    placed = SECTIONS.flat_map { |spec|
+      rows = by_section[spec[:key]].to_a
+      section = section_row(spec, create: rows.any?)
+      next [] if section.nil?
 
-      item.update(sort_order: ordered.size - idx, do_not_broadcast: true)
+      [[section, nil]] + rows.filter_map { |row| by_key[key(row[:name])] }.map { |item| [item, section] }
     }
+    # Items matching no chore keep their order relative to each other and settle
+    # underneath both sections, in neither of them.
+    seen = placed.to_set { |record, _| record }
+    placed += (by_key.values - seen.to_a).map { |item| [item, nil] }
+
+    total = placed.size
+    placed.each_with_index { |(record, section), idx|
+      attrs = { sort_order: total - idx }
+      attrs[:section_id] = section&.id if record.is_a?(::ListItem)
+      next if attrs.all? { |field, value| record.public_send(field) == value }
+
+      record.update(attrs.merge(do_not_broadcast: true))
+    }
+  end
+
+  # Created on first use rather than seeded, so a list that has never had an
+  # overdue chore never grows a header saying it might.
+  #
+  # Once created it STAYS, empty or not: a section that came and went as the
+  # last overdue chore was ticked would take its id with it, and every item
+  # under it would have to be re-pointed at a new row the next morning. An empty
+  # "Overdue" band is also the clearest way to say there is nothing overdue.
+  def section_row(spec, create:)
+    existing = list.sections.where_soft_name(spec[:name]).first
+    return existing if existing
+    return nil unless create
+
+    list.sections.create!(name: spec[:name], color: spec[:color], do_not_broadcast: true)
   end
 
   def find_chore(name)
