@@ -158,7 +158,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const status = app.querySelector("[data-byte-status]");
   const syncBadge = app.querySelector("[data-byte-sync]");
   const reloadBtn = app.querySelector("[data-byte-reload]");
-  const notifyBtn = app.querySelector("[data-byte-notify]");
+  // Settings-modal controls, and the dialogs render OUTSIDE `.byte-app` — an
+  // `app.querySelector` finds nothing here.
+  const notifyBtn = document.querySelector("[data-byte-notify]");
+  const notifyHint = document.querySelector("[data-byte-notify-hint]");
   const jumpBtn = app.querySelector("[data-byte-jump]");
   const jumpCount = app.querySelector("[data-byte-jump-count]");
   const heroEl = app.querySelector("[data-buddy-hero]");
@@ -2423,13 +2426,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     "[data-byte-reminders-modal]",
     buddyReminders,
   );
-  // No manager to refresh — the only control in here reads its value from the
-  // DOM, which applyFontScale already keeps current.
+  // Text size reads its value from the DOM, which applyFontScale already keeps
+  // current. The other two have to be re-read on open: notification permission
+  // is the browser's to change, and it can be revoked in site settings without
+  // anything here hearing about it.
   wireManager(
     "[data-byte-open-settings]",
     "[data-byte-settings-close]",
     "[data-byte-settings-modal]",
-    null,
+    {
+      refresh: () => {
+        refreshNotifyBtn();
+        paintMute();
+      },
+    },
   );
 
   // The wall-tablet surface. Only mounts when the page rendered it, so this is
@@ -2461,16 +2471,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  // Header sound toggle (Buddy's own mute, matching Whisper's control). Paints
-  // the button state and silences a ringing alarm on mute.
-  const muteBtn = app.querySelector("[data-byte-mute]");
+  // Buddy's own mute, matching Whisper's control. Lived in the header as an
+  // icon until 2026-09-14 and is a row in Settings now.
+  //
+  // The label says whether SOUND is on, not whether mute is - the row is
+  // headed "Sound", and a button reading "Mute: off" under it is one negation
+  // too many to read at a glance.
+  const muteBtn = document.querySelector("[data-byte-mute]");
   const paintMute = () => {
-    muteBtn?.classList.toggle("muted", isBuddyMuted());
-    if (muteBtn) {
-      muteBtn.title = isBuddyMuted()
-        ? "Sound off — tap to enable"
-        : "Sound on — tap to mute";
-    }
+    if (!muteBtn) return;
+    const on = !isBuddyMuted();
+    muteBtn.textContent = on ? "On" : "Off";
+    muteBtn.setAttribute("aria-pressed", String(on));
+    muteBtn.classList.toggle("on", on);
   };
   muteBtn?.addEventListener("click", () => {
     toggleBuddyMuted();
@@ -3052,6 +3065,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (hasBeenConnected && wasDisconnected) {
         requestShellRefresh();
         checkForServiceWorkerUpdate();
+        // The socket being down IS the gap the strip missed. Resume covers the
+        // common case a beat sooner; this covers a blip with the tab in front.
+        refetchAlerts();
       }
       hasBeenConnected = true;
       wasDisconnected = false;
@@ -3283,6 +3299,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (_) {}
   }
 
+  // The alert strip is fed from exactly two places: `bootstrap.alerts` on a
+  // cold page load, and a live socket push of `kind: "alerts"`. So it is only
+  // ever as current as the socket, and anything raised or resolved while that
+  // was down stayed wrong on screen until a hard reload. Rocco, 13 Sep:
+  // "Alerts don't seem to sync after coming back to the app" - 21 minutes
+  // after both laundry-gate alerts had resolved on the gate closing.
+  //
+  // `GET /buddy/alerts` already existed, was already routed, and already
+  // returned exactly the shape `setAlerts` wants; the dismiss POST was its
+  // only caller. Alerts belong to the person rather than the thread, so unlike
+  // `refetchHistory` there is no conversation to guard against a switch
+  // landing mid-fetch.
+  async function refetchAlerts() {
+    if (!navigator.onLine) return;
+    try {
+      const res = await fetch("/buddy/alerts", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const payload = await res.json();
+      alertStrip.setAlerts(payload?.alerts);
+    } catch (_) {}
+  }
+
   // Presence heartbeat. Tells Rails "user is looking at Byte right now"
   // so the webhook can skip firing a push notification. iOS would render
   // the push as an OS banner even if the SW tried to suppress it (Web
@@ -3337,6 +3378,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       startPresence();
       scheduleDrain();
       refetchHistory();
+      refetchAlerts();
       // Coming back to the app IS opening it, even though nothing navigated
       // and nothing switched. Anything that arrived in this thread while it
       // was backgrounded is on screen the moment they look, so this is the
@@ -3347,8 +3389,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       checkForServiceWorkerUpdate();
       // Re-validate push on every return-to-app (mirrors whisper.js): recovers
       // a subscription iOS silently dropped while backgrounded, re-syncs the
-      // (possibly rotated) endpoint to the server, and repaints the bell from
-      // the true current state instead of trusting the stale load-time paint.
+      // (possibly rotated) endpoint to the server, and repaints the Settings
+      // row from the true current state instead of the stale load-time paint.
       const notifyState = await ensureByteServiceWorker();
       refreshNotifyBtn(notifyState);
     } else {
@@ -3579,22 +3621,27 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- notifications button ----------
 
-  async function refreshNotifyBtn(knownState) {
+  // Four states, and only two of them are a preference. `denied` and
+  // `unsupported` are the browser's answer, not ours — the button goes
+  // unusable and the hint carries the reason, which is the whole point of
+  // moving this off a header icon whose only channel was a `title`.
+  const NOTIFY_HINTS = {
+    subscribed: "On for this device.",
+    unsubscribed: "Off for this device.",
+    denied: "Blocked in your browser settings for this site.",
+    unsupported: "This browser can't do web push.",
+  };
+
+  async function refreshNotifyBtn(knownState, note) {
     if (!notifyBtn) return;
     const state = knownState || (await checkByteNotificationStatus());
-    notifyBtn.classList.remove("subscribed", "denied", "unsupported");
-    if (state === "subscribed") notifyBtn.classList.add("subscribed");
-    if (state === "denied") notifyBtn.classList.add("denied");
-    if (state === "unsupported") notifyBtn.classList.add("unsupported");
-    const title =
-      {
-        subscribed: "Notifications on — tap to disable",
-        unsubscribed: "Notifications off — tap to enable",
-        denied: "Blocked by browser — enable in site settings",
-        unsupported: "Notifications unavailable in this browser",
-      }[state] || "Toggle notifications";
-    notifyBtn.setAttribute("title", title);
-    notifyBtn.setAttribute("aria-label", title);
+    const on = state === "subscribed";
+    const settled = state === "denied" || state === "unsupported";
+    notifyBtn.textContent = on ? "On" : "Off";
+    notifyBtn.setAttribute("aria-pressed", String(on));
+    notifyBtn.classList.toggle("on", on);
+    notifyBtn.disabled = settled;
+    if (notifyHint) notifyHint.textContent = note || NOTIFY_HINTS[state] || "";
   }
 
   function surfaceLocal(body, kind = "system") {
@@ -3612,33 +3659,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (atBottom) scrollToBottom("smooth");
   }
 
+  // Outcomes land in the hint rather than as a bubble in the thread. They used
+  // to be `surfaceLocal` messages, which was right for a header icon and is
+  // wrong from inside a modal: the confirmation for the tap you just made
+  // renders on a screen you are not looking at.
   notifyBtn?.addEventListener("click", async () => {
     const state = await checkByteNotificationStatus();
-    if (state === "unsupported") {
-      surfaceLocal(
-        "**Notifications unavailable** — this browser doesn't support Web Push.",
-      );
-      return;
-    }
-    if (state === "denied") {
-      surfaceLocal(
-        "**Notifications blocked.** Enable them in your browser settings for this site, then tap the bell again.",
-      );
+    if (state === "unsupported" || state === "denied") {
+      refreshNotifyBtn(state);
       return;
     }
     if (state === "subscribed") {
       await unregisterByteNotifications();
-      surfaceLocal("Notifications **disabled**.");
-    } else {
-      const result = await registerByteNotifications();
-      if (result && result.success) {
-        surfaceLocal("Notifications **enabled**.");
-      } else {
-        const reason = (result && result.error) || "unknown error";
-        surfaceLocal(`**Couldn't enable notifications:** \`${reason}\``);
-      }
+      refreshNotifyBtn("unsubscribed");
+      return;
     }
-    refreshNotifyBtn();
+    const result = await registerByteNotifications();
+    if (result && result.success) {
+      refreshNotifyBtn("subscribed");
+    } else {
+      const reason = (result && result.error) || "unknown error";
+      refreshNotifyBtn(null, `Couldn't turn them on: ${reason}`);
+    }
   });
 
   refreshNotifyBtn(initialNotifyState);

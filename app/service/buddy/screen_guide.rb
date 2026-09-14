@@ -47,17 +47,6 @@ module Buddy
                    "list with those, and tapping outside closes it.",
           },
           {
-            hook:  "data-byte-notify",
-            label: "The 🔔 bell",
-            does:  "Turns push notifications on and off for this device. THIS is the answer to " \
-                   "\"stop alerting me\" - it is not the reminder list, and it is not a phone setting.",
-          },
-          {
-            hook:  "data-byte-mute",
-            label: "The 🔈 speaker",
-            does:  "Sound only - it silences the timer alarm. It does NOT stop notifications.",
-          },
-          {
             hook:  "data-byte-reload",
             label: "The ↻ circular arrow",
             does:  "Reloads the app. It grows a dot when a new version is ready to pick up - " \
@@ -84,13 +73,37 @@ module Buddy
           {
             hook:  "data-byte-open-settings",
             label: "⚙️ Settings",
-            does:  "Text size, as − and + either side of the current percentage. You can also just " \
-                   "ask for bigger text and it is done from here.",
+            does:  "Notifications, sound and text size. You can also just ask for any of the " \
+                   "three and it is done from here.",
           },
           {
             hook:  "data-byte-new-convo",
             label: "The + at the top of the conversation list",
             does:  "Starts another conversation.",
+          },
+        ],
+      },
+      {
+        name:     :settings,
+        about:    "The Settings panel, reached from ⚙️ Settings in the drawer",
+        controls: [
+          {
+            hook:  "data-byte-notify",
+            label: "The Notifications row",
+            does:  "Turns push notifications on and off for this device, and the line under it " \
+                   "says where they stand - including when the browser itself has blocked them, " \
+                   "which is the one case this row cannot fix. THIS is the answer to " \
+                   "\"stop alerting me\" - it is not the reminder list, and it is not a phone setting.",
+          },
+          {
+            hook:  "data-byte-mute",
+            label: "The Sound row",
+            does:  "Sound only - it silences the timer alarm. It does NOT stop notifications.",
+          },
+          {
+            hook:  "data-byte-font-bigger",
+            label: "The Text size row",
+            does:  "− and + either side of the current percentage.",
           },
         ],
       },

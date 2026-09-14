@@ -851,7 +851,7 @@ module Buddy
       # in the text, so words and action arrived together. Structured calls split
       # them across turns, and this loop is what stitches them back into one reply.
       def attempt_turn(previous: nil)
-        input     = History.build(@conversation, upto: @inbound)
+        input     = History.build(@conversation, upto: @inbound, briefing: today_briefing?)
         input    += [{ role: :developer, content: routine_directive }] if routine_directive
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]

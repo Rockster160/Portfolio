@@ -395,98 +395,7 @@ html.html-ctr-byte body {
     }
   }
 
-  // Notifications toggle — encodes the current subscription state at a
-  // glance:
-  //   default (unsubscribed) → muted bell WITH a diagonal slash overlay
-  //   subscribed             → accent-blue bell, no slash
-  //   denied                 → red bell (browser has permanently blocked
-  //                            notifications), slash overlay, cursor
-  //                            indicates you can't fix this from here
-  //   unsupported            → very faded, not clickable
-  .byte-notify-toggle {
-    width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--bs-muted);
-    border-radius: 8px;
-    position: relative;
-    transition:
-      background 0.15s,
-      color 0.15s;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--bs-text);
-    }
-
-    // Slash overlay for non-subscribed states. Drawn as a rotated
-    // solid bar via ::after — currentColor so it matches the icon tint.
-    //
-    // Sized off the button's own box, so the `position: relative` above is
-    // load-bearing in every state including :active. Resolved against
-    // `.byte-header` instead, `left: 8px; right: 8px` is the full width of
-    // the app and the bar draws as a diagonal across the whole screen.
-    &::after {
-      content: "";
-      position: absolute;
-      left: 8px;
-      right: 8px;
-      top: 50%;
-      height: 2px;
-      background: currentColor;
-      transform: rotate(-40deg);
-      transform-origin: center;
-      border-radius: 2px;
-      pointer-events: none;
-      box-shadow: 0 -1.5px 0 var(--bs-panel); // subtle "cut through" edge
-    }
-
-    &.subscribed {
-      color: var(--bs-accent-strong);
-      &::after {
-        display: none;
-      }
-    }
-
-    &.denied {
-      color: var(--bs-danger);
-      cursor: help; // hover tooltip explains
-    }
-
-    &.unsupported {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-  }
-
-  // Sound toggle — mirrors the notify button's sizing. The `.byte-mute-off`
-  // icon shows only when muted; `.byte-mute-on` otherwise.
-  .byte-mute-toggle {
-    width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--bs-muted);
-    border-radius: 8px;
-    transition: background 0.15s, color 0.15s;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--bs-text);
-    }
-
-    .byte-mute-off { display: none; }
-    &.muted {
-      color: var(--bs-danger);
-      .byte-mute-on  { display: none; }
-      .byte-mute-off { display: inline; }
-    }
-  }
-
-  // Actions. Sized with the reload/notify/mute row it sits in, and tinted with
+  // Actions. Sized with the reload button it sits beside, and tinted with
   // the accent while its list is open so the header says which button the
   // panel below belongs to.
   .byte-actions-toggle {
@@ -4076,6 +3985,43 @@ dialog.byte-modal {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+// An on/off row control. The label IS the state, so there is nothing to read
+// twice - see the Settings modal, where "Notifications" and "Sound" name the
+// thing and this names where it stands.
+//
+// Disabled means the browser has settled it (push denied, or unsupported), not
+// that it is off; the row's hint says which, because a `title` is unreachable
+// on a phone and that is exactly where this gets read.
+.byte-setting-toggle {
+  min-width: 58px;
+  padding: 5px 12px;
+  border: 1px solid var(--bs-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bs-muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover:not(:disabled) {
+    color: var(--bs-text);
+    border-color: var(--bs-text);
+  }
+
+  &.on {
+    color: var(--bs-accent-strong);
+    border-color: var(--bs-accent-strong);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 }
 
 .byte-setting-value {

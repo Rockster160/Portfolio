@@ -45,14 +45,27 @@ RSpec.describe Buddy::ScreenGuide do
     # The thing that started this: Eve asked how to stop being alerted, was
     # sent to her phone's settings, and the control was in the window she was
     # typing into. It has to be findable and it has to be distinguishable from
-    # the speaker, which she would otherwise have been pointed at instead.
-    it "carries the bell, and separates it from the sound toggle" do
-      bell, speaker = %w[bell speaker].map { |word|
+    # the sound row, which she would otherwise have been pointed at instead.
+    #
+    # Both moved into Settings on 2026-09-14, two taps deep rather than one, so
+    # the guide matters MORE than it did when they were icons she could see.
+    it "carries notifications, and separates them from the sound row" do
+      notifications, sound = ["Notifications", "Sound"].map { |word|
         described_class.for_user(user).flat_map { |a| a[:controls] }.find { |c| c[:label].include?(word) }
       }
 
-      expect(bell[:does]).to include("notifications")
-      expect(speaker[:does]).to include("does NOT stop notifications")
+      expect(notifications[:does]).to include("notifications")
+      expect(sound[:does]).to include("does NOT stop notifications")
+    end
+
+    # Naming the panel and not the way in is a dead end: a row two taps deep
+    # is only findable if the thing that opens it says what is behind it.
+    it "says what Settings holds, from the drawer row that opens it" do
+      drawer = described_class.for_user(user).find { |a| a[:area] == :the_drawer }
+      row    = drawer[:controls].find { |c| c[:label].include?("Settings") }
+
+      expect(row[:does]).to include("Notifications")
+      expect(row[:does]).to include("sound")
     end
 
     # Same rule AppPages follows: a surface somebody cannot use is furniture,

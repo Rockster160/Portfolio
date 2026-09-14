@@ -130,21 +130,6 @@
         <path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"/>
       </svg>
     </button>
-    <button type="button" class="byte-notify-toggle" data-byte-notify title="Enable notifications" aria-label="Toggle notifications">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path fill="currentColor" d="M12 22a2.4 2.4 0 0 0 2.4-2.4H9.6A2.4 2.4 0 0 0 12 22Zm6.6-6v-5a6.6 6.6 0 1 0-13.2 0v5L3 18.4V19h18v-.6Z"/>
-      </svg>
-    </button>
-    <%# Buddy sound toggle — matches Whisper's mute control. Silences the timer %>
-    <%# alarm when off. The `muted` class swaps the icon via CSS. %>
-    <button type="button" class="byte-mute-toggle" data-byte-mute title="Toggle sound" aria-label="Toggle sound">
-      <svg class="byte-mute-on" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3Zm13.5 2a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Zm-2.5-9v2.06a7 7 0 0 1 0 13.88v2.06a9 9 0 0 0 0-18Z"/>
-      </svg>
-      <svg class="byte-mute-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3Zm18.3-1.3-1.4-1.4L17 10.2 14.1 7.3l-1.4 1.4L15.6 12l-2.9 2.9 1.4 1.4L17 13.4l2.9 2.9 1.4-1.4L18.4 12l2.9-3.3Z"/>
-      </svg>
-    </button>
 
     <%# The list, and every sub-list, in one popover hanging off the header's %>
     <%# right edge. A choice that has its own options REPLACES the list in %>
@@ -749,11 +734,34 @@
     </div>
   </dialog>
 
-  <%# Display settings. One row today, but the shape is a list on purpose - %>
-  <%# text size was the first of these to be asked for, not the last. %>
+  <%# Settings. Notifications and sound were two icons in the header until %>
+  <%# 2026-09-14, each holding a 36px slot on a row that also has to carry the %>
+  <%# thread name, the mode and the status - and each tapped a handful of %>
+  <%# times ever. They are preferences, so they live with the preferences. %>
   <dialog class="byte-modal" data-byte-settings-modal>
     <div class="byte-modal-form basic">
       <h3 class="byte-modal-title">Settings</h3>
+      <%# The hint is load-bearing rather than decoration: a browser can refuse %>
+      <%# push outright, and the old bell had nowhere to say so - it went red %>
+      <%# and put the explanation in a `title`, which a phone never shows. %>
+      <div class="byte-setting">
+        <div class="byte-setting-label">
+          <span class="byte-setting-name">Notifications</span>
+          <span class="byte-setting-hint" data-byte-notify-hint>Checking…</span>
+        </div>
+        <div class="byte-setting-control">
+          <button type="button" class="byte-setting-toggle" data-byte-notify aria-pressed="false">Off</button>
+        </div>
+      </div>
+      <div class="byte-setting">
+        <div class="byte-setting-label">
+          <span class="byte-setting-name">Sound</span>
+          <span class="byte-setting-hint">Timer alarms, on this device.</span>
+        </div>
+        <div class="byte-setting-control">
+          <button type="button" class="byte-setting-toggle" data-byte-mute aria-pressed="true">On</button>
+        </div>
+      </div>
       <div class="byte-setting">
         <div class="byte-setting-label">
           <span class="byte-setting-name">Text size</span>

@@ -105,13 +105,66 @@ module Buddy
       # call to answer, and the ones that didn't obviously touch it got answered
       # without the picture at all. A sentence costs a few dozen tokens once and
       # carries forward for nothing.
-      def build(conversation, upto:)
+      def build(conversation, upto:, briefing: false)
         rows = drop_stale_quick_actions(scope(conversation, upto), upto)
+        rows = without_routine_reminders(rows) if briefing
         described = descriptions_for(rows)
         rows.filter_map { |msg|
           current = upto.present? && msg.id == upto.id
           item_for(msg, replay_images: current, described: described, current: current)
         }
+      end
+
+      # A daily reminder that already RANG, replayed into a briefing prompt.
+      #
+      # Buddy::GPT::ContextTool#without_routine_reminders strips the everyday
+      # cadences out of a briefing's facts, on the rule its own comment states:
+      # what the model can't see, it can't read out, and the prompt asking for
+      # it in prose has lost repeatedly. Every fired reminder is posted as
+      # `kind: "buddy"`, so PROSE_KINDS replays it as an assistant turn and
+      # hands straight back what the filter had just taken away.
+      #
+      # Prod 6099, 13 Sep: Suki's seed carried a WEATHER block and nothing else
+      # — no chores, no reminders — and the briefing opened by putting "Feed the
+      # fish" and the front flower bed on Eve's pile. Both are `daily`
+      # (reminders 51 and 53), both correctly absent from the facts, and both
+      # had rung the evening before at 5 and 7 PM, two rows above the seed. No
+      # pre-send repair can catch that: the sentence is the model's own and
+      # there is nothing wrong with its shape.
+      #
+      # `drop_stale_quick_actions` had swallowed these bubbles most days by
+      # accident — it drops everything an older seed dragged in until the next
+      # thing the person SAID — so they only survive on a day someone typed
+      # after the last briefing. That is what made it look rare.
+      #
+      # Briefing turns only. On an ordinary turn the bubble is the whole answer
+      # to "did I feed the fish?" and has to stay.
+      REMINDER_SOURCE = "reminder".freeze
+
+      def without_routine_reminders(rows)
+        ids = rows.filter_map { |msg| fired_reminder_id(msg) }.uniq
+        return rows if ids.empty?
+
+        routine = BuddyReminder.where(id: ids).select { |r| Buddy::Context.routine_reminder?(r) }
+        routine = routine.to_set(&:id)
+        return rows if routine.empty?
+
+        rows.reject { |msg| routine.include?(fired_reminder_id(msg)) }
+      rescue StandardError => e
+        # A briefing carrying one line too many is the briefing as it was
+        # before this existed, and never a reason to fail the turn.
+        Rails.logger.warn("[Buddy::GPT::History] routine reminder filter failed: #{e.class}: #{e.message}")
+        rows
+      end
+
+      # nil for anything that is not Buddy speaking a reminder it just fired —
+      # which includes the reminder's own `buddy_activity` receipt and its
+      # hidden prompt seed, neither of which reaches PROSE_KINDS anyway.
+      def fired_reminder_id(message)
+        return nil unless message.direction == "inbound" && message.metadata.is_a?(Hash)
+        return nil unless message.metadata["source"].to_s == REMINDER_SOURCE
+
+        message.metadata["reminder_id"].presence&.to_i
       end
 
       # Every description in one query, keyed by blob. Built here rather than

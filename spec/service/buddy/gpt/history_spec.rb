@@ -4,18 +4,19 @@ RSpec.describe Buddy::GPT::History do
   let(:user)  { User.me }
   let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
 
-  def said(body, direction: :outbound, kind: nil, state: :delivered, source: nil, peer: nil)
+  def said(body, direction: :outbound, kind: nil, state: :delivered, source: nil, peer: nil, reminder_id: nil)
     meta = {}
     meta["kind"]        = kind if kind
     meta["source"]      = source if source
+    meta["reminder_id"] = reminder_id if reminder_id
     meta["relay_peer"]  = { "name" => peer } if peer
     convo.byte_messages.create!(
       user: user, direction: direction, state: state, body: body, metadata: meta,
     )
   end
 
-  def build(upto: nil)
-    described_class.build(convo, upto: upto)
+  def build(upto: nil, briefing: false)
+    described_class.build(convo, upto: upto, briefing: briefing)
   end
 
   describe "roles" do
@@ -606,6 +607,73 @@ RSpec.describe Buddy::GPT::History do
       said("Opening the garage.", direction: :inbound, kind: "jarvis")
 
       expect(build.length).to eq(2)
+    end
+  end
+
+  # Prod 6099, 13 Sep: Suki's briefing seed carried a WEATHER block and nothing
+  # else, and the briefing put "Feed the fish" and the front flower bed on Eve's
+  # pile anyway. Both are `daily` reminders that had rung the previous evening,
+  # two rows above the seed - stripped from the facts by
+  # Buddy::GPT::ContextTool#without_routine_reminders and handed straight back
+  # by the replay.
+  describe "reminders that already fired, on a briefing turn" do
+    def rang(reminder, body)
+      said(
+        "Reminder: #{body}",
+        direction: :inbound, kind: "buddy", source: "reminder", reminder_id: reminder.id,
+      )
+    end
+
+    def reminder(body, recurrence)
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: body,
+        fire_at: 1.day.from_now, recurrence: recurrence
+      )
+    end
+
+    let(:fish)  { reminder("Feed the fish.", { "freq" => "daily", "at" => "17:00" }) }
+    let(:weeds) { reminder("Pull the weeds.", { "freq" => "weekly", "by_day" => ["mo"] }) }
+
+    it "leaves the everyday ones out of a briefing, the way the facts already do" do
+      rang(fish, "Feed the fish.")
+
+      expect(build(briefing: true)).to be_empty
+    end
+
+    it "keeps them on an ordinary turn, where the bubble is the answer" do
+      rang(fish, "Feed the fish.")
+
+      expect(build.dig(0, :content)).to eq("Reminder: Feed the fish.")
+    end
+
+    # Same split `without_routine_reminders` makes: a weekly rhythm is exactly
+    # the thing nobody has top of mind, which is what makes it worth a line.
+    it "keeps a cadence a person would not know cold" do
+      rang(weeds, "Pull the weeds.")
+
+      expect(build(briefing: true).dig(0, :content)).to eq("Reminder: Pull the weeds.")
+    end
+
+    it "leaves everything else in the thread alone" do
+      said("morning")
+      rang(fish, "Feed the fish.")
+      said("Morning!", direction: :inbound, kind: "buddy")
+
+      expect(build(briefing: true)).to eq([
+        { role: :user, content: "morning" },
+        { role: :assistant, content: "Morning!" },
+      ])
+    end
+
+    # A bubble whose reminder has since been deleted can't be shown to be
+    # routine, and a briefing carrying one line too many beats one that
+    # silently drops a real message.
+    it "keeps a bubble whose reminder is gone" do
+      gone = fish.id
+      rang(fish, "Feed the fish.")
+      BuddyReminder.where(id: gone).delete_all
+
+      expect(build(briefing: true).length).to eq(1)
     end
   end
 end

@@ -174,6 +174,17 @@ module Buddy
       Agenda.where(user_id: user.id).pluck(:id).index_with { { mine: true } }
     end
 
+    # Is this reminder one of the everyday rhythms a briefing leaves out?
+    #
+    # Takes the RECORD, because the two places that need the answer reach it
+    # from opposite ends: Buddy::GPT::ContextTool already holds the payload row
+    # and its `cadence` label, while Buddy::GPT::History has nothing but a
+    # `reminder_id` off a fired bubble. `cadence_label` is the one mapping
+    # either way.
+    def routine_reminder?(reminder)
+      ROUTINE_CADENCES.include?(cadence_label(reminder.normalized_recurrence))
+    end
+
     class << self
       private
 
