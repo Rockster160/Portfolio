@@ -84,6 +84,11 @@ module Buddy
         kind:       :buddy_trigger,
         hidden:     true,
         seed_label: seed_label(job, verdict, outgoing),
+        # This seed is two instructions and the second one is the point. Saying
+        # so here is what lets Turn#start_over? tell "she answered in prose"
+        # from "she had nothing to do" — prod 6279 said exactly what the mail
+        # said, called nothing, and the beat never reached the board.
+        seed_call:  job ? :add_job_note : :add_job_application,
       )
     end
 

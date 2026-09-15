@@ -685,6 +685,21 @@ module Buddy
         return false if @acted || @asked_choice || @read_actions
         return false if outcome[:proposals].any?
 
+        # A seed that ORDERED a call and got none back.
+        #
+        # Prod 6279: "CentralReach confirmed they got your application and said
+        # they'll reach out if you're a fit." True, well said, and the entire
+        # whole of what happened - the seed's second half ("Then CALL
+        # add_job_note - do not offer to, do not ask first") was simply not
+        # done. Every other guard here reads the PROSE for a claim that
+        # something happened, and this sentence claims nothing; it REPORTS. One
+        # call, 23 output tokens, no card, and the beat never reached the board.
+        #
+        # So the fact that catches it isn't in the words at all. The seed said a
+        # call was required, and the two lines above have already established
+        # that nothing ran and nothing is waiting on a tap.
+        return true if seed_skipped_its_call?
+
         # Behind the same guards as everything else. A briefing trips none of
         # them - it calls nothing and proposes nothing - but a second attempt
         # after something HAS run would run it twice, and that outranks a
@@ -2689,6 +2704,14 @@ module Buddy
           end
         )
         "#{opener} #{retrying ? "I'll have another go in a minute." : "Want me to try that one again?"}"
+      end
+
+      # The tool a seed demanded, named by whoever built it. Only a seed whose
+      # whole purpose is a call sets this — a check-in or a briefing is asked
+      # for words and must never be sent round again for want of a tool call.
+      def seed_skipped_its_call?
+        meta = @inbound.metadata
+        meta.is_a?(Hash) && meta["seed_call"].present?
       end
 
       # One line saying what a self-initiated turn is ABOUT, set by whoever

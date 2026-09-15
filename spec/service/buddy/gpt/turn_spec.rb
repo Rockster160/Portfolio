@@ -350,6 +350,82 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 6279, 15 Sep. A job-mail seed is TWO instructions — say what the mail
+    # says, then call the tool — and the model did the first and stopped.
+    # "CentralReach confirmed they got your application" is true, well said, and
+    # claims nothing, so every prose guard here reads it as a good reply. The
+    # beat never reached the board.
+    describe "a seed whose call never came" do
+      def job_seed(rounds, call: "add_job_note")
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Job mail arrived.",
+          metadata: {
+            "kind" => "buddy_trigger", "hidden" => true,
+            "source" => "job_mail_watcher", "seed_label" => "the email from CentralReach",
+            "seed_call" => call,
+          }.compact,
+        )
+        described_class.run!(message, client: FakeBuddyClient.new(rounds))
+      end
+
+      # `converse` says so in the log when it starts over, which is the one
+      # signal that separates a second ATTEMPT from the ordinary second round a
+      # tool call already costs.
+      def started_over?
+        allow(Rails.logger).to receive(:warn)
+        yield
+        have_received(:warn).with(/nothing landed on attempt/)
+      end
+
+      it "goes again rather than letting the prose stand for the call" do
+        matcher = started_over? {
+          job_seed([
+            { text: "CentralReach confirmed they got your application." },
+            { text: "Logged it.", tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          ])
+        }
+
+        expect(Rails.logger).to matcher
+        expect(reply.body).to eq("Logged it.")
+      end
+
+      # The second attempt is the last one. Words are better than an error
+      # bubble when the model simply will not reach for it.
+      it "keeps the second attempt's words even when it still calls nothing" do
+        job_seed([
+          { text: "CentralReach confirmed they got your application." },
+          { text: "CentralReach acknowledged your application." },
+        ])
+
+        expect(reply.body).to eq("CentralReach acknowledged your application.")
+        expect(reply.state).to eq("delivered")
+      end
+
+      # A card IS the call landing. Going again would propose the same beat
+      # twice.
+      it "leaves a turn that put a card up alone" do
+        matcher = started_over? {
+          job_seed([
+            { text: "CentralReach got it.",
+              tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+            { text: "CentralReach got it." },
+          ])
+        }
+
+        expect(Rails.logger).not_to matcher
+      end
+
+      # A check-in or a briefing is asked for WORDS. Neither names a call, and
+      # neither may be sent round again for want of one.
+      it "leaves a seed that named no call alone" do
+        matcher = started_over? {
+          job_seed([{ text: "Morning! Nothing on today." }], call: nil)
+        }
+
+        expect(Rails.logger).not_to matcher
+      end
+    end
+
     # Only a check-in is asked for silence. A briefing that comes back with
     # nothing has failed, and has to say so.
     it "still reports an empty turn nobody asked to be silent" do
