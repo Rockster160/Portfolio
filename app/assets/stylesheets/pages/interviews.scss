@@ -693,6 +693,9 @@
   .note-tag-heard_back { background: #34d0e0; }
   .note-tag-responded { background: #1a8b96; }
   .note-tag-recruiter_call { background: #a371f7; }
+  // Deliberately NOT in the booked amber it sits next to: the whole point of
+  // the tag is that nothing is booked yet and the next move is his.
+  .note-tag-availability { background: #d44e7d; }
   .note-tag-scheduled { background: var(--iv-booked); color: var(--iv-booked-ink); }
   .note-tag-interview { background: #3fb950; }
   .note-tag-take_home { background: #e3b341; color: $grey-dark; }

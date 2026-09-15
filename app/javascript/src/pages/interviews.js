@@ -51,11 +51,16 @@ $(document).ready(function () {
 
     const syncFollowUp = function (opened) {
       const booking = tagSelect.value === "scheduled"
-      label.textContent = booking ? "Interview on" : "Follow up on"
+      // An ask for times is the one beat waiting on HIM, so the date is what he
+      // owes rather than when the thing is — the agenda row says so too.
+      const owed = tagSelect.value === "availability"
+      label.textContent = booking ? "Interview on" : owed ? "Send them by" : "Follow up on"
       if (hint) {
         hint.textContent = booking
           ? "When it is. Goes on your agenda as an event."
-          : "Optional. Goes on your agenda as a task."
+          : owed
+            ? "Optional. Goes on your agenda as \u201cSend availability\u201d."
+            : "Optional. Goes on your agenda as a task."
       }
 
       // The date is the entire point of a Scheduled note, and it lives behind

@@ -31,6 +31,13 @@ Buddy::Tools.register(
     how a tracker goes stale. Reach for those three only when the mail actually
     says so. `note` is the default and just means "this happened".
 
+    **An ask for times is `availability`, not `scheduled`.** `scheduled` means a
+    time is AGREED and puts it on their calendar as a timed event, so using it
+    for "send me your availability" invents an interview that does not exist.
+    `availability` is the one beat on the list waiting on THEM - a link to fill
+    in, times to send back - and a `follow_up_at` on it puts "Send availability"
+    on the agenda as a task. Use `scheduled` only once the mail names the slot.
+
     **An ATS receipt is `acknowledged`, not `applied` and not `heard_back`.**
     "Thanks for applying, a real human will review this" is a machine saying it
     arrived. `applied` is a thing THEY did, so putting it on a robot's reply
@@ -68,7 +75,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat. An ATS receipt is `acknowledged`. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat. An ATS receipt is `acknowledged`; an ask for times is `availability`, not `scheduled`. offer/rejected/withdrew also settle the application",
     },
     email_id:     { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:  { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

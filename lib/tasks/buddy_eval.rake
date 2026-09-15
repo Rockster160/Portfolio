@@ -536,6 +536,21 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "an ATS receipt is neither applying again nor hearing back",
   },
+  # --- an ask for times is not a booking ------------------------------------
+  # Prod 6253, 15 Sep. "Please fill out your availability for the next week"
+  # was proposed as Scheduled — which says a time is AGREED and offers to put a
+  # timed event on the calendar for an interview nobody has booked. It was the
+  # only tag on the list that sounded like interview logistics.
+  {
+    case:  "prod 6253",
+    say:   "Halloway Systems sent a link asking me to fill in my availability " \
+           "for a phone screen next week - log that",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item set_reminder],
+    args:  { add_job_note: { tag: "availability" } },
+    needs: :halloway_application,
+    note:  "no time is agreed yet; `scheduled` would invent the interview",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",

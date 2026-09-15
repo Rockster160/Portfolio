@@ -33,7 +33,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat this first one was. An ATS receipt is `acknowledged`",
+      description: "The kind of beat this first one was. An ATS receipt is `acknowledged`; an ask for times is `availability`",
     },
     occurred_at:  { type: :iso_time, required: false, description: "When it happened, if not now" },
     source:       { type: :string, required: false, description: "Where it came from - LinkedIn, a recruiter" },

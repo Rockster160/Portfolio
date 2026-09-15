@@ -138,6 +138,47 @@ RSpec.describe JobNote do
     end
   end
 
+  # Prod 6253: "please fill out your availability for the next week" was
+  # proposed as Scheduled. `scheduled` says a time is AGREED and offers to put
+  # it on the calendar as a timed event, so it invents an interview that does
+  # not exist — and the one tag that sounded like interview logistics was the
+  # only place the model had to put it.
+  describe "the availability tag" do
+    it "reads as Availability and needs no body" do
+      note = job.notes.create!(tag: :availability, occurred_at: 1.hour.ago)
+
+      expect(note.tag_label).to eq("Availability")
+      expect(note.body).to be_nil
+    end
+
+    # Adjacent in the dropdown because they are the pair being confused, and
+    # sitting next to each other is how a person tells them apart.
+    it "sits directly above scheduled in the dropdown" do
+      keys = JobNote::TAG_LABELS.keys
+
+      expect(keys[keys.index("availability") + 1]).to eq("scheduled")
+    end
+
+    # The beat waiting on HIM. "Follow up: ApartmentIQ" says nothing about what
+    # is owed, and the whole point of the tag is that there is a thing to do.
+    it "puts what he owes on the agenda as a task, not an interview" do
+      at = 2.days.from_now.change(hour: 9, min: 0)
+
+      note = job.notes.create!(tag: :availability, follow_up_at: at)
+      item = note.follow_up_item
+
+      expect(item.name).to eq("Send availability: Acme")
+      expect(item.kind).to eq("task")
+      expect(item.end_at).to be_nil
+    end
+
+    it "leaves the application where it was" do
+      job.notes.create!(tag: :availability)
+
+      expect(job.reload.status).to eq("active")
+    end
+  end
+
   # A booked interview is a different animal from a chase: the date on the note
   # is the appointment itself, so it goes on the calendar as a timed event
   # rather than as a task called "Follow up".

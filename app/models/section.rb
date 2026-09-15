@@ -44,12 +44,13 @@ class Section < ApplicationRecord
     self.sort_order ||= list.max_sort_order + 1
   end
 
+  # Through List#broadcast! rather than a third copy of it. That is the only
+  # place that resets the memoized collections before reading them, and a
+  # snapshot built anywhere else can serialize the list as it was before this
+  # very save.
   def broadcast_commit
     return if do_not_broadcast
 
-    ActionCable.server.broadcast "list_#{list_id}_json_channel", { list_data: list.serialize, timestamp: Time.current.to_i }
-
-    rendered_message = ListsController.render template: "list_items/index", locals: { list: list }, layout: false
-    ActionCable.server.broadcast "list_#{list_id}_html_channel", { list_html: rendered_message, timestamp: Time.current.to_i }
+    list.broadcast!
   end
 end

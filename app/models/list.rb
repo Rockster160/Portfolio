@@ -330,6 +330,7 @@ class List < ApplicationRecord
   def broadcast!
     return if do_not_broadcast
 
+    reset_snapshot_associations
     json = serialize
     ActionCable.server.broadcast "list_#{id}_json_channel", { list_data: json, timestamp: broadcast_stamp }
 
@@ -343,5 +344,24 @@ class List < ApplicationRecord
   # again with extra steps.
   def broadcast_stamp
     (Time.current.to_f * 1000).round
+  end
+
+  # A snapshot describes the DATABASE, never whatever this object happened to
+  # read earlier. `list_items` memoizes on first read, so a List that stays in
+  # memory across several writes serializes the collection as it looked BEFORE
+  # them.
+  #
+  # That is what empties the 9pm Before Bed run. Task 512 holds one
+  # `List.find("Before Bed")` and calls `add` on it three times; the first add
+  # loads the association, and the second and third then broadcast the
+  # one-item collection that first read cached. Three snapshots go out, all of
+  # them saying the list holds only "Pickup Whisper Dinner", and the page shows
+  # exactly that until it is reloaded. Nothing about it looks like staleness
+  # from the outside — the rows are in the database the whole time.
+  #
+  # Both collections and `sections`, because the HTML render below walks
+  # `sectioned_objects`, which reads all of them.
+  def reset_snapshot_associations
+    [:list_items, :deleted_list_items, :sections].each { |name| association(name).reset }
   end
 end

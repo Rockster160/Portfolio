@@ -166,13 +166,12 @@ RSpec.describe ListItem do
     end
   end
 
-  # Every commit broadcasts the WHOLE list, and ActionCable dispatches each
-  # broadcast on its own worker-pool thread, so three items added in a row can
-  # reach a socket in any order. The client redraws from whichever lands last,
-  # so the snapshots have to be datable or a one-item one overtaking the
-  # three-item one leaves two items missing until something bumps the list.
-  describe "broadcast ordering" do
-    let(:list) { create(:list) }
+  # Every commit broadcasts the WHOLE list, so a snapshot that describes the
+  # list as it was a moment ago is a page that shows the list as it was a
+  # moment ago, with no sign that anything is missing.
+  describe "broadcasting" do
+    let(:user) { create(:user) }
+    let(:list) { create(:list, user: user) }
 
     def json_broadcasts
       sent = []
@@ -181,6 +180,34 @@ RSpec.describe ListItem do
       }
       yield
       sent
+    end
+
+    # Prod, nightly at 9pm: Jil task 512 holds ONE `List.find("Before Bed")`
+    # and calls `add` on it three times to put the evening's items back. The
+    # first add loads `list_items`; the association memoizes, and the second
+    # and third adds then broadcast that first read. All three snapshots said
+    # the list held only "Pickup Whisper Dinner" — which is what the dashboard
+    # showed until it was reloaded, while all three rows sat in the database.
+    it "reads the database, not the collection it loaded before the writes" do
+      names = ["Pickup Whisper Dinner", "Kitchen & Living 90% Reset", "Dish washer running/delay"]
+      names.each { |n| list.list_items.add(n) }
+      list.list_items.each(&:soft_destroy)
+
+      reused = List.find(list.id)
+      sent = json_broadcasts { names.each { |n| reused.add(n) } }
+
+      expect(sent.map { |d| d[:list_data][:items].length }).to eq([1, 2, 3])
+      expect(sent.last[:list_data][:items].pluck(:name)).to match_array(names)
+    end
+
+    it "reads the database when a section changes too" do
+      list.list_items.add("Milk")
+      reused = List.find(list.id)
+      reused.serialize # memoize everything the snapshot reads
+
+      sent = json_broadcasts { create(:section, list: reused, name: "Dairy") }
+
+      expect(sent.last[:list_data][:sections].pluck(:name)).to eq(["Dairy"])
     end
 
     it "stamps every snapshot, in the order the snapshots were read" do

@@ -38,6 +38,7 @@ class JobNote < ApplicationRecord
     responded:      9,
     scheduled:      10,
     acknowledged:   11,
+    availability:   12,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
@@ -45,7 +46,14 @@ class JobNote < ApplicationRecord
   # timeline ends on is the whole question of whether the ball is in your court.
   #
   # `scheduled` sits above `interview` because that's the order they happen in:
-  # one books it, the other is it having happened.
+  # one books it, the other is it having happened. `availability` sits directly
+  # above `scheduled` for the opposite reason - the two are the pair most easily
+  # confused, and adjacency in the dropdown is how a person tells them apart.
+  #
+  # An ask for times is NOT a booking. It is the one beat on this list waiting
+  # on HIM: "send me your availability" is a task, and tagging it `scheduled`
+  # both says an interview exists that doesn't and offers to put it on the
+  # calendar as a timed event.
   #
   # `acknowledged` is the ATS auto-reply, and it needed a tag of its own because
   # neither neighbour is honest about it. `applied` is a thing THEY did, and
@@ -59,6 +67,7 @@ class JobNote < ApplicationRecord
     "heard_back"     => "Heard back",
     "responded"      => "Response",
     "recruiter_call" => "Recruiter call",
+    "availability"   => "Availability",
     "scheduled"      => "Scheduled",
     "interview"      => "Interview",
     "take_home"      => "Take-home",
@@ -233,7 +242,18 @@ class JobNote < ApplicationRecord
   # leaving an event wearing half of a task's fields.
   def follow_up_attrs
     minutes = duration_minutes || DEFAULT_INTERVIEW_MINUTES
-    prefix  = scheduled? ? "Interview" : "Follow up"
+    # What the row on the agenda is FOR. "Follow up: ApartmentIQ" against an ask
+    # for times says nothing about what is owed; the whole point of the tag is
+    # that there is a specific thing to do.
+    prefix  = (
+      if scheduled?
+        "Interview"
+      elsif availability?
+        "Send availability"
+      else
+        "Follow up"
+      end
+    )
 
     {
       name:     "#{prefix}: #{job_application.company}",
