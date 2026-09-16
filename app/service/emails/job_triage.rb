@@ -140,7 +140,6 @@ module Emails
         user:   email.user,
         key:    "mail:triage:#{email.id}",
         name:   "Reading mail",
-        icon:   "✉️",
         # Not truncated here: the model owns the chip's length, and a second
         # limit in the caller only ever disagrees with it.
         detail: email.subject.presence,

@@ -202,10 +202,10 @@ RailsClient.background_clear(user_id: USER_ID, key: "mail:watcher:#{rowid}")
 | key | who | when |
 |---|---|---|
 | `jobhunt:line` | `Jobhunt::Lineup` | an application in the line starts, steps and settles → then **parks as `waiting`** when the batch drains. Links: the posting (or the job's own page), `/line`, `/questions`. |
-| `jobhunt:task` | `Jobhunt::Web::Tasks` | **any** long jobhunt work — looking for jobs, rewriting a letter, reading up on a company. A run that dies leaves a red chip. |
+| `jobhunt:task` | `Jobhunt::Web::Tasks` | **any** long jobhunt work — looking for jobs, rewriting a letter, reading up on a company. A run that dies leaves a red chip. A server that was killed mid-run clears it on boot, since a task lives only in that process's memory. |
 | `jobhunt:handoff` | `Jobhunt::Handoff` | the browser is sitting there waiting on an answer. Cleared from an `ensure`. |
 | `jobhunt:review:<job id>` | `Jobhunt::Submitter` | an application is filled in and **not sent**. Cleared when it is. |
-| `jobhunt:triage` | `Jobhunt::Watcher` | new jobs are in the queue |
+| `jobhunt:triage` | `Jobhunt::Watcher` | mail added **at least one** new job — never for the backlog alone. Opening `/queue` clears it. |
 | `jobhunt:watcher` | `Jobhunt::Watcher` | the alert watcher is blocked (`failed`) |
 | `mail:triage:<email id>` | `Emails::JobTriage` | an email at the app domains goes to the model. Links: the message. |
 | `mail:watcher:<rowid>` | the Mac's `job_mail_watcher.rb` | an email in the personal inbox goes to the model |
