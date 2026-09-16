@@ -4,9 +4,9 @@ import { dash_colors, clamp } from "../vars"
 
 // Health bars for the money: everything there is against what it is meant to
 // last on, then how much is left on the month, the week (Monday to Sunday) and
-// today. Each bar carries its own clock — a one-cell marker
-// at how much of THAT bar's range is left — so money draining faster than the
-// clock reads as a fill ending short of its marker. That is the thing this cell
+// today. Each bar carries its own clock — a ☼ on the cell for how much of THAT
+// bar's range is left — so money draining faster than the clock reads as a
+// fill ending short of its ☼. That is the thing this cell
 // exists to show, and it is a SHAPE, not a sum. Nothing carries a number at
 // rest; a glance should not be a reckoning. Hover a bar and its own line spells
 // the figures out, in place.
@@ -166,12 +166,17 @@ import { dash_colors, clamp } from "../vars"
   }
 
   // `mark` is where on the bar its clock says the fill should end, as a
-  // fraction, or undefined for a bar with no clock to read. It is one cell: a
-  // hairline on that cell's left or right edge, whichever the position is
-  // closer to, so it lands within half a cell. Where the label is in the way
-  // the letter stays and the cell inverts instead — a cursor, not a gap in the
-  // word.
-  function bar(text, fraction, color, mark) {
+  // fraction, or undefined for a bar with no clock to read. It is a whole
+  // character, not a hairline: the fill moves a cell at a time, so a line
+  // claimed a precision the bar does not have. It sits on the cell that would
+  // be the LAST one filled if the fill were exactly on pace, rounded the same
+  // way the fill is — on pace, the ☼ is the fill's final cell.
+  //
+  // It takes the cell outright, letter or not. The label is known at a glance
+  // and the position is the reading. Not while the row is hovered, though:
+  // then the row is spelling out figures, and a ☼ over a digit would change
+  // the number.
+  function bar(row, text, fraction, color, mark) {
     text = text.padEnd(bar_width, " ").slice(0, bar_width)
 
     const filled = clamp(Math.round(bar_width * fraction), 0, bar_width)
@@ -182,16 +187,13 @@ import { dash_colors, clamp } from "../vars"
         Text.bgColor(dash_colors.darkgrey, text.slice(fill_to, to))
     }
 
-    if (mark === undefined) { return " " + paint(0, bar_width) + " " }
+    if (mark === undefined || cell.data.hover === row) {
+      return " " + paint(0, bar_width) + " "
+    }
 
-    const edge = bar_width * clamp(mark, 0, 1)
-    const at = Math.min(Math.floor(edge), bar_width - 1)
+    const at = clamp(Math.round(bar_width * clamp(mark, 0, 1)) - 1, 0, bar_width - 1)
     const under = at < filled ? color : dash_colors.darkgrey
-    const marker = (
-      text[at] === " "
-        ? Text.bgColor(under, Text.color(ink(under), edge - at < 0.5 ? "▏" : "▕"))
-        : Text.bgColor(ink(under), Text.color(under, text[at]))
-    )
+    const marker = Text.bgColor(under, Text.color(ink(under), "☼"))
 
     return " " + paint(0, at) + marker + paint(at + 1, bar_width) + " "
   }
@@ -213,7 +215,7 @@ import { dash_colors, clamp } from "../vars"
         : "  " + label
     )
 
-    return bar(text, fraction <= 0 ? 1 : fraction, roomColor(fraction), mark)
+    return bar(row, text, fraction <= 0 ? 1 : fraction, roomColor(fraction), mark)
   }
 
   // Everything there is — the home cell's figure — against the goal it is meant
@@ -242,7 +244,7 @@ import { dash_colors, clamp } from "../vars"
       now_ms,
     )
 
-    return bar(text, fraction <= 0 ? 1 : clamp(fraction, 0, 1), roomColor(fraction), mark)
+    return bar(row, text, fraction <= 0 ? 1 : clamp(fraction, 0, 1), roomColor(fraction), mark)
   }
 
   // Drains like the money: the fill is what is LEFT of the window, and the
@@ -274,7 +276,7 @@ import { dash_colors, clamp } from "../vars"
         : remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
     )
 
-    return bar(text, remaining <= 0 ? 1 : remaining, roomColor(remaining), mark)
+    return bar(row, text, remaining <= 0 ? 1 : remaining, roomColor(remaining), mark)
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the three bars
@@ -295,7 +297,7 @@ import { dash_colors, clamp } from "../vars"
         : "  Caffeine"
     )
 
-    return bar(text, clamp(mg / limit_mg, 0, 1), roomColor(remaining), mark)
+    return bar(row, text, clamp(mg / limit_mg, 0, 1), roomColor(remaining), mark)
   }
 
   // Which line the pointer is on. Redrawing replaces the line divs under the
@@ -370,7 +372,7 @@ import { dash_colors, clamp } from "../vars"
       day_key: undefined, hover: -1,
     },
     // Only the clock moves between pushes. Redrawing is free and walks every
-    // marker along — a cell of the session bar is ten minutes — but a resync
+    // ☼ along — a cell of the session bar is ten minutes — but a resync
     // runs a Jil task, so it waits for the day to actually have changed.
     refreshInterval: Time.minutes(1),
     reloader: function() {
