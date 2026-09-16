@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Portfolio's half of `deploy`: the push is what kicks the build off, so all
+# that is left is watching for it to land. Everything before this — the commit
+# message, the `eq` queue, the push, the prodExec scripts afterwards — is the
+# generic `deploy` in ~/code/scripts/helpers/deploy.sh.
+#
+# Called as: bin/deploy-trigger <branch> <env>   ($DEPLOY_BRANCH / $DEPLOY_ENV)
+set -euo pipefail
+
+env="${2:-${DEPLOY_ENV:-production}}"
+
+if [[ "$env" != "production" ]]; then
+  echo "deploy-trigger: Portfolio only deploys production, not '$env'" >&2
+  exit 1
+fi
+
+exec "$(dirname "$0")/wait_for_deploy" deploy
