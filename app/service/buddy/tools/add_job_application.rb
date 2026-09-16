@@ -138,15 +138,37 @@ Buddy::Tools.register(
   # make a duplicate of something that is by then already there.
   routinable:  false,
   execute:     ->(payload, ctx) {
-    job = ctx.user.job_applications.create!(
+    # THE CHECK RUNS AGAIN HERE, and that is the whole point of it being here.
+    #
+    # `confirm:` is PROPOSAL time. Everything it establishes can stop being true
+    # before the card is tapped, and for this tool it reliably does: a
+    # confirmation mail arrives, the card is built against a clean board, and by
+    # the time it is pressed jobhunt has written the row itself.
+    #
+    # JPMorganChase made two rows twelve seconds apart that way. Epicor made two
+    # FOUR seconds apart - jobhunt recorded it at 21:20:58 and the Workday
+    # acknowledgement opened a second at 21:21:02. Both times the card was
+    # honestly clean when it was offered and made a duplicate when it was
+    # pressed.
+    #
+    # Landing on the row that is already there is better than refusing: the mail
+    # is worth keeping either way, and a beat on the right timeline is exactly
+    # what it should have been.
+    role  = payload[:role].to_s.strip
+    twin  = Buddy::JobHunt.applications_for(ctx.user, payload[:company]).find { |row|
+      role.present? && Buddy::JobHunt.role_named_in?(row, role, ratio: Buddy::JobHunt::WHOLE_ROLE)
+    }
+
+    job = twin || ctx.user.job_applications.create!(
       company: payload[:company],
       role:    payload[:role].presence,
       source:  payload[:source].presence,
       url:     payload[:url].presence,
     )
 
+    note = nil
     if payload[:note].present? || payload[:tag].to_s != "note"
-      job.notes.create!(
+      note = job.notes.create!(
         body:             payload[:note].presence,
         tag:              payload[:tag],
         occurred_at:      payload[:occurred_at] || Time.current,
@@ -162,15 +184,22 @@ Buddy::Tools.register(
     {
       company: job.company,
       status:  job.status,
+      joined:  twin.present?,
       url:     "#{Buddy::AppPages.url_for("/interviews")}/#{job.id}",
-      # The note rides on `dependent: :destroy`, so undoing the row takes its
-      # first beat with it and there is nothing left half-made.
-      reverts: [{
-        op:      "created",
-        model:   "JobApplication",
-        id:      job.id,
-        summary: "stopped tracking #{job.company}",
-      }],
+      # Undoing has to take back only what was made. On a row that already
+      # existed that is the NOTE - destroying the row would take the whole
+      # history with it, including the beats that were there before this ran.
+      reverts: (
+        if twin
+          note ? [{ op: "created", model: "JobNote", id: note.id,
+                    summary: "removed that beat from #{job.company}" }] : []
+        else
+          # The note rides on `dependent: :destroy`, so undoing the row takes
+          # its first beat with it and there is nothing left half-made.
+          [{ op: "created", model: "JobApplication", id: job.id,
+             summary: "stopped tracking #{job.company}" }]
+        end
+      ),
     }
   },
   receipt:     ->(result, _ctx) {
