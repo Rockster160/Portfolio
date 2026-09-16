@@ -83,6 +83,72 @@ module Buddy
       matches.one? ? matches.first : nil
     end
 
+    # Is THIS row's role the one the text is talking about?
+    #
+    # Containment on the normalized role, which is the safe direction: a role
+    # that appears is a match, and anything else is "don't know" rather than
+    # "no". Callers decide what to do with a no, and both of them treat it as a
+    # reason to ask rather than a reason to act.
+    #
+    # Words of three letters or more, so "AI" and "I-" contribute nothing and a
+    # one-letter suffix can't carry a match on its own. A role the row doesn't
+    # have is unanswerable and returns false.
+    # Enough of the role to say "this is that job". Half, because an ATS
+    # headline abbreviates: "Application received for Principal Engineer"
+    # against a row reading "Principal Engineer - AI Data and Infrastructure"
+    # is the same job with the tail cut off, and refusing that would send a
+    # correct note to a new application.
+    SAME_ROLE = 0.5
+
+    # ALL of it, for the other direction. Picking a row off the board with
+    # nothing but a role to go on has no company to check against, so a partial
+    # overlap is not enough - "Senior Backend Engineer" and "Senior Frontend
+    # Engineer" share two words out of three.
+    WHOLE_ROLE = 1.0
+
+    def role_named_in?(job, text, ratio: SAME_ROLE)
+      role = job.respond_to?(:role) ? job.role : nil
+      words = role_words(role)
+      return false if words.empty?
+
+      said = role_words(text)
+      return false if said.empty?
+
+      (words & said).length >= (words.length * ratio)
+    end
+
+    # The board row whose ROLE the text names, when exactly one does.
+    #
+    # Prod 15 Sep, email 51716: a Greenhouse "thank you for applying" that
+    # names a role and no company anywhere in it - the classifier had nothing
+    # to put in `company` and was right not to guess. Twelve minutes later
+    # jobhunt opened application 29, Fieldwire by Hilti, Senior Backend
+    # Engineer, for that exact role. `resolve_application` takes a company and
+    # only a company, so the receipt could not reach the board even with the row
+    # sitting there, and 29 is the only application of the day with no
+    # `acknowledged` beat on it.
+    #
+    # Unambiguous only, mirroring the head-word rule above: two applications
+    # whose roles both appear is a coin toss, and a note on the wrong one is
+    # worse than no note.
+    def resolve_by_role(user, text)
+      said = role_words(text)
+      return nil if said.empty?
+
+      matches = JobApplication.where(user: user).select { |job|
+        role_named_in?(job, text, ratio: WHOLE_ROLE)
+      }
+      matches.one? ? matches.first : nil
+    end
+
+    # Through Flourish so the filler words go - "and", "for", "the" - and both
+    # sides are normalized the same way. Without that, "Principal Engineer - AI
+    # Data and Infrastructure" counts "and" as a word of the role, and any
+    # headline with an "and" in it scores a point against it.
+    def role_words(text)
+      Buddy::Flourish.significant(text)
+    end
+
     def normalize(name)
       words = name.to_s.downcase.gsub(/[^a-z0-9&\-\s]/, " ").split
       words.pop while words.length > 1 && LEGAL_SUFFIXES.include?(words.last)

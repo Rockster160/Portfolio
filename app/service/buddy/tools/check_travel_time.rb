@@ -74,7 +74,7 @@ Buddy::Tools.register(
       name:       item.name,
       where:      item.location,
       drive_min:  drive && (drive / 60.0).ceil,
-      leave_by:   clock.call(item.travel_hash["leave_at"].to_i.positive? ? Time.zone.at(item.travel_hash["leave_at"].to_i) : nil),
+      leave_by:   clock.call(item.leave_at),
       home_by:    clock.call(item.home_at),
       # Already spaced and already rounded, so it can be handed straight to
       # `at` or `leave_at`. See Buddy::FollowUp.

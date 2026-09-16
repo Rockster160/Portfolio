@@ -57,8 +57,20 @@ Buddy::Tools.register(
     this when a message was announced to you and there's no email number to
     hand - the arrival time will be in what you were told.
 
-    `follow_up_at` is for when they say they'll chase it - it puts a task on
-    the agenda, so only set it if they actually said they'd come back to this.
+    **`follow_up_at` means two different things, and the tag decides which.**
+
+    On a `scheduled` note it IS the interview, it is what puts the appointment
+    on their calendar as a timed event, and it is REQUIRED - a Scheduled note
+    with no time says an interview exists and cannot say when, which is the one
+    shape this tool refuses. Read the time off the mail; it is in there, in
+    their own zone, because that is what the mail was sent to tell them.
+    `duration_minutes` goes with it ("we'll chat for ~20 minutes", an invite
+    reading 2:00-2:20), and without one an interview is booked for an hour.
+
+    On every other tag it is a chase YOU owe THEM, it goes on the agenda as a
+    task, and it is optional - set it only if they actually said they'd come
+    back to this. An `availability` note is the useful middle: the date is when
+    the times are owed by, and the task reads "Send availability".
 
     `summary` is one line saying what the note SAYS, and it exists so `note`
     never has to be shortened. It is what the card shows them; `note` is what
@@ -67,20 +79,29 @@ Buddy::Tools.register(
     where they belong. Nothing stores it.
   TXT
   args:        {
-    company:      { type: :string, required: true, description: "Which application - fuzzy, the company name" },
-    note:         { type: :string, required: false, description: "What happened, in their words. Required unless a tag says it" },
-    summary:      { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
-    tag:          {
+    company:          { type: :string, required: true, description: "Which application - fuzzy, the company name" },
+    note:             { type: :string, required: false, description: "What happened, in their words. Required unless a tag says it" },
+    summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
+    tag:              {
       type:        :enum,
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
       description: "The kind of beat. An ATS receipt is `acknowledged`; an ask for times is `availability`, not `scheduled`. offer/rejected/withdrew also settle the application",
     },
-    email_id:     { type: :integer, required: false, description: "The email this came from, from recent_mail" },
-    occurred_at:  { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },
-    spoke_to:     { type: :string, required: false, description: "Who they dealt with, if a person was named" },
-    follow_up_at: { type: :iso_time, required: false, description: "Only if they said they'd chase it" },
+    email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
+    occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },
+    spoke_to:         { type: :string, required: false, description: "Who they dealt with, if a person was named" },
+    follow_up_at:     {
+      type:        :iso_time,
+      required:    false,
+      description: "On `scheduled` this IS the interview and is REQUIRED. Elsewhere, only if they said they'd chase it",
+    },
+    duration_minutes: {
+      type:        :integer,
+      required:    false,
+      description: "How long the interview runs, if the mail says. Defaults to an hour",
+    },
   },
   confirm:     ->(payload, ctx) {
     job = Buddy::JobHunt.resolve_application(ctx.user, payload[:company])
@@ -95,6 +116,51 @@ Buddy::Tools.register(
     email = ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?
     raise "no email ##{payload[:email_id]}" if payload[:email_id].present? && email.nil?
 
+    # The description says so; this enforces it. A `scheduled` note with no time
+    # writes NOTHING to the calendar - JobNote#sync_follow_up returns early on a
+    # blank `follow_up_at` - so the row reads "Interview booked" on the board
+    # and the day it is booked for stays empty. Prod 56/57: two Scheduled notes
+    # for one ApartmentIQ interview, both with the time sitting in their own
+    # summary line and neither with it in the field.
+    at = payload[:follow_up_at]
+    if tag.to_s == "scheduled" && at.blank?
+      raise "a scheduled interview needs its time - pass follow_up_at, or use a different tag"
+    end
+
+    # Two Scheduled notes at the same minute are one interview announced twice -
+    # the calendar invite and the confirmation email arrive as separate mail,
+    # five seconds apart, and each one is its own turn so no merge_key can see
+    # the other. Left alone it books the appointment on the agenda TWICE.
+    if tag.to_s == "scheduled" && job.notes.exists?(tag: :scheduled, follow_up_at: at)
+      raise "#{job.company} is already booked for then - log the words as a plain note instead"
+    end
+
+    # A SECOND acknowledgement on one row is nearly always a second ROLE.
+    #
+    # An ATS sends one "we received your application" per application, so a row
+    # that already has one and is being handed another is the shape of two jobs
+    # at one company collapsing onto one board entry.
+    #
+    # Prod 15 Sep: he applied to three separate Aledade PBC roles in one day.
+    # `resolve_application` matches on company and nothing else, so notes 54
+    # ("Senior Software Engineer I- Fullstack") and 55 ("Senior Engineering
+    # Manager - AI Enablement & EHR Agents") both landed on application 28,
+    # which reads `Principal Engineer - AI Data and Infrastructure`. Three jobs
+    # with three separate outcomes were set to resolve as one.
+    #
+    # The role check is what keeps a genuine second mail on ONE job passing: if
+    # the row's role is named in what arrived, this is that job and the note
+    # belongs. Only a headline naming something else is refused, and refused
+    # loudly enough to say what to do instead.
+    if tag.to_s == "acknowledged" && job.notes.exists?(tag: :acknowledged)
+      said = [payload[:summary], payload[:note]].compact.join(" ")
+      unless Buddy::JobHunt.role_named_in?(job, said)
+        raise "#{job.company} already has an acknowledgement, and this one is not for " \
+              "#{job.role.presence || "that role"} - if it is a different job there, open it " \
+              "with add_job_application instead of adding to this one"
+      end
+    end
+
     settles = JobNote::IMPLIED_STATUS[tag.to_s]
     summary = "Log **#{JobNote::TAG_LABELS[tag.to_s] || "Note"}** on **#{job.company}**?"
     summary += " That closes it as #{settles}." if settles
@@ -102,15 +168,16 @@ Buddy::Tools.register(
     {
       summary:  summary,
       resolved: {
-        job_id:       job.id,
-        company:      job.company,
-        tag:          tag,
-        note:         body,
-        summary:      payload[:summary].presence,
-        email_id:     email&.id,
-        occurred_at:  payload[:occurred_at],
-        spoke_to:     payload[:spoke_to].presence,
-        follow_up_at: payload[:follow_up_at],
+        job_id:           job.id,
+        company:          job.company,
+        tag:              tag,
+        note:             body,
+        summary:          payload[:summary].presence,
+        email_id:         email&.id,
+        occurred_at:      payload[:occurred_at],
+        spoke_to:         payload[:spoke_to].presence,
+        follow_up_at:     at,
+        duration_minutes: payload[:duration_minutes],
       },
     }
   },
@@ -150,19 +217,20 @@ Buddy::Tools.register(
     was   = job.status
 
     note = job.notes.create!(
-      body:         payload[:note].presence,
-      tag:          payload[:tag],
+      body:             payload[:note].presence,
+      tag:              payload[:tag],
       # The mail's own clock, so the timeline reads in the order things
       # actually happened rather than in the order they were logged. Mail that
       # arrived on Friday and got mentioned on Monday belongs on Friday. An
       # email we hold answers this itself; mail we were only told about has to
       # be handed the time, and falling back to `now` is the last resort rather
       # than the norm.
-      occurred_at:  email&.timestamp || payload[:occurred_at] || Time.current,
-      source:       (email ? "Email" : nil),
-      url:          (email ? Rails.application.routes.url_helpers.email_url(id: email.id) : nil),
-      spoke_to:     payload[:spoke_to].presence,
-      follow_up_at: payload[:follow_up_at],
+      occurred_at:      email&.timestamp || payload[:occurred_at] || Time.current,
+      source:           (email ? "Email" : nil),
+      url:              (email ? Rails.application.routes.url_helpers.email_url(id: email.id) : nil),
+      spoke_to:         payload[:spoke_to].presence,
+      follow_up_at:     payload[:follow_up_at],
+      duration_minutes: payload[:duration_minutes],
     )
     job.touch_activity!
 

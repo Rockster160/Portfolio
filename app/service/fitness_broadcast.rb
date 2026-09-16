@@ -1,5 +1,7 @@
 class FitnessBroadcast
   TIME_OFFSET = 4.hours # Base everything off of 4am
+  # Five is a good day's applying, not a ceiling — see `tally`.
+  APPLICATION_GOAL = 5
 
   def self.broadcast
     new.broadcast
@@ -44,7 +46,7 @@ class FitnessBroadcast
       workout,
       teeth,
       shower,
-      calories,
+      applications,
     ]
   end
 
@@ -126,20 +128,27 @@ class FitnessBroadcast
     row("🚿", "name::Shower", want)
   end
 
-  def calories
-    calorie_event_names = ["food", "soda", "drink", "alcohol", "treat", "snack", "workout", "z"]
-    cal_query = calorie_event_names.map { |n| "name::#{n}" }.join(" OR ")
-    "🔥 " + dates { |date|
-      cal_events = query(cal_query, date)
-      total = -1800
-      cal_events.each do |event|
-        calories = event.data&.dig("Calories").to_i
-        calories = -100 if event.name == "Z"
-        calories *= -1 if event.name == "Workout"
-        total += calories
-      end
-      total.negative? ? colorize(:✓, :green) : colorize(:𐄂, :red)
+  # Applications sent, off the tracker at /interviews rather than an event log:
+  # the `applied` note is what jobhunt writes when a form actually submits, and
+  # it is the same beat whether the robot sent it or he did.
+  #
+  # Counted from the NOTES and not from the applications themselves, because a
+  # company already on the board gets the note without a new row — a second
+  # go at somebody who turned him down in June would otherwise never be counted.
+  def applications
+    counts = Hash.new(0)
+    notes = JobNote.applied.where(occurred_at: @range, job_application: @user.job_applications)
+    notes.pluck(:occurred_at).each { |at| counts[perceived_day(at)] += 1 }
+
+    "💼 " + dates("💼") { |date|
+      colorize_count(counts[date], tally(APPLICATION_GOAL))
     }
+  end
+
+  # Which day a timestamp belongs to under the 4am rollover `allday` draws its
+  # windows on, so a midnight application lands on the day it was sent up on.
+  def perceived_day(at)
+    (at.in_time_zone(@user.timezone) - TIME_OFFSET).to_date
   end
 
   def need(num=1)
@@ -166,6 +175,15 @@ class FitnessBroadcast
       red:    num..,
       icons:  { ✓: 0, 𐄂: num },
     }.compact_blank
+  end
+
+  # The count itself, colored against a goal. `need` and `want` both swap in a
+  # tick once the number is met, which reads identically at the goal and at
+  # triple it — fine for a habit that is done or not, wrong for a row where
+  # "how many" IS the question. No `compact_blank`: the empty `icons` is the
+  # whole point of this one, and is exactly what that would throw away.
+  def tally(num=1)
+    { green: num.., orange: 1...num, red: 0, icons: {} }
   end
 
   def row(ico, q, expected)

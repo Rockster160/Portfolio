@@ -532,12 +532,16 @@ module Buddy
       # silence, since it names a cost and withholds the one part that could be
       # acted on. A minute count still asks the reader to do the subtraction;
       # this is the answer to the question they'd be doing it for.
+      # Through `AgendaItem#leave_at` rather than off the metadata directly: a
+      # stamped epoch that cannot belong to the event reads as absent there, and
+      # a blank one here falls through to the bare "(46 min drive)" that
+      # briefing_facts already renders. See AgendaItem::MAX_TRAVEL_LEAD for the
+      # morning this cost.
       def leave_by(item, user)
-        travel = item.metadata.is_a?(Hash) ? item.metadata["travel"] : nil
-        epoch  = travel.is_a?(Hash) ? travel["leave_at"].to_i : 0
-        return nil unless epoch.positive?
+        at = item.leave_at
+        return nil if at.blank?
 
-        Buddy::Clock.at(Time.zone.at(epoch), zone: user.timezone)
+        Buddy::Clock.at(at, zone: user.timezone)
       end
 
       # The other end of the same drive: what time they are back through the

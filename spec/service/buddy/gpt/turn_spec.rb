@@ -578,24 +578,119 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # Prod 15 Sep: sixteen replies in a row ended on a trailing offer across one
+  # twenty-minute session, fourteen of them literally "If you want, I can
+  # also...". Eve said yes to most and got the thing on the next turn, so every
+  # one of them bought a round trip and nothing else.
+  describe ".trailing_offer?" do
+    def offer?(text) = described_class.trailing_offer?(text)
+
+    it "catches the shape that ran sixteen times" do
+      expect(offer?("Here's the chart. If you want, I can also add a column for the date.")).to be(true)
+    end
+
+    it "catches it the other way round" do
+      expect(offer?("That's the lot. I can tidy up the next bit too if you want.")).to be(true)
+    end
+
+    it "catches the question forms" do
+      expect(offer?("That looks right. Want me to turn that into a checklist?")).to be(true)
+      expect(offer?("All set. Would you like me to print it out?")).to be(true)
+      expect(offer?("Done. Let me know if you'd like a copy.")).to be(true)
+    end
+
+    # A turn that is ONLY a question asked one, which is a different thing and
+    # sometimes the right thing - notably anything aimed at another person.
+    it "leaves a reply that is nothing but the question" do
+      expect(offer?("Would you like me to send that to Chelsea?")).to be(false)
+    end
+
+    # Position is the whole test. In the middle it is part of the reply.
+    it "leaves an offer that isn't the last thing said" do
+      expect(offer?("If you want, I can add a column. Here's the chart as it stands.")).to be(false)
+    end
+
+    # Four of the same words, no offer anywhere in them.
+    it "leaves advice that merely starts with the same words" do
+      said = "Start with the pH. If you want a stable tank, that's the one that moves everything else."
+
+      expect(offer?(said)).to be(false)
+    end
+
+    it "leaves an ordinary reply alone" do
+      expect(offer?("I've added it to the list. The bins go out tonight.")).to be(false)
+    end
+  end
+
+  # A fired reminder is `deliver_plain`'s own message, carrying
+  # `source: reminder` metadata, and it is never part of a reply. So the wire
+  # format inside one is always written rather than delivered.
+  #
+  # Prod 6185, 15 Sep: Eve said "You are a genius!" and got a warm line followed
+  # by "Reminder: Take Costco returns back to Costco." The real row (85) fired
+  # five hours later, and the wording was not even the record's. Nothing landed
+  # that time - `answering_reminder` keys on metadata, not text - but loose
+  # reminder text in the transcript is what moved the wrong row on 6 Sep.
+  describe "when a reply writes out a reminder it never fired" do
+    it "drops the line and keeps what was actually said" do
+      said = "Aww, thank you!!\n\nReminder: Take Costco returns back to Costco."
+      run([{ text: said }], text: "You are a genius!")
+
+      expect(reply.body).to eq("Aww, thank you!!")
+    end
+
+    it "takes one sitting mid-reply" do
+      run([{ text: "Sure thing.\nReminder: bins go out tonight.\nAnything else?" }], text: "thanks")
+
+      expect(reply.body).to eq("Sure thing.\nAnything else?")
+    end
+
+    # Nothing survives, so there is nothing honest left to send. It goes down
+    # the same road as any other turn with nothing to say.
+    it "goes silent when the reminder was the whole reply" do
+      run([{ text: "Reminder: Take Costco returns back to Costco." }], text: "You are a genius!")
+
+      expect(reply.body).to eq("")
+      expect(reply.reload.metadata).to include("hidden" => true, "silent" => true)
+    end
+
+    it "leaves the word alone in an ordinary sentence" do
+      run([{ text: "I'll set a reminder: want it at 5 or 6?" }], text: "remind me later")
+
+      expect(reply.body).to eq("I'll set a reminder: want it at 5 or 6?")
+    end
+  end
+
   # `PLACEHOLDER` is the bubble minted at turn start and the client draws it as
   # a live pulse, so a finished reply of exactly that is a typing indicator that
   # never resolves. Eve got three in one afternoon (prod 5213/5227/5233), each a
   # five-token answer to a one-word "Dealeo!" — delivered, `delivered_at` set,
   # and indistinguishable on her screen from Suki still thinking.
+  #
+  # It used to be swapped for "that came out empty on my side. Say it again and
+  # I\'ll get it?", which is a delivery failure blamed on somebody whose message
+  # arrived perfectly well — prod 6193, the fourth of these. A turn with nothing
+  # to say goes silent instead: the bubble is withdrawn, hidden, and the pulse
+  # comes off the screens waiting on it.
   describe "when the model answers with nothing but the typing indicator" do
     it "does not deliver a reply that reads as still thinking" do
       run([{ text: described_class::PLACEHOLDER }], text: "Dealeo!")
 
       expect(reply.body).not_to eq(described_class::PLACEHOLDER)
-      expect(reply.body).to eq(described_class::NOTHING_TO_SAY)
+      expect(reply.body).to eq("")
       expect(reply.reload).to be_delivered
+    end
+
+    it "withdraws the bubble rather than inventing a line to fill it" do
+      run([{ text: described_class::PLACEHOLDER }], text: "Ok, let me check!")
+
+      expect(reply.reload.metadata).to include("hidden" => true, "silent" => true)
     end
 
     it "counts it as empty however it is spaced" do
       run([{ text: " #{described_class::PLACEHOLDER}\n" }], text: "Excellent!")
 
-      expect(reply.body).to eq(described_class::NOTHING_TO_SAY)
+      expect(reply.body).to eq("")
     end
 
     it "leaves a reply that merely ENDS in one alone" do
@@ -2803,10 +2898,19 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to start_with("Morning! Quiet one - just the noon run.")
     end
 
-    it "leaves a briefing that flagged a day itself alone" do
-      briefing([{ text: "Morning! Quiet one, though Thu is looking wet." }])
+    it "leaves a briefing that flagged the days itself alone" do
+      briefing([{ text: "Morning! Quiet one, though Thu and Fri are looking wet." }])
 
       expect(reply.body).not_to include("this week.")
+    end
+
+    # Prod 6235, 15 Sep: a seed flagging three days, a briefing naming two, and
+    # the third silently dropped because one day used to satisfy the check for
+    # all of them. See Buddy::TodayBriefing.week_said?.
+    it "still asks when the briefing named only some of the flagged days" do
+      briefing([{ text: "Morning! Quiet one, though Thu is looking wet." }])
+
+      expect(reply.body).to include("Rain Thu & Fri this week.")
     end
 
     it "is not satisfied by today's own rain odds" do
@@ -2825,7 +2929,10 @@ RSpec.describe Buddy::GPT::Turn do
     # Same trade as the figures above: the model gets told what it left out and
     # writes it in, and the append is what happens when that fails too.
     it "asks for it again rather than writing it on the end" do
-      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }, { text: "Morning! Quiet one, with rain Thu." }])
+      client  = FakeBuddyClient.new([
+        { text: "Morning! Quiet one." },
+        { text: "Morning! Quiet one, with rain Thu and Fri." },
+      ])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
         metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }

@@ -39,6 +39,19 @@ Buddy::Tools.register(
     lesson went nowhere. Re-teaching with a changed meaning is a real update and
     should still be called.
 
+    **A CORRECTION CAN ARRIVE AS A FACT, NOT AN INSTRUCTION.** "That is
+    Afrikaans, not Dutch" reads like conversation; "change it to Afrikaans"
+    reads like a request. They are the same thing and both of them are a
+    correction - call this again with the fix and say what you learned. Prod:
+    a phrase was learned with `notes: "Dutch phrase"`, she said one minute later
+    "That is Afrikaans. The language from South Africa", and the reply agreed
+    warmly and called nothing. The glossary kept the wrong language on a word
+    the person had corrected out loud, and the whole house reads it.
+
+    This is the one case that OUTRANKS everything above about not re-writing a
+    word that is already in. A correction replaces; it does not pile up, and it
+    is not "agreeing" even when the sentence around it is friendly.
+
     **AGREEING IS NOT TEACHING.** "You got it!", "yep, that's it", a thumbs up -
     those close the subject, they don't reopen it. Prod: `dealeo` was learned,
     refined fifty seconds later when she described the sing-song, and then

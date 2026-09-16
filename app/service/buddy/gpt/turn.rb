@@ -1306,9 +1306,80 @@ module Buddy
         could have done. Two sentences is fine and usually better than one.
       TXT
 
-      # What goes out when everything the model wrote was framing it had been
-      # given to READ. Rare, and better than a blank bubble.
-      NOTHING_TO_SAY = "Hm - that came out empty on my side. Say it again and I'll get it?".freeze
+      # A reply that worked the whole thing out and then asked permission to do
+      # it.
+      #
+      # Prod 15 Sep: sixteen replies in a row ended this way across one
+      # twenty-minute session - fourteen of them literally "If you want, I can
+      # also...". Eve said yes to most and got the thing on the next turn, so
+      # the offer bought nothing except a round trip, every time. Twice it cost
+      # her more than that: an offer of "a tiny little testing checklist" was
+      # answered "Oh yes please go ahead!!" and came back "What would you like
+      # me to go ahead with?", and an offer to "tidy up the next bit" had
+      # nothing behind it and ended with Suki asking Eve what Suki had meant.
+      #
+      # The rule is in Buddy::Personality and has lost five times:
+      #
+      #   **"If you want" on the end of a correct plan is the tell.** By the
+      #   time you can write the plan out, you have already decided what to do;
+      #   the trailing offer adds nothing except a turn.
+      #
+      # POSITION is what makes it checkable rather than remembered. A question
+      # in the middle of a reply is part of the reply; the same words as the
+      # last thing said are the reply handing the work back.
+      # The conditional halves need a FIRST PERSON on the other side of them, or
+      # the phrase is not an offer at all: "if you want a stable tank, that's
+      # the one that moves everything else" is advice with the same four words
+      # in front of it.
+      TRAILING_OFFER_RX = /
+        (?:
+          if \s+ you(?:['’]?d)? \s+ (?:want|like|prefer|fancy) \b [^.!?]{0,40}
+            \b i \s* (?:can|could|['’]ll|will|would) \b |
+          \b i \s* (?:can|could|['’]ll|will|would) \b [^.!?]{0,40}
+            \b if \s+ you(?:['’]?d)? \s+ (?:want|like|prefer|fancy) \b |
+          (?:do \s+)? (?:you \s+)? want \s+ me \s+ to \b |
+          would \s+ you \s+ like \s+ me \s+ to \b |
+          (?:shall|should) \s+ i \s |
+          let \s+ me \s+ know \s+ if \s+ you(?:['’]?d)? \s+ (?:want|like) \b
+        )
+      /xi
+
+      # The reply has to have SAID something before the offer. A turn that is
+      # only a question is a turn that asked one, which is a different thing and
+      # sometimes the right one.
+      def self.trailing_offer?(body)
+        sentences = body.to_s.strip.split(/(?<=[.!?])\s+/).reject(&:blank?)
+        return false if sentences.length < 2
+
+        sentences.last.match?(TRAILING_OFFER_RX)
+      end
+
+      # Deliberately does NOT try to decide whether this particular offer had to
+      # be asked - that judgement is in the rule and the model has it. What the
+      # arm is for is making the question get asked at all, once, on the turn
+      # where it is still cheap. A false positive costs one round; the shape it
+      # catches cost sixteen.
+      TRAILING_OFFER_NUDGE = <<~TXT.freeze
+        STOP. Your reply ends by offering to do something. Look at what you
+        offered and answer one question: could you do it right now, without
+        guessing at anything they haven't told you?
+
+        If you could, DO IT in this turn and say what you did. By the time you
+        could write the offer out you had already decided what the thing was,
+        so the offer only costs them a message to say yes to something you were
+        going to do anyway - and the next message after that is you doing it.
+
+        Keep the question ONLY if one of these is true, and then ask it plainly
+        rather than as an aside on the end:
+
+        - It puts words in front of somebody who isn't in this conversation.
+        - It needs an amount or a value you would be inventing.
+        - There are genuinely two sensible readings and no favourite.
+
+        If it is none of those, the offer is the tell that you already knew.
+
+        Whatever you build, do not end this reply with another offer.
+      TXT
 
       UNFILED_OFFER_NUDGE = <<~TXT.freeze
         STOP. You offered to write something down and then wrote nothing down,
@@ -1688,6 +1759,37 @@ module Buddy
         body
       end
 
+      # The wire format of a FIRED reminder, written out inside a reply.
+      #
+      # Prod 6185, 15 Sep. Eve said "You are a genius!" and got back a warm
+      # line followed by "Reminder: Take Costco returns back to Costco." One
+      # call, no tools, and the real reminder (row 85) did not fire until 9:00
+      # PM - five hours later. The wording is not even the record's, so it was
+      # written rather than echoed.
+      #
+      # A real one is `deliver_plain`'s, from ReminderFirer and WatchMatcher,
+      # and it is always its OWN message carrying `source: reminder` metadata.
+      # It is never part of a reply, so this prefix inside one is never right.
+      # Nothing landed on 6185 - `answering_reminder` keys on the metadata, not
+      # the text - but reminder text sitting loose in the transcript is exactly
+      # what moved the wrong row on 6 Sep. See the comment above
+      # `answering_reminder`.
+      LEAKED_REMINDER_RX = /^[ \t]*Reminder:[ \t].*$\n?/
+
+      def without_leaked_reminder(body)
+        text = body.to_s
+        return text unless text.match?(LEAKED_REMINDER_RX)
+
+        Rails.logger.info("[Buddy::GPT::Turn] dropped a written-out reminder line")
+        # Blank is allowed to stand: a reply that was ONLY a reminder it never
+        # fired has nothing left worth sending, and the empty-body path below
+        # puts something honest in its place.
+        text.gsub(LEAKED_REMINDER_RX, "").strip
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] leaked-reminder strip failed: #{e.class}: #{e.message}")
+        body
+      end
+
       # Departure times the briefing was handed and didn't say.
       #
       # See Buddy::TodayBriefing.leave_line for the miss and the reasoning. This
@@ -1717,6 +1819,12 @@ module Buddy
       # `served_context` - whatever the model happened to fetch - and a briefing
       # turn is offered no lookup at all now, so there is nothing to have
       # fetched. Buddy::TodayBriefing.deliver! stamps it.
+      # The same rows `Buddy::Personality#situation_block` puts in every prompt.
+      # Read once per turn and only on a briefing, where it is used.
+      def carried_memories
+        @carried_memories ||= (BuddyMemory.where(user: @user).carried.to_a rescue [])
+      end
+
       def briefing_facts
         @briefing_facts ||= (
           meta = @inbound.metadata
@@ -2286,6 +2394,12 @@ module Buddy
         # COULD happen and then drops it. Nobody notices, because the sentence
         # is helpful and the person just asks again.
         return UNFILED_OFFER_NUDGE if self.class.unfiled_offer?(spoken.to_s)
+        # Last, because it is the most speculative arm here and the only one
+        # whose answer might legitimately be "no, the question was right". It
+        # reads position rather than intent, so it is the one most likely to
+        # spend a round and change nothing - and it is above nothing, so it only
+        # ever runs when every arm with real evidence has passed.
+        return TRAILING_OFFER_NUDGE if self.class.trailing_offer?(spoken.to_s)
 
         nil
       end
@@ -2499,6 +2613,7 @@ module Buddy
         body = display_body(outcome[:text])
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
+        body = without_leaked_reminder(body)
         # One thing said twice. Prod 5296: a single call with no tools answered
         # the question and then answered it again, reworded. See
         # Buddy::Restatement for why this compares word sets rather than
@@ -2509,6 +2624,18 @@ module Buddy
         # been talking about is available to check against. See Buddy::Flourish
         # for why this is mechanism rather than a fourth wording of the rule.
         body = repaired(:flourish, body) { |b| today_briefing? ? Buddy::Flourish.trim(b, briefing_facts) : b }
+        # A sentence about tomorrow, the weekend or a named weekday that the
+        # facts never mentioned. Briefing only, and for the same reason as the
+        # line above: it is the one turn whose whole content was handed over in
+        # advance, so anything outside it came from the conversation. See
+        # Buddy::DayClaim for the morning this cost.
+        body = repaired(:day_claim, body) { |b| today_briefing? ? Buddy::DayClaim.trim(b, briefing_facts) : b }
+        # Naming back one of the heavy things they are carrying, on the one turn
+        # where they did not raise it - because on a briefing there is no they.
+        # See Buddy::UnpromptedMemory.
+        body = repaired(:unprompted_memory, body) { |b|
+          today_briefing? ? Buddy::UnpromptedMemory.trim(b, carried_memories, briefing_facts) : b
+        }
         # The weather repairs run today's figures first, then today's hours,
         # then the week at home, then the week in the canyon, so what gets
         # appended reads in the order a person would say it. Each one only fills
@@ -2521,21 +2648,47 @@ module Buddy
         body = repaired(:leave_times, body) { |b| with_leave_times(b) }
         body = repaired(:greeting, body) { |b| with_lifted_greeting(with_greeting(b)) }
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
-        # the whole body. A blank bubble is worse than the marker was - it reads
-        # as Buddy having nothing to say to something they typed - so the turn
-        # goes down the same road as a reply whose proposals all died.
+        # the whole body.
         #
         # A body of exactly `PLACEHOLDER` counts as empty too, and is worse than
         # empty: it is byte-identical to the pulsing bubble minted at turn start,
         # so the reply lands as a typing indicator that never resolves. Eve got
         # three of those in one afternoon (prod 5213/5227/5233), each one a
         # five-token answer to a one-word "Dealeo!" with nothing to say back.
-        body = NOTHING_TO_SAY if (body.blank? || body.strip == PLACEHOLDER) && outcome[:text].present?
-        @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
+        spoke = body.present? && body.strip != PLACEHOLDER
+        @reply.update!(state: :delivered, body: (spoke ? body : ""), delivered_at: Time.current)
 
         proposals = outcome[:proposals]
         result    = build_proposals(proposals)
         nothing   = result[:action].nil? && !result[:auto_ran] && Array(result[:forms]).empty?
+
+        # The model wrote something, the scrubbers took all of it, and the turn
+        # put nothing else on screen either. That is a turn with nothing to say,
+        # and the honest form of it is SILENCE: the bubble is withdrawn and the
+        # pulsing "…" comes off every screen that was waiting on it.
+        #
+        # Prod 6193, 15 Sep. Eve said "Ok, let me check!" and got back "that
+        # came out empty on my side. Say it again and I'll get it?" - a delivery
+        # failure blamed on her side, for a message that had arrived perfectly
+        # well. Fourth time, same person, same shape (5213/5227/5233).
+        #
+        # A friendlier canned line in its place would be the same mistake with
+        # better manners. A turn with nothing to say must not be handed words to
+        # say anyway - those words are wrong the first time the thing they were
+        # answering was not small talk.
+        #
+        # Narrow on purpose, twice over.
+        #
+        # A turn that never spoke AT ALL is a different animal - that is the
+        # round budget going on tool calls - and it still falls through to the
+        # branches below, which say the minimum rather than leaving a bare
+        # checklist under nothing.
+        #
+        # And a BRIEFING with nothing to say is a fault, not a quiet moment. It
+        # was ordered, the day was handed to it, and going silent would hide
+        # that while also skipping `queue_daily_audit` - which hangs off this
+        # turn finishing and is the only thing watching.
+        return finalize_silence if !spoke && nothing && outcome[:text].present? && !today_briefing?
 
         # A tool call that gets discarded (a chore name that resolves to nothing,
         # an arg that fails validation) is silent by design — ProposalBuilder just

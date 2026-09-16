@@ -152,6 +152,7 @@ class JobNote < ApplicationRecord
   after_commit :sync_follow_up, on: [:create, :update]
   after_commit :retire_follow_up, on: :destroy
   after_commit :settle_application
+  after_commit :refresh_fitness, on: :create
 
   def tag_label
     TAG_LABELS[tag] || "Note"
@@ -296,6 +297,18 @@ class JobNote < ApplicationRecord
     return if job_application.status.to_s == implied.to_s
 
     job_application.update(status: implied)
+  end
+
+  # The dashboard's daily rows are PUSHED. The Fitness cell refreshes itself
+  # only at midnight, and the one thing that rebroadcasts it is an ActionEvent
+  # landing — so the applications row, which is neither, says so itself or
+  # sits a day stale on a wall somebody is reading to decide whether they are
+  # done for the day.
+  def refresh_fitness
+    return unless applied?
+    return unless job_application.user&.me?
+
+    ::FitnessBroadcast.broadcast
   end
 
   def newest_note?

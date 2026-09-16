@@ -18,6 +18,11 @@ Buddy::Tools.register(
     for something that has never been there. If what they want isn't here, say
     so plainly - that is a real answer - and offer `request_feature`.
 
+    `not_on_screen` is the other half of that, and it is there because sending
+    somebody to the wrong control is the SAME mistake as inventing one. It
+    lists things people ask to see that genuinely have no screen. If what they
+    asked about is in there, answer from it and name no control at all.
+
     Two things it does NOT cover, and both have their own answer:
     - Something you can just DO for them. Asked to make the text bigger, use
       `set_font_size`; asked what is on the agenda, read it out. A tour is the
@@ -30,7 +35,7 @@ Buddy::Tools.register(
   confirm:     ->(_payload, _ctx) { { summary: "Read the screen", resolved: {} } },
   label:       ->(_payload, _ctx) { "Read the screen" },
   execute:     ->(_payload, ctx) {
-    { areas: Buddy::ScreenGuide.for_user(ctx.user) }
+    Buddy::ScreenGuide.for_user(ctx.user)
   },
   # No chip: this is reading, and what the person sees is the sentence it
   # produced rather than the fact that it was looked up.

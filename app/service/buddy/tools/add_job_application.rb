@@ -24,22 +24,31 @@ Buddy::Tools.register(
     gets kept. Nothing stores it.
   TXT
   args:        {
-    company:      { type: :string, required: true, description: "The company, as they'd say it" },
-    role:         { type: :string, required: false, description: "The job title, if the mail names one" },
-    note:         { type: :string, required: false, description: "What happened, in the mail's own words" },
-    summary:      { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
-    tag:          {
+    company:          { type: :string, required: true, description: "The company, as they'd say it" },
+    role:             { type: :string, required: false, description: "The job title, if the mail names one" },
+    note:             { type: :string, required: false, description: "What happened, in the mail's own words" },
+    summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
+    tag:              {
       type:        :enum,
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
       description: "The kind of beat this first one was. An ATS receipt is `acknowledged`; an ask for times is `availability`",
     },
-    occurred_at:  { type: :iso_time, required: false, description: "When it happened, if not now" },
-    source:       { type: :string, required: false, description: "Where it came from - LinkedIn, a recruiter" },
-    url:          { type: :string, required: false, description: "The listing, if there is one" },
-    spoke_to:     { type: :string, required: false, description: "Who they dealt with, if a person was named" },
-    follow_up_at: { type: :iso_time, required: false, description: "Only if they said they'd chase it" },
+    occurred_at:      { type: :iso_time, required: false, description: "When it happened, if not now" },
+    source:           { type: :string, required: false, description: "Where it came from - LinkedIn, a recruiter" },
+    url:              { type: :string, required: false, description: "The listing, if there is one" },
+    spoke_to:         { type: :string, required: false, description: "Who they dealt with, if a person was named" },
+    follow_up_at:     {
+      type:        :iso_time,
+      required:    false,
+      description: "On `scheduled` this IS the interview and is REQUIRED. Elsewhere, only if they said they'd chase it",
+    },
+    duration_minutes: {
+      type:        :integer,
+      required:    false,
+      description: "How long the interview runs, if the mail says. Defaults to an hour",
+    },
   },
   confirm:     ->(payload, ctx) {
     company = payload[:company].to_s.strip
@@ -55,19 +64,27 @@ Buddy::Tools.register(
     body = payload[:note].to_s.strip
     raise "nothing to log - say what happened" if body.empty? && tag.to_s == "note"
 
+    # Same rule add_job_note enforces, and for the same reason: a `scheduled`
+    # note with no time puts nothing on the calendar, so the row claims an
+    # interview and the day it is on stays empty.
+    if tag.to_s == "scheduled" && payload[:follow_up_at].blank?
+      raise "a scheduled interview needs its time - pass follow_up_at, or use a different tag"
+    end
+
     {
       summary:  "Start tracking **#{company}**?",
       resolved: {
-        company:      company,
-        role:         payload[:role].presence,
-        note:         body,
-        summary:      payload[:summary].presence,
-        tag:          tag,
-        occurred_at:  payload[:occurred_at],
-        source:       payload[:source].presence,
-        url:          payload[:url].presence,
-        spoke_to:     payload[:spoke_to].presence,
-        follow_up_at: payload[:follow_up_at],
+        company:          company,
+        role:             payload[:role].presence,
+        note:             body,
+        summary:          payload[:summary].presence,
+        tag:              tag,
+        occurred_at:      payload[:occurred_at],
+        source:           payload[:source].presence,
+        url:              payload[:url].presence,
+        spoke_to:         payload[:spoke_to].presence,
+        follow_up_at:     payload[:follow_up_at],
+        duration_minutes: payload[:duration_minutes],
       },
     }
   },
@@ -96,12 +113,13 @@ Buddy::Tools.register(
 
     if payload[:note].present? || payload[:tag].to_s != "note"
       job.notes.create!(
-        body:         payload[:note].presence,
-        tag:          payload[:tag],
-        occurred_at:  payload[:occurred_at] || Time.current,
-        source:       payload[:source].presence,
-        spoke_to:     payload[:spoke_to].presence,
-        follow_up_at: payload[:follow_up_at],
+        body:             payload[:note].presence,
+        tag:              payload[:tag],
+        occurred_at:      payload[:occurred_at] || Time.current,
+        source:           payload[:source].presence,
+        spoke_to:         payload[:spoke_to].presence,
+        follow_up_at:     payload[:follow_up_at],
+        duration_minutes: payload[:duration_minutes],
       )
       job.touch_activity!
     end

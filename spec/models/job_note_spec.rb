@@ -446,4 +446,33 @@ RSpec.describe JobNote do
       expect(AgendaItem.count).to be_zero
     end
   end
+
+  # The Fitness cell on the dashboard is pushed, never polled — it refreshes
+  # itself only at midnight — so an application that does not announce itself
+  # leaves the day's count a day behind on a wall being read to decide whether
+  # the day is done.
+  describe "the dashboard count" do
+    before { allow_any_instance_of(User).to receive(:me?).and_return(true) }
+
+    it "rebroadcasts the fitness cell when an application is logged" do
+      expect(FitnessBroadcast).to receive(:broadcast)
+
+      job.notes.create!(tag: :applied, occurred_at: Time.current)
+    end
+
+    it "stays quiet for every other beat of an application" do
+      expect(FitnessBroadcast).not_to receive(:broadcast)
+
+      job.notes.create!(tag: :interview, occurred_at: Time.current)
+      job.notes.create!(tag: :rejected, occurred_at: Time.current)
+    end
+
+    # The cell is one person's. Somebody else's board does not touch it.
+    it "stays quiet for somebody else's board" do
+      allow_any_instance_of(User).to receive(:me?).and_return(false)
+      expect(FitnessBroadcast).not_to receive(:broadcast)
+
+      job.notes.create!(tag: :applied, occurred_at: Time.current)
+    end
+  end
 end

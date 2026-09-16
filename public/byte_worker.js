@@ -245,10 +245,26 @@ self.addEventListener("push", (evt) => {
     // With the app open, the page owns the badge (paintAppBadge in unread.js);
     // closed, this is the only thing that can set it, which is the whole
     // reason the count rides on the push.
+    const badgeCount = parseInt(data.data?.count || 0);
+
     if (!inForeground && navigator.setAppBadge) {
-      const badgeCount = parseInt(data.data?.count || 0);
       if (badgeCount > 0) navigator.setAppBadge(badgeCount);
       else navigator.clearAppBadge();
+    }
+
+    // The read signal, and the other half of clearing a badge.
+    //
+    // `ByteNotifier.notify_read` sends this silently — no title, no body — when
+    // the unread total falls to zero, so a phone in a pocket drops the number
+    // for something already read at the desk. It unset the number and left the
+    // notifications themselves in the tray, where iOS goes on counting them.
+    //
+    // Foreground is not a condition here. The page clears its own tray (see
+    // `paintAppBadge`), but a device that is merely NOT THE ONE READING is
+    // exactly the device this push exists for.
+    if (badgeCount === 0 && !data.title && !data.body) {
+      const shown = await self.registration.getNotifications();
+      shown.forEach((n) => n.close());
     }
 
     // Anything that arrives here gets shown.

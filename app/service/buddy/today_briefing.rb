@@ -197,13 +197,34 @@ module Buddy
     # the week's line fine. The Alpine block is gated to one person
     # (Buddy::BriefingFacts.alpine?), so this loses on exactly the briefing
     # nobody has a second copy of.
+    # EVERY flagged day, not any one of them.
+    #
+    # `any?` was a deliberate trade and the paragraph above says why - a second
+    # heads-up under one the model wrote itself reads worse than a rare miss.
+    # Prod 6235, 15 Sep, is the evidence against it. The seed flagged rain Wed,
+    # Thu and Fri; Byte wrote "Thursday's rain is sitting at 79%, and Friday's
+    # is at 98%", which satisfied the check for Wednesday as well, and
+    # Wednesday was never said. Suki and Moss said "Wed, Thu, and Fri" off an
+    # identical WEATHER block.
+    #
+    # The miss turned out not to be rare - it fires whenever the model writes
+    # two days out of three, which is an ordinary thing for it to do. So the
+    # trade now costs what it was always meant to cost, a duplicate line in the
+    # case where two of three were written, and buys back the day that was
+    # dropped. A duplicate is visible and a silence isn't; that was the
+    # argument for the original trade and it points the other way here.
+    #
+    # Per DAY rather than per word: `day_words` returns the aliases for each
+    # flagged day flattened together, and requiring all of THOSE would demand
+    # both "Wed" and "Wednesday" in the same briefing.
     def week_said?(body, days, today: Date.current)
       return true if body.blank? || days.empty?
 
-      words = day_words(days, today)
-      home_sentences(body).any? { |sentence|
-        sentence.match?(WEATHER_WORDS_RX) &&
-          words.any? { |word| sentence.match?(/\b#{Regexp.escape(word)}\b/i) }
+      said = home_sentences(body).select { |sentence| sentence.match?(WEATHER_WORDS_RX) }
+      return false if said.empty?
+
+      day_word_groups(days, today).all? { |names|
+        names.any? { |word| said.any? { |sentence| sentence.match?(/\b#{Regexp.escape(word)}\b/i) } }
       }
     end
 
@@ -297,14 +318,18 @@ module Buddy
       body.to_s.split(/\n+|(?<=[.!?])\s+/).map(&:strip).compact_blank
     end
 
-    def day_words(days, today)
-      days.flat_map { |abbrev|
+    def day_words(days, today) = day_word_groups(days, today).flatten.uniq
+
+    # One group per flagged day: every way that day could have been named.
+    # `week_said?` needs them kept apart, and everything else wants them flat.
+    def day_word_groups(days, today)
+      days.map { |abbrev|
         wday  = (DAY_ABBREVS.index(abbrev).to_i + 1) % 7
         names = [abbrev, Date::DAYNAMES[wday]]
         names << "tomorrow" if today.tomorrow.wday == wday
         names << "weekend" if [0, 6].include?(wday)
         names
-      }.uniq
+      }
     end
 
     # Today's Alpine rain hours, composed here for the third time this rule has

@@ -115,10 +115,13 @@ module Buddy
       minutes = travel["travel_minutes"].to_i
       return nil if minutes <= 0
 
-      leave = travel["leave_at"]
+      # `item.leave_at` and not `travel["leave_at"]`: the model drops an epoch
+      # that cannot belong to this event, and the `else` below is already the
+      # right thing to say when there isn't one.
+      leave = item.leave_at
       if leave.present?
         zone = recipient_zone(item.user)
-        "Travel: about #{minutes} min away — leave by #{Time.at(leave.to_i).in_time_zone(zone).strftime("%-l:%M %p")}"
+        "Travel: about #{minutes} min away — leave by #{leave.in_time_zone(zone).strftime("%-l:%M %p")}"
       else
         "Travel: about #{minutes} min away"
       end

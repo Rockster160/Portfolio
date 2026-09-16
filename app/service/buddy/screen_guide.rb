@@ -92,8 +92,10 @@ module Buddy
             label: "The Notifications row",
             does:  "Turns push notifications on and off for this device, and the line under it " \
                    "says where they stand - including when the browser itself has blocked them, " \
-                   "which is the one case this row cannot fix. THIS is the answer to " \
-                   "\"stop alerting me\" - it is not the reminder list, and it is not a phone setting.",
+                   "which is the one case this row cannot fix. This is the answer to \"stop " \
+                   "alerting me\" or \"turn notifications off\" - it is not the reminder list, " \
+                   "and it is not a phone setting. It is NOT the answer to a question about " \
+                   "the number on the app icon, which no row here controls.",
           },
           {
             hook:  "data-byte-mute",
@@ -161,14 +163,50 @@ module Buddy
       },
     ].freeze
 
+    # Things a person can reasonably ask to SEE that have no screen at all.
+    #
+    # A closed list of controls answers "where is it" and says nothing about
+    # "it isn't anywhere", and those look identical from the inside: the model
+    # reads the list, finds no row, and reaches for the nearest loud one.
+    #
+    # Prod 15 Sep, three questions in eight minutes, all answered with the
+    # Settings row:
+    #
+    #   6194  "you mentioned that something can stay on this on your shelf in
+    #          case I wanted again where does that show?"
+    #   6196  "the little number next to your picture as a notification has
+    #          nine but when I count them there's only seven"
+    #
+    # Neither has a control behind it and both got sent to Notifications, which
+    # is the loudest entry in the file. Naming the absence is what stops that -
+    # "it doesn't show anywhere, ask me" is a real answer, and it is true.
+    NOT_ON_SCREEN = [
+      {
+        about: "The stash - anything they asked to be kept for later, or that " \
+               "was put on the shelf for them",
+        says:  "It has no screen and nothing lists it. It lives with you: they " \
+               "ask, and you read it back.",
+      },
+      {
+        about: "The number on the app icon, and how many notifications it says " \
+               "are waiting",
+        says:  "Nothing in the app sets or clears it by hand, and it does not " \
+               "have to match what they can count in the thread. It comes off " \
+               "on its own once the thread has been read.",
+      },
+    ].freeze
+
     def for_user(user)
       surfaces = SURFACES.reject { |surface| surface[:owner_only] && !owner?(user) }
-      surfaces.map { |surface|
-        {
-          area:     surface[:name],
-          about:    surface[:about],
-          controls: surface[:controls].map { |c| { label: c[:label], does: c[:does] } },
-        }
+      {
+        areas:         surfaces.map { |surface|
+          {
+            area:     surface[:name],
+            about:    surface[:about],
+            controls: surface[:controls].map { |c| { label: c[:label], does: c[:does] } },
+          }
+        },
+        not_on_screen: NOT_ON_SCREEN,
       }
     end
 

@@ -39,6 +39,12 @@ module Buddy
       return nil if conversation.nil?
 
       job = JobHunt.resolve_application(user, verdict[:company])
+      # No company on the verdict, but the mail named a ROLE. A generic ATS
+      # address with "thank you for your interest in joining our team" gives the
+      # classifier nothing to put in `company`, and it is right not to guess -
+      # but the board may still hold exactly one row for the role it names.
+      # See JobHunt.resolve_by_role for the receipt this lost.
+      job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if verdict[:company].blank?
       # The watcher hands the words over because it read the message off disk.
       # The domain inbox doesn't, and for its first week that meant the seed
       # carried no message at ALL — so the trimming habit below was never even
@@ -120,12 +126,27 @@ module Buddy
     # self-initiated turn that has to go and fetch things is the one that
     # wanders off the subject.
     def seed(verdict, job, metadata, occurred_at, email, body=nil, outgoing=false)
+      # Whether the ROLE matches is a separate question from whether the company
+      # does, and the opening line used to answer both at once.
+      #
+      # Prod 15 Sep: three Aledade PBC roles in one day. The seed said "it
+      # belongs to an application already on their board", printed the board's
+      # role on one line and the mail's on another, and the model filed two
+      # other jobs onto one row. The company match is a fact; the rest is for
+      # the reader to check, so it is stated as a question rather than settled
+      # in the first sentence. add_job_note refuses it outright either way.
+      same_role = job.role.blank? || JobHunt.role_named_in?(job, verdict[:headline])
       [
         (
-          if outgoing
+          if outgoing && same_role
             "They just SENT this, and it belongs to an application already on their board."
-          else
+          elsif same_role
             "Job mail just arrived, and it belongs to an application already on their board."
+          else
+            "#{outgoing ? "They just SENT this" : "Job mail just arrived"}, and their board " \
+              "has this COMPANY on it - but for a different role than the one below. A " \
+              "different role at a company they have already applied to is a SEPARATE " \
+              "application: open it with `add_job_application`, do not add to the one below."
           end
         ),
         "",
@@ -175,7 +196,8 @@ module Buddy
         "Then CALL add_job_note#{log_hint(occurred_at, email)} - do not offer to, do not ask " \
         "first. Pick the `tag` that matches what actually happened rather than leaving it " \
         "a plain note; a rejection, an offer or a withdrawal also settles the application, " \
-        "which is correct when the mail says so.#{outgoing_tag_hint(outgoing)}#{note_hint(body)}",
+        "which is correct when the mail says so.#{booking_hint}" \
+        "#{outgoing_tag_hint(outgoing)}#{note_hint(body)}",
       ].join("\n")
     end
 
@@ -208,6 +230,19 @@ module Buddy
         "and #{occurred_at ? "occurred_at #{occurred_at.iso8601}" : "the time it arrived"}." \
         "#{note_hint(body)}",
       ].compact.join("\n")
+    end
+
+    # The one field a booked interview cannot do without. `follow_up_at` is the
+    # appointment itself on a `scheduled` note and is what puts it on the
+    # calendar; prod 56/57 were two Scheduled notes for one ApartmentIQ call,
+    # each carrying "Sep 17 at 2pm MDT" in its own summary line and neither
+    # carrying it in the field, so the day it was booked for stayed empty.
+    def booking_hint
+      " If the mail names a TIME, the beat is `scheduled` and that time goes in " \
+        "`follow_up_at` - it is the appointment, and it is what puts it on their " \
+        "calendar. Read it in their own zone, the way the mail writes it. Pass " \
+        "`duration_minutes` too when the mail says how long (\"about 20 minutes\", " \
+        "an invite reading 2:00-2:20); without one it books an hour."
     end
 
     # Their side of the thread. `responded` exists for exactly this and is the

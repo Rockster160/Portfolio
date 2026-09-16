@@ -337,14 +337,63 @@ class AgendaItem < ApplicationRecord
     secs && (secs / 60.0).ceil
   end
 
+  # The stamped epochs are only as fresh as the last chain write, and nothing
+  # on the row says when they were written.
+  #
+  # Prod 15 Sep, item 1081 "Plunge with Wil": a 2:45 PM Tuesday event carrying
+  # `leave_at` of **Monday 2:49 PM** and `post_arrive_at` of **Monday 5:26 PM**
+  # - the whole travel hash left behind by a previous placement, roughly 23
+  # hours stale. `travel_seconds` beside them (2757) was right, so the epoch and
+  # the drive time next to it described different journeys.
+  #
+  # It reached two people because every reader formats these through
+  # `Buddy::Clock`, which prints a clock time and throws the DATE away: a
+  # departure on another day came out as a perfectly ordinary "leave by
+  # 2:49pm". Both Rocco and Chelsea were told at 8 AM to leave 56 minutes after
+  # the plunge started, and only found out five hours later when the Jil travel
+  # notices got it right.
+  #
+  # So the bound is here, on the model, rather than in any one caller - there
+  # are four of them and the two that were named in the report were not all of
+  # them. An epoch outside its window is treated as NOT STAMPED, which is a
+  # state every reader already handles.
+  #
+  # Deliberately not a re-derivation from `travel_seconds`. That would couple
+  # this to AgendaTravelChain's formula, and a formula change would silently
+  # start dropping good epochs; a bound cannot drift. Twelve hours because no
+  # journey this plans leaves half a day early, and the real one was 23.
+  MAX_TRAVEL_LEAD = 12.hours
+
+  def leave_at
+    in_window(travel_hash["leave_at"], from: start_at && (start_at - MAX_TRAVEL_LEAD), to: start_at)
+  end
+
   def home_at
-    stamped = travel_hash["post_arrive_at"].to_i
-    return Time.zone.at(stamped) if stamped.positive?
+    stamped = in_window(travel_hash["post_arrive_at"], from: end_at, to: end_at && (end_at + MAX_TRAVEL_LEAD))
+    return stamped if stamped
 
     secs = travel_home_seconds
     return nil if secs.nil? || end_at.blank?
 
     Time.zone.at(end_at.to_i + secs)
+  end
+
+  # nil for anything that cannot belong to this item, so a stale stamp reads as
+  # an absent one. An item with no `start_at`/`end_at` to check against has
+  # nothing to be wrong about, and keeps whatever it was given.
+  def in_window(value, from:, to:)
+    epoch = value.to_i
+    return nil unless epoch.positive?
+
+    at = Time.zone.at(epoch)
+    return at if from.blank? || to.blank?
+    return at if at.between?(from, to)
+
+    Rails.logger.warn(
+      "[AgendaItem] dropped a travel epoch outside its event: item=#{id} " \
+      "at=#{at.iso8601} window=#{from.iso8601}..#{to.iso8601}",
+    )
+    nil
   end
 
   def travel_hash

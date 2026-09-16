@@ -25,12 +25,45 @@
 // have no unread concept at all, and the badge on them can only be a leftover.
 let counter = null;
 
+// Closing the tray is part of clearing the badge.
+//
+// `clearAppBadge()` unsets the number this code wrote. It does NOT dismiss the
+// notifications already delivered, and on iOS those carry a count of their own
+// — so a badge can survive every clear the page performs, and nothing the
+// person does inside the app will shift it.
+//
+// Prod, 15 Sep: Eve asked twice how to get rid of "the 8 notifications stuck to
+// your app pic", then counted seven messages against a badge reading nine. She
+// has exactly one conversation, so `drawerUnread.total()` was zero the whole
+// time and the page was calling `clearAppBadge()` on every one of the twenty
+// reads she made that hour. The number it was clearing was never the number she
+// could see.
+//
+// Reading is what answers a notification, so the notifications go with it.
+function clearDelivered() {
+  if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+
+  navigator.serviceWorker.ready
+    .then((reg) => reg.getNotifications())
+    .then((notes) => notes.forEach((n) => n.close()))
+    .catch(() => {
+      /* no registration, or the browser won't say — nothing to clean up */
+    });
+}
+
 export function paintAppBadge(total) {
   if (typeof navigator === "undefined") return;
 
   try {
     if (total > 0) navigator.setAppBadge?.(total);
-    else navigator.clearAppBadge?.();
+    else {
+      navigator.clearAppBadge?.();
+      // Zero is the whole condition: nothing is waiting in any thread, so
+      // nothing should be sitting in the tray claiming otherwise. Every clear
+      // site goes through here — load, pageshow, return to the foreground, a
+      // read on another device — so all of them dismiss now.
+      clearDelivered();
+    }
   } catch (e) {
     /* unsupported, or denied — only an installed PWA has an icon to stamp */
   }

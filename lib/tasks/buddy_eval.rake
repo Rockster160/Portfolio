@@ -551,6 +551,22 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "no time is agreed yet; `scheduled` would invent the interview",
   },
+  # --- a booked interview without its time is not booked --------------------
+  # Prod 56/57, 16 Sep. Two Scheduled notes for one ApartmentIQ call, each
+  # carrying "Sep 17 at 2pm MDT" in its own summary line and NEITHER carrying it
+  # in `follow_up_at` — so `sync_follow_up` returned early both times and the
+  # day the interview was booked for stayed empty. `confirm` refuses it now;
+  # this is whether the model reaches for the field at all.
+  {
+    case:  "prod 56/57",
+    say:   "Halloway Systems confirmed my phone screen for Thursday at 2pm, " \
+           "about twenty minutes - log that",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item],
+    args:  { add_job_note: { tag: "scheduled", follow_up_at: /./, duration_minutes: 20 } },
+    needs: :halloway_application,
+    note:  "the time IS the note; without it nothing reaches the calendar",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",
@@ -959,6 +975,40 @@ BUDDY_EDGE_PROBES = [
            "never to describe the screen - so there was no way to be right",
   },
 
+  # --- the loudest row in the guide, catching everything ---------------------
+  #
+  # Three questions in eight minutes on 15 Sep, all answered with "Tap the
+  # Settings in the drawer, then the Notifications row!" - a location handed
+  # back to a question about a COUNT, and to a question about the stash. The
+  # entry said "THIS is the answer to 'stop alerting me'", which is the most
+  # emphatic sentence in ScreenGuide, so anything carrying the word
+  # "notification" landed on it and stopped.
+  {
+    case:         "prod 6196",
+    say:          "the little number next to your picture as a notification " \
+                  "has nine but when I count them there's only seven what's " \
+                  "up with that?",
+    tool:         :describe_screen,
+    never_reply:  /notifications? row|\u2699|settings/i,
+    note:         "answered with the location of the Notifications toggle, " \
+                  "which turns pushes off and has nothing to do with the " \
+                  "number on the app icon. She had asked why the count was " \
+                  "wrong. ScreenGuide::NOT_ON_SCREEN carries the badge now, " \
+                  "so there is a true thing to say instead of the nearest row",
+  },
+  {
+    case:         "prod 6194",
+    say:          "you mentioned that something can stay on this on your " \
+                  "shelf in case I wanted again where does that show?",
+    tool:         :describe_screen,
+    never_reply:  /notifications? row/i,
+    note:         "she is asking where the STASH shows, and got the " \
+                  "Notifications row verbatim for the second time in three " \
+                  "minutes. The stash has no screen and no page - the honest " \
+                  "answer is that it lives with Buddy and comes back when she " \
+                  "asks, which is what NOT_ON_SCREEN now says",
+  },
+
   # --- a thing that failed, which is not a thing that is missing ------------
   {
     case:        "prod 5244",
@@ -1345,6 +1395,60 @@ BUDDY_EDGE_PROBES = [
         # answered "About 2 hours total, including travel" — which proves it
         # knew the word — and a check for /alpine|trailhead/ marked that wrong.
         never_reply: /what.{0,20}plunge|which plunge|not sure what|don.t know what/i,
+      },
+    ],
+  },
+
+  # --- a different role at a company already on the board -------------------
+  {
+    case:  "prod 6260/6283/6285",
+    say:   "Halloway Systems just confirmed they got my application for the " \
+           "Staff Platform Engineer role",
+    tool:  :add_job_application,
+    avoid: %i[add_job_note],
+    needs: :halloway_application,
+    note:  "he applied to three separate Aledade PBC roles in one day and all " \
+           "three landed on application 28, which reads Principal Engineer - " \
+           "AI Data and Infrastructure. resolve_application matches on company " \
+           "and nothing else, so the row collected the timeline of two other " \
+           "jobs and three applications with three separate outcomes were set " \
+           "to resolve as one. A different role at a company already on the " \
+           "board is a SEPARATE application",
+  },
+
+  # --- a correction that arrives as a fact ----------------------------------
+  {
+    case:  "prod 6362-6364",
+    note:  "a phrase was learned with notes \"Dutch phrase\", and one minute " \
+           "later she said \"That is Afrikaans. The language from South " \
+           "Africa.\" The reply agreed warmly - \"Ja, that makes perfect " \
+           "sense!!\" - and called nothing, so the glossary kept the wrong " \
+           "language on a word she had corrected out loud. The whole house " \
+           "reads that row. A correction phrased as a FACT about the record " \
+           "is still a correction",
+    steps: [
+      {
+        say:          "Tot Siens! It means see you later",
+        tool:         :define_term,
+        run:          true,
+        effect_label: "tot siens never made it into the glossary",
+        effect:       ->(u) {
+          u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t|
+            t.term.to_s.match?(/tot siens/i)
+          }
+        },
+      },
+      {
+        say:          "That is Afrikaans. The language from South Africa, not Dutch.",
+        tool:         :define_term,
+        run:          true,
+        effect_label: "the term still does not say Afrikaans anywhere",
+        effect:       ->(u) {
+          u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t|
+            t.term.to_s.match?(/tot siens/i) &&
+              "#{t.notes} #{t.meaning}".match?(/afrikaans/i)
+          }
+        },
       },
     ],
   },

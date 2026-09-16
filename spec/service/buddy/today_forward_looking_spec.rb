@@ -774,7 +774,10 @@ RSpec.describe "Buddy Today forward-looking" do
       end
 
       describe "whether the briefing already said it" do
-        let(:days)  { Buddy::TodayBriefing.flagged_days("rain Thu & Fri") }
+        # ONE flagged day for the word-form examples below, so each is about
+        # the naming and nothing else. Whether every flagged day has to appear
+        # is its own question, and it has its own block further down.
+        let(:days)  { Buddy::TodayBriefing.flagged_days("rain Thu") }
         let(:today) { Date.new(2026, 8, 26) } # a Wednesday
 
         def said?(body)
@@ -786,7 +789,7 @@ RSpec.describe "Buddy Today forward-looking" do
         end
 
         it "counts the whole weekday name" do
-          expect(said?("Friday looks wet.")).to be(true)
+          expect(said?("Thursday looks wet.")).to be(true)
         end
 
         # The prompt asks for that word instead of the weekday name for the next
@@ -828,6 +831,45 @@ RSpec.describe "Buddy Today forward-looking" do
 
         it "still counts the day when the weather is in the same sentence" do
           expect(said?("Rain Thu, and there's a dinner that evening too.")).to be(true)
+        end
+
+        # Prod 6235, 15 Sep. The seed flagged rain Wed, Thu and Fri; Byte wrote
+        # "Thursday's rain is sitting at 79%, and Friday's is at 98%" and
+        # Wednesday was never said, because one flagged day appearing used to
+        # satisfy the check for all of them. Suki and Moss said "Wed, Thu, and
+        # Fri" off an identical WEATHER block, so the miss was Byte's alone and
+        # nothing was watching.
+        describe "when several days are flagged" do
+          let(:three) { Buddy::TodayBriefing.flagged_days("rain Wed, Thu & Fri") }
+
+          def all_said?(body)
+            Buddy::TodayBriefing.week_said?(body, three, today: Date.new(2026, 9, 15))
+          end
+
+          it "is not satisfied by two days out of three" do
+            said = "Thursday's rain is sitting at 79%, and Friday's is at 98%."
+
+            expect(all_said?(said)).to be(false)
+          end
+
+          it "is satisfied once every flagged day is there" do
+            expect(all_said?("Rain Wed, Thu, and Fri this week.")).to be(true)
+          end
+
+          # Across sentences is fine. What does NOT carry over is the forecast:
+          # the older rule still stands, so each sentence has to be a heads-up
+          # in its own right rather than a day word borrowing the one before it.
+          it "takes the days from different sentences" do
+            said = "Rain lands Wednesday. Thursday's rain is at 79%, and Friday's at 98%."
+
+            expect(all_said?(said)).to be(true)
+          end
+
+          it "does not let a bare day word borrow the forecast next door" do
+            said = "Rain lands Wednesday. Thursday and Friday too."
+
+            expect(all_said?(said)).to be(false)
+          end
         end
 
         # The day and the forecast have to be the same claim. Split across two
