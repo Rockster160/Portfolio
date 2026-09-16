@@ -195,8 +195,11 @@ import { dash_colors, clamp } from "../vars"
     const at = clamp(target - 1, 0, bar_width - 1)
     const under = at < filled ? color : dash_colors.darkgrey
     // Grey, never the label's ink: it is a different kind of thing from the
-    // words on the bar, and reads as one where it lands on them.
-    const marker = Text.bgColor(under, Text.color(dash_colors.grey, "☼"))
+    // words on the bar, and reads as one where it lands on them. On the empty
+    // track that is the light grey; on a fill it is the track's own dark grey,
+    // which the light one washes out against green, yellow and red alike.
+    const marker_ink = at < filled ? dash_colors.darkgrey : dash_colors.grey
+    const marker = Text.bgColor(under, Text.color(marker_ink, "☼"))
 
     return " " + paint(0, at) + marker + paint(at + 1, bar_width) + " "
   }
