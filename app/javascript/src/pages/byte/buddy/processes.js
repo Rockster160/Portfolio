@@ -12,14 +12,14 @@
 //     The SERVER decides when it goes, exactly as with a timer — a chip that
 //     leaves on the gesture is indistinguishable from one that leaves on a
 //     failed request.
-//   * a chip's links render as small pills along its bottom — the job, the
-//     queue it came out of, the email being read. They are real anchors, so a
-//     long-press offers to copy one and a middle-click opens a tab. With
-//     exactly one, the whole chip is a shortcut to it as well.
+//   * a chip's links are pills under it — the job posting, the queue, the
+//     email. Real anchors, so a long-press copies one and a middle-click opens
+//     a tab, and the whole chip is a shortcut to the first.
 //
-// IT SITS OVER BUDDY, so it stays small: three chips at most (the rest become
-// a "+2 more" line), two rows each unless there is genuinely something to
-// choose between, and the words are already cut to length by the server.
+// IT SITS OVER BUDDY, so everything that is only DECORATION is gone: no icon
+// (the colour already says whether something is waiting on you) and no second
+// row for the step, which is the chip's name now. What is left is the two
+// things a person can act on — where the run has got to, and where to go.
 //
 // A cleared process is not gone: the next report under the same key puts it
 // back. Clearing says "stop showing me this", not "stop doing that".
@@ -31,17 +31,10 @@ const BASE_URL = "/api/v1/background_processes";
 // has to work it out for itself or it never goes stale at all.
 const STALE_AFTER_MS = 15 * 60 * 1000;
 
-const STATE_ICONS = { running: "⚙", waiting: "❓", failed: "⚠" };
-
 // Past this the strip is a wall rather than a glance, and Buddy is behind it.
 // The ones that got cut are the ones sorted last — still running, nothing
 // asked of anybody — and the line says how many.
 const MAX_CHIPS = 3;
-
-// Work that has stopped and needs a person. Its links are the point of it, so
-// they are always drawn; a chip that is merely running keeps its second row
-// for the step it is on.
-const PARKED = ["waiting", "failed"];
 
 function csrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
@@ -112,13 +105,10 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       if (clearing.has(p.key)) chip.dataset.pending = "clear";
       if (clearFailed.has(p.key)) chip.dataset.pending = "clear-failed";
 
+      // Name and count share one line; the chip itself stacks, so they need a
+      // row of their own or the count lands under the name.
       const head = document.createElement("span");
       head.className = "byte-process-head";
-
-      const icon = document.createElement("span");
-      icon.className = "byte-process-icon";
-      icon.textContent = p.icon || STATE_ICONS[p.state] || STATE_ICONS.running;
-      head.appendChild(icon);
 
       const name = document.createElement("span");
       name.className = "byte-process-name";
@@ -134,15 +124,11 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       }
       chip.appendChild(head);
 
-      // Stalled says itself, because the count is frozen and the chip would
-      // otherwise read as work still going on.
+      // The step it is on costs nothing here and a whole row anywhere else.
+      // Stalled leads, because a frozen count reads as work still going on and
+      // the chip being dimmed is the only other thing saying otherwise.
       const detail = stale ? `Stalled — ${p.detail || "no update"}` : p.detail;
-      if (detail) {
-        const el = document.createElement("span");
-        el.className = "byte-process-detail";
-        el.textContent = detail;
-        chip.appendChild(el);
-      }
+      if (detail) chip.title = detail;
 
       // A fill along the bottom edge, with no number on it — the count above
       // is the number, and printing it twice makes the bar look like a
@@ -155,17 +141,14 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
         chip.appendChild(bar);
       }
 
+      // Where it goes. Drawn, not hidden behind the chip: a tap target nobody
+      // knows is a tap target is not one, and these went a whole day being
+      // read as decoration on the bottom of a chip.
       const links = Array.isArray(p.links) ? p.links.filter((l) => l && l.url) : [];
-      // A third row costs about as much height as the other two together, so
-      // it is spent only where it buys something: a choice to make, or a chip
-      // that has stopped and is waiting to be acted on. A running chip with
-      // one link is two rows, and its body is the tap target.
-      if (links.length > 1 || (links.length && PARKED.includes(p.state))) {
-        chip.appendChild(linkRow(links));
-      }
-      // One link means the chip itself is a big tap target for it. Several and
-      // the body has no single right answer, so only the pills are tappable.
-      if (links.length === 1) chip.dataset.hasUrl = "true";
+      if (links.length) chip.appendChild(linkRow(links));
+      // The body is a shortcut to the first one as well - a bigger target for
+      // the common case, where there is only the one anyway.
+      if (destination(p)) chip.dataset.hasUrl = "true";
       if (!clearing.has(p.key)) wireChip(chip, p);
       container.appendChild(chip);
     });
@@ -187,6 +170,10 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
   // be long-pressed, copied and opened in a tab, and none of that is worth
   // reimplementing. `pointerdown` stops here so a tap on a pill never starts
   // the chip's swipe — a swipe begins on the body, which is most of the chip.
+  //
+  // The arrow is CSS, not text, so the label stays the label: the pills are
+  // read at a glance and "Posting" was taken for a status until one of them
+  // carried an arrow saying it went somewhere.
   function linkRow(links) {
     const row = document.createElement("span");
     row.className = "byte-process-links";
@@ -201,6 +188,12 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       row.appendChild(a);
     });
     return row;
+  }
+
+  // The first link a process carries, which is where a tap on the body goes.
+  function destination(p) {
+    const links = Array.isArray(p.links) ? p.links.filter((l) => l && l.url) : [];
+    return links.length ? links[0].url : null;
   }
 
   // Nothing here counts down, so this is only ever about a chip crossing into
@@ -258,8 +251,8 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       if (dragging) return;
 
       const current = processes.get(p.key) || p;
-      const only = (current.links || []).filter((l) => l && l.url);
-      if (only.length === 1) window.open(only[0].url, "_blank", "noopener");
+      const url = destination(current);
+      if (url) window.open(url, "_blank", "noopener");
     };
     chip.addEventListener("pointerup", finish);
     chip.addEventListener("pointercancel", (e) => {

@@ -24,19 +24,35 @@ RSpec.describe SpendingHealth do
       spend(zone.local(2026, 9, 13, 1), 2_500)
       spend(zone.local(2026, 9, 13, 9), 400)
 
-      expect(described_class.buckets(user)).to(eq({
+      expect(described_class.buckets(user)[:days]).to(eq({
         "2026-09-12" => 3_500,
         "2026-09-13" => 400,
       }))
     end
   end
 
-  it "reaches back a week before the month so the trailing week is covered" do
+  # 1 Sep 2026 is a Tuesday, so its week began on Monday 31 Aug.
+  it "reaches back a week before the month so a week that began in it is covered" do
     travel_to(zone.local(2026, 9, 1, 10)) do
       spend(zone.local(2026, 8, 27, 12), 900)
       spend(zone.local(2026, 8, 20, 12), 900)
 
-      expect(described_class.buckets(user).keys).to(eq(["2026-08-27"]))
+      expect(described_class.buckets(user)[:days].keys).to(eq(["2026-08-27"]))
+    end
+  end
+
+  # Over $500 is planned money landing on one day. It is kept, but apart, so the
+  # cell can take it off the month's budget instead of off that day.
+  it "buckets purchases over $500 apart from the rest" do
+    travel_to(zone.local(2026, 9, 13, 10)) do
+      spend(zone.local(2026, 9, 13, 9), 50_000)
+      spend(zone.local(2026, 9, 13, 9), 50_001)
+      spend(zone.local(2026, 9, 12, 9), 140_000)
+
+      expect(described_class.buckets(user)).to(eq({
+        days:       { "2026-09-13" => 50_000 },
+        large_days: { "2026-09-13" => 50_001, "2026-09-12" => 140_000 },
+      }))
     end
   end
 
@@ -54,7 +70,7 @@ RSpec.describe SpendingHealth do
       out.update!(transfer_counterpart: back)
       back.update!(transfer_counterpart: out)
 
-      expect(described_class.buckets(user)).to(eq({ "2026-09-13" => 500 }))
+      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 500 }, large_days: {} }))
     end
   end
 
@@ -70,7 +86,10 @@ RSpec.describe SpendingHealth do
 
         expect(user.caches.get(:spending)).to(eq({
           budget_cents:      described_class::MONTHLY_CENTS,
+          balance_cents:     nil,
+          balance_goal:      described_class::BALANCE_GOAL,
           days:              { "2026-09-13": 500 },
+          large_days:        {},
           caffeine_limit_mg: ::CaffeineIntake::DAILY_LIMIT_MG,
           caffeine:          { "2026-09-13": 200 },
         }))
@@ -78,6 +97,14 @@ RSpec.describe SpendingHealth do
           user, :monitor, { channel: :spending, refresh: true }, auth: :trigger
         )
       end
+    end
+
+    it "carries the home cell's projected balance" do
+      allow(::SimpleFin::DashboardCache).to receive(:projected_cents).and_return(3_858_000)
+
+      described_class.refresh!(user: user)
+
+      expect(user.caches.get(:spending)[:balance_cents]).to eq(3_858_000)
     end
 
     # A sync that found nothing must not run the task again — the cell would

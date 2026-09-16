@@ -59,8 +59,20 @@ own owner. Every response is wrapped: `{"data": {...}}`.
 | `source` | who is reporting: `jobhunt`, `mac`, `rails`. |
 
 **Only what you send is written.** A report of `current` alone leaves the name,
-the total and the url exactly as the first one set them, so the step-by-step
+the total and the links exactly as the first one set them, so the step-by-step
 calls stay one line long.
+
+**Which is also the trap.** A field you stop mentioning keeps its last value
+forever: a chip parked `waiting` when a batch finished stayed amber through the
+whole of the next batch, reading "waiting on you" while the browser was mid-form
+two jobs later. If a report marks a change of *phase* rather than a step inside
+one, say the `state` and the count out loud every time.
+
+**The name is the only text on the chip**, so it has to be where the run
+actually is — not what the run is called. `Preparing` for twenty minutes says
+nothing; `Researching` then `Writing the letter` then `Filling in the form`
+says everything. Put the long version in `detail`, which becomes the hover
+title and costs no space.
 
 Reporting `state: finished` is the same as a DELETE.
 
@@ -73,6 +85,24 @@ Reporting `state: finished` is the same as a DELETE.
 ]
 ```
 
+* They are **drawn as pills under the chip**, with a `↗` the CSS adds — a tap
+  target nobody knows is a tap target is not one. They spent a day being read
+  as decoration, and a pill labelled `Posting` (meaning *the job posting*) was
+  read as a status: "it says Posting right now, but it's not posting."
+* **One word each**, or an emoji where it says it in less: `Listing`, `Job`,
+  `Answers`, `Line`, `Queue`, `Qs`, `✉️`. A pill is read at a glance and there are
+  only ever a few of them, so a phrase is a phrase nobody finishes reading.
+* Never a word that could be read as a **state** — `Posting` was, for a day —
+  and never the **same word for two destinations**: `Job` is the job's page
+  here, and the posting on the ATS is `Listing`.
+* **Never name a link after something it cannot open.** `Form` meant the review
+  screen, but the form being filled in is a tab in Chrome on the Mac and
+  nothing can open that — so it is `Answers`, which is what the page holds.
+
+**Only `Listing` works away from the Mac.** jobhunt's web server binds
+`127.0.0.1` and its links resolve to `localhost:8790`, so every other pill is a
+dead tap from a phone. Setting `web.public_url` in jobhunt's config is what
+changes that; blanking it drops the local links entirely.
 * They are **real anchors**, so a long-press offers to copy one and a
   middle-click opens a tab.
 * An **absolute `http(s)` url, or a path on this site** (`/emails/51716`).
@@ -82,9 +112,8 @@ Reporting `state: finished` is the same as a DELETE.
 * A link with **no label is labelled by where it goes** (`lever.co`). A row of
   pills all reading "Open" says nothing.
 * **Four at most.** A fifth is a menu in the corner of a phone.
-* With **exactly one**, the whole chip is a tap target for it as well. With
-  several the body does nothing, because guessing one is how a tap meant for
-  the queue opens a job posting instead.
+* The **whole chip** is a shortcut to the first one as well — a bigger target
+  for the common case of there being only the one.
 * A form-encoded caller that cannot send a nested array may send the JSON as a
   string.
 
@@ -104,13 +133,12 @@ the size is enforced, not left to the callers:
 * **Three chips at most.** The rest become one dim `+2 more` line — visible,
   because a strip showing three of eight and saying nothing reads as three.
   What gets cut is what sorts last: still running, nothing asked of anybody.
-* **Two rows per chip**, unless there is something to choose between (more than
-  one link) or the chip has stopped and is waiting to be acted on. A third row
-  costs about as much height as the other two together, so a running chip with
-  one link does without it and lets its whole body be the tap target.
+* **Two rows at most**: the name-and-count line, and the links under it. The
+  step does not get one — it is the name — and neither does an icon, because
+  the colour already says whether something is waiting on you.
 
-That lands a running chip at ~39px and a parked one at ~56px, against a hero
-that is 34–42vh. Two running chips is about a quarter of the corner.
+That lands a chip at ~39px with links and ~24px without, against a hero that is
+34–42vh. Two chips is about a quarter of the corner.
 
 ### What it does on its own
 

@@ -203,6 +203,8 @@ class SystemController < ApplicationController
       # The headline balance follows whichever account is currently checking,
       # so re-publish whenever a kind changes.
       ::SimpleFin::DashboardCache.refresh!
+      # The Spending cell's top bar is that same figure.
+      ::SpendingHealth.refresh!
       changed[:kind] = account.kind
     end
 

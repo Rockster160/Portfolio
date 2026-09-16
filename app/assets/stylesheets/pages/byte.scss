@@ -673,8 +673,12 @@ html.html-ctr-byte body {
 // -------- Background process chips -----------------------------------------
 // Deliberately the same object as a timer chip - same size, same glass, same
 // swipe - because they live on the same shelf and one of them being fancier
-// would read as one of them mattering more. What it adds is a second line for
-// the step it is on, and a fill along the bottom edge for the count.
+// would read as one of them mattering more.
+//
+// A name and a count on one line - the state is the colour and the step is the
+// name, so neither costs a row - with the links under it as pills. Those are
+// the only thing here that earns a second row: a destination nobody can see is
+// not a destination, and these spent a day being read as decoration.
 .byte-process-chip {
   --process-accent: var(--bs-accent, #3fa0ff);
   position: relative;
@@ -684,7 +688,7 @@ html.html-ctr-byte body {
   align-items: flex-end;
   gap: 1px;
   max-width: 100%;
-  padding: 2px 7px 3px 6px;
+  padding: 1px 7px 2px 6px;
   border-radius: 7px;
   background: rgba(12, 20, 40, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -703,13 +707,6 @@ html.html-ctr-byte body {
   &[data-has-url="true"] { cursor: pointer; }
   &:hover { background: rgba(20, 32, 60, 0.85); }
 
-  .byte-process-head {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    max-width: 100%;
-  }
-  .byte-process-icon { font-size: 10px; opacity: 0.8; }
   .byte-process-name {
     font-size: 12px;
     font-weight: 600;
@@ -722,29 +719,27 @@ html.html-ctr-byte body {
     font-weight: 600;
     opacity: 0.85;
   }
-  .byte-process-detail {
-    font-size: 10px;
-    opacity: 0.6;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    // The chip's own width governs. A second limit in different units only
-    // ever disagrees with the first one.
+  // The name and the count are one line; everything else about the chip is a
+  // row of its own.
+  .byte-process-head {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
     max-width: 100%;
   }
 
-  // Where a chip goes. Small, but a real tap target - these get pressed with a
-  // thumb, on a phone, next to a swipe that clears the thing.
+  // Where the chip goes, said out loud. Small, but a real tap target - these
+  // get pressed with a thumb, on a phone, next to a swipe that clears the
+  // thing.
   .byte-process-links {
     display: inline-flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 3px;
-    margin-top: 1px;
   }
   .byte-process-link {
     display: inline-block;
-    max-width: 22vw;
+    max-width: 100%;
     padding: 0 5px;
     border-radius: 5px;
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -757,14 +752,24 @@ html.html-ctr-byte body {
     overflow: hidden;
     text-overflow: ellipsis;
 
+    // The arrow is what says "this goes somewhere". In CSS rather than in the
+    // text so the label stays the label - and it is here because a pill
+    // reading "Posting" was taken for a status for a whole day.
+    &::before {
+      content: "↗";
+      margin-right: 3px;
+      opacity: 0.7;
+    }
+
     &:hover {
       border-color: var(--process-accent);
       background: rgba(255, 255, 255, 0.12);
     }
   }
 
-  // No number on the bar: the count above it IS the number, and printing it
-  // twice makes the fill look like a different measurement.
+  // No number on the bar: the count beside it IS the number, and printing it
+  // twice makes the fill look like a different measurement. 2px of the chip's
+  // own height, so it costs no row.
   .byte-process-bar {
     position: absolute;
     left: 0;

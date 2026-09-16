@@ -23,7 +23,7 @@
 class Api::V1::BackgroundProcessesController < Api::V1::BaseController
   skip_before_action :verify_authenticity_token
 
-  PERMITTED = %i[key name state detail current total url icon source].freeze
+  PERMITTED = %i[key name state detail current total url source].freeze
 
   # Links arrive as a list of objects, which strong parameters will not take
   # from a bare permit list. A form-encoded caller has no way to send a nested

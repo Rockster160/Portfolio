@@ -88,6 +88,8 @@ RSpec.describe BackgroundProcess do
       expect(process.name).to eq("Left Fieldwire by...")
     end
 
+    # Not drawn: it is the chip's hover title. Still cut, because it travels in
+    # every broadcast and a caller will hand it a whole exception message.
     it "cuts a detail too, with a little more room" do
       process = report(name: "Preparing", detail: "a" * 90)
 

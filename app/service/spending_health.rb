@@ -1,5 +1,5 @@
 # Feeds the dashboard's Spending cell: how much of the month's money is left,
-# on three nested clocks — the month, the trailing week, and today.
+# on three nested clocks — the month, the week (Monday to Sunday), and today.
 #
 # It publishes DAILY BUCKETS rather than the three totals it is asked for,
 # because the totals are the one thing that can go stale with nothing having
@@ -21,9 +21,24 @@ module SpendingHealth
   # a day is the month split evenly, a week is seven of those — so a 31-day
   # month gets a slightly smaller daily allowance than a 30-day one, which is
   # the point of dividing rather than fixing a number.
-  MONTHLY_CENTS = 800_000
-  # How far back the buckets reach beyond the start of the month. The trailing
-  # week can begin in the previous one, and on the 1st it lies entirely there.
+  MONTHLY_CENTS = 400_000
+  # A purchase ABOVE this is a large one: rent-sized, tuition-sized, a flight.
+  # One of those lands on a single day and would read as that day and that week
+  # being blown, when it was planned money. So they are bucketed apart — the
+  # bars never draw them, and the cell takes the month's large purchases off
+  # the month's budget instead, which lowers every day of it evenly.
+  LARGE_CENTS = 50_000
+  # The top bar: everything there is, against what it is meant to hold, over
+  # the stretch it has to last. From the layoff to the end of the year. `from`
+  # and `through` are both whole perceived days, so the range runs from 3am on
+  # the first to 3am after the last.
+  BALANCE_GOAL = {
+    cents:   4_000_000,
+    from:    "2026-09-11",
+    through: "2026-12-31",
+  }.freeze
+  # How far back the buckets reach beyond the start of the month. The week can
+  # begin on a Monday in the previous one.
   LOOKBACK_DAYS = 7
 
   class << self
@@ -37,18 +52,31 @@ module SpendingHealth
       data
     end
 
-    # Cents spent per perceived day, plus the budget those days are measured
-    # against. Dates are ISO strings because that is what survives the trip
-    # through JSON and back out to the cell.
+    # Cents spent per perceived day, with the large purchases in buckets of
+    # their own, plus the budget those days are measured against. Dates are ISO
+    # strings because that is what survives the trip through JSON and back out
+    # to the cell.
+    #
+    # The large ones are dated rather than totalled for the same reason the
+    # rest are: at the turn of the month last month's rent has to stop coming
+    # off the budget, with nothing pushed to say so.
+    #
+    # The balance is the home cell's figure — cumulative and projected, see
+    # SimpleFin::DashboardCache — and nil when an account has none yet, which
+    # the cell draws as nothing rather than as a smaller total.
     #
     # The day's caffeine rides along: it is the bottom bar of the same cell,
     # and one cell wants one payload and one broadcast rather than a second
     # channel that can arrive out of step with this one.
     def payload(user)
       {
-        budget_cents: MONTHLY_CENTS,
-        days:         buckets(user),
-      }.merge(::CaffeineIntake.payload(user))
+        budget_cents:  MONTHLY_CENTS,
+        balance_cents: ::SimpleFin::DashboardCache.projected_cents,
+        balance_goal:  BALANCE_GOAL,
+      }.merge(
+        buckets(user),
+        ::CaffeineIntake.payload(user),
+      )
     end
 
     # Grouped in Ruby rather than SQL: a perceived day is local-3am to
@@ -61,9 +89,11 @@ module SpendingHealth
       to = ::Buddy::Day.range(user, date: today).last
 
       scope = ::BankTransaction.countable.spending.where(occurred_at: from...to)
-      scope.pluck(:occurred_at, :amount_cents).each_with_object({}) { |(at, cents), acc|
+      pairs = scope.pluck(:occurred_at, :amount_cents)
+      pairs.each_with_object({ days: {}, large_days: {} }) { |(at, cents), acc|
+        into = acc[cents.abs > LARGE_CENTS ? :large_days : :days]
         key = ::Buddy::Day.perceived_date(at.in_time_zone(zone)).to_s
-        acc[key] = acc.fetch(key, 0) + cents.abs
+        into[key] = into.fetch(key, 0) + cents.abs
       }
     end
 

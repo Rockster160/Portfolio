@@ -6,45 +6,39 @@ require "rails_helper"
 RSpec.describe "Buddy background process strip" do
   let(:result) { JsRunner.output("spec/javascript/byte_process_strip_runner.js") }
 
-  describe "a running process" do
-    it "reads as its name, its place in the batch, and the step it is on" do
-      expect(result["running"].first["text"])
-        .to eq(["⚙", "Preparing", "3/13", "Fieldwire - writing the letter"])
+  # It sits OVER Buddy, and the whole point of him is that he is visible. What
+  # it spends its height on is the two things a person can act on: where the
+  # run has got to, and where to go.
+  describe "a chip" do
+    it "says what it is and how far along, on one line" do
+      chip = result["running"].first
+
+      expect(chip["text"]).to eq(["Preparing", "3/13"])
+    end
+
+    it "is one row when it goes nowhere, and two when it does" do
+      expect(result["no_links_rows"]).to eq(1)
+      expect(result["running"].first["rows"]).to eq(2)
+    end
+
+    # Waiting on him, four links, a long step and a count - the most a chip is
+    # ever asked to carry, and it still does not grow a third row.
+    it "never grows past two rows" do
+      expect(result["busiest"]["rows"]).to eq(2)
+      expect(result["busiest"]["text"]).to eq(["Preparing", "3/13"])
     end
 
     # A total with no current is nothing anybody can read, so the count waits
     # for its other half rather than inventing one.
     it "shows a count with no total, and no count with neither" do
       expect(result["count_without_total"]).to include("3")
-      expect(result["no_count"]).to eq(["⚙", "Preparing", "Fieldwire - writing the letter"])
+      expect(result["no_count"]).to eq(["Preparing"])
     end
 
     it "leaves the corner of the hero empty when nothing is running" do
       expect(result["empty"]).to eq({ "shown" => 0, "hidden" => true })
     end
-  end
 
-  describe "when it goes quiet" do
-    # The count it is showing is frozen. A chip that goes on looking live is
-    # the one thing worse than no chip at all.
-    it "says stalled rather than going on claiming progress" do
-      chip = result["stale"].first
-
-      expect(chip["stale"]).to eq("true")
-      expect(chip["text"].last).to start_with("Stalled — ")
-    end
-
-    # Waiting is stalled on purpose, and it already says what it is waiting for.
-    it "leaves work that is waiting on a person alone" do
-      chip = result["waiting"].first
-
-      expect(chip["stale"]).to be_nil
-      expect(chip["text"]).to eq(["❓", "Preparing", "3/13", "8 questions waiting on you"])
-    end
-  end
-
-  # The strip overlays Buddy, and the whole point of him is that he is visible.
-  describe "how much of the hero it takes" do
     it "shows three and says how many it left out" do
       expect(result["capped"]).to eq({ "chips" => 3, "more" => ["+2 more"] })
     end
@@ -53,45 +47,57 @@ RSpec.describe "Buddy background process strip" do
     it "says nothing when nothing was left out" do
       expect(result["uncapped_more"]).to eq(0)
     end
+  end
 
-    # A third row costs about as much height as the other two together.
-    it "spends the link row only where there is something to choose or act on" do
-      expect(result["one_link_running"]["links"]).to eq([])
-      expect(result["one_link_running"]["has_url"]).to eq("true")
-      expect(result["one_link_waiting"]["links"].length).to eq(1)
+  # The step it is on costs nothing as a title and a whole row anywhere else.
+  describe "the step it is on" do
+    it "rides along as the chip's title" do
+      expect(result["running"].first["title"]).to eq("Fieldwire - writing the letter")
+    end
+
+    # A frozen count reads as work still going on, and the chip being dimmed is
+    # the only other thing saying otherwise.
+    it "says stalled first once nothing has been heard for a while" do
+      chip = result["stale"].first
+
+      expect(chip["stale"]).to eq("true")
+      expect(chip["title"]).to start_with("Stalled — ")
+    end
+
+    # Waiting is stalled on purpose. It is not the same thing as having died.
+    it "leaves work that is waiting on a person alone" do
+      expect(result["waiting"].first["stale"]).to be_nil
     end
   end
 
+  # A destination nobody can see is not a destination: these were read as
+  # decoration on the bottom of a chip for a day, and "Posting" - the job
+  # posting - was taken for a status. One word each, and the arrow that says
+  # they go somewhere is CSS, so what is asserted here is what is read.
   describe "the links" do
-    # Real anchors, so a long-press offers to copy one and a middle-click opens
-    # a tab. None of that is worth reimplementing on a tap handler.
-    it "are anchors that open in their own tab" do
+    it "are drawn, as anchors that open in their own tab" do
       expect(result["links"]).to eq([
-        { "label" => "Posting", "href" => "https://boards.greenhouse.io/x/jobs/1", "target" => "_blank" },
+        { "label" => "Listing", "href" => "https://boards.greenhouse.io/x/jobs/1",
+          "target" => "_blank" },
         { "label" => "Line", "href" => "http://localhost:8790/line", "target" => "_blank" },
       ])
     end
 
-    # Otherwise reaching for the job would be asking for the chip to be cleared.
+    # Otherwise reaching for the posting would ask for the chip to be cleared.
     it "do not start the chip's swipe" do
       expect(result["pill_stops_the_swipe"]).to eq(1)
     end
   end
 
   describe "a tap on the chip itself" do
-    it "opens the only link there is" do
-      expect(result["one_link_has_url"]).to eq("true")
-      expect(result["tap_opened"]).to eq(["http://localhost:8790/line"])
+    # A bigger target for the common case of there being one link anyway.
+    it "opens the first of them" do
+      expect(result["has_url"]).to eq("true")
+      expect(result["tap_opened"]).to eq(["https://boards.greenhouse.io/x/jobs/1"])
     end
 
-    # With several there is no single right answer, and guessing one is how a
-    # tap meant for the queue opens a job posting instead.
-    it "does nothing when there is more than one" do
-      expect(result["two_links_has_url"]).to be_nil
-      expect(result["tap_with_two_links"]).to eq([])
-    end
-
-    it "does nothing when there are none" do
+    it "does nothing when the chip goes nowhere" do
+      expect(result["no_url"]).to be_nil
       expect(result["tap_without_links"]).to eq([])
     end
   end

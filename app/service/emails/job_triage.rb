@@ -146,8 +146,9 @@ module Emails
         detail: email.subject.presence,
         # The message itself, so "what is it reading" is one tap rather than a
         # search through the inbox for a subject line half-remembered off a
-        # chip that has since gone.
-        links:  [{ label: "Email", url: "/emails/#{email.id}" }],
+        # chip that has since gone. An envelope says it in the width of one
+        # character, which is most of what a pill has.
+        links:  [{ label: "✉️", url: "/emails/#{email.id}" }],
         source: :rails,
       )
       yield

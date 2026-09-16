@@ -7,7 +7,6 @@
 #  detail       :string
 #  finished_at  :datetime
 #  heartbeat_at :datetime         not null
-#  icon         :string
 #  key          :string           not null
 #  links        :jsonb            not null
 #  name         :string           not null
@@ -59,8 +58,9 @@ class BackgroundProcess < ApplicationRecord
   # exactly what the person asked to be able to see, and clearing it is theirs.
   STALE_AFTER = 15.minutes
 
-  # A chip is small and a person taps one of these on a phone. Four is already
-  # more choices than a corner of the screen can offer without becoming a menu.
+  # The FIRST link is where a tap goes. The rest are stored and reachable
+  # through the API, but the chip is one line - it has room for a destination,
+  # not for a row of them - so a caller that wants a link tapped puts it first.
   MAX_LINKS = 4
 
   # THE CHIP IS A CORNER OF A SCREEN, NOT A LINE IN A LOG.
@@ -72,9 +72,9 @@ class BackgroundProcess < ApplicationRecord
   # and an ellipsis in the middle of a name that was never going to fit is a
   # worse answer than a name chosen to.
   #
-  # The name is the bold identity line and gets 20. The detail is the smaller
-  # second line and gets a little more, because it is the half that says
-  # whether anything is actually happening.
+  # The name is the WHOLE chip and gets 20. The detail is not drawn at all - it
+  # is the chip's hover title, and the place a caller can say more without
+  # spending a pixel on it.
   MAX_NAME = 20
   MAX_DETAIL = 32
 
@@ -98,7 +98,7 @@ class BackgroundProcess < ApplicationRecord
 
   # The only attributes a report may set. Everything else on the row - who it
   # belongs to, when it started, when it was last heard from - is the server's.
-  WRITABLE = %i[name state detail current total links icon source].freeze
+  WRITABLE = %i[name state detail current total links source].freeze
 
   validates :key, presence: true, format: { with: KEY_RX }
   validates :name, presence: true
@@ -246,7 +246,6 @@ class BackgroundProcess < ApplicationRecord
       current:      current,
       total:        total,
       links:        links,
-      icon:         icon,
       source:       source,
       stale:        stale?,
       started_at:   started_at&.iso8601(3),
