@@ -98,6 +98,7 @@ class JobNote < ApplicationRecord
   FOLLOW_UP_AGENDA_NAME = "Tasks".freeze
 
   before_validation :normalize_fields
+  before_validation :settle_applied_before_receipt, on: :create
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —
@@ -184,6 +185,37 @@ class JobNote < ApplicationRecord
     self.source   = source.to_s.strip.presence
     self.url      = url.to_s.strip.presence
     self.spoke_to = spoke_to.to_s.strip.presence
+  end
+
+  # THE SUBMISSION HAPPENED BEFORE THE RECEIPT FOR IT. ALWAYS.
+  #
+  # `applied` is stamped when he says he sent it, and saying so is a thing he
+  # gets to at his own pace - after the tab has loaded, after he has read the
+  # confirmation page, sometimes minutes later. The ATS auto-reply is sent by a
+  # machine the moment the form lands. So the receipt regularly arrives on the
+  # board FIRST, and the timeline reads as though he applied in response to
+  # being thanked for applying.
+  #
+  # Four rows were already like that: Fieldwire by twelve minutes, Instrumentl by
+  # seven seconds, JPMorganChase by twenty-five, Epicor by five and a half
+  # minutes. The gap is noise in every case - what it is measuring is how long
+  # he took to press a button, not anything about the application.
+  #
+  # So the `applied` beat is moved to just before the earliest receipt, and only
+  # ever BACKWARDS. A submission genuinely made after an acknowledgement is not
+  # a thing that happens; a submission recorded after one is routine.
+  #
+  # Only on create, and only against `acknowledged`: a later `heard_back` or
+  # `rejected` says nothing about when the form was sent, and rewriting history
+  # off those would be inventing rather than correcting.
+  def settle_applied_before_receipt
+    return unless tag.to_s == "applied"
+    return if job_application.nil? || occurred_at.nil?
+
+    receipt = job_application.notes.where(tag: :acknowledged).minimum(:occurred_at)
+    return if receipt.nil? || occurred_at < receipt
+
+    self.occurred_at = receipt - 1.second
   end
 
   # Blank lines off the top and bottom, and nothing else. `strip` was doing this
