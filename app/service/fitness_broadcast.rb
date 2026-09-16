@@ -36,9 +36,8 @@ class FitnessBroadcast
   end
 
   def fitness_data
-    [
+    rows = [
       # pullups,
-      days,
       wordle,
       drugs,
       animal_crossing,
@@ -48,6 +47,17 @@ class FitnessBroadcast
       shower,
       applications,
     ]
+    gold = gold_days(rows)
+
+    [days(gold), *rows.map { |row| render(row, gold) }]
+  end
+
+  # A day where every row came out green is redrawn in gold, header included, so
+  # a clean sweep reads as one thing instead of being counted down the column.
+  def gold_days(rows)
+    @days.to_a.select { |date|
+      rows.all? { |row| row[:cells][date]&.last == :green }
+    }
   end
 
   # def pullups
@@ -76,8 +86,11 @@ class FitnessBroadcast
   #   "#{pullups_today}t / #{monthly_remaining}r / #{monthly_goal}d"
   # end
 
-  def days
-    "   " + dates { |date| date.strftime("%a") }
+  def days(gold=[])
+    "   " + @days.to_a.map { |date|
+      name = date.strftime("%a")
+      gold.include?(date) ? colorize(name, :gold) : name.rjust(3)
+    }.reverse.join(" ")
   end
 
   def wordle
@@ -113,7 +126,7 @@ class FitnessBroadcast
       end
     )
 
-    "💧 " + dates("💧") { |date| colorize_count(counts_by_day[date] || 0, expected) }
+    cells("💧") { |date| cell(counts_by_day[date] || 0, expected) }
   end
 
   def workout
@@ -140,9 +153,7 @@ class FitnessBroadcast
     notes = JobNote.applied.where(occurred_at: @range, job_application: @user.job_applications)
     notes.pluck(:occurred_at).each { |at| counts[perceived_day(at)] += 1 }
 
-    "💼 " + dates("💼") { |date|
-      colorize_count(counts[date], tally(APPLICATION_GOAL))
-    }
+    cells("💼") { |date| cell(counts[date], tally(APPLICATION_GOAL)) }
   end
 
   # Which day a timestamp belongs to under the 4am rollover `allday` draws its
@@ -187,17 +198,22 @@ class FitnessBroadcast
   end
 
   def row(ico, q, expected)
-    [
-      ico.presence&.then { |i| "#{i} " },
-      *dates(ico) { |date| status(date, q, expected) },
-    ].inject(&:+)
+    cells(ico) { |date| cell(query(q, date).count, expected) }
   end
 
-  def status(date, q, color_map)
-    colorize_count(query(q, date).count, color_map)
+  # A row is kept as its cells — icon and color name per day — rather than as
+  # text, because whether a column goes gold is not known until every row is in.
+  def cells(ico, &)
+    { ico: ico, cells: @days.to_a.index_with(&) }
   end
 
-  def colorize_count(count, color_map)
+  def render(row, gold)
+    row[:ico].presence&.then { |i| "#{i} " }.to_s + row[:cells].map { |date, (icon, color)|
+      colorize(icon, gold.include?(date) ? :gold : color)
+    }.reverse.join(" ")
+  end
+
+  def cell(count, color_map)
     icon = count.zero? ? "-" : count
     color_map[:icons].each do |ico, range|
       icon = ico if range.is_a?(Integer) && count == range
@@ -212,7 +228,7 @@ class FitnessBroadcast
       color_name = col if range.is_a?(Range) && count.in?(range)
     end
 
-    colorize(icon, color_name)
+    [icon, color_name]
   end
 
   def query(q, date)
@@ -222,18 +238,13 @@ class FitnessBroadcast
   def colorize(str, color_name)
     color = {
       green:  "#148F14",
+      gold:   "#FFD700",
       orange: "#FFA001",
       yellow: "#FFEE14",
       red:    "#F81414",
     }[color_name] || color_name
 
     "[color #{color}]#{str.to_s.rjust(3)}[/color]"
-  end
-
-  def dates(_ico="", &block)
-    @days.then { |r| (r.first.to_date)..(r.last.to_date) }.map { |date|
-      block.call(date).to_s.rjust(3)
-    }.reverse.join(" ")
   end
 
   def broadcast

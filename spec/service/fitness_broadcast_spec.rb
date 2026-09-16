@@ -97,4 +97,45 @@ RSpec.describe FitnessBroadcast do
       expect(cells[4]).to eq(["#FFA001", "1"])
     end
   end
+
+  describe "a day where everything went green" do
+    let(:at) { zone.local(2026, 9, 15, 9) }
+    let(:water) { create(:chore, name: "8oz Water", created_by_user: user, target_count: 2) }
+
+    # Every row the cell draws, met for the one day. Drop any one of these and
+    # the column is an ordinary column again.
+    def sweep_the_day
+      ["Wordle", "Vitamins", "AnimalCrossing", "Workout", "Teeth", "Shower"].each do |name|
+        user.action_events.create!(name: name, timestamp: at)
+      end
+      2.times { create(:chore_completion, chore: water, user: user, day_key: at.to_date) }
+      5.times { applied(at) }
+    end
+
+    # The leftmost cell of every line, header included.
+    def column
+      described_class.fitness_data.map { |line|
+        line.scan(/\[color (#\w+)\]\s*(\S+)\[\/color\]/).first || line
+      }
+    end
+
+    it "turns the whole column gold, header and all" do
+      travel_to(zone.local(2026, 9, 15, 10)) do
+        sweep_the_day
+
+        expect(column).to all(start_with("#FFD700"))
+        expect(column.first).to eq(["#FFD700", "Tue"])
+      end
+    end
+
+    it "leaves the column alone when one row falls short" do
+      travel_to(zone.local(2026, 9, 15, 10)) do
+        sweep_the_day
+        user.action_events.find_by(name: "Teeth").destroy!
+
+        expect(column.first).to eq("   Tue Mon Sun Sat Fri Thu Wed")
+        expect(column).to include(["#148F14", "✓"], ["#F81414", "𐄂"])
+      end
+    end
+  end
 end
