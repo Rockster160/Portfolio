@@ -98,7 +98,7 @@ module Emails
         return nil
       end
 
-      verdict = classify(email)
+      verdict = watched(email) { classify(email) }
       return nil if verdict.nil?
 
       # Stamped before anything is delivered, so a delivery that blows up leaves
@@ -121,6 +121,38 @@ module Emails
         extra:     { email_id: email&.id },
       )
       nil
+    end
+
+    # A chip in the corner of the hero for as long as the model is thinking
+    # about this one, so mail being read is something that can be SEEN
+    # happening rather than inferred afterwards from a card appearing.
+    #
+    # Wrapped around the model call and nothing else: the list gate settles
+    # nine tenths of the volume for free and in no time at all, and a chip that
+    # appears and vanishes inside a millisecond is a flicker, not information.
+    #
+    # Keyed per email, because several of these run at once and a shared key
+    # would have one email's finish clear another's chip. `ensure` is what
+    # makes that safe - a raise in the model call still takes the chip down,
+    # and the error goes to the reporting that already wraps this.
+    def watched(email)
+      BackgroundProcess.note(
+        user:   email.user,
+        key:    "mail:triage:#{email.id}",
+        name:   "Reading mail",
+        icon:   "✉️",
+        # Not truncated here: the model owns the chip's length, and a second
+        # limit in the caller only ever disagrees with it.
+        detail: email.subject.presence,
+        # The message itself, so "what is it reading" is one tap rather than a
+        # search through the inbox for a subject line half-remembered off a
+        # chip that has since gone.
+        links:  [{ label: "Email", url: "/emails/#{email.id}" }],
+        source: :rails,
+      )
+      yield
+    ensure
+      BackgroundProcess.clear(user: email.user, key: "mail:triage:#{email.id}")
     end
 
     # ---- the free gate --------------------------------------------------------

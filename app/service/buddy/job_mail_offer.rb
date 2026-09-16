@@ -38,7 +38,14 @@ module Buddy
       conversation = ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
       return nil if conversation.nil?
 
-      job = JobHunt.resolve_application(user, verdict[:company])
+      # `said` is what tells one role from another when the company holds several
+      # applications. The headline and the subject are what the mail has to
+      # offer; without them a second job at a known company resolves to whichever
+      # row came first.
+      job = JobHunt.resolve_application(
+        user, verdict[:company],
+        said: [verdict[:headline], metadata[:subject]].compact_blank.join(" ")
+      )
       # No company on the verdict, but the mail named a ROLE. A generic ATS
       # address with "thank you for your interest in joining our team" gives the
       # classifier nothing to put in `company`, and it is right not to guess -
@@ -57,13 +64,27 @@ module Buddy
       # No row, but a company name: the suggestion is to START one. A plain card
       # is only right when there is nothing to propose at all — mail the
       # classifier couldn't name a company for, where any row would be a guess.
+      #
+      # The middle case is the one a role-aware resolver creates: the company IS
+      # on the board, several times, and the mail does not say which job. That
+      # is not a new company and it must not propose one — it is a question, and
+      # the rows are what it has to ask with.
       if job.nil?
         return deliver_card(user, conversation, card, metadata, verdict) if verdict[:company].blank?
+
+        rows = JobHunt.applications_for(user, verdict[:company])
+        seed = (
+          if rows.any?
+            ambiguous_seed(verdict, rows, metadata, occurred_at, email, body, outgoing)
+          else
+            new_company_seed(verdict, metadata, occurred_at, email, body, outgoing)
+          end
+        )
 
         return CompanionDelivery.deliver_prompt(
           user:         user,
           conversation: conversation,
-          seed:         new_company_seed(verdict, metadata, occurred_at, email, body, outgoing),
+          seed:         seed,
           metadata:     prompt_metadata(metadata, nil, verdict, outgoing),
         )
       end
@@ -153,19 +174,7 @@ module Buddy
         "Company: #{job.company}#{" (#{job.role})" if job.role.present?}",
         "Status on the board: #{job.status}",
         "Link: #{job_url(job)}",
-        "What happened: #{verdict[:headline]}",
-        "Kind: #{verdict[:kind]}",
-        "Subject: #{metadata[:subject]}",
-        "#{outgoing ? "To" : "From"}: #{metadata[:sender]}",
-        # The handle the note gets pinned to, stated as a fact rather than only
-        # inside the instruction below.
-        (if email.present?
-           "Email id: #{email.id}"
-         else
-           "#{outgoing ? "Sent" : "Arrived"}: #{occurred_at&.iso8601}"
-         end),
-        ("Mail: #{mail_url(email)}" if email.present?),
-        message_block(body),
+        *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
         "",
         instruction(job, occurred_at, email, body, outgoing),
       ].compact.join("\n")
@@ -214,12 +223,7 @@ module Buddy
         ),
         "",
         "Company: #{verdict[:company]}",
-        "What happened: #{verdict[:headline]}",
-        "Kind: #{verdict[:kind]}",
-        "Subject: #{metadata[:subject]}",
-        "From: #{metadata[:sender]}",
-        (email.present? ? "Email id: #{email.id}" : "Arrived: #{occurred_at&.iso8601}"),
-        message_block(body),
+        *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
         "",
         "Say in ONE short sentence what this mail actually says - they have not read it. " \
         "Do not quote it back at them and do not paste any of it into your reply.",
@@ -245,6 +249,29 @@ module Buddy
         "an invite reading 2:00-2:20); without one it books an hour."
     end
 
+    # The company is on the board more than once and the mail does not say which
+    # job. Every row is named, because that is the whole of what has to be
+    # decided and the answer is in the mail's own words more often than not.
+    def ambiguous_seed(verdict, rows, metadata, occurred_at, email, body=nil, outgoing=false)
+      listed = rows.map { |row| "  - #{row.role.presence || "(no role recorded)"} - #{job_url(row)}" }
+
+      [
+        "#{outgoing ? "They just SENT job mail" : "Job mail just arrived"} for a company that " \
+        "is on their board #{rows.size} times, for different jobs.",
+        "",
+        "Company: #{verdict[:company]}",
+        "On the board:",
+        *listed,
+        *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
+        "",
+        "Say in ONE short sentence what this says. Then CALL add_job_note" \
+        "#{log_hint(occurred_at, email)} with `role` naming WHICH of those jobs it is - the " \
+        "mail usually says, in the subject or the first line. If it genuinely does not, ask " \
+        "them which one rather than picking: a note on the wrong job is permanent." \
+        "#{note_hint(body)}",
+      ].compact.join("\n")
+    end
+
     # Their side of the thread. `responded` exists for exactly this and is the
     # other half of `heard_back` — withdrawing is the one thing they can say
     # that settles the row, and it is rare.
@@ -253,6 +280,25 @@ module Buddy
 
       " This one is theirs, so `responded` is usually the tag - unless they " \
         "withdrew, accepted an offer, or the words say something more specific."
+    end
+
+    # What the mail IS, the same way in all three seeds. The handle the note gets
+    # pinned to is stated as a fact here rather than only inside the instruction
+    # that uses it.
+    def mail_facts(verdict, metadata, occurred_at, email, body, outgoing)
+      [
+        "What happened: #{verdict[:headline]}",
+        "Kind: #{verdict[:kind]}",
+        "Subject: #{metadata[:subject]}",
+        "#{outgoing ? "To" : "From"}: #{metadata[:sender]}",
+        (if email.present?
+           "Email id: #{email.id}"
+         else
+           "#{outgoing ? "Sent" : "Arrived"}: #{occurred_at&.iso8601}"
+         end),
+        ("Mail: #{mail_url(email)}" if email.present?),
+        message_block(body),
+      ]
     end
 
     # The row on the board, so a reply and a receipt can both point at it.

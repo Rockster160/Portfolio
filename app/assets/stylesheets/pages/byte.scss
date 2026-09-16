@@ -567,26 +567,41 @@ html.html-ctr-byte body {
   border-left-color: rgba(242, 107, 107, 0.65) !important;
 }
 
-// -------- Buddy timer chips ------------------------------------------------
-// Absolutely pinned to the hero's top-left, OVERLAYING Buddy's area rather than
-// pushing him down. Small + tight, inset from the edge so a stack doesn't clip
+// -------- Buddy hero chips -------------------------------------------------
+// Two stacks absolutely pinned to the top corners of the hero, OVERLAYING
+// Buddy's area rather than pushing him down: timers counting down on the left,
+// background work running on the right. Small + tight, inset from the edge so a stack doesn't clip
 // the character. The container is click-through (pointer-events: none) so only
 // the chips themselves catch taps, leaving the rest of the hero interactive.
-.byte-buddy-timers {
+.byte-buddy-timers,
+.byte-buddy-processes {
   position: absolute;
   top: 0;
-  left: 0;
   z-index: 4;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 2px;
-  max-width: 48%;
+  // It overlays Buddy, and the whole point of him is that he is visible. The
+  // stack is capped at three chips in JS; this is what stops any one of them
+  // growing across him.
+  max-width: 46%;
   pointer-events: none;
 
   // An author `display` beats the `hidden` attribute's UA rule, so restore it
   // explicitly — otherwise the empty container never actually hides.
   &[hidden] { display: none; }
+}
+.byte-buddy-timers {
+  left: 0;
+  align-items: flex-start;
+}
+// The other half of the same shelf: what is RUNNING, opposite what is counting
+// down. Right-aligned so a long name grows toward the middle of the hero
+// rather than off the edge of the screen.
+.byte-buddy-processes {
+  right: 0;
+  align-items: flex-end;
+  text-align: right;
 }
 .byte-timer-chip {
   --timer-accent: var(--bs-accent, #3fa0ff);
@@ -653,6 +668,167 @@ html.html-ctr-byte body {
 }
 @keyframes byte-timer-flash {
   50% { background: rgba(242, 107, 107, 0.4); }
+}
+
+// -------- Background process chips -----------------------------------------
+// Deliberately the same object as a timer chip - same size, same glass, same
+// swipe - because they live on the same shelf and one of them being fancier
+// would read as one of them mattering more. What it adds is a second line for
+// the step it is on, and a fill along the bottom edge for the count.
+.byte-process-chip {
+  --process-accent: var(--bs-accent, #3fa0ff);
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  max-width: 100%;
+  padding: 2px 7px 3px 6px;
+  border-radius: 7px;
+  background: rgba(12, 20, 40, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 2px solid var(--process-accent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  user-select: none;
+  touch-action: pan-y;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+
+  // Only a chip that goes somewhere offers to be tapped. The rest are still
+  // swipeable, which is a drag rather than a click.
+  &[data-has-url="true"] { cursor: pointer; }
+  &:hover { background: rgba(20, 32, 60, 0.85); }
+
+  .byte-process-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+  }
+  .byte-process-icon { font-size: 10px; opacity: 0.8; }
+  .byte-process-name {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .byte-process-count {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.85;
+  }
+  .byte-process-detail {
+    font-size: 10px;
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    // The chip's own width governs. A second limit in different units only
+    // ever disagrees with the first one.
+    max-width: 100%;
+  }
+
+  // Where a chip goes. Small, but a real tap target - these get pressed with a
+  // thumb, on a phone, next to a swipe that clears the thing.
+  .byte-process-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px;
+    margin-top: 1px;
+  }
+  .byte-process-link {
+    display: inline-block;
+    max-width: 22vw;
+    padding: 0 5px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    font-size: 10px;
+    line-height: 15px;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover {
+      border-color: var(--process-accent);
+      background: rgba(255, 255, 255, 0.12);
+    }
+  }
+
+  // No number on the bar: the count above it IS the number, and printing it
+  // twice makes the fill look like a different measurement.
+  .byte-process-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.08);
+
+    &::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: var(--process-progress, 0%);
+      background: var(--process-accent);
+      transition: width 200ms ease;
+    }
+  }
+
+  // Waiting on a person. Warm rather than alarming - nothing is wrong, it just
+  // cannot go any further on its own.
+  &[data-state="waiting"] {
+    --process-accent: var(--bs-warning, #e8a85c);
+    background: rgba(232, 168, 92, 0.18);
+  }
+  // It died. This is the one most worth seeing, so it stays put until it is
+  // swiped away or reported again.
+  &[data-state="failed"] {
+    --process-accent: var(--bs-danger, #f26b6b);
+    background: rgba(242, 107, 107, 0.2);
+  }
+  // Nothing heard for a quarter of an hour. Dimmed, because the count it is
+  // showing is frozen and should not read as live.
+  &[data-stale="true"] {
+    opacity: 0.55;
+    filter: grayscale(0.6);
+  }
+
+  // A swipe asks the server to clear it; it doesn't clear it. Same as the
+  // timers, and for the same reason - a chip that leaves on the gesture looks
+  // exactly like one that leaves on a failed request.
+  // (see .byte-process-more below for what happens past three chips)
+  &[data-pending="clear"] {
+    opacity: 0.32;
+    pointer-events: none;
+    filter: grayscale(1);
+  }
+  &[data-pending="clear-failed"] {
+    border-color: var(--bs-danger, #f26b6b);
+    border-right-color: var(--bs-danger, #f26b6b);
+    animation: byte-timer-flash 0.5s steps(1) 4;
+  }
+}
+
+// Not a chip, on purpose: it is a note about the ones that did not fit, and
+// giving it a border would make four things look like four things running.
+.byte-process-more {
+  padding: 0 7px 0 6px;
+  font-size: 10px;
+  line-height: 14px;
+  opacity: 0.5;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .byte-thread {

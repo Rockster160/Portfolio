@@ -155,6 +155,7 @@ module BuddyEvalNeeds
     coffee_pairing:       { label: "the coffee-to-chore pairing",  check: ->(u) { RecordLink.where(user: u).any? { |l| l.source_name.to_s.match?(/coffee/i) } } },
     desk_delivery:        { label: "a desk on the delivery list",  check: ->(u) { delivery?(u, "desk") } },
     halloway_application: { label: "a live Halloway Systems application", check: ->(u) { JobApplication.where(user: u).live.any? { |j| j.company.to_s.match?(/halloway/i) } } },
+    vantrice_two_roles:   { label: "two Vantrice Labs roles on the board", check: ->(u) { JobApplication.where(user: u).count { |j| j.company.to_s.match?(/vantrice/i) } >= 2 } },
     halloway_job_mail:    { label: "triaged job mail from Halloway Systems", check: ->(u) { Email.where(user: u).job_mail.any? { |e| e.subject.to_s.match?(/halloway/i) } } },
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },
     pending_prompt:       { label: "a pending prompt",             check: ->(u) { u.prompts.unanswered.exists? } },

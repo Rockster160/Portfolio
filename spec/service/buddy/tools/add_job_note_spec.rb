@@ -72,6 +72,43 @@ RSpec.describe "add_job_note tool" do
     end
   end
 
+  # Prod 15 Sep: three Aledade PBC roles applied to in one day. The resolver
+  # took a company and only a company and answered with the first row, so two of
+  # those jobs were filed onto a third one's timeline — three separate outcomes
+  # set to resolve as one.
+  describe "a company with more than one job on the board" do
+    let!(:backend) {
+      user.job_applications.create!(company: "ApartmentIQ", role: "Senior Backend Engineer")
+    }
+
+    it "picks the row whose role the beat names" do
+      execute(role: "Senior Backend Engineer", tag: :acknowledged, note: "Got it.")
+
+      expect(backend.notes.count).to eq(1)
+      expect(job.notes.count).to be_zero
+    end
+
+    # `role` is the explicit way to say it; the words of the mail are the one
+    # that actually turns up, since an ATS receipt quotes the title back.
+    it "reads the role out of the mail's own words" do
+      execute(note: "Thanks for applying to the Senior Backend Engineer role.", tag: :acknowledged)
+
+      expect(backend.notes.count).to eq(1)
+    end
+
+    # Answerable beats silent. A note on the wrong job is permanent; a question
+    # naming the roles can simply be answered.
+    it "asks which one rather than picking" do
+      expect { confirm(tag: :heard_back, note: "They wrote back.") }
+        .to raise_error(/has 2 applications on the board.*Senior Backend Engineer/m)
+    end
+
+    it "asks again rather than guessing when the role names neither" do
+      expect { confirm(role: "Designer", tag: :heard_back, note: "They wrote.") }
+        .to raise_error(/has 2 applications/)
+    end
+  end
+
   # On every other tag `follow_up_at` is a chase, stays optional, and goes on
   # the agenda as a task.
   describe "everything that is not a booking" do

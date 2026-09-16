@@ -7,10 +7,15 @@ Buddy::Tools.register(
     with no row — a recruiter's first approach, or an application they made
     without saying so.
 
-    Check the `job_search` context section first. If the company IS already
+    Check the `job_search` context section first. If the same JOB is already
     there, even settled, this is the WRONG tool: use add_job_note, which hangs
-    the beat off the row that exists. Two rows for one company is the mess this
-    is most likely to make.
+    the beat off the row that exists.
+
+    **A different role at a company they have already applied to IS a separate
+    application** - three jobs at one place is three rows with three separate
+    outcomes - so this is the right tool for that, and `role` is what tells the
+    two apart. Passing no `role` for a company already on the board is refused,
+    because then nothing can.
 
     `note` and `tag` work exactly as they do on add_job_note - the words of what
     happened, and what kind of beat it was. `occurred_at` is when it happened,
@@ -54,11 +59,40 @@ Buddy::Tools.register(
     company = payload[:company].to_s.strip
     raise "which company?" if company.empty?
 
-    # The guard the description asks for, enforced rather than trusted. A second
-    # row for a company already on the board splits its timeline in two, and
-    # nothing downstream would ever put them back together.
-    existing = Buddy::JobHunt.resolve_application(ctx.user, company)
-    raise "#{existing.company} is already on the board - use add_job_note" if existing
+    # A DIFFERENT role at a company already on the board is a SEPARATE
+    # application - three Aledade jobs in one day, three separate outcomes - and
+    # opening it is what this branch is for. What is refused is the same job
+    # twice, because a second row for one job splits its timeline and nothing
+    # downstream would ever put the halves back together.
+    existing = Buddy::JobHunt.applications_for(ctx.user, company)
+    role     = payload[:role].to_s.strip
+
+    if existing.any?
+      # Nothing to tell them apart by. Refused rather than guessed: a row with
+      # no role is the ordinary shape on this board, and half of what is on it
+      # has none.
+      if role.empty?
+        raise "#{existing.first.company} is already on the board - if this is a different " \
+              "job there, pass its `role`; if it is the same one, use add_job_note"
+      end
+
+      blank = existing.find { |job| job.role.blank? }
+      if blank
+        raise "#{blank.company} is on the board with no role recorded, so the two cannot be " \
+              "told apart - use add_job_note if this is that same job"
+      end
+
+      # WHOLE_ROLE, not the looser SAME_ROLE the mail-matching uses: asking "is
+      # this the same JOB" is the direction where a partial overlap lies.
+      # "Staff Frontend Engineer" and "Principal Engineer" share the word
+      # engineer, and at half a role that is enough to refuse a second job at a
+      # company they have applied to twice — which is the whole of what this is
+      # meant to allow.
+      twin = existing.find { |job|
+        Buddy::JobHunt.role_named_in?(job, role, ratio: Buddy::JobHunt::WHOLE_ROLE)
+      }
+      raise "#{twin.company} - #{twin.role} is already on the board - use add_job_note" if twin
+    end
 
     tag  = payload[:tag].presence || :note
     body = payload[:note].to_s.strip

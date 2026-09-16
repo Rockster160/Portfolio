@@ -92,6 +92,40 @@ RSpec.describe Buddy::JobMailOffer do
     end
   end
 
+  # One company, several jobs. A role-aware resolver answers nil when the mail
+  # does not say which — and nil used to mean "not on the board", which here
+  # would propose opening a company that is already on it twice.
+  context "when the company is on the board more than once" do
+    let!(:backend) { user.job_applications.create!(company: "iCapital", role: "Senior Backend Engineer") }
+    let!(:manager) { user.job_applications.create!(company: "iCapital", role: "Engineering Manager") }
+
+    it "asks which job rather than proposing a new company" do
+      body = call.body
+
+      expect(body).to include("on their board 2 times")
+      expect(body).to include("Senior Backend Engineer")
+      expect(body).to include("Engineering Manager")
+      expect(body).to include("with `role` naming WHICH")
+      expect(body).not_to include("CALL add_job_application")
+    end
+
+    it "still keeps the mail's own words for the note" do
+      body = call(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
+
+      expect(body).to include("--- the message, for the NOTE only ---")
+      expect(body).to include("VERBATIM")
+    end
+
+    # The mail naming one of them is the ordinary case, and it must go straight
+    # through to that row rather than asking.
+    it "goes straight to the row the mail names" do
+      message = call(verdict: verdict.merge(headline: "Senior Backend Engineer interview request"))
+
+      expect(message.body).to include("belongs to an application already on their board")
+      expect(message.metadata["job_application_id"]).to eq(backend.id)
+    end
+  end
+
   # Prod 6162, 14 Sep. A GitLab confirmation off the DOMAIN inbox was logged as
   # "Greenhouse confirmed receipt of your application" — the seed's own headline
   # read back. The watcher hands the words over because it read them off disk;

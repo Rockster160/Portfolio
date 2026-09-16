@@ -212,6 +212,31 @@ class BuddyEvalWorld
       )
     }
 
+    # A SECOND company, carrying two roles, because one company can hold several
+    # applications and the resolver has to tell them apart. Deliberately not a
+    # second Halloway row: every other job probe says "Halloway Systems" and
+    # nothing else, and a second one there would make all of them ambiguous by
+    # construction - a miss would then read as a description problem when the
+    # question simply had two right answers.
+    [
+      "Staff Data Engineer",
+      "Senior Backend Engineer",
+    ].each { |role|
+      reuse(
+        JobApplication.where(user: user).detect { |j|
+          j.company.to_s.match?(/vantrice/i) && j.role == role
+        },
+      ) {
+        JobApplication.create!(
+          user:    user,
+          company: "Vantrice Labs",
+          role:    role,
+          status:  :active,
+          color:   JobApplication::COLORS.last,
+        )
+      }
+    }
+
     reuse(Email.where(user: user).detect { |e| e.subject.to_s.match?(/halloway/i) }) {
       Email.create!(
         user:               user,

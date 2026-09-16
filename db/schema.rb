@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_10_191504) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_16_162438) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -265,6 +265,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_10_191504) do
     t.integer "uuid", null: false
     t.boolean "from_session"
     t.index ["user_id"], name: "index_avatars_on_user_id"
+  end
+
+  create_table "background_processes", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "key", null: false
+    t.string "name", null: false
+    t.integer "state", default: 0, null: false
+    t.string "detail"
+    t.integer "current"
+    t.integer "total"
+    t.jsonb "links", default: [], null: false
+    t.string "icon"
+    t.string "source"
+    t.datetime "started_at", null: false
+    t.datetime "heartbeat_at", null: false
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "heartbeat_at"], name: "index_background_processes_on_user_id_and_heartbeat_at"
+    t.index ["user_id", "key"], name: "index_background_processes_live_key", unique: true, where: "(finished_at IS NULL)"
+    t.index ["user_id"], name: "index_background_processes_on_user_id"
   end
 
   create_table "bank_accounts", force: :cascade do |t|
@@ -1875,6 +1896,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_10_191504) do
   add_foreign_key "agendas", "users"
   add_foreign_key "anchor_occurrences", "anchors"
   add_foreign_key "anchors", "users"
+  add_foreign_key "background_processes", "users"
   add_foreign_key "bank_balance_snapshots", "bank_accounts"
   add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
   add_foreign_key "bank_transactions", "bank_accounts"

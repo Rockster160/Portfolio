@@ -153,18 +153,39 @@ class ChoreListSync
     @list = user.ordered_lists.find_by(parameterized_name: LIST_NAME.parameterize)
   end
 
+  # ONE sync per person at a time. Marking a chore due enqueues two of these —
+  # `item_added` asks for one, and the `marked_due_at` write fires Chore's own
+  # `after_commit` which asks for another — and Sidekiq runs them side by side.
+  # Both read the list before either writes, so both decide the same item is
+  # missing and both add it. `writing` is thread-local and cannot see across
+  # Sidekiq threads, let alone processes, so it was never going to stop this.
+  #
+  # 16 Sep: "Unpack Dishes" typed onto the list matched chore 78 by its alias,
+  # and the two syncs added "Unload Dishwasher" 0.8ms apart. One of the pair was
+  # placed under Today; the other kept `max_sort_order + 1` and no section,
+  # which sorts ABOVE the Today header — a second copy of the chore pinned to
+  # the top of the list, in no section at all.
+  #
+  # Waits rather than skips: the second run may have been asked for by a change
+  # the first one started too early to see, and a reconcile that runs twice
+  # costs a redraw, while one that never runs leaves the list wrong.
+  def push
+    return nil if list.nil?
+
+    User.with_advisory_lock("chore_list_sync_#{user.id}", 15.seconds) { reconcile! }
+    list
+  end
+
   # Make the list say exactly what the due set says, in due order.
   #
   # Items that match no chore at all are left where they are. They are somebody
   # typing a note to themselves, and the uphill half turns anything that was
   # meant as a chore into one within the same breath anyway.
-  def push
-    return nil if list.nil?
-
+  def reconcile!
     self.class.writing {
       due = due_rows
       wanted = due.index_by { |row| key(row[:name]) }
-      present = list.list_items.to_a.index_by { |item| key(item.name) }
+      present = collapse_duplicates(list.list_items.to_a.group_by { |item| key(item.name) })
 
       (wanted.keys - present.keys).each { |k| list.list_items.add(wanted[k][:name]) }
       present.each { |k, item| list.list_items.remove(item.name) if !wanted.key?(k) && known_chore?(k) }
@@ -172,7 +193,19 @@ class ChoreListSync
       restamp!(due)
     }
     list.broadcast!
-    list
+  end
+
+  # The list is a mirror, so two rows saying the same thing is never something a
+  # person meant — it is a race that already happened. Collapse them here rather
+  # than leaving `restamp!` to pick one and strand the other, and the stray from
+  # any earlier race is cleared by the next sync instead of needing a script.
+  # The oldest row is the keeper; `restamp!` renumbers it into place regardless.
+  def collapse_duplicates(grouped)
+    grouped.transform_values { |items|
+      keep, *extra = items.sort_by(&:id)
+      extra.each { |dupe| dupe.update(deleted_at: ::Time.current, do_not_broadcast: true) }
+      keep
+    }
   end
 
   # One item, one direction: onto the list means the chore is due, off the list
@@ -292,8 +325,13 @@ class ChoreListSync
   # the size of the list forever. Sections and items share the one sequence
   # because `List#sectioned_objects` merges them into a single descending sort
   # before it groups; a section only has to outrank the items underneath it.
+  # GROUPED by name, never indexed. Two rows can share one, and `index_by` kept
+  # the last and silently dropped the rest — a dropped row is never placed, so
+  # it keeps the `max_sort_order + 1` it was created with and sorts above every
+  # section header. Every row this walks gets a sort_order and a section, even
+  # the ones it would rather not have.
   def restamp!(due)
-    by_key = list.list_items.ordered.to_a.index_by { |item| key(item.name) }
+    by_key = list.list_items.ordered.to_a.group_by { |item| key(item.name) }
     by_section = due.group_by { |row| section_key(row) }
 
     # [record, section it belongs under] in final top-to-bottom order.
@@ -302,12 +340,13 @@ class ChoreListSync
       section = section_row(spec, create: rows.any?)
       next [] if section.nil?
 
-      [[section, nil]] + rows.filter_map { |row| by_key[key(row[:name])] }.map { |item| [item, section] }
+      items = rows.flat_map { |row| by_key[key(row[:name])].to_a }
+      [[section, nil]] + items.map { |item| [item, section] }
     }
     # Items matching no chore keep their order relative to each other and settle
     # underneath both sections, in neither of them.
     seen = placed.to_set { |record, _| record }
-    placed += (by_key.values - seen.to_a).map { |item| [item, nil] }
+    placed += (by_key.values.flatten - seen.to_a).map { |item| [item, nil] }
 
     total = placed.size
     placed.each_with_index { |(record, section), idx|
@@ -349,9 +388,16 @@ class ChoreListSync
     @active_chores ||= user.accessible_chores.to_a
   end
 
+  # Names AND aliases, because `find_chore` matches on both and the two have to
+  # agree about what counts as naming a chore. They didn't: "Unpack Dishes" is
+  # an alias of chore 78, so the uphill half resolved it and marked the chore
+  # due, then this half read it as a note to itself and left it on the list
+  # forever underneath the "Unload Dishwasher" row the mirror had just added.
+  # What should look like one item being corrected to its real name was two
+  # items, and only the new one meant anything.
   def household_chore_keys
     @household_chore_keys ||= ::Chore.where(chore_household_id: user.chore_household_id)
-      .pluck(:name).to_set { |name| key(name) }
+      .pluck(:name, :aliases).flatten.compact_blank.to_set { |name| key(name) }
   end
 
   def key(name)

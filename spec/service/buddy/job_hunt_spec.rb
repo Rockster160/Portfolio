@@ -308,4 +308,48 @@ RSpec.describe "Buddy job hunt tools" do
       end
     end
   end
+
+  # Prod 15 Sep: three Aledade PBC roles in one day. The resolver took a company
+  # and only a company and answered with the FIRST row, so two of those jobs
+  # were filed onto a third one's timeline.
+  describe ".resolve_application with several jobs at one company" do
+    let!(:backend) { user.job_applications.create!(company: "Aledade PBC", role: "Senior Backend Engineer") }
+    let!(:manager) { user.job_applications.create!(company: "Aledade PBC", role: "Engineering Manager") }
+
+    it "is still the one row when a company holds only one" do
+      solo = user.job_applications.create!(company: "Pellworth", role: "Staff Engineer")
+
+      expect(Buddy::JobHunt.resolve_application(user, "Pellworth")).to eq(solo)
+    end
+
+    it "picks the one whose role the text names" do
+      picked = Buddy::JobHunt.resolve_application(user, "Aledade", said: "Senior Backend Engineer")
+
+      expect(picked).to eq(backend)
+    end
+
+    # Nil is answerable upstream; a guess is silent and permanent.
+    it "is nil rather than a guess when nothing names a role" do
+      expect(Buddy::JobHunt.resolve_application(user, "Aledade PBC")).to be_nil
+    end
+
+    it "is nil when the text names both" do
+      both = Buddy::JobHunt.resolve_application(user, "Aledade PBC", said: "Engineer")
+
+      expect(both).to be_nil
+    end
+
+    it "hands back every row for the company" do
+      expect(Buddy::JobHunt.applications_for(user, "Aledade PBC")).to contain_exactly(backend, manager)
+    end
+
+    # The head-word fallback was unambiguous-only because one head word matching
+    # two companies is a coin toss. Two rows for the SAME company is not.
+    it "still refuses a head word that reaches two different companies" do
+      user.job_applications.create!(company: "Acme Systems")
+      user.job_applications.create!(company: "Acme Robotics")
+
+      expect(Buddy::JobHunt.applications_for(user, "Acme Talent Acquisition")).to be_empty
+    end
+  end
 end

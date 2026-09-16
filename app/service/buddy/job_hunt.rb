@@ -63,24 +63,46 @@ module Buddy
     # A closed application is still a thing that happened to them and still a
     # thing they talk about. Being unable to see it doesn't stop the sentence
     # arriving - it just removes the correct answer.
-    def resolve_application(user, company)
+    # EVERY row on the board for this company. One company can hold several
+    # applications - three Aledade roles in one day - and a resolver that
+    # answered with the first of them was the whole of why two of those jobs
+    # ended up on one timeline.
+    def applications_for(user, company)
       name = company.to_s.strip
-      return nil if name.empty?
+      return [] if name.empty?
 
       board = JobApplication.where(user: user)
-      hit   = JobSearch.call(board, normalize(name)).first
-      return hit if hit
+      hits  = JobSearch.call(board, normalize(name)).to_a
+      return hits if hits.any?
 
       # Still nothing: try the leading word on its own, for the "Netflix Talent
       # Acquisition" shape where the extra words are a department rather than
-      # part of the name. Accepted ONLY when it is unambiguous - one head word
-      # matching two applications is a coin toss, and a note on the wrong
-      # company is worse than no note.
+      # part of the name.
       head = normalize(name).split.first
-      return nil if head.blank?
+      return [] if head.blank?
 
-      matches = JobSearch.call(board, head)
-      matches.one? ? matches.first : nil
+      matches = JobSearch.call(board, head).to_a
+      # One head word matching two DIFFERENT companies is still a coin toss, and
+      # a note on the wrong company is worse than no note. Two rows for the SAME
+      # company is not a coin toss - it is the thing this exists to return.
+      matches.map(&:company).uniq.one? ? matches : []
+    end
+
+    # The ONE row a beat belongs to, or nil when that can't be said.
+    #
+    # `said` is whatever text is going with the beat - the role, the headline,
+    # the note. It only comes into it when the company holds more than one
+    # application, and then it is the only thing that can tell them apart.
+    # Nil rather than a guess when it can't: callers turn that into a question
+    # naming the roles, which is answerable, where a note on the wrong one is
+    # silent and permanent.
+    def resolve_application(user, company, said: nil)
+      rows = applications_for(user, company)
+      return nil if rows.empty?
+      return rows.first if rows.one?
+
+      narrowed = rows.select { |job| role_named_in?(job, said) }
+      narrowed.one? ? narrowed.first : nil
     end
 
     # Is THIS row's role the one the text is talking about?

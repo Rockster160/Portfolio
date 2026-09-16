@@ -73,6 +73,7 @@ import {
 import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
+import { initBuddyProcesses } from "./buddy/processes";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
@@ -1881,6 +1882,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     rememberConversationInUrl(currentConversationId);
     buddyHero?.onModeChange(convo?.mode);
     buddyTimers?.setActive();
+    buddyProcesses?.setActive();
     // Mood + theme are per-conversation — repaint the pet for the thread we're
     // on so it wears ITS face, not whichever one was painted before.
     if (convo?.mode === "buddy") applyBuddyTheme(convo);
@@ -2355,6 +2357,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
   });
 
+  // What Byte is doing in the background (top-right, opposite the timers).
+  // Reported by whoever is doing the work - the Mac filling in applications, a
+  // worker reading mail - so this only renders and reconciles.
+  const buddyProcesses = initBuddyProcesses({
+    container: app.querySelector("[data-buddy-processes]"),
+    isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
+  });
+
   // Routines and reminders: two managers reached from the drawer, each in its
   // own dialog. Fetched when the drawer opens rather than at boot — most
   // sessions never open it, and a stale list would be worse than no list. The
@@ -2468,6 +2478,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     received(payload) {
       buddyTimers?.applyBroadcast(payload);
+    },
+  });
+
+  // Background work rides its own envelope id for the same reason the timers
+  // do - the Monitor dispatcher routes by id, not by page. Hydrating on
+  // (re)connect is what catches a run that started while the tab was shut.
+  Monitor.subscribe("background", {
+    connected() {
+      buddyProcesses?.hydrate();
+    },
+    received(payload) {
+      buddyProcesses?.applyBroadcast(payload);
     },
   });
 

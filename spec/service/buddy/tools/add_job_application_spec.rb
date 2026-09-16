@@ -38,12 +38,46 @@ RSpec.describe "add_job_application tool" do
     expect(result[:url]).to end_with("/interviews/#{job.id}")
   end
 
-  # Two rows for one company splits its timeline, and nothing downstream would
-  # ever put them back together. The description says so; this enforces it.
-  it "refuses a company that is already on the board" do
+  # A second row for the SAME job splits its timeline, and nothing downstream
+  # would ever put them back together. The description says so; this enforces it.
+  it "refuses a company that is already on the board with nothing to tell them apart" do
     user.job_applications.create!(company: "Pellworth Dynamics, Inc.")
 
     expect { confirm(note: "They wrote again.") }.to raise_error(/already on the board/)
+  end
+
+  # Three jobs at one place is three rows with three separate outcomes. This is
+  # the case the tool exists for, and it was refused outright until now.
+  describe "a second role at a company already on the board" do
+    let!(:first) {
+      user.job_applications.create!(company: "Pellworth Dynamics", role: "Principal Engineer")
+    }
+
+    it "opens a row of its own" do
+      execute(role: "Staff Frontend Engineer", tag: :applied, note: "Applied.")
+
+      roles = user.job_applications.where(company: "Pellworth Dynamics").pluck(:role)
+      expect(roles).to contain_exactly("Principal Engineer", "Staff Frontend Engineer")
+    end
+
+    it "still refuses the same job twice" do
+      expect { confirm(role: "Principal Engineer", note: "Applied again.") }
+        .to raise_error(/already on the board - use add_job_note/)
+    end
+
+    # Half the board carries no role at all, so this is the ordinary shape
+    # rather than an edge — and with nothing to tell the two apart, a guess
+    # would be a duplicate nobody could later separate.
+    it "refuses when the row already there has no role recorded" do
+      first.update!(role: nil)
+
+      expect { confirm(role: "Staff Frontend Engineer", note: "Applied.") }
+        .to raise_error(/no role recorded/)
+    end
+
+    it "refuses when this one brings no role either" do
+      expect { confirm(note: "Applied.") }.to raise_error(/pass its `role`/)
+    end
   end
 
   it "refuses an untagged note with nothing in it" do

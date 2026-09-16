@@ -567,6 +567,31 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the time IS the note; without it nothing reaches the calendar",
   },
+  # --- one company, several jobs --------------------------------------------
+  # Prod 15 Sep: three Aledade PBC roles applied to in one day. The resolver
+  # took a company and only a company and answered with the FIRST row, so two of
+  # those jobs were filed onto a third one's timeline. `role` is what tells them
+  # apart now, and passing it is the behaviour worth checking.
+  {
+    case:  "prod 54/55",
+    say:   "Vantrice Labs got back to me about the Staff Data Engineer job - log that",
+    tool:  :add_job_note,
+    avoid: %i[add_job_application log_event],
+    args:  { add_job_note: { role: /data/i } },
+    needs: :vantrice_two_roles,
+    note:  "two Vantrice roles on the board; the company alone cannot say which",
+  },
+  # The other direction, and the one that was refused outright until now: a
+  # DIFFERENT role at a company already on the board is a separate application.
+  {
+    case:  "a second job at a company already there",
+    say:   "I applied to the Principal Platform Engineer role at Vantrice Labs as well",
+    tool:  :add_job_application,
+    avoid: %i[add_job_note],
+    args:  { add_job_application: { role: /platform/i } },
+    needs: :vantrice_two_roles,
+    note:  "three jobs at one place is three rows with three separate outcomes",
+  },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
     case:  "prod 3897",

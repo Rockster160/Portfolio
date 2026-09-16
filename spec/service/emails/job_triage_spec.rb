@@ -99,6 +99,48 @@ RSpec.describe Emails::JobTriage do
     end
   end
 
+  # Reading mail is one of the things Byte does while nobody is watching it, so
+  # it says so in the corner of the hero while it is happening.
+  describe "the chip in the hero" do
+    it "is up while the model is reading and down afterwards" do
+      mail = email!(address: "talent@newco.com", subject: "About your application")
+      seen = nil
+      allow_any_instance_of(Buddy::GPT::Client).to receive(:stream) { |*|
+        seen = BackgroundProcess.live_for(user).first
+        {
+          ok:    true,
+          text:  verdict_json(job: false, kind: "other"),
+          model: "gpt-5.4-mini",
+          usage: FakeBuddyClient::DEFAULT_USAGE,
+        }
+      }
+
+      described_class.triage!(mail)
+
+      expect(seen&.key).to eq("mail:triage:#{mail.id}")
+      expect(seen&.name).to eq("Reading mail")
+      expect(BackgroundProcess.live_for(user)).to be_empty
+    end
+
+    # The list gate settles most of the volume in no time at all, and a chip
+    # that appears and vanishes inside a millisecond is a flicker.
+    it "never goes up for mail a list already settled" do
+      described_class.triage!(email!(address: "no.reply.alerts@chase.com", subject: "Statement"))
+
+      expect(BackgroundProcess.count).to eq(0)
+    end
+
+    # A chip is a nicety. It must not become a new way for mail reading to die.
+    it "comes down when the model call blows up" do
+      mail = email!(address: "talent@newco.com", subject: "About your application")
+      allow_any_instance_of(Buddy::GPT::Client).to receive(:stream).and_raise("boom")
+
+      described_class.triage!(mail)
+
+      expect(BackgroundProcess.live_for(user)).to be_empty
+    end
+  end
+
   describe "what the model is told" do
     it "carries the open applications so 'already exists' is answerable" do
       JobApplication.create!(user: user, company: "Netflix", color: "#388bfd", status: :active)

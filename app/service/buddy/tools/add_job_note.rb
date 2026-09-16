@@ -25,6 +25,13 @@ Buddy::Tools.register(
     Inc." finds "CSC Generation". SETTLED applications match too: one they were
     rejected from is still a thing that happened to them and still takes a note.
 
+    **One company can hold several applications.** Applying to three jobs at one
+    place is three rows with three separate outcomes, so when the board shows
+    more than one for a company, `company` alone cannot say which and `role` is
+    what does. Pass it whenever the mail names a job title. If you leave it off
+    and the company has several, this comes back naming the roles - answer it
+    with one of them rather than picking.
+
     `tag` is what KIND of beat it was, and it does more than colour the row:
     logging `offer`, `rejected` or `withdrew` settles the whole application,
     because having to then go and change a dropdown saying the same thing is
@@ -80,6 +87,7 @@ Buddy::Tools.register(
   TXT
   args:        {
     company:          { type: :string, required: true, description: "Which application - fuzzy, the company name" },
+    role:             { type: :string, required: false, description: "Which job there, when the company has more than one on the board" },
     note:             { type: :string, required: false, description: "What happened, in their words. Required unless a tag says it" },
     summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
     tag:              {
@@ -104,8 +112,23 @@ Buddy::Tools.register(
     },
   },
   confirm:     ->(payload, ctx) {
-    job = Buddy::JobHunt.resolve_application(ctx.user, payload[:company])
-    raise "no application matching \"#{payload[:company]}\"" if job.nil?
+    # One company can hold several applications, and then the company name alone
+    # cannot say which. Everything that might name the role goes in: the `role`
+    # arg, the card's own line, and the words of the mail.
+    said = [payload[:role], payload[:summary], payload[:note]].compact_blank.join(" ")
+    job  = Buddy::JobHunt.resolve_application(ctx.user, payload[:company], said: said)
+
+    if job.nil?
+      rows = Buddy::JobHunt.applications_for(ctx.user, payload[:company])
+      raise "no application matching \"#{payload[:company]}\"" if rows.empty?
+
+      # Answerable: it says which roles are there, so the next call can name one.
+      # A guess here is silent and permanent - three Aledade jobs with three
+      # separate outcomes were set to resolve as one.
+      roles = rows.map { |row| row.role.presence || "(no role recorded)" }
+      raise "#{rows.first.company} has #{rows.size} applications on the board - " \
+            "pass `role` saying which: #{roles.join(" / ")}"
+    end
 
     tag  = payload[:tag].presence || :note
     body = payload[:note].to_s.strip

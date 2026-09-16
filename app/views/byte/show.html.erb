@@ -218,6 +218,10 @@
     <%# Buddy's area so they don't push the character down. Rendered by %>
     <%# buddy/timers.js off the live Timer stack; empty + hidden when none. %>
     <div class="byte-buddy-timers" data-buddy-timers hidden></div>
+    <%# What Byte is doing in the background - the mirror of the timers, pinned %>
+    <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>
+    <%# through /api/v1/background_processes; rendered by buddy/processes.js. %>
+    <div class="byte-buddy-processes" data-buddy-processes hidden></div>
     <div class="byte-buddy-char" aria-label="<%= buddy_page_chrome[:name] %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <div class="byte-buddy-face" aria-hidden="true"></div>

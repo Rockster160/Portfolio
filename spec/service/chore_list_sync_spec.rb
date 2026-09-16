@@ -270,6 +270,55 @@ RSpec.describe ChoreListSync do
 
       expect { other.list_items.add("Wash the Dog") }.not_to change(Chore, :count)
     end
+
+    # Prod 16 Sep. "Unpack Dishes" is an alias of chore 78 "Unload Dishwasher",
+    # so the uphill half resolved it and marked the chore due — and then the
+    # mirror added a row under the chore's real name and left the typed one
+    # sitting at the bottom, because `known_chore?` read names and not aliases.
+    # Two rows for one chore, only one of which meant anything.
+    it "replaces an item typed under a chore's alias with the chore's own name" do
+      chore = chore!("Unload Dishwasher", aliases: ["unpack dishes"])
+
+      expect { type_item!("Unpack Dishes") }.not_to change(Chore, :count)
+
+      expect(chore.reload.marked_due_at).to be_present
+      expect(item_names).to eq(["Unload Dishwasher"])
+    end
+  end
+
+  # Marking a chore due asks for two syncs — `item_added` wants one and Chore's
+  # own `after_commit` wants another — and Sidekiq runs them side by side. Both
+  # read the list before either writes, so both add the same missing item.
+  describe "two syncs racing" do
+    # Across Sidekiq threads and processes, so the thread-local `writing` flag
+    # can't see it and a spec can't stage it. What is worth pinning is that the
+    # reconcile is behind a lock at all, and that the lock is per person — a
+    # global one would make everyone's list wait on everyone else's.
+    it "does the reconcile behind a lock of its own" do
+      chore!("Unload Dishwasher", one_off: true, starts_on: day)
+      expect(User).to receive(:with_advisory_lock).with("chore_list_sync_#{user.id}", 15.seconds).and_yield
+
+      described_class.push(user)
+
+      expect(item_names).to eq(["Unload Dishwasher"])
+    end
+
+    # What the race left behind, and what any earlier one left behind too: the
+    # keeper was placed under Today and the twin kept the `max_sort_order + 1`
+    # it was created with, which sorts ABOVE the Today header. A copy of the
+    # chore pinned to the top of the list, in no section at all.
+    it "clears a duplicate row rather than stranding it above every section" do
+      chore!("Unload Dishwasher", one_off: true, starts_on: day)
+      described_class.push(user)
+      described_class.writing {
+        list.list_items.create!(name: "Unload Dishwasher", sort_order: 1632)
+      }
+
+      described_class.push(user)
+
+      expect(item_names).to eq(["Unload Dishwasher"])
+      expect(list.reload.list_items.first.section.name).to eq("Today")
+    end
   end
 
   describe "an item ticked off the list" do

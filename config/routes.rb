@@ -109,6 +109,17 @@ Rails.application.routes.draw do
 
       resources :buddy_usages, only: [:create]
 
+      # What Byte is doing in the background, reported by whatever is doing it.
+      # `:key` is the caller's own name for the work rather than an id, because
+      # a script that has just been restarted knows what it is working on and
+      # not what row it made last time. The constraint keeps a colon (the
+      # nesting convention) and refuses a dot, which routing would read as a
+      # format suffix.
+      resources :background_processes,
+        only:        [:index, :create, :update, :destroy],
+        param:       :key,
+        constraints: { key: %r{[^/.]+} }
+
       resources :lists, only: [:index, :show, :update, :create, :destroy] do
         post :reorder, on: :collection
         put :order_items, on: :member
