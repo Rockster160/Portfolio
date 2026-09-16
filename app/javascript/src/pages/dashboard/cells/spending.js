@@ -27,9 +27,9 @@ import { dash_colors, clamp } from "../vars"
 // ~/.claude/hooks/usage-report.sh) and they ride this payload as `claude`.
 //
 // The Caffeine bar at the bottom is the odd one out: it counts UP, filling as
-// the day's milligrams land rather than draining as they go, so its marker
-// counts up too. Its buckets arrive in the same payload for the same reason —
-// one cell, one broadcast.
+// the day's milligrams land rather than draining as they go, and it carries no
+// ☼ — the fill against the limit is the whole reading. Its buckets arrive in
+// the same payload for the same reason — one cell, one broadcast.
 (function() {
   let cell = undefined
 
@@ -166,20 +166,20 @@ import { dash_colors, clamp } from "../vars"
   // the number.
   //
   // The color is the same reading as the ☼, so it is decided off the same
-  // cells: green while the fill reaches the ☼, yellow once it falls short —
-  // or, on a `rising` bar, once it runs past. A bar with no clock has nothing
-  // to be behind, so it stays green. `gone` is red, and drawn FULL: an empty
-  // red sliver reads as "nearly out" when it means the opposite.
-  function bar(row, text, fraction, mark, gone, rising) {
+  // cells: green while the fill reaches the ☼, yellow once it falls short. A
+  // bar with no clock has nothing to be behind, so it stays green unless the
+  // caller has its own reason to `warn`. `gone` is red, and drawn FULL: an
+  // empty red sliver reads as "nearly out" when it means the opposite.
+  function bar(row, text, fraction, mark, gone, warn) {
     text = text.padEnd(bar_width, " ").slice(0, bar_width)
 
     const filled = clamp(Math.round(bar_width * (gone ? 1 : fraction)), 0, bar_width)
     const target = mark === undefined ? undefined : Math.round(bar_width * clamp(mark, 0, 1))
-    const on_pace = target === undefined || (rising ? filled <= target : filled >= target)
+    const on_pace = target === undefined || filled >= target
     const color = (
       gone
         ? dash_colors.red
-        : (on_pace ? dash_colors.green : dash_colors.yellow)
+        : (on_pace && !warn ? dash_colors.green : dash_colors.yellow)
     )
 
     function paint(from, to) {
@@ -283,12 +283,13 @@ import { dash_colors, clamp } from "../vars"
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the bars above it
-  // drain as the money goes. So it is behind pace — yellow — when the fill runs
-  // PAST its ☼, and red once the limit is reached, same as they are.
+  // drain as the money goes. No ☼: how much of the day has gone says nothing
+  // about how much caffeine is fine. Green, yellow from three quarters of the
+  // limit, and red once it is reached.
   //
   // Drawn blank until the server has said what the limit is — a bar measured
   // against nothing is a shape that means nothing.
-  function caffeineBar(row, mg, limit_mg, mark) {
+  function caffeineBar(row, mg, limit_mg) {
     if (!(limit_mg > 0)) { return blank }
 
     const remaining = (limit_mg - mg) / limit_mg
@@ -299,7 +300,7 @@ import { dash_colors, clamp } from "../vars"
         : "  Caffeine"
     )
 
-    return bar(row, text, mg / limit_mg, mark, remaining <= 0, true)
+    return bar(row, text, mg / limit_mg, undefined, remaining <= 0, remaining <= 0.25)
   }
 
   // Which line the pointer is on. Redrawing replaces the line divs under the
@@ -358,7 +359,6 @@ import { dash_colors, clamp } from "../vars"
         caffeine_row,
         (cell.data.caffeine || {})[cell.data.day_key] || 0,
         cell.data.caffeine_limit_mg || 0,
-        1 - today_left,
       ),
     ]
 
