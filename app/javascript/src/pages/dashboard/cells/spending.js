@@ -193,7 +193,9 @@ import { dash_colors, clamp } from "../vars"
 
     const at = clamp(Math.round(bar_width * clamp(mark, 0, 1)) - 1, 0, bar_width - 1)
     const under = at < filled ? color : dash_colors.darkgrey
-    const marker = Text.bgColor(under, Text.color(ink(under), "☼"))
+    // Grey, never the label's ink: it is a different kind of thing from the
+    // words on the bar, and reads as one where it lands on them.
+    const marker = Text.bgColor(under, Text.color(dash_colors.grey, "☼"))
 
     return " " + paint(0, at) + marker + paint(at + 1, bar_width) + " "
   }
