@@ -136,18 +136,6 @@ import { dash_colors, clamp } from "../vars"
     return sign + "$" + Math.abs(dollars).toLocaleString("en-US")
   }
 
-  // Takes what is LEFT, not what has gone: green while there is room, yellow
-  // on the last quarter, red once it is gone. Both directions of bar read off
-  // this, so a full red bar means the same thing whichever way it filled.
-  //
-  // An overspent bar is drawn full rather than empty: an empty red sliver
-  // reads as "nearly out" when it means the opposite.
-  function roomColor(fraction) {
-    if (fraction <= 0) { return dash_colors.red }
-    if (fraction <= 0.25) { return dash_colors.yellow }
-    return dash_colors.green
-  }
-
   // Which ink the label can be read in ON a given fill. Off the fill's own
   // luminance rather than a list of which palette colors are bright: the
   // palette is someone else's and can change, the physics cannot. sRGB is
@@ -176,10 +164,23 @@ import { dash_colors, clamp } from "../vars"
   // and the position is the reading. Not while the row is hovered, though:
   // then the row is spelling out figures, and a ☼ over a digit would change
   // the number.
-  function bar(row, text, fraction, color, mark) {
+  //
+  // The color is the same reading as the ☼, so it is decided off the same
+  // cells: green while the fill reaches the ☼, yellow once it falls short —
+  // or, on a `rising` bar, once it runs past. A bar with no clock has nothing
+  // to be behind, so it stays green. `gone` is red, and drawn FULL: an empty
+  // red sliver reads as "nearly out" when it means the opposite.
+  function bar(row, text, fraction, mark, gone, rising) {
     text = text.padEnd(bar_width, " ").slice(0, bar_width)
 
-    const filled = clamp(Math.round(bar_width * fraction), 0, bar_width)
+    const filled = clamp(Math.round(bar_width * (gone ? 1 : fraction)), 0, bar_width)
+    const target = mark === undefined ? undefined : Math.round(bar_width * clamp(mark, 0, 1))
+    const on_pace = target === undefined || (rising ? filled <= target : filled >= target)
+    const color = (
+      gone
+        ? dash_colors.red
+        : (on_pace ? dash_colors.green : dash_colors.yellow)
+    )
 
     function paint(from, to) {
       const fill_to = clamp(filled, from, to)
@@ -191,7 +192,7 @@ import { dash_colors, clamp } from "../vars"
       return " " + paint(0, bar_width) + " "
     }
 
-    const at = clamp(Math.round(bar_width * clamp(mark, 0, 1)) - 1, 0, bar_width - 1)
+    const at = clamp(target - 1, 0, bar_width - 1)
     const under = at < filled ? color : dash_colors.darkgrey
     // Grey, never the label's ink: it is a different kind of thing from the
     // words on the bar, and reads as one where it lands on them.
@@ -217,7 +218,7 @@ import { dash_colors, clamp } from "../vars"
         : "  " + label
     )
 
-    return bar(row, text, fraction <= 0 ? 1 : fraction, roomColor(fraction), mark)
+    return bar(row, text, fraction, mark, fraction <= 0)
   }
 
   // Everything there is — the home cell's figure — against the goal it is meant
@@ -246,7 +247,7 @@ import { dash_colors, clamp } from "../vars"
       now_ms,
     )
 
-    return bar(row, text, fraction <= 0 ? 1 : clamp(fraction, 0, 1), roomColor(fraction), mark)
+    return bar(row, text, fraction, mark, fraction <= 0)
   }
 
   // Drains like the money: the fill is what is LEFT of the window, and the
@@ -278,13 +279,12 @@ import { dash_colors, clamp } from "../vars"
         : remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
     )
 
-    return bar(row, text, remaining <= 0 ? 1 : remaining, roomColor(remaining), mark)
+    return bar(row, text, remaining, mark, remaining <= 0)
   }
 
-  // Counts UP: it fills as the day's caffeine lands, where the three bars
-  // above it drain as the money goes. The color still reads off what is LEFT
-  // under the limit, so it turns yellow on the last quarter and red once the
-  // limit is passed, same as they do.
+  // Counts UP: it fills as the day's caffeine lands, where the bars above it
+  // drain as the money goes. So it is behind pace — yellow — when the fill runs
+  // PAST its ☼, and red once the limit is reached, same as they are.
   //
   // Drawn blank until the server has said what the limit is — a bar measured
   // against nothing is a shape that means nothing.
@@ -299,7 +299,7 @@ import { dash_colors, clamp } from "../vars"
         : "  Caffeine"
     )
 
-    return bar(row, text, clamp(mg / limit_mg, 0, 1), roomColor(remaining), mark)
+    return bar(row, text, mg / limit_mg, mark, remaining <= 0, true)
   }
 
   // Which line the pointer is on. Redrawing replaces the line divs under the
