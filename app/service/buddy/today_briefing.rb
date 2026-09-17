@@ -352,8 +352,16 @@ module Buddy
     end
 
     # The start of a window as `PlungeAdvisor.format_window` writes one:
-    # "8pm-9pm", "11pm-12am", "6pm-8pm".
-    RAIN_WINDOW_RX = /\A(?<hour>\d{1,2})(?::\d{2})?(?<mer>am|pm)/i
+    # "8pm-9pm", "11pm-12am", and since Buddy::Clock.range started saying a
+    # shared meridiem once, "3-6pm".
+    #
+    # The meridiem on the start is OPTIONAL, and borrowed from the end when it
+    # isn't there. Prod 6374, 16 Sep: the seed carried "Rain in Alpine 3-6pm",
+    # the briefing gave no hours, and nothing was repaired - this required a
+    # meridiem straight after the start hour, matched nothing in "3-6pm", and an
+    # empty list of starts reads as "already said". Every window inside one
+    # half of the day had been unrepairable since 13 Sep.
+    RAIN_WINDOW_RX = /\A(?<hour>\d{1,2})(?::\d{2})?(?<mer>am|pm)?(?:-\d{1,2}(?::\d{2})?(?<end>am|pm))?/i
 
     # Did the briefing already give one of the hours?
     #
@@ -363,23 +371,52 @@ module Buddy
     # rare miss. Only the START of each window is looked for - "rain from 6
     # tonight" is the sentence the rule wanted and it never names the end.
     def rain_hours_said?(body, windows)
-      starts = Array(windows).filter_map { |w| RAIN_WINDOW_RX.match(w.to_s) }
+      starts = window_starts(windows)
       return true if body.blank? || starts.empty?
 
-      starts.any? { |m|
-        mer = m[:mer].downcase.chars.join("\\.?")
-        body.match?(/(?<!\d)#{m[:hour]}\s*(?::\d{2})?\s*#{mer}\.?/i)
-      }
+      starts.any? { |m| window_said?(body, m) }
+    end
+
+    def window_starts(windows)
+      Array(windows).filter_map { |w| RAIN_WINDOW_RX.match(w.to_s) }.select { |m| m[:mer] || m[:end] }
+    end
+
+    # "3pm", "3 p.m.", "3:00pm" - or the start of a range the briefing wrote
+    # the same way the seed does, "3-6pm" or "3 to 6pm", where the start hour
+    # carries no meridiem of its own.
+    def window_said?(body, start)
+      mer = (start[:mer] || start[:end]).downcase.chars.join("\\.?")
+      body.match?(/(?<!\d)#{start[:hour]}\s*(?::\d{2})?\s*(?:#{mer}\.?|(?:-|\u2013|to)\s*\d)/i)
     end
 
     # A day in Alpine's WEEK, as PlungeAdvisor.loose_rain writes one:
     # "Monday, rain at 27% - the forecast has no hours that far out, so the day
-    # on its own is the whole of it". Its timed siblings ("tomorrow 8am-1pm")
-    # carry no figure and are `rain_hours_line`'s business, not this one's.
+    # on its own is the whole of it". Its timed siblings carry no figure and are
+    # ALPINE_HOURS_RX's.
     ALPINE_ODDS_RX = /\A(?<day>[A-Za-z]+),\s*(?<kind>[a-z]+)\s+at\s+(?<pop>\d{1,3})%/i
+
+    # A timed day in Alpine's week, as PlungeAdvisor.timed_rain writes one:
+    # "tomorrow 1-7pm", "Thursday 8am-1pm".
+    #
+    # These were said to be `rain_hours_line`'s business, and it only ever takes
+    # TODAY's windows, so nothing restored them at all. Prod 6235 and 6374, two
+    # mornings running: the seed carried tomorrow's Alpine hours and the
+    # briefing went out without them.
+    ALPINE_HOURS_RX = /\A(?<day>[A-Za-z]+)\s+(?<window>\d{1,2}(?::\d{2})?(?:am|pm)?(?:-\d{1,2}(?::\d{2})?(?:am|pm))?)\s*\z/i
 
     def alpine_week_odds(lines)
       Array(lines).filter_map { |line| ALPINE_ODDS_RX.match(line.to_s) }
+    end
+
+    # The timed Alpine days whose hours the briefing didn't give. Per day, for
+    # the reason `week_odds_missing` gives.
+    def week_hours_missing(body, lines)
+      return [] if body.blank?
+
+      Array(lines).filter_map { |line| ALPINE_HOURS_RX.match(line.to_s) }.select { |m|
+        start = window_starts([m[:window]]).first
+        start && !window_said?(body, start)
+      }
     end
 
     # The Alpine days whose ODDS the briefing didn't give.
@@ -408,9 +445,11 @@ module Buddy
     end
 
     # Only the ones that went missing, so a briefing that gave two of four
-    # doesn't get both of them read back at it.
-    def week_odds_line(missing)
-      parts = Array(missing).map { |m| "#{m[:day]} #{m[:kind].downcase} at #{m[:pop]}%" }
+    # doesn't get both of them read back at it. The timed days first, because
+    # they are the sooner ones.
+    def week_odds_line(missing, hours=[])
+      parts = Array(hours).map { |m| "#{m[:day]} #{m[:window]}" }
+      parts += Array(missing).map { |m| "#{m[:day]} #{m[:kind].downcase} at #{m[:pop]}%" }
       return nil if parts.empty?
 
       "In Alpine, #{parts.to_sentence}."

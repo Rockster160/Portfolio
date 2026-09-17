@@ -844,6 +844,15 @@ RSpec.describe "Buddy brain-dump (stash)" do
         end
       end
 
+      # Prod 6393: History#seed_standin's bracket, copied onto a job-mail reply.
+      context "when the model echoes a tapped-action stand-in" do
+        let(:body) { "JPMorgan got it.\n\n[Tapped Today - asked for a briefing on the day ahead]" }
+
+        it "takes it out" do
+          expect(deduped).to eq("JPMorgan got it.")
+        end
+      end
+
       context "when the model uses an em dash anyway" do
         let(:body) { "Done — your Today briefing is up." }
 

@@ -1830,6 +1830,28 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 6417-6418: "is that on the Stash pile?" was answered, and the answer
+    # was retracted as though it claimed something had been done.
+    describe "a question about how things stand" do
+      it "leaves the answer alone" do
+        run([{ text: "Yep, it's on your Stash pile." }], text: "Ok perfect  is that on the Stash pile?")
+
+        expect(reply.body).to eq("Yep, it's on your Stash pile.")
+      end
+
+      it "still retracts a first-person claim, which no question makes true" do
+        run([{ text: "I added it to your Stash pile." }], text: "is that on the Stash pile?")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "gives an order phrased as a question no carve-out" do
+        run([{ text: "It's on your list." }], text: "Can you add milk to the list?")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+    end
+
     it "leaves a question about a device alone" do
       run([{ text: "Is the fan on right now?" }])
 

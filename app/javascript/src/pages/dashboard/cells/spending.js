@@ -253,36 +253,34 @@ import { dash_colors, clamp } from "../vars"
     return bar(row, text, fraction, mark, fraction <= 0)
   }
 
-  // Drains like the money: the fill is what is LEFT of the window, and the
-  // marker is how much of the window's time is left. The figure on hover is
-  // what has been USED and when it resets, which is the question a person at
-  // the limit is actually asking.
+  // Drains like the money: the fill is what is LEFT of the window, and the ☼
+  // is how much of the window's time is left. The figure on hover is what is
+  // left too, and when it resets.
   //
-  // Drawn blank until a report has arrived. A window whose reset has already
-  // passed has started over, so it is drawn with all of it left and no marker:
-  // the next one only begins with the next use, and there is no clock to read
-  // until that has been reported.
+  // Only a CURRENT report is drawn as one: a window whose reset has passed has
+  // started over, and one that has never been reported is in the same place as
+  // far as anyone here can tell. Either way it is taken as all of it left — the
+  // next window only starts with the next use, so there is no reset time to
+  // show and no clock for a ☼ to read, and the figure says `??` where the time
+  // would be. That is what the bar says until a session reports the new one.
   function claudeBar(row, label, key, now) {
     const limit = (cell.data.claude || {})[key] || {}
-    if (typeof limit.used !== "number" || !limit.resets_at) { return blank }
-
-    const resets = new Date(limit.resets_at * 1000)
-    const lapsed = resets <= now
-    const used = lapsed ? 0 : limit.used
-    const remaining = (100 - used) / 100
-    const figure = (lapsed ? "reset" : used + "% · " + clock(resets, key === "seven_day")) + "  "
+    const resets = limit.resets_at ? new Date(limit.resets_at * 1000) : undefined
+    const current = typeof limit.used === "number" && resets !== undefined && resets > now
+    const left = current ? 100 - limit.used : 100
+    const figure = (current ? left + "% · " + clock(resets, key === "seven_day") : "100% · ??") + "  "
     const text = (
       cell.data.hover === row
         ? Text.justify(bar_width, "  " + label, figure)
         : "  " + label
     )
     const mark = (
-      lapsed
-        ? undefined
-        : remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
+      current
+        ? remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
+        : undefined
     )
 
-    return bar(row, text, remaining, mark, remaining <= 0)
+    return bar(row, text, left / 100, mark, left <= 0)
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the bars above it

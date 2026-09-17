@@ -250,14 +250,25 @@ module Buddy
           # mind" are all silent-turn-legal sentences, and the last of those is
           # in the turn spec precisely because a bare verb match eats it.
           \b(?!\s+(?:to|sure|out|my\s+mind)\b)
-        # The passive half, which is the same claim with Buddy taken out of it.
-        # "They're added", "that's on the list", "those are set" - all of them
-        # report a record that does not exist, in a voice that never says "I".
-        | \b(?:they|those|these|it|that|both|all\s+\w+)
-            (?:(?:'|\u2019)re|(?:'|\u2019)s|\s+are|\s+is)\s+
-            (?:(?:now|all)\s+)?
-            (?:added|set|logged|saved|scheduled|done|in\s+there|
-               on\s+(?:the|your)\s+\w+)\b
+      /xi
+
+      # The passive half, which is the same claim with Buddy taken out of it.
+      # "They're added", "that's on the list", "those are set" - all of them
+      # report a record that does not exist, in a voice that never says "I".
+      #
+      # Kept apart from the first-person half because it is ALSO the shape of a
+      # true answer to a question about how things stand, and on that turn
+      # nothing running is correct. Prod 6417-6418: Eve asked "is that on the
+      # Stash pile?", the answer was retracted as a claim ("This one hasn't
+      # actually happened"), and she had to ask again. "I added it" is never an
+      # answer to a question on a turn that added nothing; "it's on your pile"
+      # frequently is.
+      SILENT_TURN_STATE_RX = /
+        \b(?:they|those|these|it|that|both|all\s+\w+)
+          (?:(?:'|\u2019)re|(?:'|\u2019)s|\s+are|\s+is)\s+
+          (?:(?:now|all)\s+)?
+          (?:added|set|logged|saved|scheduled|done|in\s+there|
+             on\s+(?:the|your)\s+\w+)\b
       /xi
 
       # A reply on a turn that touched nothing, written as though it had.
@@ -266,13 +277,17 @@ module Buddy
       # turn and has to survive the ones where something really did run. This is
       # only asked behind the "nothing executed" gate, and its whole value is
       # being broad enough that a new phrasing doesn't need a new release.
-      def self.silent_turn_claim?(body)
+      #
+      # `asked:` is whether the person asked how things stand - see
+      # SILENT_TURN_STATE_RX for why that stands the passive half down.
+      def self.silent_turn_claim?(body, asked: false)
         return false if body.blank?
         # An honest refusal and an honest question both survive, for the same
         # reasons they survive everywhere else in here.
         return false if body.match?(DENIAL_RX)
+        return true if body.match?(SILENT_TURN_CLAIM_RX)
 
-        body.match?(SILENT_TURN_CLAIM_RX)
+        !asked && body.match?(SILENT_TURN_STATE_RX)
       end
 
       def self.unbacked_claim(body)
@@ -556,6 +571,12 @@ module Buddy
       # It took two more messages to get the four completions written.
       FORM_FRAMING_RX = /\[form you put up:[^\]\n]*\]/i
 
+      # The bracket History#seed_standin puts where a tapped action's seed was,
+      # written back out. Prod 6393: a JPMorgan receipt reply ended in
+      # "[Tapped Today - asked for a briefing on the day ahead]", lifted off the
+      # morning's briefing a few turns up.
+      ACTION_STANDIN_RX = /\[tapped\s[^\]\n]*\]/i
+
       # The fourth of the family, and the plainest: the model wrote the tool
       # CALL out as text instead of making it.
       #
@@ -712,7 +733,7 @@ module Buddy
         return true if body.match?(TOOL_CALL_LEAK_RX)
 
         unbacked_claim(body).present? ||
-          self.class.silent_turn_claim?(body) ||
+          self.class.silent_turn_claim?(body, asked: asked_about_state?) ||
           commanded_action_unanswered?(body)
       end
 
@@ -740,6 +761,7 @@ module Buddy
           ("the week's weather" if week_dropped?(body)),
           ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
           ("the rain odds on Alpine's week" if week_odds_dropped?(body)),
+          ("the rain hours on Alpine's week" if week_hours_dropped?(body)),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
           *unnamed_week(body).map { |i| "#{i[:title]} later this week" },
           ("the jobs on today" if jobs_dropped?(body)),
@@ -772,6 +794,10 @@ module Buddy
 
       def week_odds_dropped?(body)
         Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week).any?
+      end
+
+      def week_hours_dropped?(body)
+        Buddy::TodayBriefing.week_hours_missing(body, briefing_alpine_week).any?
       end
 
       # Alpine's hours, but only if the SEED carried Alpine.
@@ -1699,7 +1725,8 @@ module Buddy
         return body unless today_briefing?
 
         missing = Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week)
-        line    = Buddy::TodayBriefing.week_odds_line(missing)
+        hours   = Buddy::TodayBriefing.week_hours_missing(body, briefing_alpine_week)
+        line    = Buddy::TodayBriefing.week_odds_line(missing, hours)
         return body if line.blank?
 
         "#{body.rstrip}\n\n#{line}"
@@ -2376,7 +2403,7 @@ module Buddy
         # the same purpose: get the call MADE, rather than only stopping the
         # sentence about it. `proposals` is already empty by the guard at the
         # top of this method, so `@acted` is the whole of "did anything happen".
-        return RETRY_NUDGE if !@acted && self.class.silent_turn_claim?(spoken.to_s)
+        return RETRY_NUDGE if !@acted && self.class.silent_turn_claim?(spoken.to_s, asked: asked_about_state?)
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
         # actually turned off, rather than only stopping the lie about it.
@@ -3423,6 +3450,16 @@ module Buddy
         (?:me|us)\b
       /xi
 
+      # A question about how things stand, as opposed to an order phrased as
+      # one. "Can you add milk?" is a command with a question mark on it and
+      # gets no carve-out; "is that on the Stash pile?" is asking.
+      def asked_about_state?
+        return false if self_initiated?
+
+        said = @inbound.body.to_s
+        said.match?(QUESTION_RX) && !said.match?(COMMAND_REQUEST_RX)
+      end
+
       # Did they order something done, and did the reply act like it happened?
       #
       # Two ways in. Either the REQUEST was an imperative, or the reply carries
@@ -3482,7 +3519,7 @@ module Buddy
         # the voice of having acted. See SILENT_TURN_CLAIM_RX - this is the arm
         # that doesn't need a new alternative every time the model finds a new
         # way to say it.
-        kind ||= (:silent if !pending && self.class.silent_turn_claim?(body))
+        kind ||= (:silent if !pending && self.class.silent_turn_claim?(body, asked: asked_about_state?))
         return if kind.nil?
         # Everything below assumes the claim is about THIS turn, which is why
         # "nothing executed" reads as "nothing happened". A turn that fetched
@@ -3670,10 +3707,11 @@ module Buddy
       def display_body(text)
         raw   = text.to_s
         all   = {
-          marker: STRAY_MARKER_RX,
-          relay:  RELAY_FRAMING_RX,
-          form:   FORM_FRAMING_RX,
-          call:   TOOL_CALL_LEAK_RX,
+          marker:  STRAY_MARKER_RX,
+          relay:   RELAY_FRAMING_RX,
+          form:    FORM_FRAMING_RX,
+          standin: ACTION_STANDIN_RX,
+          call:    TOOL_CALL_LEAK_RX,
         }
         stray = all.select { |_kind, rx| raw.match?(rx) }
         # A fenced block is the one place a JSON object is there on purpose. He

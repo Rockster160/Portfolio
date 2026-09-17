@@ -154,10 +154,25 @@ Buddy::Tools.register(
     # Landing on the row that is already there is better than refusing: the mail
     # is worth keeping either way, and a beat on the right timeline is exactly
     # what it should have been.
+    #
+    # With no role, it is the company alone. `confirm:` refuses that outright
+    # when the company is already there, so a role-less card can only have been
+    # offered against an empty board - and one row appearing since is the job
+    # the mail was about. Prod 6391, JPMorgan's verification code: offered a
+    # minute before jobhunt made row 36, and a tap would have opened a second
+    # row beside it. More than one is a guess, and refused.
     role  = payload[:role].to_s.strip
-    twin  = Buddy::JobHunt.applications_for(ctx.user, payload[:company]).find { |row|
-      role.present? && Buddy::JobHunt.role_named_in?(row, role, ratio: Buddy::JobHunt::WHOLE_ROLE)
-    }
+    rows  = Buddy::JobHunt.applications_for(ctx.user, payload[:company])
+    twin  = (
+      if role.present?
+        rows.find { |row| Buddy::JobHunt.role_named_in?(row, role, ratio: Buddy::JobHunt::WHOLE_ROLE) }
+      elsif rows.many?
+        raise "#{rows.first.company} has #{rows.size} applications on the board now - " \
+              "use add_job_note on the one this is about"
+      else
+        rows.first
+      end
+    )
 
     job = twin || ctx.user.job_applications.create!(
       company: payload[:company],

@@ -991,6 +991,52 @@ RSpec.describe "Buddy Today forward-looking" do
     end
   end
 
+  # Prod 6374, 16 Sep: the seed carried "Rain in Alpine 3-6pm" and "tomorrow
+  # 1-7pm", the briefing gave neither, and nothing put them back. The start of
+  # "3-6pm" has no meridiem of its own, so no start was found and that read as
+  # "already said"; and tomorrow's hours had no repair at all.
+  describe "Alpine's rain hours" do
+    it "reads the start of a window that says its meridiem once" do
+      expect(Buddy::TodayBriefing.rain_hours_said?("Rain is in the forecast for Alpine.", ["3-6pm"])).to be(false)
+    end
+
+    it "still reads a window with a meridiem on each end" do
+      expect(Buddy::TodayBriefing.rain_hours_said?("Rain is in the forecast.", ["11am-2pm"])).to be(false)
+      expect(Buddy::TodayBriefing.rain_hours_said?("Rain from 11am.", ["11am-2pm"])).to be(true)
+    end
+
+    it "counts the hours written the way the seed writes them" do
+      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain 3-6pm.", ["3-6pm"])).to be(true)
+      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain from 3 to 6pm.", ["3-6pm"])).to be(true)
+      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain from 3pm.", ["3-6pm"])).to be(true)
+    end
+
+    it "is not satisfied by a figure ending in the same digit" do
+      expect(Buddy::TodayBriefing.rain_hours_said?("A high of 73-ish.", ["3-6pm"])).to be(false)
+    end
+
+    it "names tomorrow's hours when the briefing left them out" do
+      lines   = ["tomorrow 1-7pm", "Friday, rain at 60% - the forecast has no hours that far out, so the day on its own is the whole of it"]
+      body    = "Friday looks 60% wet in Alpine."
+      hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
+      missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
+
+      expect(Buddy::TodayBriefing.week_odds_line(missing, hours)).to eq("In Alpine, tomorrow 1-7pm.")
+    end
+
+    it "leaves tomorrow alone when the briefing gave its hours" do
+      body = "Tomorrow Alpine gets rain from 1 to 7pm."
+
+      expect(Buddy::TodayBriefing.week_hours_missing(body, ["tomorrow 1-7pm"])).to be_empty
+    end
+
+    it "does not read a day-level line as timed" do
+      line = "Monday, rain at 27% - the forecast has no hours that far out, so the day on its own is the whole of it"
+
+      expect(Buddy::TodayBriefing.week_hours_missing("Quiet.", [line])).to be_empty
+    end
+  end
+
   describe "plunge advisor ignores rain that already fell" do
     it "stays silent when the only rain was earlier in the day" do
       payload = {

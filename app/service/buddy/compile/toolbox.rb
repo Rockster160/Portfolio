@@ -33,6 +33,15 @@ module Buddy
                              "This row will be read on a day that is not this one.".freeze
       MEMORY_CONTENT = "The whole fact, as one sentence that stands alone. #{MEMORY_CONTENT_DATES}".freeze
 
+      # The row is the THING - the idea, the fact - and `kind` and `status`
+      # already hold where it stands. Prod 16 Sep, idea 196: Eve undid a card by
+      # accident and asked whether the idea was still on her pile; this pass
+      # then rewrote the row to say it was, and that moment's confusion rode
+      # along with the idea everywhere it was read.
+      REVISED_CONTENT = "The whole row, rewritten: the idea or fact itself and nothing about its " \
+                        "standing, which its kind and status already record. " \
+                        "#{MEMORY_CONTENT_DATES}".freeze
+
       # What this run changed, so the caller can replan check-ins over the
       # result and report what it did.
       attr_reader :written, :touched
@@ -120,7 +129,7 @@ module Buddy
             type:       :object,
             properties: {
               id:       { type: :integer },
-              content:  { type: :string, description: "The whole row, rewritten. #{MEMORY_CONTENT_DATES}" },
+              content:  { type: :string, description: REVISED_CONTENT },
               summary:  { type: :string },
               tags:     { type: :array, items: { type: :string } },
               severity: { type: :integer },

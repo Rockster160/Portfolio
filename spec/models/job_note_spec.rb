@@ -129,6 +129,41 @@ RSpec.describe JobNote do
     end
   end
 
+  # The submission came before the receipt for it, whichever was written first.
+  describe "an applied beat and its receipt" do
+    it "moves an applied written after the receipt to just before it" do
+      receipt = job.notes.create!(tag: :acknowledged, occurred_at: 10.minutes.ago)
+      applied = job.notes.create!(tag: :applied, occurred_at: 2.minutes.ago)
+
+      expect(applied.reload.occurred_at).to eq(receipt.occurred_at - 1.second)
+    end
+
+    # Prod 67/68, University of Utah: jobhunt wrote applied first, and the
+    # receipt tapped later carried the mail's earlier time.
+    it "moves an applied already there when an earlier receipt lands" do
+      applied = job.notes.create!(tag: :applied, occurred_at: 2.minutes.ago)
+      receipt = job.notes.create!(tag: :acknowledged, occurred_at: 5.minutes.ago)
+
+      expect(applied.reload.occurred_at).to eq(receipt.occurred_at - 1.second)
+      expect(job.reload.last_activity_at).to eq(receipt.occurred_at)
+    end
+
+    it "never moves an applied that is already before the receipt" do
+      applied = job.notes.create!(tag: :applied, occurred_at: 1.day.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)
+
+      expect(applied.reload.occurred_at).to be_within(1.second).of(1.day.ago)
+    end
+
+    it "leaves another application's applied alone" do
+      other   = user.job_applications.create!(company: "Other")
+      applied = other.notes.create!(tag: :applied, occurred_at: 2.minutes.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 5.minutes.ago)
+
+      expect(applied.reload.occurred_at).to be_within(1.second).of(2.minutes.ago)
+    end
+  end
+
   describe ".recent" do
     it "reverses the association's own order rather than stacking onto it" do
       old = job.notes.create!(body: "Older", occurred_at: 9.days.ago)

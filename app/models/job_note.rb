@@ -99,6 +99,7 @@ class JobNote < ApplicationRecord
 
   before_validation :normalize_fields
   before_validation :settle_applied_before_receipt, on: :create
+  after_create :settle_receipt_after_applied, if: :acknowledged?
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —
@@ -208,6 +209,14 @@ class JobNote < ApplicationRecord
   # Only on create, and only against `acknowledged`: a later `heard_back` or
   # `rejected` says nothing about when the form was sent, and rewriting history
   # off those would be inventing rather than correcting.
+  #
+  # BOTH ORDERS OF WRITING, because either note can be the second one. This
+  # first shipped handling only an `applied` written after its receipt, and
+  # University of Utah went out of order two hours later: jobhunt wrote
+  # `applied` at 5:31:32pm, and the receipt card tapped at 5:44pm stamped the
+  # mail's own 5:31:30pm. That is the COMMON order - jobhunt records the
+  # submission the moment it happens, and the receipt waits on a tap. Three of
+  # the five that were out of order were written that way round.
   def settle_applied_before_receipt
     return unless tag.to_s == "applied"
     return if job_application.nil? || occurred_at.nil?
@@ -216,6 +225,18 @@ class JobNote < ApplicationRecord
     return if receipt.nil? || occurred_at < receipt
 
     self.occurred_at = receipt - 1.second
+  end
+
+  # The same rule from the receipt's side: the submissions already on the row
+  # that now sit at or after it. `update_all` for the reason the backfill gives
+  # - the only change is a clock correction, and `sync_follow_up` and
+  # `refresh_fitness` have nothing to answer about one.
+  def settle_receipt_after_applied
+    receipt = job_application.notes.where(tag: :acknowledged).minimum(:occurred_at)
+    late    = job_application.notes.where(tag: :applied, occurred_at: receipt..)
+    return if late.update_all(occurred_at: receipt - 1.second, updated_at: Time.current).zero?
+
+    job_application.touch_activity!
   end
 
   # Blank lines off the top and bottom, and nothing else. `strip` was doing this

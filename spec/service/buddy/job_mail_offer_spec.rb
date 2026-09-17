@@ -49,6 +49,19 @@ RSpec.describe Buddy::JobMailOffer do
     # add_job_note is level 3: calling it puts an UNCHECKED card on screen that
     # writes nothing until it's tapped. The card IS the question, so asking in
     # prose first is a round trip for something already reviewable.
+    # Prod 6395, Aledade: a rejection's headline names no role, and the seed
+    # called the job it was about "a different role" because only the headline
+    # was checked.
+    it "matches the role off the subject when the headline names none" do
+      verdict[:headline] = "iCapital is moving forward with other candidates"
+      metadata[:subject] = "Your application for Full Stack Engineer"
+
+      body = call.body
+
+      expect(body).to include("belongs to an application already on their board")
+      expect(body).not_to include("different role")
+    end
+
     it "tells her to make the card rather than ask for permission" do
       body = call.body
 

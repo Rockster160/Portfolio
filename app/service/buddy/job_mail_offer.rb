@@ -42,10 +42,7 @@ module Buddy
       # applications. The headline and the subject are what the mail has to
       # offer; without them a second job at a known company resolves to whichever
       # row came first.
-      job = JobHunt.resolve_application(
-        user, verdict[:company],
-        said: [verdict[:headline], metadata[:subject]].compact_blank.join(" ")
-      )
+      job = JobHunt.resolve_application(user, verdict[:company], said: mail_said(verdict, metadata))
       # No company on the verdict, but the mail named a ROLE. A generic ATS
       # address with "thank you for your interest in joining our team" gives the
       # classifier nothing to put in `company`, and it is right not to guess -
@@ -142,6 +139,11 @@ module Buddy
       )
     end
 
+    # The words the mail offers for telling one role from another.
+    def mail_said(verdict, metadata)
+      [verdict[:headline], metadata[:subject]].compact_blank.join(" ")
+    end
+
     # A seed, not a card: Buddy reads it and speaks. Everything she needs rides
     # on it so the turn costs no lookups — see Buddy::BriefingFacts for why a
     # self-initiated turn that has to go and fetch things is the one that
@@ -156,7 +158,12 @@ module Buddy
       # other jobs onto one row. The company match is a fact; the rest is for
       # the reader to check, so it is stated as a question rather than settled
       # in the first sentence. add_job_note refuses it outright either way.
-      same_role = job.role.blank? || JobHunt.role_named_in?(job, verdict[:headline])
+      #
+      # Against the subject as well as the headline, the same words the row was
+      # resolved with. Prod 6395, Aledade: a rejection's headline names no role
+      # ("moving forward with other candidates"), the subject named it in full,
+      # and the seed called the very job it was about a different role.
+      same_role = job.role.blank? || JobHunt.role_named_in?(job, mail_said(verdict, metadata))
       [
         (
           if outgoing && same_role

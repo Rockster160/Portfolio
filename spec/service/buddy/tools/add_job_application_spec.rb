@@ -80,6 +80,44 @@ RSpec.describe "add_job_application tool" do
     end
   end
 
+  # The card is offered against the board as it was, and tapped against the
+  # board as it is. JPMorgan and Epicor each got two rows seconds apart when
+  # jobhunt wrote the row in between.
+  describe "a row that appeared between the offer and the tap" do
+    it "lands a role-bearing card on the row for that role" do
+      resolved = confirm(role: "Staff Engineer", tag: :acknowledged)[:resolved]
+      row      = user.job_applications.create!(company: "Pellworth Dynamics", role: "Staff Engineer")
+
+      result = tool[:execute].call(resolved, ctx)
+
+      expect(result[:joined]).to be(true)
+      expect(user.job_applications.count).to eq(1)
+      expect(row.notes.pluck(:tag)).to eq(["acknowledged"])
+    end
+
+    # Prod 6391: JPMorgan's verification code, offered with no role a minute
+    # before jobhunt made row 36.
+    it "lands a role-less card on the one row now there" do
+      resolved = confirm(note: "A code to confirm who they are.")[:resolved]
+      row      = user.job_applications.create!(company: "Pellworth Dynamics", role: "Staff Engineer")
+
+      result = tool[:execute].call(resolved, ctx)
+
+      expect(result[:joined]).to be(true)
+      expect(user.job_applications.count).to eq(1)
+      expect(row.notes.count).to eq(1)
+    end
+
+    it "refuses a role-less card when there are several to choose from" do
+      resolved = confirm(note: "A code to confirm who they are.")[:resolved]
+      user.job_applications.create!(company: "Pellworth Dynamics", role: "Staff Engineer")
+      user.job_applications.create!(company: "Pellworth Dynamics", role: "Principal Engineer")
+
+      expect { tool[:execute].call(resolved, ctx) }.to raise_error(/2 applications on the board now/)
+      expect(user.job_applications.count).to eq(2)
+    end
+  end
+
   it "refuses an untagged note with nothing in it" do
     expect { confirm(note: "  ") }.to raise_error(/nothing to log/)
   end
