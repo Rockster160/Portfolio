@@ -140,12 +140,21 @@ function closeButton(chip) {
   return chip.children.find((n) => n.className === "byte-chip-close");
 }
 
-// A cancel: one click on the chip's ×.
+// A press and a release in the same place, the way a browser delivers them.
+function press(node, target, { from = [0, 0], to = from } = {}) {
+  node.listeners.pointerdown?.({ clientX: from[0], clientY: from[1], target });
+  node.listeners.click?.({
+    clientX: to[0], clientY: to[1], detail: 1, target,
+    stopPropagation() {}, preventDefault() {},
+  });
+}
+
+// A cancel: one press on the chip's ×.
 function dismiss(chip) {
   const btn = closeButton(chip);
   if (!btn) return false;
 
-  btn.listeners.click({ stopPropagation() {}, preventDefault() {} });
+  press(btn, btn);
   return true;
 }
 
@@ -153,9 +162,18 @@ function dismiss(chip) {
 // first when one is armed, exactly as the browser would; `closest` finds no
 // button above the target, which is what the real DOM would answer for a tap
 // that missed the ×.
+const body = { closest: () => null };
+
 function tap(chip) {
   docListeners.pointerdown?.({ clientX: 0, pointerId: 1 });
-  chip.listeners.click({ target: { closest: () => null } });
+  press(chip, body);
+}
+
+// The same press with the finger travelling: a drag, or a scroll that began on
+// a chip. It used to pause the timer.
+function drag(chip) {
+  docListeners.pointerdown?.({ clientX: 0, pointerId: 1 });
+  press(chip, body, { from: [0, 0], to: [60, 0] });
 }
 
 const view = () => container.children.map((c) => ({
@@ -209,6 +227,14 @@ out.second_cancel_requests = [...requests];
 release?.();
 await new Promise((r) => setTimeout(r, 0));
 out.after_release = view();
+
+// ---- a drag is not a tap ---------------------------------------------------
+// Rocco, 17 Sep: "A drag on it should not be counted as a click."
+await reset();
+fetchPlan = () => ({ ok: true, json: async () => timerPayload({ paused_at: new Date().toISOString() }) });
+drag(container.children[0]);
+await new Promise((r) => setTimeout(r, 0));
+out.after_drag_requests = [...requests];
 
 // ---- tapping a chip that is RINGING ---------------------------------------
 // It used to pause, which left a countdown with nowhere to go parked at zero.

@@ -124,6 +124,15 @@ RSpec.describe "Buddy timer cancel" do
     end
   end
 
+  # Rocco, 17 Sep: "swiping is now getting triggered as a click ... A drag on it
+  # should not be counted as a click." A tap belongs to the element the gesture
+  # started on, and a gesture that travelled is not one - see chip_taps.js.
+  describe "dragging across a chip" do
+    it "does not pause the timer" do
+      expect(result["after_drag_requests"]).to be_empty
+    end
+  end
+
   # Only the ringing one changed. A tap on a chip that is still counting is
   # pause/resume exactly as it was.
   describe "tapping a chip that is still counting" do

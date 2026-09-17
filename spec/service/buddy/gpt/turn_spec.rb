@@ -3486,6 +3486,62 @@ RSpec.describe Buddy::GPT::Turn do
       expect(names).to include(:get_context, :add_note, :remember, :complete_chore, :log_event)
     end
 
+    # Prod 6502, 17 Sep: an Aura Frames application-confirmation seed - say one
+    # sentence, then log the beat - called `complete_chore` for "Puppy Down",
+    # credited it to Chelsea, who had not done it, and never logged the beat it
+    # was sent for. Nothing in that seed mentions chores; it had forty tools and
+    # a "Who did: Puppy Down?" form in the transcript from an hour before.
+    describe "a seed that names the tools it came for" do
+      def seeded(rounds, tools)
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Job mail just arrived.",
+          metadata: {
+            "kind" => "buddy_trigger", "hidden" => true, "source" => "job_mail_watcher",
+            "seed_call" => "add_job_note", "seed_tools" => tools,
+          },
+        )
+        client = FakeBuddyClient.new(rounds)
+        described_class.run!(message, client: client)
+        client
+      end
+
+      # The job tools themselves are owner-only, so the pair here stands in for
+      # them: what is under test is that the seed's list is the whole list.
+      it "is offered those and nothing else" do
+        client = seeded([{ text: "Aura got your application." }], %w[log_event add_list_item])
+
+        expect(client.calls.first.tools.pluck(:name)).to contain_exactly(:log_event, :add_list_item)
+      end
+
+      # `complete_chore` is the one it must not have been able to reach.
+      it "cannot reach a tool the seed never asked for" do
+        client = seeded([{ text: "Aura got your application." }], %w[log_event])
+
+        expect(client.calls.first.tools.pluck(:name)).not_to include(:complete_chore, :get_context)
+      end
+
+      # A seed naming a tool this person may not use is left with nothing rather
+      # than with the run of the house.
+      it "never adds one back" do
+        client = seeded([{ text: "Aura got your application." }], %w[add_job_note])
+
+        expect(client.calls.first.tools).to be_empty
+      end
+
+      # Every other self-initiated seed - a check-in, a watch, a reminder - is
+      # asked for WORDS, and whatever they say back can go anywhere.
+      it "leaves a seed that names none of them with the full set" do
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Check in on it.",
+          metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "check_in" },
+        )
+        client = FakeBuddyClient.new([{ text: "How's the eye?" }])
+        described_class.run!(message, client: client)
+
+        expect(client.calls.first.tools.pluck(:name)).to include(:complete_chore, :get_context)
+      end
+    end
+
     # The face is Buddy::Sentiment's now, so none of it is offered: no tool to
     # set one, no vocabulary of faces to pick from, no marker protocol, and not
     # even which face is currently on.

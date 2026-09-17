@@ -90,6 +90,35 @@ RSpec.describe "Buddy background process strip" do
     end
   end
 
+  # Rocco, 17 Sep, of the × that replaced the swipe: "the whole layout changes
+  # and the x moves and then the click gets registered on the alert itself which
+  # opens the tab instead of closing the check. Also swiping is now getting
+  # triggered as a click ... A drag on it should not be counted as a click."
+  #
+  # Both are one missing rule: a tap belongs to the element the gesture STARTED
+  # on, and a gesture that travelled is not a tap.
+  describe "what counts as a tap" do
+    it "ignores a drag that happens to end on a chip" do
+      expect(result["after_drag_opened"]).to eq([])
+    end
+
+    # What arrives after the × re-renders the strip under the finger: a click
+    # on a chip that was not there when the press began.
+    it "ignores a click with no press behind it" do
+      expect(result["after_stale_click_opened"]).to eq([])
+      expect(result["stale_click_requests"]).to eq([])
+    end
+
+    it "still opens on an ordinary press and release" do
+      expect(result["after_tap_opened"]).to eq(["https://boards.greenhouse.io/x/jobs/1"])
+    end
+
+    # A keyboard press has no pointer behind it and is not a stray click.
+    it "takes Enter on the × " do
+      expect(result["keyboard_requests"]).to eq(["DELETE /api/v1/background_processes/jobhunt%3Aline"])
+    end
+  end
+
   describe "a tap on the chip itself" do
     # A bigger target for the common case of there being one link anyway.
     it "opens the first of them" do

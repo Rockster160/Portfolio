@@ -62,8 +62,20 @@ const container = {
   appendChild(child) { this.children.push(child); },
 };
 
+// Bundled rather than imported directly, the way byte_timer_cancel_runner does
+// it and for the same reason: `processes.js` reaches for "./chip_taps" with no
+// extension, which is the house convention and what esbuild resolves for the
+// real build, and Node's ESM loader will not.
+const { build } = await import("esbuild");
+const bundled = await build({
+  entryPoints: [new URL("../../app/javascript/src/pages/byte/buddy/processes.js", import.meta.url).pathname],
+  bundle:      true,
+  format:      "esm",
+  write:       false,
+  logLevel:    "silent",
+});
 const { initBuddyProcesses } = await import(
-  "../../app/javascript/src/pages/byte/buddy/processes.js"
+  `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
 
 const strip = initBuddyProcesses({ container, isBuddyActiveFn: () => true });
@@ -104,23 +116,48 @@ function closeButton(chip) {
   return descendants(chip).find((n) => n.className === "byte-chip-close");
 }
 
+// A press and a release in the same place, the way a browser delivers them:
+// `pointerdown` on the node, then a `click` carrying where the pointer was.
+function press(node, target, { from = [0, 0], to = from } = {}) {
+  node.listeners.pointerdown?.({ clientX: from[0], clientY: from[1], target });
+  node.listeners.click?.({
+    clientX: to[0], clientY: to[1], detail: 1, target,
+    stopPropagation() {}, preventDefault() {},
+  });
+}
+
 function dismiss(chip) {
   const btn = closeButton(chip);
   if (!btn) return false;
 
-  btn.listeners.click({ stopPropagation() {}, preventDefault() {} });
+  press(btn, btn);
   return true;
 }
 
 // A tap that landed on the chip's own body: `closest` finds no link and no
 // button above it, which is what the real DOM would answer.
+const body = { closest: () => null };
+
 function tap(chip) {
-  chip.listeners.click({ target: { closest: () => null } });
+  press(chip, body);
 }
 
-// A tap that landed on something inside the chip that owns it.
+// The same press, with the finger travelling on the way: a drag, or a scroll
+// that began on a chip.
+function drag(chip) {
+  press(chip, body, { from: [0, 0], to: [60, 0] });
+}
+
+// A click with no press behind it on this element - what arrives after the
+// strip re-renders under the finger, and what used to open a tab.
+function staleClick(chip) {
+  chip.listeners.click?.({ clientX: 0, clientY: 0, detail: 1, target: body });
+}
+
+// A tap that landed on something inside the chip that owns it - the pill, say.
+// `closest` answers with that node, the way the real DOM would.
 function tapOn(chip, node) {
-  chip.listeners.click({ target: { closest: () => node } });
+  press(chip, { closest: () => node });
 }
 
 // What a chip SAYS, leaving out the links and the × - those are controls, they
@@ -234,6 +271,32 @@ out.no_url = view()[0].has_url;
 out.no_links_rows = view()[0].rows;
 tap(container.children[0]);
 out.tap_without_links = [...opened];
+
+// ---- a gesture that is not a tap --------------------------------------------
+// Rocco, 17 Sep: "swiping is now getting triggered as a click ... A drag on it
+// should not be counted as a click." And the other half of the same report: the
+// × re-renders the strip, so what arrives afterwards lands on a chip that was
+// not there when the press began, and that chip opened its link.
+await reset(payload());
+opened.length = 0;
+drag(container.children[0]);
+out.after_drag_opened = [...opened];
+staleClick(container.children[0]);
+out.after_stale_click_opened = [...opened];
+tap(container.children[0]);
+out.after_tap_opened = [...opened];
+
+// The × is held to the same rule, and a keyboard press (`detail` 0, no pointer
+// behind it) is still a press.
+await reset(payload());
+staleClick(closeButton(container.children[0]));
+out.stale_click_requests = [...requests];
+closeButton(container.children[0]).listeners.click({
+  detail: 0, target: closeButton(container.children[0]),
+  stopPropagation() {}, preventDefault() {},
+});
+await new Promise((r) => setTimeout(r, 0));
+out.keyboard_requests = [...requests];
 
 // ---- the busiest a chip ever gets -------------------------------------------
 // Waiting on him, four links, a long step and a count: two rows, never three.

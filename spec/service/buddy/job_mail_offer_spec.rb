@@ -62,6 +62,12 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).not_to include("different role")
     end
 
+    # Prod 6502: the seed that marked a chore for Chelsea instead of logging the
+    # beat it was sent for.
+    it "names the only two tools the turn is for" do
+      expect(call.metadata["seed_tools"]).to eq(%w[add_job_note add_job_application])
+    end
+
     it "tells her to make the card rather than ask for permission" do
       body = call.body
 

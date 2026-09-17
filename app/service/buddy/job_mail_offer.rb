@@ -113,6 +113,12 @@ module Buddy
         # from "she had nothing to do" — prod 6279 said exactly what the mail
         # said, called nothing, and the beat never reached the board.
         seed_call:  job ? :add_job_note : :add_job_application,
+        # Both, always: a seed built against a row still opens a SEPARATE
+        # application when the mail names a different role (see `seed` above),
+        # and one built without a row can find the row itself was made in the
+        # meantime. Nothing else on this turn is this seed's business - see
+        # Buddy::GPT::Turn#seed_tools and prod 6502.
+        seed_tools: %i[add_job_note add_job_application],
       )
     end
 

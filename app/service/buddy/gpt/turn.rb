@@ -2518,14 +2518,47 @@ module Buddy
       def tools
         return [] if today_briefing?
 
-        @tools ||= [
-          ContextTool.schema(user: @user, briefing: false),
-          PromptTool.schema,
-          ImageTool.schema,
-          ListenerTool.schema,
-          *Buddy::SideEffects.function_schemas,
-          *Buddy::Tools.function_schemas(user: @user),
-        ].compact
+        @tools ||= (
+          all = [
+            ContextTool.schema(user: @user, briefing: false),
+            PromptTool.schema,
+            ImageTool.schema,
+            ListenerTool.schema,
+            *Buddy::SideEffects.function_schemas,
+            *Buddy::Tools.function_schemas(user: @user),
+          ].compact
+          named = seed_tools
+          named.empty? ? all : all.select { |schema| named.include?(schema[:name].to_s) }
+        )
+      end
+
+      # A seed that came to have ONE thing done is offered the tools for that
+      # thing and nothing else.
+      #
+      # Prod 6502, 17 Sep: the Aura Frames confirmation seed - say a sentence,
+      # then log the beat on the board - came back having called
+      # `complete_chore` for "Puppy Down", credited to Chelsea, who had not done
+      # it. It marked the chore, said "Aura Frames confirmed they received your
+      # application", and never logged the beat it was sent for. Rocco: "It
+      # incorrectly marked Chelsea for a chore she hasn't done... We are WAY
+      # off."
+      #
+      # Nothing in that seed mentions chores. What it had was forty tools and a
+      # transcript with a "Who did: Puppy Down?" form in it from forty-five
+      # minutes earlier, which is all a model needs to do somebody else's job on
+      # the way past. The briefing turn has been `[]` here since the same
+      # reasoning (`today_briefing?` above): a model that can reach for twenty
+      # things will reach for one of them.
+      #
+      # The LIST rather than `seed_call`, because the two are different
+      # questions: `seed_call` is the one call whose absence means the seed was
+      # wasted, and a job-mail seed naming `add_job_note` may still correctly
+      # answer with `add_job_application` when the role is a new one.
+      def seed_tools
+        meta = @inbound.metadata
+        return [] unless meta.is_a?(Hash)
+
+        Array(meta["seed_tools"]).map(&:to_s).compact_blank
       end
 
       # The handful of always-needed values, inlined so a chat-only turn never

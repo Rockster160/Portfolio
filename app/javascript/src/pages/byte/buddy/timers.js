@@ -18,6 +18,7 @@
 //     we silence it instead of blaring (the away case got a push).
 
 import { startAlarm, stopAlarm, alarmRunning, isBuddyMuted } from "./alarm";
+import { onChipTap } from "./chip_taps";
 
 async function apiCall(url, method) {
   const csrfMeta = document.querySelector('meta[name="csrf-token"]');
@@ -214,7 +215,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     const label = `Cancel ${t.name || "timer"}`;
     btn.title = label;
     btn.setAttribute("aria-label", label);
-    btn.addEventListener("click", (e) => {
+    onChipTap(btn, (e) => {
       e.stopPropagation();
       e.preventDefault();
       cancelTimer(t.id);
@@ -223,9 +224,9 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   }
 
   function wireChip(chip, t) {
-    chip.addEventListener("click", (e) => {
+    onChipTap(chip, (e) => {
       // The × is inside the chip, and it has already done its own thing.
-      if (e.target.closest("button")) return;
+      if (e.target?.closest?.("button")) return;
 
       // A RINGING chip is finished with, so a tap on it ends it. It used to run
       // pause/resume like any other chip, which left the thing paused at zero

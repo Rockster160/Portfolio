@@ -20,6 +20,10 @@ RSpec.describe TeslaCacheStore do
     allow_any_instance_of(AddressBook).to receive(:reverse_geocode).and_return(nil)
   end
 
+  # Tesla stamps its snapshots in epoch milliseconds, and compose_trip now reads
+  # those stamps rather than trusting presence — so a trip spec has to say when.
+  def ms_ago(ago) = ((Time.current - ago).to_f * 1000).round
+
   def telemetry_cache = user.caches.get(:tesla_telemetry)
   def endpoint_cache  = user.caches.get(:tesla_endpoint)
   def car_data        = user.caches.get(:car_data) || {}
@@ -107,7 +111,7 @@ RSpec.describe TeslaCacheStore do
         active_route_longitude:           -111.5,
         active_route_miles_to_arrival:    2.34,
         active_route_minutes_to_arrival:  6.7,
-        timestamp:                        1,
+        timestamp:                        ms_ago(10.seconds),
       })
       expect(car_data[:trip]).to include(
         miles_to_arrival:   2.34,
@@ -136,15 +140,93 @@ RSpec.describe TeslaCacheStore do
         MilesToArrival:      1.85,
         MinutesToArrival:    3.5,
       )
-      described_class.record_endpoint(drive_state: {
-        active_route_latitude:            40.4,
-        active_route_longitude:           -112.0,
-        active_route_miles_to_arrival:    nil,
-        active_route_minutes_to_arrival:  nil,
-        timestamp:                        1,
-      })
+      # The clear has to be the newer word, which is what a nav-clear is: the
+      # route was reported, and then a later poll found it gone. An explicit
+      # negative wins immediately rather than waiting out the staleness window.
+      travel_to(1.minute.from_now) do
+        described_class.record_endpoint(drive_state: {
+          active_route_latitude:            40.4,
+          active_route_longitude:           -112.0,
+          active_route_miles_to_arrival:    nil,
+          active_route_minutes_to_arrival:  nil,
+          timestamp:                        ms_ago(1.second),
+        })
 
-      expect(car_data[:trip]).to be_nil
+        expect(car_data[:trip]).to be_nil
+      end
+    end
+
+    # The 2026-09-17 phantom: parked at home, and the route line still read
+    # "→ Home (23mi/26min)" off a poll taken 46 minutes earlier while the car
+    # really was 23 miles out. Neither source ever says "no route" — the
+    # endpoint keeps its active_route_* fields until the next poll and telemetry
+    # keeps its deep-merged copy forever — so the only thing that can retire a
+    # finished drive is the age of the last word about it.
+    it "drops a trip whose only evidence is an endpoint poll older than the window" do
+      stamp = ms_ago(46.minutes)
+      described_class.record_telemetry(RouteLine: "abc", MilesToArrival: 23.12)
+      travel_to(40.minutes.from_now) do
+        described_class.record_endpoint(drive_state: {
+          active_route_latitude:           40.480434,
+          active_route_longitude:          -111.998186,
+          active_route_miles_to_arrival:   23.12,
+          active_route_minutes_to_arrival: 26.3,
+          timestamp:                       stamp,
+        })
+
+        expect(car_data[:trip]).to be_nil
+      end
+    end
+
+    it "keeps a trip alive on a fresh telemetry push when the last poll predates it" do
+      described_class.record_endpoint(drive_state: {
+        active_route_miles_to_arrival:   nil,
+        active_route_minutes_to_arrival: nil,
+        timestamp:                       ms_ago(40.minutes),
+      })
+      described_class.record_telemetry(
+        RouteLine:           "abc",
+        DestinationLocation: { latitude: 40.5, longitude: -111.5 },
+        MilesToArrival:      4.2,
+        MinutesToArrival:    9.1,
+      )
+
+      expect(car_data[:trip]).to include(miles_to_arrival: 4.2, minutes_to_arrival: 9.1)
+      expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
+    end
+
+    it "prefers the countdown from whichever source restated it last" do
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:           40.5,
+        active_route_longitude:          -111.5,
+        active_route_miles_to_arrival:   23.12,
+        active_route_minutes_to_arrival: 26.3,
+        timestamp:                       ms_ago(4.minutes),
+      })
+      described_class.record_telemetry(MilesToArrival: 2.68, MinutesToArrival: 5.24)
+
+      expect(car_data[:trip]).to include(miles_to_arrival: 2.68, minutes_to_arrival: 5.24)
+      # The address string only the poll carries survives the swap.
+      expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
+    end
+
+    it "does not resurrect a trip once both sources have gone quiet" do
+      described_class.record_telemetry(
+        RouteLine:           "abc",
+        DestinationLocation: { latitude: 40.5, longitude: -111.5 },
+        MilesToArrival:      2.68,
+        MinutesToArrival:    5.24,
+      )
+      expect(car_data[:trip]).to be_present
+
+      # Parked. Only non-trip telemetry keeps arriving, exactly as it does in
+      # production — which is what kept `updated_at` reading "just now".
+      travel_to(5.minutes.from_now) do
+        described_class.record_telemetry(Gear: "ShiftStateP", ChargeState: "Charging")
+
+        expect(car_data[:trip]).to be_nil
+        expect(car_data[:updated_at]).to be_within(2000).of((Time.current.to_f * 1000).round)
+      end
     end
 
     describe "drive.shift normalization" do

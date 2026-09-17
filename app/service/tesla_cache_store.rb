@@ -48,6 +48,21 @@ class TeslaCacheStore
     meta:     %i[VehicleName Vin],
   }.freeze
 
+  # How long a route stays true after the last thing said about it.
+  #
+  # Neither source can be asked "is nav on right now". The endpoint poll clears
+  # active_route_miles/minutes_to_arrival when nav ends but leaves the
+  # destination coords behind; telemetry just stops pushing, and its
+  # deep-merged DestinationLocation/MilesToArrival keep a finished drive
+  # forever. Age is the only honest signal either one gives.
+  #
+  # Telemetry restates a loaded route every minute (RouteLine, and Tesla floors
+  # a requested interval at 60s — see TeslaService.fields), so three minutes is
+  # two missed pushes: long enough that a dropped record doesn't blink a live
+  # route off the dashboard, short enough that a finished drive stops being
+  # reported as one while the driver is still walking inside.
+  TRIP_EVIDENCE_WINDOW_MS = 3 * 60 * 1000
+
   # Position keys are shared by doors and windows so a "driver_front" door
   # and "driver_front" window read the same way. Matches the snake_case form
   # of Tesla's own DoorState keys (DriverFront → driver_front).
@@ -128,17 +143,17 @@ class TeslaCacheStore
       # rewrite only to what flows into current/cleaned.
       defaulted = apply_invalid_defaults(data)
       cleaned  = strip_invalid(defaulted) || {}
-      now_ms   = (Time.current.to_f * 1000).round
+      stamp    = now_ms
       existing = User.me.caches.get(TELEMETRY_KEY) || {}
       current  = (existing[:current] || {}).deep_merge(cleaned)
       section_ts = (existing[:section_ts] || {}).symbolize_keys
-      sections_in_record(cleaned).each { |s| section_ts[s] = now_ms }
+      sections_in_record(cleaned).each { |s| section_ts[s] = stamp }
       # Per-FIELD stamps too: a section stamp can't answer "how old is this one
       # field", because any field in the section refreshes it. Gear needs the
       # finer grain — see compose_drive.
       field_ts = (existing[:field_ts] || {}).symbolize_keys
-      cleaned.each_key { |k| field_ts[k.to_sym] = now_ms }
-      entry    = { timestamp: now_ms, data: data }
+      cleaned.each_key { |k| field_ts[k.to_sym] = stamp }
+      entry    = { timestamp: stamp, data: data }
       history  = [entry, *(existing[:history] || [])].first(HISTORY_LIMIT)
 
       User.me.caches.set(TELEMETRY_KEY, {
@@ -154,7 +169,7 @@ class TeslaCacheStore
       raw = payload.to_h.deep_symbolize_keys
       User.me.caches.set(ENDPOINT_KEY, {
         current:   raw,
-        timestamp: (Time.current.to_f * 1000).round,
+        timestamp: now_ms,
       })
     end
 
@@ -214,7 +229,7 @@ class TeslaCacheStore
         battery:    compose_battery(ep, sec_ts),
         charging:   compose_charging(ep, tel, sec_ts, ep_ts),
         drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts),
-        trip:       compose_trip(ep, tel, sec_ts),
+        trip:       compose_trip(ep, tel, sec_ts, field_ts, ep_ts),
         climate:    compose_climate(ep, tel, sec_ts),
         doors:      compose_doors(ep, tel, sec_ts),
         windows:    compose_windows(ep, tel, sec_ts),
@@ -333,25 +348,73 @@ class TeslaCacheStore
       { "2" => "P", "3" => "R", "4" => "N", "5" => "D" }[s]
     end
 
-    def compose_trip(ep, tel, sec_ts)
-      # Tesla clears `active_route_miles_to_arrival` and
-      # `active_route_minutes_to_arrival` in the endpoint poll when nav ends,
-      # but leaves stale lat/lng behind (both in the endpoint's active_route_*
-      # AND in the deep_merged telemetry DestinationLocation). Presence of
-      # either miles or minutes in the endpoint is the reliable "route
-      # active" signal — anything else is a phantom trip from a prior
-      # session. Origin comes from telemetry only and is likewise stale, so
-      # we drop it here rather than surface an old one.
-      miles   = ep.dig(:drive_state, :active_route_miles_to_arrival)
-      minutes = ep.dig(:drive_state, :active_route_minutes_to_arrival)
-      return nil if miles.nil? && minutes.nil?
+    # A route is only as true as the last thing said about it, so this asks
+    # freshness rather than presence — the same way compose_charging and
+    # compose_drive resolve their two sources.
+    #
+    # Presence alone made a parked car 23 miles from its own driveway. On
+    # 2026-09-17 the car reached home at 12:04 and shifted into P at 12:09, and
+    # the dashboard still read "→ Home (23mi/26min)" at 12:31: the figures came
+    # from the 11:39 poll, when the car really was 23 miles out, and nothing
+    # overwrote them until the next poll at 12:25. Polls are hourly once the car
+    # is parked and not charging, so the window is as wide as the gap between
+    # arriving and whenever someone next opens the dashboard — all of it under a
+    # timeago reading "just now", because `updated_at` is the max over every
+    # section and telemetry keeps streaming the other ten.
+    def compose_trip(ep, tel, sec_ts, field_ts, ep_ts)
+      miles_ep   = ep.dig(:drive_state, :active_route_miles_to_arrival)
+      minutes_ep = ep.dig(:drive_state, :active_route_minutes_to_arrival)
+      routing_ep = !(miles_ep.nil? && minutes_ep.nil?)
+      # Tesla's own stamp for the data, never the request clock: a poll that
+      # reached an asleep car returns the same snapshot at a fresh wall time.
+      poll_ts    = ep.dig(:drive_state, :timestamp) || ep_ts
+      # Any trip field arriving stamps the section, so this is when telemetry
+      # last mentioned the route — and it only mentions one while it has one.
+      told_ts    = sec_ts[:trip]
 
+      # Whoever spoke last wins: telemetry saying anything at all means a route
+      # was loaded, and a poll is taken at its word either way.
+      return nil unless tel_fresher?(told_ts, poll_ts) || routing_ep
+
+      confirmed_ts = max_ts(told_ts, (poll_ts if routing_ep))
+      return nil unless trip_still_current?(confirmed_ts)
+
+      miles, minutes = trip_countdown(ep, tel, field_ts, poll_ts)
       {
-        destination:        normalize_loc(ep_route_dest(ep), ep.dig(:drive_state, :active_route_destination)),
+        destination:        trip_destination(ep, tel),
         miles_to_arrival:   miles&.to_f&.round(2),
         minutes_to_arrival: minutes&.to_f&.round(2),
-        ts:                 sec_ts[:trip] || ep.dig(:drive_state, :timestamp),
+        ts:                 confirmed_ts,
       }.compact
+    end
+
+    # Both sources carry the countdown; prefer whichever restated it last. The
+    # endpoint's is only as new as the last poll, and telemetry's is only as new
+    # as the last push, so neither is reliably the fresher one.
+    def trip_countdown(ep, tel, field_ts, poll_ts)
+      miles_ep     = ep.dig(:drive_state, :active_route_miles_to_arrival)
+      minutes_ep   = ep.dig(:drive_state, :active_route_minutes_to_arrival)
+      countdown_ts = max_ts(*field_ts.values_at(:MilesToArrival, :MinutesToArrival))
+
+      if tel_fresher?(countdown_ts, poll_ts)
+        [tel[:MilesToArrival] || miles_ep, tel[:MinutesToArrival] || minutes_ep]
+      else
+        [miles_ep || tel[:MilesToArrival], minutes_ep || tel[:MinutesToArrival]]
+      end
+    end
+
+    # The endpoint's destination carries the address string Tesla resolved for
+    # it, so it leads; telemetry's bare coords answer for a route the last poll
+    # predates entirely.
+    def trip_destination(ep, tel)
+      from_ep = normalize_loc(ep_route_dest(ep), ep.dig(:drive_state, :active_route_destination))
+      from_ep || normalize_loc(tel[:DestinationLocation])
+    end
+
+    def trip_still_current?(ts)
+      return false if ts.nil?
+
+      (now_ms - ts) <= TRIP_EVIDENCE_WINDOW_MS
     end
 
     def compose_climate(ep, tel, sec_ts)
@@ -452,6 +515,8 @@ class TeslaCacheStore
     end
 
     def max_ts(*values) = values.compact.max
+
+    def now_ms = (Time.current.to_f * 1000).round
 
     # `updated_at` answers "when did Tesla last tell us something", so only data
     # that actually arrived may move it. A poll that reaches Tesla and comes back

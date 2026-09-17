@@ -31,6 +31,8 @@
 // A cleared process is not gone: the next report under the same key puts it
 // back. Clearing says "stop showing me this", not "stop doing that".
 
+import { onChipTap } from "./chip_taps";
+
 const BASE_URL = "/api/v1/background_processes";
 
 // Mirrors BackgroundProcess::STALE_AFTER. The server sends `stale` too, but
@@ -229,7 +231,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
     btn.textContent = "×";
     btn.title = `Dismiss ${p.name}`;
     btn.setAttribute("aria-label", `Dismiss ${p.name}`);
-    btn.addEventListener("click", (e) => {
+    onChipTap(btn, (e) => {
       e.stopPropagation();
       e.preventDefault();
       clearProcess(p.key);
@@ -238,10 +240,12 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
   }
 
   // The body is a shortcut to the first link. The × and the link pills are
-  // inside it, so a tap that landed on one of those is theirs.
+  // inside it, so a tap that landed on one of those is theirs — and `onChipTap`
+  // is what keeps a drag, or a click left over from a gesture that started on
+  // a chip that has since been re-rendered, from counting as one.
   function wireChip(chip, p) {
-    chip.addEventListener("click", (e) => {
-      if (e.target.closest("a, button")) return;
+    onChipTap(chip, (e) => {
+      if (e.target?.closest?.("a, button")) return;
 
       const current = processes.get(p.key) || p;
       const url = destination(current);
