@@ -10,6 +10,8 @@
 # field normalized (units converted, enum strings → bools, etc.) and per-
 # section timestamps so readers can reason about freshness.
 class TeslaCacheStore
+  extend ::DistanceHelper
+
   HISTORY_LIMIT = 10
   TELEMETRY_KEY = :tesla_telemetry
   ENDPOINT_KEY  = :tesla_endpoint
@@ -220,16 +222,21 @@ class TeslaCacheStore
       field_ts = (telemetry_cache_hash[:field_ts] || {}).symbolize_keys
       ep_ts = endpoint_cache_hash[:timestamp]
 
+      # Hoisted: compose_trip needs to know where the car is, and
+      # compose_location resolves a contact name / reverse-geocodes, so it must
+      # not be built twice.
+      location = compose_location(ep, tel, sec_ts)
+
       {
         state:      ep[:state] || (tel.any? ? "online" : nil),
         name:       tel[:VehicleName] || ep[:vehicle_state]&.dig(:vehicle_name),
         vin:        tel[:Vin] || ep[:vin],
 
-        location:   compose_location(ep, tel, sec_ts),
+        location:   location,
         battery:    compose_battery(ep, sec_ts),
         charging:   compose_charging(ep, tel, sec_ts, ep_ts),
         drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts),
-        trip:       compose_trip(ep, tel, sec_ts, field_ts, ep_ts),
+        trip:       compose_trip(ep, tel, sec_ts, field_ts, ep_ts, location),
         climate:    compose_climate(ep, tel, sec_ts),
         doors:      compose_doors(ep, tel, sec_ts),
         windows:    compose_windows(ep, tel, sec_ts),
@@ -361,7 +368,7 @@ class TeslaCacheStore
     # arriving and whenever someone next opens the dashboard — all of it under a
     # timeago reading "just now", because `updated_at` is the max over every
     # section and telemetry keeps streaming the other ten.
-    def compose_trip(ep, tel, sec_ts, field_ts, ep_ts)
+    def compose_trip(ep, tel, sec_ts, field_ts, ep_ts, location)
       miles_ep   = ep.dig(:drive_state, :active_route_miles_to_arrival)
       minutes_ep = ep.dig(:drive_state, :active_route_minutes_to_arrival)
       routing_ep = !(miles_ep.nil? && minutes_ep.nil?)
@@ -376,16 +383,46 @@ class TeslaCacheStore
       # was loaded, and a poll is taken at its word either way.
       return nil unless tel_fresher?(told_ts, poll_ts) || routing_ep
 
+      destination = trip_destination(ep, tel)
+      return nil if arrived?(location, destination)
+
       confirmed_ts = max_ts(told_ts, (poll_ts if routing_ep))
       return nil unless trip_still_current?(confirmed_ts)
 
       miles, minutes = trip_countdown(ep, tel, field_ts, poll_ts)
       {
-        destination:        trip_destination(ep, tel),
+        destination:        destination,
         miles_to_arrival:   miles&.to_f&.round(2),
         minutes_to_arrival: minutes&.to_f&.round(2),
         ts:                 confirmed_ts,
       }.compact
+    end
+
+    # The car sitting at its own destination is the plainest end of a route
+    # there is, and unlike a silence it needs no waiting period to be true — so
+    # it retires the trip on the position alone. Nothing here rewrites what
+    # Tesla reported; it just stops repeating a countdown to where we already
+    # are. `near?` defaults to ~100m, the same reach LocationCache.at_home?
+    # uses to decide a coord is at a place.
+    #
+    # The staleness window still earns its keep: a route cancelled mid-drive,
+    # or one whose destination pin sits further than 100m from where you
+    # actually parked, never satisfies this and is retired by silence instead.
+    def arrived?(location, destination)
+      here  = coord_pair(location)
+      there = coord_pair(destination)
+      return false if here.nil? || there.nil?
+
+      near?(here, there)
+    end
+
+    def coord_pair(hash)
+      return nil unless hash.is_a?(::Hash)
+
+      pair = [hash[:lat], hash[:lng]]
+      return nil if pair.any?(&:nil?)
+
+      pair.map(&:to_f)
     end
 
     # Both sources carry the countdown; prefer whichever restated it last. The

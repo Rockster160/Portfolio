@@ -612,11 +612,24 @@ html.html-ctr-byte body {
 // Absolutely positioned so those pixels cost the chip no width; the chips make
 // room with `padding-right` instead, and the one rule that matters is that
 // nothing else is drawn under this column.
-.byte-chip-close {
+//
+// `button.byte-chip-close` rather than the bare class, and pinned again on
+// `:active`, because two rules above this one both outrank a lone class and
+// both land on a PRESS - which is how the × ended up moving out from under the
+// finger mid-click. Rocco: "The x button is STILL drifting as I click."
+//
+//   forms.scss     `button:active { position: relative; top: 1px }`  (0,1,1)
+//   this sheet     `.ctr-byte .byte-app button:active { top: auto }` (0,2,1)
+//
+// The first drops this out of its corner into the chip's flow; the second
+// takes away the top anchor, leaving a box hung off `bottom` alone at its own
+// content height. Either way the target moves while the button is being
+// pressed. This is the fifth element in this file to need the pin - see
+// .byte-msg-cancel, .byte-jump-btn, .byte-kiosk-ask-close, .byte-kiosk-who.
+.byte-process-chip button.byte-chip-close,
+.byte-timer-chip button.byte-chip-close {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0 0 0 auto;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -635,6 +648,13 @@ html.html-ctr-byte body {
   &:hover, &:focus-visible {
     opacity: 1;
     background: rgba(255, 255, 255, 0.1);
+  }
+
+  // Nothing here may move on a press: the whole point of the column is that it
+  // is where the finger already is.
+  &:active {
+    position: absolute;
+    inset: 0 0 0 auto;
   }
 }
 

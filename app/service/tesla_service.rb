@@ -28,8 +28,12 @@ class TeslaService
       InsideTemp:          30.minutes,
       OutsideTemp:         30.minutes,
       HvacPower:           1.minute,
-      MilesToArrival:      5.minutes,
-      MinutesToArrival:    5.minutes,
+      # 60s is the floor Tesla will authorize (it answered a requested 30s on
+      # ChargePort with 60000ms), and the countdown is the one number on the
+      # dashboard that is wrong rather than merely old the moment it ages — at
+      # 5 minutes it was reporting a distance the car had already driven.
+      MilesToArrival:      1.minute,
+      MinutesToArrival:    1.minute,
       RouteLine:           1.minute,
       OriginLocation:      1.minute,
       DestinationLocation: 1.minute,

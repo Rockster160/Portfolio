@@ -178,6 +178,47 @@ RSpec.describe TeslaCacheStore do
       end
     end
 
+    # Arrival is the direct answer the staleness window can only approximate:
+    # the car is at the place it was routing to, so there is nothing left to
+    # count down. Retires the route on the position alone, no waiting.
+    it "drops the trip the moment the car is at its own destination" do
+      described_class.record_telemetry(
+        RouteLine:           "abc",
+        Location:            { latitude: 40.480396, longitude: -111.99818 },
+        DestinationLocation: { latitude: 40.480434, longitude: -111.998186 },
+        MilesToArrival:      0.1,
+        MinutesToArrival:    1.0,
+      )
+
+      expect(car_data.dig(:location, :lat)).to eq(40.480396)
+      expect(car_data[:trip]).to be_nil
+    end
+
+    it "keeps the trip while the car is still short of the destination" do
+      described_class.record_telemetry(
+        RouteLine:           "abc",
+        Location:            { latitude: 40.52, longitude: -111.99818 },
+        DestinationLocation: { latitude: 40.480434, longitude: -111.998186 },
+        MilesToArrival:      2.8,
+        MinutesToArrival:    6.0,
+      )
+
+      expect(car_data[:trip]).to include(miles_to_arrival: 2.8)
+    end
+
+    it "keeps a route set from the driveway to somewhere else" do
+      # Sitting at home is not arrival at a destination that isn't home.
+      described_class.record_telemetry(
+        RouteLine:           "abc",
+        Location:            { latitude: 40.480396, longitude: -111.99818 },
+        DestinationLocation: { latitude: 40.77158, longitude: -111.899307 },
+        MilesToArrival:      23.12,
+        MinutesToArrival:    26.3,
+      )
+
+      expect(car_data[:trip]).to include(miles_to_arrival: 23.12)
+    end
+
     it "keeps a trip alive on a fresh telemetry push when the last poll predates it" do
       described_class.record_endpoint(drive_state: {
         active_route_miles_to_arrival:   nil,
