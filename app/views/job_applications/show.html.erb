@@ -102,6 +102,41 @@
           <% end %>
         </details>
 
+        <%# Two rows for one application — jobhunt's and one opened off the ATS
+           receipt — keep turning up. Either page works: the one jobhunt
+           recorded is kept whichever side it's merged from. %>
+        <% if @merge_candidates.any? %>
+          <details class="job-details job-merge">
+            <summary>Merge a duplicate</summary>
+            <%= form_with url: merge_interview_path(@job), method: :post, local: true do |f| %>
+              <div class="form-fields">
+                <div class="form-field">
+                  <%= f.label :other_id, "Merge with" %>
+                  <%= f.select :other_id,
+                        grouped_options_for_select(
+                          @merge_candidates.transform_values { |jobs|
+                            jobs.map { |job|
+                              ["#{job.label} · ##{job.id} · #{pluralize(job.notes.size, "note")}", job.id]
+                            }
+                          },
+                        ) %>
+                  <span class="field-hint">
+                    The one jobhunt recorded is kept, whichever page you merge from; with
+                    neither or both, this one is. Every note moves onto it and the other is
+                    deleted. An Applied beat within an hour after the receipt moves to 5
+                    minutes before it.
+                  </span>
+                </div>
+
+                <div class="form-submission">
+                  <%= submit_tag "Merge", class: "btn danger",
+                        data: { confirm: "Merge these two? Every note moves onto one and the other is deleted." } %>
+                </div>
+              </div>
+            <% end %>
+          </details>
+        <% end %>
+
         <%# Writing comes before reading on this page: you open it because
            something just happened. The timeline below it runs newest first, so
            what you just added lands directly under the form. %>

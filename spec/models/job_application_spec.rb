@@ -66,4 +66,122 @@ RSpec.describe JobApplication do
       expect(job.reload.last_activity_at).to be_within(5.seconds).of(2.days.ago)
     end
   end
+
+  describe "#merge_with!" do
+    let(:receipt_at) { Time.zone.parse("2026-09-17 16:41:31") }
+    # jobhunt's row: the role, the listing, the moment it says it submitted.
+    let(:keep) {
+      user.job_applications.create!(company: "Workstream", role: "Staff Engineer", url: "https://x.test/1")
+    }
+    # The row opened off the ATS receipt, seconds later, knowing only the company.
+    let(:drop) { user.job_applications.create!(company: "Workstream", source: "Workstream") }
+
+    def applied_at(at)
+      keep.notes.create!(tag: :applied, occurred_at: at)
+    end
+
+    def receipt!
+      drop.notes.create!(tag: :acknowledged, occurred_at: receipt_at, body: "Thank you for applying")
+    end
+
+    it "moves every note across and deletes the other row" do
+      applied = applied_at(receipt_at - 10.minutes)
+      receipt = receipt!
+
+      keep.merge_with!(drop)
+
+      expect(JobApplication.exists?(drop.id)).to be(false)
+      expect(JobNote.where(id: [applied.id, receipt.id]).pluck(:job_application_id).uniq).to eq([keep.id])
+      expect(keep.reload.last_activity_at).to eq(receipt_at)
+    end
+
+    it "keeps the row jobhunt recorded, whichever side it is merged from" do
+      keep.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
+      receipt!
+
+      expect(drop.merge_with!(keep)).to eq(keep)
+      expect(JobApplication.exists?(keep.id)).to be(true)
+      expect(JobApplication.exists?(drop.id)).to be(false)
+      expect(keep.notes.reload.map(&:tag)).to contain_exactly("applied", "acknowledged")
+    end
+
+    it "keeps the row it was called on when neither was recorded by jobhunt" do
+      expect(drop.merge_with!(keep)).to eq(drop)
+      expect(JobApplication.exists?(keep.id)).to be(false)
+    end
+
+    it "keeps the row it was called on when both were" do
+      keep.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
+      drop.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
+
+      expect(drop.merge_with!(keep)).to eq(drop)
+    end
+
+    it "fills what this row is missing and keeps what it has" do
+      drop.update!(role: "Something else", url: "https://x.test/2")
+
+      keep.merge_with!(drop)
+
+      expect(keep.reload.role).to eq("Staff Engineer")
+      expect(keep.url).to eq("https://x.test/1")
+      expect(keep.source).to eq("Workstream")
+    end
+
+    it "puts an applied that landed within the hour after the receipt five minutes before it" do
+      applied = applied_at(receipt_at + 7.minutes + 20.seconds)
+      receipt!
+
+      keep.merge_with!(drop)
+
+      expect(applied.reload.occurred_at).to eq(receipt_at - 5.minutes)
+    end
+
+    it "leaves an applied more than an hour after the receipt where it is" do
+      applied = applied_at(receipt_at + 61.minutes)
+      receipt!
+
+      keep.merge_with!(drop)
+
+      expect(applied.reload.occurred_at).to eq(receipt_at + 61.minutes)
+    end
+
+    it "never moves an applied that was already before the receipt" do
+      applied = applied_at(receipt_at - 30.seconds)
+      receipt!
+
+      keep.merge_with!(drop)
+
+      expect(applied.reload.occurred_at).to eq(receipt_at - 30.seconds)
+    end
+
+    it "measures from the EARLIEST receipt" do
+      applied = applied_at(receipt_at + 20.minutes)
+      receipt!
+      keep.notes.create!(tag: :acknowledged, occurred_at: receipt_at + 10.minutes)
+
+      keep.merge_with!(drop)
+
+      expect(applied.reload.occurred_at).to eq(receipt_at - 5.minutes)
+    end
+
+    it "takes the status a settling beat implies, or the other row's when this one is only active" do
+      drop.notes.create!(tag: :rejected, occurred_at: 1.minute.ago)
+
+      expect(keep.merge_with!(drop).reload.status).to eq("rejected")
+
+      other = user.job_applications.create!(company: "Workstream", status: :closed)
+      live  = user.job_applications.create!(company: "Workstream")
+      live.notes.create!(tag: :note, body: "hi", occurred_at: 1.minute.ago)
+
+      expect(live.merge_with!(other).reload.status).to eq("closed")
+    end
+
+    it "refuses itself and someone else's row" do
+      stranger = create(:user).job_applications.create!(company: "Workstream")
+
+      expect { keep.merge_with!(keep) }.to raise_error(ArgumentError)
+      expect { keep.merge_with!(stranger) }.to raise_error(ArgumentError)
+      expect(JobApplication.exists?(stranger.id)).to be(true)
+    end
+  end
 end

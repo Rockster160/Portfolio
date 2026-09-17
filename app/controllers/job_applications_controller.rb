@@ -8,7 +8,7 @@
 # done.
 class JobApplicationsController < ApplicationController
   before_action :authorize_user
-  before_action :load_job, only: [:show, :update, :destroy]
+  before_action :load_job, only: [:show, :update, :destroy, :merge]
 
   # `status` filters the wall. Nothing means live — active and offers — which
   # is the "hide the rejected by default" the tracker is supposed to do.
@@ -39,6 +39,7 @@ class JobApplicationsController < ApplicationController
   def show
     @notes = @job.notes.recent.to_a
     @note = @job.notes.new(occurred_at: Time.current)
+    @merge_candidates = merge_candidates
   end
 
   # The one form on the index does both halves of "pick a job, or name a new
@@ -80,6 +81,17 @@ class JobApplicationsController < ApplicationController
     end
   end
 
+  # Folds two rows into one. The model decides which is kept - jobhunt's, when
+  # one of them is - so this may land somewhere other than the page it came from.
+  def merge
+    other = current_user.job_applications.find(params[:other_id])
+    labels = { @job.id => "##{@job.id}", other.id => "##{other.id}" }
+    keep = @job.merge_with!(other)
+    gone = labels.except(keep.id).values.first
+
+    redirect_to interview_path(keep), notice: "Merged #{gone} into this one."
+  end
+
   def destroy
     @job.destroy!
 
@@ -103,6 +115,15 @@ class JobApplicationsController < ApplicationController
 
   def load_job
     @job = current_user.job_applications.find(params[:id])
+  end
+
+  # Every other row, the same company first - that is where a duplicate always
+  # is, but a name typed two ways ("JPMorgan Chase" / "JPMorganChase") isn't.
+  def merge_candidates
+    others = current_user.job_applications.where.not(id: @job.id).includes(:notes).order(:company, :id)
+    same, rest = others.partition { |job| job.company.casecmp?(@job.company) }
+
+    { "Same company" => same, "Everything else" => rest }.reject { |_, jobs| jobs.empty? }
   end
 
   # An id from the dropdown wins; otherwise the typed company becomes a new

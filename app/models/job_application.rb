@@ -65,6 +65,37 @@ class JobApplication < ApplicationRecord
     update_columns(last_activity_at: latest, updated_at: Time.current)
   end
 
+  # How close behind its receipt an `applied` beat has to land to be read as the
+  # same moment, and where a merge puts it. See `settle_merged_applied`.
+  MERGE_RECEIPT_WINDOW = 1.hour
+  MERGE_APPLIED_LEAD = 5.minutes
+
+  # Two rows for ONE application, folded into one. It keeps happening the same
+  # way: jobhunt writes its row the moment it submits, the ATS receipt is
+  # proposed as a new row off the mail, and the two land seconds apart with half
+  # the timeline on each (JPMorgan, Epicor, Workstream).
+  #
+  # WHICH ROW SURVIVES is decided here, not by which page the button was on.
+  # jobhunt remembers the row it wrote by id (`rails_job_id`) - its "on the
+  # board" link and every later note it sends go there - so deleting that one
+  # strands it. Its mark on the board is the `applied` note it wrote, source
+  # "jobhunt": `Recorder#record` writes that beat onto the very row whose id it
+  # then keeps. Nothing points at any other row, so with no mark (or a mark on
+  # both) the row being merged from is kept.
+  #
+  # Returns the row that was kept.
+  def merge_with!(other)
+    raise ArgumentError, "can't merge an application into itself" if other.id == id
+    raise ArgumentError, "#{other.label} belongs to someone else" if other.user_id != user_id
+
+    keep, drop = other.jobhunt_row? && !jobhunt_row? ? [other, self] : [self, other]
+    keep.absorb!(drop)
+  end
+
+  def jobhunt_row?
+    JobNote.exists?(job_application_id: id, tag: :applied, source: "jobhunt")
+  end
+
   # What the card shows when there's no logo: the company's first letter over
   # its colour. Two words give two letters, which is enough to tell "Stripe"
   # from "Square" at a glance.
@@ -87,6 +118,35 @@ class JobApplication < ApplicationRecord
     booked.map(&:follow_up_at).select(&:future?).min
   end
 
+  protected
+
+  # The notes move by `update_all` so nothing re-fires - a note's callbacks are
+  # about the moment it was WRITTEN, and moving it is not that. Their ids don't
+  # change, so a mail's `job_triage.job_note_id` still points at the right beat.
+  def absorb!(other)
+    transaction do
+      # A blank here is nothing known, so the other row's answer is better. A
+      # value on both is a disagreement and this row's is kept.
+      [:role, :source, :url, :logo].each { |field|
+        self[field] = other[field] if self[field].blank?
+      }
+
+      JobNote.where(job_application_id: other.id).update_all(
+        job_application_id: id,
+        updated_at:         Time.current,
+      )
+      other.reload.destroy!
+
+      settle_merged_applied
+      self.status = merged_status(other)
+      save!
+      notes.reset
+      touch_activity!
+    end
+
+    self
+  end
+
   private
 
   def normalize_fields
@@ -99,5 +159,37 @@ class JobApplication < ApplicationRecord
 
   def assign_color
     self.color = color.presence || COLORS.sample
+  end
+
+  # The submission happened before its receipt, and on a merge the two beats
+  # have only just met: each was written onto a row that had no idea the other
+  # existed, so neither `JobNote` callback ever compared them.
+  #
+  # An `applied` stamped after the receipt but within the hour is the time he
+  # got round to pressing the button, and moves to five minutes before the
+  # receipt. Past the hour it is not obviously the same moment, and is left
+  # where it is. Backwards only, and only against the EARLIEST receipt.
+  def settle_merged_applied
+    receipt = JobNote.where(job_application_id: id, tag: :acknowledged).minimum(:occurred_at)
+    return if receipt.nil?
+
+    late = JobNote.where(
+      job_application_id: id,
+      tag:                :applied,
+      occurred_at:        receipt..(receipt + MERGE_RECEIPT_WINDOW),
+    )
+    late.update_all(occurred_at: receipt - MERGE_APPLIED_LEAD, updated_at: Time.current)
+  end
+
+  # The newest beat speaks for the job when it's one that settles it, the same
+  # rule `JobNote#settle_application` keeps. Otherwise a row somebody moved off
+  # `active` knows something this one doesn't.
+  def merged_status(other)
+    newest = JobNote.where(job_application_id: id).order(occurred_at: :desc, id: :desc).first
+    implied = JobNote::IMPLIED_STATUS[newest&.tag]
+    return implied if implied
+    return other.status if active? && !other.active?
+
+    status
   end
 end

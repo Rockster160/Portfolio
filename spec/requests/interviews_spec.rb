@@ -338,6 +338,51 @@ RSpec.describe "Interview tracker", type: :request do
     end
   end
 
+  describe "POST /interviews/:id/merge" do
+    let(:keep) { user.job_applications.create!(company: "Workstream", role: "Staff Engineer") }
+    let(:drop) { user.job_applications.create!(company: "Workstream") }
+
+    it "offers the other rows, the same company first" do
+      drop
+      user.job_applications.create!(company: "Acme")
+
+      get interview_path(keep)
+
+      expect(response.body).to include("Merge a duplicate")
+      expect(response.body.index("Same company")).to be < response.body.index("Everything else")
+    end
+
+    it "folds the chosen row into the one whose page it is" do
+      note = drop.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)
+
+      post merge_interview_path(keep), params: { other_id: drop.id }
+
+      expect(response).to redirect_to(interview_path(keep))
+      expect(note.reload.job_application_id).to eq(keep.id)
+      expect(JobApplication.exists?(drop.id)).to be(false)
+    end
+
+    it "lands on jobhunt's row when merged from the other one" do
+      keep.notes.create!(tag: :applied, source: "jobhunt", occurred_at: 2.hours.ago)
+
+      post merge_interview_path(drop), params: { other_id: keep.id }
+
+      expect(response).to redirect_to(interview_path(keep))
+      expect(flash[:notice]).to eq("Merged ##{drop.id} into this one.")
+      expect(JobApplication.exists?(drop.id)).to be(false)
+    end
+
+    it "can't reach somebody else's row" do
+      stranger = create(:user).job_applications.create!(company: "Workstream")
+      note = stranger.notes.create!(tag: :applied, occurred_at: 1.hour.ago)
+
+      post merge_interview_path(keep), params: { other_id: stranger.id }
+
+      expect(JobApplication.exists?(stranger.id)).to be(true)
+      expect(note.reload.job_application_id).to eq(stranger.id)
+    end
+  end
+
   describe "notes" do
     let(:job) { user.job_applications.create!(company: "Acme") }
 
