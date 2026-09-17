@@ -8,10 +8,17 @@
 //   * applies :background MonitorChannel broadcasts
 //   * repaints every 30s so a process that stops reporting starts saying so
 //     rather than going on claiming progress
-//   * swipe a chip away → clears it, which is the answer to one that is stuck.
-//     The SERVER decides when it goes, exactly as with a timer — a chip that
-//     leaves on the gesture is indistinguishable from one that leaves on a
-//     failed request.
+//   * an × on the chip clears it, which is the answer to one that is stuck.
+//     The SERVER decides when it goes — a chip that leaves on the tap is
+//     indistinguishable from one that leaves on a failed request.
+//
+//     It was a SWIPE until 17 Sep and never worked. The gesture depends on
+//     pointer capture, and when the capture doesn't take, the browser retargets
+//     to whatever is under the finger now - so `pointerup` never reaches the
+//     chip, the drag is never finished, and the chip sits where it was dragged,
+//     often right off the edge of the strip. It LOOKS dismissed, nothing was
+//     ever sent, and it is still there on the next device to look. Rocco:
+//     "the swipe away feature has just been bad from the start".
 //   * a chip's links are pills under it — the job posting, the queue, the
 //     email. Real anchors, so a long-press copies one and a middle-click opens
 //     a tab, and the whole chip is a shortcut to the first.
@@ -123,6 +130,9 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
         head.appendChild(el);
       }
       chip.appendChild(head);
+      // On the chip rather than in the head row: it is positioned against the
+      // chip's right edge and spans its full height, so it belongs to the chip.
+      if (!clearing.has(p.key)) chip.appendChild(closeButton(p));
 
       // The step it is on costs nothing here and a whole row anywhere else.
       // Stalled leads, because a frozen count reads as work still going on and
@@ -149,7 +159,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       // The body is a shortcut to the first one as well - a bigger target for
       // the common case, where there is only the one anyway.
       if (destination(p)) chip.dataset.hasUrl = "true";
-      if (!clearing.has(p.key)) wireChip(chip, p);
+      wireChip(chip, p);
       container.appendChild(chip);
     });
 
@@ -168,8 +178,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
 
   // Real anchors rather than tap handlers: a link that behaves like a link can
   // be long-pressed, copied and opened in a tab, and none of that is worth
-  // reimplementing. `pointerdown` stops here so a tap on a pill never starts
-  // the chip's swipe — a swipe begins on the body, which is most of the chip.
+  // reimplementing.
   //
   // The arrow is CSS, not text, so the label stays the label: the pills are
   // read at a glance and "Posting" was taken for a status until one of them
@@ -184,7 +193,6 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       a.target = "_blank";
       a.rel = "noopener";
       a.textContent = link.label || link.url;
-      a.addEventListener("pointerdown", (e) => e.stopPropagation());
       row.appendChild(a);
     });
     return row;
@@ -209,63 +217,40 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
     }
   }
 
-  // ---- interaction: tap = open, swipe = clear -----------------------------
+  // ---- interaction: tap = open, × = clear ---------------------------------
 
+  // A real button, so it is reachable by keyboard and reads as a control to a
+  // screen reader. `type` matters nowhere here and costs nothing to be right.
+  // The hit area is the chip's whole right edge — see .byte-chip-close.
+  function closeButton(p) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "byte-chip-close";
+    btn.textContent = "×";
+    btn.title = `Dismiss ${p.name}`;
+    btn.setAttribute("aria-label", `Dismiss ${p.name}`);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      clearProcess(p.key);
+    });
+    return btn;
+  }
+
+  // The body is a shortcut to the first link. The × and the link pills are
+  // inside it, so a tap that landed on one of those is theirs.
   function wireChip(chip, p) {
-    let startX = null;
-    let dragging = false;
-
-    const release = (e) => {
-      try {
-        if (chip.hasPointerCapture(e.pointerId)) chip.releasePointerCapture(e.pointerId);
-      } catch (_) { /* already gone */ }
-    };
-
-    // Capture, or the chip is stranded mid-swipe: without it the browser
-    // retargets pointer events to whatever is under the finger now, which is
-    // no longer the chip, and pointerup never arrives. Same trap the timers
-    // hit (see timers.js).
-    chip.addEventListener("pointerdown", (e) => {
-      startX = e.clientX;
-      dragging = false;
-      try { chip.setPointerCapture(e.pointerId); } catch (_) { /* no capture, no drag */ }
-    });
-    chip.addEventListener("pointermove", (e) => {
-      if (startX == null) return;
-      const dx = e.clientX - startX;
-      if (Math.abs(dx) > 6) dragging = true;
-      if (dragging) chip.style.transform = `translateX(${dx}px)`;
-      chip.style.opacity = String(Math.max(0.2, 1 - Math.abs(dx) / 160));
-    });
-    const finish = (e) => {
-      release(e);
-      if (startX == null) return;
-      const dx = e.clientX - startX;
-      startX = null;
-      chip.style.transform = "";
-      chip.style.opacity = "";
-      if (dragging && Math.abs(dx) > 90) {
-        clearProcess(p.key);
-        return;
-      }
-      if (dragging) return;
+    chip.addEventListener("click", (e) => {
+      if (e.target.closest("a, button")) return;
 
       const current = processes.get(p.key) || p;
       const url = destination(current);
       if (url) window.open(url, "_blank", "noopener");
-    };
-    chip.addEventListener("pointerup", finish);
-    chip.addEventListener("pointercancel", (e) => {
-      release(e);
-      startX = null;
-      dragging = false;
-      chip.style.transform = "";
-      chip.style.opacity = "";
     });
   }
 
-  // A swipe is a REQUEST to clear. The chip stays, visibly pending, until the
-  // server agrees, and comes back with a flash if it never landed.
+  // A tap on the × is a REQUEST to clear. The chip stays, visibly pending,
+  // until the server agrees, and comes back with a flash if it never landed.
   async function clearProcess(key) {
     if (clearing.has(key)) return;
 
@@ -318,7 +303,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       const p = data.process;
       if (!p) return;
       if (data.reason === "cleared") {
-        // However it was cleared, the swipe that asked for it is answered.
+        // However it was cleared, the tap that asked for it is answered.
         clearing.delete(p.key);
         clearFailed.delete(p.key);
         processes.delete(p.key);

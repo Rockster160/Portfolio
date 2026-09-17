@@ -83,9 +83,10 @@ RSpec.describe "Buddy background process strip" do
       ])
     end
 
-    # Otherwise reaching for the posting would ask for the chip to be cleared.
-    it "do not start the chip's swipe" do
-      expect(result["pill_stops_the_swipe"]).to eq(1)
+    # Otherwise reaching for the posting would open the chip's own link beside
+    # the one that was actually pressed.
+    it "are the tap, when the tap landed on one" do
+      expect(result["tap_on_pill_opened"]).to eq([])
     end
   end
 
@@ -102,25 +103,43 @@ RSpec.describe "Buddy background process strip" do
     end
   end
 
-  # Same rule the timer chips had to learn (prod timer 94): a chip that leaves
-  # on the gesture is indistinguishable from one that leaves on a failed
-  # request, and the failure means work nobody can see still running.
-  describe "a swipe" do
-    it "asks the server rather than deciding" do
-      expect(result["ok_requests"]).to eq(["DELETE /api/v1/background_processes/jobhunt%3Aline"])
-      expect(result["after_ok_swipe"]).to eq([])
+  # It was a swipe until 17 Sep and it never worked: the gesture needs the
+  # pointer captured, and when the capture didn't take, `pointerup` went to
+  # whatever was under the finger by then. The chip stayed where it had been
+  # dragged - frequently off the edge of the strip - nothing was ever sent, and
+  # it was still there on the next device to look. Rocco: "the swipe away
+  # feature has just been bad from the start".
+  describe "the × on a chip" do
+    it "is on every chip, and says which one it closes" do
+      expect(result["running"].first["closes"]).to be(true)
+      expect(result["close_label"]).to eq("×")
+      expect(result["close_aria"]).to eq("Dismiss Preparing")
     end
 
-    it "keeps the chip on screen while the request is out, and takes no more gestures" do
+    # Same rule the timer chips had to learn (prod timer 94): a chip that leaves
+    # on the tap is indistinguishable from one that leaves on a failed request,
+    # and the failure means work nobody can see still running.
+    it "asks the server rather than deciding" do
+      expect(result["ok_requests"]).to eq(["DELETE /api/v1/background_processes/jobhunt%3Aline"])
+      expect(result["after_ok_dismiss"]).to eq([])
+    end
+
+    # The × sits inside a chip whose body opens a tab.
+    it "does not also open the chip's link" do
+      expect(result["dismiss_opened"]).to eq([])
+    end
+
+    it "keeps the chip on screen while the request is out, and comes off it" do
       chip = result["in_flight"].first
 
       expect(chip["pending"]).to eq("clear")
-      expect(chip["wired"]).to be(false)
-      expect(result["second_swipe_requests"]).to eq([])
+      expect(chip["closes"]).to be(false)
+      expect(result["second_dismiss"]).to be(false)
+      expect(result["second_dismiss_requests"]).to eq([])
     end
 
     it "puts it back with a flash when the request never landed" do
-      expect(result["after_failed_swipe"].first["pending"]).to eq("clear-failed")
+      expect(result["after_failed_dismiss"].first["pending"]).to eq("clear-failed")
       expect(result["after_flash_clears"].first["pending"]).to be_nil
       expect(result["after_flash_clears"].first["key"]).to eq("jobhunt:line")
     end

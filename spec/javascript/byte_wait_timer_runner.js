@@ -1,7 +1,7 @@
 // Drives Buddy's timer chips through a WAIT reaching zero and prints what the
 // corner of the screen did, as JSON for byte_wait_timer_spec.rb.
 //
-// Same stubs as byte_timer_swipe_runner: the chips are plain objects that
+// Same stubs as byte_timer_cancel_runner: the chips are plain objects that
 // remember their listeners, `fetch` is scripted per step, and the document
 // records the capture-phase handler the module arms while something is ringing
 // — which is the observable difference between a chip that wants a tap and one
@@ -45,9 +45,7 @@ function fakeElement(tag) {
     style:       { setProperty() {} },
     appendChild(child) { this.children.push(child); },
     addEventListener(name, fn) { this.listeners[name] = fn; },
-    setPointerCapture() {},
-    releasePointerCapture() {},
-    hasPointerCapture() { return false; },
+    setAttribute(name, value) { this[name] = value; },
   };
 }
 

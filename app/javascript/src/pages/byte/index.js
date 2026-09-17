@@ -3401,6 +3401,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       scheduleDrain();
       refetchHistory();
       refetchAlerts();
+      // The strip is only as current as the socket. A chip cleared on another
+      // device while this one was backgrounded is a broadcast that arrived at
+      // a frozen page, and if the socket never dropped there is no reconnect
+      // to hydrate on - so the phone goes on showing work that finished hours
+      // ago, and dismissing it there does nothing anybody can see.
+      buddyProcesses?.hydrate();
       // Coming back to the app IS opening it, even though nothing navigated
       // and nothing switched. Anything that arrived in this thread while it
       // was backgrounded is on screen the moment they look, so this is the

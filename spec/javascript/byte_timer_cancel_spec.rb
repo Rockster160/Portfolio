@@ -16,9 +16,22 @@ require "rails_helper"
 # wrote to the console. The corner of the screen said cancelled, the row was
 # live, and the next hydrate quietly put it back.
 #
-# So a swipe is a REQUEST to cancel. Removal comes from the server.
-RSpec.describe "Buddy timer swipe-to-cancel" do
-  let(:result) { JsRunner.output("spec/javascript/byte_timer_swipe_runner.js") }
+# So a cancel is a REQUEST. Removal comes from the server.
+#
+# The gesture itself is gone as of 17 Sep - a swipe needs the pointer captured,
+# and when the capture didn't take, the chip sat wherever it had been dragged
+# with the timer still running. Every chip carries an × instead. Rocco: "It's
+# all buggy and it all sucks."
+RSpec.describe "Buddy timer cancel" do
+  describe "the ×" do
+    it "is on every live chip, and says which timer it cancels" do
+      expect(result["after_flash_clears"].first["closes"]).to be(true)
+      expect(result["close_label"]).to eq("×")
+      expect(result["close_aria"]).to eq("Cancel Quiet time")
+    end
+  end
+
+  let(:result) { JsRunner.output("spec/javascript/byte_timer_cancel_runner.js") }
 
   describe "when the DELETE never lands" do
     it "sends the request" do
@@ -28,20 +41,21 @@ RSpec.describe "Buddy timer swipe-to-cancel" do
     # The one that matters. A chip that leaves on a failed cancel is a live
     # timer nobody is expecting, and they only find out when it rings.
     it "leaves the timer on screen instead of pretending it went" do
-      expect(result["after_failed_swipe"].length).to eq(1)
-      expect(result["after_failed_swipe"].first["id"]).to eq(94)
+      expect(result["after_failed_cancel"].length).to eq(1)
+      expect(result["after_failed_cancel"].first["id"]).to eq(94)
     end
 
     # There is no toast in Byte, so the chip coming back IS the message.
     it "flashes it so the failure is visible" do
-      expect(result["after_failed_swipe"].first["pending"]).to eq("cancel-failed")
+      expect(result["after_failed_cancel"].first["pending"]).to eq("cancel-failed")
     end
 
     # The flash is a signal, not decoration, and what's underneath is an
-    # ordinary live chip they can swipe again.
+    # ordinary live chip with its × back.
     it "settles back to a normal chip once the flash is done" do
       expect(result["after_flash_clears"].first["pending"]).to be_nil
       expect(result["after_flash_clears"].first["wired"]).to be(true)
+      expect(result["after_flash_clears"].first["closes"]).to be(true)
     end
   end
 
@@ -51,7 +65,7 @@ RSpec.describe "Buddy timer swipe-to-cancel" do
     end
 
     it "drops the chip" do
-      expect(result["after_ok_swipe"]).to be_empty
+      expect(result["after_ok_cancel"]).to be_empty
     end
   end
 
@@ -61,11 +75,13 @@ RSpec.describe "Buddy timer swipe-to-cancel" do
       expect(result["in_flight"].first["pending"]).to eq("cancel")
     end
 
-    # A second swipe would fire a second DELETE and a tap would pause a timer
-    # on its way out, so a chip mid-cancel takes no gestures at all.
-    it "takes no further gestures" do
+    # A second × would fire a second DELETE and a tap would pause a timer on its
+    # way out, so a chip mid-cancel takes no taps at all.
+    it "takes no further taps" do
       expect(result["in_flight"].first["wired"]).to be(false)
-      expect(result["second_swipe_requests"]).to be_empty
+      expect(result["in_flight"].first["closes"]).to be(false)
+      expect(result["second_cancel"]).to be(false)
+      expect(result["second_cancel_requests"]).to be_empty
     end
 
     it "drops the chip once the server answers" do
@@ -79,7 +95,7 @@ RSpec.describe "Buddy timer swipe-to-cancel" do
   # alarm stopped (any tap anywhere does that), the countdown had nowhere left
   # to go, and the chip sat there as a ⏸ nobody could do anything with. Prod
   # timer 94 has the pause in `log_trackers` at 00:00:22, three seconds after
-  # its end_at, and the swipe that actually got rid of it four minutes later.
+  # its end_at, and the cancel that actually got rid of it four minutes later.
   describe "tapping the chip that is ringing" do
     # The ring has to ARRIVE. One already past its end_at when the app opens
     # counts as acknowledged, so it never starts the alarm — hydrating a
@@ -123,7 +139,7 @@ RSpec.describe "Buddy timer swipe-to-cancel" do
 
   # Buddy::Timers.stop! broadcasts `archived`, and the cancel_timer TOOL goes
   # through the same call — so a cancel Byte does itself has to clear the chip
-  # exactly as the swipe does.
+  # exactly as the × does.
   it "drops a chip the server says is archived" do
     expect(result["after_archived_broadcast"]).to be_empty
   end

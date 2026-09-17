@@ -1,9 +1,9 @@
-// Drives Buddy's timer chips through a swipe-to-cancel and prints what the
-// stack looked like at each step, as JSON for byte_timer_swipe_spec.rb.
+// Drives Buddy's timer chips through a cancel and prints what the stack looked
+// like at each step, as JSON for byte_timer_cancel_spec.rb.
 //
 // Everything the module touches is stubbed and recorded rather than performed:
-// the chips are plain objects that remember their listeners, so a swipe is
-// three synthetic pointer events, and `fetch` is a script the test sets per
+// the chips are plain objects that remember their listeners, so a cancel is one
+// synthetic click on the chip's ×, and `fetch` is a script the test sets per
 // step so a DELETE can be made to fail on demand.
 
 // The module warns on a failed cancel, which is correct and which this file
@@ -53,9 +53,7 @@ function fakeElement(tag) {
     style:       { setProperty() {} },
     appendChild(child) { this.children.push(child); },
     addEventListener(name, fn) { this.listeners[name] = fn; },
-    setPointerCapture() {},
-    releasePointerCapture() {},
-    hasPointerCapture() { return false; },
+    setAttribute(name, value) { this[name] = value; },
   };
 }
 
@@ -138,38 +136,49 @@ async function reset(payload = timerPayload()) {
   requests.length = 0;
 }
 
-// A swipe: press, drag past the threshold, release.
-function swipe(chip) {
-  chip.listeners.pointerdown({ clientX: 0, pointerId: 1 });
-  chip.listeners.pointermove({ clientX: 130, pointerId: 1 });
-  chip.listeners.pointerup({ clientX: 130, pointerId: 1 });
+function closeButton(chip) {
+  return chip.children.find((n) => n.className === "byte-chip-close");
 }
 
-// A tap: press and release without moving. The document's capture-phase
-// handler runs first when one is armed, exactly as the browser would.
+// A cancel: one click on the chip's ×.
+function dismiss(chip) {
+  const btn = closeButton(chip);
+  if (!btn) return false;
+
+  btn.listeners.click({ stopPropagation() {}, preventDefault() {} });
+  return true;
+}
+
+// A tap on the chip's own body. The document's capture-phase handler runs
+// first when one is armed, exactly as the browser would; `closest` finds no
+// button above the target, which is what the real DOM would answer for a tap
+// that missed the ×.
 function tap(chip) {
   docListeners.pointerdown?.({ clientX: 0, pointerId: 1 });
-  chip.listeners.pointerdown({ clientX: 0, pointerId: 1 });
-  chip.listeners.pointerup({ clientX: 0, pointerId: 1 });
+  chip.listeners.click({ target: { closest: () => null } });
 }
 
 const view = () => container.children.map((c) => ({
   id:      c.dataset.timerId,
   pending: c.dataset.pending ?? null,
-  wired:   Object.keys(c.listeners).length > 0,
+  wired:   Boolean(c.listeners.click),
+  closes:  Boolean(closeButton(c)),
 }));
 
 const out = {};
 
+// ---- the × itself ----------------------------------------------------------
+await reset();
+out.close_label = closeButton(container.children[0])?.textContent ?? null;
+out.close_aria = closeButton(container.children[0])?.["aria-label"] ?? null;
+
 // ---- the DELETE never lands ----------------------------------------------
 // Prod timer 94: swiped away, gone from the corner, and it rang an hour later.
-await reset();
-let deferred = null;
 fetchPlan = () => new Error("offline");
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.failed_requests = [...requests];
-out.after_failed_swipe = view();
+out.after_failed_cancel = view();
 // The flash is temporary; the chip underneath is not.
 pendingTimeouts.forEach((fn) => fn());
 out.after_flash_clears = view();
@@ -177,10 +186,10 @@ out.after_flash_clears = view();
 // ---- the DELETE lands ------------------------------------------------------
 await reset();
 fetchPlan = () => ({ ok: true, json: async () => ({}) });
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.ok_requests = [...requests];
-out.after_ok_swipe = view();
+out.after_ok_cancel = view();
 
 // ---- while it is still in the air -----------------------------------------
 await reset();
@@ -189,13 +198,14 @@ fetchPlan = () => ({
   ok:   true,
   json: () => new Promise((r) => { release = () => r({}); }),
 });
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.in_flight = view();
-// A second swipe while the first is out must not fire a second DELETE.
+// The × comes off a chip that is already going, so there is nothing to press a
+// second time and no second DELETE to send.
 requests.length = 0;
-if (container.children[0]?.listeners?.pointerdown) swipe(container.children[0]);
-out.second_swipe_requests = [...requests];
+out.second_cancel = dismiss(container.children[0]);
+out.second_cancel_requests = [...requests];
 release?.();
 await new Promise((r) => setTimeout(r, 0));
 out.after_release = view();

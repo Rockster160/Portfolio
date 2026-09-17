@@ -603,14 +603,51 @@ html.html-ctr-byte body {
   align-items: flex-end;
   text-align: right;
 }
+// How a chip goes away, on both stacks, and the only way - the swipe both of
+// them used to carry is gone (see processes.js for what it cost).
+//
+// The whole right EDGE of the chip, not the glyph: the chips are 20-odd pixels
+// tall, so a 13px × with a little padding is a target you miss on a phone -
+// and missing it means tapping the chip, which opens a tab or pauses a timer.
+// Absolutely positioned so those pixels cost the chip no width; the chips make
+// room with `padding-right` instead, and the one rule that matters is that
+// nothing else is drawn under this column.
+.byte-chip-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.55;
+  cursor: pointer;
+
+  &:hover, &:focus-visible {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
 .byte-timer-chip {
   --timer-accent: var(--bs-accent, #3fa0ff);
+  position: relative;
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  padding: 1px 7px 1px 6px;
+  // Right padding is the × column's, and nothing else may be drawn in it.
+  padding: 1px 28px 1px 6px;
   border-radius: 7px;
   background: rgba(12, 20, 40, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -621,8 +658,7 @@ html.html-ctr-byte body {
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   user-select: none;
-  touch-action: pan-y;
-  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+  transition: opacity 120ms ease, background 120ms ease;
 
   &:hover { background: rgba(20, 32, 60, 0.85); }
 
@@ -640,11 +676,11 @@ html.html-ctr-byte body {
     max-width: 22vw;
   }
 
-  // A swipe asks the server to cancel; it doesn't cancel. Until the DELETE
-  // comes back the chip stays put and reads as on its way out, because a chip
-  // that leaves on the gesture is indistinguishable from one that leaves on a
-  // failure — and the failure means a live timer nobody expects (prod timer 94,
-  // swiped away and rang an hour later).
+  // The × asks the server to cancel; it doesn't cancel. Until the DELETE comes
+  // back the chip stays put and reads as on its way out, because a chip that
+  // leaves on the tap is indistinguishable from one that leaves on a failure —
+  // and the failure means a live timer nobody expects (prod timer 94, swiped
+  // away and rang an hour later).
   &[data-pending="cancel"] {
     opacity: 0.32;
     pointer-events: none;
@@ -671,9 +707,10 @@ html.html-ctr-byte body {
 }
 
 // -------- Background process chips -----------------------------------------
-// Deliberately the same object as a timer chip - same size, same glass, same
-// swipe - because they live on the same shelf and one of them being fancier
-// would read as one of them mattering more.
+// Deliberately the same object as a timer chip - same size, same glass -
+// because they live on the same shelf and one of them being fancier would read
+// as one of them mattering more. It is dismissed with an × rather than a
+// swipe; see processes.js for what the swipe cost.
 //
 // A name and a count on one line - the state is the colour and the step is the
 // name, so neither costs a row - with the links under it as pills. Those are
@@ -688,7 +725,8 @@ html.html-ctr-byte body {
   align-items: flex-end;
   gap: 1px;
   max-width: 100%;
-  padding: 1px 7px 2px 6px;
+  // Right padding is the × column's, and nothing else may be drawn in it.
+  padding: 1px 28px 2px 6px;
   border-radius: 7px;
   background: rgba(12, 20, 40, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -699,11 +737,10 @@ html.html-ctr-byte body {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   user-select: none;
-  touch-action: pan-y;
-  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+  transition: opacity 120ms ease, background 120ms ease;
 
-  // Only a chip that goes somewhere offers to be tapped. The rest are still
-  // swipeable, which is a drag rather than a click.
+  // Only a chip that goes somewhere offers to be tapped. The rest are read,
+  // and dismissed with the ×.
   &[data-has-url="true"] { cursor: pointer; }
   &:hover { background: rgba(20, 32, 60, 0.85); }
 
@@ -719,8 +756,8 @@ html.html-ctr-byte body {
     font-weight: 600;
     opacity: 0.85;
   }
-  // The name and the count are one line; everything else about the chip is a
-  // row of its own.
+  // The name, the count and the × are one line; everything else about the chip
+  // is a row of its own.
   .byte-process-head {
     display: inline-flex;
     align-items: baseline;
@@ -728,9 +765,9 @@ html.html-ctr-byte body {
     max-width: 100%;
   }
 
+
   // Where the chip goes, said out loud. Small, but a real tap target - these
-  // get pressed with a thumb, on a phone, next to a swipe that clears the
-  // thing.
+  // get pressed with a thumb, on a phone.
   .byte-process-links {
     display: inline-flex;
     flex-wrap: wrap;
@@ -797,7 +834,7 @@ html.html-ctr-byte body {
     background: rgba(232, 168, 92, 0.18);
   }
   // It died. This is the one most worth seeing, so it stays put until it is
-  // swiped away or reported again.
+  // dismissed or reported again.
   &[data-state="failed"] {
     --process-accent: var(--bs-danger, #f26b6b);
     background: rgba(242, 107, 107, 0.2);
@@ -809,9 +846,8 @@ html.html-ctr-byte body {
     filter: grayscale(0.6);
   }
 
-  // A swipe asks the server to clear it; it doesn't clear it. Same as the
-  // timers, and for the same reason - a chip that leaves on the gesture looks
-  // exactly like one that leaves on a failed request.
+  // The × asks the server to clear it; it doesn't clear it. A chip that leaves
+  // on the tap looks exactly like one that leaves on a failed request.
   // (see .byte-process-more below for what happens past three chips)
   &[data-pending="clear"] {
     opacity: 0.32;

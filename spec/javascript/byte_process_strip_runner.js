@@ -1,10 +1,10 @@
-// Drives the background-process chips through a hydrate, a swipe, a clear and
-// a report that arrives after one, and prints what the strip looked like at
+// Drives the background-process chips through a hydrate, a dismissal, a clear
+// and a report that arrives after one, and prints what the strip looked like at
 // each step as JSON for byte_process_strip_spec.rb.
 //
-// Same shape as byte_timer_swipe_runner.js, and for the same reason: the chips
-// are plain objects that remember their listeners, so a swipe is three
-// synthetic pointer events and `fetch` is a script the test sets per step.
+// The chips are plain objects that remember their listeners, so a dismissal is
+// one synthetic click on the chip's × and `fetch` is a script the test sets per
+// step.
 
 // The module warns on a failed clear, which is correct and which this file
 // causes on purpose.
@@ -45,9 +45,7 @@ function fakeElement(tag) {
     style:       { setProperty(name, value) { this[name] = value; } },
     appendChild(child) { this.children.push(child); },
     addEventListener(name, fn) { this.listeners[name] = fn; },
-    setPointerCapture() {},
-    releasePointerCapture() {},
-    hasPointerCapture() { return false; },
+    setAttribute(name, value) { this[name] = value; },
   };
 }
 
@@ -97,21 +95,39 @@ async function reset(...rows) {
   requests.length = 0;
 }
 
-function swipe(chip) {
-  chip.listeners.pointerdown({ clientX: 0, pointerId: 1 });
-  chip.listeners.pointermove({ clientX: 130, pointerId: 1 });
-  chip.listeners.pointerup({ clientX: 130, pointerId: 1 });
+// Every node under a chip, so a control can be found the way a thumb finds it.
+function descendants(node) {
+  return node.children.flatMap((child) => [child, ...descendants(child)]);
 }
 
+function closeButton(chip) {
+  return descendants(chip).find((n) => n.className === "byte-chip-close");
+}
+
+function dismiss(chip) {
+  const btn = closeButton(chip);
+  if (!btn) return false;
+
+  btn.listeners.click({ stopPropagation() {}, preventDefault() {} });
+  return true;
+}
+
+// A tap that landed on the chip's own body: `closest` finds no link and no
+// button above it, which is what the real DOM would answer.
 function tap(chip) {
-  chip.listeners.pointerdown({ clientX: 0, pointerId: 1 });
-  chip.listeners.pointerup({ clientX: 0, pointerId: 1 });
+  chip.listeners.click({ target: { closest: () => null } });
 }
 
-// What a chip SAYS, leaving the links out - they are reported separately, so
-// an assertion about the words does not move every time one gains a link.
+// A tap that landed on something inside the chip that owns it.
+function tapOn(chip, node) {
+  chip.listeners.click({ target: { closest: () => node } });
+}
+
+// What a chip SAYS, leaving out the links and the × - those are controls, they
+// are reported separately, and an assertion about the words should not move
+// every time a chip gains one.
 function words(node) {
-  if (node.tag === "a") return [];
+  if (node.tag === "a" || node.tag === "button") return [];
   if (!node.children.length) return node.textContent ? [node.textContent] : [];
 
   return node.children.flatMap(words);
@@ -137,10 +153,10 @@ const view = () => container.children
     links:   anchors(c),
     title:   c.title ?? null,
     // The rows a chip actually stacks: the name-and-count line, and the links
-    // under it. A third would be the detail row coming back. The bar is
-    // absolutely positioned and costs no height, so it is not one.
-    rows:    c.children.filter((n) => n.className !== "byte-process-bar").length,
-    wired:   Object.keys(c.listeners).length > 0,
+    // under it. A third would be the detail row coming back. The bar and the ×
+    // are absolutely positioned and cost no height, so neither is one.
+    rows:    c.children.filter((n) => !["byte-process-bar", "byte-chip-close"].includes(n.className)).length,
+    closes:  Boolean(closeButton(c)),
   }));
 
 const out = {};
@@ -199,12 +215,12 @@ out.uncapped_more = container.children.filter((c) => c.className === "byte-proce
 await reset(payload());
 out.links = view()[0].links;
 
-// A tap on a pill must never start the chip's swipe, or reaching for the job
-// posting would be asking for the chip to be cleared.
-let stopped = 0;
+// A tap on a pill is the pill's. The anchor takes it; the chip must not also
+// open its own first link in a second tab.
+opened.length = 0;
 const row = container.children[0].children.find((c) => c.className === "byte-process-links");
-row.children[0].listeners.pointerdown({ stopPropagation: () => { stopped += 1; } });
-out.pill_stops_the_swipe = stopped;
+tapOn(container.children[0], row.children[1]);
+out.tap_on_pill_opened = [...opened];
 
 // ---- where a tap on the body goes -------------------------------------------
 // The first link, as a bigger target for the common case of there being one.
@@ -228,34 +244,46 @@ await reset(payload({
 }));
 out.busiest = view()[0];
 
-// ---- a swipe that never lands ----------------------------------------------
+// ---- the × is on every chip, and is what a dismissal costs ------------------
+// One tap, no gesture: the swipe it replaces needed the pointer captured, and
+// when that failed the chip was left sitting wherever it had been dragged,
+// looking dismissed with nothing ever sent.
 await reset(payload());
+out.close_label = closeButton(container.children[0])?.textContent ?? null;
+out.close_aria = closeButton(container.children[0])?.["aria-label"] ?? null;
+// A dismissal is not a trip to the chip's link.
+opened.length = 0;
+
+// ---- a dismissal that never lands -------------------------------------------
 fetchPlan = () => new Error("offline");
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.failed_requests = [...requests];
-out.after_failed_swipe = view();
+out.dismiss_opened = [...opened];
+out.after_failed_dismiss = view();
 pendingTimeouts.forEach((fn) => fn());
 out.after_flash_clears = view();
 
-// ---- a swipe that does ------------------------------------------------------
+// ---- one that does ----------------------------------------------------------
 await reset(payload());
 fetchPlan = () => ({ ok: true, json: async () => ({ data: { cleared: true } }) });
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.ok_requests = [...requests];
-out.after_ok_swipe = view();
+out.after_ok_dismiss = view();
 
 // ---- while it is still in the air -------------------------------------------
 await reset(payload());
 let release = null;
 fetchPlan = () => ({ ok: true, json: () => new Promise((r) => { release = () => r({}); }) });
-swipe(container.children[0]);
+dismiss(container.children[0]);
 await new Promise((r) => setTimeout(r, 0));
 out.in_flight = view();
 requests.length = 0;
-if (container.children[0]?.listeners?.pointerdown) swipe(container.children[0]);
-out.second_swipe_requests = [...requests];
+// The × comes off a chip that is already going, so there is nothing to press
+// twice and no second DELETE to send.
+out.second_dismiss = dismiss(container.children[0]);
+out.second_dismiss_requests = [...requests];
 release?.();
 await new Promise((r) => setTimeout(r, 0));
 

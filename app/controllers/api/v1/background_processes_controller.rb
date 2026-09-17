@@ -17,7 +17,7 @@
 #   DELETE /api/v1/background_processes/:key    clear it; unknown keys say ok
 #
 # A PATCH for a key that was cleared, or never existed, STARTS one. A long run
-# whose chip was swiped away mid-flight puts it back on its next step, rather
+# whose chip was dismissed mid-flight puts it back on its next step, rather
 # than reporting into nothing for twenty minutes because a stale delete won a
 # race it never knew it was in.
 class Api::V1::BackgroundProcessesController < Api::V1::BaseController

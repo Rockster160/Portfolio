@@ -5,7 +5,12 @@
 //   * applies :timers MonitorChannel broadcasts (create/pause/resume/fire/archive)
 //   * ticks every 250ms to update the remaining-time readout off end_at
 //   * tap a chip → pause/resume, or cancel if it's the one ringing;
-//     swipe it away → cancel. Either way the SERVER decides when it goes.
+//     its × → cancel. Either way the SERVER decides when it goes.
+//
+//     The × replaced a SWIPE on 17 Sep. The gesture depended on pointer
+//     capture, and when that didn't take the chip was left sitting wherever it
+//     had been dragged with the timer still running - it looked cancelled and
+//     nothing had been sent. Rocco: "It's all buggy and it all sucks."
 //   * on a timer reaching end_at WHILE open → rings the grub alarm + face loop
 //     until a tap anywhere acknowledges. The ring is driven off end_at, not off
 //     the server's fire, which arrives seconds later (see isDue).
@@ -93,7 +98,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   // before they can be confirmed. See drainSilenced.
   const silenced = new Set();
   // Ids with a DELETE in flight, and ids whose DELETE came back failed. See
-  // cancelTimer — a swipe is a REQUEST to cancel, not the cancellation.
+  // cancelTimer — the × is a REQUEST to cancel, not the cancellation.
   const cancelling = new Set();
   const cancelFailed = new Set();
 
@@ -124,7 +129,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       chip.className = "byte-timer-chip";
       chip.dataset.timerId = t.id;
       chip.dataset.state = ringing ? "fired" : isPaused(t) ? "paused" : "running";
-      // Dimmed and untouchable while the DELETE is out, so a swipe reads as
+      // Dimmed and untouchable while the DELETE is out, so the tap reads as
       // "going" rather than "gone"; flashed if the server never took it.
       if (cancelling.has(t.id)) chip.dataset.pending = "cancel";
       if (cancelFailed.has(t.id)) chip.dataset.pending = "cancel-failed";
@@ -148,11 +153,16 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
         chip.appendChild(name);
       }
 
-      // A chip mid-cancel takes no gestures: a second swipe would fire a second
-      // DELETE, and a tap would pause a timer that is on its way out. A wait
-      // that has run out is in the same position — the archive is already on
-      // its way — and a tap on one would cancel a timer that has done its job.
-      if (!cancelling.has(t.id) && !(isDue(t) && isWait(t))) wireChip(chip, t);
+      // A chip mid-cancel takes no taps: a second × would fire a second DELETE,
+      // and a tap on the body would pause a timer that is on its way out. A
+      // wait that has run out is in the same position — the archive is already
+      // on its way — and a tap on one would cancel a timer that has done its
+      // job.
+      const settled = cancelling.has(t.id) || (isDue(t) && isWait(t));
+      if (!settled) {
+        chip.appendChild(closeButton(t));
+        wireChip(chip, t);
+      }
       container.appendChild(chip);
     });
 
@@ -192,57 +202,30 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     if (!tickHandle) tickHandle = window.setInterval(tick, 250);
   }
 
-  // ---- interaction: tap = pause/resume, swipe = cancel --------------------
+  // ---- interaction: tap = pause/resume, × = cancel ------------------------
+
+  // A real button, so it is reachable by keyboard and reads as a control. The
+  // hit area is padding rather than glyph size — see .byte-chip-close.
+  function closeButton(t) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "byte-chip-close";
+    btn.textContent = "×";
+    const label = `Cancel ${t.name || "timer"}`;
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      cancelTimer(t.id);
+    });
+    return btn;
+  }
 
   function wireChip(chip, t) {
-    let startX = null;
-    let dragging = false;
-
-    const release = (e) => {
-      try {
-        if (chip.hasPointerCapture(e.pointerId)) chip.releasePointerCapture(e.pointerId);
-      } catch (_) { /* already gone */ }
-    };
-
-    // Capture the pointer, or the swipe strands the chip.
-    //
-    // Dragging works by translating the chip out from under the finger. Without
-    // capture the browser retargets every following pointer event to whatever
-    // is under the finger NOW, which is no longer the chip - so pointermove
-    // stops arriving, pointerup never fires, `finish` never runs, and the chip
-    // is left sitting at its last transform with the timer still very much
-    // alive. Swiped either way, it stayed where it was put and never went away.
-    chip.addEventListener("pointerdown", (e) => {
-      startX = e.clientX;
-      dragging = false;
-      try { chip.setPointerCapture(e.pointerId); } catch (_) { /* no capture, no drag */ }
-    });
-    chip.addEventListener("pointermove", (e) => {
-      if (startX == null) return;
-      const dx = e.clientX - startX;
-      if (Math.abs(dx) > 6) dragging = true;
-      if (dragging) chip.style.transform = `translateX(${dx}px)`;
-      chip.style.opacity = String(Math.max(0.2, 1 - Math.abs(dx) / 160));
-    });
-    const finish = (e) => {
-      release(e);
-      if (startX == null) return;
-      const dx = e.clientX - startX;
-      startX = null;
-      if (dragging && Math.abs(dx) > 90) {
-        // Deliberately NOT flung off-screen here. That was truth applied to a
-        // gesture: the chip left the corner, the request was still in the air,
-        // and a chip that vanished on a failed DELETE is exactly how a live
-        // timer ends up believed cancelled. `cancelTimer` re-renders it pending
-        // on the spot and removes it when the server says so.
-        chip.style.transform = "";
-        chip.style.opacity = "";
-        cancelTimer(t.id);
-        return;
-      }
-      chip.style.transform = "";
-      chip.style.opacity = "";
-      if (dragging) return;
+    chip.addEventListener("click", (e) => {
+      // The × is inside the chip, and it has already done its own thing.
+      if (e.target.closest("button")) return;
 
       // A RINGING chip is finished with, so a tap on it ends it. It used to run
       // pause/resume like any other chip, which left the thing paused at zero
@@ -257,14 +240,6 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       const current = timers.get(t.id) || t;
       if (isDue(current)) cancelTimer(current.id);
       else toggleTimer(current);
-    };
-    chip.addEventListener("pointerup", finish);
-    chip.addEventListener("pointercancel", (e) => {
-      release(e);
-      startX = null;
-      dragging = false;
-      chip.style.transform = "";
-      chip.style.opacity = "";
     });
   }
 
@@ -279,7 +254,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     }
   }
 
-  // A swipe is a REQUEST to cancel. It is not the cancellation.
+  // A tap on the × is a REQUEST to cancel. It is not the cancellation.
   //
   // This used to delete the timer from the local store and re-render on the
   // spot, then fire the DELETE into a `catch` that only wrote to the console.
@@ -288,8 +263,8 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   // broadcast put it back — usually unnoticed, because by then nobody is
   // looking at the corner of the screen. Prod timer 94, 27 Aug: swiped away,
   // vanished, and rang an hour later anyway. `log_trackers` has no DELETE for
-  // it at all until the second swipe four minutes AFTER it went off, so the
-  // first request never reached Rails, and every part of the UI said it had.
+  // it at all until four minutes AFTER it went off, so the first request never
+  // reached Rails, and every part of the UI said it had.
   //
   // So the chip stays, visibly pending, until the server agrees. Removal comes
   // from the response or from the `archived` broadcast, both of which are
@@ -461,7 +436,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       if (!t) return;
       if (pageId != null && t.timer_page_id !== pageId) return;
       if (data.reason === "archived") {
-        // Whoever archived it, the swipe that asked for it is answered.
+        // Whoever archived it, the tap that asked for it is answered.
         cancelling.delete(t.id);
         cancelFailed.delete(t.id);
         timers.delete(t.id);

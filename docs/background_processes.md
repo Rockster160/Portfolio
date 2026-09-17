@@ -7,7 +7,7 @@ takes minutes and happens somewhere else.
 Each one is a chip pinned to the **top-right** of the Buddy hero, opposite the
 timers. It carries a name, a count (`Preparing 3/13`), the step it is on, a
 fill along its bottom edge, and up to four **links** — the job, the queue it
-came out of, the email being read. Swipe a chip away to clear it.
+came out of, the email being read. The × on a chip clears it.
 
 **Nothing in Rails does the work.** Every chip is put there by whatever is
 doing it, through the endpoint below.
