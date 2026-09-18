@@ -18,25 +18,6 @@
 #  updated_at   :datetime         not null
 #  user_id      :bigint           not null
 #
-# What Byte is doing while nobody is watching it.
-#
-# A row is one piece of work being done somewhere else — a line of job
-# applications being filled in on the Mac, an inbound email being read — and it
-# exists so the person can see it happening from the hero instead of wondering
-# whether anything is running at all. Nothing here does the work; every row is
-# reported by whoever is.
-#
-# THE KEY IS THE WHOLE DESIGN. A caller names its own work ("jobhunt:line") and
-# every endpoint is an upsert on that name, so:
-#
-#   * a report for a key with nothing live behind it STARTS one,
-#   * a report for a key already running is a STEP in it,
-#   * a clear for a key with nothing behind it is a no-op that still says ok.
-#
-# That is what makes the three endpoints idempotent in the way a script needs:
-# a crashed run that comes back reports the same key and picks up its own chip,
-# and one that was cleared by hand while it was still going puts it back on the
-# next step rather than being lost until the process is restarted.
 class BackgroundProcess < ApplicationRecord
   # The person whose hero shows it. Never another user's — the strip is a
   # window onto their own machinery.

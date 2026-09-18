@@ -213,12 +213,13 @@ import { dash_colors, clamp } from "../vars"
     function markCell(at, glyph) {
       const under = at < filled ? color : dash_colors.darkgrey
       // The clock is grey on whatever it lands on — it is only saying where you
-      // are. The wall CARRIES its red rather than borrowing the cell's: red ink
-      // on the green fill is the same brightness as the green (1.06 : 1) and on
-      // an exhausted red bar it is the same color outright, so the cell itself
-      // goes red and the ‼ is knocked out of it in white.
+      // are. The wall is red, and red only reads on something dark: on the
+      // green fill it is the same brightness as the green (1.06 : 1) and on an
+      // exhausted red bar it is the same color outright. So its cell drops to
+      // the empty track's own dark — a notch in the fill with a red mark in it,
+      // and nothing at all to see where the track is already that color.
       if (glyph === "‼") {
-        return Text.bgColor(dash_colors.red, Text.color(ink(dash_colors.red), glyph))
+        return Text.bgColor(dash_colors.darkgrey, Text.color(dash_colors.red, glyph))
       }
 
       const grey = at < filled ? dash_colors.darkgrey : dash_colors.grey
