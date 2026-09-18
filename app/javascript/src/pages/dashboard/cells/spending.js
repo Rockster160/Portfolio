@@ -26,6 +26,13 @@ import { dash_colors, clamp } from "../vars"
 // is left. The local status line reports them (see
 // ~/.claude/hooks/usage-report.sh) and they ride this payload as `claude`.
 //
+// The session bar can carry a second mark, a ‼, for where the WEEK runs out
+// part way through it — the point past which there is session left and nothing
+// to spend it on. It needs an exchange rate between two percentages of
+// different sizes, which is measured rather than assumed: `claude.burn` is how
+// much of each the reporter has watched go, this week, and their ratio is the
+// rate. Until enough of the week has been watched it is not drawn at all.
+//
 // The Caffeine bar at the bottom is the odd one out: it counts UP, filling as
 // the day's milligrams land rather than draining as they go, and it carries no
 // ☼ — the fill against the limit is the whole reading. Its buckets arrive in
@@ -63,6 +70,11 @@ import { dash_colors, clamp } from "../vars"
   }
 
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+  // How much of a session the reporter has to have watched before their ratio
+  // is worth drawing a ‼ off. Both figures are whole percents, so a handful of
+  // reports is mostly rounding; a fifth of a session is not.
+  const burn_sample_pct = 20
 
   function perceivedDate(date) {
     const day = new Date(date.getTime())
@@ -153,12 +165,18 @@ import { dash_colors, clamp } from "../vars"
     return luminance > 0.5 ? dash_colors.black : dash_colors.white
   }
 
+  // Which cell a fraction marks: the one that would be the LAST filled if the
+  // fill were exactly there, rounded the same way the fill is.
+  function markAt(fraction) {
+    return clamp(Math.round(bar_width * clamp(fraction, 0, 1)) - 1, 0, bar_width - 1)
+  }
+
   // `mark` is where on the bar its clock says the fill should end, as a
   // fraction, or undefined for a bar with no clock to read. It is a whole
   // character, not a hairline: the fill moves a cell at a time, so a line
   // claimed a precision the bar does not have. It sits on the cell that would
-  // be the LAST one filled if the fill were exactly on pace, rounded the same
-  // way the fill is — on pace, the ☼ is the fill's final cell.
+  // be the LAST one filled if the fill were exactly on pace — on pace, the ☼ is
+  // the fill's final cell. `wall` is a second mark on the same footing.
   //
   // It takes the cell outright, letter or not. The label is known at a glance
   // and the position is the reading. Not while the row is hovered, though:
@@ -170,7 +188,7 @@ import { dash_colors, clamp } from "../vars"
   // bar with no clock has nothing to be behind, so it stays green unless the
   // caller has its own reason to `warn`. `gone` is red, and drawn FULL: an
   // empty red sliver reads as "nearly out" when it means the opposite.
-  function bar(row, text, fraction, mark, gone, warn) {
+  function bar(row, text, fraction, mark, gone, warn, wall) {
     text = text.padEnd(bar_width, " ").slice(0, bar_width)
 
     const filled = clamp(Math.round(bar_width * (gone ? 1 : fraction)), 0, bar_width)
@@ -188,20 +206,35 @@ import { dash_colors, clamp } from "../vars"
         Text.bgColor(dash_colors.darkgrey, text.slice(fill_to, to))
     }
 
-    if (mark === undefined || cell.data.hover === row) {
+    // Grey, never the label's ink: a mark is a different kind of thing from
+    // the words on the bar, and reads as one where it lands on them. On the
+    // empty track that is the light grey; on a fill it is the track's own dark
+    // grey, which the light one washes out against green, yellow and red alike.
+    function markCell(at, glyph) {
+      const under = at < filled ? color : dash_colors.darkgrey
+      const marker_ink = at < filled ? dash_colors.darkgrey : dash_colors.grey
+      return Text.bgColor(under, Text.color(marker_ink, glyph))
+    }
+
+    const marks = {}
+    if (mark !== undefined) { marks[markAt(mark)] = "☼" }
+    // Second, so that a week ending exactly where the clock does says the
+    // harder of the two things.
+    if (wall !== undefined) { marks[markAt(wall)] = "‼" }
+
+    const cells = Object.keys(marks).map(Number).sort(function(a, b) { return a - b })
+    if (cells.length === 0 || cell.data.hover === row) {
       return " " + paint(0, bar_width) + " "
     }
 
-    const at = clamp(target - 1, 0, bar_width - 1)
-    const under = at < filled ? color : dash_colors.darkgrey
-    // Grey, never the label's ink: it is a different kind of thing from the
-    // words on the bar, and reads as one where it lands on them. On the empty
-    // track that is the light grey; on a fill it is the track's own dark grey,
-    // which the light one washes out against green, yellow and red alike.
-    const marker_ink = at < filled ? dash_colors.darkgrey : dash_colors.grey
-    const marker = Text.bgColor(under, Text.color(marker_ink, "☼"))
+    let drawn = ""
+    let from = 0
+    cells.forEach(function(at) {
+      drawn += paint(from, at) + markCell(at, marks[at])
+      from = at + 1
+    })
 
-    return " " + paint(0, at) + marker + paint(at + 1, bar_width) + " "
+    return " " + drawn + paint(from, bar_width) + " "
   }
 
   // At rest it carries no figure: how full it is IS the answer, and a glance
@@ -253,6 +286,26 @@ import { dash_colors, clamp } from "../vars"
     return bar(row, text, fraction, mark, fraction <= 0)
   }
 
+  // Where the WEEK runs out, measured in session, as a fraction of the session
+  // bar — or undefined when there is nothing solid to say.
+  //
+  // `burn.week / burn.session` is what a percent of session costs in percent of
+  // week, watched rather than assumed. What is left of the week, divided by
+  // that, is how much session there is anything left to spend on.
+  //
+  // Undefined until a fifth of a session has been watched THIS week: the totals
+  // start over with the week, both figures are whole percents, and a ratio off
+  // two or three of them would move the mark around for no reason.
+  function weeklyWall(now) {
+    const claude = cell.data.claude || {}
+    const burn = claude.burn || {}
+    const week = claude.seven_day || {}
+    const current = typeof week.used === "number" && week.resets_at * 1000 > now
+    if (!current || !(burn.session >= burn_sample_pct) || !(burn.week > 0)) { return undefined }
+
+    return ((100 - week.used) / (burn.week / burn.session)) / 100
+  }
+
   // Drains like the money: the fill is what is LEFT of the window, and the ☼
   // is how much of the window's time is left. The figure on hover is what is
   // left too, and when it resets.
@@ -263,6 +316,11 @@ import { dash_colors, clamp } from "../vars"
   // next window only starts with the next use, so there is no reset time to
   // show and no clock for a ☼ to read, and the figure says `??` where the time
   // would be. That is what the bar says until a session reports the new one.
+  //
+  // The session also carries the ‼ for where the week gives out, and only when
+  // that falls INSIDE what is left of the session — past the end of the bar it
+  // is not a wall, it is just the week outlasting this window, which is the
+  // ordinary case and needs no mark.
   function claudeBar(row, label, key, now) {
     const limit = (cell.data.claude || {})[key] || {}
     const resets = limit.resets_at ? new Date(limit.resets_at * 1000) : undefined
@@ -279,8 +337,10 @@ import { dash_colors, clamp } from "../vars"
         ? remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
         : undefined
     )
+    const week_out = key === "five_hour" && current ? weeklyWall(now.getTime()) : undefined
+    const wall = week_out !== undefined && week_out < left / 100 ? week_out : undefined
 
-    return bar(row, text, left / 100, mark, left <= 0)
+    return bar(row, text, left / 100, mark, left <= 0, false, wall)
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the bars above it
