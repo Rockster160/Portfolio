@@ -57,19 +57,8 @@ RSpec.describe Buddy::Sentiment do
       expect(Buddy::Faces.nearest(:byte, { warmth: 0.7, play: 0.5, weight: 0.35, strain: 0.05 })).to eq(:nerd)
     end
 
-    # `happy` moved on 18 Sep so that something could be glad about news that
-    # MATTERS - see "good news about the job hunt" below. The cost is this
-    # reading: bright, light and low-stakes now lands a step over on
-    # `neutral_blush`, which is a warm face and a fair answer to a small win.
-    # Byte has one glad face and two jobs for it; nothing sits in both places,
-    # and the one this had to win is the one that was reading STERN.
-    it "reaches a warm face for an ordinary light win" do
-      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.4, weight: 0.15, strain: 0.05 }))
-        .to be_in(%i[happy neutral_blush])
-    end
-
-    it "reaches the plain pleased face for a win that matters" do
-      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.3, weight: 0.45, strain: 0.05 })).to eq(:happy)
+    it "reaches a plain pleased face for an ordinary win" do
+      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.4, weight: 0.15, strain: 0.05 })).to eq(:happy)
     end
 
     it "reaches a silly one when they're mucking about" do
@@ -214,11 +203,20 @@ RSpec.describe Buddy::Sentiment do
       Buddy::Faces.nearest("byte", reading, skip: skip)
     end
 
-    # Warm, dead earnest, and genuinely at stake. Before this it was the one
-    # shape with nowhere to go: `happy` was pinned to "a small win" at weight
-    # 0.20, so the nearest face was `loving` — hearts, at an ATS.
-    it "is glad about something that matters" do
-      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:happy)
+    # Warm, dead earnest, and genuinely at stake. Before `cheering` there was no
+    # face for it at all: every warm face Byte had sat at weight 0.35 or below,
+    # so the nearest was `loving` — hearts, at an ATS.
+    it "cheers about something that matters" do
+      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:cheering)
+    end
+
+    it "cheers an application going out, rather than waiting on it" do
+      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.6, strain: 0.0 })).to eq(:cheering)
+    end
+
+    # A robot confirming a form is a good moment and a SMALL one.
+    it "is quietly pleased about a routine confirmation" do
+      expect(face_for({ warmth: 0.7, play: 0.0, weight: 0.35, strain: 0.0 })).to eq(:content)
     end
 
     it "is still sad about a rejection" do
@@ -227,8 +225,10 @@ RSpec.describe Buddy::Sentiment do
 
     # The original complaint. `focused` reads STERN and was what every job-shaped
     # reading fell to.
-    it "is not stern about a routine confirmation" do
-      expect(face_for({ warmth: 0.7, play: 0.0, weight: 0.4, strain: 0.0 })).not_to eq(:focused)
+    it "is never stern about good news" do
+      [0.3, 0.5, 0.7, 0.9].each { |weight|
+        expect(face_for({ warmth: 0.8, play: 0.0, weight: weight, strain: 0.0 })).not_to eq(:focused)
+      }
     end
   end
 
@@ -240,15 +240,28 @@ RSpec.describe Buddy::Sentiment do
     let(:warm) { { warmth: 0.9, play: 0.0, weight: 0.6, strain: 0.0 } }
 
     it "are out of reach on a turn nobody started" do
-      expect(described_class.send(:skipped, warm, false, true, unprompted: true)).to include(:loving)
-      expect(Buddy::Faces.nearest("byte", warm, skip: [:loving])).to eq(:happy)
+      skip = described_class.send(:skipped, warm, false, true, unprompted: true)
+
+      expect(skip).to include(:loving, :hugging, :caring)
+      expect(Buddy::Faces.nearest("byte", warm, skip: skip)).not_to be_in(Buddy::Faces::TENDER)
     end
 
     it "are exactly where they were in a conversation" do
       skip = described_class.send(:skipped, warm, false, true, unprompted: false)
 
       expect(skip).not_to include(:loving)
-      expect(Buddy::Faces.nearest("byte", warm, skip: skip)).to eq(:loving)
+      expect(Buddy::Faces.nearest("byte", warm, skip: skip)).to be_in(Buddy::Faces::TENDER)
+    end
+
+    # Spread along `weight` so each one is actually reachable: a kind word, then
+    # being smitten, then holding something dear. Two faces at one point means
+    # one of them is art nobody ever sees.
+    it "are three distinct faces, not three names for one" do
+      reached = [0.3, 0.6, 0.85].map { |weight|
+        Buddy::Faces.nearest("byte", { warmth: 0.9, play: 0.15, weight: weight, strain: 0.05 }, skip: [])
+      }
+
+      expect(reached).to eq(%i[caring loving hugging])
     end
   end
 
@@ -343,7 +356,7 @@ RSpec.describe Buddy::Sentiment do
     # killed for.
     it "leaves a face that is already about as close as the new one" do
       convo.update_column(:buddy_expression, "happy")
-      answering('{"warmth":0.83,"play":0.28,"weight":0.47,"strain":0.06}')
+      answering('{"warmth":0.83,"play":0.43,"weight":0.22,"strain":0.06}')
 
       described_class.settle!(convo, acted: false, landed: true)
 

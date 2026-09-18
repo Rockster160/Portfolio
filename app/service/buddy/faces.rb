@@ -65,7 +65,7 @@ module Buddy
     HINTS = {
       # shared
       neutral:       "calm little smile, unbothered — your resting default for flat, nothing-happening moments",
-      happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, glad for them; the face for a WIN, big or small",
+      happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, lightening the mood, a small win",
       sad:           "downcast eyes and a frown — deflated, tender, sitting with something heavy",
       crying:        "teary eyes, quivering frown — moved, upset, right there with them in a hard moment",
       surprised:     "wide round eyes, open mouth — startled, caught off guard, 'oh!'",
@@ -79,6 +79,15 @@ module Buddy
       confused:      "small frown, wide uncertain eyes, a question mark — puzzled, thrown, didn't expect that, can't work out what happened",
       focused:       "hard narrowed eyes, set frown — locked onto something difficult; it reads STERN, so never for a light moment or a small favour",
       playful:       "one-eyed wink and a grin — teasing, cheeky, being a bit of a menace about it",
+      # Six sprites Rocco drew on 18 Sep. `content` was already written for Moss
+      # and had no Byte art until now; these five are new words as well as new
+      # faces. Each one earns its place by being somewhere the old set could not
+      # go — see the note over `cheering` in PROFILES for the hole they fill.
+      cheering:      "eyes squeezed shut, wide open grin, BOTH arms thrown up, bursts either side — celebrating, thrilled for them, a win worth making a noise about",
+      thumbs_up:     "a wink and a thumbs up — on it, got it, that's sorted; pleased with itself in a way that is about the job rather than the person",
+      hugging:       "eyes closed, both arms wrapped around a big heart, hearts drifting up — holding something dear, tender, the quiet end of affection",
+      caring:        "eyes closed, soft smile, a little heart in a speech bubble — saying something kind; warmth offered rather than felt",
+      eager:         "big shining wide-open eyes, small pleased smile, marks off to one side — perked up, keen, leaning in and waiting for it",
       # Moss extras
       content:       "serene eyes-closed smile — settled, satisfied, at peace",
       grin:          "big beaming grin — laughing, thrilled, delighted",
@@ -121,23 +130,45 @@ module Buddy
       angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95 },
       annoyed:       { warmth: 0.25, play: 0.30, weight: 0.35, strain: 0.80 },
       cheery:        { warmth: 0.90, play: 0.55, weight: 0.15, strain: 0.05 },
+      # Glad about something that MATTERS, and the reason `happy` could go back
+      # to being a small win.
+      #
+      # This was a genuine hole in the table, not a tuning problem. Every warm
+      # face Byte had sat at weight 0.35 or below, so a reading that was warm,
+      # earnest and high-stakes - an interview getting booked, an application
+      # going out - had nowhere to land but `loving`, and the pet put HEARTS on
+      # an ATS. Stretching `happy` up to reach it worked and cost the light,
+      # low-stakes win, which fell to `neutral_blush`. One face cannot be both;
+      # this is the second face.
+      cheering:      { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05 },
       confused:      { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45 },
       content:       { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05 },
       crying:        { warmth: 0.05, play: 0.00, weight: 0.95, strain: 0.30 },
       dismayed:      { warmth: 0.25, play: 0.20, weight: 0.50, strain: 0.50 },
       dizzy:         { warmth: 0.40, play: 0.55, weight: 0.40, strain: 0.60 },
       excited:       { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05 },
+      # About the JOB, not the person: pleased with itself for having got
+      # something done. Sits where ACTED_POINT does on purpose (Buddy::Sentiment
+      # blends a turn that DID something toward warm, light and low-stakes), so
+      # a turn that worked has somewhere of its own to go instead of borrowing
+      # the face for being glad for them.
+      thumbs_up:     { warmth: 0.80, play: 0.55, weight: 0.30, strain: 0.05 },
+      # Waiting on something, not celebrating it. The `strain` is the small
+      # tension in anticipation, and it is what keeps this off an outright win -
+      # at 0.10 it was the nearest face to an application going OUT, which is a
+      # thing to be pleased about rather than a thing to wait for.
+      eager:         { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20 },
       focused:       { warmth: 0.45, play: 0.05, weight: 0.85, strain: 0.35 },
       frustrated:    { warmth: 0.20, play: 0.15, weight: 0.55, strain: 0.90 },
       grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05 },
-      # Glad FOR them, and the only face that is. `play` came down from 0.45 and
-      # `weight` up from 0.20 on 18 Sep: pinned to "a small win" it could not
-      # answer good news that MATTERS, and every warm, earnest, weighty reading
-      # fell through to `loving` instead - an interview getting booked put
-      # HEARTS on the pet. What separates it from `neutral_blush` is still the
-      # two it is higher on: brightly glad rather than quietly touched.
-      happy:         { warmth: 0.85, play: 0.30, weight: 0.45, strain: 0.05 },
+      happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05 },
+      # The three TENDER faces, spread along `weight` so each is reachable: a
+      # kind word (0.35), being smitten (0.60), holding something dear (0.80).
+      # All three are affection pointed at a PERSON, which is why all three are
+      # out of reach on a turn nobody started - see TENDER below.
+      caring:        { warmth: 0.85, play: 0.15, weight: 0.35, strain: 0.05 },
       loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05 },
+      hugging:       { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05 },
       # Pleased AND a bit clever, and — the part that matters — LIGHT. It is
       # reachable again precisely because `weight` can now keep it away from a
       # moment that isn't.
@@ -184,7 +215,7 @@ module Buddy
     #
     # Prod 18 Sep: the pet put HEARTS on an application going out. Rocco asked
     # for encouraging, and hearts at an ATS is not that.
-    TENDER = %i[loving].freeze
+    TENDER = %i[loving hugging caring].freeze
 
     AXES = %i[warmth play weight strain].freeze
 

@@ -5050,7 +5050,7 @@ dialog.byte-modal {
 // of them. Each entry must have a matching face_#{name}.png or precompile
 // fails — spec/service/buddy/expression_face_spec.rb checks these lists against
 // the art on disk in both directions so that lands in a spec, not a deploy.
-$byte_expressions: neutral neutral_blush happy uwu loving annoyed sad crying thinking nerd sleeping focused confused surprised playful unamused;
+$byte_expressions: neutral neutral_blush happy uwu loving annoyed sad crying thinking nerd sleeping focused confused surprised playful unamused cheering thumbs_up hugging content eager caring;
 $moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy confused focused dismayed;
 @each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
@@ -5059,9 +5059,11 @@ $moss_expressions: neutral happy grin star loving wink sad crying surprised shoc
   }
 }
 // Names nothing emits any more, kept because a stale stored expression can
-// still ask for one. `encouraging` was Byte's own art until the full-character
-// redraw, which has no soft eyes-closed smile to give it.
-$byte_expr_aliases: ("celebrating": "happy", "encouraging": "happy");
+// still ask for one. Both used to land on `happy` for want of anything closer;
+// the six faces added on 18 Sep gave each of them its real one — `celebrating`
+// is what `cheering` IS, and `caring` is the soft eyes-closed smile the
+// full-character redraw had taken away from `encouraging`.
+$byte_expr_aliases: ("celebrating": "cheering", "encouraging": "caring");
 @each $mood, $face in $byte_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
