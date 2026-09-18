@@ -68,11 +68,11 @@ module Buddy
     #
     # `watch` was already here. `form` is the attribution prompt ("Who did:
     # Puppy Up?"), which is a widget with buttons and reads as a question the
-    # companion asked. Prod memory 64 is what that costs: the form went up at
-    # 15:04, Rocco typed an unrelated printer command at 15:13, and the compile
-    # read them as one exchange and wrote down that "Puppy Up" MEANS "print game
-    # tray vase". Two unrelated things fused into a false definition, which is
-    # worse than either being lost - it is now a fact about his vocabulary.
+    # companion asked. What that costs: a form posted at one point and an
+    # unrelated command typed nine minutes later get read as one exchange, and
+    # the compile writes down that the form's subject MEANS the command. Two
+    # unrelated things fused into a false definition, which is worse than either
+    # being lost - it is now a fact about the person's vocabulary.
     SKIP_SOURCES = %w[watch form relay_copy].freeze
 
     # Nothing in here quotes an illustration of somebody's circumstances, and
@@ -82,10 +82,9 @@ module Buddy
     # of the ones that were cut, and why each was reachable.
     #
     # Incidents live out here rather than in the prompt, for the same reason.
-    # The one behind CHECK WHAT THE COMPANION SAID IT DID: on 14 Aug the
-    # companion was taught an Afrikaans saying and replied that it was in the
-    # house words too — it was not, anywhere, until somebody noticed five days
-    # later.
+    # The one behind CHECK WHAT THE COMPANION SAID IT DID: a companion taught a
+    # new saying replied that it was in the house words too — it was not,
+    # anywhere, and nobody noticed for days.
     INSTRUCTIONS = <<~TXT.freeze
       You keep the long-term record of one person, and you are the ONLY thing
       that writes it. Their companion talks to them and acts for them in the
@@ -393,9 +392,9 @@ module Buddy
     # It used to answer once, in a fixed shape, and Rails applied whatever came
     # back. That could only ever ADD: forty truncated labels was not enough to
     # judge overlap, there was no way to look further, and nothing could fix a
-    # row that was already wrong. Every tangle found in prod on 19 Aug — the
-    # same request held twice, a sentence leaning on a row beside it, a
-    # correction stored instead of applied — was something this pass had written
+    # row that was already wrong. Every tangle that turns up — the same request
+    # held twice, a sentence leaning on a row beside it, a
+    # correction stored instead of applied — is something this pass wrote
     # and then had no means to repair.
     #
     # Rounds are bounded and the tools are its own. There is nobody waiting on
@@ -535,10 +534,10 @@ module Buddy
     #
     # A receipt is `buddy_activity`, which SKIP_KINDS drops so a doorbell
     # notification can't vote on what the conversation was about — and dropping
-    # it took the evidence with it. Asked for a daily nudge on 19 Aug, Suki set
-    # the reminder and posted "Suki will remind you every day at 9am"; the
-    # compile saw only the asking and wrote down "she wants a daily reminder to
-    # let things go" as a standing preference, so the same request now exists
+    # it took the evidence with it. Asked for a daily nudge, a companion sets
+    # the reminder and posts a receipt saying so; the compile sees only the
+    # asking and writes down "she wants a daily reminder" as a standing
+    # preference, so the same request then exists
     # twice, once as a live reminder and once as a fact about her.
     #
     # Listed apart from the transcript rather than folded back into it: these
@@ -569,10 +568,9 @@ module Buddy
     #
     # WHEN each one is due, and how heavy it is, are on the line. They were not,
     # and their absence is why a check-in could only ever be pushed further out.
-    # Rocco, 8 Sep: "when I told Buddy I'd be losing my job, the check-in was
-    # scheduled months away... when I gave more info saying that the layoff was
-    # happening sooner than anticipated, the check-in likely should have been
-    # moved to a much sooner time." The pass that read that second conversation
+    # News that a heavy thing is coming SOONER has to pull its check-in in, and
+    # a pass with no dates on the line can only ever push one further out. The
+    # pass that reads that second conversation
     # was shown `- #61 out of a job before the end of the year` and nothing
     # else. It could not have known the row was armed for December, so pulling
     # it in was never a move it was in a position to make.
@@ -643,8 +641,8 @@ module Buddy
     #
     # It used to be the LAST thing the person said, which is where they stopped
     # talking and has nothing to do with where the content came from: both
-    # memories written off Suki's thread on 19 Aug point at a goodnight message
-    # containing neither subject. Nothing reads `source_message` yet, which is
+    # memories written off one thread can all point at a goodnight message
+    # containing none of their subjects. Nothing reads `source_message` yet, which is
     # precisely why it has to be right or absent - a provenance link is only
     # worth having if following it lands somewhere, and a wrong one is worse
     # than none the first time somebody trusts it.
@@ -692,8 +690,8 @@ module Buddy
     # the gap between the two writes is where the wording moves. The inline
     # `remember` path writes first and stamps no source_message_id, then compile
     # re-reads the same turns half an hour later and says it again in its own
-    # words: "a good time for Eve to water outside" became "for her" (79/83),
-    # and a followup grew its own second half (76/80). Buddy::SideEffects
+    # words: "a good time for her to water outside" loses the name, and a
+    # followup grows its own second half. Buddy::SideEffects
     # already knew how to tell those apart for the inline path; this asks it.
     def duplicate?(user, content)
       return true if restates_feature_request?(user, content)
@@ -710,9 +708,9 @@ module Buddy
     #
     # `feature_requests` is the only one a compile pass can restate, because it
     # is the only one the companion raises mid-conversation and then describes
-    # back in prose. Memory 97 - "Rocco needs a feature request for Inventory
-    # access" - was written half an hour after feature request 1 was created
-    # with a receipt chip saying so. A note about a row is not the row, and
+    # back in prose - so "needs a feature request for Inventory access" gets
+    # written half an hour after the feature request itself was created with a
+    # receipt chip saying so. A note about a row is not the row, and
     # holding one keeps a finished job on the pile forever.
     def restates_feature_request?(user, content)
       words = Buddy::SideEffects.significant_words(content.to_s.downcase)

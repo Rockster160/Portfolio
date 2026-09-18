@@ -1,6 +1,6 @@
-# Prod 5513: told the forecast was for the wrong town, the reply agreed, said it
-# was corrected and promised to use the other town from then on. Nothing was
-# corrected and nothing was recorded — home weather is one hardcoded coordinate
+# Told the forecast is for the wrong town, a reply will agree, say it has been
+# corrected, and promise to use the other town from then on. Nothing is
+# corrected and nothing is recorded — home weather is one hardcoded coordinate
 # (WeatherService::HOME_LAT/HOME_LNG) for every user, and the wrong town had
 # come out of a briefing repair rather than out of anybody's location.
 #

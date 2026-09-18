@@ -22,9 +22,9 @@
 # ONE callback it is configured with, which is production. So a locally
 # scheduled audit spends a full Claude session re-reading the day and publishes
 # a second report into the production thread, carrying an `in_reply_to` that
-# points at a prompt row only the dev database has (prod 4935, 5040 and 5100
-# name 7133, 7152 and 7157). It landed in the right thread only because the two
-# databases happen to agree on conversation 37.
+# points at a prompt row only the dev database has. It lands in the right thread
+# at all only because the two databases happen to agree on the conversation
+# id.
 #
 # The local run comes from a scheduled Today finishing (Buddy::GPT::Turn
 # #queue_daily_audit) and from the backstop cron, both of which arrive here, so

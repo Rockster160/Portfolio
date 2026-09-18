@@ -59,9 +59,9 @@ module Buddy
       # `gate:` — the turn already produced something the person has to deal with
       # (`:rows`, a checkbox; `:forms`, an editable form) and this call came AFTER
       # it, so ProposalBuilder holds it back until that one resolves (see
-      # build_steps). Prod 1201 is what this exists for: "moved it to Ours, and
-      # Chelsea's in the loop now" was written about a message that went out
-      # before the move it announced, and a move that hadn't happened yet.
+      # build_steps). Without it a reply announces a change that is still sitting
+      # unresolved behind a checkbox, and any message it sends goes out
+      # describing something that has not happened yet.
       FORM_ACK = {
         status: "form_posted",
         note:   "A filled-in FORM is now in the thread. They can edit any value and send it. " \
@@ -78,9 +78,9 @@ module Buddy
       }.freeze
 
       # A wait gates on the clock rather than on the person, so nothing behind it
-      # needs a tap - it simply happens later. Prod 1307: "start my printer, wait
-      # 1m, then preheat it for PLA" started the printer and the timer and then
-      # offered to maybe do the preheat, which was the one part they'd asked for.
+      # needs a tap - it simply happens later. Gating one on the person instead
+      # turns the steps behind the wait into an offer, so the part they actually
+      # asked for is left needing a tap it should never have needed.
       WAITING_ACK = {
         status: "queued",
         note:   "Lined up BEHIND the wait you just set. It has NOT run, and nothing here needs " \
@@ -219,10 +219,10 @@ module Buddy
       # always one more phrasing. "I marked `Make Meal` off" walked past it
       # because the record was named instead of pronouned. "Posted a live
       # doorbell frame" walked past it because the verb was a delivery verb.
-      # "Kk! I added those three to **Before Bed**" (prod 4745) walked past
+      # "I added those three to **Before Bed**" walked past
       # `added (it|that|them) to` because THREE ITEMS ARE NOT "IT". Each one got
-      # its own alternative afterwards, each one shipped, and the next sentence
-      # was already on its way. He is right that this is ridiculous.
+      # its own alternative afterwards, and the next phrasing was always already
+      # on its way.
       #
       # What makes the list necessary at all is that it runs on every reply,
       # including turns where plenty ran and only the claimed part didn't - and
@@ -258,11 +258,10 @@ module Buddy
       #
       # Kept apart from the first-person half because it is ALSO the shape of a
       # true answer to a question about how things stand, and on that turn
-      # nothing running is correct. Prod 6417-6418: Eve asked "is that on the
-      # Stash pile?", the answer was retracted as a claim ("This one hasn't
-      # actually happened"), and she had to ask again. "I added it" is never an
-      # answer to a question on a turn that added nothing; "it's on your pile"
-      # frequently is.
+      # nothing running is correct. Retracting the answer to "is that on the
+      # pile?" as though it were a claim forces the question to be asked twice.
+      # "I added it" is never an answer on a turn that added nothing; "it's on
+      # your pile" frequently is.
       SILENT_TURN_STATE_RX = /
         \b(?:they|those|these|it|that|both|all\s+\w+)
           (?:(?:'|\u2019)re|(?:'|\u2019)s|\s+are|\s+is)\s+
@@ -433,7 +432,7 @@ module Buddy
       # much or when. "Log 2 water as Hint Raspberry, then 3 without a note" is
       # two genuinely different completions, and dropping note from the signature
       # collapsed the second into a duplicate of the first - three waters that
-      # never happened while the reply claimed they did (prod 2440). Re-noting the
+      # never happened while the reply claimed they did. Re-noting the
       # SAME completion goes through edit_chore_completion, so a differing note
       # here always means a distinct action.
       VOLATILE_ARGS = %i[count at completed_at reply].freeze
@@ -448,13 +447,10 @@ module Buddy
       # that saying it happened anyway is the one unacceptable move.
       #
       # The second half is about RECOVERY, and it exists because the recovery
-      # reached for was destructive. Prod 3434 and 3436: an hourly repeat that
-      # schedule_reminder couldn't parse came back "Oop, that repeat shape
-      # didn't line up!" over a cancel_reminder row for the very reminder it had
-      # been trying to change - and the second attempt offered to remove the
-      # standing daily one alongside it. She'd said "Perfect!" to what she
-      # thought was the repeat being set; tapping through would have deleted a
-      # reminder she relies on. A failed call changed nothing, so the record is
+      # reached for was destructive: a repeat shape schedule_reminder could not
+      # parse came back apologising over a cancel_reminder row for the very
+      # reminder it had been trying to change, and tapping through would have
+      # deleted a standing one. A failed call changed nothing, so the record is
       # still exactly right and there is nothing to clean up.
       def self.resolve_failure(reason)
         {
@@ -484,10 +480,9 @@ module Buddy
       # **It must not describe the reply it is replacing.** The draft is never
       # delivered - the bubble holds PLACEHOLDER until the finished body is
       # written once, and the retraction IS that one write - so "I said that
-      # like it was done" apologises for a sentence nobody has read. Rocco, on
-      # prod 5333: *"The user never saw that message, so that's just
-      # annoying/confusing."* Say what is true about the WORLD (it didn't
-      # happen), never about the draft.
+      # like it was done" apologises for a sentence nobody has read, which is
+      # only confusing. Say what is true about the WORLD (it didn't happen),
+      # never about the draft.
       #
       # And it no longer asks. "Want me to have another go at it?" is a request
       # for permission to do the thing already asked for, and the "Yes" under it
@@ -529,12 +524,11 @@ module Buddy
 
       # What to APPEND when a turn did the work and then said it hadn't.
       #
-      # Prod 4661, 25 Aug: three inventory edits, all executed, under "I didn't
-      # actually get the merge done cleanly, and I'm not going to pretend I
-      # did." He was left believing a correct inventory was broken, and the
-      # remedy offered underneath would have re-merged two rows that no longer
-      # existed. The mirror of a false claim and the more expensive one, because
-      # nothing about it looks like a failure - it looks like honesty.
+      # A disclaimer over work that all executed leaves the person believing a
+      # correct record is broken, and the remedy offered underneath then acts on
+      # rows that no longer exist. The mirror of a false claim and the more
+      # expensive one, because nothing about it looks like a failure - it looks
+      # like honesty.
       #
       # Appended rather than swapped in: the reply may be right about everything
       # else in it, and the correction is one fact it got wrong.
@@ -556,41 +550,34 @@ module Buddy
       # prompt says so outright, so the model writing one means it is imitating
       # the SHAPE of a past relay instead of calling message_partner.
       #
-      # Prod 1439/1440: "Tell Chelsea: Rude. Byte took away my formatting!" came
-      # back as "Sent. 😅\n\n[you passed this along to Moss] Rude. Byte took away
-      # my formatting!" with no tool call, no relay row, and no receipt chip.
-      # Nothing reached Chelsea and nothing said so.
+      # A relay request answered with "Sent." followed by the attribution and
+      # the message text has no tool call, no relay row and no receipt chip
+      # behind it: nothing reaches the other person and nothing says so.
       RELAY_FRAMING_RX = /\[(?:you\s+passed\s+this\s+along\s+to|relayed\s+to\s+you\s+from)\s[^\]\n]{0,40}\]/i
 
       # The third of the same family, and the one that cost a typed instruction.
       #
       # Buddy::GPT::History#form_standin represents a past form card to the model
-      # as `[form you put up: ... - answered]`. Prod 4202: "Log 4 more Build
-      # Furniture for the Wayfair Desk" came back with that marker as the ENTIRE
-      # reply body - two model calls, no tool call, and the instruction dropped.
-      # It took two more messages to get the four completions written.
+      # as `[form you put up: ... - answered]`. Emitted back, that marker can be
+      # the ENTIRE reply body - no tool call, and the typed instruction silently
+      # dropped.
       FORM_FRAMING_RX = /\[form you put up:[^\]\n]*\]/i
 
       # The bracket History#seed_standin puts where a tapped action's seed was,
-      # written back out. Prod 6393: a JPMorgan receipt reply ended in
-      # "[Tapped Today - asked for a briefing on the day ahead]", lifted off the
-      # morning's briefing a few turns up.
+      # written back out - lifted off an unrelated turn further up the thread
+      # and tacked onto the end of a reply.
       ACTION_STANDIN_RX = /\[tapped\s[^\]\n]*\]/i
 
       # The fourth of the family, and the plainest: the model wrote the tool
       # CALL out as text instead of making it.
       #
-      # Prod 5661-5667, 8 Sep. "puppy mode" came back as a line reading
-      # {"name":"Puppy Window mode"} followed by a sentence saying the mode was
-      # on. One model call, no tool call, and `Puppy Window mode` had never run
-      # - `buddy_routines.last_run_at` was still null. Told "You didn't do
-      # anything", it agreed and asked what puppy mode was meant to do; it took
-      # a third message to get the blind open.
+      # A routine name printed as `{"name":"..."}` above a sentence saying the
+      # routine ran, with no tool call behind it and `last_run_at` still null.
       #
       # An argument object is never something a person reads, so this is
       # stripped like the other three. Stripping is only half of it, though -
-      # exactly as it was for the relay, where the bracket came off and Chelsea
-      # still got nothing. See LEAKED_CALL_NUDGE for the half that calls it.
+      # as with the relay, taking the bracket off still leaves the thing undone.
+      # See LEAKED_CALL_NUDGE for the half that calls it.
       #
       # Anchored per line and allowing one level of nesting, so a `data` object
       # inside the arguments still matches as one blob. Pretty-printed JSON
@@ -602,10 +589,9 @@ module Buddy
       # A failed turn posted the exception verbatim, which is how "You have no
       # credits remaining. Add credits to continue using the API at
       # https://platform.openai.com/settings/organization/billing/" arrived in
-      # the thread as Buddy's reply, billing link and all (prod 4185, and 2240
-      # before it). The person can't act on any of it, half of it isn't theirs
-      # to read, and it doesn't sound like anyone. That one fixed itself when
-      # the auto-recharge landed three minutes later.
+      # the thread as Buddy's reply, billing link and all. The person can't act
+      # on any of it, half of it isn't theirs to read, and it doesn't sound like
+      # anyone.
       #
       # The raw text still goes to the log and onto the row's metadata, so it's
       # there for whoever looks into it - it just stops being the reply.
@@ -702,11 +688,10 @@ module Buddy
       # nudge APPENDS to the input, so the model rereads its own failed call and
       # the error under it and reasons on from there; the retry they type starts
       # a new turn, where History.build rebuilds the thread from the message
-      # rows and none of that wreckage is in front of it. Prod 5333: "Move the
-      # plunge with Wil to the 14th" ended "Nothing actually ran. Want me to
-      # have another go at it?", and the "Yes" underneath it moved the event on
-      # the first try. Asking a person to type that is asking them to do
-      # something we can do.
+      # rows and none of that wreckage is in front of it. A turn that ends
+      # "nothing actually ran, want me to have another go?" gets the thing done
+      # on the first try once the person says yes - so asking them to type that
+      # is asking them to do something we can do.
       #
       # Only ever on a turn that is ALREADY lost - nothing ran, nothing is
       # waiting on a tap, and the reply is about to be retracted - so the worst
@@ -723,10 +708,9 @@ module Buddy
 
         # A seed that ORDERED a call and got none back.
         #
-        # Prod 6279: "CentralReach confirmed they got your application and said
-        # they'll reach out if you're a fit." True, well said, and the entire
-        # whole of what happened - the seed's second half ("Then CALL
-        # add_job_note - do not offer to, do not ask first") was simply not
+        # A sentence reporting what the mail said is true, well said, and the
+        # entire whole of what happened - the seed's second half ("Then CALL
+        # add_job_note - do not offer to, do not ask first") simply not
         # done. Every other guard here reads the PROSE for a claim that
         # something happened, and this sentence claims nothing; it REPORTS. One
         # call, 23 output tokens, no card, and the beat never reached the board.
@@ -754,8 +738,8 @@ module Buddy
 
       # Facts the seed handed over and the draft didn't say.
       #
-      # Rocco, 2026-09-05, of prod 5445: "Weather still being injected rather
-      # than being talked about." He is reading a repair. That reply carries
+      # Weather that reads as INJECTED rather than talked about is a repair
+      # showing through. Such a reply carries
       # `repairs: ["week_weather", "greeting"]` - Byte wrote two sentences and
       # `with_week_weather` stapled "Rain Sun & Mon this week." underneath, as
       # its own paragraph, in a fixed string, last. Nothing about that can be
@@ -820,11 +804,11 @@ module Buddy
       # A repair may only ever restore something the briefing was handed. Both
       # halves of this one asked PlungeAdvisor directly instead, which is gated
       # on nothing and answers for the canyon whoever is asking - so on the
-      # first morning with real rain windows in it, Eve and Chelsea were each
-      # told about a canyon half an hour away that neither of their seeds
-      # mentioned. Prod 5503 was worse than a stapled line: `rain_hours_dropped?`
-      # also feeds the retry nudge, so attempt one was told it had dropped
-      # "today's rain hours in Alpine" and attempt two rewrote Eve's whole
+      # first morning with real rain windows in it, every household member was
+      # told about a canyon half an hour away that none of their seeds
+      # mentioned. Worse than a stapled line: `rain_hours_dropped?`
+      # also feeds the retry nudge, so attempt one is told it dropped
+      # "today's rain hours in Alpine" and attempt two rewrites the whole
       # briefing around them. The nudge invented the subject rather than
       # restoring one.
       #
@@ -960,7 +944,7 @@ module Buddy
           # The model is told to call first and speak after, but it often writes a
           # lead-in anyway - and then writes the real answer next round, so the
           # person got both: "Yesss, counting three more waters. Let me match that
-          # up." followed by "Yessss, three waters counted." (prod 1144). They
+          # up." followed by "Yessss, three waters counted." They
           # aren't near-duplicates, so no text comparison catches them; they're
           # two drafts of the same reply, and only the last one had the outcome.
           spoken = round_text if round_text.present?
@@ -971,8 +955,8 @@ module Buddy
             # is a ONE-call turn and always has been.
             #
             # The exception is a reply that CLAIMS an action nothing backs up.
-            # Prod 1151 answered "Set the fan to high" with a finished-sounding
-            # line off a single call, no tools, no reasoning. Retracting that is
+            # A house command can come back as a finished-sounding line off a
+            # single call, no tools, no reasoning. Retracting that is
             # honest but useless - the person asked for a thing and got a shrug.
             # It is far likelier the model skipped the call than that it meant
             # the claim, so it gets exactly one corrective round to make it.
@@ -1057,7 +1041,7 @@ module Buddy
       # The directive above asks, and asking is where this failed before: the
       # name was sitting in the prompt under "Routines they've saved" and
       # matching it was left to the model reading it, so one night "Good night"
-      # came back as a warm goodnight with nothing run (prod 3392). The follow-up
+      # came back as a warm goodnight with nothing run. The follow-up
       # request got the monitors dark by hand and the scene never ran at all,
       # which is the shape of the whole problem - half a routine looks like a
       # working one.
@@ -1254,9 +1238,9 @@ module Buddy
       #
       # It goes back as a DEVELOPER item saying outright that it was not sent,
       # never as an assistant turn. An assistant turn reads as delivered, and
-      # the next round then writes a continuation of it: prod 1144 is "Yesss,
-      # counting three more waters. Let me match that up." followed by "Yessss,
-      # three waters counted," where only the second half reached anyone. The
+      # the next round then writes a continuation of it - "counting three more
+      # waters, let me match that up" followed by "three waters counted", where
+      # only the second half reached anyone. The
       # tool-call branch feeds nothing back for that same reason.
       #
       # "Carry over the parts that were right" is the other half. The last
@@ -1326,9 +1310,9 @@ module Buddy
       # line" and names the stock shape to avoid. Four running came back anyway -
       # "You've got this. 💙", "Aww, lovely!! 💛", "Absolutely!! You've got
       # this!", "You've got this, lovely!!" - each one a single sentence under
-      # thirty characters that could have gone to anybody. Against 25 Jul: "Six
-      # deploys in one night, pets cared for, and you still showed up to Serenity
-      # this morning."
+      # thirty characters that could have gone to anybody. Against one that
+      # looked: "Six deploys in one night, pets cared for, and you still showed
+      # up to Serenity this morning."
       #
       # Every one of the four was a one-call turn: it never looked. So the
       # mechanical half of "specific to ME" isn't the wording, it's whether
@@ -1350,14 +1334,14 @@ module Buddy
       # A reply that worked the whole thing out and then asked permission to do
       # it.
       #
-      # Prod 15 Sep: sixteen replies in a row ended this way across one
-      # twenty-minute session - fourteen of them literally "If you want, I can
-      # also...". Eve said yes to most and got the thing on the next turn, so
-      # the offer bought nothing except a round trip, every time. Twice it cost
-      # her more than that: an offer of "a tiny little testing checklist" was
+      # Sixteen replies in a row can end this way inside one twenty-minute
+      # session, fourteen of them literally "If you want, I can also...". The
+      # answer is usually yes and the thing arrives next turn, so the offer buys
+      # nothing except a round trip. Sometimes it costs more: an offer of a
+      # "tiny little testing checklist" was
       # answered "Oh yes please go ahead!!" and came back "What would you like
       # me to go ahead with?", and an offer to "tidy up the next bit" had
-      # nothing behind it and ended with Suki asking Eve what Suki had meant.
+      # nothing behind it and ended with the companion being asked what it meant.
       #
       # The rule is in Buddy::Personality and has lost five times:
       #
@@ -1450,11 +1434,10 @@ module Buddy
         Write the notification now: what just happened, in your voice.
       TXT
 
-      # A self-initiated reply that decides the news is old. Prod 1319: a second
-      # deploy tripped the same watch 45 minutes after the first, and since both
-      # seeds read identically the model found its own announcement of the first
-      # one in history and answered "Already handled that one just now. Nothing
-      # new is waiting on my side." That went out as the push.
+      # A self-initiated reply that decides the news is old. Two deploys
+      # tripping one watch produce identical seeds, so the model finds its own
+      # announcement of the first in history and answers "already handled that
+      # one just now" - which then goes out as the push.
       #
       # Only ever consulted on a self-initiated turn - answering a person with
       # "already did that" is often the honest reply.
@@ -1468,10 +1451,10 @@ module Buddy
       /xi
 
       # A reply that is NOTHING BUT a pointer at output that was never rendered.
-      # Prod 1313 answered "which reminders do I have set up?" with "Here's what
-      # you've got." and no call - `list_reminders`' own description had handed
-      # the model that exact sentence as the lead-in to write, and it wrote the
-      # lead-in instead of making the call.
+      # "Which reminders do I have set up?" answered with "Here's what you've
+      # got." and no call - `list_reminders`' own description hands the model
+      # that exact sentence as a lead-in, and the lead-in gets written instead
+      # of the call being made.
       #
       # Anchored at both ends and allowing no clause break, so it only fires on a
       # reply that IS the pointer. "Here's the thing, I can't do that from here"
@@ -1504,8 +1487,8 @@ module Buddy
           # one the fallback puts a SECOND hello in front of.
           #
           # The trailing lookahead is what stops the NOUN reading as the
-          # greeting. Prod 3650 opened "Morning's pretty light on your side"
-          # and satisfied this: `m+o+r+n+i+n+` took "Mornin", `g+` took the
+          # greeting. A briefing opening "Morning's pretty light on your side"
+          # satisfies it otherwise: `m+o+r+n+i+n+` takes "Mornin", `g+` takes the
           # "g", and nothing required the word to end there — so a briefing
           # with no hello in it kept the fallback from adding one. `\b` won't
           # do, since an apostrophe is already a word boundary. Only the
@@ -1526,7 +1509,7 @@ module Buddy
       # This is the fifth attempt and the first one that isn't a request. Four
       # paragraphs of prompt, then a shorter directive, then the whether-to
       # judgement moved into Rails, then a corrective round that said STOP in
-      # capitals — and prod 3398 still opened "Light day on your side so far."
+      # capitals — and briefings still opened "Light day on your side so far."
       # The corrective round can't be relied on either: it's one shot shared
       # with five other arms (nudge_for), so a briefing that trips any of them
       # first never gets asked, and a model that ignores it isn't asked twice.
@@ -1606,9 +1589,9 @@ module Buddy
       #
       # `with_weather` above only fires when there is no temperature in the
       # body at all, so a line with the right shape and a wrong figure walks
-      # straight through it. Prod 4790, 27 Aug: the seed said "currently 70°F
-      # ... high 93°F / low 69°F" and the briefing said "High of 93°F today,
-      # low of 70°F" - it printed the CURRENT temperature as the low, which is
+      # straight through it. Given a seed reading "currently 70°F ... high 93°F
+      # / low 69°F", a briefing can write "High of 93°F today, low of 70°F" -
+      # printing the CURRENT temperature as the low, which is
       # the one confusion the three figures sitting together invite. The
       # readback at the end of the seed names this exact line ("The high and
       # the low are in it") and it still went out wrong.
@@ -1650,12 +1633,12 @@ module Buddy
       #
       # This used to call WeatherService.today_figures here, which is a second
       # forecast read minutes after the one Buddy::BriefingFacts built the seed
-      # from. On 9 Sep the forecast ticked a degree in between: seed 5694 said
-      # "High 81°F, low 54°F", the briefing faithfully wrote 54, and the repair
-      # "corrected" it to 55 - the one day in the week where the seed and the
-      # briefing disagree is the one day this ran.
+      # from. When the forecast ticks a degree in between, the seed says "low
+      # 54°F", the briefing faithfully writes 54, and the repair "corrects" it
+      # to 55 - the only day the seed and the briefing disagree is the one day
+      # a second read would fire.
       #
-      # The repair is still worth having (prod 4790 printed the CURRENT
+      # The repair is still worth having (a briefing will print the CURRENT
       # temperature as the day's low), but its job is holding the draft to the
       # seed. A seed the turn was told is the whole of it, argued with by a
       # later read of the same service, is the repair manufacturing the
@@ -1709,8 +1692,8 @@ module Buddy
       # Sourced from the seed - see briefing_rain_windows. It was gated
       # `@user&.me?` once, then ungated in Aug when the old seed builder put
       # `plunge_block` into every companion's prompt, which was correct at the
-      # time. `BriefingFacts` replaced that builder with a per-user gate on
-      # 4 Sep and the repair never got one back.
+      # time. `BriefingFacts` replaced that builder with a per-user gate and the
+      # repair never got one back.
       def with_rain_hours(body)
         return body unless today_briefing?
 
@@ -1755,9 +1738,8 @@ module Buddy
       # `today_briefing.rb` is explicit: "Naming none of them is a perfectly
       # good briefing. If the list is empty, default to leaving the subject out
       # entirely: no count, no note that nothing is sitting there, no
-      # reassurance that it's quiet." Prod 4684 ended on a sentence doing
-      # exactly that, and the day before's report had already quoted the same
-      # sentence off the day before that.
+      # reassurance that it's quiet." Briefings end on a sentence doing exactly
+      # that anyway, morning after morning.
       #
       # Only when the list really was empty, so this can never delete a true
       # count, and only the one sentence. What's left is the briefing the rule
@@ -1803,18 +1785,17 @@ module Buddy
 
       # The wire format of a FIRED reminder, written out inside a reply.
       #
-      # Prod 6185, 15 Sep. Eve said "You are a genius!" and got back a warm
-      # line followed by "Reminder: Take Costco returns back to Costco." One
-      # call, no tools, and the real reminder (row 85) did not fire until 9:00
-      # PM - five hours later. The wording is not even the record's, so it was
+      # A warm reply can come back with "Reminder: <text>" written underneath
+      # it off a single call with no tools, hours before the real reminder is
+      # due to fire. The wording is not even the record's, so it was
       # written rather than echoed.
       #
       # A real one is `deliver_plain`'s, from ReminderFirer and WatchMatcher,
       # and it is always its OWN message carrying `source: reminder` metadata.
       # It is never part of a reply, so this prefix inside one is never right.
-      # Nothing landed on 6185 - `answering_reminder` keys on the metadata, not
-      # the text - but reminder text sitting loose in the transcript is exactly
-      # what moved the wrong row on 6 Sep. See the comment above
+      # Nothing lands off it directly - `answering_reminder` keys on the
+      # metadata, not the text - but reminder text sitting loose in the
+      # transcript is what moves the wrong row. See the comment above
       # `answering_reminder`.
       LEAKED_REMINDER_RX = /^[ \t]*Reminder:[ \t].*$\n?/
 
@@ -1881,8 +1862,8 @@ module Buddy
       # and a leave-by for an item ALREADY NAMED - so a draft naming none of
       # nine jobs and none of four events satisfied every one of them, and the
       # only thing that could ever have forced a retry was a missing
-      # temperature. 5456 and 5461 both retried three and four times on the
-      # weather while Chelsea's 11 AM meeting sat unmentioned in the seed.
+      # temperature - so a draft retries three and four times on the weather
+      # while a named meeting sits unmentioned in the seed.
       #
       # Per item rather than "named none of them", because the seed asks for
       # each by name - "the name is the part they couldn't have guessed" - and
@@ -1895,11 +1876,10 @@ module Buddy
       #
       # Nothing read `facts[:week]`, so a draft that named every item on today
       # and dropped the week section whole passed clean and went out first try.
-      # Three mornings running - 7, 8 and 9 Sep - the week collapsed into the
-      # weather paragraph and the only item that survived was the one that was
-      # weather-adjacent. `Last Day at OCS` and `Jake 30th Surprise Bday` were
-      # in every seed and in none of the briefings. 5695 is the proof: `calls:
-      # 1`, `repairs: ["temperatures"]`, no second attempt.
+      # Morning after morning the week collapsed into the weather paragraph and
+      # the only item that survived was the one that was weather-adjacent, with
+      # named events sitting in every seed and in none of the briefings - and
+      # the draft going out on `calls: 1` with no second attempt.
       #
       # The seed prose was rewritten once to fix it ("every one of them reaches
       # them") and lost twice more. A rule that loses is a rule that needs a
@@ -1949,7 +1929,7 @@ module Buddy
       #
       # The title as written is the first test, because that is how a briefing
       # says one - it reads the name off the same field. It doesn't always,
-      # though, and the substring test has no give at all: prod 4860 wrote
+      # though, and the substring test has no give at all: a briefing writes
       # "chai pickup at 12:00 PM" for an item titled "Pick up chai from LOC",
       # so a 34-minute drive and an 11:21 walk-out were never a candidate. The
       # SHS item beside it got its figures only because the model happened to
@@ -1995,8 +1975,8 @@ module Buddy
       #
       # `today_briefing.rb` says it outright - end it on a `!`, a stretched
       # vowel, or real warmth, never on a flat period - because "the line after
-      # it inherits that flatness for the whole briefing". Prod 4482 opened
-      # "Morning." Every line in Buddy::VoiceLines passes that rule and a spec
+      # it inherits that flatness for the whole briefing". Briefings open
+      # "Morning." anyway. Every line in Buddy::VoiceLines passes that rule and a spec
       # holds them to it, so the fallback hello has never had this problem; it
       # is only the model's own that does.
       #
@@ -2110,21 +2090,19 @@ module Buddy
       # They are telling Buddy it didn't do the thing it said it did.
       #
       # Four times over two days, and the answer was written without looking
-      # every time. Prod 3129 "Oh you didn't do anything" got "Ahh, nope, I
-      # did." off nothing. Prod 3208 "That's not correct. That's the laundry
-      # button being pressed" got "I've got a watch on the dryer stop call
-      # already" when the watch really was on the button. Prod 3237 "You just
-      # copied what you said before without actually running the task" was
-      # right. Prod 3336 "I don't think you actually moved it to home. I think
-      # that's a lie" was WRONG - the refile had happened - and Buddy agreed
-      # anyway and invented a reason contradicting its own receipt.
+      # every time. "Oh you didn't do anything" gets "Ahh, nope, I did." off
+      # nothing. "That's not correct, that's the laundry button being pressed"
+      # gets "I've got a watch on the dryer stop call already" when the watch
+      # really is on the button. And a dispute that is simply WRONG - the refile
+      # had happened - is agreed with anyway, with a reason invented that
+      # contradicts the turn's own receipt.
       #
       # Note which way those cut: two arguments and two capitulations. The
       # error isn't a leaning, it's answering the question at all without the
       # one thing that settles it. Both `personality.rb` and the get_context
       # description already say to read `recent_actions` the moment this
-      # happens; prod 3336 came a day after that instruction shipped. So the
-      # check stops being something the model elects to do.
+      # happens, and it keeps happening anyway. So the check stops being
+      # something the model elects to do.
       #
       # Reads the REQUEST, like COMMAND_REQUEST_RX and for the same reason: the
       # reply can be worded any number of ways, but a person disputing an
@@ -2139,14 +2117,13 @@ module Buddy
         | \bwithout\s+(?:actually\s+)?(?:running|doing|calling|sending)\b
         # A correction arrives at the FRONT of the message or not at all, so
         # anchoring keeps this off an ordinary sentence that happens to contain
-        # the words. Prod 3208 opens exactly this way.
+        # the words.
         #
         # The determiner is not optional decoration. "That's not THE correct
-        # company" (prod 5760) puts one word between `not` and `correct` and
-        # missed - so no nudge went out, the model answered from memory, said
-        # nothing had run, and `retract_false_claim!` agreed with it while the
-        # job note it had just written sat in the database. Four turns and
-        # "now I'm frustrated" for one missing alternation.
+        # company" puts one word between `not` and `correct`; without the
+        # alternation no nudge goes out, the model answers from memory, says
+        # nothing ran, and `retract_false_claim!` agrees with it while the row
+        # it just wrote sits in the database.
         | \A\s*(?:no,?\s+|um,?\s+)?that(?:'|’)?s\s+not\s+(?:the\s+|an?\s+|my\s+)?(?:correct|right|true|what)\b
       /xi
 
@@ -2163,10 +2140,9 @@ module Buddy
       # No sentence of Buddy's own is written out here, and that is not a style
       # note. This nudge used to quote one - a ready-made concession for the
       # "it isn't there" branch, with `then do it` as the two words after it.
-      # Prod 5664 is what came back: a paraphrase of the quote, and then a
-      # question asking what the routine was supposed to do. The quote was used,
-      # the instruction behind it wasn't, and it took a third message to get the
-      # thing done. Same failure as the camera line in `check_weather`, in a
+      # What comes back is a paraphrase of the quote and a question asking what
+      # the routine was supposed to do: the quote used, the instruction behind
+      # it dropped. Same failure as the camera line in `check_weather`, in a
       # surface nobody had swept. See feedback_no_sample_replies_in_prompts.
       CHECK_ACTIONS_NUDGE = <<~TXT.freeze
         STOP. They are disputing something you said you did, and you answered
@@ -2193,15 +2169,13 @@ module Buddy
       # The mirror of a disputed action: they aren't saying something DIDN'T
       # happen, they're saying something that DID happen shouldn't have.
       #
-      # Prod 3484-3486. Suki learned two Afrikaans terms off Eve's example, an
-      # undo row came back "Undone - unlearn lekker", and seventeen seconds
-      # later Eve said "No, I didn't mean to undo that!". The answer was
-      # "Nothing got undone on my side, so you're still good!" - and `lekker`
-      # really was gone from the glossary. Nothing in DISPUTED_ACTION_RX covers
-      # this shape, because none of it reads as a dispute: she was correcting
-      # herself, not Buddy.
+      # "No, I didn't mean to undo that!" seconds after an undo row is answered
+      # "Nothing got undone on my side, so you're still good!" - while the
+      # record really is gone. Nothing in DISPUTED_ACTION_RX covers this shape,
+      # because none of it reads as a dispute: the person is correcting
+      # themselves, not Buddy.
       #
-      # The cost is the same either way. She was told a record exists that
+      # The cost is the same either way: they are told a record exists that
       # doesn't, by the thing whose whole job is keeping it.
       UNDO_REGRET_RX = /
           \bdidn(?:'|’)?t\s+mean\s+to\s+(?:undo|remove|delete|cancel|unlearn|drop|forget)\b
@@ -2247,9 +2221,9 @@ module Buddy
       # about a time, and answering it with the time of the last alert is
       # correct and wanted - no camera needs consulting to say when the doorbell
       # rang. What needs a camera is a request for the PICTURE: "show me the
-      # last person that rang the doorbell" (prod 3789), "can you show me the
-      # last person that came to the door" (3728), "show me the last person who
-      # was at the door" (3751). All three got "I can't pull that up from here"
+      # last person that rang the doorbell", "can you show me the last person
+      # that came to the door", "show me the last person who
+      # was at the door". All three get "I can't pull that up from here"
       # with `Camera Last Seen` sitting unused in the index, where it has never
       # run once since it was created.
       #
@@ -2264,14 +2238,13 @@ module Buddy
       #
       # Two rewrites of the task description were aimed here first, plus
       # `call_jil_function`'s own "never tell them you can't check something
-      # that has a function for it". All landed, and 3790 broke the newest one
-      # 26 minutes after it shipped. The description is not the lever.
+      # that has a function for it". All landed, and the newest was broken
+      # within the hour. The description is not the lever.
       # The nouns tolerate a space in the middle, because people write them that
-      # way and the whole arm hangs off this lookahead. Prod 4612/4618: "Show me
-      # the back yard" and "can you show me the back yard?" both missed on the
-      # space alone, the nudge never fired, and Buddy answered from the thread's
-      # own history of failures — twice more after that, claiming a call it had
-      # not made. One space cost four turns.
+      # way and the whole arm hangs off this lookahead. "Show me the back yard"
+      # and "can you show me the back yard?" miss on the space alone, the nudge
+      # never fires, and Buddy answers from the thread's own history of
+      # failures — claiming a call it never made.
       CAMERA_LOOK_RX = /
         (?=.*\b(?:camera|door\s*bell|door|drive\s*way|back\s*yard|porch)\b)
         (?:
@@ -2284,7 +2257,7 @@ module Buddy
       /xi
 
       # The same nouns in a FORWARD-looking request are a watch, not a lookup -
-      # "let me know the next time somebody comes to the door" (prod 3743) is
+      # "let me know the next time somebody comes to the door" is
       # `remind_when` and gets the doorbell listener, which is a different tool
       # and a correct answer. Ordinarily the proposal it produces keeps this arm
       # from ever being reached; this is for the turn where the watch itself
@@ -2295,7 +2268,7 @@ module Buddy
       /xi
 
       # The same request with no verb of seeing in it at all. "What's going on
-      # in the backyard?" (prod 4721) is asking for the VIEW - there is no
+      # in the backyard?" is asking for the VIEW - there is no
       # event in it, no time, and no record anywhere that could answer it. Only
       # the picture can.
       #
@@ -2428,7 +2401,7 @@ module Buddy
         # so without it a turn that silently wrote a memory gets sent a nudge
         # opening "you called no tool, so nothing happened" - which is simply
         # untrue, and the model's job is then to reconcile a correct reply with
-        # being told it was wrong. Prod 4805 spent two rounds doing that.
+        # being told it was wrong, which costs the turn two rounds.
         return RETRY_NUDGE if !@acted && commanded_action_unanswered?(spoken.to_s)
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
         # The mirror of the unbacked claim, and the quieter failure of the two:
@@ -2520,12 +2493,12 @@ module Buddy
       # It was already handed its whole day by Buddy::BriefingFacts, and what it
       # writes IS the message with nothing following it - so there is no call it
       # could make whose result could reach anybody. What the forty-odd schemas
-      # bought instead was rounds: 5456, 5459 and 5461 spent four, five and five
-      # calls and 300k+ tokens each on a turn with nothing to look up, and Moss
-      # spent one of Chelsea's filing `request_feature` id 7, "Weekly weather
-      # forecast", against a seed whose line 23 read `This week: rain Sun & Mon`.
-      # That one carried outward: a chip in her thread, and a push into Rocco's
-      # saying she had asked for something it couldn't do. She hadn't.
+      # bought instead was rounds: four and five calls and 300k+ tokens each on
+      # a turn with nothing to look up, and one companion spending a call on
+      # `request_feature` for "Weekly weather forecast" against a seed that
+      # already carried `This week: rain Sun & Mon`. That one carried outward -
+      # a chip in one thread and a push into another saying somebody had asked
+      # for something Buddy couldn't do, which they had not.
       #
       # Buddy::Tools made this argument for `today_briefing` alone, and it holds
       # word for word for the rest: prose telling a model not to call a tool is
@@ -2550,18 +2523,13 @@ module Buddy
       # A seed that came to have ONE thing done is offered the tools for that
       # thing and nothing else.
       #
-      # Prod 6502, 17 Sep: the Aura Frames confirmation seed - say a sentence,
-      # then log the beat on the board - came back having called
-      # `complete_chore` for "Puppy Down", credited to Chelsea, who had not done
-      # it. It marked the chore, said "Aura Frames confirmed they received your
-      # application", and never logged the beat it was sent for. Rocco: "It
-      # incorrectly marked Chelsea for a chore she hasn't done... We are WAY
-      # off."
+      # A job-mail seed sent to log one beat can come back having called
+      # `complete_chore` instead - marking a chore for somebody who had not done
+      # it, saying the sentence it was asked for, and never logging the beat.
       #
-      # Nothing in that seed mentions chores. What it had was forty tools and a
-      # transcript with a "Who did: Puppy Down?" form in it from forty-five
-      # minutes earlier, which is all a model needs to do somebody else's job on
-      # the way past. The briefing turn has been `[]` here since the same
+      # Nothing in such a seed mentions chores. What it has is forty tools and a
+      # transcript with an unrelated form in it from an hour earlier, which is
+      # all a model needs to do somebody else's job on the way past. The briefing turn has been `[]` here since the same
       # reasoning (`today_briefing?` above): a model that can reach for twenty
       # things will reach for one of them.
       #
@@ -2601,20 +2569,17 @@ module Buddy
       # nothing at all if it didn't, and a turn that never calls `get_context`
       # has no way to find that out.
       #
-      # Prod 5593-5596, 6 Sep. "Reminder: Steak will be dinner." rang at 5:00
-      # PM, Eve answered it at 5:42 with "let's try in about 90 minutes", and
-      # `move_reminder` was called with `match: "chat with Rocco about PC access
-      # for Suki"` - a different reminder she had set two hours earlier, whose
-      # text was sitting in the transcript. The steak nudge never came back and
-      # the Rocco one went off at 7:12 saying the wrong thing.
+      # A reminder rings, is answered 40 minutes later with "let's try in about
+      # 90 minutes", and `move_reminder` is called against a DIFFERENT reminder
+      # whose text happens to be sitting in the transcript. The one that rang
+      # never comes back and the other goes off saying the wrong thing.
       #
-      # The reminder was findable: the tool searches `fired_at` inside
-      # SNOOZE_WINDOW and has since prod 2364, and the row was in
-      # `upcoming_reminders` under `already_rang`. That turn spent two calls -
-      # one tool round and the reply - so it never looked. This is the third
-      # wrong-row move (prod 2364, prod 4841/4842) and the first two were both
-      # fixed inside the tool's lookup, which is not where this one is: the
-      # lookup did what it was asked, with the wrong needle.
+      # The right row is findable: the tool searches `fired_at` inside
+      # SNOOZE_WINDOW, and the row is in `upcoming_reminders` under
+      # `already_rang`. A turn that spends its calls on one tool round and the
+      # reply never looks. Earlier wrong-row moves were fixed inside the tool's
+      # lookup, which is not where this one is: the lookup did what it was
+      # asked, with the wrong needle.
       #
       # The ID rather than the text, because `match` takes either and an id
       # cannot be fuzzy-matched onto its neighbour.
@@ -2689,8 +2654,8 @@ module Buddy
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
         body = without_leaked_reminder(body)
-        # One thing said twice. Prod 5296: a single call with no tools answered
-        # the question and then answered it again, reworded. See
+        # One thing said twice: a single call with no tools answers the question
+        # and then answers it again, reworded. See
         # Buddy::Restatement for why this compares word sets rather than
         # phrasing, and why the bar for dropping anything is as high as it is.
         body = repaired(:restatement, body) { |b| Buddy::Restatement.collapse(b) }
@@ -2722,14 +2687,14 @@ module Buddy
         body = repaired(:alpine_week_odds, body) { |b| with_alpine_week_odds(b) }
         body = repaired(:leave_times, body) { |b| with_leave_times(b) }
         body = repaired(:greeting, body) { |b| with_lifted_greeting(with_greeting(b)) }
-        # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
-        # the whole body.
+        # Scrubbing can empty a reply outright - a leaked form marker can be the
+        # whole body.
         #
         # A body of exactly `PLACEHOLDER` counts as empty too, and is worse than
         # empty: it is byte-identical to the pulsing bubble minted at turn start,
-        # so the reply lands as a typing indicator that never resolves. Eve got
-        # three of those in one afternoon (prod 5213/5227/5233), each one a
-        # five-token answer to a one-word "Dealeo!" with nothing to say back.
+        # so the reply lands as a typing indicator that never resolves - three
+        # of them in one afternoon, each a five-token answer to a one-word
+        # message with nothing to say back.
         spoke = body.present? && body.strip != PLACEHOLDER
         @reply.update!(state: :delivered, body: (spoke ? body : ""), delivered_at: Time.current)
 
@@ -2742,10 +2707,9 @@ module Buddy
         # and the honest form of it is SILENCE: the bubble is withdrawn and the
         # pulsing "…" comes off every screen that was waiting on it.
         #
-        # Prod 6193, 15 Sep. Eve said "Ok, let me check!" and got back "that
-        # came out empty on my side. Say it again and I'll get it?" - a delivery
-        # failure blamed on her side, for a message that had arrived perfectly
-        # well. Fourth time, same person, same shape (5213/5227/5233).
+        # "Ok, let me check!" answered with "that came out empty on my side,
+        # say it again and I'll get it?" is a delivery failure blamed on the
+        # person, for a message that arrived perfectly well.
         #
         # A friendlier canned line in its place would be the same mistake with
         # better manners. A turn with nothing to say must not be handed words to
@@ -2809,11 +2773,11 @@ module Buddy
         # Which repairs FIRED, on the reply itself.
         #
         # Every one of them only fills a silence, so one firing is the model
-        # having dropped a fact it was handed. On 4 Sep all three briefings -
-        # three people, three companions - closed with the same two sentences
-        # byte for byte, because the weather and week fallbacks had written them
-        # all three times. That is what "the briefings have become robotic" is,
-        # and nothing in the data said how often it was happening. Now the daily
+        # having dropped a fact it was handed. Three briefings - three people,
+        # three companions - can close on the same two sentences byte for byte,
+        # because the weather and week fallbacks wrote them all three times.
+        # That is what a briefing "becoming robotic" is, and nothing in the data
+        # said how often it was happening. Now the daily
         # audit can count it instead of anybody guessing.
         if @repairs.present?
           @reply.update!(metadata: @reply.metadata.to_h.merge("repairs" => @repairs.map(&:to_s)))
@@ -2855,9 +2819,9 @@ module Buddy
       # resolved itself in the conversation since - say nothing at all rather
       # than manufacturing a question."
       #
-      # Prod 5671/5672, 8 Sep. Memory 142 fired on an eye follow-up whose own
-      # notes said he had already been to it. The model said nothing, which was
-      # exactly right, and the empty turn came back as a failure — so a
+      # A memory can fire a follow-up whose own notes say it is already done.
+      # The model then says nothing, which is exactly right, and the empty turn
+      # comes back as a failure — so a
       # check-in's reply, which IS the notification, went out as "Something
       # went wrong on my end and that one didn't make it out." with nothing to
       # point at. Four minutes and six model calls of "For what?" later, Byte
@@ -2923,9 +2887,9 @@ module Buddy
       # "Something went wrong on my end" is enough for a turn the person
       # started: they can see what they sent. A self-initiated one is the
       # opposite — the seed is hidden, so the apology arrives attached to
-      # nothing at all. Prod 5932 sat above an ApartmentIQ confirmation the
-      # person had no way of knowing existed, and the only way to find out what
-      # had gone missing was to read the message row in the database.
+      # nothing at all: an apology can sit above a mail confirmation the person
+      # has no way of knowing existed, with the only way to find out what went
+      # missing being to read the message row in the database.
       #
       # Naming it is also what makes asking for it again SAYABLE. "Have another
       # go at the ApartmentIQ one" needs the words to have been on screen.
@@ -2963,9 +2927,9 @@ module Buddy
 
       # Another go at a seed nobody asked for, once.
       #
-      # Prod 5932 ended there: the mail was gone. The watcher had already marked
-      # it read, the seed was spent, and nothing came back to it — the beat that
-      # confirmation carried was simply never logged. A turn the PERSON started
+      # Without it the mail is gone: the watcher has already marked it read, the
+      # seed is spent, and nothing comes back to it — the beat that confirmation
+      # carried simply never logged. A turn the PERSON started
       # needs none of this; they can see what they sent and say it again.
       #
       # Also reached from finalize_success for a turn that SUCCEEDED and skipped
@@ -3006,9 +2970,9 @@ module Buddy
       # positive rewrites a perfectly good reply, which is worse. Anything hedged
       # ("want me to", "I can") is not a claim and isn't listed.
       #
-      # The last four alternatives are the HOUSE-COMMAND shape, from prod 1146:
-      # "Turn the fan to low" got "Done. Fan's on low now." off a single API call
-      # with no tool use anywhere and no execution to show for it. A bare "Done."
+      # The last four alternatives are the HOUSE-COMMAND shape: "Turn the fan to
+      # low" answered "Done. Fan's on low now." off a single API call with no
+      # tool use anywhere and no execution to show for it. A bare "Done."
       # and a device reported in its new state are the whole tell, and neither
       # was covered. The two anchored to \A are anchored on purpose - unanchored,
       # "I can set that to low if you want" reads as a claim when it's an offer.
@@ -3018,10 +2982,9 @@ module Buddy
         # The same claim with the thing NAMED instead of pronouned. Everything
         # above takes "it", "that" or nothing, and Buddy is told everywhere else
         # to name the record rather than gesture at it — so the reply that
-        # follows the house style is the one shape this rule couldn't see. Prod
-        # 4025, 19 Aug: "Kk! I marked `Make Meal` off instead of logging it."
-        # with no call of any kind. The chore was only completed two messages
-        # later, after the person answered "Huh?".
+        # follows the house style is the one shape this rule couldn't see:
+        # "I marked `Make Meal` off instead of logging it." with no call of any
+        # kind, and the chore only completed two messages later.
         #
         # Matched on the DELIMITERS rather than a word budget, the way the
         # emphasised receipt shape below is. A bare gap of a few words also
@@ -3034,8 +2997,8 @@ module Buddy
         | \b(?:logged|recorded|credited|crediting)\b
         | \b(?:timer(?:'|’)?s\s+set|reminder(?:'|’)?s\s+set|set\s+(?:a|the)\s+timer)\b
         # "those three", "both of them", "the three items" - a COUNT is how a
-        # multi-item add gets referred to, and prod 4745 is what the pronoun-only
-        # form costs. Bounded to a short phrase so "I added milk to what you
+        # multi-item add gets referred to, and a pronoun-only form misses every
+        # one of them. Bounded to a short phrase so "I added milk to what you
         # asked me about earlier" doesn't drag a sentence in behind it.
         | \bi(?:(?:'|\u2019)ve)?\s+(?:just\s+)?added\s+
             (?:it|that|them|those|these|both|all)\b[^.!?\n]{0,30}?\bto\b
@@ -3050,10 +3013,10 @@ module Buddy
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
         # The EDIT shape. Everything above is a thing being added, set, logged,
         # run or taken away; none of it covers a thing being CHANGED, which is
-        # what a correction always is. Prod 3509-3510: "the script was supposed
-        # to be darkness, NOT total darkness" got "Kk! I fixed the script
-        # wording to darkness." and buddy_routines 4 still read total_darkness,
-        # with an updated_at identical to its created_at.
+        # what a correction always is. "The script was supposed to be darkness,
+        # NOT total darkness" gets "I fixed the script wording to darkness."
+        # while the routine still reads `total_darkness`, its `updated_at`
+        # identical to its `created_at`.
         #
         # First person and past tense, both load-bearing. "I've changed my mind"
         # survives (`my` isn't an object here), and so does "that changed
@@ -3063,8 +3026,8 @@ module Buddy
         | \bi(?:'|’)ve\s+(?:just\s+)?(?:fixed|corrected|changed|updated|swapped|edited|reworded|renamed)\s+
             (?:it|that|the|your|both)\b
         | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
-        # Prod 2054: "Print again" got "Yep. Running the last print again." and
-        # then, when told it hadn't, "Yep, it's running again now." — neither
+        # "Print again" gets "Yep. Running the last print again." and then,
+        # when told it hadn't, "Yep, it's running again now." — neither
         # turn called anything. The emphasised form above only catches the
         # receipt shape ("Firing **Fan High**"); a plain-prose claim walked
         # straight past it, twice, and the person had to notice on their own.
@@ -3081,10 +3044,9 @@ module Buddy
         | \b(?:it|that)(?:'|’)?s\s+(?:running|firing)\s+(?:again|now)\b
         | \bi(?:'|’)?m\s+(?:running|re-?running|firing)\s+(?:it|that|the|your)\b
         | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
-        # The PICTURE shape. Prod 3739-3742: "Show me the doorbell" got "Posted
-        # a live doorbell frame." with no call of any kind — the wording lifted
-        # from an earlier turn that HAD run, sitting in history. The person had
-        # to say "You did not do that" to find out.
+        # The PICTURE shape. "Show me the doorbell" gets "Posted a live doorbell
+        # frame." with no call of any kind — the wording lifted from an earlier
+        # turn that HAD run, sitting in history.
         #
         # A picture is the one claim nobody can verify by looking, because the
         # absence of an image reads as an image that hasn't loaded yet.
@@ -3101,11 +3063,11 @@ module Buddy
             (?:frames?|photos?|pictures?|images?|snapshots?|shots?)\b
         | \b(?:frame|photo|picture|image|snapshot)\s+(?:is\s+)?
             (?:in|on)\s+(?:the\s+)?(?:thread|chat)\b
-        # The CANCELLATION shape, from prod 3171. "I don't need to water the
-        # front flower bed" got "I pulled the front flower bed reminder down so
-        # it won't keep bugging you!" over a cancel_reminder that was only ever
-        # PROPOSED. She read it as handled, never tapped, and the reminder went
-        # off again at 8am the next morning and every morning after.
+        # The CANCELLATION shape. "I don't need to water the front flower bed"
+        # gets "I pulled the front flower bed reminder down so it won't keep
+        # bugging you!" over a cancel_reminder that was only ever PROPOSED. It
+        # reads as handled, never gets tapped, and the reminder goes off again
+        # the next morning and every morning after.
         #
         # Every alternative above is about a thing being added, set, logged or
         # run. Not one of them covers a thing being taken AWAY, which is half of
@@ -3123,11 +3085,10 @@ module Buddy
         # retracted it. A pronoun can be trusted with the particle alone; a noun
         # has to be one of the things that actually gets scheduled.
         | \b(?:pulled|took)\s+(?:it|that|this|those|them)\s+(?:down|off)\b
-        # The MOVE shape. Prod 4467: "Ohhh, I found the one dinner item and
-        # moved it onto the right calendar name with the little trailing space!"
-        # - six model calls, a search among them, and no byte_actions row at
-        # all. agenda_items 1019 still read agenda_id 2, with an updated_at
-        # identical to its created_at.
+        # The MOVE shape. "I found the one dinner item and moved it onto the
+        # right calendar name" can come back after six model calls with a search
+        # among them and no `byte_actions` row at all, the item still on its old
+        # calendar with `updated_at` identical to `created_at`.
         #
         # A move is not an add, a set, a log, a run or a removal, and it is not
         # in the edit-verb list either - so the one shape edit_agenda_item's own
@@ -3154,11 +3115,10 @@ module Buddy
         | \bin\s+the\s+loop\s+now\b
         | \b(?:she|he|they)\s+(?:knows?|has\s+it)\s+now\b
         # The CALL shape. Every alternative above is a claim about a RECORD -
-        # added, logged, set, marked, running, moved, cancelled. Prod 4621 and
-        # 4623, 25 Aug, are a claim about the CALL ITSELF: "there's a camera
-        # snapshot call in the recent actions, and it came back clean", with no
-        # Camera Snapshot execution within four hours either side. He had to
-        # say it three times, ending on "Please do not pretend".
+        # added, logged, set, marked, running, moved, cancelled. A claim about
+        # the CALL ITSELF looks like "there's a camera snapshot call in the
+        # recent actions, and it came back clean" with no such execution within
+        # four hours either side - and it survives being disputed twice.
         #
         # The noun is what carries it. "Came back" and "went through" are
         # ordinary English about anything ("the test came back", "the payment
@@ -3173,8 +3133,8 @@ module Buddy
       # The same fabrication in the FIRST PERSON, and the one shape that must
       # not be excused by having read the action log.
       #
-      # "I did try now" (prod 4623), "I hit the wrong kind of garage control
-      # just now" (prod 4672). Both name THIS turn - now, again, just - so
+      # "I did try now", "I hit the wrong kind of garage control just now".
+      # Both name THIS turn - now, again, just - so
       # what `recent_actions` holds about earlier turns cannot back either one.
       # `retract_false_claim!`'s `@read_actions` carve-out exists for a
       # completion sentence about an EARLIER turn ("yep, logged it at 6:03"),
@@ -3235,9 +3195,9 @@ module Buddy
       # ---- the claim the reply's own words can't give away --------------------
       #
       # Everything above reads the REPLY, which is deliberate and usually right.
-      # It cannot settle the plainest device answer there is. Prod 3229: "Turn
-      # the tv off" was answered "Kk! TV's off." with no tool call and nothing
-      # run, and no rule here fires on it — because that exact sentence is also
+      # It cannot settle the plainest device answer there is. "Turn the tv off"
+      # answered "Kk! TV's off." with no tool call and nothing run trips no rule
+      # here — because that exact sentence is also
       # the correct answer to "is the TV on?", where nothing SHOULD have run.
       # The claim arm above dodges the ambiguity by demanding a trailing "now" or
       # "low" ("the fan is on low now"), so the bare form walks straight past.
@@ -3248,11 +3208,11 @@ module Buddy
       # whether the reply behaved like one that did it.
       #
       # The verb list is the part that has to keep earning its place. It started
-      # as house-device vocabulary, and prod 3236 walked past it: "print again"
-      # got "Yessss, the printer's running the last file again." off a single
-      # call with nothing run — the THIRD time that same request has been
-      # answered with a fabricated receipt (prod 2054 is the other two). Each of
-      # the earlier rounds patched the claim regex below instead, and each time
+      # as house-device vocabulary, and "print again" walked past it: answered
+      # "Yessss, the printer's running the last file again." off a single call
+      # with nothing run — the third time that same request came back with a
+      # fabricated receipt. Each of the earlier rounds patched the claim regex
+      # below instead, and each time
       # the next occurrence dodged it by naming a different noun ("it's running"
       # → "the printer's running"). The request side can't be dodged that way:
       # "print again" is an imperative no matter how the reply is worded.
@@ -3264,9 +3224,9 @@ module Buddy
       COMMAND_REQUEST_RX = /
         \A\s*(?:hey[\s,]+\w+[\s,]+)?
         # A leading WHEN or IF clause, which does not stop a sentence being an
-        # order. Prod 4744: "Every night at 9pm, can you add these items to that
-        # list:" is as plain a command as exists, and it missed this arm on the
-        # anchor alone - `\A` wanted the verb first and got a schedule. Bounded
+        # order. "Every night at 9pm, can you add these items to that list:" is
+        # as plain a command as exists, and misses on the anchor alone - `\A`
+        # wants the verb first and gets a schedule. Bounded
         # to one short clause ending in a comma, so this stays an anchor rather
         # than becoming a search for a verb anywhere in a paragraph.
         (?:(?:every|each|at|on|in|by|when|whenever|after|before|tomorrow|tonight|
@@ -3286,10 +3246,9 @@ module Buddy
         # first" open with a command verb and are conversation, so the thing
         # right after the verb is what separates an order from a turn of phrase.
         \b(?!\s+(?:with|by|from|about)\b)
-        # The VERBLESS imperative. Prod 4518: "Monitors off" got "Kk! Monitors
-        # are dark. *squish*" off a single API call with no `byte_actions` row
-        # behind it, and he had to answer "They are not. You didn't do anything"
-        # to get it done. Every alternative above needs a verb, and the shortest
+        # The VERBLESS imperative. "Monitors off" gets "Kk! Monitors are dark.
+        # *squish*" off a single API call with no `byte_actions` row behind it.
+        # Every alternative above needs a verb, and the shortest
         # way to say a house command has none in it - a device and the state you
         # want it in is the whole sentence.
         #
@@ -3310,10 +3269,9 @@ module Buddy
 
       # ---- a command that said WHEN ------------------------------------------
       #
-      # Prod 3562, 10:44 AM: "Play Whisper Nap sound at 11." Buddy answered
-      # "Playing the nap sound on Whisper." and called `call_jil_function` on
-      # the spot. The sound went off in the room, 16 minutes early, next to a
-      # sleeping dog.
+      # "Play Whisper Nap sound at 11." is answered "Playing the nap sound on
+      # Whisper." with `call_jil_function` fired on the spot - the sound going
+      # off in the room a quarter of an hour early, next to a sleeping dog.
       #
       # This is the same failure `message_partner` carries a whole section
       # about ("A DELAY IS IN THE INSTRUCTION, NEVER IN THE NOTE") and prose
@@ -3347,9 +3305,8 @@ module Buddy
       # so verbs that only matter to this gate get their own list rather than
       # being pushed into that one, where being wrong costs more.
       #
-      # Prod 3897 is why it exists: "Add "something" to my todo list in 2
-      # minutes" never reached the gate at all, because "add" is not a device
-      # verb and never will be.
+      # Without it, "Add something to my todo list in 2 minutes" never reaches
+      # the gate at all, because "add" is not a device verb and never will be.
       WRITE_REQUEST_RX = /
         \A\s*(?:hey[\s,]+\w+[\s,]+)?
         (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
@@ -3367,8 +3324,8 @@ module Buddy
 
       # Does this call actually put something on the clock? `set_timer` is the
       # one that has to be read rather than just named, because a BARE countdown
-      # defers nothing. Prod 3897's second shape is the add plus a plain timer:
-      # the timer IS the artifact of the mistake, and letting it stand in for
+      # defers nothing. The shape to watch is an add plus a plain timer: the
+      # timer IS the artifact of the mistake, and letting it stand in for
       # "the model understood the time" is what lets the write through. Only a
       # wait carrying the rest of the sequence counts.
       def self.defers?(name, arguments)
@@ -3402,7 +3359,7 @@ module Buddy
       # Is this tool covered by what's already been scheduled this turn?
       #
       # A real scheduler covers everything. A WAIT covers only what can actually
-      # be queued behind it, and that is the distinction prod 4081 turns on.
+      # be queued behind it, and that is the distinction this turns on.
       #
       # "Play the whisper wake sound in 2 minutes" came back as
       # `call_jil_function` plus `set_timer(then_continue: true)` in one round.
@@ -3469,9 +3426,9 @@ module Buddy
       # ordinary conversation. It is the one completion marker the persona OWNS
       # rather than one a regex has to guess at, so it can't be dodged by
       # renaming the noun, which is how the claim regex keeps getting walked
-      # past. Prod 3128 is what it catches: "Good night" is not an imperative
-      # and has no verb to match, but it got "Total darkness, and the monitors
-      # are out. *click* 💙" off a single call with nothing run.
+      # past. "Good night" is not an imperative and has no verb to match, but
+      # it comes back "Total darkness, and the monitors are out. *click* 💙"
+      # off a single call with nothing run.
       CLICK_RX = /\*click\*/i
 
       # It belongs HERE and not in COMPLETION_CLAIM_RX because the same sentence
@@ -3489,9 +3446,9 @@ module Buddy
       # spoken to. The reply IS the delivery, so there is no call to miss and
       # nothing for a retraction to be right about.
       #
-      # Prod 4829, 27 Aug: "Can you send me a link to my Doctor list?" was
-      # answered with the link, and the answer was replaced by "Nothing
-      # actually ran. Want me to have another go at it?" It cost two extra
+      # "Can you send me a link to my Doctor list?" answered WITH the link gets
+      # that answer replaced by "Nothing actually ran. Want me to have another
+      # go at it?" It costs two extra
       # rounds on the way there too, because the same predicate arms the
       # corrective nudge — which told the model to call a tool for something no
       # tool does.
@@ -3556,11 +3513,11 @@ module Buddy
       #
       # This used to bail out entirely on a pending row, reasoning that a
       # checkbox is visible on its own so a wrong tense above it is only a tone
-      # bug. Prod 3171 is what that costs: "I pulled the front flower bed
-      # reminder down so it won't keep bugging you!" sat above an untapped
-      # cancel_reminder. A checkbox is only visible to someone still looking for
-      # one, and a sentence saying the thing is already handled is precisely the
-      # instruction to stop looking. She didn't tap it, and it fired again the
+      # bug. What that costs: "I pulled the front flower bed reminder down so it
+      # won't keep bugging you!" sitting above an untapped cancel_reminder. A
+      # checkbox is only visible to someone still looking for one, and a
+      # sentence saying the thing is already handled is precisely the
+      # instruction to stop looking. It never gets tapped, and it fires again the
       # next morning.
       #
       # So a pending row earns PENDING_BODY instead of an exemption. The
@@ -3595,9 +3552,9 @@ module Buddy
         #
         # `:call` is the one kind that does NOT get it. Those name this turn -
         # "I did try now", "I hit the wrong one just now" - so the action log is
-        # what the sentence is misreading rather than what backs it. Prod 4621
-        # and 4623 both went out on a turn that had read `recent_actions` and
-        # described a call that was not in them.
+        # what the sentence is misreading rather than what backs it: these go
+        # out on a turn that HAS read `recent_actions` and then describes a call
+        # that is not in them.
         return if @read_actions && kind != :call
 
         Rails.logger.warn(
@@ -3696,7 +3653,7 @@ module Buddy
       # the same size of mistake, not a new one — and the model leading with its
       # own marker skips this entirely.
       # Curly and straight apostrophes both, because the model writes curly ones
-      # and prod 4594 is "couldn\u2019t". `can\u2019t` excludes a following "wait" —
+      # and writes "couldn\u2019t" for this. `can\u2019t` excludes a following "wait" —
       # "I can\u2019t wait to hear how it goes" is the opposite of a setback and the
       # one cheerful phrase that would otherwise land in here.
       SETBACK_RX = /
@@ -3752,8 +3709,8 @@ module Buddy
       #
       # `acted` and `landed` are passed through rather than deciding anything
       # here: they say whether the thing worked, which blends the reading toward
-      # the miss faces (prod 4594's gleeful laugh over "I couldn't get a frame
-      # from the backyard camera") without pretending to know the room.
+      # the miss faces - a gleeful laugh over "I couldn't get a frame from the
+      # backyard camera" - without pretending to know the room.
       #
       # `unprompted` has to be passed for the same reason: a seed is hidden, so
       # by the time the reading runs there is nothing in the thread to tell a
@@ -3805,8 +3762,8 @@ module Buddy
       # Buddy::GPT::Client does this too, across the message parts of a response
       # — but it compares them BEFORE the markers come off, and a response whose
       # parts differ only by a `[[mood:...]]` prefix therefore isn't caught.
-      # Prod 3229: "Turn the tv off" came back as "Kk! TV's off." twice, the two
-      # parts identical except that the first carried a mood marker that is
+      # "Turn the tv off" can come back as "Kk! TV's off." twice, the two parts
+      # identical except that the first carried a mood marker that is
       # stripped four lines above this. Once it's gone they're the same sentence,
       # and the person reads it, reads it again, and learns nothing the second
       # time.
@@ -3815,8 +3772,8 @@ module Buddy
       # also the last point before the body is broadcast. A single part that
       # simply repeats itself is caught by the same pass.
       #
-      # Exact match is not enough on its own. Prod 3337 came back as the same
-      # retraction twice, reworded in the middle: "it's still sitting in home
+      # Exact match is not enough on its own. The same retraction comes back
+      # twice, reworded in the middle: "it's still sitting in home
       # already, so there wasn't anything to move" and "it's already in home,
       # so there wasn't anything to move", opening and closing identically. To
       # a reader that is one sentence said twice; to `==` it is two sentences.
@@ -3845,8 +3802,8 @@ module Buddy
       SIMILAR_ENOUGH = 0.8
       MIN_COMPARABLE = 8
 
-      # Containment is the hole under the floor. Prod 3575: "Sure thing, what
-      # time later?" followed by "What time later?" — five words and three, so
+      # Containment is the hole under the floor. "Sure thing, what time later?"
+      # followed by "What time later?" — five words and three, so
       # Dice never ran, and the two aren't identical. A LATER paragraph whose
       # words appear as a contiguous run inside an EARLIER one adds nothing the
       # earlier one didn't already say. Directional on purpose: the other way

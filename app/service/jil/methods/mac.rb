@@ -58,10 +58,11 @@ class Jil::Methods::Mac < Jil::Methods::Base
   # The owner check alone is not enough, because `@jil.user` is the task's OWNER
   # and not necessarily whoever asked. A SHARED task always runs as its owner —
   # that's `Task#execute` calling `Jil::Executor.call(user, ...)`, and it's
-  # deliberate, since running as the owner is how a task reaches his
-  # credentials at all. So Eve pressing Run on a task of mine, or asking her
-  # companion to fire one, arrives here with `@jil.user` already me. Checking
-  # only the owner would let her darken my screens.
+  # deliberate, since running as the owner is how a task reaches their
+  # credentials at all. So anybody else pressing Run on the owner's task, or
+  # asking their companion to fire one, arrives here with `@jil.user` already
+  # set to the owner. Checking only the owner would let them drive the owner's
+  # machine.
   #
   # The execution knows who asked: `auth_type_id` names the acting person for
   # the types above (the same fact `Jil::Methods::Buddy#recipient` reads to

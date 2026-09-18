@@ -52,10 +52,10 @@ class BuddyRelay < ApplicationRecord
   # There is deliberately no clock here. Hundreds of messages can go by in three
   # days, and the length of that gap says nothing about whether an answer is
   # still owed - what says it is whether they've spoken since without answering.
-  # Chelsea asked "Are we leaving at 5:30?" on Aug 3; it stayed listed as open
-  # through four days of unrelated conversation, and a stray "Tick" from the CLI
-  # got passed back to her as Rocco's answer. One intervening message would have
-  # closed it, and there were hundreds.
+  # A question like "Are we leaving at 5:30?" stays listed as open through days
+  # of unrelated conversation, and a stray "Tick" typed at the CLI gets passed
+  # back as the answer to it. One intervening message would have closed it, and
+  # there were hundreds.
   #
   # The current turn's message is already saved by the time context is built, so
   # ONE message after the question is the answering opportunity and TWO means it

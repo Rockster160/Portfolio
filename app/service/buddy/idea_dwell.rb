@@ -115,8 +115,8 @@ module Buddy
     # the work Buddy needs done quietly.
     MODEL = "gpt-5.4-mini".freeze
 
-    # What the model says instead of a note. Two things reach it, and until
-    # 27 Aug only one of them was asked about.
+    # What the model says instead of a note. Two things reach it, and only one
+    # of them used to be asked about.
     #
     # The first is novelty: six messages can touch an idea without any of them
     # taking it anywhere. The second is SUBJECT, and it is the one that was
@@ -124,10 +124,9 @@ module Buddy
     # vocabulary with an idea, and the model was only ever asked whether there
     # was anything new in them.
     #
-    # Prod, 26 Aug 02:41. A conversation about filing photos into inventory
-    # (msgs 4642-4655: what's in my boxes, here's a picture of the garage
-    # freezer, add it as a box, file the items) was written up as a note on
-    # BuddyMemory 46, "automatic kennel open/close and treat dispenser with an
+    # A conversation about filing photos into inventory - what's in my boxes,
+    # here's a picture of the garage freezer, add it as a box, file the items -
+    # gets written up as a note on an unrelated idea about an
     # inside sensor to tell if Whisper is in there". The four words that carried
     # it were `tell`, `open`, `close` and `inside`: five of the seven matching
     # messages were somebody saying "tell me", and the other two came from an
@@ -137,8 +136,8 @@ module Buddy
     # NEW here" has an obliging answer and it is yes. "Is this about my idea"
     # does not. That question is the fix, and it has to be the model's rather
     # than the heuristic's: tightening the score to reject the kennel case also
-    # rejects the notes it gets right - the 27 Aug avatar-layering note, which
-    # is correct, has no message in its stretch carrying two of that idea's
+    # rejects the notes it gets right - a correct note can equally have no
+    # message in its stretch carrying two of that idea's
     # words either. The overlap simply does not separate them. What can tell the
     # difference is the call that is already being paid for, reading both.
     NOTHING = "NOTHING".freeze

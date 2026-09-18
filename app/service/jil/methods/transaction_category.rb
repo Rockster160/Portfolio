@@ -38,9 +38,9 @@ class Jil::Methods::TransactionCategory < Jil::Methods::Base
     ::TransactionCategory::DEFAULT.to_s
   end
 
-  # The merchant rules, which task 453 held until 2026-08-12 and Rails owns
-  # now. Task 454 is a one-line wrapper over this so `Custom.TransactionCategory`
-  # keeps working for its callers.
+  # The merchant rules, owned by Rails rather than by a Jil task. The Jil task
+  # that used to hold them is a one-line wrapper over this now, so
+  # `Custom.TransactionCategory` keeps working for its callers.
   #
   # Falls back to "other" rather than "" deliberately: that IS what task 454
   # returned, and the value goes straight into a prompt a human is about to

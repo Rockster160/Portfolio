@@ -1,11 +1,9 @@
 # The suite number, said when they get there rather than five minutes before it
 # starts.
 #
-# FeatureRequest 5, 4 Sep: "Send suite number on arrival if earlier than the 5
-# minute mark." Rocco, 2026-09-14: "Previously, 5 minutes prior to the start of
-# an event that had a suite number in the address, Jarvis would send a ping with
-# the suite number. However, sometimes I'd be arriving early because of traffic
-# or paperwork or whatever else, so the thought was to change that feature to
+# The suite number used to ping five minutes before an event whose address
+# carried one. Arriving early - traffic, paperwork, anything - means the ping
+# comes after it was needed, so the trigger moves to
 # send the suite number upon arrival to the location - either car or phone
 # reporting."
 #

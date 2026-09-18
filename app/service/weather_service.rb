@@ -33,11 +33,10 @@ module WeatherService
   # looked up.
   #
   # THE HOUSEHOLD'S, falling back to the person's own. It read only the calling
-  # user's cache, and Weather Refresh (task 491) is Rocco's - so nobody else in
-  # the house has ever had one to read. On 10 Sep the three morning briefings
-  # went out half an hour apart quoting three figures: Byte "low of 55°F" off
-  # the cache, Suki and Moss "low of 54°F" off their own live fetches, because
-  # `own` had billed a new forecast for each of them and the day had moved.
+  # user's cache, and the Weather Refresh task belongs to ONE user - so nobody
+  # else in the house has a cache to read. Three morning briefings then go out
+  # half an hour apart quoting different figures: one off the cache and the rest
+  # off their own live fetches, each billed a new forecast as the day moves.
   #
   # Same numbers for everyone is the whole point of a shared read, and it is
   # sound here for the same reason the coordinates are: this cache is the HOME

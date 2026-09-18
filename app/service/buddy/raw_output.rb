@@ -4,9 +4,9 @@ module Buddy
   # Right now that means one thing: timestamps. A sensor reading comes back as
   # `kennel is closed (raw state: off, last changed:
   # 2026-08-05T18:58:03.888986+00:00)`, and the seed used to hand that over with
-  # an instruction to convert the UTC stamp into local time. It doesn't. Prod
-  # 2636 read 18:58Z back as "6:58 PM", which is the same number with the offset
-  # thrown away — six hours wrong, and stated with total confidence.
+  # an instruction to convert the UTC stamp into local time. It doesn't: 18:58Z
+  # comes back as "6:58 PM", the same number with the offset thrown away — six
+  # hours wrong, and stated with total confidence.
   #
   # It's the lesson `iso_time` args already learned the hard way (see
   # Buddy::Tools::TYPE_HINTS, "never convert to UTC"): the model is fine at

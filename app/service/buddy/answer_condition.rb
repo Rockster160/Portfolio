@@ -9,9 +9,9 @@ module Buddy
   # said it.
   #
   # Without it, everything queued behind a question ran on ANY answer, because
-  # it was all decided before the answer existed. "Ask Chelsea if she wants
-  # syrup for dinner; if she says yes, add it to the agenda" booked the dinner
-  # whether she wanted it or not, and the "if" was decorative in exactly the way
+  # it was all decided before the answer existed. "Ask her if she wants syrup
+  # for dinner; if she says yes, add it to the agenda" books the dinner whether
+  # she wants it or not, and the "if" is decorative in exactly the way
   # a reminder's used to be.
   #
   # THREE outcomes, not two. An answer that doesn't clearly go either way —

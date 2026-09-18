@@ -25,8 +25,8 @@ class BuddyExpressionResetWorker
   # It was 2 minutes, chosen when the face moved on its own after every action
   # and so had to clear often. It doesn't any more - Buddy::Sentiment reads the
   # conversation and chooses - and 2 minutes turned out to be shorter than a
-  # conversation: 43% of the things Rocco typed over a fortnight arrived more
-  # than 2 minutes after the previous message, so the pet had already gone
+  # conversation: over a fortnight, 43% of typed messages arrived more than
+  # 2 minutes after the previous one, so the pet had already gone
   # blank between nearly half of them. That is a lull to a cron job and a pause
   # to a person.
   IDLE_AFTER = 5.minutes

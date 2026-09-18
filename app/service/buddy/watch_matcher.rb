@@ -411,14 +411,14 @@ module Buddy
         # Quoted and attributed, because the bare imperative ran straight into
         # the stored body and read as one instruction: "Tell them, in your own
         # voice: let you know the deploy finished" got answered with "Yep, sent
-        # it along" (prod 1316) - the model took itself for the messenger and
+        # it along" - the model takes itself for the messenger and
         # reported back on the errand instead of doing it.
         "What they asked for was: \"#{body}\". Say it to them in your own voice.",
         ("Lead with the fact that it failed - that's the part they need." if outcome == :failed),
       ].compact.join(" ")
     end
 
-    # A cross-user watch ("whenever I add to our Agenda, let Rocco know")
+    # A cross-user watch ("whenever I add to our Agenda, let them know")
     # delivers to notify_user's companion, framed as coming from the owner.
     # A watch aimed at somebody ELSE is a message from whoever set it, waiting
     # on a condition instead of a clock. Same delivery as an immediate relay

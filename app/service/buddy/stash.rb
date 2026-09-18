@@ -29,7 +29,7 @@ module Buddy
     # with nothing set.
     #
     # `destination` already tells the model to DO these rather than file them,
-    # and that prose landed on 6 Aug and works most of the time. This is the
+    # and that prose works most of the time. This is the
     # deterministic half: a pile entry that names a moment can be recognised
     # without a model in the loop, which is what lets an item already ON the
     # pile be spotted later (see .misfiled?) rather than only as it arrives.
@@ -97,8 +97,8 @@ module Buddy
     end
 
     # Not a thought. An armed latch swallows whatever comes next, and what comes
-    # next is sometimes just manners - prod filed "Thanks!" onto Eve's Me pile
-    # and cheerfully told her so. A pile with "Thanks!" in it is worse than one
+    # next is sometimes just manners - "Thanks!" gets filed onto a pile and
+    # announced. A pile with "Thanks!" in it is worse than one
     # thing shorter, because every later read has to step over it.
     #
     # Deliberately narrow: only a bare pleasantry with nothing else in it. Two
@@ -124,13 +124,10 @@ module Buddy
     # Is this thought already on the pile?
     #
     # Content equality was the whole test, and it is exact - so the SAME thought
-    # said twice in different words starts a second pile entry. Prod 4723/4739,
-    # 26 Aug: the vobot dock link went in at 14:47 as BuddyMemory 113, and 82
-    # minutes later came back as 115, reworded ("a cool Dock/Clock/Hub I may
-    # want to buy" against "a Dock/Clock/Hub to probably buy") off a message
-    # that was about the Before Bed list and mentioned no dock at all. Rocco
-    # said twice that it didn't belong, got two apologies, and both rows are
-    # still sitting there.
+    # said twice in different words starts a second pile entry: a link filed
+    # once comes back an hour later reworded ("a cool Dock/Clock/Hub I may want
+    # to buy" against "a Dock/Clock/Hub to probably buy") off a message about
+    # something else entirely that mentioned no dock at all.
     #
     # A LINK is the part that can't drift. Prose is the model's each time, but
     # the URL was pasted, and two stashes carrying the same one are the same
@@ -195,8 +192,8 @@ module Buddy
       # The first sort stays silent because the stash chip above already said
       # where it landed, and sharpening a summary stays silent because the
       # persona promises it will ("Never announce that you're updating it").
-      # Moving one is neither. Prod 3332-3337: "that's actually more of a home
-      # one" really did refile idea 36 out of Work, silently — so the only
+      # Moving one is neither: "that's actually more of a home one" refiles an
+      # idea out of Work silently — so the only
       # trace was the sentence "Kk! Moved it to home", and a sentence is
       # precisely what can't be trusted about whether something happened. Told
       # it was lying, Buddy had nothing to check either, agreed, and invented

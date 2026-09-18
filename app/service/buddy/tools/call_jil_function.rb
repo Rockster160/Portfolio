@@ -106,10 +106,10 @@ Buddy::Tools.register(
   # Every other level-1 tool runs AFTER the reply is written, which is fine when
   # the outcome is a foregone conclusion. These aren't: a function can come back
   # "already closed, nothing sent", or refuse, or report a state nobody could
-  # predict. Prod 2789 is the cost of guessing - Byte said "Garage's closing"
-  # while the call was still in flight, then had to fire a SECOND function to
-  # find out what happened, and reported that read (taken 33ms before its own
-  # toggle) as the outcome.
+  # predict. The cost of guessing: "Garage's closing" written while the call is
+  # still in flight, then a SECOND function fired to find out what happened, and
+  # that read - taken before the toggle it is reporting on - given as the
+  # outcome.
   #
   # Running here means one call answers the request: the return value is in
   # front of the model before it writes a word, and the relay turn is gone.
@@ -175,12 +175,12 @@ Buddy::Tools.register(
     # through jsonb, which sorts object keys by length then bytes, so `lockdown`
     # saved {action, which, position} arrived {which, action, position} and
     # HASS Blinds ran with action="all" — matched no case, moved no blind, and
-    # reported the house shut (prod 3845). Jil::FunctionSignature has the rest.
+    # reported the house shut. Jil::FunctionSignature has the rest.
     input = fn_args.empty? ? {} : fn_args.merge("params" => task.function_params(fn_args))
 
     # auth_id is the ACTING user, which differs from the execution's user
-    # whenever the task was shared: it runs as its owner, but Chelsea may be
-    # the one who asked. Execution#auth_type/:buddy + auth_type_id is the
+    # whenever the task was shared: it runs as its owner, but somebody else may
+    # be the one who asked. Execution#auth_type/:buddy + auth_type_id is the
     # audit trail for that.
     execution = task.execute(
       input,
@@ -190,8 +190,8 @@ Buddy::Tools.register(
     )
 
     # The timestamp is rewritten to local BEFORE the model sees it. Asking it to
-    # convert one produced prod 2636: 18:58Z read back as "6:58 PM", the same
-    # digits with the offset discarded, six hours out.
+    # convert one gets 18:58Z read back as "6:58 PM" - the same digits with the
+    # offset discarded, six hours out.
     raw    = execution.respond_to?(:result) ? execution.result.to_s.strip : ""
     answer = Buddy::RawOutput.localize(raw, ctx.user) if raw.present?
     lookup = ActiveModel::Type::Boolean.new.cast(payload[:expect_result])

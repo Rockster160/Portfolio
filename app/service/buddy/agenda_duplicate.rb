@@ -1,12 +1,11 @@
 module Buddy
   # Is this exact row already on that calendar?
   #
-  # Prod 6035-6039 (11 Sep 2026): three turns in three minutes put "Clear
-  # kitchen" on 12 Sep at noon twice and "Start kitchen" at 9 AM twice, and the
-  # replies said so out loud while the calls were making the second copy - *"I've
-  # got Start kitchen on tomorrow morning and Clear kitchen at noon"*, *"that 9am
-  # kitchen start is already sitting there nicely"*. Eve's briefing the next
-  # morning read each of them twice.
+  # Three turns in three minutes can put the same two items on a calendar
+  # twice, with the replies saying so out loud while the calls make the second
+  # copy - *"I've got Start kitchen on tomorrow morning and Clear kitchen at
+  # noon"*, *"that 9am kitchen start is already sitting there nicely"*. The next
+  # morning's briefing then reads each of them twice.
   #
   # `ToolContext#existing_agenda_twin` had already found them: it looks an hour
   # either side and its note goes up in the ack the model reads before it writes

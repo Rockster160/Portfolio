@@ -9,7 +9,7 @@ module Buddy
     #
     # `sleeping_frown` was here too. Nothing ever set it — Buddy::SleepGuard
     # reaches for `:sleeping` for both the usage cap and an outage — so it was a
-    # face only Byte had art for and nobody could ever see. Removed 2026-08-25.
+    # face only Byte had art for and nobody could ever see.
     SYSTEM = %i[sleeping].freeze
 
     # Transitional-only: the face shown WHILE a reply is being generated.
@@ -114,8 +114,8 @@ module Buddy
     #   weight — how much is at stake (0 trivial, 1 really matters to them)
     #   strain — how much friction is in the room (0 none, 1 fed up)
     #
-    # `weight` is the axis that was missing entirely, and it is why prod 5759
-    # could put the glasses on over a rejection: `nerd` and `sad` are miles
+    # `weight` is the axis that was missing entirely, and without it the
+    # glasses go on over a rejection: `nerd` and `sad` are miles
     # apart on it and were indistinguishable to a table that only knew
     # "pleased" from "not pleased".
     #
@@ -182,9 +182,9 @@ module Buddy
     # mirror held up to distress returns a scowl pointed at the person in it.
     # Nothing distinguishes that from being cross with them.
     #
-    # Prod 5890-5894: a stretch about being stressed read as high strain, the
-    # nearest Byte face was `annoyed`, and the pet wore a furrowed brow through
-    # its own offer to cheer them up. See Buddy::Sentiment#skipped.
+    # A stretch about being stressed reads as high strain, the nearest Byte face
+    # is then `annoyed`, and the pet wears a furrowed brow through its own offer
+    # to cheer them up. See Buddy::Sentiment#skipped.
     IRRITATED = %i[angry annoyed frustrated unamused].freeze
 
     # Affection, which needs somebody to feel it toward — so these are skipped

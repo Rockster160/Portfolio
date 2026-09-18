@@ -86,10 +86,9 @@ Buddy::Tools.register(
     # than saying nothing: they stop looking at the routine, which was never
     # the problem, and the thing that IS wrong keeps happening.
     #
-    # Prod 1 Sep, Puppy Window mode. The routine read
-    # `great_bottom_right / open / 20` from the moment it was made and was
-    # right the whole time; the blind moved wrongly because task 429 inverted
-    # the percentage on its way to the house. Told the routine was broken,
+    # A routine can be correct from the moment it was made while the device
+    # still behaves wrongly, because the task it calls inverts a value on its
+    # way to the house. Told the routine is broken,
     # three separate turns rewrote it to the identical payload and reported it
     # fixed (5128, 5136, 5142), and the person re-ran it and hit the same wall
     # each time. The step PHRASE carries no arguments, so `was` and `now` were

@@ -136,7 +136,7 @@ Buddy::Tools.register(
         # Nothing was written, and the receipt underneath says so - but the
         # sentence is written from here, before the receipt is read. Without
         # this the reply is "I've put the corrected request on the list" over a
-        # row that never changed (prod 5420-5422).
+        # row that never changed.
         note:       (
           unless added
             "NOTHING WAS WRITTEN. That is word for word what is already on the list, so there was " \

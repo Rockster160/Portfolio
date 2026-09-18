@@ -5,8 +5,8 @@ module Buddy
   # partial, another in the header, a ternary in SleepGuard that knew about Moss
   # and nothing else, and several branches keyed off a USER ID rather than the
   # theme. That meant adding a pet touched half a dozen files, and a thread whose
-  # theme differed from its owner's default (Rocco opening a Suki thread) showed
-  # the wrong name, icon, and voice.
+  # theme differed from its owner's default showed the wrong name, icon and
+  # voice.
   #
   # So: one entry per pet, keyed by theme, and nothing anywhere keys off who the
   # user is. Adding a companion is this table plus its asset folder.

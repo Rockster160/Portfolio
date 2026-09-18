@@ -321,12 +321,10 @@ class Jil::Methods::Global < Jil::Methods::Base
       # future on a row still carrying `started_at` is a trigger that can never
       # come due again, and nothing anywhere says so.
       #
-      # Prod, 4 Sep, agenda item 1062: the leave-by went out at 10:10:02 for an
-      # 11:00 meeting, the meeting moved to 11:45 twenty-eight seconds later,
-      # and the corrected 10:52 leave-by was never spoken. "Time to go" landed
-      # correctly at 11:02 - that trigger had not fired yet, so its row was
-      # clean and the same upsert worked on it. Chelsea had a wrong walk-out
-      # time standing for 42 minutes.
+      # A leave-by that has already gone out for a meeting which then MOVES
+      # never speaks its correction, while a trigger on the same item that has
+      # not fired yet updates cleanly off the identical upsert - so a wrong
+      # walk-out time can stand for the best part of an hour.
       #
       # It only bites when the NAME is unchanged, which is what makes it look
       # intermittent: `remove_triggers_by_scope` spares the row whose name

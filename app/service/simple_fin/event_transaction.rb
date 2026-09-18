@@ -49,11 +49,10 @@ module SimpleFin
 
       # The row an EARLIER alert already landed for this same purchase.
       #
-      # The bank sometimes sends one alert twice, down two delivery paths. The
-      # $19.33 Crunchyroll charge on 23 Aug arrived as emails 51535 and 51536,
-      # same subject, same amount, same account, both quoting "Made on Aug 22,
-      # 2026 at 11:31 PM ET" - and became two events, two prompts and two rows,
-      # so the projected balance was $19.33 low until `balance_date` moved past
+      # The bank sometimes sends one alert twice, down two delivery paths: two
+      # emails with the same subject, amount, account and quoted purchase time
+      # become two events, two prompts and two rows,
+      # so the projected balance runs low until `balance_date` moves past
       # them. Six pairs have come through since Feb (four Amazon, one Venmo,
       # this one), every one of them alert-sourced and none from the feed.
       #

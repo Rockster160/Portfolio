@@ -2,11 +2,10 @@
 // background processes on the right. Shared, because both stacks had both of
 // the bugs below and a rule about what a tap is belongs in one place.
 //
-// A plain `click` listener is wrong here for two reasons, and each one was
-// reported the day the × replaced the swipe (Rocco, 17 Sep):
+// A plain `click` listener is wrong here for two reasons:
 //
-// 1. "the whole layout changes and the x moves and then the click gets
-//    registered on the alert itself which opens the tab instead."
+// 1. The layout changes, the × moves, and the click registers on the chip
+//    itself - opening its link instead of closing it.
 //    Pressing the × re-renders the strip inside the handler, so the DOM under
 //    the finger is replaced mid-gesture. What arrives afterwards — the mouse
 //    events a touch synthesises, or a `click` retargeted to the nearest

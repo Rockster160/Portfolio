@@ -12,13 +12,12 @@
 //     The SERVER decides when it goes — a chip that leaves on the tap is
 //     indistinguishable from one that leaves on a failed request.
 //
-//     It was a SWIPE until 17 Sep and never worked. The gesture depends on
-//     pointer capture, and when the capture doesn't take, the browser retargets
-//     to whatever is under the finger now - so `pointerup` never reaches the
+//     It was a SWIPE, which never worked. The gesture depends on pointer
+//     capture, and when the capture doesn't take, the browser retargets to
+//     whatever is under the finger now - so `pointerup` never reaches the
 //     chip, the drag is never finished, and the chip sits where it was dragged,
 //     often right off the edge of the strip. It LOOKS dismissed, nothing was
-//     ever sent, and it is still there on the next device to look. Rocco:
-//     "the swipe away feature has just been bad from the start".
+//     ever sent, and it is still there on the next device to look.
 //   * a chip's links are pills under it — the job posting, the queue, the
 //     email. Real anchors, so a long-press copies one and a middle-click opens
 //     a tab, and the whole chip is a shortcut to the first.

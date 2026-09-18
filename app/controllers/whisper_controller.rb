@@ -5,8 +5,8 @@ class WhisperController < ApplicationController
   OWNER_IDS = [1, CHELSEA_ID].freeze
   CARETAKER_IDS = [EVE_ID].freeze
 
-  # NOTE! When adding one, share the task with Chelsea — otherwise it renders
-  # blank on her iPad and never receives its broadcast.
+  # NOTE! When adding one, share the task with every OWNER_IDS user — otherwise
+  # it renders blank on their tablet and never receives its broadcast.
   BUTTON_MONITORS = [
     :fed,
     :water,

@@ -53,9 +53,9 @@ module Buddy
       # The domain inbox doesn't, and for its first week that meant the seed
       # carried no message at ALL — so the trimming habit below was never even
       # said, and what got proposed as the note was a paraphrase of the
-      # headline. Prod 6162 logged a GitLab confirmation as "Greenhouse
-      # confirmed receipt of your application", which is the seed's own summary
-      # line read back. The mail is right there on the email; read it.
+      # headline - logging a confirmation as "Greenhouse confirmed receipt of
+      # your application", which is the seed's own summary line read back. The
+      # mail is right there on the email; read it.
       body = body.presence || mail_text(email)
 
       # No row, but a company name: the suggestion is to START one. A plain card
@@ -149,14 +149,14 @@ module Buddy
         seed_label: seed_label(job, verdict, outgoing),
         # This seed is two instructions and the second one is the point. Saying
         # so here is what lets Turn#start_over? tell "she answered in prose"
-        # from "she had nothing to do" — prod 6279 said exactly what the mail
-        # said, called nothing, and the beat never reached the board.
+        # from "she had nothing to do" — a reply saying exactly what the mail
+        # said, calling nothing, leaves the beat off the board entirely.
         seed_call:  job ? :add_job_note : :add_job_application,
         # Both, always: a seed built against a row still opens a SEPARATE
         # application when the mail names a different role (see `seed` above),
         # and one built without a row can find the row itself was made in the
         # meantime. Nothing else on this turn is this seed's business - see
-        # Buddy::GPT::Turn#seed_tools and prod 6502.
+        # Buddy::GPT::Turn#seed_tools.
         seed_tools: %i[add_job_note add_job_application],
       )
     end
@@ -164,9 +164,8 @@ module Buddy
     # What this seed is ABOUT, in the words a failure would have to use. The
     # seed itself is instructions and its first sentence is not a subject, so
     # a turn that dies has nothing to name unless it is told — see
-    # Buddy::GPT::Turn#failure_body, and prod 5932, where "Something went wrong
-    # on my end" was the entire record of a mail that had already been marked
-    # read on the Mac.
+    # Buddy::GPT::Turn#failure_body. Without it, "Something went wrong on my
+    # end" is the entire record of a mail already marked read upstream.
     def seed_label(job, verdict, outgoing)
       company = job&.company.presence || verdict[:company].presence
       return "that email" if company.blank?
@@ -207,17 +206,17 @@ module Buddy
       # Whether the ROLE matches is a separate question from whether the company
       # does, and the opening line used to answer both at once.
       #
-      # Prod 15 Sep: three Aledade PBC roles in one day. The seed said "it
-      # belongs to an application already on their board", printed the board's
-      # role on one line and the mail's on another, and the model filed two
-      # other jobs onto one row. The company match is a fact; the rest is for
+      # Three roles at one company in a day: the seed said "it belongs to an
+      # application already on their board", printed the board's role on one
+      # line and the mail's on another, and the model filed two other jobs onto
+      # one row. The company match is a fact; the rest is for
       # the reader to check, so it is stated as a question rather than settled
       # in the first sentence. add_job_note refuses it outright either way.
       #
       # Against the subject as well as the headline, the same words the row was
-      # resolved with. Prod 6395, Aledade: a rejection's headline names no role
-      # ("moving forward with other candidates"), the subject named it in full,
-      # and the seed called the very job it was about a different role.
+      # resolved with: a rejection's headline names no role ("moving forward
+      # with other candidates") while the subject names it in full, and the seed
+      # calls the very job it is about a different role.
       same_role = same_role?(job, verdict, metadata)
       [
         (
@@ -425,9 +424,9 @@ module Buddy
     # promise one.
     #
     # "pass the part that carries the substance" read as permission to
-    # SUMMARISE, and prod 5934 duly proposed "They said they can't provide
+    # SUMMARISE, and a seed duly proposes "They said they can't provide
     # feedback, but thanked you for your time and wished you well" in place of
-    # what Alethia actually wrote. A summary of a rejection is not a record of
+    # what the company wrote. A summary of a rejection is not a record of
     # one: the words are the thing being kept, and a paraphrase can't be read
     # back later to work out what was said.
     def note_hint(body)

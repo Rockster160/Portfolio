@@ -50,9 +50,9 @@ module TransactionCategory
   ALL = CATEGORIES.keys.sort_by(&:to_s).freeze
   DEFAULT = :other
 
-  # Which merchant means which category. Ported verbatim from Jil task 453,
-  # which owned it until 2026-08-12 and is now deleted — a copy in Jil and a
-  # copy here is the exact problem this module exists to end.
+  # Which merchant means which category. Owned here rather than by a Jil task —
+  # a copy in Jil and a copy here is the exact problem this module exists to
+  # end.
   #
   # ORDER IS LOAD-BEARING. The first rule that matches wins, so the specific
   # must precede the general: "AMAZON WEB" is hosting and has to be tested

@@ -15,7 +15,8 @@ module Buddy
   #   2. Words that were asked for and were never in the prompt at all, most
   #      notably "the plunge", which three unrelated services had been
   #      pattern-matching by hand.
-  #   3. Eve's South African substrate, lifted from her tone profile. That file
+  #   3. A household member's regional vocabulary, lifted from their tone
+  #      profile. That file
   #      teaches the companion to SPEAK these; nothing taught it to UNDERSTAND
   #      them, and those are different jobs. "Bakkie" is the sharp end: a
   #      plastic tub here, a pickup truck to everyone else, so a companion

@@ -58,8 +58,8 @@ module Buddy
     end
 
     # Scope the event to whose calendar it lives on, WITHOUT naming the
-    # calendar (its name is usually just the owner's handle — "Chelsea's
-    # Alchemibluum calendar" is redundant). The actor's own calendar reads
+    # calendar (its name is usually just the owner's handle, so naming both is
+    # redundant). The actor's own calendar reads
     # "on their own calendar" (the recipient's Buddy renders the right
     # pronoun since it knows both people); the recipient's own reads "on your
     # calendar"; anything jointly-owned is simply "a shared <kind>".

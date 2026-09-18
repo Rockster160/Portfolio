@@ -16,10 +16,10 @@ module Buddy
       # A memory outlives the day it was written on, so a word that means a
       # different day tomorrow does not belong in one.
       #
-      # `buddy_memories` 105, written 15:21 Mon 24 Aug: "Eve has a therapist
-      # appointment with Iberty tomorrow at 10:00 AM", `check_in_at` 6pm the
-      # NEXT evening and no expiry. By the time it reads itself out, "tomorrow"
-      # means Wednesday and the appointment was that morning. Rows 44 and 71
+      # A memory reading "she has an appointment tomorrow at 10:00 AM", with a
+      # `check_in_at` on the following evening and no expiry, reads itself out
+      # when "tomorrow" means a different day and the appointment has already
+      # happened. Other rows
       # carry the same defect ("...tomorrow, since it will be trash day",
       # "...to tonight's agenda"); both have since been dropped, and the third
       # occurrence in three weeks is what says prose is the wrong place for it.
@@ -34,10 +34,10 @@ module Buddy
       MEMORY_CONTENT = "The whole fact, as one sentence that stands alone. #{MEMORY_CONTENT_DATES}".freeze
 
       # The row is the THING - the idea, the fact - and `kind` and `status`
-      # already hold where it stands. Prod 16 Sep, idea 196: Eve undid a card by
-      # accident and asked whether the idea was still on her pile; this pass
-      # then rewrote the row to say it was, and that moment's confusion rode
-      # along with the idea everywhere it was read.
+      # already hold where it stands. Undo a card by accident and ask whether
+      # the idea is still on the pile, and this pass rewrites the row to say so
+      # - carrying that moment's confusion along with the idea everywhere it is
+      # read.
       REVISED_CONTENT = "The whole row, rewritten: the idea or fact itself and nothing about its " \
                         "standing, which its kind and status already record. " \
                         "#{MEMORY_CONTENT_DATES}".freeze
@@ -354,13 +354,10 @@ module Buddy
       #
       # It used to be written first and unconditionally, while `arm` is a no-op
       # whenever `days` is blank - so a call that changed nothing still left a
-      # paragraph on the row. Prod, 6 Sep 2:29:19 PM: a note describing Eve's
-      # plants and yard work landed on `buddy_memories` 42, "Check spray cans
-      # for blue", a thought from 5 August about spray paint. 42's `check_in_at`
-      # is still null, so nothing else about the call happened at all, and
-      # `read_idea` will hand that paragraph back to whoever opens the spray-can
-      # thread next. Note 88 had put the Whisper Quiet conversation onto memory
-      # 46 the same way on 4 Sep.
+      # paragraph on the row: a note describing one conversation lands on an
+      # unrelated memory from weeks earlier, whose `check_in_at` stays null - so
+      # nothing else about the call happened at all, and `read_idea` hands that
+      # paragraph back to whoever opens the wrong thread next.
       #
       # Checked before `save!`, because `arm` only assigns.
       def set_check_in(args)

@@ -149,8 +149,8 @@ class User < ApplicationRecord
   #
   # One rule for the page AND everything inside it. Byte's own controller
   # listed three people while the hero's chips - quick actions, timers,
-  # routines - each carried their own copy that still said two, so Eve got a
-  # row of buttons that every one of them answered with a 403.
+  # routines - each carried their own copy that still said two, so the third
+  # person got a row of buttons that every one of them answered with a 403.
   def byte_access? = me? || chelsea? || eve?
 
   # How big Byte's thread text renders, as a percentage. Clamped rather than

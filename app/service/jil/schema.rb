@@ -3,10 +3,10 @@ class Jil::Schema
   #
   # `Task.schema` feeds the editor everything it knows — every class, every
   # method, every autocomplete entry — and it used to hand the same text to
-  # everyone. The owner-only classes were in there for the whole household:
-  # Eve's editor offered her `Tesla.unlockDoors` and `Mac.run`, and the only
-  # thing between the offer and the car was a guard at execution time telling
-  # her no. Refusing is right; offering it first is a menu of things that
+  # everyone. The owner-only classes were in there for the whole household, so
+  # a non-owner's editor offered them `Tesla.unlockDoors` and `Mac.run`, with
+  # the only thing between the offer and the car being a guard at execution time
+  # telling them no. Refusing is right; offering it first is a menu of things that
   # cannot work.
   #
   # A gate is an `@name` suffix on the line it applies to. On a class header it

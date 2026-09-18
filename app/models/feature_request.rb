@@ -20,7 +20,7 @@
 # to keep somebody on a 30-minute rhythm with 10-minute breaks, Suki said the
 # breaks were "lined up to pop in every half hour until 6:30 PM" and set one
 # countdown, because there was no way to express the rest and describing it was
-# nearer to helping than saying no (prod 4136). The same shape has turned up
+# nearer to helping than saying no. The same shape has turned up
 # against a repeating timer, a per-minute reminder and a UI she can't see.
 #
 # So a companion now has a third answer besides doing it and declining it: say

@@ -318,9 +318,9 @@ module Buddy
     # it means "the thing you just did" - so anything old enough that they'd
     # have to NAME it isn't what they're pointing at.
     #
-    # Prod 1362: told the routine it had just saved was wrong, Buddy offered to
-    # undo a chore completion from five hours earlier, because that was simply
-    # the newest reversible thing in the thread. Past this window the honest
+    # Told that the routine it just saved was wrong, Buddy otherwise offers to
+    # undo a chore completion from hours earlier, because that is simply the
+    # newest reversible thing in the thread. Past this window the honest
     # answer is "nothing recent to undo", which sends them to the tools that
     # take a name (undo_chore_completion, edit_event, delete_event) instead of
     # quietly proposing to unpick their morning.

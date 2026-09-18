@@ -119,8 +119,8 @@ module Buddy
       # a ✓, and it carries the tool's own words underneath (see `rowNote` in
       # multi_select.js). A message repeating that is a second broadcast about
       # something the person is already looking at, and on a checklist worked
-      # through one box at a time it is one per box: prod 5833-5835 were three
-      # bubbles saying what three ticked rows directly above them already said.
+      # through one box at a time it is one per box - each bubble saying what the
+      # ticked row directly above it already said.
       #
       # A FAILURE needs no bubble either - a failed row is red with the error
       # inline on it, which is more than the summary line ever carried.

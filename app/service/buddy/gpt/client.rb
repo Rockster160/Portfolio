@@ -168,10 +168,10 @@ module Buddy
         #
         # `stream_error` survives because the clock is checked AFTER each event,
         # terminal ones included: a response that failed or came back incomplete
-        # and only THEN blew the budget still knows why. Prod 5932 blamed a
-        # 90-second job-mail turn on "timed out" with usage sitting on the row —
-        # and usage only ever arrives on a terminal event, so something had
-        # reached the end and whatever it said was being overwritten.
+        # and only THEN blew the budget still knows why. Otherwise a turn that
+        # failed for its own reasons is blamed on "timed out" with usage sitting
+        # on the row — and usage only ever arrives on a terminal event, so
+        # something had reached the end and whatever it said was overwritten.
         text = join_parts(parts)
         Rails.logger.warn("[Buddy::GPT::Client] stream exceeded its deadline; keeping #{text.length} chars")
         {
@@ -203,12 +203,11 @@ module Buddy
 
       # The response's message parts as one body.
       #
-      # Separated by a blank line because prod 1106 came back as "...keep an eye
-      # on that.Yep, I'm watching..." - two separate replies fused mid-sentence
-      # when every delta was appended blind. Deduped because prod 1313 came back
-      # as "Here's what you've got." twice, verbatim, in two parts of one
-      # response; the person read the same sentence to themselves and got no
-      # more information the second time.
+      # Separated by a blank line, or two separate replies fuse mid-sentence
+      # ("...keep an eye on that.Yep, I'm watching...") when every delta is
+      # appended blind. Deduped because a response can carry the same sentence
+      # verbatim in two of its parts, and reading it twice tells nobody
+      # anything.
       def join_parts(parts)
         kept = Set.new
         parts.values.filter_map { |part|
@@ -321,9 +320,9 @@ module Buddy
       #            companion over one burst would be worse than the burst
       #
       # `insufficient_quota` is what OpenAI returns behind "You have no credits
-      # remaining. Add credits to continue using the API at ..." (prod 4185),
-      # which is the message that went into the thread as Buddy's reply and
-      # started all of this.
+      # remaining. Add credits to continue using the API at ...", which is the
+      # message that goes into the thread as Buddy's reply if nothing catches
+      # it.
       def kind_of(exception)
         response = exception.respond_to?(:response) ? exception.response : nil
         return nil unless response.is_a?(Hash)

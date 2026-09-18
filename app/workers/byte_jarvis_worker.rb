@@ -28,12 +28,12 @@ class ByteJarvisWorker
     # Say that it's in hand, before it is.
     #
     # `Jarvis.command` runs the whole Jil chain inline, so a house command takes
-    # exactly as long as the house takes to answer. Prod, 26 Aug 16:49: ".close
-    # blinds" reached a Home Assistant that was down, the POST sat on
-    # RestClient's 60-second read timeout, and the thread showed NOTHING for a
-    # full minute - no receipt, no pending state, no face. The reply when it
-    # came was correct ("the house didn't take that one"), but for that minute
-    # there was no way to tell a stalled command from one that never sent.
+    # exactly as long as the house takes to answer. Reach a Home Assistant that
+    # is DOWN and the POST sits on RestClient's 60-second read timeout with the
+    # thread showing nothing at all - no receipt, no pending state, no face. The
+    # eventual reply is correct ("the house didn't take that one"), but for that
+    # minute there is no way to tell a stalled command from one that never
+    # sent.
     #
     # Both halves, because they answer different questions. The face says the
     # companion is busy; the BUBBLE says this particular command is what it's

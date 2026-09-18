@@ -359,11 +359,11 @@ class TeslaCacheStore
     # freshness rather than presence — the same way compose_charging and
     # compose_drive resolve their two sources.
     #
-    # Presence alone made a parked car 23 miles from its own driveway. On
-    # 2026-09-17 the car reached home at 12:04 and shifted into P at 12:09, and
-    # the dashboard still read "→ Home (23mi/26min)" at 12:31: the figures came
-    # from the 11:39 poll, when the car really was 23 miles out, and nothing
-    # overwrote them until the next poll at 12:25. Polls are hourly once the car
+    # Presence alone puts a parked car 23 miles from its own driveway: the car
+    # arrives home and shifts into P, and the dashboard still reads
+    # "→ Home (23mi/26min)" half an hour later, because the figures came from a
+    # poll taken while it really was 23 miles out and nothing overwrote them.
+    # Polls are hourly once the car
     # is parked and not charging, so the window is as wide as the gap between
     # arriving and whenever someone next opens the dashboard — all of it under a
     # timeago reading "just now", because `updated_at` is the max over every

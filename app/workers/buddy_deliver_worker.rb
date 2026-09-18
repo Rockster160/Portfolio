@@ -54,11 +54,10 @@ class BuddyDeliverWorker
 
   # The `:failed` state was supposed to be the whole signal — see the note on
   # `sidekiq_options` above. It isn't one for a message nobody can see: the
-  # daily audit's prompt carries `hidden`, so when its handoff failed on 20 Aug
-  # the state was set on a row that renders nowhere, and the first sign of it
-  # was somebody noticing that no report had arrived. The person's OWN message
-  # went the same way on 19 Aug (4001, the one asking about connection
-  # timeouts), where a visible bubble at least showed the state.
+  # daily audit's prompt carries `hidden`, so a failed handoff sets the state on
+  # a row that renders nowhere and the first sign of it is somebody noticing no
+  # report arrived. A person's OWN message fails the same way, except a visible
+  # bubble at least shows the state.
   #
   # Same reason Buddy::ReminderFirer reports: something the person is waiting
   # for silently didn't happen, and silent-log-only means hours before anyone

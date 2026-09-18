@@ -48,11 +48,11 @@ module Buddy
     # other person's copy of the same message, so its OWNER is the peer, with
     # nothing guessed.
     #
-    # Reading relay_id alone is what broke prod 4376: "I love you the most!" was
-    # typed straight at a note from Chelsea, the menu offered "Reply to Moss"
-    # off the peer identity that was right there, and the send fell through to
-    # an ordinary turn because the row it came from had no relay_id. Byte
-    # answered it. Of the 69 bridged messages in prod that day, every one had a
+    # Reading relay_id alone breaks it: a reply typed straight at a relayed
+    # note gets the menu offering "Reply to <peer>" off the peer identity that
+    # is right there, and then falls through to an ordinary turn because the row
+    # it came from has no relay_id - so the companion answers a message meant
+    # for a person. Of the bridged messages in one day, every one had a
     # twin and NOT ONE had a relay_id.
     def route_for(user, message)
       return nil unless metadata(message)["kind"].to_s == "buddy_relay"

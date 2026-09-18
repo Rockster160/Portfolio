@@ -169,10 +169,9 @@ Buddy::Tools.register(
     # that already has one and is being handed another is the shape of two jobs
     # at one company collapsing onto one board entry.
     #
-    # Prod 15 Sep: he applied to three separate Aledade PBC roles in one day.
-    # `resolve_application` matches on company and nothing else, so notes 54
-    # ("Senior Software Engineer I- Fullstack") and 55 ("Senior Engineering
-    # Manager - AI Enablement & EHR Agents") both landed on application 28,
+    # Three separate roles applied to at one company in a day:
+    # `resolve_application` matches on company and nothing else, so notes for
+    # two of them land on the third's row,
     # which reads `Principal Engineer - AI Data and Infrastructure`. Three jobs
     # with three separate outcomes were set to resolve as one.
     #
@@ -211,7 +210,7 @@ Buddy::Tools.register(
   },
   # `summary` wins over `note` on the CARD and nowhere else. What gets kept is
   # the message's own words, and the first eighty characters of those are a
-  # greeting — "Hi Rocco, I'm not able to provide feedback per the advice from"
+  # greeting — "Hi there, I'm not able to provide feedback per the advice from"
   # is the part of a rejection that says least about it.
   label:       ->(payload, _ctx) {
     label = JobNote::TAG_LABELS[payload[:tag].to_s] || "Note"
@@ -225,10 +224,10 @@ Buddy::Tools.register(
   # It was level 2 - written on arrival, pre-checked, undo by unchecking - and
   # that is too much trust for this. The model picks WHICH application a beat
   # lands on, and when the one they named isn't on the visible board it will
-  # pick a neighbour rather than stop: prod 5759 settled CSC Generation as
-  # rejected off a sentence about Corporate Tools. A pre-checked row makes the
-  # read-back the only defence, and reading "Rejected — CSC Generation" as a
-  # statement of fact is exactly what a level-2 row invites.
+  # pick a neighbour rather than stop, settling one company as rejected off a
+  # sentence about another. A pre-checked row makes the read-back the only
+  # defence, and reading "Rejected — <company>" as a statement of fact is
+  # exactly what a level-2 row invites.
   #
   # A settling tag also moves the application's whole status, so the cost of
   # being wrong isn't one stray row - it closes an application that is still

@@ -4,11 +4,11 @@ module Buddy
   #
   # The rule used to be that Buddy never describes the screen at all — "you
   # don't know, and a confident wrong direction sends someone hunting for
-  # something that isn't there" (prod 2612 invented a tab). That was the right
-  # rule for a companion with nothing to read. It is the wrong rule now: prod
-  # 5808, Eve asked how to stop the notifications, was sent to her phone's
-  # settings and offered the sound toggle, and the control she wanted was the
-  # bell in the top bar of the window she was typing into.
+  # something that isn't there", and a companion with nothing to read will
+  # invent a tab. It is the wrong rule now: asked how to stop the notifications,
+  # a companion sends somebody to their phone's settings and offers the sound
+  # toggle, when the control they want is the bell in the top bar of the window
+  # they are typing into.
   #
   # So the refusal is replaced by a source. Three properties make that safe:
   #
@@ -24,9 +24,9 @@ module Buddy
   #      the only version of "keep it up to date" that survives contact with a
   #      year of edits. `hook` is never shown to the model.
   #
-  # Owner-only surfaces are dropped rather than labelled, same as AppPages:
-  # Chelsea has no Claude threads, so the working-directory strip is furniture
-  # she can see and nothing she can use.
+  # Owner-only surfaces are dropped rather than labelled, same as AppPages: a
+  # non-owner has no Claude threads, so the working-directory strip is furniture
+  # they can see and nothing they can use.
   module ScreenGuide
     module_function
 
@@ -169,10 +169,9 @@ module Buddy
     # "it isn't anywhere", and those look identical from the inside: the model
     # reads the list, finds no row, and reaches for the nearest loud one.
     #
-    # Prod 15 Sep, three questions in eight minutes, all answered with the
-    # Settings row:
+    # Three questions in eight minutes, all answered with the Settings row:
     #
-    #   6194  "you mentioned that something can stay on this on your shelf in
+    #   "you mentioned that something can stay on this on your shelf in
     #          case I wanted again where does that show?"
     #   6196  "the little number next to your picture as a notification has
     #          nine but when I count them there's only seven"

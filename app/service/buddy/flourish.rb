@@ -1,16 +1,12 @@
 module Buddy
   # A trailing "..., which is <something charming>" that says nothing.
   #
-  # Rocco, 2026-09-05: "'{statement} which is {unnecessary description}' is back
-  # and annoying." Three in the seven days before that, all on briefings, all
-  # the same shape:
+  # `{statement}, which is {unnecessary description}` - the shape, on briefings:
   #
-  #   prod 5445  Not much on deck from here, which is either peaceful or
-  #              suspiciously peaceful.
-  #   prod 5248  Then tonight's got meatballs & power Mac, which is a nice
-  #              little anchor.
-  #   prod 5017  Otherwise it looks nice and open for you, which is a small
-  #              mercy!
+  #   Not much on deck from here, which is either peaceful or suspiciously
+  #   peaceful.
+  #   Then tonight's got meatballs & power Mac, which is a nice little anchor.
+  #   Otherwise it looks nice and open for you, which is a small mercy!
   #
   # THIS IS THE FOURTH ATTEMPT AND THE FIRST ONE THAT ISN'T PROSE. TONE banned
   # the shape and the model moved the same empty flourish mid-sentence; the ban

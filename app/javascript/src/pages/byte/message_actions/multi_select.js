@@ -216,8 +216,8 @@ export function removalHint(toolName, { status, undoable, override } = {}) {
 //
 // This is where the receipt lives now. It used to be a message of its own
 // posted under the card, which meant a checklist worked through one box at a
-// time produced one bubble per box — prod 5833-5835 were three of them saying
-// what the three ticked rows directly above already said. The row ticks, locks,
+// time produced one bubble per box, each saying what the row directly above it
+// already said. The row ticks, locks,
 // wears a ✓; repeating that in a broadcast is telling somebody something they
 // are looking at.
 //

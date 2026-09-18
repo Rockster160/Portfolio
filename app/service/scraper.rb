@@ -49,7 +49,7 @@ end
 #   # rm file
 # end
 
-# driver.navigate.to "https://auth.tesla.com/oauth2/v3/authorize?client_id=ownerapi&code_challenge=uFnDQOhBRJZb9j_sbG8bWhpSLAtuPTwhylaMkIJIHpU&code_challenge_method=S256&login_hint=rocco11nicholls%40gmail.com&redirect_uri=https%3A%2F%2Fauth.tesla.com%2Fvoid%2Fcallback&response_type=code&scope=openid+email+offline_access&state=f1289496913dacc9b5050e424be86aa8"
+# driver.navigate.to "https://auth.tesla.com/oauth2/v3/authorize?client_id=ownerapi&code_challenge=...&code_challenge_method=S256&login_hint=<email>&redirect_uri=https%3A%2F%2Fauth.tesla.com%2Fvoid%2Fcallback&response_type=code&scope=openid+email+offline_access&state=..."
 # psswd = wait.until { driver.find_element(id: "form-input-credential") }
 # psswd.clear
 # psswd.send_keys "abcd"

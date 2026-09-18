@@ -93,9 +93,8 @@ Buddy::Tools.register(
       type:        :duration_min,
       required:    false,
       # No worked example of "they don't want a buffer" here on purpose. This
-      # read "or 0 for 'no need to be early'" until prod 5725, where "Add a
-      # Plunge with Christian today leaving at 4" - which says nothing about
-      # arriving at all - came back carrying `arrive_early: 0`. It was the only
+      # read "or 0 for 'no need to be early'", and a request saying nothing
+      # about arriving at all came back carrying `arrive_early: 0`. It was the only
       # concrete value the description offered, so it got reached for, and it
       # defeated the default the branch below exists to protect. An option
       # spelled out in an argument description is a suggestion to use it.
@@ -112,19 +111,19 @@ Buddy::Tools.register(
   confirm:     ->(payload, ctx) {
     # `strict` for the same reason edit_agenda_item uses it. The loose form
     # falls back to the default calendar, and the argument that it is catchable
-    # on the confirm card lost on prod 4463: five dinners asked for on a
-    # "Dinners" calendar that does not exist landed on Alchemibluum, and the
-    # reply said Dinners because that is what the model had passed. A raise is
-    # recoverable in the same turn - 4465 did exactly that forty seconds later
+    # on the confirm card loses: five dinners asked for on a "Dinners" calendar
+    # that does not exist land on the default one, and the reply says Dinners
+    # because that is what the model passed. A raise is
+    # recoverable in the same turn - the next one lands correctly seconds later
     # against the strict edit path - and a silent landing is not.
     agenda = ctx.resolve_writable_agenda(payload[:calendar], strict: true)
     raise "no writable calendar available" if agenda.nil? && payload[:calendar].blank?
     raise "no calendar named #{payload[:calendar].inspect} that you can write to" if agenda.nil?
 
     # A leave time is not a start time, and the difference is the drive. The
-    # same rule edit_agenda_item has carried since prod 5145, for the same
-    # reason: asked for a leave time the model does the sum in its head, and
-    # when it did it here the whole drive went missing (prod 5935-5939).
+    # same rule edit_agenda_item carries, for the same reason: asked for a leave
+    # time the model does the sum in its head, and the whole drive goes
+    # missing.
     #
     # Worked back HERE rather than at execute so the row on the card shows the
     # start that actually lands, and so a drive it can't measure is a raise the
@@ -174,9 +173,9 @@ Buddy::Tools.register(
     end
 
     is_default = agenda.id == ctx.default_agenda&.id
-    # Prod 1201: "move it to Ours" produced an ADD, so the same Costco Run now
-    # exists twice at 1:00 PM. The description covers it, but description alone
-    # is what already failed, so look for the item they probably meant to move.
+    # "Move it to Ours" produces an ADD, so the same item ends up existing twice
+    # at the same hour. The description covers it, but description alone is what
+    # already failed, so look for the item they probably meant to move.
     #
     # Deliberately a note rather than a raise: two genuinely separate errands can
     # collide, and refusing a real add is worse than a duplicate. This runs in
@@ -305,7 +304,7 @@ Buddy::Tools.register(
     # true of it, which is the whole reason this reads the key rather than
     # `.presence`.
     #
-    # What changed after prod 5725 is upstream, not here: the argument no
+    # The fix for that is upstream, not here: the argument no
     # longer SHOWS the model a 0, so the branch is reached by a buffer somebody
     # actually named rather than by the one value the description happened to
     # spell out.

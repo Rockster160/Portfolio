@@ -1,9 +1,9 @@
 module Buddy
   # Which parts of Buddy a given person actually has.
   #
-  # Not everyone in the household uses the whole app. Eve has no chores, no
-  # completions, and no pebbles, and she has no business firing commands at the
-  # owner's Mac. Left alone, her companion would keep reaching for all of it:
+  # Not everyone in the household uses the whole app. Somebody may have no
+  # chores, no completions and no pebbles, and no business firing commands at
+  # the owner's Mac. Left alone, their companion keeps reaching for all of it:
   # the tools are offered whether or not the data exists, and the Rules of the
   # House teach chore-matching to every pet regardless.
   #

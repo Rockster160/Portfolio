@@ -4,9 +4,9 @@ module Buddy
   # calls `Buddy::Errors.report(section:, ...)`. The reporter:
   #
   #   1. Logs at ERROR level (not warn) with a full backtrace slice.
-  #   2. Pings Slack asynchronously via SlackWorker (prod only). Rocco
-  #      sees Buddy failures the moment they happen, no need to grep
-  #      production logs after the fact.
+  #   2. Pings Slack asynchronously via SlackWorker (prod only), so Buddy
+  #      failures surface the moment they happen rather than needing production
+  #      logs grepped after the fact.
   #   3. Re-raises in development so the failure is impossible to miss
   #      during local iteration.
   #

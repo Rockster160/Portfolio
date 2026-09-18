@@ -132,9 +132,9 @@ module Buddy
     # every screen in the app honours them; the briefing did not, so a series
     # deliberately hidden months ago still went out loud every morning.
     #
-    # Prod 4524 is the case: "Tomorrow's got a couple birthday all-days" was
-    # `agenda_items` 1027 and 1028, the same person on two calendars. 1027 comes
-    # off `agenda_schedules` 80, which is IN `hidden_schedule_ids` - put there by
+    # The case: "Tomorrow's got a couple birthday all-days" is two rows for the
+    # same person on two calendars, one of them coming off a schedule that IS in
+    # `hidden_schedule_ids` - put there by
     # `BirthdaySync` itself, precisely so the gmail copy wouldn't double the
     # Birthdays calendar. The app had already solved it. Twenty-four series and
     # one item are hidden on that account and every one of them was reaching the
@@ -157,9 +157,9 @@ module Buddy
       # #subject_users already apply, and the reason the comment above says
       # "agendas they own, like a jointly-run 'Ours' calendar". Without this,
       # every co-owned calendar reached the non-primary owner's briefing tagged
-      # as the OTHER person's, which the seed reads as "leave it out entirely":
-      # Moss called the joint 6pm dinner "Rocco's dinner" to Chelsea on both 17
-      # and 19 Aug. Their own joint calendar is not somebody else's news.
+      # as the OTHER person's, which the seed reads as "leave it out entirely" -
+      # so a joint dinner gets announced to one owner as the other owner's.
+      # Their own joint calendar is not somebody else's news.
       AgendaShare.where(user_id: user.id, permission: :owner).pluck(:agenda_id).each { |id|
         map[id] ||= { mine: true }
       }
@@ -197,9 +197,9 @@ module Buddy
       # door, and on somebody else's calendar it is an instruction to go to
       # their appointment — the clearest possible sign the item was read as
       # theirs. Three rules have been written into the briefing prompt against
-      # exactly this, and the morning after the last of them it went out again
-      # (prod 3951, then 4040: "Chelsea's Inclusion Cheer board meeting at 4:00
-      # PM. It's a drive one too, so you'd want to leave around 3:28 PM").
+      # exactly this, and the morning after the last of them it went out again:
+      # "<partner>'s board meeting at 4:00 PM. It's a drive one too, so you'd
+      # want to leave around 3:28 PM".
       #
       # A fourth rule was not going to be the one that worked. A number the
       # model is never shown is a number it cannot hand over.
@@ -211,10 +211,10 @@ module Buddy
       # `home_by` and `drive_home_min` deliberately SURVIVE. They are the exact
       # opposite case: her drive home is a fact about when she is back, which is
       # a fact about HIS day, and it is the thing people plan around out loud.
-      # Prod 5266 — "I want to leave only once Chelsea gets back from her yoga
-      # that day" — was unanswerable, and Byte asked him for a time the app
-      # already had. Stripping a partner's `leave_by` stops Buddy telling him to
-      # go to her appointment; stripping her arrival home would only stop it
+      # Without them, "I want to leave only once she gets back from yoga that
+      # day" is unanswerable and Buddy asks for a time the app already has.
+      # Stripping a partner's `leave_by` stops Buddy sending someone to their
+      # partner's appointment; stripping the arrival home would only stop it
       # answering the question he actually asked.
       def tag_ownership(hash, source)
         return hash if source.nil? || source[:mine] != false
@@ -228,10 +228,9 @@ module Buddy
       # because a number the model is never shown is a number it cannot hand
       # over. This is the same lever one level up: the briefing prompt spends
       # three paragraphs saying a partner's calendar is NEVER the briefing and
-      # to default to leaving it out, and prod 4482 opened "the calendar's busy
-      # around you" and then named five of Chelsea's items and none of his -
-      # his own Serenity went unmentioned. Prod 4429 the morning before was the
-      # milder version of it.
+      # to default to leaving it out, and briefings still open "the calendar's
+      # busy around you" and then name five of the partner's items and none of
+      # the reader's own.
       #
       # So the ones with no effect on his day stop being shown at all (see
       # ContextTool#without_uninvolved_partner_items), and a collision is what
@@ -242,12 +241,12 @@ module Buddy
       # collide with the whole day, which would keep everything and mean
       # nothing.
       # Answers with the NAME of the thing it runs into, not a bare yes. The
-      # overlap is worked out here either way, and prod 4524 is what throwing it
-      # away costs: Chelsea's yoga arrived tagged `collides` and led Byte's
-      # briefing as Rocco's own, because the one sentence the prompt asks for -
-      # whose it is and what it clashes with - had to be reassembled from two
-      # other entries in the same list. It clashed with Tech Retro; that is
-      # knowable right here and nowhere cheaper.
+      # overlap is worked out here either way, and throwing it away costs: a
+      # partner's item arrives tagged `collides` and leads the briefing as the
+      # reader's own, because the one sentence the prompt asks for - whose it is
+      # and what it clashes with - has to be reassembled from two other entries
+      # in the same list. What it clashes with is knowable right here and
+      # nowhere cheaper.
       def collisions(items, sources)
         mine, theirs = items.partition { |i| sources[i.agenda_id]&.dig(:mine) != false }
         spans = mine.filter_map { |i| ([i, span_for(i)] if span_for(i)) }
@@ -264,11 +263,11 @@ module Buddy
 
       # One thing on two calendars is still one thing.
       #
-      # Prod 4524: "Tomorrow's got a couple birthday all-days". There is one
-      # birthday - `agenda_items` 1027 (`Marcos' Birthday`, agenda 14) and 1028
-      # (`Marcos Jones's Birthday`, agenda 32) are the same person on two of
-      # Rocco's own calendars. So the count was a count of ROWS, and the name -
-      # the one thing a birthday mention exists to carry - was gone, because
+      # "Tomorrow's got a couple birthday all-days" when there is ONE birthday:
+      # `Marcos' Birthday` on one calendar and `Marcos Jones's Birthday` on
+      # another are the same person twice. The count is then a count of ROWS,
+      # and the name - the one thing a birthday mention exists to carry - is
+      # gone, because
       # "a couple birthday all-days" is a fair reading of what it was handed.
       # Every birthday that sits on both the Birthdays calendar and the gmail
       # one has this shape.
@@ -343,7 +342,7 @@ module Buddy
           tag_ownership(
             {
               id:             i.id,
-              # "all day" was the value here, and prod 4684 read it straight
+              # "all day" was the value here, and a briefing reads it straight
               # back as a predicate: "Marcos Jones's birthday is all day". It
               # is a duration where the sentence wanted a day. Everything in
               # this list IS today, so that's what the field says, and the flag
@@ -527,8 +526,8 @@ module Buddy
       # 858: 10:00 AM start, 32-minute drive, 5 minutes early, `leave_at` 9:22.)
       #
       # It exists because `drive_min` on its own was not enough to get the
-      # number said. Prod 3823 raised the travel on two items and gave a figure
-      # for neither - "it's a longer drive", "much closer" - which is worse than
+      # number said: a briefing will raise the travel on two items and give a
+      # figure for neither - "it's a longer drive", "much closer" - which is worse than
       # silence, since it names a cost and withholds the one part that could be
       # acted on. A minute count still asks the reader to do the subtraction;
       # this is the answer to the question they'd be doing it for.
@@ -586,8 +585,8 @@ module Buddy
         # Attribution respects `sharing_mode`: a HOUSEHOLD chore (feed the
         # animals, dishes) is "done" for THIS user if ANYONE in the household
         # did it; a PERSONAL chore (brush teeth) is "done" only if THIS user
-        # did it. Without the split, Chelsea brushing her teeth would show as
-        # Rocco's teeth already done.
+        # did it. Without the split, one person brushing their teeth shows as
+        # everybody's teeth already done.
         household_user_ids = user.chore_household&.member_user_ids || [user.id]
         completions = ChoreCompletion
           .where(user_id: household_user_ids, day_key: today)
@@ -601,8 +600,8 @@ module Buddy
 
         # WHO did it, when it wasn't this person. A shared chore counts as done
         # the moment anyone in the house does it, and with no actor on the row
-        # the whole bucket reads as a list of THEIR wins - prod 2528 told Rocco
-        # he'd knocked out a chore that was recorded for someone else. Only
+        # the whole bucket reads as a list of THEIR wins, crediting them with a
+        # chore that was recorded for somebody else. Only
         # filled in where this person has no completion of their own, which is
         # the only case where taking the credit is wrong.
         credited_to = completions.each_with_object({}) { |(cid, uid), map|
@@ -625,8 +624,8 @@ module Buddy
         # The same question asked strictly - is TODAY the day it comes round -
         # rather than "has it been due since some earlier day".
         #
-        # Rocco, 2026-09-06: "Chores should only ever appear if they are
-        # actually due on the current day." `matches_day?` answers
+        # A chore belongs here only if it is actually due on the current day.
+        # `matches_day?` answers
         # `date >= due_on` for relative and after_chore schedules, so anything
         # left undone matches every morning from then on, forever - and every
         # bucket built from it inherited that. See Chore#strictly_matches_day?.
@@ -641,7 +640,7 @@ module Buddy
         # label so Buddy can weigh "should I nudge this now" instead of
         # blindly listing everything - e.g. Wordle typically done at 9
         # PM, don't push it at 7 AM. Per-user (not household) because
-        # habits are personal: Chelsea and Rocco may do the same chore
+        # habits are personal: two people may do the same chore
         # at very different times. 7-day window keeps it responsive to
         # recent patterns without drifting on old habits.
         typical_hours = compute_typical_hours(user)
@@ -691,8 +690,8 @@ module Buddy
         # Both kinds of overdue, which used to be one kind. A chore STAMPED due
         # on an earlier day was recognised as backlog; one whose SCHEDULE came
         # round on an earlier day was not, and sat in `scheduled_today` claiming
-        # to be today's. Brush kitty, last done 19 July on a seven-day cycle,
-        # was in that bucket every morning for six weeks.
+        # to be today's - a seven-day chore last done months ago sat in that
+        # bucket every morning indefinitely.
         overdue = (marked_past + schedule_overdue_ids).uniq.reject { |id|
           intentional_ids.include?(id) || strictly_due_ids.include?(id) || done_today_ids.include?(id)
         }
@@ -706,18 +705,15 @@ module Buddy
         # which is the one nobody remembers on their own. The schedule adds the
         # rest a few lines down.
         #
-        # BEING PINNED IS NOT A REASON TO BE HERE. Rocco, 8 Sep: "we should just
-        # dump all of the hot picks from the briefing entirely. They've never
-        # worked well." Every attempt to draw the line somewhere inside them
-        # failed in a different direction. Handing all of them over rebuilt the
-        # read-out this method exists to prevent - seven get pinned at 2x every
-        # single morning, 144 across the three weeks to 10 Aug against three 5x
-        # ever, so that set IS the daily rotation wearing another name, and
-        # 10 Aug's briefing named six in a row having been told in the same
-        # breath that a plain 2x isn't news. Taking only the ones above the
-        # routine multiplier then hid a chore that was pinned AND genuinely due
-        # (prod, Tue 8 Sep, "Go get mail"), because the pin pulled it out of the
-        # schedule's reach and the multiplier test dropped it again.
+        # BEING PINNED IS NOT A REASON TO BE HERE, and every attempt to draw
+        # the line somewhere inside the pins failed in a different direction.
+        # Handing all of them over rebuilds the read-out this method exists to
+        # prevent - around seven get pinned at 2x every single morning against
+        # a handful of 5x ever, so that set IS the daily rotation wearing
+        # another name. Taking only the ones above the routine multiplier then
+        # hides a chore that is pinned AND genuinely due, because the pin pulls
+        # it out of the schedule's reach and the multiplier test drops it
+        # again.
         #
         # So the pin decides nothing here. What it still does is RIDE ALONG:
         # `slim_chore` keeps `hot` on any row that earned its place some other
@@ -732,10 +728,9 @@ module Buddy
         # different one-off jobs are stamped for today, eight is the honest
         # answer and the day really is like that.
         due_today_ids = pending_ids.select { |id|
-          # Rocco, 2026-09-04: "We should also just be removing the ChoreDaily
-          # rotation items from the briefing. Those never need to be brought
-          # up." That list is the person's own answer to "what do I do every
-          # day", so it leaves here unconditionally.
+          # The ChoreDaily rotation never belongs in a briefing: that list is
+          # the person's own answer to "what do I do every day", so it leaves
+          # here unconditionally.
           next false if daily_ids.include?(id)
 
           marked_today.include?(id)
@@ -743,11 +738,10 @@ module Buddy
 
         # And what the SCHEDULE puts on today.
         #
-        # Rocco, 4 Sep: "I WOULD like Byte to mention the chores that are
-        # scheduled DUE TODAY, excluding the dailies, and maybe even the ones
-        # that are every other day." The Wednesday bin run, the fortnightly
-        # nails, the two-monthly filter - none of them were reachable from a
-        # briefing at all. They land in `scheduled_today`, which a briefing
+        # Chores scheduled DUE TODAY belong in a briefing, dailies aside. The
+        # weekly bin run, the fortnightly nails, the two-monthly filter - none
+        # of them are reachable from a briefing otherwise. They land in
+        # `scheduled_today`, which a briefing
         # never sees, so a whole shape of "today is not like other days" was
         # missing from every one.
         #
@@ -758,11 +752,10 @@ module Buddy
         # definition.
         #
         # `scheduled_ids` is strictly today now (see strictly_due_ids), so what
-        # this line still does is drop the everyday rhythm. Prod 5500, Saturday
-        # 6 Sep: ten jobs handed over and Byte read out all of them, plus "It's
-        # trash day" off "Bring trash cans in" - which is not even the trash-day
-        # chore, it's the follower that comes round the day AFTER the cans go
-        # out, and its anchor had run on the Wednesday.
+        # this line still does is drop the everyday rhythm. Hand over ten jobs
+        # and a briefing reads out all of them, plus "It's trash day" off
+        # "Bring trash cans in" - which is not the trash-day chore at all, it's
+        # the follower that comes round the day AFTER the cans go out.
         #
         # An overdue chore is still on the Today tab, still completable, still
         # in `overdue_backlog` and `all_names`. It is just not today.
@@ -772,11 +765,9 @@ module Buddy
         # pinned as well as due went missing entirely - the pin removed it from
         # here, and the pin was the only thing that could have put it back.
         #
-        # Prod, Tue 8 Sep: "Go get mail" (chore 21, weekly on Tuesdays) was
-        # pinned at 2x that morning along with six others, and JOBS TODAY read
-        # "- Laundry" and nothing else. Rocco: "It's laundry day, yes, but I
-        # also need to go get the mail and that's a 'today' chore that got left
-        # off." The first Tuesday since JOBS TODAY existed at all.
+        # A weekly chore pinned at 2x on the morning it is due drops out of
+        # JOBS TODAY entirely, leaving a genuinely-due job unmentioned while
+        # the rest of the day's list reads normally.
         due_today_ids += strictly_due_ids.reject { |id|
           daily_ids.include?(id) || done_today_ids.include?(id) || routine_cadence?(by_id[id])
         }
@@ -874,11 +865,10 @@ module Buddy
       # left for a cadence to decide is whether something recurs so often that
       # naming it is padding with a clock time on it.
       #
-      # It briefly excluded every-other-day too. Rocco, 2026-09-04: "I don't
-      # know if routine_cadence? is good... I DO want things like a weekly
-      # reminder for trash or laundry or mail to show up, despite happening
-      # every week." Weekly was never excluded - but his Laundry runs on a
-      # two-day interval, and a rhythm with a gap in it is a day being different
+      # It briefly excluded every-other-day too, which is wrong: a weekly trash
+      # or laundry or mail reminder has to show up despite happening every week,
+      # and a chore on a two-day interval is the same case - a rhythm with a gap
+      # in it is a day being different
       # from the one before it, which is the definition of news here.
       #
       # `relative` and `custom` are the two freqs that carry an interval instead
@@ -899,8 +889,8 @@ module Buddy
       #
       # Wednesday is five rows - gather the trash, gather the recycling, take
       # the bags out, take the cans out, bring them back in - and read one by
-      # one it buries a day that really only has one thing on it. Rocco, 4 Sep:
-      # "Those can be grouped into just saying 'It's trash day'."
+      # one it buries a day that really only has one thing on it, when the
+      # whole group is sayable as "It's trash day".
       #
       # The shared word IS the job, so it becomes the label. The briefing prompt
       # has asked for this batching in prose for a while and had nothing to
@@ -970,7 +960,7 @@ module Buddy
       end
 
       # Rolling-window average local hour of completion per chore, for
-      # THIS user only. Habits are personal - Chelsea and Rocco may do
+      # THIS user only. Habits are personal - two people may do
       # the same shared chore at very different times, so averaging
       # across the household would produce a meaningless midpoint.
       # 7-day window keeps it responsive to the person's current rhythm.
@@ -1066,7 +1056,7 @@ module Buddy
       #
       # A link ships because the alternative is a guess. `app_pages` carries
       # `/lists`, the INDEX, and that was the only list link Buddy had - so
-      # prod 4831 answered "send me a link to my Doctor list" with
+      # "send me a link to my Doctor list" got answered with
       # `[Doctor!](https://ardesian.com/lists)`, which is a correct link to the
       # wrong page and reads as a working one until it's tapped.
       #
@@ -1132,8 +1122,8 @@ module Buddy
             body:         r.body.to_s.first(120),
             # A recurring reminder rolls `fire_at` forward the moment it fires,
             # so the next occurrence is all that's visible and the one that just
-            # went off looks like it never did. Prod 2761 announced the flower
-            # bed "tomorrow at 8:00 AM" half an hour after it rang that morning.
+            # went off looks like it never did - announced as "tomorrow at 8:00
+            # AM" half an hour after it rang that morning.
             last_fired:   (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
             # nil for a one-off, "daily" / "every weekday" / "monthly" / ...
             # for a repeat — the same labels an agenda item carries, from the
@@ -1144,11 +1134,11 @@ module Buddy
             # The row that FIRES the briefing, which is an ordinary recurring
             # reminder on purpose (Buddy::TodaySchedule) so it can be moved and
             # cancelled like any other. Unmarked it reads as something on their
-            # plate, and it has gone out as one twice: prod 3951 closed a
-            # briefing with "there's one reminder in play already: Today
-            # briefing", and prod 4020 answered "what's happening tomorrow?"
-            # with "that Today briefing reminder is still sitting there from
-            # this morning" — hours after it had already run that day.
+            # plate, and it has gone out as one: a briefing closing with
+            # "there's one reminder in play already: Today briefing", and
+            # "what's happening tomorrow?" answered "that Today briefing
+            # reminder is still sitting there from this morning" — hours after
+            # it had already run that day.
             #
             # Buddy::GPT::ContextTool drops it outright on a briefing turn. This
             # is for every other turn, where it has to stay reachable: "move my
@@ -1157,8 +1147,8 @@ module Buddy
             # Whether it falls on the day being briefed. The window is 48 hours
             # and the stamp is a weekday name, so a briefing turn had tomorrow's
             # reminders in front of it wearing "Fri 10:00 AM" and read one out
-            # as "10 AM" — prod 5254, a four-day cadence promised for a morning
-            # it was never due on, and nothing arrived. A BRIEFING drops the
+            # as "10 AM" — a cadence promised for a morning it was never due
+            # on, with nothing arriving. A BRIEFING drops the
             # other days on this tag (ContextTool.without_other_days); every
             # other turn keeps them, because "what's coming up" means the window.
             not_today:    (true unless r.fire_at.in_time_zone(tz).to_date == today),
@@ -1178,9 +1168,9 @@ module Buddy
       # that was the entire subject of a conversation an hour ago is simply not
       # there any more.
       #
-      # Prod 3255 is what that costs. The swimming-lesson reminder rang at 7:00
-      # PM and the next morning Buddy announced it as "set for this evening",
-      # having read it off the thread and re-dated it a day forward. Nothing in
+      # What that costs: a reminder that rang at 7:00 PM gets announced the next
+      # morning as "set for this evening", read off the thread and re-dated a
+      # day forward. Nothing in
       # context contradicted that, because there was nothing in context at all:
       # an absence can't argue, and it leaves the transcript as the only source
       # for a reminder - and a transcript has no idea what day it is.
@@ -1202,8 +1192,8 @@ module Buddy
       # they're still listed there, they just aren't running.
       #
       # Buddy could only ever see live ones, which made a whole class of
-      # question unanswerable. Prod 2822: "I'm still seeing it in the Reminders
-      # list" was TRUE and "I cancelled it" was also true, and with no way to
+      # question unanswerable: "I'm still seeing it in the Reminders list" is
+      # TRUE and "I cancelled it" is also true, and with no way to
       # hold both, the reply argued about whether it was a reminder or a watch.
       # Marked `status: off` so the difference is a fact rather than an absence.
       def switched_off(klass, conversation)
@@ -1264,8 +1254,8 @@ module Buddy
             # Present only on a hand-written watch. Carried so a "why did that
             # fire" (or a near-duplicate) can be reasoned about from the actual
             # condition rather than the prose around it. It is also the ONLY
-            # thing separating two watches whose prose is identical - both
-            # doorbell watches in prod 2817 read "🔔 Someone's at the doorbell."
+            # thing separating two watches whose prose is identical - two
+            # doorbell watches both read "🔔 Someone's at the doorbell."
             listener: w.listener,
             # What it DOES when it trips, on the two kinds that don't say
             # anything. Without it a watch that starts a timer is indistinguish-
@@ -1290,8 +1280,8 @@ module Buddy
 
       # Index of Jil tasks that can be fired by scope name via the
       # `trigger_jil_task` tool. Sourced from ACCESSIBLE tasks (owned +
-      # shared), so a task Rocco owns and shares with Chelsea shows up in
-      # her Buddy too - and executes as its owner, with the owner's
+      # shared), so a task one person owns and shares shows up in the other
+      # person's Buddy too - and executes as its owner, with the owner's
       # credentials. Gated on the owner's explicit `buddy_enabled` opt-in;
       # without it the index would be ~380 entries of mostly plumbing and
       # Buddy would have no way to tell a scene from a webhook receiver.
@@ -1442,10 +1432,10 @@ module Buddy
       # turns they teach Buddy to narrate receipts instead of talking. The cost
       # was that Buddy had no record of its own actions at all, so when it was
       # told it hadn't done something it could only argue from its own prose.
-      # Prod 3129 - "Oh you didn't do anything" - got "Ahh, nope, I did." when
-      # nothing had run. Prod 3208 - "That's not correct. That's the laundry
-      # button being pressed." - got "I've got a watch on the dryer stop call
-      # already, not the button press.", and the watch really was on the button.
+      # "Oh you didn't do anything" gets "Ahh, nope, I did." when nothing has
+      # run. "That's not correct, that's the laundry button being pressed" gets
+      # "I've got a watch on the dryer stop call already, not the button press."
+      # when the watch really is on the button.
       # Both were confident, both were wrong, and both were checkable.
       #
       # Context is where that belongs rather than history: here it is a FACT to

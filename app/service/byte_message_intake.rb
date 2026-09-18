@@ -132,9 +132,9 @@ class ByteMessageIntake
     # the other half of the contract, which queue.js has always stated we hold:
     # "the server treats a repeat with the same local_id as idempotent".
     #
-    # Prod 3781/3783 — one send, two rows, same local_id and the same
-    # client-stamped created_at to the millisecond. Two rows meant two turns,
-    # two replies, and "light covers" going onto the agenda twice. Handing back
+    # Without it: one send, two rows, same local_id and the same
+    # client-stamped created_at to the millisecond. Two rows mean two turns,
+    # two replies, and whatever was asked for happening twice. Handing back
     # the row we already have is what the client is expecting either way: it
     # upgrades its queued bubble to this id and stops.
     if (already = existing_for_local_id)
@@ -155,8 +155,8 @@ class ByteMessageIntake
 
     # They long-pressed one message and answered THAT. Above everything below
     # it because an explicit target outranks whatever the parsers would make of
-    # the same words: "10 more minutes" said at a note from Chelsea is an answer
-    # to Chelsea, not a timer.
+    # the same words: "10 more minutes" said at a relayed note is an answer to
+    # the person who sent it, not a timer.
     #
     # A reply to a relayed message never reaches Buddy at all - it goes to the
     # person who sent it, which is also why it still works while the provider is

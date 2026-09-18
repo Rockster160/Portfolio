@@ -141,10 +141,10 @@ module Buddy
     # A stored topic goes into the prompt for every turn, so the reply written
     # under it reaches for its vocabulary; reading that reply back as evidence
     # the subject hasn't changed is asking the topic whether the topic is still
-    # current, and the answer is always yes. Prod conversation 21, 27 Aug: the
-    # topic settled at 16:23 on a recurring-list problem and was still there at
-    # 17:09 through a memory, two travel alerts, a chore form and a completely
-    # unrelated question about product ideas - because Byte's own answer to that
+    # current, and the answer is always yes: a topic settles on one problem and
+    # is still there three quarters of an hour later through a memory, two
+    # travel alerts, a chore form and a completely
+    # unrelated question - because the companion's own answer to that
     # question said "recurring", "list" and "already", so the tail matched and
     # nothing refreshed. Every reply after it was written under a description of
     # a conversation that had finished three quarters of an hour earlier.

@@ -121,14 +121,11 @@ module ByteStandupPrep
   # The list is spent once the brief has been read, and clearing it is what
   # keeps the brief about YESTERDAY.
   #
-  # It used to be cleared by the -5 minute "Import Standup" step (Jil task
-  # 380 -> 44), which copied each item into Todo and removed it from Standup.
-  # 380 was disabled on 3 Sep when this service replaced it, and nothing took
-  # over the second half: every item before that date was soft-deleted the
-  # next morning at 9:25, and `Yesterday: Worked on adding a memo to
-  # Allocations` — typed 3 Sep, merged 3 Sep — has been the whole of "On my
-  # list" every morning since. Six briefs reporting one day's work as though
-  # it were yesterday's.
+  # It used to be cleared by an "Import Standup" Jil step that copied each item
+  # into Todo and removed it from Standup. When this service replaced that step,
+  # nothing took over the second half: every older item stayed soft-deleted and
+  # one stale entry became the whole of "On my list" every morning - brief after
+  # brief reporting the same day's work as though it were yesterday's.
   #
   # The Todo leg is NOT restored. All 133 items it ever moved there are
   # soft-deleted; they went in and were swept out by hand, so it was churn

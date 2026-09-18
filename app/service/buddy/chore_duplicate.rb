@@ -5,9 +5,9 @@ module Buddy
   # `merge_key` on `complete_chore` settles that question WITHIN one card, so
   # two identical calls in a single reply collapse into one row. It cannot see
   # a row written two minutes ago on the card above, and that is the shape this
-  # went wrong in: prod 5879, a sentence clarifying WHICH pair of chores was
-  # Chelsea's, read as a fresh request, wrote `chore_completions` 2869 and 2870
-  # against the same two chores she had already been credited for.
+  # went wrong in: a sentence clarifying WHICH pair of chores somebody meant,
+  # read as a fresh request, writes two more completions against the same two
+  # chores they were already credited for.
   #
   # The tool's own description has told the model to reach for
   # `edit_chore_completion` in exactly this case since it was written. Prose is

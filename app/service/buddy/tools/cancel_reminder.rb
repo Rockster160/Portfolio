@@ -35,7 +35,7 @@ Buddy::Tools.register(
   # already carries the proof: `execute` returns PendingLookup's `recreated`
   # descriptor, holding every column, and Reverter lists both BuddyReminder and
   # BuddyWatch. What it cost was a reminder firing 47 minutes after the person
-  # said to stop it (prod 3849 -> 3855), because the card sat untapped and
+  # said to stop it, because the card sat untapped and
   # nothing about "you can clear it off" reads as "this is still on".
   level:       2,
   confirm:     ->(payload, ctx) {
@@ -60,8 +60,8 @@ Buddy::Tools.register(
     next { title: "Remove reminder" } if row.nil?
 
     # The sub is what makes two identical-looking rows tellable apart on the
-    # card. Prod 2817: three cancel rows in a row all read "Cancel 🔔 Someone's
-    # at the doorbell." and two of them were the wrong watch.
+    # card: three cancel rows can all read "Cancel 🔔 Someone's at the
+    # doorbell." with two of them pointing at the wrong watch.
     { title: "Remove #{row.summary}", sub: row.detail }
   },
   execute:     ->(payload, ctx) {

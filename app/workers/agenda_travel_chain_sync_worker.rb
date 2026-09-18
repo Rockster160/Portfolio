@@ -17,10 +17,9 @@ class AgendaTravelChainSyncWorker
   # the moment work begins, so a change arriving during the run books a fresh
   # pass over the new state.
   #
-  # Prod, both moved and both left holding a leave_at computed for their old
-  # start: agenda_items 1069 (Orchard, moved by the Buddy tool on 1 Sep, leave_at
-  # 34 seconds AFTER its own start) and 1048 ("IT", moved by a PATCH from the UI
-  # on 29 Aug, leave_at a clean 24 hours early). Two different writers, one
+  # An item moved by the Buddy tool and one moved by a PATCH from the UI are
+  # both left holding a `leave_at` computed for their OLD start - one landing
+  # after its own start, the other a clean day early. Two different writers, one
   # pipeline - which is why this is fixed here and not in either of them.
   # `Buddy::Context#leave_by` and `AgendaBriefing#travel_line` read that field
   # verbatim, so a stale value is quoted to the person as fact.

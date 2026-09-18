@@ -158,9 +158,9 @@ Buddy::Tools.register(
     # With no role, it is the company alone. `confirm:` refuses that outright
     # when the company is already there, so a role-less card can only have been
     # offered against an empty board - and one row appearing since is the job
-    # the mail was about. Prod 6391, JPMorgan's verification code: offered a
-    # minute before jobhunt made row 36, and a tap would have opened a second
-    # row beside it. More than one is a guess, and refused.
+    # the mail was about - a card offered a minute before jobhunt opens the row
+    # would otherwise add a second one beside it. More than one is a guess, and
+    # refused.
     role  = payload[:role].to_s.strip
     rows  = Buddy::JobHunt.applications_for(ctx.user, payload[:company])
     twin  = (

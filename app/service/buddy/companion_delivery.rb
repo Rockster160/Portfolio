@@ -14,10 +14,10 @@ module Buddy
   module CompanionDelivery
     # The seed is the only thing on the input for a turn nobody asked for, and
     # two firings of the same watch or recurring reminder word it identically.
-    # Prod 1318 was byte-for-byte 1315 from 45 minutes earlier, so the model
-    # found its own announcement of the FIRST deploy sitting in history, read the
-    # second as a duplicate, and sent "Already handled that one just now." to the
-    # lock screen - the deploy it fired for went unmentioned.
+    # A seed byte-for-byte identical to one from an hour earlier lets the model
+    # find its own announcement of the FIRST event sitting in history, read the
+    # second as a duplicate, and send "Already handled that one just now." to the
+    # lock screen - leaving the event it fired for unmentioned.
     #
     # The clock stamp is what makes each firing distinct on its face, and the
     # rest of the frame says whose turn this is: nothing was said to Buddy, and

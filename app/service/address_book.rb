@@ -264,10 +264,9 @@ class AddressBook
   # geocode (which `nonnil_cache`s, so the same location asked twice is one
   # call).
   #
-  # Lived in Buddy::ToolContext as a private method until 2026-09-14 and is
-  # here now because a second caller wanted it and none of it was ever about
-  # Buddy - SuiteOnArrival has to turn an appointment's location into a point
-  # to compare a phone against. ToolContext delegates.
+  # Lives here rather than in Buddy::ToolContext because none of it was ever
+  # about Buddy - SuiteOnArrival has to turn an appointment's location into a
+  # point to compare a phone against. ToolContext delegates.
   def coords_for_location(location)
     return if location.blank?
 

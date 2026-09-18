@@ -498,7 +498,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // system acknowledgement. Stamping the local_id onto that told the client
   // the ack WAS the echo, so it repainted the optimistic "/reset" bubble into
   // an ack — and the broadcast of the same ack, which carries no local_id,
-  // mounted a second one beside it. Prod 2513: two identical bubbles, one row.
+  // mounted a second one beside it - two identical bubbles for one row.
   function adoptSendResponse(entry, message) {
     if (message?.direction === "outbound") {
       message.metadata = {
@@ -629,8 +629,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Gated on the SAME linkage the server routes by (Buddy::ThreadReply), not
     // just on there being a peer identity to name. A bubble carrying Moss's
     // name but neither link is one the server can't send anywhere, and offering
-    // "Reply to Moss" over it is a promise it then quietly breaks — which is
-    // exactly what happened to prod 4376.
+    // "Reply to Moss" over it is a promise it then quietly breaks.
     const routable = Boolean(
       message?.metadata?.relay_twin || message?.metadata?.relay_id,
     );
@@ -2493,8 +2492,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  // Buddy's own mute, matching Whisper's control. Lived in the header as an
-  // icon until 2026-09-14 and is a row in Settings now.
+  // Buddy's own mute, matching Whisper's control. A row in Settings rather
+  // than an icon in the header.
   //
   // The label says whether SOUND is on, not whether mute is - the row is
   // headed "Sound", and a button reading "Mute: off" under it is one negation
@@ -3324,9 +3323,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The alert strip is fed from exactly two places: `bootstrap.alerts` on a
   // cold page load, and a live socket push of `kind: "alerts"`. So it is only
   // ever as current as the socket, and anything raised or resolved while that
-  // was down stayed wrong on screen until a hard reload. Rocco, 13 Sep:
-  // "Alerts don't seem to sync after coming back to the app" - 21 minutes
-  // after both laundry-gate alerts had resolved on the gate closing.
+  // was down stayed wrong on screen until a hard reload - alerts resolved
+  // server-side still showing long after the fact.
   //
   // `GET /buddy/alerts` already existed, was already routed, and already
   // returned exactly the shape `setAlerts` wants; the dismiss POST was its

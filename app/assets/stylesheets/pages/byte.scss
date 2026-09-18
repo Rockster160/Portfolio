@@ -56,10 +56,10 @@ html.html-ctr-byte body {
   --bs-attention: #F2B84B;
   --bs-pending: #94A3B8;
 
-  // Moss theme (Chelsea) — retint the ENTIRE surface (page, drawer, modals)
+  // Moss theme — retint the ENTIRE surface (page, drawer, modals)
   // to Moss's calm forest palette. `:has` on the themed .byte-app overrides
   // the vars at the .ctr-byte root, so everything downstream inherits it.
-  // Her own (outbound) messages are Chelsea's purple; Moss's replies are a
+  // The reader's own (outbound) messages are purple; Moss's replies are a
   // soft green.
   &:has(.byte-app[data-buddy-theme="moss"]) {
     --bs-bg: #0C1710;
@@ -79,11 +79,11 @@ html.html-ctr-byte body {
     --bs-pending: #8CA886;
   }
 
-  // Suki theme (Eve) — a bright iridescent-violet surface for her purple
-  // sunbird. Same override mechanism as Moss: `:has` on the themed .byte-app
+  // Suki theme — a bright iridescent-violet surface for the purple sunbird.
+  // Same override mechanism as Moss: `:has` on the themed .byte-app
   // retints page, drawer, and modals. Suki's replies/buttons are her violet;
-  // Eve's own (outbound) messages are a warm sunset coral, so the two never
-  // blur together against the plum.
+  // the reader's own (outbound) messages are a warm sunset coral, so the two
+  // never blur together against the plum.
   &:has(.byte-app[data-buddy-theme="suki"]) {
     --bs-bg: #150A22;
     --bs-panel: #241338;
@@ -102,11 +102,11 @@ html.html-ctr-byte body {
     --bs-pending: #9B84B8;
   }
 
-  // Glimmer theme (Chelsea's yoga companion) — a warm amber lantern surface for
-  // her firefly. Same `:has` override mechanism as Moss/Suki: retints page,
-  // drawer, and modals to a soft glowing dusk. Glimmer's replies/buttons are her
-  // gold; Chelsea's own (outbound) messages stay her purple (as with Moss), so
-  // the two never blur together against the amber.
+  // Glimmer theme — a warm amber lantern surface for the firefly. Same `:has`
+  // override mechanism as Moss/Suki: retints page, drawer, and modals to a soft
+  // glowing dusk. Glimmer's replies/buttons are her gold; the reader's own
+  // (outbound) messages stay purple (as with Moss), so the two never blur
+  // together against the amber.
   &:has(.byte-app[data-buddy-theme="glimmer"]) {
     --bs-bg: #160F04;
     --bs-panel: #241A0A;
@@ -615,8 +615,8 @@ html.html-ctr-byte body {
 //
 // `button.byte-chip-close` rather than the bare class, and pinned again on
 // `:active`, because two rules above this one both outrank a lone class and
-// both land on a PRESS - which is how the × ended up moving out from under the
-// finger mid-click. Rocco: "The x button is STILL drifting as I click."
+// both land on a PRESS - which moves the × out from under the finger
+// mid-click.
 //
 //   forms.scss     `button:active { position: relative; top: 1px }`  (0,1,1)
 //   this sheet     `.ctr-byte .byte-app button:active { top: auto }` (0,2,1)
@@ -5085,7 +5085,7 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star");
   }
 }
 
-// Glimmer (Chelsea's firefly) — spliced from a 9-pose sheet, so a smaller
+// Glimmer — spliced from a 9-pose sheet, so a smaller
 // raster set than Moss. Each name here must have a matching
 // buddy/glimmer/face_#{name}.png or precompile fails.
 $glimmer_expressions: neutral happy grin sad content surprised loving star sleeping crying thinking focused dismayed;
@@ -5119,7 +5119,7 @@ $glimmer_expr_aliases: (
   }
 }
 
-// Suki (Eve) — a full raster set of her purple sunbird. Each name here must
+// Suki — a full raster set of the purple sunbird. Each name here must
 // have a matching buddy/suki/face_#{name}.png or precompile fails.
 $suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sleeping surprised focused sad;
 @each $expr in $suki_expressions {

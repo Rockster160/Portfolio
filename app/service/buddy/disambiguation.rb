@@ -4,9 +4,9 @@ module Buddy
   # Before this, a resolver that couldn't tell two records apart raised a
   # sentence, the model read it, and the person got a question in prose - so
   # answering meant typing the name back, and the whole thing cost a second
-  # turn to say something the system already knew. Prod 4495 is the cost of NOT
-  # asking (Moss marked `Unload Dishwasher` for "Log load dishwasher", the
-  # opposite job), and the fix for that was to stop guessing - which turns every
+  # turn to say something the system already knew. The cost of NOT asking is
+  # marking `Unload Dishwasher` for "Log load dishwasher", the opposite job -
+  # and the fix for that was to stop guessing, which turns every
   # near miss into that extra exchange unless the candidates come with it.
   #
   # A tap runs the ORIGINAL call with the chosen record and no model turn at

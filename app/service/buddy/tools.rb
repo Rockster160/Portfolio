@@ -66,9 +66,9 @@ module Buddy
 
     # The one lesson none of their own descriptions can carry on its own,
     # because every example in one is immediate and most never mention time at
-    # all. It lived only on `call_jil_function`; prod 3897 was `add_list_item`,
-    # which had never been told, and "Add "something" to my todo list in 2
-    # minutes" put the item on the list on the spot.
+    # all. It lived only on `call_jil_function`, so `add_list_item` had never
+    # been told, and "Add something to my todo list in 2 minutes" put the item
+    # on the list on the spot.
     IMMEDIATE_NOTE = "This happens the MOMENT you call it. A time in the request says WHEN to " \
                      "act and is never part of what to do. For anything later, put it on the " \
                      "clock FIRST and call this one after it: set_timer with then_continue: true " \
@@ -81,9 +81,9 @@ module Buddy
     # hold them in. So a `set_timer` in the same reply is set AFTER the sound
     # has already played, and it holds an empty queue.
     #
-    # Prod 4081, "Play the whisper wake sound in 2 minutes": Whisper Sound at
-    # 21:04:35, the two-minute wait at 21:04:36, timer 78 with `{}` for a queue.
-    # The model was doing what both descriptions told it to.
+    # "Play the whisper wake sound in 2 minutes" fires the sound immediately,
+    # sets the two-minute wait a second later, and leaves the timer holding `{}`
+    # for a queue. The model is doing what both descriptions told it to.
     UNWAITABLE_NOTE = "This happens the MOMENT you call it, and a wait CANNOT hold it - it will " \
                       "already have run by the time the wait is set. A time in the request says " \
                       "WHEN to act and is never part of what to do. For anything later it goes on " \
@@ -214,9 +214,9 @@ module Buddy
         # be ordinary level-1 tools that executed after the reply and fed their
         # findings into a SECOND turn, so on the turn that mattered the model
         # held "Ran immediately. Speak about it as done." and no data — and it
-        # did what anyone would with that and made the result up. Prod 2710 said
-        # "No print record for `game_tray-vase` either"; prod 2712, four seconds
-        # later, said "Found it."
+        # did what anyone would with that and made the result up - answering
+        # "No print record for that either" and then, four seconds later,
+        # "Found it."
         #
         # An ACTION needs it when the model has to react to how the action went
         # rather than merely report it — print_again hands the printer the name

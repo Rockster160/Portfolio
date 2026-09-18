@@ -1,9 +1,8 @@
 # Where the person is, right now.
 #
-# Rocco, 2026-09-14: "Buddy should be able to access my location and subscribe
-# to listening for location changes so that he can act on things like
-# arrive/depart." The second half already existed - `remind_when` has taken a
-# travel watch, coordinate-matched, since July - and the first half did not, so
+# Reading the location, as the counterpart to subscribing to changes in it.
+# The second half already existed - `remind_when` has taken a travel watch,
+# coordinate-matched, for a long time - and the first half did not, so
 # the only way to know where somebody was had been to wait for them to move.
 #
 # It reads LocationCache, which is what the phone's geofence, the car's
@@ -13,7 +12,7 @@
 #
 # OWNER_ONLY through `feature: :location`, because LocationCache is User.me's
 # and there is no per-user one - an ungated version of this would answer
-# Chelsea with Rocco's position.
+# everybody with the owner's position.
 Buddy::Tools.register(
   name:        :check_location,
   description: <<~TXT,

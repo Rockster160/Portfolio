@@ -32,10 +32,10 @@ let counter = null;
 // — so a badge can survive every clear the page performs, and nothing the
 // person does inside the app will shift it.
 //
-// Prod, 15 Sep: Eve asked twice how to get rid of "the 8 notifications stuck to
-// your app pic", then counted seven messages against a badge reading nine. She
-// has exactly one conversation, so `drawerUnread.total()` was zero the whole
-// time and the page was calling `clearAppBadge()` on every one of the twenty
+// So a badge reading nine sits over seven actual messages, with no way to get
+// rid of it from inside the app. For somebody with exactly one conversation
+// `drawerUnread.total()` is zero the whole
+// time and the page calls `clearAppBadge()` on every one of the twenty
 // reads she made that hour. The number it was clearing was never the number she
 // could see.
 //

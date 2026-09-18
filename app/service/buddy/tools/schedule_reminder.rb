@@ -342,7 +342,7 @@ Buddy::Tools.register(
 
     # Who it's FOR. Naming someone we can't place is refused rather than
     # quietly aimed back at the asker - a reminder that reaches the wrong
-    # person is the failure this argument exists to stop (prod 2547).
+    # person is the failure this argument exists to stop.
     wanted      = payload[:notify].to_s.strip
     recipient   = wanted.present? ? ctx.resolve_household_user(wanted) : nil
     raise "I'm not sure who #{wanted} is" if wanted.present? && recipient.nil?
@@ -458,9 +458,9 @@ Buddy::Tools.register(
   # confirmation checkbox and drops an activity receipt instead.
   auto:    true,
   # Who it's for leads the receipt when it isn't them. "Byte will send you a
-  # reminder at 12:22pm" was the only visible sign that a reminder meant for
-  # Chelsea had been aimed back at the person who asked, and it's easy to read
-  # past (prod 2547). It says "send" rather than "remind" for the same reason
+  # reminder at 12:22pm" is the only visible sign that a reminder meant for
+  # somebody else has been aimed back at the person who asked, and it is easy to
+  # read past. It says "send" rather than "remind" for the same reason
   # the delivery bridges: aimed at somebody else, this is a note going to them.
   receipt: ->(result, ctx) {
     name    = ctx.buddy_name

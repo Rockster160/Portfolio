@@ -83,8 +83,8 @@ Buddy::Tools.register(
       # read instead of the row's own (see confirm), which is right for "leave
       # at 4 and let's be 10 minutes early" and wrong for every number invented
       # to make a clock land: asked only to leave at 4:15, this came back
-      # carrying 14, which is the buffer that keeps a start already on the row
-      # where it was (prod 5940). `leave_at` moves the START - that is the whole
+      # carrying the exact buffer that keeps a start already on the row where
+      # it was. `leave_at` moves the START - that is the whole
       # job - so there is never a buffer to solve for.
       description: "Minutes to be there BEFORE it starts - the app's \"min early\" setting. A plain number " \
                    "on the row; it needs no drive time. Only when they NAMED one out loud; omit it and the " \
@@ -128,7 +128,7 @@ Buddy::Tools.register(
     # And on a ONE-OFF it is redundant rather than wrong: there is no rule, so
     # the single row already IS everything. Raising here dead-ended "I moved it
     # to 3. Can you switch that to the Ours calendar?" with nothing moved and
-    # nothing the person could do about it (prod 5270-5271).
+    # nothing the person could do about it.
     series = false if item.agenda_schedule_id.blank?
 
     # `was_kind` is what the row IS, carried so the checklist can say "Edit
@@ -148,7 +148,7 @@ Buddy::Tools.register(
 
     # A leave time is not a start time, and the difference is the drive. The
     # app knows `travel_seconds` and `arrive_early_minutes`; the model does not,
-    # and when it guessed it was 12 minutes out (prod 5145). So it is worked
+    # a guess lands minutes out. So it is worked
     # back HERE and the start is what gets written.
     #
     # Refused rather than guessed when there is no drive time on the row - a
@@ -201,7 +201,7 @@ Buddy::Tools.register(
     diffs << "title → #{payload[:title]}" if payload[:title].present?
     # BOTH times when they asked to leave at one. Naming only the start reads
     # as though their leave time was ignored, and naming only the leave time is
-    # what put "leave at 4:28" on a 4:28 start (prod 5147).
+    # what puts "leave at 4:28" on a 4:28 start.
     if payload[:leave_from].respond_to?(:strftime) && payload[:at].respond_to?(:strftime)
       zone = ctx.user.timezone
       diffs << "leave #{Buddy::Clock.at(payload[:leave_from], zone: zone)} → " \

@@ -9,8 +9,8 @@ module Buddy
   # person believes they were sent. So here the message FAILS, says so, and
   # offers a retry.
   #
-  # House-wide because it is one API key. The alternative is Eve and Chelsea
-  # each discovering it by sending something and watching it die.
+  # House-wide because it is one API key. The alternative is every other person
+  # discovering it by sending something and watching it die.
   #
   # Nothing clears it on a timer, on purpose. It comes back when a real call
   # succeeds — either the retry link in the Slack post, or a person tapping

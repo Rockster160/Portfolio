@@ -37,8 +37,8 @@ module WebPushNotifications
   # subscription — which meant a person with a phone and a desktop PWA got their
   # notifications on exactly one of them, whichever they had most recently
   # opened. Opening Byte on the Mac silently took the phone off the list, and
-  # relay messages ("Chelsea says…") stopped arriving on the device that
-  # actually goes everywhere with them.
+  # relay messages stopped arriving on the device that actually goes everywhere
+  # with them.
   #
   # `subscriptions:` narrows the fan-out. ByteNotifier uses it to drop the
   # device that's already looking at the thread while still reaching the others,
@@ -144,10 +144,9 @@ module WebPushNotifications
   # SUBSCRIPTION revoked, and the device comes back with a new endpoint.
   #
   # A badge-only push shows nothing by design, so a stream of them is a stream
-  # of broken promises. That is what happened: from 2026-09-03, when a titleless
-  # payload was first let through and a silent push went out on every READ,
-  # endpoints stopped lasting weeks and started lasting minutes. A 845-day-old
-  # Jarvis subscription died the same evening.
+  # of broken promises. Let a titleless payload through so a silent push goes
+  # out on every READ and endpoints stop lasting weeks and start lasting
+  # minutes, taking subscriptions years old with them.
   #
   # So the count RIDES ALONG on notifications that show something — `send_to`
   # attaches it for Jarvis and ByteNotifier passes it for Byte — and the only

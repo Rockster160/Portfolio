@@ -19,9 +19,9 @@ module Buddy
   # early stops it — otherwise it fires in the middle of the next block and
   # announces a break that finished ten minutes ago.
   #
-  # Prod: Eve asked for exactly this on 20 Aug (message 4135) and got one
-  # 30-minute timer with an empty `then_continue` queue, plus a reply
-  # describing a cycle that didn't exist.
+  # Asked for without it, a work/break cycle comes back as one 30-minute timer
+  # with an empty `then_continue` queue, under a reply describing a cycle that
+  # does not exist.
   module TimerCycle
     module_function
 

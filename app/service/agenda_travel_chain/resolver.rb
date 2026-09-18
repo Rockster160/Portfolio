@@ -18,9 +18,9 @@ module AgendaTravelChain
 
     # Cross-state happens. Cross-ocean does not.
     #
-    # Prod agenda_item 1054, 3 Sep: "Neurodiversity Clinic" - a bare venue name
-    # with no city - was geocoded to -37.879, 145.023, which is Melbourne,
-    # Australia. There is no driving route across the Pacific, so travel_seconds
+    # A bare venue name with no city geocodes to the other side of the world -
+    # a clinic in Utah landing at -37.879, 145.023, which is Melbourne.
+    # There is no driving route across the Pacific, so travel_seconds
     # came back nil, no `agenda-travel-prepare` and no `agenda-travel-go` were
     # ever created, and a 2 PM appointment with 10 minutes' arrive-early got no
     # leave-by and no time-to-go. Nothing logged; the only symptom was a briefing

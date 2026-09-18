@@ -1,22 +1,20 @@
 module Buddy
   # A briefing sentence about a day the facts never mentioned.
   #
-  # Prod 6137, 15 Sep. Suki's seed carried one section — the weather — and the
-  # briefing said:
+  # A seed carrying one section — the weather — still produces:
   #
   #   Tomorrow still looks like a pantry-start kind of day, so today can stay
   #   focused and steady.
   #
-  # Nothing in the seed mentions a pantry or a tomorrow. It came from the
-  # evening before (prod 6118), where Eve said she believed TOMORROW would be
-  # the day she could start on the pantry — and from where she was standing,
-  # tomorrow was the Monday the briefing was for. Read forward unchanged, her
-  # own sentence pushed the pantry start to Tuesday on the one morning she had
+  # Nothing in the seed mentions a pantry or a tomorrow. It comes from the
+  # evening before, where "tomorrow" meant the day the briefing is FOR. Read
+  # forward unchanged, that sentence pushes the thing a day later on the one
+  # morning they had
   # set aside for it.
   #
   # `History::PROSE_KINDS` replays the thread as assistant turns, so the whole
-  # week is in the prompt and this is what it can cost. The second briefing
-  # running to say something its seed withheld; 6099 on 13 Sep was the first.
+  # week is in the prompt and this is what it can cost: a briefing saying
+  # something its seed withheld.
   #
   # WHY THIS IS MECHANISM AND NOT A FOURTH WORDING OF THE RULE: the seed
   # already says "Only what's above. If it isn't there, it isn't happening

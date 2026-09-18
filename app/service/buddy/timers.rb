@@ -17,10 +17,9 @@ module Buddy
     # are watching. The chip still shows, because it is the only sign the delay
     # is real, but nothing rings and there is nothing to dismiss.
     #
-    # Prod timer 98, 4 Sep: the nap-sound wait went off like a kitchen timer,
-    # blared, and sat there until it was tapped away - `confirmed_at` two
-    # seconds after the fire. Nothing was being asked of him; the sound was
-    # already playing.
+    # Otherwise the wait behind a sound goes off like a kitchen timer, blares,
+    # and sits there until it is tapped away - when nothing was being asked at
+    # all and the sound was already playing.
     #
     # Written when the queue is actually attached (Buddy::ProposalBuilder
     # .hold_for_timer!) rather than off the model's `then_continue`, so the flag

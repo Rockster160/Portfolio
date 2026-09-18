@@ -5,9 +5,9 @@
 # often a full postal address: street number, city, state, ZIP, country. Read
 # back in a sentence it becomes "Monday's plunge with Wil is still on the board
 # for Horsetail Falls, Alpine, UT" — a briefing reciting a mailing label for a
-# canyon Rocco has driven to a hundred times. He asked for the short form
-# everywhere except when he asks for the address on purpose: "a hair
-# appointment in Sandy" over the street number and the ZIP.
+# canyon somebody has driven to a hundred times. The short form goes everywhere
+# except when the address itself was asked for: "a hair appointment in Sandy"
+# over the street number and the ZIP.
 #
 # So this decides it in Ruby rather than asking the model to be brief. Two
 # shapes cover nearly everything real:

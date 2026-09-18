@@ -54,10 +54,9 @@ module Buddy
     #
     # EVERY application, settled ones included. It was live-only, on the
     # reasoning that a beat on a job closed months ago is nearly always a
-    # misfire - and the cost of that showed up as prod 5759. Rocco said
-    # "Corporate Tools rejected me"; Corporate Tools was already closed, so it
-    # wasn't on the board the model could see and it wasn't resolvable either.
-    # With no way to be right and no way to say so, the model reached for the
+    # misfire - and the cost of that is a conversation about an already-closed
+    # application, which is off the board the model can see and unresolvable.
+    # With no way to be right and no way to say so, the model reaches for the
     # nearest live company and settled the wrong one.
     #
     # A closed application is still a thing that happened to them and still a
@@ -141,10 +140,9 @@ module Buddy
 
     # The board row whose ROLE the text names, when exactly one does.
     #
-    # Prod 15 Sep, email 51716: a Greenhouse "thank you for applying" that
-    # names a role and no company anywhere in it - the classifier had nothing
-    # to put in `company` and was right not to guess. Twelve minutes later
-    # jobhunt opened application 29, Fieldwire by Hilti, Senior Backend
+    # A generic ATS "thank you for applying" can name a role and no company
+    # anywhere in it - the classifier has nothing to put in `company` and is
+    # right not to guess. Minutes later jobhunt opens the matching
     # Engineer, for that exact role. `resolve_application` takes a company and
     # only a company, so the receipt could not reach the board even with the row
     # sitting there, and 29 is the only application of the day with no

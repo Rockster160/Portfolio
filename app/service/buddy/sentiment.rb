@@ -8,10 +8,9 @@ module Buddy
   # Two things used to do this job and both are gone. The model led its reply
   # with a `[[mood:]]` marker that Turn parsed off the front, or called a
   # `set_mood` tool - and when it did neither, which was often, a `.sample` from
-  # a three-item "pleased" list fired the moment a tool succeeded. Prod 5759 is
-  # what that bought: the reply said "*sad*" about a rejection from the job he'd
-  # been most excited about, and the pet put its glasses on, because the toss
-  # came up `nerd`.
+  # a three-item "pleased" list fired the moment a tool succeeded. What that
+  # bought: a reply saying "*sad*" about a rejection, with the pet putting its
+  # glasses on because the toss came up `nerd`.
   #
   # Asking the model to also be its own mood ring cost 4kb of face vocabulary in
   # every prompt, a tool call it spent a round on, a regex on the front of every
@@ -74,8 +73,8 @@ module Buddy
     # ADDED to weight and the pet wept because a camera didn't return a frame.
     #
     # Strong on every axis, because a failure is the loudest thing that
-    # happened in the turn. Prod 4594 was a gleeful laugh over "I couldn't get
-    # a frame from the backyard camera".
+    # happened in the turn - otherwise a gleeful laugh lands over "I couldn't
+    # get a frame from the backyard camera".
     MISSED_POINT = { warmth: 0.25, play: 0.15, weight: 0.40, strain: 0.65 }.freeze
     MISSED_PULL  = { warmth: 0.6, play: 0.5, weight: 0.5, strain: 0.7 }.freeze
 

@@ -74,15 +74,13 @@ module Buddy
     # not match "have a good night" or "what does my good night routine do",
     # because both carry content the name doesn't account for.
     #
-    # Prod 3392: "Good night" - as literal a match to a saved name as exists -
-    # got a warm goodnight and no routine, and the person had to ask for the
-    # monitors by hand afterwards, by which point the other half of the routine
-    # was never going to run at all. The name was in the prompt and matching it
-    # was left entirely to reading, which works right up until it doesn't.
-    # People shorten their own names for things. Prod 5661, 8 Sep: **Puppy
-    # Window mode** was asked for as "puppy mode", so the whole of the above
-    # missed it, nothing forced the run, and the model wrote the tool call out
-    # as prose instead - a blind that stayed shut for three messages.
+    # "Good night" - as literal a match to a saved name as exists - otherwise
+    # gets a warm goodnight and no routine, leaving the rest of it to be asked
+    # for by hand. The name is in the prompt and matching it is left entirely to
+    # reading, which works right up until it doesn't.
+    # People also shorten their own names for things: **Puppy Window mode**
+    # asked for as "puppy mode" misses all of the above, nothing forces the run,
+    # and the model writes the tool call out as prose instead.
     #
     # An abbreviation is still the name and nothing else: there is no other
     # content in it to act on, which is the entire test. So a message whose
@@ -282,7 +280,7 @@ module Buddy
     #
     # The flat one used to fall through as an empty payload and come back
     # "missing required arg :name" - a baffling thing to be told about a step
-    # whose name is sitting right there, and prod 1345 lost a routine to it.
+    # whose name is sitting right there, and it loses the routine entirely.
     #
     # Flat only makes sense when the tool was named by its OWN key. If `name`
     # was doing that job then there are no arguments in this row at all, and

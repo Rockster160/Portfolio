@@ -3,12 +3,12 @@ module Buddy
   #
   # Reminders and watches are separate tables that behave identically from the
   # person's side - both are "the thing you're going to tell me about" - and get
-  # referred to interchangeably. Prod 2825: "I don't care if it's a reminder or
-  # an agenda or a watch, I'm specifically asking it to be removed." So the
-  # lookup spans both and the taxonomy never reaches the conversation.
+  # referred to interchangeably - "I don't care if it's a reminder or an agenda
+  # or a watch, I'm asking for it to be removed". So the lookup spans both and
+  # the taxonomy never reaches the conversation.
   #
-  # Two rules come out of prod 2817-2834, where the right watch was removed on
-  # the first attempt and then the wrong one three times after:
+  # Two rules, from the right watch being removed on the first attempt and the
+  # wrong one three times after:
   #
   # 1. NOTHING here silently chooses between two candidates. A watch's `body` is
   #    prose somebody wrote, and two can carry identical prose while listening

@@ -53,10 +53,9 @@ module Buddy
     # AgendaSchedule::MATERIALIZE_WINDOW is 30 hours, so a weekly series created
     # on Sunday evening has exactly one real row and four rules. Searching
     # AgendaItem alone therefore cannot see a series Buddy itself created a
-    # minute earlier - which is what prod 4462-4471 was: five dinners went on,
-    # and then two companions over four turns told him the other four weren't
-    # there. "The others don't seem to be sitting there under those exact
-    # titles." They were on the calendar he was looking at the whole time; the
+    # minute earlier: five dinners go on, and then several turns insist the
+    # other four aren't there - "the others don't seem to be sitting there under
+    # those exact titles". They are on the calendar the whole time; the
     # browser expands the rule (Agenda.items_for_range_in) and this didn't.
     #
     # Phantoms are unsaved AgendaItems, exactly as the calendar builds them, so
@@ -130,11 +129,10 @@ module Buddy
       parts = [handle(item), item.name, when_str.sub(":00", "")]
       parts << "until #{clock(item.end_at, user)}" if ends_later?(item)
       # When they are back through the door, which for somebody else's item is
-      # the ONLY figure on it that is about the asker's day. Prod 5266: "I want
-      # to leave once Chelsea gets back from her yoga that day" - the search
-      # found the yoga and handed back a start time and nothing else, so Byte
-      # asked him for an end time the app had, and then for a drive home it had
-      # too. Both were one line away the whole time.
+      # the ONLY figure on it that is about the asker's day. "I want to leave
+      # once she gets back from her yoga that day" otherwise finds the yoga and
+      # hands back a start time and nothing else, so Buddy asks for an end time
+      # the app already has, and then for a drive home it has too.
       parts << "home by #{clock(item.home_at, user)}" if item.home_at
       # The FULL address, and the only place it appears. Everything ambient
       # carries `Buddy::Place.short` because a briefing reading out a ZIP is

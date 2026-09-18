@@ -26,7 +26,7 @@ class BuddyWatch < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation
   # When present, the watch delivers to this person's companion instead of the
-  # owner's ("whenever I add to our Agenda, let Rocco know"). Same household.
+  # owner's ("whenever I add to our Agenda, let them know"). Same household.
   belongs_to :notify_user, class_name: "User", optional: true
 
   # `prompt` seeds a Buddy turn, `reminder` delivers a fixed line, and `action`

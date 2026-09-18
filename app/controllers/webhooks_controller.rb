@@ -739,7 +739,7 @@ class WebhooksController < ApplicationController
   # Who a doorbell ring reaches besides whoever posted it.
   #
   # A literal id, by decision: there is no partner/spouse relation on User to
-  # derive "Chelsea" from, and the alternative was making every automation that
+  # derive the other person from, and the alternative was making every automation that
   # posts a frame carry a name. If this ever points at someone who has left the
   # house, the ring quietly goes to the wrong pocket and nothing here will say
   # so — that is the cost being accepted, and it's why the lookup below tolerates
@@ -1002,12 +1002,12 @@ class WebhooksController < ApplicationController
   # conversation. Absolute fallback: the user's default conversation.
   # Which thread a reply from the Mac belongs to.
   #
-  # Both hints are the Mac's, and on 19 Aug both were wrong at once: the daily
-  # audit came back naming conversation 26 (Moss) with an `in_reply_to` of 1133,
-  # a fan command from 30 July in conversation 21. Neither had anything to do
-  # with the audit, which had been posted into 37 twelve minutes earlier. The
-  # explicit id won, so a full engineering report was published inside a
-  # companion thread as a `claude` message with no prompt above it.
+  # Both hints are the Mac's, and both can be wrong at once: a daily audit
+  # naming a companion conversation with an `in_reply_to` pointing at a device
+  # command from weeks earlier in a third thread, when the audit itself had been
+  # posted somewhere else entirely. The explicit id wins, so a full engineering
+  # report gets published inside a companion thread as a `claude` message with
+  # no prompt above it.
   #
   # So a hint is now checked rather than obeyed. Nothing reaching this
   # controller is ever a Buddy turn — the in-Rails turn does not route through
@@ -1026,9 +1026,9 @@ class WebhooksController < ApplicationController
   # How old the message being answered may be. A reply is an answer to something
   # just said; past this it is the Mac replaying state, not a conversation.
   #
-  # Both mis-routed reports named one: 3946 pointed at message 1133 and 4002 at
-  # 1194, a "turn the fan to high" and a thank-you from 30 July, three weeks
-  # dead and in a thread neither report had anything to do with.
+  # Mis-routed reports name one: a "turn the fan to high" and a thank-you from
+  # weeks earlier, long dead and in a thread neither report had anything to do
+  # with.
   REPLY_MAX_AGE = 6.hours
 
   def byte_reply_parent(user)
@@ -1121,10 +1121,9 @@ class WebhooksController < ApplicationController
   #
   # Home Assistant's `rest_command` gives up around ten seconds and re-sends,
   # and the work behind a trigger runs INLINE in this request - five Jil tasks
-  # for a Whisper button press, which took eleven seconds on 7 Sep. The retry
-  # went all the way through: `action_events` 52124 and 52125 share a timestamp
-  # to the microsecond, and Rocco got two "Who did: Puppy Down?" cards for one
-  # dog (prod 5635/5636).
+  # for a single button press, which can take eleven seconds. The retry then
+  # goes all the way through: two `action_events` sharing a timestamp to the
+  # microsecond, and two attribution cards for one event.
   #
   # A payload that carries `pressed_at` has said when the thing happened, so
   # the press has an identity and two deliveries of it are one press. Payloads

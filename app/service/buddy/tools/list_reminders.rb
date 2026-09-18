@@ -22,9 +22,9 @@ Buddy::Tools.register(
     here. There is a control for those; `describe_screen` is how you find it.
     Only "reminder" in their own words, or a reminder they name, reaches this.
   TXT
-  # Prod 5808, and it cost a round: "It looks like you have a lot of
-  # notifications how do I go through those so they [stop] alerting me anymore"
-  # drew the reminder list, and the answer back was "no they are not the
+  # It costs a round otherwise: "I have a lot of notifications, how do I stop
+  # them alerting me" draws the reminder list, and the answer back is
+  # "no they are not the
   # reminders they are like notifications on my phone maybe it's every time you
   # speak". Nothing in the description said "notifications" - the model
   # generalized, which is what an unbounded verb list invites.

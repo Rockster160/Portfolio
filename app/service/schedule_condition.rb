@@ -24,10 +24,9 @@
 #
 #     { kind: :location, place: "home", expect: :away }
 #
-#   That last one is FeatureRequest 6, written 4 Sep: "If I'm not home by
-#   12:50, set Whisper Quiet for an hour." Byte set the 12:50 part and said it
-#   had no home-away check wired, which was true, and Rocco's answer was "that's
-#   not what's needed at all" - an unconditional version of a conditional
+#   That last one is for requests like "If I'm not home by 12:50, set Whisper
+#   Quiet for an hour." Without it Buddy sets the 12:50 part and reports that no
+#   home-away check is wired — and an unconditional version of a conditional
 #   request is a different request. It COULD have been written as a `jil`
 #   condition, and that is the tell that it should not have to be: a phone
 #   position is not a bespoke automation, it is a fact the app already keeps.
@@ -241,8 +240,8 @@ module ScheduleCondition
 
   # "home" is the one name that must always work, and it is the one the address
   # book already answers directly. Everything else goes through `match_contact`,
-  # which is what resolves "Chelsea's", "Chelsea's place" and "Chelseas" onto
-  # the one contact - the same cascade `remind_when` uses to place a travel
+  # which is what resolves "<name>'s", "<name>'s place" and a bare possessive
+  # onto the one contact - the same cascade `remind_when` uses to place a travel
   # watch, so a condition and a watch agree about where somewhere is.
   def place_coord(place, user)
     book = user.address_book

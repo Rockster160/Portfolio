@@ -7,10 +7,10 @@
 //   * tap a chip → pause/resume, or cancel if it's the one ringing;
 //     its × → cancel. Either way the SERVER decides when it goes.
 //
-//     The × replaced a SWIPE on 17 Sep. The gesture depended on pointer
-//     capture, and when that didn't take the chip was left sitting wherever it
-//     had been dragged with the timer still running - it looked cancelled and
-//     nothing had been sent. Rocco: "It's all buggy and it all sucks."
+//     The × replaced a SWIPE, which depended on pointer capture: when that
+//     did not take, the chip was left sitting wherever it had been dragged
+//     with the timer still running - it looked cancelled and nothing had been
+//     sent.
 //   * on a timer reaching end_at WHILE open → rings the grub alarm + face loop
 //     until a tap anywhere acknowledges. The ring is driven off end_at, not off
 //     the server's fire, which arrives seconds later (see isDue).
@@ -61,8 +61,8 @@ function isPaused(t) {
 // not do is ring, or sit at 0:00 waiting to be dismissed. The server archives
 // it the moment the step it was holding runs, so it leaves on its own.
 //
-// Prod timer 98, 4 Sep: the nap-sound wait blared like a kitchen timer and was
-// tapped away two seconds later. Nothing was being asked of him — the sound
+// Otherwise the wait behind a sound blares like a kitchen timer and gets
+// tapped away seconds later, when nothing was being asked at all — the sound
 // was already playing.
 function isWait(t) {
   return !!t.wait;
@@ -74,8 +74,8 @@ function isWait(t) {
 // Firing is a Sidekiq job scheduled for end_at, and Sidekiq polls its scheduled
 // set on an interval (~5s by default), so `fired_at` lands somewhere in the
 // several seconds AFTER the alarm was due. Waiting for it put an audible gap
-// between asking for an alarm and hearing one: prod 4062 (the chip) and 4063
-// (the fire) were 5.6 seconds apart, and the room was silent for all of it.
+// between asking for an alarm and hearing one - the chip and the fire land
+// several seconds apart, and the room is silent for all of it.
 //
 // end_at is already here — it arrives on the `created` broadcast and the ticker
 // below is reading it 4 times a second to paint the readout. Nothing has to be
@@ -262,10 +262,9 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   // When the request didn't land there was nothing left to say so: the chip was
   // already gone, the row was still live on the server, and the next hydrate or
   // broadcast put it back — usually unnoticed, because by then nobody is
-  // looking at the corner of the screen. Prod timer 94, 27 Aug: swiped away,
-  // vanished, and rang an hour later anyway. `log_trackers` has no DELETE for
-  // it at all until four minutes AFTER it went off, so the first request never
-  // reached Rails, and every part of the UI said it had.
+  // looking at the corner of the screen - a timer dismissed here can vanish
+  // and still ring an hour later, with no DELETE reaching Rails at all and
+  // every part of the UI saying one had.
   //
   // So the chip stays, visibly pending, until the server agrees. Removal comes
   // from the response or from the `archived` broadcast, both of which are

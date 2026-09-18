@@ -81,9 +81,8 @@ module Buddy
       # prompt only ever told the model how to FILTER it — which ones are stale,
       # which are switched off — never to go and fetch it. So a briefing that
       # didn't ask wrote the day without the half of it that lives in reminders.
-      # Prod 3954, 19 Aug: "a very open day ahead, with nothing pressing" at
-      # 8:30, against two reminders due at 9:00 and one at 10:00. All three rang
-      # on time.
+      # "A very open day ahead, with nothing pressing" at 8:30, against two
+      # reminders due at 9:00 and one at 10:00, all of which rang on time.
       #
       # Handed over rather than instructed, for the same reason the greeting is:
       # a rule the model has to remember to follow is one it can skip on the
@@ -92,16 +91,15 @@ module Buddy
 
       # The WEEK is the person's own. See #without_uninvolved_partner_items.
       #
-      # Rocco, 2026-09-04: "we WANT the partner events to be visible, we do NOT
-      # want them treated as our own... (Although it should only be bringing up
-      # today's except for specifically noticeable events)". So today keeps
-      # everybody's and the week keeps only theirs.
+      # Partner events are visible but never treated as the reader's own, and
+      # only today's are worth raising at all. So today keeps everybody's and
+      # the week keeps only theirs.
       PARTNER_FILTERED = %i[upcoming_notable].freeze
 
       # Today's partner items stay, and lose the marker naming what they run
       # into. Two different people doing two different things at the same hour
       # is not a clash, and a tag naming what it collides with is an invitation
-      # to write one - prod 4524 read Chelsea's yoga out as Rocco's own.
+      # to write one, and a partner's item gets read out as the reader's own.
       PARTNER_UNTAGGED = %i[today_notable].freeze
 
       # Sections this turn may not have, for any reason: a feature the person
@@ -254,16 +252,15 @@ module Buddy
       # so it sits in `upcoming_reminders` where Buddy can answer "when's the
       # next one due" — and it rolls forward to tomorrow the instant it fires,
       # which drops it right back inside the 48-hour window while the briefing
-      # it just triggered is being written. Prod 3951 closed with "there's one
-      # reminder in play already: Today briefing." All three companions carry
-      # the row; the other two only happened not to mention it.
+      # it just triggered is being written, so a briefing closes with "there's
+      # one reminder in play already: Today briefing." Every companion carries
+      # the row.
       #
       # A whole-section withhold would be wrong — half of somebody's day lives
       # in reminders — so this takes the one row, and only on a briefing turn.
       # Everywhere else it stays, marked `own_briefing`, because "move my morning
-      # briefing to nine" needs the id: prod 4020 is what an UNMARKED row costs
-      # on an ordinary turn, and removing it there would only trade one wrong
-      # answer for another.
+      # briefing to nine" needs the id, and removing the row on an ordinary turn
+      # would only trade one wrong answer for another.
       def without_own_reminder(payload)
         return payload unless @briefing
         return payload unless payload[:upcoming_reminders].is_a?(Array)
@@ -276,9 +273,8 @@ module Buddy
 
       # The standing daily nudges, on a briefing turn only.
       #
-      # Rocco, 2026-08-28: "We don't want Byte to include all of the every-day
-      # reminders in the briefing as it fills it with extra text that's not
-      # needed." A reminder that goes off every single day is the shape of an
+      # Every-day reminders fill a briefing with text that carries nothing: a
+      # reminder that goes off every single day is the shape of an
       # ordinary week, not news about this particular one — the same thing
       # `notable?` has always said about an agenda item, and the briefing
       # prompt has said out loud since it was written: "Everything that repeats
@@ -314,10 +310,9 @@ module Buddy
       # `upcoming_reminders` runs a 48-hour window and stamps each row "%a %-I:%M
       # %p" - so tomorrow's arrives as "Fri 10:00 AM" and there is nothing in it
       # that says tomorrow except a weekday name three words from a clock time.
-      # Prod 5254, 3 Sep: Suki opened with "your propagation check is back around
-      # again, and it's due at 10 AM". Reminder 52 is a four-day cadence, last
-      # fired 31 Aug, `fire_at` 4 Sep - it was not due that day, no 10 AM message
-      # ever went out, and the row itself had been right all along.
+      # So a briefing opens with "your propagation check is back around again,
+      # and it's due at 10 AM" for a multi-day cadence that is not due that day
+      # at all - no message goes out, and the row itself was right all along.
       #
       # `without_routine_reminders` above drops daily and weekday cadences, which
       # is why the three 9 AM nudges were correctly absent that morning; a
@@ -341,9 +336,9 @@ module Buddy
       #
       # `today_briefing.rb` spends three paragraphs on this - NEVER the
       # briefing, default to leaving them out, a briefing that names one while
-      # leaving out one of MINE is wrong - and prod 4482 opened "the calendar's
-      # busy around you", named five of Chelsea's items, and left his own
-      # Serenity out. Prod 4429 the morning before did the milder version. Same
+      # leaving out one of MINE is wrong - and briefings still open "the
+      # calendar's busy around you", name five of the partner's items, and leave
+      # the reader's own out. Same
       # answer as the chore roster and as `leave_by`: what the model can't see,
       # it can't read out.
       #
@@ -351,16 +346,14 @@ module Buddy
       # in data, so it is still what decides WHICH of a partner's items survive.
       # But the marker comes OFF the ones that do - two different people doing
       # two different things at the same hour is not a clash, and a tag naming
-      # what it runs into is an invitation to write one. Prod 4524 read
-      # Chelsea's yoga out as Rocco's own; the answer is that a partner's item
-      # is background, and background has nothing to compare itself to.
+      # what it runs into is an invitation to write one, and a partner's item
+      # gets read out as the reader's own. A partner's item is background, and
+      # background has nothing to compare itself to.
       #
       # Briefing only. Ask "does her yoga run into my retro?" on an ordinary
       # turn and `collides_with` is right there naming the item, because that
-      # time the comparison is the question.
-      #
-      # Briefing only. Ask "what's Chelsea got on today" on an ordinary turn and
-      # you still get all of it, because that time you asked.
+      # time the comparison is the question - and asking what a partner has on
+      # still returns all of it, because that time you asked.
       def without_uninvolved_partner_items(payload)
         return payload unless @briefing
 
@@ -391,9 +384,9 @@ module Buddy
       # default to leaving the subject out entirely: no count, no note that
       # nothing is sitting there, no reassurance that it's quiet."
       #
-      # Prod 4985 said "Nothing's due today, so your morning looks pretty open
-      # for now" on a day Chelsea logged three chore completions.
-      # Buddy::GPT::Turn#without_empty_chore_note is the repair written for that
+      # Otherwise a briefing says "Nothing's due today, so your morning looks
+      # pretty open for now" on a day the household logs three chore
+      # completions. Buddy::GPT::Turn#without_empty_chore_note is the repair for that
       # sentence and could not see this one: it requires the sentence to NAME
       # chores, and this one named nothing. Widening that regex is chasing
       # phrasings; a list the model never receives is one it cannot describe,
@@ -416,26 +409,25 @@ module Buddy
       # not as a passing note that the morning one already went", and a
       # switched-off reminder sitting in context "so you can ANSWER about them
       # when asked, and for no other reason" - and prose has now lost three
-      # times across three companions in two days. Prod 4490 opened with "Yoga
-      # already passed" and prod 4488 volunteered that a reminder cancelled six
-      # days earlier "is not coming at you today". Same answer as the partner
+      # times across three companions in two days: briefings opening with "Yoga
+      # already passed", and volunteering that a reminder cancelled six days
+      # earlier "is not coming at you today". Same answer as the partner
       # filter above and as `leave_by`: what the model can't see, it can't read
       # out. Nobody is asking a question on a briefing turn, so nothing is lost.
       #
       # One thing deliberately STAYS: a `cancelled` agenda item, which the
       # prompt wants raised - a standing thing not happening today is real news.
       #
-      # `already_rang` was the other one until 2026-08-31, kept because prod
-      # 3255 is what its absence costs: the swimming-lesson reminder rang at 7pm
-      # and the next morning Buddy announced it as "set for this evening", read
-      # off the thread and re-dated a day forward, with nothing in context to
-      # argue. That row still does that job on every other turn, which is where
+      # `already_rang` was the other one, kept because its absence costs: a
+      # reminder that rang at 7pm gets announced the next morning as "set for
+      # this evening", read off the thread and re-dated a day forward, with
+      # nothing in context to argue. That row still does that job on every other turn, which is where
       # the question actually gets asked.
       #
-      # On a briefing turn it does the opposite. Prod 4980 OPENED on "Whisper
-      # nap sound just went off" - reminder 69, a one-off that had fired twenty
-      # hours earlier - and then named nothing still ahead, on a morning whose
-      # one real item Moss found in the identical context. On a quiet day the
+      # On a briefing turn it does the opposite: a briefing OPENS on "Whisper
+      # nap sound just went off" for a one-off that fired twenty hours earlier,
+      # and then names nothing still ahead, on a morning whose one real item
+      # another companion found in the identical context. On a quiet day the
       # model reaches for whatever is in front of it, and a rung reminder is the
       # only row in that list shaped like an event. Holding 3255 shut here is
       # the seed's own rule against inventing - "EVERY item you name has to be

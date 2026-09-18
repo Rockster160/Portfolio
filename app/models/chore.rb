@@ -249,8 +249,8 @@ class Chore < ApplicationRecord
   # The chore THIS PERSON actually does, when this one has been split into
   # per-person sub-chores.
   #
-  # A container isn't a thing anybody does. "Teeth" holding Rocco's Teeth and
-  # Chelsea's Teeth is a family, and a completion written against the family
+  # A container isn't a thing anybody does. A "Teeth" chore holding one per
+  # person is a family, and a completion written against the family
   # credits neither of them: a parent's card counts `chore_id OR
   # parent_chore_id`, a leaf's counts `chore_id` alone (see
   # ChoreSerializerContext), so the leaf still reads as not done. Splitting a
@@ -388,8 +388,7 @@ class Chore < ApplicationRecord
   # why the app splits "due today" from overdue carryover correctly and the
   # briefing did not. The tightening lives here now so there is one answer.
   #
-  # Rocco, 2026-09-06: "Chores should only be brought up if they are
-  # SPECIFICALLY DUE TODAY. Not over due. Not due next week. TODAY only."
+  # SPECIFICALLY DUE TODAY. Not overdue, not due next week - today only.
   def strictly_matches_day?(date, user=nil, last_completed_day: :unset, anchor_last_day: :unset)
     return false unless matches_day?(date, user, last_completed_day: last_completed_day, anchor_last_day: anchor_last_day)
 

@@ -41,7 +41,7 @@ class BuddyMemory < ApplicationRecord
   belongs_to :source_message, class_name: "ByteMessage", optional: true
 
   # Same query syntax as emails and bank transactions — `kind:followup
-  # who:eve severity>50 tag:health -status:dropped`, with AND/OR/NOT. A bare
+  # who:<name> severity>50 tag:health -status:dropped`, with AND/OR/NOT. A bare
   # word searches the prose.
   #
   # `kind`, `status` and `category` are integer enum columns, so each needs a
@@ -96,12 +96,9 @@ class BuddyMemory < ApplicationRecord
   # a small thing is never worth interrupting for, and this says a big one is
   # never left for months before anybody asks.
   #
-  # Rocco, 8 Sep: "when I told Buddy I'd be losing my job, the check-in was
-  # scheduled months away. It's usually best to check in on somebody sooner
-  # rather than later." `buddy_memories` 61, severity 86, written 19 Aug — "out
-  # of a job before the end of the year." Read as a date, the answer is
-  # December; read as a person, the answer is tomorrow. The prompt now says so,
-  # and this is what holds when it doesn't.
+  # A heavy memory written as "out of a job before the end of the year" read as
+  # a DATE schedules its check-in months away; read as a person, the answer is
+  # tomorrow. The prompt says so, and this is what holds when it doesn't.
   #
   # It bounds the FREEHAND distance only. `relevant_at` still wins the max in
   # `Buddy::Compile::Toolbox#arm`, so a genuinely dated thing — surgery in three
@@ -146,9 +143,9 @@ class BuddyMemory < ApplicationRecord
   #
   # `surfaceable` is doing two jobs here, and it was missing from both. It holds
   # back a memory whose `relevant_at` has not arrived - the `carried` scope below
-  # has always had that gate and says why - and on 12 Sep a preference written on
-  # the 10th, dated to the 16th, was read out in a briefing four days early and
-  # with its own relative wording ("about 6 days away") taken as today's
+  # has always had that gate and says why - without it a preference dated days
+  # ahead gets read out in a briefing early, with its own relative wording
+  # ("about 6 days away") taken as today's
   # arithmetic. It also drops a `dropped` one, which matters because undoing a
   # `remember` sets exactly that status (Buddy::Reverter) - so until now, taking
   # a memory back left it riding in every prompt.
@@ -163,7 +160,7 @@ class BuddyMemory < ApplicationRecord
   # who says they feel awful is usually talking about the thing already on
   # file, and a companion that has to decide to go and look will not - nothing
   # in "feeling stressed today" says search. It asks what is wrong instead,
-  # which is the one answer that proves it wasn't holding anything (prod 5890).
+  # which is the one answer that proves it wasn't holding anything.
   #
   # The floor is what keeps this from becoming the flat `limit(30)` the recall
   # cap used to be. Severity is already the axis for "how much this matters to
@@ -376,8 +373,8 @@ class BuddyMemory < ApplicationRecord
   # so `Date.current` and `created_at.to_date` are both UTC dates, and in MDT
   # every evening past 6pm has already rolled over - which is the whole band
   # `Buddy::CheckIns::BANDS` calls "the common one" for a check-in, plus all of
-  # `night`. Prod: memory 128, created 31 Aug 2:05 PM and seeded 1 Sep 6:00 PM,
-  # 28 hours later, was announced as "2 days". Callers may pass a Time or a
+  # `night`. A memory seeded 28 hours after it was written gets announced as
+  # "2 days". Callers may pass a Time or a
   # Date; a Date is taken as already-local and used as-is.
   def waiting_label(now=Time.current)
     zone  = ::ActiveSupport::TimeZone[user&.timezone.to_s] || ::Time.zone

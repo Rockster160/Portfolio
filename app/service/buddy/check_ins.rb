@@ -107,11 +107,9 @@ module Buddy
       # delay on the first one in the queue, whether or not there was anything
       # to be spaced from.
       #
-      # Prod: Eve's dinner check-in (buddy_memories 128) was written 31 Aug at
-      # 2:05 PM, four hours before the 6:00 PM dinner it was about, and asked
-      # 1 Sep at 6:00 PM - the day after. Her previous check-in was 25 Aug, six
-      # days earlier, and hers still moved. Both check-ins that have ever fired
-      # landed after the thing they were about.
+      # A check-in written hours before the thing it is about then gets asked
+      # the day AFTER, even when the previous one was nearly a week earlier -
+      # so the only check-ins that fire land after the moment they were for.
       #
       # `cursor = placed` at the end of the loop still spaces the rest, so the
       # second and later ones in one pass are unaffected.
@@ -128,9 +126,9 @@ module Buddy
         # `place` is idempotent, so a re-plan that settled on the same moment
         # used to stack another job at the identical `perform_at` - and a
         # follow-up that survives several compile passes while armed collected
-        # one per pass. Prod: buddy_memories 141 was re-planned five times on
-        # 4 Sep and asked the same question five separate times at 6:00:0x PM
-        # on the 7th (5624-5628) - five model calls, five pushes, one question.
+        # one per pass - a memory re-planned five times asks the same question
+        # five separate times within the same minute: five model calls, five
+        # pushes, one question.
         # A record that is genuinely due always moves, because `now` is in the
         # `earliest` max, so nothing that needs a job goes without one.
         BuddyCheckInWorker.perform_at(placed, memory.id) if moved

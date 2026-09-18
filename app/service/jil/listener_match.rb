@@ -69,7 +69,7 @@ class Jil
     # literal anywhere in app code, so KNOWN_SCOPES structurally cannot list
     # them - and it refused all nine of the HASS scopes this install's 28 house
     # tasks run on, which is how "let me know when someone rings the doorbell"
-    # came back as "I don't have that wired" (prod 1479-1482).
+    # came back as "I don't have that wired".
     #
     # A task the person already has listening on a scope is the evidence
     # instead: nobody wires a task to a scope that never fires. That's a

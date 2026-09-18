@@ -7,7 +7,7 @@ module Buddy
   # the only thing there is to edit; and a move between calendars means the
   # series unless they say otherwise, because changing the one materialized
   # Monday leaves the rule pointing at the old calendar and next Monday is back
-  # where it started. Prod 4462-4471 was both at once.
+  # where it started, and a single request can be both at once.
   #
   # The occurrences follow on their own: AgendaSchedule re-materializes on a
   # name/time/duration/kind change and moves its rows on an agenda change, so

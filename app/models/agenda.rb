@@ -63,10 +63,10 @@ class Agenda < ApplicationRecord
   # they get is who OWNS the calendar — a different question from whose day the
   # thing is on. Firing only for the owner meant a task could see nothing on a
   # calendar shared IN to it, however plainly the item belonged to that person's
-  # day. Prod, Sat 8/15: "Games @ lucky ones" at 10:00 AM sat on a partner's
-  # calendar shared to Rocco. It was on his dashboard, in his morning briefing,
-  # with a leave-by time worked out from his own address — and his
-  # `Pre-Morning Event Fade` never ran, because the trigger fired as her.
+  # day: an item on a partner's calendar shared IN shows on the recipient's
+  # dashboard and in their morning briefing, with a leave-by worked out from
+  # their own address — and their own pre-event tasks never run, because the
+  # trigger fires as the calendar's owner.
   #
   # It lives on the Agenda because it's a fact about the CALENDAR rather than
   # about either record hanging off it, and because those two fire paths are
@@ -100,8 +100,8 @@ class Agenda < ApplicationRecord
   #
   # A calendar with a co-owner is a joint one ("Ours"), and everything on it
   # is both people's business. Any other share is access to somebody else's
-  # calendar: an editor can add to "Rocco Work" and a viewer can read
-  # Chelsea's, but neither is having the day. So a leave-by alert on a
+  # calendar: an editor can add to somebody's work calendar and a viewer can
+  # read it, but neither is having the day. So a leave-by alert on a
   # personal calendar goes to its owner and nobody else, however widely it's
   # shared, while the same alert on a joint one goes to everyone on it.
   #

@@ -2,9 +2,9 @@ module Buddy
   # Getting a written-down gap in front of the one person who can close it.
   #
   # A companion filing one is the easy half. The hard half is that the person
-  # who hit the wall is usually not the person who can do anything about it —
-  # Eve asks Suki for a work rhythm, and the list it lands on is only useful if
-  # it reaches the owner. So it's delivered, once, as an ordinary message from
+  # who hit the wall is usually not the person who can do anything about it, so
+  # the list it lands on is only useful if it reaches the owner. So it's
+  # delivered, once, as an ordinary message from
   # their own companion rather than parked somewhere to be found later.
   module FeatureRequests
     module_function

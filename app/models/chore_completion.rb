@@ -229,10 +229,10 @@ class ChoreCompletion < ApplicationRecord
   # named person who took an action and whose own automations should answer
   # for it.
   #
-  # Prod, 04 Sep: "Pickup RX" is Rocco's personal chore, marked done and
-  # credited to Eve. The trigger went to Eve alone, she owns no RecordLinks,
-  # and the item sat on the Chores list looking undone. Crediting somebody
-  # must not quietly hand your automations to them.
+  # A personal chore marked done and credited to somebody else sends the
+  # trigger to THEM alone - and if they own no RecordLinks, the item sits on the
+  # Chores list looking undone. Crediting somebody must not quietly hand your
+  # automations to them.
   def trigger_target_users
     return [user, recorded_by_user].compact.uniq unless chore.share_household?
 

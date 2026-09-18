@@ -102,10 +102,10 @@ module Buddy
 
     # The other names a chore goes by, which until now nothing read.
     #
-    # Prod 4705, 11:51: "Mark refill drinks done an hour ago" wrote a completion
-    # against chore 83, `Refill Item`. He meant 42, `Restock Soda`, whose
-    # `aliases` column is ["refill", "drinks", "fridge"] - both of his words, in
-    # the column, verbatim. `aliases_array` has existed on the model, been
+    # Without it, "Mark refill drinks done an hour ago" writes a completion
+    # against a chore called `Refill Item` when the one meant is `Restock Soda`,
+    # whose `aliases` column holds ["refill", "drinks", "fridge"] - both of the
+    # words used, in the column, verbatim. `aliases_array` has existed on the model, been
     # serialized, and been editable in the chore form the whole time; the
     # matcher only ever looked at `name`, so the one chore he could not have
     # named more clearly was the one chore that could not be found.
@@ -156,10 +156,9 @@ module Buddy
     # record nobody can see is false. What was missing is the other half: the
     # model got back the bare fact that its string missed, and nothing else.
     #
-    # Prod 3802-3808. "Water cup yesterday" resolved (the model passed the exact
-    # name, `8oz Water`, and two waters went on). Forty seconds later "Add it as
-    # one more" and "No, mark another water done yesterday" both failed, because
-    # the model passed the person's own phrasing that time and `resolve_chore`
+    # "Water cup yesterday" resolves when the model passes the exact name, and
+    # "Add it as one more" or "mark another water done yesterday" seconds later
+    # both fail, because the model passes the person's own phrasing and `resolve_chore`
     # only ever asks whether a chore NAME contains the needle - never the other
     # way round, so every superset of a real name misses. "one more water",
     # "another water" and "water cup" all resolve to nothing while bare "water"
@@ -180,9 +179,9 @@ module Buddy
         # Aliases count here for the same reason they count in `by_alias`: a
         # chore whose alias list holds both of the words they used cannot be
         # allowed to sit outside the near-miss list while one sharing a single
-        # word tops it. Prod 4705 - `Restock Soda` was unreachable from
-        # "refill drinks" by NAME, so the list it wasn't in is what the model
-        # picked its second guess from, and it picked wrong.
+        # word tops it: a chore unreachable from the words used by NAME leaves
+        # the model picking its second guess from a list that excludes the
+        # right answer.
         parts  = significant_words("#{c.name} #{c.aliases_array.join(' ')}")
         shared = words.count { |w| parts.any? { |p| p.start_with?(w) || w.start_with?(p) } }
         [shared, c.name.to_s] if shared.positive?
@@ -209,9 +208,9 @@ module Buddy
     # The failure to RAISE, which is the sentence above plus the candidates
     # themselves.
     #
-    # Prod 4495: "Log load dishwasher" could have been `Light Load Dishes` or
-    # `Medium~Normal Load Dishes`, and the old answer was a sentence asking
-    # which - so she had to type a chore name back at it. Buddy::Disambiguation
+    # "Log load dishwasher" could be `Light Load Dishes` or `Medium~Normal Load
+    # Dishes`, and answering with a sentence asking which means a chore name has
+    # to be typed back at it. Buddy::Disambiguation
     # puts them on screen and a tap runs the completion.
     #
     # ONE near miss gets a card too. "I couldn't find anything called X - did
@@ -378,7 +377,7 @@ module Buddy
       # The date that is wrong is usually the one they SAID: "move the plunge
       # with Wil to the 14th" is a request whose only date is the destination,
       # and passing that as the hint asks for an item already on a day it is
-      # being moved off. Prod 5333 answered it with nothing done. The tool's
+      # being moved off, so nothing is found and nothing is done. The tool's
       # own argument now says which date it wants, and this is the half that
       # doesn't depend on the model reading it.
       #
@@ -442,7 +441,7 @@ module Buddy
     # A series occurrence that has no row yet.
     #
     # AgendaSchedule::MATERIALIZE_WINDOW only reaches 30 hours ahead, so four of
-    # the five dinners added on prod 4462 existed purely as rules - and this
+    # five dinners added at once exist purely as rules - and this
     # method's AgendaItem query is why "I'd need you to point at that specific
     # row" was the answer three times running. There was no row to point at.
     #
@@ -561,10 +560,10 @@ module Buddy
     # The OTHER custom watches already armed on this trigger.
     #
     # A twin is decided by string equality on the listener, so it can only ever
-    # catch an exact repeat — and a CORRECTION is never one. Prod 3743 set a
-    # doorbell-RING watch; thirty seconds later 3746 said "No, not doorbell
-    # ring. Again. I want to know the next time the doorbell SEES a person."
-    # That wrote a second watch with a different listener, nothing cancelled the
+    # catch an exact repeat — and a CORRECTION is never one. A doorbell-RING
+    # watch followed seconds later by "No, not doorbell ring - I want to know
+    # the next time the doorbell SEES a person"
+    # writes a second watch with a different listener, nothing cancels the
     # first, and 74 minutes on it delivered the exact ping he'd refused, in the
     # words he'd rejected.
     #
@@ -624,8 +623,8 @@ module Buddy
     #
     # Both agenda tools pass it. Add used not to, on the reasoning that the
     # fallback was catchable because the confirm card names the calendar - and
-    # that lost on prod 4463, where five dinners went to Alchemibluum under a
-    # reply saying "the Dinners calendar" because the model wrote back the
+    # that loses: five dinners go to the wrong calendar under a reply naming
+    # the right one, because the model writes back the
     # argument it passed rather than the receipt it got. A name nobody has is a
     # question, not a default.
     #
@@ -844,10 +843,10 @@ module Buddy
     #
     # This used to add 12 hours, on the theory that "4:45" written at 5 PM meant
     # 16:45. It guessed wrong far more than it guessed right, and the wrong
-    # guesses were invisible: prod 966 and 967 were "today, finish the living
-    # room and bedroom" with no hour named anywhere, so the model wrote the wall
-    # clock it had been handed, that resolved a few seconds later, and both items
-    # landed at 11:11 PM. Half a day away from anything anyone said.
+    # guesses were invisible: "today, finish the living room and bedroom" names
+    # no hour anywhere, so the model writes the wall clock it was handed, that
+    # resolves a few seconds later, and the items land twelve hours out - half a
+    # day away from anything anyone said.
     #
     # An item at the current time is at worst where the conversation already is,
     # and it's visibly wrong if it's wrong. One half a day out reads as
@@ -959,11 +958,11 @@ module Buddy
     # Does the name contain what they said STARTING at a word, rather than
     # anywhere at all?
     #
-    # A bare include? lets a negating prefix disappear. Prod 4495, 09:25:
-    # Chelsea said "Log load dishwasher" and `Unload Dishwasher` (78) was marked
-    # done, because "unload dishwasher" contains "load dishwasher". Loading and
-    # unloading are opposite jobs on the same appliance, and the two chores she
-    # plausibly meant - `Light Load Dishes` and `Medium~Normal Load Dishes` -
+    # A bare include? lets a negating prefix disappear: "Log load dishwasher"
+    # marks `Unload Dishwasher` done, because "unload dishwasher" contains
+    # "load dishwasher". Loading and unloading are opposite jobs on the same
+    # appliance, and the two chores plausibly meant - `Light Load Dishes` and
+    # `Medium~Normal Load Dishes` -
     # were both in the roster. A completion written against the wrong chore is
     # the false record FUZZY_TOLERANCE exists to prevent, six lines up.
     #
@@ -1042,8 +1041,8 @@ module Buddy
     # Turn an agenda location string into coordinates, local-first: it may be a
     # contact name ("Serenity") or a street ("3300 N Triumph Blvd ..."). Only
     # falls back to a (cached) geocode when neither is on file.
-    # Moved onto AddressBook on 2026-09-14, when SuiteOnArrival needed the same
-    # answer. None of it was ever about Buddy.
+    # Lives on AddressBook because SuiteOnArrival needs the same answer; none
+    # of it was ever about Buddy.
     def coords_for_location(location)
       user.address_book.coords_for_location(location)
     end

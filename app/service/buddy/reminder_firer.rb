@@ -120,10 +120,10 @@ module Buddy
     #      the same morning - a second briefing an hour later. So a briefing
     #      rolls from the END of the perceived day, which is tomorrow's slot.
     #   2. The pull-back can land in the PAST, and a `fire_at` in the past is
-    #      due on every scheduler tick. On 21 Aug that produced a fixed point:
-    #      agenda item 1006 at 8:30, minus the 30-minute lead, is 8:00 exactly,
-    #      so every roll recomputed the same past time and Byte briefed once a
-    #      minute for ten minutes until the reminder was cancelled by hand.
+    #      due on every scheduler tick, which can produce a fixed point: an
+    #      8:30 item minus a 30-minute lead is 8:00 exactly, so every roll
+    #      recomputes the same past time and the briefing fires once a minute
+    #      until the reminder is cancelled by hand.
     #
     # So: roll from the end of the day, and never accept an adjustment that
     # isn't actually ahead of us.

@@ -413,10 +413,9 @@ module RecordLinks
     # The guard above is keyed on the EVENT, so two events ask twice - which is
     # right when they're two separate doings and wrong when they're one.
     #
-    # Prod, 26 Aug 22:00: two Whisper events nineteen seconds apart, 51790 and
-    # 51791, put up two identical `Who did: Puppy Down?` forms. It was one press
-    # for a nap corrected by a hold for sleep, which is the intended way to fix
-    # it - and the device sends the same nameless event either way, so nothing
+    # Two device events seconds apart put up two identical attribution forms.
+    # One press corrected by a hold is the intended way to fix a mistake - and
+    # the device sends the same nameless event either way, so nothing
     # downstream can tell the correction from a second bedtime. He skipped one
     # form and answered the other.
     #
@@ -435,10 +434,9 @@ module RecordLinks
     #
     # The window is measured between the two EVENTS, and the first cut of this
     # measured `prompts.created_at` instead - which is the same number only
-    # while events reach the database as fast as they happen. Prod, 31 Aug
-    # 22:00: events 51933 and 51934 were fifty seconds apart, but 51934 did not
-    # arrive until 22:21:52, so the two prompts were 21m42s apart and a
-    # 15-minute guard on prompt time let the duplicate through.
+    # while events reach the database as fast as they happen: two events fifty
+    # seconds apart can arrive twenty minutes apart, so a guard measured on
+    # prompt time lets the duplicate through.
     #
     # An open prompt whose event has since been deleted falls back to its
     # `created_at` for the timing - the deletion is real, 51934 no longer

@@ -18,8 +18,8 @@ module Buddy
   #      has nothing to point at, and Buddy has nothing to find in
   #      `recent_actions`, which the persona tells it to read as proof that
   #      something didn't happen. Post a Buddy::ActivityChip and report true
-  #      from `call`, or you get prod 3332-3337, where a refile that really
-  #      worked got talked out of having happened.
+  #      from `call`, or a refile that really worked gets talked out of having
+  #      happened.
   module SideEffects
     module_function
 
@@ -55,10 +55,9 @@ module Buddy
     # arm infers the failure from the request being an imperative and never
     # reads the reply for an assertion at all.
     #
-    # Prod 4805, 27 Aug: "Note that my eye issue flared up badly on August
-    # 20th..." wrote BuddyMemory 117 five seconds later, and the reply saying
-    # so was replaced with "Nothing actually ran. Want me to have another go at
-    # it?" He had to ask a second time for a thing that was already saved. A
+    # Otherwise "Note that <fact>" writes the memory seconds later and the reply
+    # saying so is replaced with "Nothing actually ran. Want me to have another
+    # go at it?", so the same thing gets asked for twice and saved twice. A
     # write that reports nothing is indistinguishable from a turn that did
     # nothing, and this is the half that knows.
     def call(conversation, name, args)
@@ -335,10 +334,9 @@ module Buddy
     # Public because Buddy::Compile needs to ask the same question. It had its
     # own test that compared normalized strings for equality, so one fact
     # reworded between the inline write and the compile pass half an hour later
-    # became two rows — "a good time for Eve to water outside" and "a good time
-    # for her to water outside" (memories 79 and 83), and "told to check the
-    # print at 3:16" against the same sentence with the follow-up appended
-    # (76 and 80). Which scope to search is the caller's to decide; this only
+    # becomes two rows — "a good time for <name> to water outside" against "a
+    # good time for her to water outside", or a sentence against the same
+    # sentence with a follow-up appended. Which scope to search is the caller's to decide; this only
     # answers whether two pieces of text are the same fact.
     def same_fact?(left, right)
       a = normalize_fact(left)

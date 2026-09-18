@@ -187,7 +187,7 @@ module Buddy
     end
 
     # A reminder aimed at someone else says so on the row. Without it the two
-    # are indistinguishable in the list, and "did that go to Chelsea or to me?"
+    # are indistinguishable in the list, and "did that go to them or to me?"
     # has no answer short of opening it.
     def when_text(reminder, user)
       base = reminder.recurring? ? recurrence_text(reminder) : Buddy::Clock.day_at(reminder.fire_at, zone: user.timezone)

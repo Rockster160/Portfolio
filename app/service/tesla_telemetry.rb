@@ -136,7 +136,7 @@ class TeslaTelemetry
   end
 
   # The car's own account of leaving home and coming back, which is the only
-  # thing in the house that knows the car went somewhere without Rocco. Scoped
+  # thing in the house that knows the car went somewhere without its owner. Scoped
   # to the home boundary on purpose: every other place the car passes through
   # is a city name changing mid-drive, and none of those are legs.
   #
@@ -167,10 +167,11 @@ class TeslaTelemetry
   # Sound on geometry rather than luck: Bluetooth reaches about ten metres and
   # the home boundary about a hundred. Riding in it, the pairing holds through
   # the crossing. Left behind, it dropped at the end of the driveway,
-  # necessarily before. On 2026-09-10 the last edge was 10:22:15 and the car
-  # crossed around 10:23 unpaired — the car went, he didn't, and this says so.
-  # The same geometry answers the way back: Chelsea driving home crosses the
-  # boundary while his phone is still a hundred metres away in the house.
+  # necessarily before - the last Bluetooth edge lands under a minute before an
+  # unpaired boundary crossing, which is the car going without its owner, and
+  # this says so. The same geometry answers the way back: somebody else driving
+  # home crosses the boundary while the owner's phone is still a hundred metres
+  # away in the house.
   #
   # This is what keeps `travel:depart:home` firing at all. A pairing in the
   # garage no longer announces on its own (TravelResolver refuses it), and the

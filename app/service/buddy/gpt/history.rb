@@ -70,10 +70,10 @@ module Buddy
       #
       # Buddy::FormAction posts one as `kind: "buddy_reply"`, so it replays as
       # an assistant turn — and a day of chore prompts is ten of them, all
-      # identical. On 19 Aug that thread held ten form cards against eight real
-      # replies, and Byte answered a correction with "Kk! I marked `Make Meal`
-      # off instead of logging it." followed, on its own line, by "Who did:
-      # Puppy Up?" — prose, no form, no metadata, copied off the ten above it.
+      # identical. A thread holding ten form cards against eight real replies
+      # gets a correction answered with "I marked `Make Meal` off instead of
+      # logging it." followed, on its own line, by "Who did: Puppy Up?" — prose,
+      # no form, no metadata, copied off the ten above it.
       # The person's next message was "Huh?".
       #
       # That is the failure `drop_stale_quick_actions` already exists for:
@@ -124,11 +124,10 @@ module Buddy
       # `kind: "buddy"`, so PROSE_KINDS replays it as an assistant turn and
       # hands straight back what the filter had just taken away.
       #
-      # Prod 6099, 13 Sep: Suki's seed carried a WEATHER block and nothing else
-      # — no chores, no reminders — and the briefing opened by putting "Feed the
-      # fish" and the front flower bed on Eve's pile. Both are `daily`
-      # (reminders 51 and 53), both correctly absent from the facts, and both
-      # had rung the evening before at 5 and 7 PM, two rows above the seed. No
+      # A seed carrying a WEATHER block and nothing else — no chores, no
+      # reminders — still opens a briefing by putting two daily reminders on the
+      # person's pile: correctly absent from the facts, and both rung the
+      # evening before, two rows above the seed. No
       # pre-send repair can catch that: the sentence is the model's own and
       # there is nothing wrong with its shape.
       #
@@ -237,9 +236,9 @@ module Buddy
       # by which point the inbound row already exists — so `buddy_recap_at`
       # always lands a second or two AFTER it. Unclamped, that leaves the window
       # between the boundary and `upto` empty, and an empty `input` is rejected
-      # outright by the Responses API. Prod 2240: the 7:08am briefing tripped a
-      # compaction and died on the spot with the raw API error in the thread.
-      # Every compaction killed the turn that caused it.
+      # outright by the Responses API - so a briefing that trips a compaction
+      # dies on the spot with the raw API error in the thread. Every compaction
+      # killed the turn that caused it.
       def compact_boundary(conversation, upto)
         at = compact_timestamp(conversation)
         return at if at.nil? || upto.nil?
@@ -284,19 +283,18 @@ module Buddy
       # those are short and their words are the whole point.
       #
       # NEVER the seed being answered right now (`current:`), and that exemption
-      # is the whole of what went wrong on 5 Sep. This was written when a Today
-      # seed was 4.5KB of pure INSTRUCTION and the day itself arrived separately,
+      # is the whole of what goes wrong without it. This was written when a
+      # Today seed was 4.5KB of pure INSTRUCTION and the day arrived separately,
       # through `get_context` - so throwing the block away cost nothing, because
       # the facts were never in it. Buddy::BriefingFacts then moved the day INTO
       # the seed body and took the lookup away, and this went on standing it in.
       #
-      # What reached the model on prod 5445, 5456, 5459 and 5461 was one line
-      # reading "[tapped Today - asked for a briefing on the day ahead]" and a
-      # hundred messages of thread. Every symptom follows from that: 5445 said
-      # "not much on deck from here" on a day holding Game Night and eight jobs,
-      # Suki told Eve her day was packed out of Eve's messages from the previous
-      # morning, and Moss filed a feature request for the week's weather it had
-      # supposedly been given. None of them ignored the day. None of them was
+      # What reaches the model is then one line reading "[tapped Today - asked
+      # for a briefing on the day ahead]" and a hundred messages of thread.
+      # Every symptom follows from that: "not much on deck from here" on a day
+      # holding eight jobs, a day described as packed out of yesterday's
+      # messages, and a feature request filed for the week's weather the seed
+      # had supposedly carried. None of them ignored the day. None of them was
       # ever shown it.
       ACTION_STANDINS = {
         "today"       => "[tapped Today - asked for a briefing on the day ahead]",

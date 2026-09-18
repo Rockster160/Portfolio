@@ -54,8 +54,8 @@ module Buddy
     # `game_tray-vase`, `Wall_mount_phone_holder_v2` — so a literal substring
     # test misses every natural phrasing of one. "game tray" and "game tray
     # vase" both found nothing against thirteen runs of `game_tray-vase`, and it
-    # only matched once they typed the underscore and the hyphen themselves
-    # (prod 2699-2712) — which is the one thing this tool exists to spare them.
+    # only matched once the underscore and the hyphen were typed by hand —
+    # which is the one thing this tool exists to spare them.
     #
     # So both sides fold to plain words and every word has to land somewhere in
     # the name, in any order. A description is loose by nature ("that phone

@@ -12,9 +12,8 @@ class Jil::Methods::Hash < Jil::Methods::Base
     # this long: Ruby's `to_json` writes `"foo":1` and never trips it, so every
     # fixture and every spec here was written in the one form that can't. Python's
     # `json.dumps` defaults to `", "` / `": "` separators and trips it on EVERY
-    # object. Prod 6194466, 25 Aug 2026: a 464KB camera frame from Home Assistant
-    # — well-formed, `"ok": true`, whole image present — parsed to `{}`, and the
-    # picture was reported missing four separate times.
+    # object - so a well-formed 464KB camera frame carrying `"ok": true` and the
+    # whole image parses to `{}`, and the picture is reported missing.
     processed = tz.untokenize(
       tz.tokenized_text.gsub(/(\w+): /) { |match|
         key = ::Regexp.last_match[1]

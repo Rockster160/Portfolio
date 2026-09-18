@@ -28,10 +28,10 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # rather than to whoever's task is running. Returns how many people it
   # reached, so a task can tell "nobody uses Buddy" from "sent".
   #
-  # The travel alerts are the reason this exists. They're computed by Rocco's
-  # tasks — the car is his, the address book is his — but the event might be
-  # on Chelsea's calendar, and "leave by 5:30" is no use to the person not
-  # going. `Agenda#subject_users` is the whose-day-is-it rule; a personal
+  # The travel alerts are the reason this exists. They are computed by the
+  # task OWNER's tasks — the car and the address book are theirs — but the
+  # event may be on somebody else's calendar, and "leave by 5:30" is no use to
+  # the person not going. `Agenda#subject_users` is the whose-day-is-it rule; a personal
   # calendar answers with its owner however widely it's shared, a joint one
   # answers with everybody.
   #
@@ -272,10 +272,11 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Who the message is actually FOR, which is not always whose task this is.
   #
-  # A SHARED task runs as its owner — `@jil.user` is Rocco even when Chelsea is
-  # the one who asked, and that's deliberate: running as the owner is how the
-  # task reaches his HASS credentials at all (Task#execute runs as `task.user`).
-  # Delivering to `@jil.user` would then answer her question in his thread and
+  # A SHARED task runs as its owner — `@jil.user` is the owner even when
+  # somebody else asked, and that is deliberate: running as the owner is how the
+  # task reaches their HASS credentials at all (Task#execute runs as
+  # `task.user`). Delivering to `@jil.user` would answer the asker's question in
+  # the owner's thread and
   # leave hers empty, which is a picture of her front door arriving on somebody
   # else's phone.
   #

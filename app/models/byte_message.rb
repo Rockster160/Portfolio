@@ -30,9 +30,9 @@ class ByteMessage < ApplicationRecord
   # NULLIFY, not destroy. A usage row is what a turn COST, and the money is a
   # true fact about the day whichever bubble it was earned on - `buddy:cost`
   # still has to add it up after the message is gone. Without this, deleting any
-  # message with spend on it raises a foreign key violation instead: it stopped
-  # a backfill halfway through the twelve looping briefings of 21 Aug, and it is
-  # why tearing down an eval conversation used to fail.
+  # message with spend on it raises a foreign key violation instead, which stops
+  # any backfill that deletes messages and is why tearing down an eval
+  # conversation used to fail.
   has_many :buddy_usages, dependent: :nullify
   # NULLIFY, same as usages and for a related reason: a BuddyAlert is the record
   # that a condition was outstanding, and that stays true after somebody clears

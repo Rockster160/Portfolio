@@ -51,11 +51,10 @@ module Buddy
     # `at` is the LATEST the briefing may land, not the time it always lands.
     #
     # Moving the schedule onto a reminder took `at` literally, and a flat 08:30
-    # is wrong on exactly the mornings a briefing matters: on 19 Aug it went out
-    # at 08:30:40 against a Focus block that started at 08:30:00, in the same
-    # second. Chelsea only escaped it because her first thing was 11:30 - the
-    # day before she had 9:25 yoga with a half-hour drive, and 08:30 would have
-    # briefed her five minutes after she needed to be in the car.
+    # is wrong on exactly the mornings a briefing matters: it lands in the same
+    # minute as a block that starts at 08:30, and on a morning with a 9:25
+    # appointment half an hour's drive away it arrives five minutes after
+    # somebody needed to be in the car.
     #
     # So the old rule comes back: thirty minutes before DEPARTURE for the first
     # thing that starts before the cutoff, which is the start minus the known

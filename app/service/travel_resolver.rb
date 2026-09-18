@@ -10,7 +10,7 @@
 #            corroborated by driving off (TeslaTelemetry#carrying_him?). Only
 #            this source announces, because every listener on `travel:` (the
 #            garage verify, the TODO ping, the queued arrival commands) is
-#            about Rocco being gone, not the car being gone.
+#            about the PERSON being gone, not the car being gone.
 #   :tesla — where the CAR is. Recorded and queryable, never announced. A
 #            `departed` row carrying only this key is the car leaving
 #            without him, which is the thing that had no signal at all
@@ -121,11 +121,10 @@ class TravelResolver
     end
 
     # Bluetooth reaches into the garage, so a car pulling out of it pairs with
-    # a phone that is not going anywhere and never was: on 2026-09-10 the radio
-    # connected and dropped five times in three minutes from the same spot,
-    # while Rocco was inside the house, and the first of those recorded a
-    # departure (action_event 52194) that stood unmatched for the rest of the
-    # day.
+    # a phone that is not going anywhere and never was: the radio can connect
+    # and drop five times in three minutes from the same spot while its owner is
+    # inside the house, and the first of those records a departure that then
+    # stands unmatched for the rest of the day.
     #
     # At home the geofence answers this question, and answers it about the
     # PERSON rather than about the car they happen to be standing near.

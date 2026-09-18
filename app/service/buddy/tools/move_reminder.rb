@@ -42,9 +42,9 @@ Buddy::Tools.register(
     # Pending FIRST, then anything that went off in the last few hours. A
     # one-shot stamps `fired_at` and drops out of `pending` the moment it
     # lands, and the moment it lands is exactly when someone says "send me that
-    # again tomorrow at 6" - so the old lookup answered the most natural snooze
-    # there is with "couldn't find that reminder to move it" (prod 2364), and
-    # the whole thing had to be dictated a second time.
+    # again tomorrow at 6" - so a lookup that skips fired rows answers the most
+    # natural snooze there is with "couldn't find that reminder to move it",
+    # and the whole thing has to be dictated a second time.
     scope  = BuddyReminder.where(user_id: ctx.user.id, cancelled_at: nil)
     recent = scope.where(fired_at: nil).or(scope.where(fired_at: Buddy::Tools::SNOOZE_WINDOW.ago..))
 
@@ -62,11 +62,10 @@ Buddy::Tools.register(
       # `last_fired_at` and rolls `fire_at` forward a day, leaving `fired_at`
       # nil forever. So `find { fired_at.nil? }` matched every candidate and
       # the whole thing collapsed to `order(:fire_at).first` - which, for
-      # reminders whose next fire is a day out, is arbitrary. Prod 4841/4842,
-      # 27 Aug: two daily "Do Dishes." rows, the 3 PM one fired, "change that
-      # Dishes reminder to go off at 9am" twenty seconds later moved the 8 PM
-      # one instead. Byte said "Moved Do Dishes to 9:00 AM" and it was true
-      # about the wrong row, so nothing looked wrong until the 8 PM nudge
+      # reminders whose next fire is a day out, is arbitrary: with two daily
+      # rows of the same name, the one that just fired is not the one that gets
+      # moved. The receipt then reads correctly about the WRONG row, so nothing
+      # looks wrong until the other one
       # stopped coming.
       #
       # The recency test runs INSIDE the pending set rather than across all
@@ -133,9 +132,7 @@ Buddy::Tools.register(
   receipt: ->(result, ctx) {
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
     # `friendly_future` already writes "at 7:12pm" / "tomorrow at 9am", so a
-    # "to" in front of it made prod 5596 read "moved that reminder to at
-    # 7:12pm". Every schedule_reminder chip in that window read correctly; this
-    # was the only one carrying the extra word.
+    # "to" in front of it reads "moved that reminder to at 7:12pm".
     "#{ctx.buddy_name} moved that reminder #{ctx.friendly_future(fire_at)}"
   },
 )

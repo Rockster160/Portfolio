@@ -15,8 +15,8 @@
 # outright. It never posts an action-request card, because there is nobody in
 # front of a 2am run to tap one.
 #
-# It sat in `ask` until 2026-09-04, which was never read-only and was only ever
-# quiet by accident. `ask` consults `permissions.allow` and nothing else, so it
+# It sat in `ask`, which was never read-only and was only ever quiet by
+# accident. `ask` consults `permissions.allow` and nothing else, so it
 # was exactly as wide as whatever had been tapped "always allow" — and what had
 # accumulated was a bare `"Bash"`, a wildcard for every shell command there is.
 # Removing that (it belonged to nothing) is what made the audit start carding
@@ -37,9 +37,9 @@ module ByteDailyAudit
   # every day — and a report that lands anywhere else is a report nobody will
   # look for again.
   #
-  # `mode:` is asserted on the way out for the same reason. On 19 Aug the report
-  # was published into a Buddy companion thread because the Mac replied naming
-  # one, and a companion thread cannot be the audit however it gets nominated.
+  # `mode:` is asserted on the way out for the same reason: the Mac can reply
+  # naming a Buddy companion thread, and a companion thread cannot be the audit
+  # however it gets nominated.
   def conversation(user)
     convo = user.byte_conversations.find_by(name: NAME)
     return sync!(convo) if convo
@@ -83,7 +83,7 @@ module ByteDailyAudit
   # doesn't happen leaves a stretch of hours nothing has ever looked at, and the
   # next one opens 24 hours before ITSELF rather than where the last report
   # stopped — so the hours in between are skipped by both and would stay skipped
-  # forever. On 20 Aug that was 08:30 to 13:32 the previous day.
+  # forever - five hours of the previous day, in one case.
   def window(user, now: Time.current, since: nil)
     local = now.in_time_zone(user.timezone)
     from  = (since ? since.in_time_zone(user.timezone) : local - 24.hours)
@@ -103,10 +103,9 @@ module ByteDailyAudit
   # sidekiq-cron can fire the same minute twice across a restart, so the guard
   # is a real requirement rather than belt-and-braces.
   #
-  # A prompt that never reached the Mac does NOT count as having run. On 20 Aug
-  # the 8:30 handoff failed (message 4046, state `failed`, nothing delivered),
-  # the 10am backstop found that row and stood down, and the day had no report
-  # at all until someone noticed the absence seven hours later. The backstop
+  # A prompt that never reached the Mac does NOT count as having run: a failed
+  # handoff leaves a row the backstop finds and stands down on, and the day then
+  # has no report at all until somebody notices the absence. The backstop
   # exists for exactly the morning the audit didn't happen, and asking whether a
   # prompt was POSTED answers a different question from whether one landed.
   def already_ran?(user, convo, now: Time.current)

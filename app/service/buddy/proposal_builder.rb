@@ -57,10 +57,10 @@ module Buddy
         # and a routine is exactly the case where that's the whole point: the
         # person tapped a button labelled "Yoga Lamp" and meant the lamp.
         #
-        # Dropping those was silent and total. Chelsea's kiosk routine had one
-        # step, `call_jil_function`, so every tap dropped every step and the
-        # only reply was "Nothing in it could run just now - what it points at
-        # might be gone", which pointed at the lamp instead of at this line.
+        # Dropping those was silent and total: a routine whose only step is a
+        # `call_jil_function` loses every step on every tap, and the only reply
+        # is "Nothing in it could run just now - what it points at might be
+        # gone", which points at the device instead of at this line.
         # The tools didn't change under it either; they gained `answers: true`
         # so they could report mid-turn, and that quietly retired every routine
         # built on them.
@@ -108,12 +108,11 @@ module Buddy
           first.merge(count: total_count)
         }
 
-      # ORDER matters, not just level. Prod 1201: "move it to Ours and let
-      # Chelsea know" produced add_agenda_item (level 3, a checkbox) plus
-      # message_partner (level 1, fires on arrival). Splitting purely on level
-      # ran them backwards — Chelsea was told the event had moved 22 seconds
-      # before the checkbox was tapped, and would have been told even if it
-      # never was.
+      # ORDER matters, not just level. "Move it to Ours and let her know"
+      # produces add_agenda_item (level 3, a checkbox) plus message_partner
+      # (level 1, fires on arrival). Splitting purely on level runs them
+      # backwards — the other person is told the event moved before the checkbox
+      # is tapped, and would be told even if it never was.
       #
       # So the calls become ordered STEPS (see build_steps). Everything up to and
       # including the first GATE — the first thing that has to finish before the
@@ -224,8 +223,8 @@ module Buddy
       result = create(user: user, byte_message: msg, markers: markers)
 
       # A step that ANSWERED gets its answer said. There is no model turn behind
-      # a routine, so nothing else is left to read it back: Chelsea's Garage
-      # routine posted "Running **Garage**" and a receipt, which is the same
+      # a routine, so nothing else is left to read it back: a Garage routine
+      # posts "Running **Garage**" and a receipt, which is the same
       # message whether it just opened or just closed. The task itself has known
       # all along — `Toggle Garage` returns "Closing the garage now" — and this
       # is only a matter of not dropping it on the floor. Verbatim, deliberately:
@@ -349,7 +348,7 @@ module Buddy
     #
     # The answer itself is already in the thread by now (record_answer! bridges
     # it before it gets here), so this is only the nudge to act on it — which is
-    # the whole difference between "Chelsea said yes" sitting there and the
+    # the whole difference between the answer sitting there and the
     # plunge actually going on the calendar.
     def pick_back_up!(action, relay)
       conversation = action.byte_conversation || Buddy::CompanionRelay.conversation_for(relay.from_user)
@@ -520,12 +519,11 @@ module Buddy
       # where the model put them.
       #
       # A WAIT earlier in the same reply is the line they can't cross (see
-      # blocks_hoist?). "Ask Chelsea if she wants syrup for dinner in 5 minutes;
-      # if she says yes, wait 2 minutes and then add it to the agenda" hoisted
-      # the agenda add ahead of both waits and put it on the calendar before
-      # Chelsea had been asked anything — the one step that was supposed to
-      # happen last happened first, and it happened whether she wanted syrup or
-      # not.
+      # blocks_hoist?). "Ask her if she wants syrup for dinner in 5 minutes; if
+      # she says yes, wait 2 minutes and then add it to the agenda" hoists the
+      # agenda add ahead of both waits and puts it on the calendar before
+      # anybody has been asked anything — the one step that was supposed to
+      # happen last happening first, and happening whatever the answer.
       #
       # Also blocked when the call is waiting on a VALUE. Hoisting is a
       # reordering and it's harmless right up until a step's arguments depend on
@@ -586,10 +584,10 @@ module Buddy
       # A wait the model put LAST, with nothing behind it — and the steps it
       # meant to hold sitting in front of it instead.
       #
-      # Prod 3897, "Add "something" to my todo list in 2 minutes": add_list_item
-      # then set_timer(then_continue: true). The item was created on the spot and
-      # the countdown rang two minutes later over a job already done. Reported as
-      # a VERY common shape, and the diagnosis is the person's: the trailing time
+      # "Add something to my todo list in 2 minutes" produces add_list_item then
+      # set_timer(then_continue: true): the item is created on the spot and the
+      # countdown rings two minutes later over a job already done. A very common
+      # shape, and the cause is the trailing time
       # phrase gets read as a second thing to DO rather than as when to do the
       # first, so it's appended in the order it was spoken. Not a reordering
       # mistake — an adverb mistaken for a deliverable.
@@ -826,8 +824,8 @@ module Buddy
 
         # A gate goes up whenever the answer was AWAITED, not only when steps
         # are queued behind it. `await_reply` with nothing following is a
-        # perfectly ordinary thing to ask for — "ask Chelsea if she wants to
-        # plunge tomorrow" and then act on what she says — and the receipt
+        # perfectly ordinary thing to ask for — "ask her if she wants to plunge
+        # tomorrow" and then act on what she says — and the receipt
         # promises "I'll pick this back up when they answer" off the var alone.
         # Gating only on `deferred.any?` meant that promise was made and then
         # nothing existed to keep it: the answer came back as a bubble and Buddy
@@ -967,7 +965,7 @@ module Buddy
         }
       end
 
-      # "Message Chelsea", not "message partner" — the tool's own label proc
+      # "Message <name>", not "message partner" — the tool's own label proc
       # already renders its payload for a human, so reuse it rather than
       # humanizing a snake_case name at someone.
       def queue_summary(user, steps, vars={})

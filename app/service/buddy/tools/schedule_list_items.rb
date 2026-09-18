@@ -1,7 +1,6 @@
-# Prod 4744-4750, 26 Aug. "Every night at 9pm, can you add these items to that
-# list:" was answered first with a claim that never ran, and then, when he asked
-# for it properly, with "I can't make list items recur on a schedule, so I've put
-# that request on the list instead."
+# "Every night at 9pm, can you add these items to that list:" was answerable
+# only with a claim that never ran, or with "I can't make list items recur on a
+# schedule, so I've put that request on the list instead."
 #
 # The refusal was true and should never have been. Adding a list item is
 # something Buddy does; putting a thing on the clock is something Buddy does;

@@ -9,9 +9,9 @@ module Buddy
   #
   # This exists because the alternative is writing the message yourself and
   # pasting it in, which arrives in a voice that isn't the one that person's
-  # companion has been using all week. Suki telling Eve about a new feature
-  # should sound like Suki. The briefing is what you know; the draft is how that
-  # companion would say it.
+  # companion has been using all week. A companion telling its own person about
+  # a new feature should sound like that companion. The briefing is what you
+  # know; the draft is how it would be said.
   #
   # Nothing is sent until you say so, and a regenerate costs one model call.
   #

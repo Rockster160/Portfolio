@@ -2,9 +2,8 @@ module Buddy
   # A clock time the way a person reads one at a glance: "3pm", "3:15pm",
   # "3-4pm".
   #
-  # Rocco, 2026-09-13: "the whole '3:00 PM to 4:00 PM' is really excessive and
-  # redundant and gets hard to read quickly. '3-4pm' is so much easier for a
-  # human to process."
+  # "3:00 PM to 4:00 PM" is excessive and slow to read; "3-4pm" is the same
+  # information at a glance.
   #
   # The rule was already in the codebase three times over and agreed with itself
   # nowhere. `TimeParser.friendly` wrote `%-I:%M %p` then cut ":00" and

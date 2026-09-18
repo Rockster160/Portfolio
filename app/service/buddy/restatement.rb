@@ -3,14 +3,14 @@ module Buddy
   #
   # Two shapes of it, and they arrive by completely different roads:
   #
-  #   Prod 5296, 3 Sep. One model call, no tools, no retry — Suki answered a
-  #   question about reminders and then answered it again in the next paragraph,
-  #   reworded. Nothing structural to point at; it is a generation artefact, and
-  #   the only place it can be caught is on the way out.
+  #   One model call, no tools, no retry — a question answered and then answered
+  #   again in the next paragraph, reworded. Nothing structural to point at; it
+  #   is a generation artefact, and the only place it can be caught is on the
+  #   way out.
   #
-  #   Prod 5401, 4 Sep. "Whisper nap sound." sitting over "Playing the nap sound
-  #   on Whisper" — a note the person wrote, and the task's own account of what
-  #   it did. Both true, both about to be read as one message repeating itself.
+  #   "Whisper nap sound." sitting over "Playing the nap sound on Whisper" — a
+  #   note the person wrote, and the task's own account of what it did. Both
+  #   true, both about to be read as one message repeating itself.
   #
   # Deliberately NOT phrase matching. It compares the SIGNIFICANT WORDS of two
   # paragraphs and asks whether the shorter one is almost entirely contained in
@@ -62,7 +62,7 @@ module Buddy
 
     # Drop any paragraph that restates one already above it. The FIRST wording
     # survives: a restatement is the second attempt at a sentence that already
-    # landed, and in prod 5296 the opening paragraph was also the fuller one.
+    # landed, and the opening paragraph is reliably the fuller one.
     def collapse(text)
       body = text.to_s
       return body if body.blank?

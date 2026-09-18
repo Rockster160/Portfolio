@@ -52,7 +52,7 @@ module Buddy
     # Third sense of one phrase, and the one that had no form. "when the print
     # finishes" was being interpolated straight into the sentence announcing the
     # thing was over: *"when the print finishes - I've stopped the check-ins."*
-    # (prod 4339) - a condition standing where a past-tense subject belongs.
+    # - a condition standing where a past-tense subject belongs.
     #
     # Written out per trigger rather than conjugated, because conjugating is
     # where this would start being wrong: "the timer goes off" has no regular

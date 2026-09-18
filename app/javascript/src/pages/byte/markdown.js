@@ -69,10 +69,10 @@ const SAFE_URL = /^https?:\/\/[^\s<>"']+$/i;
 
 // A street address in prose, turned into a tap that opens maps.
 //
-// Rocco, 4 Sep, four minutes after "Time to go - Eye Follow Up. 21m drive to
-// 11820 S State St Suite 320 Draper, UT, United States": "addresses should be
-// linked so that I can click to open them in maps". The agenda's details modal
-// has done this since June, but that reads a LOCATION FIELD whose whole value
+// An address that arrives inside a sentence - "21m drive to 11820 S State St
+// Suite 320 Draper, UT" - has to be tappable the same way one on the agenda is.
+// The agenda's details modal has done this for a long time,
+// but that reads a LOCATION FIELD whose whole value
 // is the address; here it has to be found inside a sentence, and the sentence
 // was composed by a Jil task rather than by anything in this repo.
 //

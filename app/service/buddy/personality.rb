@@ -565,9 +565,9 @@ module Buddy
     #
     # The relay plumbing has always been household-wide, but knowing WHO to
     # relay to came from the personas, and a persona is a markdown file that
-    # only names the people it was written next to. Eve had a companion, a
-    # household membership, and working relay in both directions for a week
-    # while Byte and Moss would both have told you she wasn't reachable - and
+    # only names the people it was written next to. A new household member can
+    # have a companion, a membership, and working relay in both directions while
+    # every other companion would tell you they weren't reachable - and
     # each of them lists what it helps with and then offers to decline anything
     # not on the list, so the omission read as a hard no rather than a gap.
     #
@@ -748,7 +748,7 @@ module Buddy
     # a deploy, so words didn't get added and the companion kept mishearing
     # the same handful. The subtler one is that the prompt only ever held terms
     # somebody had thought to write down there, while the SAME vocabulary was
-    # already sitting in Eve's tone profile teaching the companion to SPEAK
+    # already sitting in a tone profile teaching the companion to SPEAK
     # these words with nothing teaching it to UNDERSTAND them - so "pop it in a
     # bakkie" got read as a pickup truck by a companion that would happily have
     # said "bakkie" itself.
@@ -879,9 +879,9 @@ module Buddy
     # they are living through, and it is here for a reason the other block
     # cannot cover: everything outside preferences is reached by `search_memories`,
     # and a search only happens when something in the words says to go looking.
-    # "Feeling stressed today" says nothing of the kind. So the pet asked what
-    # was wrong (prod 5890-5894) with four records on file about exactly that,
-    # and being asked is how a person finds out nothing was being held.
+    # "Feeling stressed today" says nothing of the kind. So the pet asks what
+    # is wrong with several records on file about exactly that, and being asked
+    # is how a person finds out nothing was being held.
     #
     # The age on each line is doing real work rather than decorating. These
     # facts are TIMED - an illness ends, a bad week passes - and a companion
@@ -943,13 +943,12 @@ module Buddy
       # everything just handed over falls off it - which is the one thing that
       # must never happen to a promise to hold something.
       #
-      # Prod, 6 Sep: Eve had 33 live, her list ended at `#40` from 5 Aug, and a
-      # month of stash was invisible to every turn. She asked "Okay is it in
-      # Stash?" sixteen seconds after Suki stashed something and was told no -
-      # it was there, in the bucket the same reply offered to move it to. A
-      # correction to another item the same afternoon found no id to elaborate
-      # on and the turn was retracted. Rocco (8) and Chelsea (2) are under the
-      # cap, so it only ever showed in her thread.
+      # With 33 live items and a list ending at the oldest of them, a month of
+      # stash is invisible to every turn: "is it in Stash?" seconds after
+      # something was stashed gets answered no, when it is there in the bucket
+      # the same reply offers to move it to. A correction to another item finds
+      # no id to elaborate on and the turn is retracted. Only bites for somebody
+      # over the cap.
       rows  = scope.order(created_at: :desc).limit(OPEN_LOOP_LIMIT).to_a.reverse
       return nil if rows.empty?
 
@@ -1009,8 +1008,8 @@ module Buddy
     # above says not to go fetching that section on the chance a phrase might
     # be one - correctly, since almost nothing said to Buddy is. Together those
     # two facts meant a routine could only be recognised by someone who said
-    # the word "routine" out loud. Prod 2183: "log cup water", against a saved
-    # **water cup** that marks three waters, logged one. The person had already
+    # the word "routine" out loud - so "log cup water", against a saved
+    # **water cup** that marks three waters, logs one. The person had already
     # done the naming; the name was just sitting behind a lookup nobody was
     # allowed to make.
     #
@@ -1097,9 +1096,9 @@ module Buddy
 
     # Voice guide, paired to the PET rather than the person reading it.
     #
-    # It used to key off the user (`user.chelsea?` / `user.eve?`), which meant a
-    # Suki thread opened by anyone but Eve got Suki's persona wearing Rocco's
-    # voice - a companion half in character. A pet is a whole personality, so
+    # It used to key off the USER, which meant a Suki thread opened by anybody
+    # but its owner got Suki's persona wearing somebody else's voice - a
+    # companion half in character. A pet is a whole personality, so
     # picking Suki gets you Suki's, whoever you are.
     #
     # These used to live in the Byte repo and were injected Mac-side, only on

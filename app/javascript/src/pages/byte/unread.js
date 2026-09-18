@@ -63,8 +63,8 @@ export class UnreadTracker {
   // and so is the server's own total — but the page counted anything that
   // wasn't the thread on screen, archived included. Conversation 43 is the
   // standup-prep thread: archived plumbing that a scheduled job still posts
-  // into. Its 9:15 AM post on 9 Sep put a 1 on the hamburger with no row under
-  // it, and nothing the person could tap would ever take it off.
+  // into. Its morning post puts a 1 on the hamburger with no row under it, and
+  // nothing the person can tap will ever take it off.
   knows(convId) {
     return this.listed === null || this.listed.has(convId);
   }

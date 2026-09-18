@@ -10,18 +10,16 @@ module Buddy
   # reply would resolve against `byte.` and land nowhere.
   #
   # Owner-only pages are filtered out rather than labelled. `/system` is behind
-  # `MeConstraint`, so offering it to Chelsea or Eve is a link that bounces
-  # them - worse than not mentioning it, because they can see it and can't use
-  # it.
+  # `MeConstraint`, so offering it to anybody else is a link that bounces them -
+  # worse than not mentioning it, because they can see it and can't use it.
   module AppPages
     module_function
 
     # `feature:` is not decoration. The reject below has been here since the
-    # board arrived, and until 10 Sep only `interviews` used it - so somebody
+    # board arrived, and for a while only `interviews` used it - so somebody
     # without `chores` was still offered the chore grid, the pebble balance and
     # the completion history, three links to pages that can only be empty for
-    # them. Eve is exactly that person: agenda, events, inventory, jil, lists,
-    # prompts, relay, and no chores. Tag a page with the feature its data comes
+    # them. Tag a page with the feature its data comes
     # from, or it gets handed to people who have none of it.
     #
     # `links` is deliberately untagged: `link_records` is core, and a pairing

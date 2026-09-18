@@ -63,8 +63,8 @@ module Buddy
     # The one door `dispatch` can't cover. Destroying a record fires no Jil
     # trigger, so a deleted prompt leaves its form open in the thread pointing
     # at a row that is gone, and tapping it runs `answer_prompt` against nothing.
-    # Byte action 756 sat like that from 2 Sep with three days left to expire,
-    # after its event was deleted by hand from the Jil editor.
+    # An action can sit like that for days after its event is deleted by hand
+    # from the Jil editor.
     #
     # Hangs off a Prompt callback for the same reason `dispatch` refuses to:
     # this is the ending that has no trigger to ride.

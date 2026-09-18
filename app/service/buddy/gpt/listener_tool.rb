@@ -11,7 +11,7 @@ module Buddy
     # app code declares. Nothing else Buddy can read mentions them - the
     # `jil_triggers` context section only carries `buddy_visible` tasks, which is
     # 20 of 411 here - so without searching these listeners, an integration is
-    # invisible and gets answered with "I don't have that wired" (prod 1479).
+    # invisible and gets answered with "I don't have that wired".
     #
     # HOW TO WRITE ONE. What stops a listener from parsing cleanly and then
     # never firing is using a key that doesn't exist in that scope's payload -

@@ -16,7 +16,7 @@
 # list a copy of a screen rather than a list of what needs doing. A chore that
 # has been done or skipped today drops out the same day.
 #
-# Rocco, 2026-09-14: "most recently due chores appear at the top" — so the sort
+# Most recently due chores appear at the top — so the sort
 # is due-date DESCENDING. Today's work is at the top and the thing that has been
 # sitting there for three weeks is at the bottom.
 class ChoreListSync
@@ -160,9 +160,9 @@ class ChoreListSync
   # missing and both add it. `writing` is thread-local and cannot see across
   # Sidekiq threads, let alone processes, so it was never going to stop this.
   #
-  # 16 Sep: "Unpack Dishes" typed onto the list matched chore 78 by its alias,
-  # and the two syncs added "Unload Dishwasher" 0.8ms apart. One of the pair was
-  # placed under Today; the other kept `max_sort_order + 1` and no section,
+  # A list item matching a chore by ALIAS can have two syncs add the chore's
+  # own name within a millisecond of each other. One of the pair is
+  # placed under Today; the other keeps `max_sort_order + 1` and no section,
   # which sorts ABOVE the Today header — a second copy of the chore pinned to
   # the top of the list, in no section at all.
   #

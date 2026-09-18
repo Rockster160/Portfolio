@@ -132,10 +132,10 @@ module Buddy
     # The week's flagged days, composed here for the same reason the line above
     # it is - and it is the same rule, losing the same way.
     #
-    # 26 Aug: every seed carried "This week to flag: rain Thu, Fri, Sat & Sun.
-    # Give a short heads-up for any day with rain / wind / snow", and Byte's
-    # additionally carried a whole Alpine block reading 99%, 100%, 100%. All
-    # THREE briefings went out with no mention of any of it. All three also
+    # Every seed can carry "This week to flag: rain Thu, Fri, Sat & Sun. Give a
+    # short heads-up for any day with rain / wind / snow", with one of them
+    # additionally carrying a whole Alpine block reading 99%, 100%, 100%, and
+    # all THREE briefings go out with no mention of any of it. All three also
     # ended on the identical `weather_line` string, which is the tell: none of
     # the models wrote weather at all, the fallback filled today's figures, and
     # the week half had no fallback to fill it.
@@ -174,10 +174,10 @@ module Buddy
     # correct briefing is one that never writes the abbreviation at all.
     #
     # But the day word has to be doing WEATHER work. Matched against the whole
-    # body it wasn't: prod 4925 wrote "Nyjah Dinner on Monday at 6:30 PM" and
-    # 4930 "Monday's got Nyjah Dinner at Texas Roadhouse too", Monday was a
-    # flagged day, and both briefings went out with no forecast at all on a
-    # Saturday carrying rain four days running. 4860 lost its line the same way
+    # body it wasn't: "Dinner on Monday at 6:30 PM" and "Monday's got dinner
+    # out too" both satisfy it when Monday is a flagged day, and the briefings
+    # then go out with no forecast at all on a day carrying rain four days
+    # running. Other briefings lose the line the same way
     # the morning before, on "a little art show tomorrow evening". An agenda
     # item on a rainy day is the ordinary case, not the rare one - the days
     # worth flagging and the days with plans are drawn from the same week.
@@ -187,24 +187,24 @@ module Buddy
     # the list ("Monday looks grim") earns a second line. That trade goes this
     # way because a duplicate is visible and a silence isn't.
     #
-    # And the sentence has to be about the right PLACE. Prod 6052, 12 Sep: the
-    # seed said "This week: rain Wed & Thu, windy Sun" and the briefing said
-    # none of it, because it had written "Alpine looks rainy tomorrow from 8:00
-    # AM to 1:00 PM, and the rest of the week there's rain odds on Monday,
-    # Wednesday, Thursday, and Friday" - one sentence about a canyon, carrying
-    # a weather word and every flagged day, and the repair stood down. Eve's
-    # briefing, built from an identical WEATHER block and no ALPINE one, said
-    # the week's line fine. The Alpine block is gated to one person
+    # And the sentence has to be about the right PLACE. A seed saying "This
+    # week: rain Wed & Thu, windy Sun" gets none of it said, because the
+    # briefing wrote "Alpine looks rainy tomorrow from 8:00 AM to 1:00 PM, and
+    # the rest of the week there's rain odds on Monday, Wednesday, Thursday, and
+    # Friday" - one sentence about a canyon, carrying a weather word and every
+    # flagged day, and the repair stands down. A briefing built from an
+    # identical WEATHER block and no ALPINE one says the week's line fine. The
+    # Alpine block is gated to one person
     # (Buddy::BriefingFacts.alpine?), so this loses on exactly the briefing
     # nobody has a second copy of.
     # EVERY flagged day, not any one of them.
     #
     # `any?` was a deliberate trade and the paragraph above says why - a second
     # heads-up under one the model wrote itself reads worse than a rare miss.
-    # Prod 6235, 15 Sep, is the evidence against it. The seed flagged rain Wed,
-    # Thu and Fri; Byte wrote "Thursday's rain is sitting at 79%, and Friday's
-    # is at 98%", which satisfied the check for Wednesday as well, and
-    # Wednesday was never said. Suki and Moss said "Wed, Thu, and Fri" off an
+    # The evidence against it: a seed flagging rain Wed, Thu and Fri gets
+    # "Thursday's rain is sitting at 79%, and Friday's is at 98%", which
+    # satisfies the check for Wednesday as well, and Wednesday is never said.
+    # The other companions say "Wed, Thu, and Fri" off an
     # identical WEATHER block.
     #
     # The miss turned out not to be rare - it fires whenever the model writes
@@ -243,10 +243,10 @@ module Buddy
 
     # A claim that the week is quiet, on a week that isn't.
     #
-    # 5 Sep, all three morning briefings: the week staple fired on every one and
-    # on two of them landed directly under a sentence saying the opposite.
-    # 5456 - "the week looks pretty clear overall, so nothing spicy lurking out
-    # there" / "Rain Sun & Mon this week." 5459 - "The week ahead looks mostly
+    # The week staple can fire on all three morning briefings and on two of them
+    # land directly under a sentence saying the opposite:
+    # "the week looks pretty clear overall, so nothing spicy lurking out
+    # there" / "Rain Sun & Mon this week." Or "The week ahead looks mostly
     # steady from here, so nothing is shouting for attention just yet!" / the
     # same line. Appending left both standing, so the briefing said two opposite
     # things about the same week.
@@ -339,8 +339,8 @@ module Buddy
     # day names; the HOURS were the one piece of the weather rule with nothing
     # behind them, and they are the piece the seed asks for most directly -
     # "Rain windows today (give these times)". Dropped by all three briefings
-    # on 27 Aug, and dropped again on 28 Aug by the briefing that got both of
-    # the other two fallbacks right, which is what says it isn't a phrasing
+    # on one morning, and dropped again the next by the briefing that got both
+    # of the other two fallbacks right - which is what says it isn't a phrasing
     # problem.
     #
     # Same trade as the two above: this only fills a silence.
@@ -356,11 +356,11 @@ module Buddy
     # shared meridiem once, "3-6pm".
     #
     # The meridiem on the start is OPTIONAL, and borrowed from the end when it
-    # isn't there. Prod 6374, 16 Sep: the seed carried "Rain in Alpine 3-6pm",
-    # the briefing gave no hours, and nothing was repaired - this required a
-    # meridiem straight after the start hour, matched nothing in "3-6pm", and an
-    # empty list of starts reads as "already said". Every window inside one
-    # half of the day had been unrepairable since 13 Sep.
+    # isn't there. A seed carrying "Rain in Alpine 3-6pm" against a briefing
+    # with no hours repairs nothing if this requires a meridiem straight after
+    # the start hour: it matches nothing in "3-6pm", and an empty list of starts
+    # reads as "already said". That leaves every window inside one half of the
+    # day unrepairable.
     RAIN_WINDOW_RX = /\A(?<hour>\d{1,2})(?::\d{2})?(?<mer>am|pm)?(?:-\d{1,2}(?::\d{2})?(?<end>am|pm))?/i
 
     # Did the briefing already give one of the hours?
@@ -399,9 +399,9 @@ module Buddy
     # "tomorrow 1-7pm", "Thursday 8am-1pm".
     #
     # These were said to be `rain_hours_line`'s business, and it only ever takes
-    # TODAY's windows, so nothing restored them at all. Prod 6235 and 6374, two
-    # mornings running: the seed carried tomorrow's Alpine hours and the
-    # briefing went out without them.
+    # TODAY's windows, so nothing restored them at all - morning after morning
+    # the seed carried tomorrow's Alpine hours and the briefing went out without
+    # them.
     ALPINE_HOURS_RX = /\A(?<day>[A-Za-z]+)\s+(?<window>\d{1,2}(?::\d{2})?(?:am|pm)?(?:-\d{1,2}(?::\d{2})?(?:am|pm))?)\s*\z/i
 
     def alpine_week_odds(lines)
@@ -421,10 +421,10 @@ module Buddy
 
     # The Alpine days whose ODDS the briefing didn't give.
     #
-    # Prod 6052, 12 Sep: the seed listed Monday 27%, Wednesday 30%, Thursday
-    # 100% and Friday 77%, and the briefing returned "the rest of the week
-    # there's rain odds on Monday, Wednesday, Thursday, and Friday" - every day,
-    # not one number, against a seed that says "Anything above an ordinary day
+    # A seed listing Monday 27%, Wednesday 30%, Thursday 100% and Friday 77%
+    # gets back "the rest of the week there's rain odds on Monday, Wednesday,
+    # Thursday, and Friday" - every day, not one number, against a seed that
+    # says "Anything above an ordinary day
     # goes in with its odds". It then closed on "Monday at 3:40 PM is Plunge
     # with Wil at Horsetail Falls. Nice little canyon weather for that one",
     # which is Monday's 27% read as an all-clear. With the odds stripped a hedge
@@ -459,9 +459,9 @@ module Buddy
     #
     # `leave_by` arrives already worked out and the prompt is explicit about it
     # - "Both are figures; say the figures" - and it keeps losing to the shape
-    # that names the CATEGORY instead. Prod 4529: "You've got Yoga first this
-    # morning, with a pretty full drive time before it", sent at 8:25 to
-    # somebody who had to walk out at 8:46, and neither figure in it. The travel
+    # that names the CATEGORY instead: "You've got Yoga first this morning,
+    # with a pretty full drive time before it", sent at 8:25 to somebody who has
+    # to walk out at 8:46, with neither figure in it. The travel
     # alert covered it eleven minutes later, which is the only reason nothing
     # broke; the briefing is the one that arrives while there is still time.
     #
@@ -480,9 +480,7 @@ module Buddy
     end
     # ---- the seed ----------------------------------------------------------
     #
-    # Rocco, 2026-09-04: "We should re-write the entire prompt from scratch as
-    # needed. Revisit every piece of it and make sure every piece earns its
-    # mark."
+    # Every piece of this prompt has to earn its place.
     #
     # The old one ran to about two thousand words, and most of it was about
     # WHICH facts to use: where to look, what had already been filtered, what to
@@ -502,8 +500,8 @@ module Buddy
     #   teaches it to go looking for one.
     #
     # Written POSITIVELY. "notes to write from, not lines to read out" was the
-    # last anti-example standing and Rocco caught it: a rule phrased as the
-    # mistake still hands over the mistake. Say the thing to do.
+    # last anti-example standing: a rule phrased as the mistake still hands over
+    # the mistake. Say the thing to do.
 
     # Rules whose subject can be absent from a day.
     WRITING_RULES = {
@@ -535,10 +533,10 @@ module Buddy
       # week has been taken out by `notable?` before the model ever sees it -
       # so a second selection here throws away work that was already done, and
       # it contradicts "All of it reaches them" three lines above it in the
-      # same prompt. There is no reading that satisfies both, and on 7 Sep the
-      # two companions split it two different ways off the identical section:
-      # Byte kept three of four and dropped `Jake 30th Surprise Bday` (5602),
-      # Moss kept all five (5610). Same event, same morning, told to one house
+      # same prompt. There is no reading that satisfies both, and two
+      # companions will split it two different ways off the identical section -
+      # one keeping three of four and dropping a named birthday, the other
+      # keeping all five. Same event, same morning, told to one house
       # and not the other.
       week:      "The week's already down to its exceptions, so every one of them reaches them - a few words each, the name and the day.",
       stash:     "Occasionally, and not most days, float one of the things on their mind. Light, one at a time, easy to wave off.",

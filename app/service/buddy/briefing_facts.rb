@@ -2,14 +2,13 @@ module Buddy
   # Everything a Today briefing is about, gathered and decided in one place so
   # the companion's entire job is to say it well.
   #
-  # Rocco, 2026-09-04: "Having a service that collects and provides all of the
-  # data points and then just passing it to the buddy to talk about and phrase
-  # in their own words and not have to use any tools is a complete refactor."
+  # One service collects every data point and hands them over; the companion
+  # uses no tools and only has to phrase them.
   #
-  # What that replaced: a two-thousand-word prompt that described where to look,
+  # What that replaced: a two-thousand-word prompt describing where to look,
   # what to filter, what to drop and what not to say, plus five pre-send repairs
-  # that stapled the facts back on when it didn't. On 4 Sep all three briefings -
-  # three people, three companions - ended with the same two sentences byte for
+  # that stapled the facts back on when it didn't. Three briefings - three
+  # people, three companions - would end on the same two sentences byte for
   # byte, because `with_weather` and `with_week_weather` had written them all
   # three times under the one paragraph the model actually wrote.
   #
@@ -23,10 +22,9 @@ module Buddy
   module BriefingFacts
     module_function
 
-    # Rocco, 2026-09-04: "we also want to make sure that we are collecting all of
-    # the information that Buddy previously was collecting. Reminders, memories,
-    # and anything else that Buddy normally would have looked at and collected,
-    # we should be collecting, determining if it should be included or not, and
+    # Everything the companion used to fetch for itself is collected here
+    # instead - reminders, memories, and anything else a turn would have gone
+    # looking for. Collected, judged for whether it belongs, and
     # then providing it."
     #
     # A briefing turn can no longer look anything up, so an absence here is a
@@ -84,17 +82,16 @@ module Buddy
 
     # Deliberately NOT collected, and it isn't a ContextTool section at all:
     # a memory carrying `check_in_at` is Buddy's own plan to ASK about
-    # something later (Buddy::CheckIns). Rocco, 4 Sep: "Buddy should NOT bring
-    # things up like 'Oh, I'm going to check up on you today' just because there
-    # is a check up today." The check-in speaks for itself when it fires.
+    # something later (Buddy::CheckIns), and a briefing must never announce
+    # that a check-in is due. The check-in speaks for itself when it fires.
     #
     # Their durable memories are not collected here either, because they are
     # already in front of the model: Buddy::Personality#memories_block puts
     # everything they ever asked to be remembered into every prompt, briefing
     # turns included. Fetching them twice would only make them a list to recite.
 
-    # Alpine is a canyon Rocco drives to. For everyone else in the house it's a
-    # town half an hour away whose forecast they have no reason to hear, and
+    # Alpine is a canyon one member of the house drives to. For everyone else
+    # it is a town half an hour away whose forecast they never need, and
     # their own weather is already in the block above it.
     def alpine?(user)
       user.present? && user.me?
@@ -144,9 +141,8 @@ module Buddy
       hour >= 16 || hour < Buddy::Day::ROLLOVER_HOUR
     end
 
-    # Rocco, 2026-09-04: "We don't want Alpine included every day - only the days
-    # with precipitation during the desired hours, otherwise it gets
-    # ignored/dropped from the data and the prompt entirely."
+    # Only the days with precipitation during the hours that matter. Included
+    # every day, the block gets ignored and dropped from the prompt entirely.
     #
     # Both halves already answer with nothing on a dry day (PlungeAdvisor is
     # only ever about whether the canyon is wet), so this collapses to an empty
@@ -189,8 +185,8 @@ module Buddy
     end
 
     # Whose it is leads the title, because that is the order somebody says it in
-    # and it is the difference between "you have yoga at 4" and "Chelsea has
-    # yoga at 4". Rocco, 4 Sep: the first is "absolutely incorrect".
+    # and it is the difference between "you have yoga at 4" and "she has yoga
+    # at 4" - the first being plainly wrong about whose day it is.
     def agenda_line(item)
       title = item[:title]
       title = "#{item[:owner]}: #{title}" if item[:mine] == false && item[:owner].present?
@@ -198,8 +194,8 @@ module Buddy
       bits = [item[:time], title]
       bits << item[:where] if item[:where].present?
       # NOT the calendar. It sits where a place sits and gets read as one:
-      # "a hair trim for Chelsea at 10:00 AM at Alchemibluum" is the calendar
-      # the trim is written on, and Alchemibluum is not where anybody is
+      # "a hair trim at 10:00 AM at Alchemibluum" names the calendar the trim
+      # is written on, and that is not where anybody is
       # going. Whose item it is already leads the title, which is the only
       # thing the calendar was ever standing in for.
       bits << "cancelled" if item[:cancelled]

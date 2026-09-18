@@ -65,10 +65,9 @@ module Emails
     # `githubinc+autoreply@talent.icims.com`, a different domain entirely, and
     # reaches the model like any other.
     #
-    # oneclaimsolution.com is deliberately absent even though it is the current
-    # employer and is blocked on the Mac. In THIS inbox that address is Rocco
-    # forwarding mail to himself, and a forward is a decision to have something
-    # looked at.
+    # The CURRENT employer's domain is deliberately absent even though it is
+    # blocked upstream. In THIS inbox that address is the owner forwarding mail
+    # to themselves, and a forward is a decision to have something looked at.
     IGNORED_SENDERS = [
       /@(?:.*\.)?chase\.com\z/i,
       /@(?:.*\.)?amazon\.com\z/i,

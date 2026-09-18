@@ -76,7 +76,7 @@ class BuddyReminder < ApplicationRecord
   # and re-resolves it at fire time. That covers "run my wind-down" and can't
   # cover anything with arguments — there is nowhere in a sentence to put
   # `sound: "nap"` — which is why "Play Whisper Nap sound at 11" had no way to be
-  # scheduled at all and got played immediately instead (prod 3562).
+  # scheduled at all and got played immediately instead.
   #
   # The tool NAME is stored, never a resolved id, so this degrades the same way
   # a routine step does: the function is looked up again every time it fires.
@@ -158,10 +158,10 @@ class BuddyReminder < ApplicationRecord
   #
   # It matched on ONE shared significant word across sixty days, which is not a
   # narrowing — `clashing` below uses the same one-word test but only after
-  # pinning to a single minute, which is what makes that one safe. So Eve asking
-  # for a 9pm nudge about a YouTube video on propagating snake plants was told
-  # she'd switched it off, on the strength of "plant" appearing in a noon plant
-  # check she cancelled the day before (prod 4115).
+  # pinning to a single minute, which is what makes that one safe. So a request
+  # for a 9pm nudge about propagating snake plants gets answered "you switched
+  # that off", on the strength of "plant" appearing in a noon plant check
+  # cancelled the day before.
   #
   # It isn't worth fixing the threshold, because there's nothing on the other
   # side of it. A cancelled row is kept so an undo has something to restore, and

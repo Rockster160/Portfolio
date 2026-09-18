@@ -1,12 +1,10 @@
 module Buddy
   # A briefing naming back one of the heavy things they're carrying.
   #
-  # Prod 6243, 15 Sep. Moss closed Chelsea's morning briefing with "And I'm
-  # holding that <X> note for you too, so you don't have to keep it in your
-  # head". The record was real - hers, in her own words, from 10 Sep - and the
-  # seed (6242) carried `due, jobs, name, week, stash, today, alpine, waiting,
-  # weather` and no section about it at all. It came from `situation_block`,
-  # which rides in every prompt.
+  # A morning briefing can close with "And I'm holding that <X> note for you
+  # too, so you don't have to keep it in your head". The record is real - theirs,
+  # in their own words - but the seed carried no section about it at all. It
+  # came from `situation_block`, which rides in every prompt.
   #
   # That block's instruction is bolded and could not be plainer:
   #
@@ -15,7 +13,7 @@ module Buddy
   #   picking at a bruise, and they cannot un-hear it.
   #
   # This is that failure in the exact form the paragraph describes: announcing
-  # that it is being held, to prove it is being held. Chelsea had said nothing.
+  # that it is being held, to prove it is being held, when nothing was asked.
   #
   # ## Why a briefing is the one place this is checkable
   #

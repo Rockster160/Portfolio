@@ -44,9 +44,8 @@ class AgendaItem < ApplicationRecord
   # is NOT NULL and every synced row has to land somewhere; this is what a
   # person creating something means by "no answer", and it is 5.
   #
-  # Rocco, 3 Sep 2026: *"The default is 5 and it should always be 5 unless the
-  # user specifically says a different amount of time."* Said of Buddy, which
-  # was writing 0 onto anything with no place attached.
+  # Always 5 unless somebody names a different amount of time; Buddy otherwise
+  # writes 0 onto anything with no place attached.
   DEFAULT_ARRIVE_EARLY_MINUTES = 5
 
   attr_accessor :phantom
@@ -312,10 +311,10 @@ class AgendaItem < ApplicationRecord
   # Not every writer produces both. The legacy pair — `travel_minutes` +
   # `travel_location`, which is what the Jil refresh task writes — carries no
   # seconds at all, and an item that has only ever been touched by that has a
-  # perfectly good drive time that reads as zero. Item 1081 ("Plunge with Wil")
-  # was created by Buddy and held `travel_minutes: 47` and nothing else, so
-  # asked to set a leave time on it the tool answered that it had no drive time
-  # for it (prod 5268-5269) — with 47 minutes sitting right there.
+  # perfectly good drive time that reads as zero: an item created by Buddy can
+  # hold `travel_minutes` and nothing else, so asked to set a leave time on it
+  # the tool answers that it has no drive time — with the minutes sitting right
+  # there.
   def travel_seconds
     secs = travel_hash["travel_seconds"].to_i
     return secs if secs.positive?
@@ -340,18 +339,16 @@ class AgendaItem < ApplicationRecord
   # The stamped epochs are only as fresh as the last chain write, and nothing
   # on the row says when they were written.
   #
-  # Prod 15 Sep, item 1081 "Plunge with Wil": a 2:45 PM Tuesday event carrying
-  # `leave_at` of **Monday 2:49 PM** and `post_arrive_at` of **Monday 5:26 PM**
-  # - the whole travel hash left behind by a previous placement, roughly 23
-  # hours stale. `travel_seconds` beside them (2757) was right, so the epoch and
+  # A Tuesday event can carry a `leave_at` and `post_arrive_at` from MONDAY -
+  # the whole travel hash left behind by a previous placement, roughly a day
+  # stale. `travel_seconds` beside them stays right, so the epoch and
   # the drive time next to it described different journeys.
   #
   # It reached two people because every reader formats these through
   # `Buddy::Clock`, which prints a clock time and throws the DATE away: a
   # departure on another day came out as a perfectly ordinary "leave by
-  # 2:49pm". Both Rocco and Chelsea were told at 8 AM to leave 56 minutes after
-  # the plunge started, and only found out five hours later when the Jil travel
-  # notices got it right.
+  # 2:49pm". Everyone on the item is then told to leave nearly an hour after it
+  # started, and only finds out when the Jil travel notices get it right.
   #
   # So the bound is here, on the model, rather than in any one caller - there
   # are four of them and the two that were named in the report were not all of

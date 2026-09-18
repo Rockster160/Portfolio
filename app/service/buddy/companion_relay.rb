@@ -34,10 +34,10 @@ module Buddy
       # reminder or a watch aimed at somebody else).
       #
       # Those two used to poke the recipient's companion directly instead, which
-      # delivered the words fine and left NO record on the sender's side. Prod
-      # 2555-2569: a note set for Chelsea two minutes out arrived exactly as
-      # asked, Rocco had no way to see that it had, asked "did it send?", got a
-      # guess for an answer, and a second copy went out for real.
+      # delivered the words fine and left NO record on the sender's side: a note
+      # scheduled two minutes out arrives exactly as asked, the sender has no way
+      # to see that it did, asks "did it send?", gets a guess for an answer, and
+      # a second copy goes out for real.
       #
       # `from_message:` is for the one case where the sender's words are ALREADY
       # a row in their thread - they long-pressed a relayed message and typed a
@@ -66,8 +66,8 @@ module Buddy
       PHOTO_REACH = 15.minutes
 
       # Pass along a picture ALREADY in the thread, instead of a sentence about
-      # one. "Send Chelsea a picture of the driveway" (prod 3731) came back as
-      # "I can't grab or forward a driveway photo from here" — and the frame was
+      # one. "Send her a picture of the driveway" comes back as "I can't grab
+      # or forward a driveway photo from here" — and the frame is
       # right there, one message up.
       #
       # Shared rather than copied (ByteMessageShare): what she opens is the same
@@ -129,7 +129,7 @@ module Buddy
         # broadcasts the recipient's copy the moment it creates it, so attaching
         # the action afterwards left the question sitting in their thread as
         # plain text with no way to answer it, until something unrelated redrew
-        # the thread and the options finally appeared (prod 2212).
+        # the thread and the options finally appeared.
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
           from_conversation: relay.from_conversation, text: choice_body(relay), relay: relay
@@ -343,9 +343,8 @@ module Buddy
         # conversation, and a queued `await_reply` sequence is deliberately
         # parked until they answer.
         #
-        # Prod 3586: Chelsea asked Rocco whether he wanted to watch something
-        # while they ate, he came back to it twenty minutes later, and every tap
-        # returned 409 with "tap to try again" — advice that could never work.
+        # A relayed question answered twenty minutes later has every tap return
+        # 409 with "tap to try again" — advice that could never work.
         # Before that, every relayed question had happened to be answered inside
         # nine minutes, so the fuse had never been reached.
         action = ByteAction.create!(
@@ -398,7 +397,7 @@ module Buddy
         return if conversation&.kiosk?
 
         # Icon references become their names. A push has no pixels, and
-        # "Rocco: [hicon:24] [hicon:22]" is the message arriving as its own
+        # "<name>: [hicon:24] [hicon:22]" is the message arriving as its own
         # source code.
         WebPushNotifications.send_to_byte(
           title: "💬 #{::IconPool.refs_to_text(title, user: user).truncate(160)}",
