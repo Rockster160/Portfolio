@@ -212,8 +212,17 @@ import { dash_colors, clamp } from "../vars"
     // grey, which the light one washes out against green, yellow and red alike.
     function markCell(at, glyph) {
       const under = at < filled ? color : dash_colors.darkgrey
-      const marker_ink = at < filled ? dash_colors.darkgrey : dash_colors.grey
-      return Text.bgColor(under, Text.color(marker_ink, glyph))
+      // The clock is grey on whatever it lands on — it is only saying where you
+      // are. The wall CARRIES its red rather than borrowing the cell's: red ink
+      // on the green fill is the same brightness as the green (1.06 : 1) and on
+      // an exhausted red bar it is the same color outright, so the cell itself
+      // goes red and the ‼ is knocked out of it in white.
+      if (glyph === "‼") {
+        return Text.bgColor(dash_colors.red, Text.color(ink(dash_colors.red), glyph))
+      }
+
+      const grey = at < filled ? dash_colors.darkgrey : dash_colors.grey
+      return Text.bgColor(under, Text.color(grey, glyph))
     }
 
     const marks = {}
