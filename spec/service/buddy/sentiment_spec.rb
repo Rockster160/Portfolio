@@ -156,10 +156,8 @@ RSpec.describe Buddy::Sentiment do
       expect(described_class.read(convo)).to be_nil
     end
 
-    # Prod 18 Sep. Rocco: "he's often using the focused/angry face for those
-    # which feels inappropriate." An ATS auto-reply is a small moment, but the
-    # window it was read from held eight companion lines and none of his - two
-    # of them rejections - so the reading was of a long hard day.
+    # A self-initiated turn can be read from a window of companion lines with
+    # nothing the person said in it, which reads as a long bad day.
     describe "a turn nobody started" do
       before {
         say("Epicor said they're not moving forward.", kind: "buddy")
@@ -190,22 +188,16 @@ RSpec.describe Buddy::Sentiment do
     end
   end
 
-  # Rocco, 18 Sep: "receiving an email back from a potential job, as long as
-  # it's not a rejection, seems like it should be a GOOD thing. As is marking a
-  # job as applied. It feels like Byte should be encouraging there."
-  #
-  # Measured against the real model on the prod windows: an acknowledgement, an
-  # application going out and an interview being booked all land on `happy`
-  # now, and a rejection still lands on `sad`.
+  # A job mail that is not a rejection, and an application going out, are both
+  # good news and have to read that way.
   describe "good news about the job hunt" do
     def face_for(reading, unprompted: true)
       skip = described_class.send(:skipped, reading, false, true, unprompted: unprompted)
       Buddy::Faces.nearest("byte", reading, skip: skip)
     end
 
-    # Warm, dead earnest, and genuinely at stake. Before `cheering` there was no
-    # face for it at all: every warm face Byte had sat at weight 0.35 or below,
-    # so the nearest was `loving` — hearts, at an ATS.
+    # Warm, dead earnest and genuinely at stake — the region only `cheering`
+    # covers; every other glad face sits at weight 0.35 or below.
     it "cheers about something that matters" do
       expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:cheering)
     end
@@ -223,8 +215,8 @@ RSpec.describe Buddy::Sentiment do
       expect(face_for({ warmth: 0.1, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:sad)
     end
 
-    # The original complaint. `focused` reads STERN and was what every job-shaped
-    # reading fell to.
+    # `focused` reads STERN and is the nearest face to anything high-weight
+    # that no warm face can reach.
     it "is never stern about good news" do
       [0.3, 0.5, 0.7, 0.9].each { |weight|
         expect(face_for({ warmth: 0.8, play: 0.0, weight: weight, strain: 0.0 })).not_to eq(:focused)
@@ -266,11 +258,9 @@ RSpec.describe Buddy::Sentiment do
   end
 
   describe "what a reading is told about the size of a moment" do
-    # The other half of the same afternoon: `weight` read the SUBJECT rather
-    # than the event, and its own wording asked for that - "1 is something that
-    # genuinely matters - work, health, money, family". Anything about the job
-    # hunt was therefore maximal, which put `focused` (weight 0.85) on a robot
-    # saying it had received a form.
+    # `weight` is about the size of the EVENT. Wording it as a list of subject
+    # areas ("work, health, money") makes anything job-shaped maximal, which is
+    # how a robot confirming a form reaches a weight-0.85 face.
     it "asks about the event rather than the subject it belongs to" do
       expect(described_class::PROMPT).to include("Judge the EVENT, not the subject")
       expect(described_class::PROMPT).to include("a routine confirmation")

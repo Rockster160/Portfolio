@@ -99,11 +99,10 @@ class JobNote < ApplicationRecord
 
   before_validation :normalize_fields
   before_validation :settle_applied_before_receipt, on: :create
-  # `after_save`, not `after_create`: a mail is now filed on its row as a plain
-  # note the moment it arrives and RETAGGED when the card is tapped, so the
-  # first moment this row is known to be a receipt is usually an update. It was
-  # create-only and the retag would have walked straight past it. Gated on the
-  # two columns it reads so an unrelated touch costs nothing.
+  # `after_save`, not `after_create`: a note usually becomes a receipt by being
+  # RETAGGED, not by being created as one — Buddy::JobMailOffer files arriving
+  # mail as a plain `note` and Buddy::Tools add_job_note revises it in place.
+  # Gated on the two columns the callback reads so an unrelated touch is free.
   after_save :settle_receipt_after_applied,
     if: -> { acknowledged? && (saved_change_to_tag? || saved_change_to_occurred_at?) }
 

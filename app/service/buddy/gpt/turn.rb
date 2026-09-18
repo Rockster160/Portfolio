@@ -616,14 +616,9 @@ module Buddy
       # it, short enough that the person is still looking at the thread.
       SEED_RETRY_DELAY = 60
 
-      # What a seed is told when it is sent round again for want of its CALL,
-      # rather than because the turn fell over.
-      #
-      # The difference matters: a failed turn left nothing on screen, so its
-      # retry says the whole thing over. This one already said its piece
-      # perfectly well - prod 6551 is "Machinify says your application was
-      # received and will be reviewed." - and repeating it a minute later is a
-      # duplicate the person has to read twice to find out is the same news.
+      # Prefixed onto a seed sent round again for want of its CALL rather than
+      # because the turn failed. The reply from the first attempt is already in
+      # the thread and was fine, so this retry must not write it again.
       SEED_CALL_RETRY = <<~TXT.freeze
         You already answered this one a minute ago, in the thread, and they have
         read it. What did not happen is the CALL, so that is the whole of this
@@ -2797,24 +2792,13 @@ module Buddy
           correct_false_denial!(result)
         end
 
-        # A seed built around a call that came back with words and nothing else.
+        # A seed built around a call, answered in prose. `start_over?` has
+        # already spent its second attempt inside this turn by now.
         #
-        # start_over? already had a second go inside this turn and it is spent.
-        # Prod 6551, 18 Sep: "Machinify says your application was received and
-        # will be reviewed." — true, well said, three model calls, no card, and
-        # the beat never reached the board. 6279 and 6282 on 15 Sep are the same
-        # turn and were backfilled by hand the next day. Rocco: "Byte will say
-        # it's been acknowledged, but not create a note for it on the Interview."
-        #
-        # Nothing that reads the REPLY can catch this and nothing ever will: the
-        # sentence reports what the COMPANY did, so it claims nothing, offers
-        # nothing, and is a perfectly good thing to have said. The only fact that
-        # separates it from a finished turn is that the seed named a call and no
-        # call was made — which is exactly what `seed_skipped_its_call?` holds.
-        #
-        # So it goes round again a minute later, from a clean build, the way a
-        # failed seed does. Once only, and the copy carries SEED_CALL_RETRY so
-        # the second one makes the call instead of writing the sentence twice.
+        # None of the guards above can see this one, because they all read the
+        # REPLY for a claim and the reply is honest — a job-mail seed asks for a
+        # sentence about what the MAIL said, which asserts nothing about Buddy.
+        # `seed_skipped_its_call?` is the only evidence there is.
         retry_seed!(nil, prefix: SEED_CALL_RETRY) if nothing && seed_skipped_its_call?
 
         # A brain in the corner of the bubble. Writing to somebody's memory is
@@ -2984,14 +2968,11 @@ module Buddy
       # confirmation carried was simply never logged. A turn the PERSON started
       # needs none of this; they can see what they sent and say it again.
       #
-      # Two callers now, and the second is the one that catches a seed which
-      # went perfectly WELL and still lost the thing it was sent for — see
-      # finalize_success and SEED_CALL_RETRY. A fresh turn is the point in both
-      # cases: History.build rebuilds the thread from the message rows, so the
-      # attempt that wrote words instead of a call is not sitting in front of
-      # the model when it tries again. That is the difference between this and
-      # the corrective rounds, and it is why start_over? going twice inside one
-      # turn is not enough on its own.
+      # Also reached from finalize_success for a turn that SUCCEEDED and skipped
+      # the call it existed to make; `prefix` is what tells the two apart. A
+      # fresh turn rather than another corrective round either way, because
+      # History.build rebuilds the thread from the message rows and leaves the
+      # failed attempt out of what the model sees.
       #
       # Guarded exactly the way start_over? is, and for the same reason: a turn
       # that already ran something would run it twice. Once only — the copy
@@ -3774,11 +3755,10 @@ module Buddy
       # the miss faces (prod 4594's gleeful laugh over "I couldn't get a frame
       # from the backyard camera") without pretending to know the room.
       #
-      # `unprompted` is the same kind of fact and this is the only place that
-      # holds it. The seed is hidden, so by the time the reading runs, a turn
-      # nobody started is indistinguishable from one they did - and on a busy
-      # jobhunt afternoon every line in the window is a notification, which read
-      # as a person having a long hard day. See Buddy::Sentiment::UNPROMPTED_NOTE.
+      # `unprompted` has to be passed for the same reason: a seed is hidden, so
+      # by the time the reading runs there is nothing in the thread to tell a
+      # turn nobody started from one they did. See
+      # Buddy::Sentiment::UNPROMPTED_NOTE for what the reading does with it.
       #
       # Asynchronous, so the reply is never waiting on it.
       def settle_expression(acted: false, landed: true)

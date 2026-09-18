@@ -23,15 +23,9 @@ RSpec.describe Buddy::ListChecklist do
 
   before { allow(WebPushNotifications).to receive(:send_to_byte) }
 
-  # Prod, 17 Sep. Eve dictated nine freezer-prep steps across five messages -
-  # bacon and sausages cooked first, cheese grated last - they were written onto
-  # the list in that order, and the card came back exactly inverted. She read it
-  # and asked for it to be flipped; it was already the right way round on the
-  # list.
-  #
   # `list_items` is `-> { ordered }` = `sort_order DESC NULLS LAST`, which is
-  # right for the app's list view and for choosing WHICH rows a card shows. A
-  # card is something worked through, so it reads the other way.
+  # right for choosing WHICH rows a card shows and wrong for reading them: a
+  # card of steps is worked through top to bottom.
   describe "the order the boxes come out in" do
     before {
       %w[Cook Cool Chop Grate Assemble].each_with_index { |name, i|

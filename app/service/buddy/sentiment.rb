@@ -220,24 +220,17 @@ module Buddy
     # Both sides. `readable` is inbound-only because it answers "what is there
     # left to look at", and what the PERSON said is the larger half of what
     # this is trying to measure.
-    # A turn nobody started ends with a line saying so.
+    # Appended to the transcript of a turn nobody started.
     #
-    # Prod, 18 Sep: an ATS auto-reply - "Machinify says your application was
-    # received and will be reviewed" - put the STERN face on the pet, and so
-    # did the ones before it. The window that turn was read from held eight
-    # lines and not one of them was his: seven earlier notifications, two of
-    # them rejections, and the new sentence. Rocco: "he's often using the
-    # focused/angry face for those which feels inappropriate."
+    # `transcript_for` drops hidden rows, so a self-initiated turn reaches the
+    # reading as companion lines with no person in them — and the PROMPT tells
+    # it to weight "the last thing they said", which on such a turn does not
+    # exist. Without this the model falls back on the whole stretch, which for
+    # a run of notifications reads as a long bad day rather than one small
+    # piece of news.
     #
-    # The seed is `hidden`, so it is filtered out above and the reading cannot
-    # see what the turn was FOR. Without this line the prompt's own instruction
-    # - weight the end, the last thing they said is the moment - has nothing to
-    # land on, and the model falls back on the stretch, which on a jobhunt
-    # afternoon is a wall of other people's bad news being counted again.
-    #
-    # Said as a sentence rather than passed as a flag because the whole reading
-    # is one small model call over plain text, and this is a fact about the
-    # transcript it is being asked to read.
+    # A sentence rather than a flag because the reading is a model call over
+    # plain text; this is a fact about the transcript being read.
     UNPROMPTED_NOTE = "(Nobody said anything. The last line is news the companion " \
                       "delivered on its own, and they may not have seen it yet.)".freeze
 
@@ -290,8 +283,7 @@ module Buddy
     def skipped(reading, acted, landed, unprompted: false)
       skip = acted && landed ? [::Buddy::Faces.default] : []
       skip += ::Buddy::Faces::IRRITATED if theirs_to_carry?(reading)
-      # Nobody said anything, so there is nobody for the pet to be fond of. See
-      # Buddy::Faces::TENDER.
+      # Nobody said anything, so there is nobody for the pet to be fond of.
       skip += ::Buddy::Faces::TENDER if unprompted
       skip
     end

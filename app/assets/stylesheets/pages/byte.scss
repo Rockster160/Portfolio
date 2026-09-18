@@ -5059,10 +5059,7 @@ $moss_expressions: neutral happy grin star loving wink sad crying surprised shoc
   }
 }
 // Names nothing emits any more, kept because a stale stored expression can
-// still ask for one. Both used to land on `happy` for want of anything closer;
-// the six faces added on 18 Sep gave each of them its real one — `celebrating`
-// is what `cheering` IS, and `caring` is the soft eyes-closed smile the
-// full-character redraw had taken away from `encouraging`.
+// still ask for one.
 $byte_expr_aliases: ("celebrating": "cheering", "encouraging": "caring");
 @each $mood, $face in $byte_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]

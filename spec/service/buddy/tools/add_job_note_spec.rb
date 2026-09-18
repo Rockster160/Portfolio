@@ -124,11 +124,8 @@ RSpec.describe "add_job_note tool" do
       expect(item.name).to eq("Send availability: ApartmentIQ")
     end
   end
-  # Buddy::JobMailOffer files every arriving mail on its row the moment it is
-  # classified, as a plain `note` - that is what makes the record a guarantee
-  # rather than something contingent on a call being made and a card tapped.
-  # This card is the READING of it, so it revises that row instead of filing the
-  # same mail a second time in different words.
+  # Buddy::JobMailOffer files arriving mail on its row as a plain `note`, so
+  # this card is the READING of a row that already exists rather than a new one.
   describe "a mail this row already holds" do
     let(:email) {
       user.emails.create!(
@@ -183,8 +180,8 @@ RSpec.describe "add_job_note tool" do
       }.to change { job.notes.count }.by(1)
     end
 
-    # The applied-before-its-receipt fix hangs off the note becoming a receipt,
-    # and that moment is now an UPDATE rather than a create.
+    # JobNote#settle_receipt_after_applied hangs off the note becoming a
+    # receipt, which for a filed mail is an UPDATE rather than a create.
     it "still pulls an applied beat back behind the receipt on a retag" do
       applied = job.notes.create!(tag: :applied, occurred_at: email.timestamp + 5.minutes)
 

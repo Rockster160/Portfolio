@@ -154,10 +154,9 @@ Buddy::Tools.register(
     # the calendar invite and the confirmation email arrive as separate mail,
     # five seconds apart, and each one is its own turn so no merge_key can see
     # the other. Left alone it books the appointment on the agenda TWICE.
-    # The mail's OWN row is not a second announcement of itself. Every arriving
-    # mail is filed on its row by Buddy::JobMailOffer before this card is even
-    # raised, and this call is the reading of that same row - so without the
-    # exclusion, tagging one `scheduled` reads as a clash with itself.
+    # `filed` is excluded because it IS this mail: Buddy::JobMailOffer files an
+    # arriving mail on its row before this card is raised, so without the
+    # exclusion the duplicate checks below read that row as a clash with itself.
     filed = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
     twin  = job.notes.where(tag: :scheduled, follow_up_at: at).where.not(id: filed&.id)
     if tag.to_s == "scheduled" && twin.exists?
@@ -245,21 +244,13 @@ Buddy::Tools.register(
     email = ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?
     was   = job.status
 
-    # One email is one beat, so a mail already on this row is REVISED rather
-    # than filed twice.
+    # One email is one beat: a mail already filed on this row is REVISED, not
+    # filed twice. Buddy::JobMailOffer writes arriving mail onto its row as a
+    # plain `note`, and this card is the reading of that same row.
     #
-    # Buddy::JobMailOffer writes every arriving mail onto its row the moment it
-    # is classified - as a plain `note`, because nothing in Ruby can tell a
-    # receipt from a rejection. That is what makes the record a guarantee
-    # instead of something contingent on a call being made and a card being
-    # tapped. The reading is what this card is for, and without this it would
-    # land as a SECOND row saying the same thing in different words.
-    #
-    # Keyed on `job_triage[:job_note_id]`, the same stamp this sets below, and
-    # only when that note is on the very application being written to - a mail
-    # filed against one row must never be dragged onto another by an
-    # `email_id`. Told about out loud with no email, or a mail nothing has filed
-    # yet, still creates.
+    # Scoped to `job.notes` on purpose — an `email_id` must never drag a note
+    # filed against one application onto another. A mail nothing has filed, or
+    # a beat mentioned out loud with no email at all, still creates.
     existing = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
     before   = existing&.slice(:tag, :body, :spoke_to, :follow_up_at, :duration_minutes)
 
@@ -289,9 +280,8 @@ Buddy::Tools.register(
     email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
 
     job.reload
-    # Undo has to put back what was there, and for a revision that is the note's
-    # old tag rather than no note at all - unticking must never take the mail
-    # itself off the board.
+    # A revision undoes to the note's previous attributes, not to nothing:
+    # unticking must never take the mail itself off the board.
     summary = existing ? "put that note back as it was on #{job.company}" : "took that note back off #{job.company}"
     reverts = (
       if existing

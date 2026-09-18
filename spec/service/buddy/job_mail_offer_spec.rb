@@ -62,11 +62,8 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).not_to include("different role")
     end
 
-    # Rocco, 18 Sep: "can we enforce that it adds the email as a note to the
-    # company/interview record in one form or another?" Nothing enforced it -
-    # the model had to call, and then the card had to be tapped, and either half
-    # failing lost the beat with no trace. Prod 6551 called nothing; notes 85
-    # and 86 sat unticked for seven hours.
+    # The record must not depend on the model making a call or the person
+    # tapping a card.
     describe "filing the mail on the row" do
       let(:email) {
         user.emails.create!(
@@ -114,9 +111,8 @@ RSpec.describe Buddy::JobMailOffer do
         expect(body).to include("CALL add_job_note")
       end
 
-      # The one case where the ROW itself might be wrong. Filing it anyway would
-      # put the receipt on a sibling application, which is the failure the
-      # question below exists to avoid.
+      # The one case where the resolved row itself might be the wrong one.
+      # Filing anyway would put the receipt on a sibling application.
       it "files nothing when the mail may be about a different role" do
         user.job_applications.create!(company: "iCapital", role: "Backend Engineer")
         verdict[:headline] = "Application confirmation for iCapital"
@@ -130,12 +126,9 @@ RSpec.describe Buddy::JobMailOffer do
       end
     end
 
-    # Prod 6501, Aura Frames, 17 Sep - the third of these, and the first after a
-    # fix aimed squarely at it. Neither the subject ("Thank you for applying to
-    # Aura") nor the headline ("Application confirmation for Aura Frames") names
-    # a role at all, so `role_named_in?` says false the same way it says false
-    # for a mail about a genuinely different job - and the seed then stated that
-    # as fact and ordered a second application off the back of it.
+    # `role_named_in?` returns false for a mail naming no role at all exactly
+    # as it does for one naming a different role, and an ATS confirmation
+    # usually names none.
     describe "when the mail names no role at all" do
       before {
         verdict[:headline] = "Application confirmation for iCapital"

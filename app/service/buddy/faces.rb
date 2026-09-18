@@ -79,10 +79,6 @@ module Buddy
       confused:      "small frown, wide uncertain eyes, a question mark — puzzled, thrown, didn't expect that, can't work out what happened",
       focused:       "hard narrowed eyes, set frown — locked onto something difficult; it reads STERN, so never for a light moment or a small favour",
       playful:       "one-eyed wink and a grin — teasing, cheeky, being a bit of a menace about it",
-      # Six sprites Rocco drew on 18 Sep. `content` was already written for Moss
-      # and had no Byte art until now; these five are new words as well as new
-      # faces. Each one earns its place by being somewhere the old set could not
-      # go — see the note over `cheering` in PROFILES for the hole they fill.
       cheering:      "eyes squeezed shut, wide open grin, BOTH arms thrown up, bursts either side — celebrating, thrilled for them, a win worth making a noise about",
       thumbs_up:     "a wink and a thumbs up — on it, got it, that's sorted; pleased with itself in a way that is about the job rather than the person",
       hugging:       "eyes closed, both arms wrapped around a big heart, hearts drifting up — holding something dear, tender, the quiet end of affection",
@@ -130,16 +126,10 @@ module Buddy
       angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95 },
       annoyed:       { warmth: 0.25, play: 0.30, weight: 0.35, strain: 0.80 },
       cheery:        { warmth: 0.90, play: 0.55, weight: 0.15, strain: 0.05 },
-      # Glad about something that MATTERS, and the reason `happy` could go back
-      # to being a small win.
-      #
-      # This was a genuine hole in the table, not a tuning problem. Every warm
-      # face Byte had sat at weight 0.35 or below, so a reading that was warm,
-      # earnest and high-stakes - an interview getting booked, an application
-      # going out - had nowhere to land but `loving`, and the pet put HEARTS on
-      # an ATS. Stretching `happy` up to reach it worked and cost the light,
-      # low-stakes win, which fell to `neutral_blush`. One face cannot be both;
-      # this is the second face.
+      # The warm end of HIGH weight, which nothing else covers: every other
+      # glad face sits at 0.35 or below, so without this a warm, earnest,
+      # high-stakes reading has nowhere to land but `loving`. Keep them apart —
+      # widening `happy` to reach up here takes it off the small wins it owns.
       cheering:      { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05 },
       confused:      { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45 },
       content:       { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05 },
@@ -147,25 +137,20 @@ module Buddy
       dismayed:      { warmth: 0.25, play: 0.20, weight: 0.50, strain: 0.50 },
       dizzy:         { warmth: 0.40, play: 0.55, weight: 0.40, strain: 0.60 },
       excited:       { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05 },
-      # About the JOB, not the person: pleased with itself for having got
-      # something done. Sits where ACTED_POINT does on purpose (Buddy::Sentiment
-      # blends a turn that DID something toward warm, light and low-stakes), so
-      # a turn that worked has somewhere of its own to go instead of borrowing
-      # the face for being glad for them.
+      # Deliberately close to Buddy::Sentiment::ACTED_POINT, which a turn that
+      # DID something blends toward: pleased about the job rather than about
+      # them, so a successful turn has a face of its own.
       thumbs_up:     { warmth: 0.80, play: 0.55, weight: 0.30, strain: 0.05 },
-      # Waiting on something, not celebrating it. The `strain` is the small
-      # tension in anticipation, and it is what keeps this off an outright win -
-      # at 0.10 it was the nearest face to an application going OUT, which is a
-      # thing to be pleased about rather than a thing to wait for.
+      # Waiting on something, not celebrating it. `strain` carries the tension
+      # in anticipation and is the whole of what separates this from `cheering`;
+      # drop it and this becomes the nearest face to a plain good-news reading.
       eager:         { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20 },
       focused:       { warmth: 0.45, play: 0.05, weight: 0.85, strain: 0.35 },
       frustrated:    { warmth: 0.20, play: 0.15, weight: 0.55, strain: 0.90 },
       grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05 },
       happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05 },
-      # The three TENDER faces, spread along `weight` so each is reachable: a
-      # kind word (0.35), being smitten (0.60), holding something dear (0.80).
-      # All three are affection pointed at a PERSON, which is why all three are
-      # out of reach on a turn nobody started - see TENDER below.
+      # The TENDER three, spread along `weight` — a kind word, being smitten,
+      # holding something dear — so no two share a point and go unreachable.
       caring:        { warmth: 0.85, play: 0.15, weight: 0.35, strain: 0.05 },
       loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05 },
       hugging:       { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05 },
@@ -202,19 +187,13 @@ module Buddy
     # its own offer to cheer them up. See Buddy::Sentiment#skipped.
     IRRITATED = %i[angry annoyed frustrated unamused].freeze
 
-    # Affection, and it needs somebody to feel it toward.
+    # Affection, which needs somebody to feel it toward — so these are skipped
+    # on a turn nobody started (Buddy::Sentiment#skipped).
     #
-    # Skipped on a turn NOBODY STARTED - see Buddy::Sentiment#skipped. A
-    # notification is news arriving on its own, and the nearest-face lookup has
-    # no way to tell what a warm, weighty moment is warm ABOUT: "an interview
-    # got booked" and "Chelsea left a note in my bag" land within a hundredth
-    # of each other on four axes that measure how a moment FEELS and never what
-    # it concerns. Held apart by the one thing that is actually known about
-    # them - one of them was a message from a person, and the other was a robot
-    # writing to say a form arrived.
-    #
-    # Prod 18 Sep: the pet put HEARTS on an application going out. Rocco asked
-    # for encouraging, and hearts at an ATS is not that.
+    # The four axes measure how a moment FEELS and never what it is about, so a
+    # warm weighty reading about a person and one about a company land within a
+    # hundredth of each other. Whether anyone spoke is the only thing that
+    # separates them, and without this a notification reaches these faces.
     TENDER = %i[loving hugging caring].freeze
 
     AXES = %i[warmth play weight strain].freeze

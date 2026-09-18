@@ -405,9 +405,7 @@ RSpec.describe Buddy::GPT::Turn do
         expect(reply.state).to eq("delivered")
       end
 
-      # ...and then the whole seed goes round once more, a minute later, from a
-      # clean build. Prod 6551: both attempts inside the turn wrote the sentence
-      # and neither called anything, and the beat was simply lost.
+      # ...and then the whole seed goes round once more from a clean build.
       describe "when both attempts inside the turn wrote only words" do
         let(:copy) { convo.byte_messages.where(direction: :outbound).order(:id).last }
 
@@ -425,8 +423,7 @@ RSpec.describe Buddy::GPT::Turn do
           expect(copy.metadata["retry_of"]).to be_present
         end
 
-        # The words are already on screen and were fine. A retry that says them
-        # over is a duplicate the person has to read twice to place.
+        # The first attempt's words are already in the thread and were fine.
         it "tells the copy to make the call rather than say it again" do
           expect(copy.body).to start_with(described_class::SEED_CALL_RETRY)
           expect(copy.body).to end_with("Job mail arrived.")

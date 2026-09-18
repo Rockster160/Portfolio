@@ -14,13 +14,11 @@ class BuddySentimentWorker
   # anyway, so a late run is a no-op rather than a wrong face.
   sidekiq_options queue: :default, retry: 0
 
-  # Positional, because Sidekiq serialises the argument list to JSON and
-  # keywords are the wrong shape here.
+  # Positional, because Sidekiq serialises the argument list to JSON.
   #
-  # `unprompted` carries a default where the other three don't, and it is the
-  # deploy that needs it: jobs enqueued by the previous build are sitting in
-  # the queue with three arguments, and the reading they were queued for is a
-  # conversation somebody was having - which is what `false` says.
+  # `unprompted` has a default and the others don't: jobs enqueued before it
+  # existed are still in the queue with three arguments, and `false` is what
+  # they mean.
   # rubocop:disable Style/OptionalBooleanParameter -- Sidekiq args are positional
   def perform(conversation_id, acted, landed, unprompted=false)
     conversation = ByteConversation.find_by(id: conversation_id)
