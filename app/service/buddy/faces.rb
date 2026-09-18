@@ -65,7 +65,7 @@ module Buddy
     HINTS = {
       # shared
       neutral:       "calm little smile, unbothered — your resting default for flat, nothing-happening moments",
-      happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, lightening the mood, a small win",
+      happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, glad for them; the face for a WIN, big or small",
       sad:           "downcast eyes and a frown — deflated, tender, sitting with something heavy",
       crying:        "teary eyes, quivering frown — moved, upset, right there with them in a hard moment",
       surprised:     "wide round eyes, open mouth — startled, caught off guard, 'oh!'",
@@ -130,7 +130,13 @@ module Buddy
       focused:       { warmth: 0.45, play: 0.05, weight: 0.85, strain: 0.35 },
       frustrated:    { warmth: 0.20, play: 0.15, weight: 0.55, strain: 0.90 },
       grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05 },
-      happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05 },
+      # Glad FOR them, and the only face that is. `play` came down from 0.45 and
+      # `weight` up from 0.20 on 18 Sep: pinned to "a small win" it could not
+      # answer good news that MATTERS, and every warm, earnest, weighty reading
+      # fell through to `loving` instead - an interview getting booked put
+      # HEARTS on the pet. What separates it from `neutral_blush` is still the
+      # two it is higher on: brightly glad rather than quietly touched.
+      happy:         { warmth: 0.85, play: 0.30, weight: 0.45, strain: 0.05 },
       loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05 },
       # Pleased AND a bit clever, and — the part that matters — LIGHT. It is
       # reachable again precisely because `weight` can now keep it away from a
@@ -164,6 +170,21 @@ module Buddy
     # nearest Byte face was `annoyed`, and the pet wore a furrowed brow through
     # its own offer to cheer them up. See Buddy::Sentiment#skipped.
     IRRITATED = %i[angry annoyed frustrated unamused].freeze
+
+    # Affection, and it needs somebody to feel it toward.
+    #
+    # Skipped on a turn NOBODY STARTED - see Buddy::Sentiment#skipped. A
+    # notification is news arriving on its own, and the nearest-face lookup has
+    # no way to tell what a warm, weighty moment is warm ABOUT: "an interview
+    # got booked" and "Chelsea left a note in my bag" land within a hundredth
+    # of each other on four axes that measure how a moment FEELS and never what
+    # it concerns. Held apart by the one thing that is actually known about
+    # them - one of them was a message from a person, and the other was a robot
+    # writing to say a form arrived.
+    #
+    # Prod 18 Sep: the pet put HEARTS on an application going out. Rocco asked
+    # for encouraging, and hearts at an ATS is not that.
+    TENDER = %i[loving].freeze
 
     AXES = %i[warmth play weight strain].freeze
 

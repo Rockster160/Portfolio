@@ -124,4 +124,73 @@ RSpec.describe "add_job_note tool" do
       expect(item.name).to eq("Send availability: ApartmentIQ")
     end
   end
+  # Buddy::JobMailOffer files every arriving mail on its row the moment it is
+  # classified, as a plain `note` - that is what makes the record a guarantee
+  # rather than something contingent on a call being made and a card tapped.
+  # This card is the READING of it, so it revises that row instead of filing the
+  # same mail a second time in different words.
+  describe "a mail this row already holds" do
+    let(:email) {
+      user.emails.create!(
+        direction: :inbound,
+        mail_id:   "m-9",
+        subject:   "Thanks for applying",
+        blurb:     "Thanks!",
+        timestamp: 1.hour.ago.change(usec: 0),
+      )
+    }
+    let!(:filed) {
+      note = job.notes.create!(body: "Thanks!", tag: :note, occurred_at: email.timestamp)
+      email.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
+      note
+    }
+
+    it "revises it rather than filing a second one" do
+      expect {
+        execute(tag: :acknowledged, email_id: email.id, note: "Thanks!")
+      }.not_to(change { job.notes.count })
+
+      expect(filed.reload.tag).to eq("acknowledged")
+    end
+
+    # Unticking must put the tag back, never take the mail off the board.
+    it "undoes to the tag it had, not to nothing" do
+      result = execute(tag: :rejected, email_id: email.id, note: "No thanks.")
+      revert = result[:reverts].first
+
+      expect(revert[:op]).to eq("updated")
+      expect(revert[:id]).to eq(filed.id)
+      expect(revert[:before]["tag"]).to eq("note")
+    end
+
+    # A mail filed against one row must never be dragged onto another by an id.
+    it "leaves another application's filed mail alone" do
+      other = user.job_applications.create!(company: "Elsewhere")
+      email.update!(job_triage: email.job_triage.merge(job_note_id: other.notes.create!(
+        body: "Different row.", tag: :note, occurred_at: email.timestamp,
+      ).id))
+
+      expect {
+        execute(tag: :acknowledged, email_id: email.id, note: "Thanks!")
+      }.to change { job.notes.count }.by(1)
+    end
+
+    it "still creates when nothing has filed the mail yet" do
+      email.update!(job_triage: {})
+
+      expect {
+        execute(tag: :acknowledged, email_id: email.id, note: "Thanks!")
+      }.to change { job.notes.count }.by(1)
+    end
+
+    # The applied-before-its-receipt fix hangs off the note becoming a receipt,
+    # and that moment is now an UPDATE rather than a create.
+    it "still pulls an applied beat back behind the receipt on a retag" do
+      applied = job.notes.create!(tag: :applied, occurred_at: email.timestamp + 5.minutes)
+
+      execute(tag: :acknowledged, email_id: email.id, note: "Thanks!")
+
+      expect(applied.reload.occurred_at).to be < email.timestamp
+    end
+  end
 end

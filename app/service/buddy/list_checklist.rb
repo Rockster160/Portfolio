@@ -47,7 +47,22 @@ module Buddy
       items = list.list_items.to_a
       return 0 if conversation.nil? || items.empty?
 
-      shown   = items.first(MAX_ROWS)
+      # Cap against the LIST's order, then read back in the other direction.
+      #
+      # `list_items` is `-> { ordered }`, which is `sort_order DESC NULLS LAST`
+      # - newest first, which is right for the app's list view and for deciding
+      # WHICH ten rows a card shows: the batch just added is the one being
+      # looked at. It is wrong for reading them, because a list of steps is a
+      # SEQUENCE and a card puts them in front of somebody to work through.
+      #
+      # Prod, 17 Sep. Eve dictated nine freezer-prep steps across five messages
+      # - bacon and sausages cooked first, cheese grated last - and they were
+      # written in that order. The card came back opening on "Assemble
+      # breakfast bowls" and closing on "Cook bacon and sausages", so she asked
+      # for it to be flipped: "I'd like to start with cooking the bacon and
+      # sausage." It was already that way round on the list. She was reading
+      # the card.
+      shown   = items.first(MAX_ROWS).reverse
       body    = [text, overflow_note(items.length)].compact_blank.join("\n\n")
       buttons = shown.each_with_index.map { |item, i| button_for(list, item, i + 1) }
       action  = ByteAction.new(

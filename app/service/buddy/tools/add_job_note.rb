@@ -154,7 +154,13 @@ Buddy::Tools.register(
     # the calendar invite and the confirmation email arrive as separate mail,
     # five seconds apart, and each one is its own turn so no merge_key can see
     # the other. Left alone it books the appointment on the agenda TWICE.
-    if tag.to_s == "scheduled" && job.notes.exists?(tag: :scheduled, follow_up_at: at)
+    # The mail's OWN row is not a second announcement of itself. Every arriving
+    # mail is filed on its row by Buddy::JobMailOffer before this card is even
+    # raised, and this call is the reading of that same row - so without the
+    # exclusion, tagging one `scheduled` reads as a clash with itself.
+    filed = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
+    twin  = job.notes.where(tag: :scheduled, follow_up_at: at).where.not(id: filed&.id)
+    if tag.to_s == "scheduled" && twin.exists?
       raise "#{job.company} is already booked for then - log the words as a plain note instead"
     end
 
@@ -175,7 +181,7 @@ Buddy::Tools.register(
     # the row's role is named in what arrived, this is that job and the note
     # belongs. Only a headline naming something else is refused, and refused
     # loudly enough to say what to do instead.
-    if tag.to_s == "acknowledged" && job.notes.exists?(tag: :acknowledged)
+    if tag.to_s == "acknowledged" && job.notes.where(tag: :acknowledged).where.not(id: filed&.id).exists?
       said = [payload[:summary], payload[:note]].compact.join(" ")
       unless Buddy::JobHunt.role_named_in?(job, said)
         raise "#{job.company} already has an acknowledgement, and this one is not for " \
@@ -239,7 +245,26 @@ Buddy::Tools.register(
     email = ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?
     was   = job.status
 
-    note = job.notes.create!(
+    # One email is one beat, so a mail already on this row is REVISED rather
+    # than filed twice.
+    #
+    # Buddy::JobMailOffer writes every arriving mail onto its row the moment it
+    # is classified - as a plain `note`, because nothing in Ruby can tell a
+    # receipt from a rejection. That is what makes the record a guarantee
+    # instead of something contingent on a call being made and a card being
+    # tapped. The reading is what this card is for, and without this it would
+    # land as a SECOND row saying the same thing in different words.
+    #
+    # Keyed on `job_triage[:job_note_id]`, the same stamp this sets below, and
+    # only when that note is on the very application being written to - a mail
+    # filed against one row must never be dragged onto another by an
+    # `email_id`. Told about out loud with no email, or a mail nothing has filed
+    # yet, still creates.
+    existing = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
+    before   = existing&.slice(:tag, :body, :spoke_to, :follow_up_at, :duration_minutes)
+
+    note = (existing || job.notes.new)
+    note.assign_attributes(
       body:             payload[:note].presence,
       tag:              payload[:tag],
       # The mail's own clock, so the timeline reads in the order things
@@ -255,6 +280,7 @@ Buddy::Tools.register(
       follow_up_at:     payload[:follow_up_at],
       duration_minutes: payload[:duration_minutes],
     )
+    note.save!
     job.touch_activity!
 
     # Stamped back onto the email so the context section can say this one is
@@ -263,8 +289,17 @@ Buddy::Tools.register(
     email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
 
     job.reload
-    summary = "took that note back off #{job.company}"
-    reverts = [{ op: "created", model: "JobNote", id: note.id, summary: summary }]
+    # Undo has to put back what was there, and for a revision that is the note's
+    # old tag rather than no note at all - unticking must never take the mail
+    # itself off the board.
+    summary = existing ? "put that note back as it was on #{job.company}" : "took that note back off #{job.company}"
+    reverts = (
+      if existing
+        [{ op: "updated", model: "JobNote", id: note.id, before: before.stringify_keys, summary: summary }]
+      else
+        [{ op: "created", model: "JobNote", id: note.id, summary: summary }]
+      end
+    )
     # A settling tag moved the application as well as adding a row, and
     # JobNote#settle_application bails on destroy - so without this second
     # descriptor an undo removes the note and leaves the job marked rejected.

@@ -23,6 +23,41 @@ RSpec.describe Buddy::ListChecklist do
 
   before { allow(WebPushNotifications).to receive(:send_to_byte) }
 
+  # Prod, 17 Sep. Eve dictated nine freezer-prep steps across five messages -
+  # bacon and sausages cooked first, cheese grated last - they were written onto
+  # the list in that order, and the card came back exactly inverted. She read it
+  # and asked for it to be flipped; it was already the right way round on the
+  # list.
+  #
+  # `list_items` is `-> { ordered }` = `sort_order DESC NULLS LAST`, which is
+  # right for the app's list view and for choosing WHICH rows a card shows. A
+  # card is something worked through, so it reads the other way.
+  describe "the order the boxes come out in" do
+    before {
+      %w[Cook Cool Chop Grate Assemble].each_with_index { |name, i|
+        create(:list_item, list: list, name: name, sort_order: i + 1)
+      }
+    }
+
+    it "reads in list order, first step first" do
+      post!
+
+      expect(action.buttons.pluck("label")).to eq(%w[Cook Cool Chop Grate Assemble])
+    end
+
+    # The cap still bites against the list's own order, so a long list shows the
+    # rows just added rather than the bottom of the pile.
+    it "still caps against the newest end of the list" do
+      6.times { |i| create(:list_item, list: list, name: "Extra #{i + 1}", sort_order: 20 + i) }
+
+      labels = post! && action.buttons.pluck("label")
+
+      expect(labels.last).to eq("Extra 6")
+      expect(labels).not_to include("Cook")
+      expect(labels.length).to eq(described_class::MAX_ROWS)
+    end
+  end
+
   # Rocco: "It should cap at probably 10 or so." A card is read at a glance and
   # tapped; thirty boxes is a page, and it pushes whatever was said above it out
   # of sight for rows nobody is going to tick.

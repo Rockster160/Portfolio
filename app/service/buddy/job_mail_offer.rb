@@ -86,12 +86,60 @@ module Buddy
         )
       end
 
+      # The beat goes on the board HERE, before a model has seen any of it.
+      #
+      # Rocco, 18 Sep: "can we enforce that it adds the email as a note to the
+      # company/interview record in one form or another?" It was not enforced by
+      # anything. The turn had to call `add_job_note`, and then the card it put
+      # up had to be TAPPED, and either half failing lost the beat silently -
+      # prod 6551 (Machinify) called nothing at all, and notes 85 and 86 sat
+      # unticked for seven hours reading as though nothing had been recorded.
+      #
+      # Everything the row needs is already known in Ruby at this point: which
+      # application (resolved above, not guessed by a model), the mail's own
+      # words, its clock, its sender and a link back to it. The one thing that
+      # genuinely needs reading is the TAG, and that is what the card is for -
+      # `add_job_note` now revises this note rather than adding a second.
+      #
+      # Deliberately `note`, the untagged default, which settles nothing: an
+      # untapped card must never leave an application marked rejected off a
+      # guess. And only when the role is not in question, because that is the
+      # one case where the row itself might be wrong (see `seed`).
+      pre_logged = log_arrival!(job, email, body, occurred_at) if same_role?(job, verdict, metadata)
+
       CompanionDelivery.deliver_prompt(
         user:         user,
         conversation: conversation,
-        seed:         seed(verdict, job, metadata, occurred_at, email, body, outgoing),
+        seed:         seed(verdict, job, metadata, occurred_at, email, body, outgoing, pre_logged),
         metadata:     prompt_metadata(metadata, job, verdict, outgoing),
       )
+    end
+
+    # Writes the mail onto the row and hands back the note, or nil if there was
+    # nothing to write with or one is already there.
+    #
+    # Idempotent on the EMAIL: `job_triage[:job_note_id]` is the same stamp
+    # `add_job_note` sets, so a mail that has already been filed - by an earlier
+    # run, by hand, by a tap - is left exactly as it is.
+    def log_arrival!(job, email, body, occurred_at)
+      return nil if email.nil? || body.blank?
+      return nil if email.job_triage[:job_note_id].present?
+
+      note = job.notes.create!(
+        body:        body,
+        tag:         :note,
+        occurred_at: email.timestamp || occurred_at || Time.current,
+        source:      "Email",
+        url:         Rails.application.routes.url_helpers.email_url(id: email.id),
+      )
+      email.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
+      job.touch_activity!
+      note
+    rescue StandardError => e
+      # The seed is worth more than this is. A row that would not save is worth
+      # knowing about and is not worth losing the whole turn over.
+      Rails.logger.warn("[Buddy::JobMailOffer] could not log the arrival: #{e.class}: #{e.message}")
+      nil
     end
 
     # A seed is INSTRUCTIONS, not a message. `hidden: true` with the
@@ -145,6 +193,17 @@ module Buddy
       )
     end
 
+    # Is this mail about THAT row's job, as far as anything here can tell?
+    #
+    # A blank role on the row cannot disagree with anything. Otherwise it is
+    # `role_named_in?`, whose false means "the words do not name this role" -
+    # which covers a mail about a different job AND a mail naming no job at
+    # all. Both are "cannot tell" and both are asked about rather than assumed;
+    # see `seed`.
+    def same_role?(job, verdict, metadata)
+      job.role.blank? || JobHunt.role_named_in?(job, mail_said(verdict, metadata))
+    end
+
     # The words the mail offers for telling one role from another.
     def mail_said(verdict, metadata)
       [verdict[:headline], metadata[:subject]].compact_blank.join(" ")
@@ -154,7 +213,7 @@ module Buddy
     # on it so the turn costs no lookups — see Buddy::BriefingFacts for why a
     # self-initiated turn that has to go and fetch things is the one that
     # wanders off the subject.
-    def seed(verdict, job, metadata, occurred_at, email, body=nil, outgoing=false)
+    def seed(verdict, job, metadata, occurred_at, email, body=nil, outgoing=false, pre_logged=nil)
       # Whether the ROLE matches is a separate question from whether the company
       # does, and the opening line used to answer both at once.
       #
@@ -169,7 +228,7 @@ module Buddy
       # resolved with. Prod 6395, Aledade: a rejection's headline names no role
       # ("moving forward with other candidates"), the subject named it in full,
       # and the seed called the very job it was about a different role.
-      same_role = job.role.blank? || JobHunt.role_named_in?(job, mail_said(verdict, metadata))
+      same_role = same_role?(job, verdict, metadata)
       [
         (
           if outgoing && same_role
@@ -177,10 +236,29 @@ module Buddy
           elsif same_role
             "Job mail just arrived, and it belongs to an application already on their board."
           else
+            # NOT "a different role", however much it reads like one here.
+            #
+            # `JobHunt.role_named_in?` answers "does this text name that row's
+            # role", and its own comment says a non-match is "'don't know'
+            # rather than 'no'" - it returns false for a mail that names a
+            # DIFFERENT role and for one that names no role at all, and an ATS
+            # confirmation usually names none. Prod 6501, Aura Frames, 17 Sep:
+            # subject "Thank you for applying to Aura", headline "Application
+            # confirmation for Aura Frames", neither carrying a role, and the
+            # seed called the very application it was the receipt for a
+            # different job. 6487 (Pantheon) that morning and 6395 (Aledade) the
+            # day before are the same sentence.
+            #
+            # So it asks. Widening the match to the subject as well as the
+            # headline was the previous go at this and it changed nothing,
+            # because the failure is not that the words were missed - it is that
+            # "I could not tell" was being stated as "it is a different role"
+            # and then followed by an order.
             "#{outgoing ? "They just SENT this" : "Job mail just arrived"}, and their board " \
-              "has this COMPANY on it - but for a different role than the one below. A " \
-              "different role at a company they have already applied to is a SEPARATE " \
-              "application: open it with `add_job_application`, do not add to the one below."
+              "has this COMPANY on it, for the role below - but nothing in this mail says " \
+              "whether it is about that job or another one there. If it is the same job, " \
+              "add the note to the row below. If the mail names a different role, that is a " \
+              "SEPARATE application: open it with `add_job_application`."
           end
         ),
         "",
@@ -189,7 +267,7 @@ module Buddy
         "Link: #{job_url(job)}",
         *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
         "",
-        instruction(job, occurred_at, email, body, outgoing),
+        instruction(job, occurred_at, email, body, outgoing, pre_logged),
       ].compact.join("\n")
     end
 
@@ -198,7 +276,7 @@ module Buddy
     # UNCHECKED card on screen that writes nothing until it is tapped. The card
     # IS the question. Asking in prose first produces a sentence they then have
     # to answer, which is a second round trip for something already reviewable.
-    def instruction(job, occurred_at, email, body, outgoing=false)
+    def instruction(job, occurred_at, email, body, outgoing=false, pre_logged=nil)
       [
         (
           if outgoing
@@ -215,12 +293,28 @@ module Buddy
           end
         ),
         "",
-        "Then CALL add_job_note#{log_hint(occurred_at, email)} - do not offer to, do not ask " \
+        "#{pre_logged ? filed_instruction : "Then CALL add_job_note"}" \
+        "#{log_hint(occurred_at, email)} - do not offer to, do not ask " \
         "first. Pick the `tag` that matches what actually happened rather than leaving it " \
         "a plain note; a rejection, an offer or a withdrawal also settles the application, " \
         "which is correct when the mail says so.#{booking_hint}" \
         "#{outgoing_tag_hint(outgoing)}#{note_hint(body)}",
       ].join("\n")
+    end
+
+    # What changes when the mail is already ON the row.
+    #
+    # It is filed as a plain note, which is a record and not a reading - nothing
+    # in Ruby can tell a rejection from a receipt, so nothing in Ruby chose a
+    # tag. Saying so matters twice over: the turn must not report the filing as
+    # its own doing (there is nothing to take credit for, and the tense rules
+    # for an untapped card still apply to the card it is about to raise), and it
+    # must not decide the beat is handled and skip the call, which would leave
+    # every mail on the board wearing the same colourless tag forever.
+    def filed_instruction
+      "The mail is already filed on that row as a plain note, so nothing is lost either " \
+        "way and there is no news in that - do not mention it. What is missing is what KIND " \
+        "of beat it was, and that needs reading. CALL add_job_note to set it"
     end
 
     # Mail from somewhere with no row yet. Same shape as the matched seed, and

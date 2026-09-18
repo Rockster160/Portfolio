@@ -85,14 +85,23 @@ module Buddy
       Each is 0.0 to 1.0, one decimal place:
 
         warmth - how good this moment is FOR THEM. 0 is bleak, 0.5 is flat or
-                 ordinary, 1 is delighted. News they are receiving counts:
-                 being turned down for something they wanted is low warmth even
-                 when they are calm about it.
+                 ordinary, 1 is delighted. News they are receiving counts, and
+                 it counts BOTH WAYS. Being turned down for something they
+                 wanted is low warmth even when they are calm about it. A step
+                 forward in something they are working toward - an application
+                 going out, a company writing back, a time getting booked, a
+                 thing they were waiting on arriving - is genuinely GOOD news,
+                 high warmth, even when it is routine and even when they have
+                 not said anything about it.
         play   - how light it is. 0 is dead earnest, 0.5 is ordinary chat, 1 is
                  mucking about, jokes, silliness.
-        weight - how much is at stake for them. 0 is trivial admin (a list, a
-                 timer, a light on). 1 is something that genuinely matters -
-                 work, health, money, family, a loss.
+        weight - how much is at stake in THIS moment. 0 is trivial admin (a
+                 list, a timer, a light on). 1 is something that genuinely
+                 matters - a loss, a result they were waiting on, a decision
+                 that costs them something. Judge the EVENT, not the subject
+                 it belongs to: a routine confirmation that something was
+                 received is a small moment however much the thing it concerns
+                 matters to them.
         strain - friction in THIS exchange, between them and the companion.
                  0 is none. 1 is fed up with you, snapping, repeating
                  themselves because they weren't heard.
@@ -101,6 +110,13 @@ module Buddy
       is the moment being described. Judge the PERSON's state, not the
       companion's - the companion's lines are context for what they were
       responding to.
+
+      Sometimes nobody said anything and the last line is the companion
+      delivering news on its own. The transcript says so at the end when that
+      is what happened. Then THAT line is the moment: read the news in it.
+      strain is 0, because there has been no exchange to have friction in. And
+      anything further up has already been delivered and reacted to - it is
+      background, not the thing being described again.
 
       warmth and weight are independent. A calm sentence about a hard thing is
       low warmth and high weight. An excited sentence about nothing much is high
@@ -118,8 +134,8 @@ module Buddy
 
     # nil means "couldn't read it" and is a real answer - the caller falls back
     # rather than inventing a mood off a failed call.
-    def read(conversation)
-      transcript = transcript_for(conversation)
+    def read(conversation, unprompted: false)
+      transcript = transcript_for(conversation, unprompted: unprompted)
       return nil if transcript.blank?
 
       result = ::Buddy::GPT::Client.new(model: MODEL).stream(
@@ -149,23 +165,23 @@ module Buddy
     # thing a change is visible against.
     STICKY_MARGIN = 0.02
 
-    def later(conversation, acted: false, landed: true)
+    def later(conversation, acted: false, landed: true, unprompted: false)
       return unless readable?(conversation)
 
-      ::BuddySentimentWorker.perform_async(conversation.id, acted, landed)
+      ::BuddySentimentWorker.perform_async(conversation.id, acted, landed, unprompted)
     end
 
     # Runs in the worker, on every buddy turn.
-    def settle!(conversation, acted: false, landed: true)
+    def settle!(conversation, acted: false, landed: true, unprompted: false)
       return unless readable?(conversation)
 
-      reading = read(conversation)
+      reading = read(conversation, unprompted: unprompted)
       # Nothing came back. The pet keeps the face it has, which is the honest
       # answer: the last reading is the most recent thing anybody knew.
       return if reading.nil?
 
       reading = blended(reading, landed) if acted
-      skip    = skipped(reading, acted, landed)
+      skip    = skipped(reading, acted, landed, unprompted: unprompted)
       face    = ::Buddy::Faces.nearest(conversation.buddy_theme, reading, skip: skip)
       return if face.nil? || !worth_changing?(conversation, face, reading, skip)
 
@@ -204,7 +220,28 @@ module Buddy
     # Both sides. `readable` is inbound-only because it answers "what is there
     # left to look at", and what the PERSON said is the larger half of what
     # this is trying to measure.
-    def transcript_for(conversation)
+    # A turn nobody started ends with a line saying so.
+    #
+    # Prod, 18 Sep: an ATS auto-reply - "Machinify says your application was
+    # received and will be reviewed" - put the STERN face on the pet, and so
+    # did the ones before it. The window that turn was read from held eight
+    # lines and not one of them was his: seven earlier notifications, two of
+    # them rejections, and the new sentence. Rocco: "he's often using the
+    # focused/angry face for those which feels inappropriate."
+    #
+    # The seed is `hidden`, so it is filtered out above and the reading cannot
+    # see what the turn was FOR. Without this line the prompt's own instruction
+    # - weight the end, the last thing they said is the moment - has nothing to
+    # land on, and the model falls back on the stretch, which on a jobhunt
+    # afternoon is a wall of other people's bad news being counted again.
+    #
+    # Said as a sentence rather than passed as a flag because the whole reading
+    # is one small model call over plain text, and this is a fact about the
+    # transcript it is being asked to read.
+    UNPROMPTED_NOTE = "(Nobody said anything. The last line is news the companion " \
+                      "delivered on its own, and they may not have seen it yet.)".freeze
+
+    def transcript_for(conversation, unprompted: false)
       rows = conversation.byte_messages.where(
         state: ::ByteMessage::SETTLED_STATES,
       ).where(
@@ -214,7 +251,11 @@ module Buddy
         "byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'",
       ).recent.limit(WINDOW).to_a.reverse
 
-      rows.filter_map { |message| line_for(message) }.join("\n")
+      lines = rows.filter_map { |message| line_for(message) }
+      return "" if lines.empty?
+
+      lines.push(UNPROMPTED_NOTE) if unprompted
+      lines.join("\n")
     end
 
     def line_for(message)
@@ -246,9 +287,13 @@ module Buddy
     # and it is a rule about the pet rather than a reading of the room, so it
     # belongs here and not in the numbers. Nothing is skipped on a turn that
     # only talked: a flat conversation is allowed to look flat.
-    def skipped(reading, acted, landed)
+    def skipped(reading, acted, landed, unprompted: false)
       skip = acted && landed ? [::Buddy::Faces.default] : []
-      skip + (theirs_to_carry?(reading) ? ::Buddy::Faces::IRRITATED : [])
+      skip += ::Buddy::Faces::IRRITATED if theirs_to_carry?(reading)
+      # Nobody said anything, so there is nobody for the pet to be fond of. See
+      # Buddy::Faces::TENDER.
+      skip += ::Buddy::Faces::TENDER if unprompted
+      skip
     end
 
     # Low warmth and real weight: whatever is wrong, it is wrong FOR THEM and it

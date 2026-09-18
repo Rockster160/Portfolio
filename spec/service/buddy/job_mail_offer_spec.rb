@@ -62,6 +62,99 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).not_to include("different role")
     end
 
+    # Rocco, 18 Sep: "can we enforce that it adds the email as a note to the
+    # company/interview record in one form or another?" Nothing enforced it -
+    # the model had to call, and then the card had to be tapped, and either half
+    # failing lost the beat with no trace. Prod 6551 called nothing; notes 85
+    # and 86 sat unticked for seven hours.
+    describe "filing the mail on the row" do
+      let(:email) {
+        user.emails.create!(
+          direction: :inbound,
+          mail_id:   "m-1",
+          subject:   metadata[:subject],
+          blurb:     "Thanks for applying to iCapital.",
+          timestamp: arrived,
+        )
+      }
+
+      it "writes the mail onto the row before any model sees it" do
+        call(email: email, body: "Thanks for applying to iCapital.")
+
+        note = job.notes.last
+        expect(note.body).to eq("Thanks for applying to iCapital.")
+        expect(note.occurred_at).to eq(arrived)
+        expect(note.source).to eq("Email")
+        expect(note.url).to be_present
+      end
+
+      # Nothing in Ruby can tell a receipt from a rejection, so nothing in Ruby
+      # picks a tag. `note` settles no application.
+      it "leaves it untagged and the application alone" do
+        call(email: email, body: "We're moving forward with other candidates.")
+
+        expect(job.notes.last.tag).to eq("note")
+        expect(job.reload.status).to eq("active")
+      end
+
+      it "stamps the email so the same mail is never filed twice" do
+        call(email: email, body: "Thanks for applying to iCapital.")
+        first = email.reload.job_triage[:job_note_id]
+
+        expect { call(email: email, body: "Thanks for applying to iCapital.") }
+          .not_to(change { job.notes.count })
+        expect(email.reload.job_triage[:job_note_id]).to eq(first)
+      end
+
+      it "still asks for the tag, and keeps the filing out of the reply" do
+        body = call(email: email, body: "Thanks for applying to iCapital.").body
+
+        expect(body).to include("already filed on that row as a plain note")
+        expect(body).to include("do not mention it")
+        expect(body).to include("CALL add_job_note")
+      end
+
+      # The one case where the ROW itself might be wrong. Filing it anyway would
+      # put the receipt on a sibling application, which is the failure the
+      # question below exists to avoid.
+      it "files nothing when the mail may be about a different role" do
+        user.job_applications.create!(company: "iCapital", role: "Backend Engineer")
+        verdict[:headline] = "Application confirmation for iCapital"
+        metadata[:subject] = "Thank you for applying"
+
+        expect { call(email: email, body: "Thanks!") }.not_to change(JobNote, :count)
+      end
+
+      it "files nothing when there is no mail to file" do
+        expect { call }.not_to change(JobNote, :count)
+      end
+    end
+
+    # Prod 6501, Aura Frames, 17 Sep - the third of these, and the first after a
+    # fix aimed squarely at it. Neither the subject ("Thank you for applying to
+    # Aura") nor the headline ("Application confirmation for Aura Frames") names
+    # a role at all, so `role_named_in?` says false the same way it says false
+    # for a mail about a genuinely different job - and the seed then stated that
+    # as fact and ordered a second application off the back of it.
+    describe "when the mail names no role at all" do
+      before {
+        verdict[:headline] = "Application confirmation for iCapital"
+        metadata[:subject] = "Thank you for applying to iCapital"
+      }
+
+      it "does not call it a different role" do
+        expect(call.body).not_to include("different role than")
+      end
+
+      it "says it cannot tell, and leaves both doors open" do
+        body = call.body
+
+        expect(body).to include("nothing in this mail says")
+        expect(body).to include("add the note to the row below")
+        expect(body).to include("add_job_application")
+      end
+    end
+
     # Prod 6502: the seed that marked a chore for Chelsea instead of logging the
     # beat it was sent for.
     it "names the only two tools the turn is for" do

@@ -99,7 +99,13 @@ class JobNote < ApplicationRecord
 
   before_validation :normalize_fields
   before_validation :settle_applied_before_receipt, on: :create
-  after_create :settle_receipt_after_applied, if: :acknowledged?
+  # `after_save`, not `after_create`: a mail is now filed on its row as a plain
+  # note the moment it arrives and RETAGGED when the card is tapped, so the
+  # first moment this row is known to be a receipt is usually an update. It was
+  # create-only and the retag would have walked straight past it. Gated on the
+  # two columns it reads so an unrelated touch costs nothing.
+  after_save :settle_receipt_after_applied,
+    if: -> { acknowledged? && (saved_change_to_tag? || saved_change_to_occurred_at?) }
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —

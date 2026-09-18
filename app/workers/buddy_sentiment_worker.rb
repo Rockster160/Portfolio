@@ -14,13 +14,19 @@ class BuddySentimentWorker
   # anyway, so a late run is a no-op rather than a wrong face.
   sidekiq_options queue: :default, retry: 0
 
-  # Positional and all three required, because Sidekiq serialises the argument
-  # list to JSON - keywords are the wrong shape here, and a default would only
-  # ever be reached by a job written by hand.
-  def perform(conversation_id, acted, landed)
+  # Positional, because Sidekiq serialises the argument list to JSON and
+  # keywords are the wrong shape here.
+  #
+  # `unprompted` carries a default where the other three don't, and it is the
+  # deploy that needs it: jobs enqueued by the previous build are sitting in
+  # the queue with three arguments, and the reading they were queued for is a
+  # conversation somebody was having - which is what `false` says.
+  # rubocop:disable Style/OptionalBooleanParameter -- Sidekiq args are positional
+  def perform(conversation_id, acted, landed, unprompted=false)
     conversation = ByteConversation.find_by(id: conversation_id)
     return if conversation.nil?
 
-    Buddy::Sentiment.settle!(conversation, acted: acted, landed: landed)
+    Buddy::Sentiment.settle!(conversation, acted: acted, landed: landed, unprompted: unprompted)
   end
+  # rubocop:enable Style/OptionalBooleanParameter
 end

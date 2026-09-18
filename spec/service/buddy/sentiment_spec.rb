@@ -57,8 +57,19 @@ RSpec.describe Buddy::Sentiment do
       expect(Buddy::Faces.nearest(:byte, { warmth: 0.7, play: 0.5, weight: 0.35, strain: 0.05 })).to eq(:nerd)
     end
 
-    it "reaches a plain pleased face for an ordinary win" do
-      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.4, weight: 0.15, strain: 0.05 })).to eq(:happy)
+    # `happy` moved on 18 Sep so that something could be glad about news that
+    # MATTERS - see "good news about the job hunt" below. The cost is this
+    # reading: bright, light and low-stakes now lands a step over on
+    # `neutral_blush`, which is a warm face and a fair answer to a small win.
+    # Byte has one glad face and two jobs for it; nothing sits in both places,
+    # and the one this had to win is the one that was reading STERN.
+    it "reaches a warm face for an ordinary light win" do
+      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.4, weight: 0.15, strain: 0.05 }))
+        .to be_in(%i[happy neutral_blush])
+    end
+
+    it "reaches the plain pleased face for a win that matters" do
+      expect(Buddy::Faces.nearest(:byte, { warmth: 0.85, play: 0.3, weight: 0.45, strain: 0.05 })).to eq(:happy)
     end
 
     it "reaches a silly one when they're mucking about" do
@@ -155,6 +166,112 @@ RSpec.describe Buddy::Sentiment do
     it "is nothing at all on an empty thread" do
       expect(described_class.read(convo)).to be_nil
     end
+
+    # Prod 18 Sep. Rocco: "he's often using the focused/angry face for those
+    # which feels inappropriate." An ATS auto-reply is a small moment, but the
+    # window it was read from held eight companion lines and none of his - two
+    # of them rejections - so the reading was of a long hard day.
+    describe "a turn nobody started" do
+      before {
+        say("Epicor said they're not moving forward.", kind: "buddy")
+        say("Machinify says your application was received.", kind: "buddy")
+      }
+
+      it "says so, so the last line is readable as the moment" do
+        text = described_class.transcript_for(convo, unprompted: true)
+
+        expect(text.lines.last.strip).to eq(described_class::UNPROMPTED_NOTE)
+        expect(text).to include("Companion: Machinify says your application was received.")
+      end
+
+      it "says nothing of the sort about an ordinary exchange" do
+        text = described_class.transcript_for(convo)
+
+        expect(text).not_to include(described_class::UNPROMPTED_NOTE)
+      end
+
+      # The note is about the transcript, so an empty one must not consist of
+      # only the note - `read` bails on a blank transcript and that gate has to
+      # keep working.
+      it "does not stand alone on an empty thread" do
+        convo.byte_messages.destroy_all
+
+        expect(described_class.transcript_for(convo.reload, unprompted: true)).to eq("")
+      end
+    end
+  end
+
+  # Rocco, 18 Sep: "receiving an email back from a potential job, as long as
+  # it's not a rejection, seems like it should be a GOOD thing. As is marking a
+  # job as applied. It feels like Byte should be encouraging there."
+  #
+  # Measured against the real model on the prod windows: an acknowledgement, an
+  # application going out and an interview being booked all land on `happy`
+  # now, and a rejection still lands on `sad`.
+  describe "good news about the job hunt" do
+    def face_for(reading, unprompted: true)
+      skip = described_class.send(:skipped, reading, false, true, unprompted: unprompted)
+      Buddy::Faces.nearest("byte", reading, skip: skip)
+    end
+
+    # Warm, dead earnest, and genuinely at stake. Before this it was the one
+    # shape with nowhere to go: `happy` was pinned to "a small win" at weight
+    # 0.20, so the nearest face was `loving` — hearts, at an ATS.
+    it "is glad about something that matters" do
+      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:happy)
+    end
+
+    it "is still sad about a rejection" do
+      expect(face_for({ warmth: 0.1, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:sad)
+    end
+
+    # The original complaint. `focused` reads STERN and was what every job-shaped
+    # reading fell to.
+    it "is not stern about a routine confirmation" do
+      expect(face_for({ warmth: 0.7, play: 0.0, weight: 0.4, strain: 0.0 })).not_to eq(:focused)
+    end
+  end
+
+  # Affection needs somebody to feel it toward, and the four axes cannot say
+  # what a warm weighty moment is warm ABOUT — an interview being booked and a
+  # note left in his bag land within a hundredth of each other. What IS known is
+  # whether anybody spoke.
+  describe "the tender faces" do
+    let(:warm) { { warmth: 0.9, play: 0.0, weight: 0.6, strain: 0.0 } }
+
+    it "are out of reach on a turn nobody started" do
+      expect(described_class.send(:skipped, warm, false, true, unprompted: true)).to include(:loving)
+      expect(Buddy::Faces.nearest("byte", warm, skip: [:loving])).to eq(:happy)
+    end
+
+    it "are exactly where they were in a conversation" do
+      skip = described_class.send(:skipped, warm, false, true, unprompted: false)
+
+      expect(skip).not_to include(:loving)
+      expect(Buddy::Faces.nearest("byte", warm, skip: skip)).to eq(:loving)
+    end
+  end
+
+  describe "what a reading is told about the size of a moment" do
+    # The other half of the same afternoon: `weight` read the SUBJECT rather
+    # than the event, and its own wording asked for that - "1 is something that
+    # genuinely matters - work, health, money, family". Anything about the job
+    # hunt was therefore maximal, which put `focused` (weight 0.85) on a robot
+    # saying it had received a form.
+    it "asks about the event rather than the subject it belongs to" do
+      expect(described_class::PROMPT).to include("Judge the EVENT, not the subject")
+      expect(described_class::PROMPT).to include("a routine confirmation")
+    end
+
+    it "says news counts in both directions, not only the bad kind" do
+      expect(described_class::PROMPT).to include("it counts BOTH WAYS")
+      expect(described_class::PROMPT).to include("is genuinely GOOD news")
+    end
+
+    it "tells it what an unprompted last line means" do
+      expect(described_class::PROMPT).to include("delivering news on its own")
+      expect(described_class::PROMPT).to include("strain is 0")
+    end
   end
 
   describe "settling the face" do
@@ -226,7 +343,7 @@ RSpec.describe Buddy::Sentiment do
     # killed for.
     it "leaves a face that is already about as close as the new one" do
       convo.update_column(:buddy_expression, "happy")
-      answering('{"warmth":0.8,"play":0.35,"weight":0.22,"strain":0.06}')
+      answering('{"warmth":0.83,"play":0.28,"weight":0.47,"strain":0.06}')
 
       described_class.settle!(convo, acted: false, landed: true)
 
@@ -254,7 +371,7 @@ RSpec.describe Buddy::Sentiment do
 
   describe "when it is worth asking at all" do
     it "queues on a buddy thread" do
-      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true)
+      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true, false)
       described_class.later(convo, acted: true, landed: true)
     end
 
@@ -263,7 +380,7 @@ RSpec.describe Buddy::Sentiment do
     it "queues even when a face is already on" do
       convo.update_column(:buddy_expression, "uwu")
 
-      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true)
+      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true, false)
       described_class.later(convo, acted: true, landed: true)
     end
 

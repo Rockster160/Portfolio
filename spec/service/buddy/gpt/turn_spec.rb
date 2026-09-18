@@ -356,6 +356,10 @@ RSpec.describe Buddy::GPT::Turn do
     # claims nothing, so every prose guard here reads it as a good reply. The
     # beat never reached the board.
     describe "a seed whose call never came" do
+      # Sidekiq runs inline here, so without this the queued retry re-enters the
+      # turn on the spot with a fake client that has no rounds left.
+      before { allow(BuddyDeliverWorker).to receive(:perform_in) }
+
       def job_seed(rounds, call: "add_job_note")
         message = convo.byte_messages.create!(
           user: user, direction: :outbound, state: :sent, body: "Job mail arrived.",
@@ -389,8 +393,8 @@ RSpec.describe Buddy::GPT::Turn do
         expect(reply.body).to eq("Logged it.")
       end
 
-      # The second attempt is the last one. Words are better than an error
-      # bubble when the model simply will not reach for it.
+      # The second attempt is the last one INSIDE the turn. Words are better
+      # than an error bubble when the model simply will not reach for it.
       it "keeps the second attempt's words even when it still calls nothing" do
         job_seed([
           { text: "CentralReach confirmed they got your application." },
@@ -399,6 +403,87 @@ RSpec.describe Buddy::GPT::Turn do
 
         expect(reply.body).to eq("CentralReach acknowledged your application.")
         expect(reply.state).to eq("delivered")
+      end
+
+      # ...and then the whole seed goes round once more, a minute later, from a
+      # clean build. Prod 6551: both attempts inside the turn wrote the sentence
+      # and neither called anything, and the beat was simply lost.
+      describe "when both attempts inside the turn wrote only words" do
+        let(:copy) { convo.byte_messages.where(direction: :outbound).order(:id).last }
+
+        before {
+          job_seed([
+            { text: "CentralReach confirmed they got your application." },
+            { text: "CentralReach acknowledged your application." },
+          ])
+        }
+
+        it "queues the seed again" do
+          expect(BuddyDeliverWorker).to have_received(:perform_in).with(
+            described_class::SEED_RETRY_DELAY, copy.id
+          )
+          expect(copy.metadata["retry_of"]).to be_present
+        end
+
+        # The words are already on screen and were fine. A retry that says them
+        # over is a duplicate the person has to read twice to place.
+        it "tells the copy to make the call rather than say it again" do
+          expect(copy.body).to start_with(described_class::SEED_CALL_RETRY)
+          expect(copy.body).to end_with("Job mail arrived.")
+        end
+
+        it "keeps the copy out of the thread" do
+          expect(copy.metadata["hidden"]).to be(true)
+          expect(copy.metadata["seed_call"]).to eq("add_job_note")
+        end
+      end
+
+      # Once. The copy carries `retry_of`, and a copy never makes another.
+      it "does not send a retry round again" do
+        message = convo.byte_messages.create!(
+          user:      user,
+          direction: :outbound,
+          state:     :sent,
+          body:      "Job mail arrived.",
+          metadata:  {
+            "kind"       => "buddy_trigger",
+            "hidden"     => true,
+            "seed_label" => "the email from CentralReach",
+            "seed_call"  => "add_job_note",
+            "retry_of"   => 1,
+          },
+        )
+        described_class.run!(message, client: FakeBuddyClient.new([
+          { text: "CentralReach confirmed they got your application." },
+          { text: "CentralReach acknowledged your application." },
+        ]))
+
+        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
+      end
+
+      # A card IS the call landing, so there is nothing to go back for.
+      it "does not queue a retry when a card went up" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(
+          action:   instance_double(ByteAction, buttons: [{ "status" => "pending" }]),
+          auto_ran: false,
+        )
+
+        job_seed([
+          {
+            text:       "CentralReach got it.",
+            tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }],
+          },
+          { text: "CentralReach got it." },
+        ])
+
+        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
+      end
+
+      # A check-in or a briefing names no call, so an empty one is not a loss.
+      it "does not queue a retry for a seed that named no call" do
+        job_seed([{ text: "Morning! Nothing on today." }], call: nil)
+
+        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
       end
 
       # A card IS the call landing. Going again would propose the same beat
@@ -505,20 +590,35 @@ RSpec.describe Buddy::GPT::Turn do
       end
 
       it "says it didn't land when the reply reports a miss" do
-        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: false)
+        expect(Buddy::Sentiment).to receive(:later).with(
+          convo,
+          acted:      true,
+          landed:     false,
+          unprompted: false,
+        )
 
         acts_then_says("Hmm. I couldn't get a frame from the backyard camera, and it didn't say why.")
       end
 
       it "says it landed when the reply says it worked" do
-        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
+        expect(Buddy::Sentiment).to receive(:later).with(
+          convo,
+          acted:      true,
+          landed:     true,
+          unprompted: false,
+        )
 
         acts_then_says("Kitchen lights are on now.")
       end
 
       # The one cheerful phrase that would otherwise read as a setback.
       it "does not read looking forward to something as a miss" do
-        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
+        expect(Buddy::Sentiment).to receive(:later).with(
+          convo,
+          acted:      true,
+          landed:     true,
+          unprompted: false,
+        )
 
         acts_then_says("Timer's set. I can't wait to hear how it goes!")
       end
@@ -528,7 +628,12 @@ RSpec.describe Buddy::GPT::Turn do
       it "asks whatever face the pet is already wearing" do
         convo.update_columns(buddy_expression: "loving")
 
-        expect(Buddy::Sentiment).to receive(:later).with(convo, acted: true, landed: true)
+        expect(Buddy::Sentiment).to receive(:later).with(
+          convo,
+          acted:      true,
+          landed:     true,
+          unprompted: false,
+        )
 
         acts_then_says("Kitchen lights are on now.")
       end
