@@ -374,6 +374,49 @@ RSpec.describe JobNote do
     end
   end
 
+  # "Olivia can no longer meet on the 24th. Please submit further availability."
+  # The mail lands as its own note; the booking it cancels lives on the earlier
+  # `scheduled` one, and nothing looked at that row - so the interview stayed on
+  # the calendar for a day nobody was meeting.
+  describe "an availability request arriving on a booked application" do
+    let!(:booking) { job.notes.create!(tag: :scheduled, follow_up_at: 5.days.from_now) }
+
+    it "takes the interview off the calendar" do
+      item_id = booking.reload.agenda_item_id
+      expect(item_id).to be_present
+
+      job.notes.create!(tag: :availability, body: "Please send more times")
+
+      expect(booking.reload.follow_up_at).to be_nil
+      expect(booking.agenda_item_id).to be_nil
+      expect(AgendaItem.find_by(id: item_id)).to be_nil
+    end
+
+    it "keeps the note itself, because the interview was still booked" do
+      job.notes.create!(tag: :availability, body: "Please send more times")
+
+      expect(booking.reload.tag).to eq("scheduled")
+    end
+
+    it "does the same when an arriving note is retagged into one" do
+      note = job.notes.create!(tag: :note, body: "Olivia can no longer meet on the 24th")
+
+      note.update!(tag: :availability)
+
+      expect(booking.reload.follow_up_at).to be_nil
+    end
+
+    # An interview that already happened is history. A request for times weeks
+    # later is about the next round.
+    it "leaves a booking that has already been and gone" do
+      past = job.notes.create!(tag: :scheduled, follow_up_at: 5.days.ago)
+
+      job.notes.create!(tag: :availability, body: "Please send more times")
+
+      expect(past.reload.follow_up_at).to be_present
+    end
+  end
+
   describe "follow-ups" do
     # Every account gets one on save (User#ensure_default_agenda); the
     # follow-up lands on the oldest writable one unless a preference says

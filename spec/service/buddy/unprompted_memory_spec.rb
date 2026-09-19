@@ -56,6 +56,32 @@ RSpec.describe Buddy::UnpromptedMemory do
     expect(described_class.trim(body, [], facts)).to eq(body)
   end
 
+  # The always-loaded block ships on a briefing where `situation_block` does
+  # not, so a preference-kind note about somebody's life is the one that can
+  # actually reach one - and it takes two of its words rather than one, because
+  # a preference's vocabulary is the briefing's vocabulary.
+  describe "a preference memory" do
+    let(:preference) { Struct.new(:content) { def kind_preference? = true } }
+
+    def trim_pref(body, content)
+      described_class.trim(body, [preference.new(content)], facts)
+    end
+
+    it "drops a sentence that names several of its words" do
+      body = "Morning! Keeping in mind your period is about 6 days away, so a softer touch this week."
+      note = "Be mindful about how hormones might affect me over the next little while, with my period about 6 days away."
+
+      expect(trim_pref(body, note)).to eq("Morning!")
+    end
+
+    it "leaves a sentence that shares one ordinary word with it" do
+      body = "Your shopping list has four things on it."
+      note = "My list means the Ongoing TO DO list, not the old empty duplicate."
+
+      expect(trim_pref(body, note)).to eq(body)
+    end
+  end
+
   # The words in a carried memory are the most private thing this system holds.
   # They are read to decide a drop and never written anywhere.
   it "keeps the memory's words out of the log" do

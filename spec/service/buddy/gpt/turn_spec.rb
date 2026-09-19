@@ -2822,8 +2822,8 @@ RSpec.describe Buddy::GPT::Turn do
       client = briefing([{ text: "Morning! Hair trim at 10:00 AM, and rain later in the week." }, { text: full }])
 
       expect(client.calls.length).to eq(2)
-      expect(nudges(client)).to include("Last Day at OCS later this week")
-      expect(nudges(client)).to include("Jake 30th Surprise Bday later this week")
+      expect(nudges(client)).to include("Last Day at OCS on Friday")
+      expect(nudges(client)).to include("Jake 30th Surprise Bday on Sunday")
       expect(reply.body).to eq(full)
     end
 
@@ -2836,8 +2836,38 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(2)
-      expect(nudges(client)).to include("Jake 30th Surprise Bday later this week")
-      expect(nudges(client)).not_to include("Last Day at OCS later this week")
+      expect(nudges(client)).to include("Jake 30th Surprise Bday on Sunday")
+      expect(nudges(client)).not_to include("Last Day at OCS on Friday")
+    end
+
+    # The same appointment on two days. Naming today's used to satisfy the week
+    # one as well - same title, same time - and the week quietly lost a row.
+    describe "an item on today with a twin later in the week" do
+      let(:facts) {
+        {
+          "name"  => "Chelsea",
+          "today" => [{ "time" => "9:00 AM", "title" => "IT" }],
+          "week"  => [{ "day" => "next Saturday", "time" => "9:00 AM", "title" => "IT" }],
+        }
+      }
+
+      it "still asks for the one later in the week" do
+        client = briefing([
+          { text: "Morning! IT at 9:00 AM today." },
+          { text: "Morning! IT at 9:00 AM today, and again next Saturday." },
+        ])
+
+        expect(client.calls.length).to eq(2)
+        expect(nudges(client)).to include("IT on next Saturday")
+      end
+
+      it "is satisfied once the day is named" do
+        client = briefing([
+          { text: "Morning! IT at 9:00 AM today, and the same again next Saturday." },
+        ])
+
+        expect(client.calls.length).to eq(1)
+      end
     end
 
     it "goes out first try when the week is all there" do

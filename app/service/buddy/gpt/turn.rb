@@ -762,7 +762,7 @@ module Buddy
           ("the rain odds on Alpine's week" if week_odds_dropped?(body)),
           ("the rain hours on Alpine's week" if week_hours_dropped?(body)),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
-          *unnamed_week(body).map { |i| "#{i[:title]} later this week" },
+          *unnamed_week(body).map { |i| "#{i[:title]} on #{i[:day].presence || "later this week"}" },
           ("the jobs on today" if jobs_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
         ].compact_blank
@@ -1842,10 +1842,20 @@ module Buddy
       # `served_context` - whatever the model happened to fetch - and a briefing
       # turn is offered no lookup at all now, so there is nothing to have
       # fetched. Buddy::TodayBriefing.deliver! stamps it.
-      # The same rows `Buddy::Personality#situation_block` puts in every prompt.
+      # Every memory the prompt actually carried, which on a briefing is NOT the
+      # `carried` set: Buddy::Personality#for drops `situation_block` for a
+      # briefing and ships `memories_block` regardless, so the block being
+      # subtracted has to be the block being sent. Feeding this the `carried`
+      # rows alone left the guard blind to the one kind of memory that reaches a
+      # briefing at all, and a preference-kind note about somebody's cycle came
+      # back out of one unprompted.
+      #
       # Read once per turn and only on a briefing, where it is used.
-      def carried_memories
-        @carried_memories ||= (BuddyMemory.where(user: @user).carried.to_a rescue [])
+      def prompt_memories
+        @prompt_memories ||= (
+          scope = BuddyMemory.where(user: @user)
+          (scope.carried.to_a + scope.always_loaded.to_a).uniq rescue []
+        )
       end
 
       def briefing_facts
@@ -1889,7 +1899,30 @@ module Buddy
       # `upcoming_notable`, so everything in it is meant to be said - see the
       # week's own no-second-cap rule.
       def unnamed_week(body)
-        Array(briefing_facts[:week]).select { |i| i.is_a?(::Hash) && !named_in?(body, i) }
+        Array(briefing_facts[:week]).select { |i| i.is_a?(::Hash) && !week_named_in?(body, i) }
+      end
+
+      # A week item is its DAY and its title together, where an item on today is
+      # only its title.
+      #
+      # The same appointment can sit on two days - a 9am IT visit this morning
+      # and another next Saturday - and `named_in?` matches on either the title
+      # or the time, so naming this morning's satisfied the check for both and
+      # the Saturday one went out of the week silently.
+      #
+      # A label with no weekday in it reads as said. `day_label` writes
+      # "tomorrow", "Saturday", "next Saturday" or "Sat 9/26", and the last of
+      # those has no word a briefing is obliged to use - demanding one would
+      # send every draft round again over wording it was never given.
+      def week_named_in?(body, item)
+        named_in?(body, item) && day_said?(body, item[:day])
+      end
+
+      DAY_WORDS = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
+
+      def day_said?(body, day)
+        word = day.to_s[DAY_WORDS]
+        word.blank? || body.match?(/\b#{Regexp.escape(word)}/i)
       end
 
       # Jobs are the opposite case and get counted as a whole: they ARE meant to
@@ -2674,7 +2707,7 @@ module Buddy
         # where they did not raise it - because on a briefing there is no they.
         # See Buddy::UnpromptedMemory.
         body = repaired(:unprompted_memory, body) { |b|
-          today_briefing? ? Buddy::UnpromptedMemory.trim(b, carried_memories, briefing_facts) : b
+          today_briefing? ? Buddy::UnpromptedMemory.trim(b, prompt_memories, briefing_facts) : b
         }
         # The weather repairs run today's figures first, then today's hours,
         # then the week at home, then the week in the canyon, so what gets

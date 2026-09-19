@@ -160,6 +160,36 @@ RSpec.describe Buddy::BriefingFacts do
     end
   end
 
+  # ON THEIR MIND had never once rendered: the section read `idea[:summary]`
+  # and `idea[:body]`, and Buddy::Context#stashed_ideas writes neither. Every
+  # line came back nil, the section was dropped as empty, and the rule asking
+  # the briefing to float one of them shipped anyway - so the model was told to
+  # reach for a list it was never handed.
+  describe "what is on their mind" do
+    let(:stash) {
+      [
+        { id: 1, category: "house", idea: "Repaint the shed", waiting: "9 days" },
+        { id: 2, category: "work",  idea: "Write up the talk" },
+      ]
+    }
+
+    it "renders the idea, with how long it has been sitting" do
+      lines = described_class.stash_lines({ stash: stash })
+
+      expect(lines).to eq(["Repaint the shed (9 days)", "Write up the talk"])
+    end
+
+    it "puts the section in the block" do
+      block = described_class.block({ today: [], due: [], jobs: [], weather: nil, week: [], stash: stash })
+
+      expect(block).to include("ON THEIR MIND", "- Repaint the shed (9 days)")
+    end
+
+    it "is empty when nothing is stashed" do
+      expect(described_class.stash_lines({ stash: [] })).to eq([])
+    end
+  end
+
   describe "how a line reads" do
     # Rocco: "'You have yoga tomorrow' is absolutely incorrect. 'Chelsea has
     # yoga tomorrow' is accurate and acceptable."

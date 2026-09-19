@@ -101,6 +101,13 @@ module Buddy
       return rows.first if rows.one?
 
       narrowed = rows.select { |job| role_named_in?(job, said) }
+      # Still several: take the ones the text names IN FULL. SAME_ROLE is half
+      # the role's words, which two rows at the same company clear on seniority
+      # and discipline alone - "Lead Principal Platform Software Engineer" and
+      # "Sr Lead Software Engineer - Agentic AI" share lead/software/engineer,
+      # so a headline naming the first of them scores both and resolves
+      # neither. A row the text names whole beats one it names in part.
+      narrowed = narrowed.select { |job| role_named_in?(job, said, ratio: WHOLE_ROLE) } if narrowed.many?
       narrowed.one? ? narrowed.first : nil
     end
 

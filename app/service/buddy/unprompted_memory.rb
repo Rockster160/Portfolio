@@ -36,16 +36,21 @@ module Buddy
       text = body.to_s
       return text if text.blank?
 
-      private_words = distinctive(memories, facts)
-      return text if private_words.empty?
+      rows = Array(memories)
+      # Two pools, two bars. See `names?` for why a preference needs to be
+      # named twice over and everything else only once.
+      light, heavy = rows.partition { |memory| memory.respond_to?(:kind_preference?) && memory.kind_preference? }
+      private_words = distinctive(heavy, facts)
+      loose_words   = distinctive(light, facts)
+      return text if private_words.empty? && loose_words.empty?
 
       kept = []
       # Same split and the same separator handling as Buddy::DayClaim and
       # `without_empty_chore_note`: the break that led INTO a dropped sentence
       # leaves with it.
       text.split(/((?<=[.!?])\s+)/).each { |part|
-        if names_one?(part, private_words)
-          Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a carried memory")
+        if names?(part, private_words, at_least: 1) || names?(part, loose_words, at_least: 2)
+          Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a prompt-resident memory")
           kept.pop
         else
           kept << part
@@ -72,13 +77,22 @@ module Buddy
       }.uniq.reject { |word| said.include?(word) || word.length < 4 }
     end
 
-    # One distinctive word is enough, and that is deliberate. A briefing has no
-    # reason to reach for a word that is in a carried memory and in nothing it
-    # was handed; the cost of dropping a sentence is a shorter briefing, and the
-    # cost of keeping one is the thing the bolded rule is about.
-    def names_one?(part, private_words)
+    # One distinctive word is enough for a carried memory, and that is
+    # deliberate. A briefing has no reason to reach for a word that is in one of
+    # those and in nothing it was handed; the cost of dropping a sentence is a
+    # shorter briefing, and the cost of keeping one is the thing the bolded rule
+    # is about.
+    #
+    # A PREFERENCE takes two, because its vocabulary is the briefing's
+    # vocabulary. A note reading "my list means the Ongoing TO DO list"
+    # contributes `list`, and at a one-word bar that convicts every sentence
+    # about a list - while the preferences worth guarding are whole phrases and
+    # land several of their words in one sentence.
+    def names?(part, private_words, at_least: 1)
+      return false if private_words.empty?
+
       words = Buddy::Flourish.significant(part).to_set
-      private_words.any? { |word| words.include?(word) }
+      private_words.count { |word| words.include?(word) } >= at_least
     end
   end
 end

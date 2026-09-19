@@ -558,7 +558,7 @@ module Buddy
       rules << :alpine    if facts[:alpine].present? && facts[:alpine].values.flatten.compact_blank.any?
       rules << :week      if facts[:week].any?
       rules << :waiting   if Array(facts[:waiting]).any?
-      rules << :stash     if facts[:stash].any?
+      rules << :stash     if Buddy::BriefingFacts.stash_lines(facts).any?
       rules.map { |key| "- #{WRITING_RULES.fetch(key)}" }.join("\n")
     end
 

@@ -175,7 +175,7 @@ module Buddy
         ["ALPINE",          Array(facts.dig(:alpine, :today)) + Array(facts.dig(:alpine, :week))],
         ["LATER THIS WEEK", facts[:week].map { |i| week_line(i) }],
         ["WAITING ON THEM", Array(facts[:waiting]).map { |r| "#{r[:from]} asked: #{r[:question]}" }],
-        ["ON THEIR MIND",   facts[:stash].map { |idea| idea[:summary].presence || idea[:body] }],
+        ["ON THEIR MIND",   stash_lines(facts)],
       ].reject { |_title, lines| lines.compact_blank.empty? }
       return "" if sections.empty?
 
@@ -233,6 +233,25 @@ module Buddy
       bits << item[:where] if item[:where].present?
       bits << "cancelled" if item[:cancelled]
       bits.compact_blank.join(" · ")
+    end
+
+    # The key is `idea` - Buddy::Context#stashed_ideas builds it, and neither
+    # `summary` nor `body` is on those hashes. Shared with
+    # Buddy::TodayBriefing#applicable_rules so the section and the rule asking
+    # for it are decided by one expression: a rule that ships without its
+    # section sends the model looking for a list it was never handed, and it
+    # reaches into the memories instead.
+    #
+    # How long it has been sitting rides on the line for the same reason it
+    # does in the always-loaded block - a stashed thought read out with no age
+    # on it comes back as if it were said this morning.
+    def stash_lines(facts)
+      Array(facts[:stash]).map { |idea|
+        text = idea[:idea].to_s
+        next if text.blank?
+
+        [text, ("(#{idea[:waiting]})" if idea[:waiting].present?)].compact.join(" ")
+      }.compact
     end
   end
 end

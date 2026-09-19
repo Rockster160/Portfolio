@@ -105,6 +105,11 @@ class JobNote < ApplicationRecord
   # Gated on the two columns the callback reads so an unrelated touch is free.
   after_save :settle_receipt_after_applied,
     if: -> { acknowledged? && (saved_change_to_tag? || saved_change_to_occurred_at?) }
+  # Asking for times again withdraws the booking those times were for.
+  # `after_commit`, because retiring the other note's calendar row runs that
+  # note's own callbacks.
+  after_commit :withdraw_booking, on: [:create, :update],
+    if: -> { availability? && previous_changes.key?("tag") }
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —
@@ -242,6 +247,30 @@ class JobNote < ApplicationRecord
     return if late.update_all(occurred_at: receipt - 1.second, updated_at: Time.current).zero?
 
     job_application.touch_activity!
+  end
+
+  # A company that asks for availability has cancelled whatever was booked.
+  #
+  # The two notes are different rows: the mail saying "she can no longer meet on
+  # the 24th, send more times" lands as its own `availability` note, while the
+  # booking lives on the earlier `scheduled` one that holds the agenda item. So
+  # retagging the arrival leaves a meeting nobody is going to sitting on the
+  # calendar, and nothing in the path that files the mail ever looks at the
+  # other row.
+  #
+  # Clearing `follow_up_at` is the whole of it: `sync_follow_up` on that note
+  # sees a blank and retires its agenda item. The note itself stays - it is
+  # still the record that an interview was booked - and only the date it is
+  # waiting on goes, which is the thing that stopped being true.
+  #
+  # FUTURE ONLY. An interview that already happened is history, and an
+  # availability request weeks later is about the next round rather than a
+  # withdrawal of that one.
+  def withdraw_booking
+    return if job_application.nil?
+
+    booked = job_application.notes.where(tag: :scheduled).where(follow_up_at: Time.current..)
+    booked.find_each { |note| note.update(follow_up_at: nil) }
   end
 
   # Blank lines off the top and bottom, and nothing else. `strip` was doing this

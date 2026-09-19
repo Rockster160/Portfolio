@@ -347,6 +347,10 @@ module Buddy
         "mail usually says, in the subject or the first line. If it genuinely does not, ask " \
         "them which one rather than picking: a note on the wrong job is permanent." \
         "#{note_hint(body)}",
+        "",
+        "This mail is not on the board yet and nothing else is going to put it there, so " \
+        "the note exists only if that call is made. Reading the role off the mail and " \
+        "filing it is the answer whenever the mail names one.",
       ].compact.join("\n")
     end
 

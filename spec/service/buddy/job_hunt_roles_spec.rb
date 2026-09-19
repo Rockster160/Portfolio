@@ -86,4 +86,30 @@ RSpec.describe Buddy::JobHunt do
       expect(described_class.resolve_by_role(user, "Thank you for your interest in joining our team")).to be_nil
     end
   end
+
+  # Two rows at one company, and SAME_ROLE clears both on seniority and
+  # discipline alone.
+  describe ".resolve_application with several rows at one company" do
+    let!(:meant) { application("Oracle", "Lead Principal Platform Software Engineer") }
+    let!(:other) { application("Oracle", "Sr Lead Software Engineer - Agentic AI Engineer") }
+
+    it "takes the row the text names in full" do
+      said = "Application received for Lead Principal Platform Software Engineer We received your application"
+
+      expect(described_class.resolve_application(user, "Oracle", said: said)).to eq(meant)
+    end
+
+    it "still stands back when the text names both of them whole" do
+      application("Oracle", "Lead Principal Platform Software Engineer II")
+      said = "Lead Principal Platform Software Engineer II"
+
+      expect(described_class.resolve_application(user, "Oracle", said: said)).to be_nil
+    end
+
+    it "still stands back when the text names neither of them whole" do
+      said = "Application received for Lead Software Engineer"
+
+      expect(described_class.resolve_application(user, "Oracle", said: said)).to be_nil
+    end
+  end
 end
