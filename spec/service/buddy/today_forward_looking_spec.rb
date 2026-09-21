@@ -312,7 +312,7 @@ RSpec.describe "Buddy Today forward-looking" do
 
     it "drops the week, the stash, the all-day rule and the travel rule" do
       expect(quiet).not_to include("The week gets at most one line")
-      expect(quiet).not_to include("things on their mind")
+      expect(quiet).not_to include("stashed a while back")
       expect(quiet).not_to include("simply ON today")
       expect(quiet).not_to include("A leave-by is a clock time")
     end

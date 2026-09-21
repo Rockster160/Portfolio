@@ -613,13 +613,16 @@ BUDDY_EDGE_PROBES = [
     note:  "doing it now is the opposite of what was asked",
   },
   {
-    case:  "prod 4081",
+    case:  "prod 4081, 6603",
     say:   "play the Whisper nap sound in 2 minutes",
     tool:  :schedule_function,
-    avoid: %i[call_jil_function],
+    avoid: %i[call_jil_function set_timer],
     needs: :whisper_sound_fn,
-    note:  "the sound played in the room two minutes early - a wait can't hold " \
-           "a tool that runs inside the turn, and the queue behind it was empty",
+    note:  "twice, in both directions. First the sound played in the room two " \
+           "minutes early - a wait can't hold a tool that runs inside the turn. " \
+           "Then only the wait was set, with nothing behind it at all: the reply " \
+           "said the sound was queued, the sound never played, and the countdown " \
+           "rang like a kitchen timer at the hour it should have happened",
   },
   {
     case:  "prod 3562",

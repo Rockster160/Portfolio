@@ -235,6 +235,22 @@ module Buddy
       bits.compact_blank.join(" · ")
     end
 
+    # ONE, because the rule that reads this section asks for one.
+    #
+    # `Buddy::Context#stashed_ideas` caps at 12 for the chat context, where a
+    # list is a list and the model picks off it on demand. A briefing is not
+    # that: the section arrives with "float one of the things on their mind,
+    # light, one at a time" written under it, and three bullets above that the
+    # same prompt says "All of it reaches them". Handed twelve lines, a
+    # companion read out all twelve, in order, as one paragraph - and with no
+    # agenda, no chores and no reminders that day, twelve idle thoughts WERE
+    # the briefing, arriving as a list of assigned tasks.
+    #
+    # There is no wording that satisfies both readings, so the count is settled
+    # here instead, the way `facts[:week]` is narrowed by `notable?` before the
+    # model ever sees it. One line in the section and one line asked for.
+    STASH_FLOAT = 1
+
     # The key is `idea` - Buddy::Context#stashed_ideas builds it, and neither
     # `summary` nor `body` is on those hashes. Shared with
     # Buddy::TodayBriefing#applicable_rules so the section and the rule asking
@@ -245,13 +261,23 @@ module Buddy
     # How long it has been sitting rides on the line for the same reason it
     # does in the always-loaded block - a stashed thought read out with no age
     # on it comes back as if it were said this morning.
+    #
+    # The oldest of them, because `stashed_ideas` hands them over oldest-first
+    # and says why: this list is what keeps a loose end from going quietly
+    # missing, so the one at most risk of that is the one worth floating.
     def stash_lines(facts)
-      Array(facts[:stash]).map { |idea|
-        text = idea[:idea].to_s
-        next if text.blank?
+      stash_floated(facts).map { |idea|
+        [idea[:idea], ("(#{idea[:waiting]})" if idea[:waiting].present?)].compact_blank.join(" ")
+      }
+    end
 
-        [text, ("(#{idea[:waiting]})" if idea[:waiting].present?)].compact.join(" ")
-      }.compact
+    # WHICH of them the briefing was handed, as the rows themselves.
+    #
+    # Buddy::StashClaim needs the thought without its age on it: the bracket
+    # renders as "(11 days)", which puts `day` into the line's vocabulary, and
+    # `day` is a word every briefing ever written contains.
+    def stash_floated(facts)
+      Array(facts[:stash]).select { |idea| idea[:idea].to_s.present? }.first(STASH_FLOAT)
     end
   end
 end

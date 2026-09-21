@@ -539,7 +539,14 @@ module Buddy
       # keeping all five. Same event, same morning, told to one house
       # and not the other.
       week:      "The week's already down to its exceptions, so every one of them reaches them - a few words each, the name and the day.",
-      stash:     "Occasionally, and not most days, float one of the things on their mind. Light, one at a time, easy to wave off.",
+      # "Occasionally" stays and "one at a time" goes. The rarity is a real
+      # instruction - the same thought is picked every morning until it is
+      # settled, so floating it daily is nagging - but the COUNT was a
+      # selection the model was being asked to make from twelve lines while
+      # "All of it reaches them" sat three bullets above. The section is down
+      # to one line now (Buddy::BriefingFacts::STASH_FLOAT), so there is
+      # nothing left to select.
+      stash:     "Occasionally, and not most days, float the thing they stashed a while back and haven't come back to. Lightly, easy to wave off, and in the words it's written in, with how long it's been sitting. A thought from a fortnight ago, renamed and read back without its age, arrives as a job somebody set them this morning.",
     }.freeze
 
     def applicable_rules(facts)

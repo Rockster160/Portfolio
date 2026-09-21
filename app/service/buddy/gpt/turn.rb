@@ -514,6 +514,17 @@ module Buddy
       SILENT_BODY = "This one hasn't actually happened - nothing ran, so there's no receipt for " \
                     "it. I don't want you thinking it's done.".freeze
 
+      # What to say when a `then_continue` wait came back holding nothing.
+      #
+      # Both halves, because both are true and neither on its own is: the
+      # countdown is real and is going to ring, and the thing it was supposed to
+      # release does not exist. SILENT_BODY says nothing ran, which would leave
+      # them unprepared for a timer going off; a plain receipt would leave them
+      # expecting the thing.
+      EMPTY_WAIT_BODY = "The countdown's running, but nothing's queued behind it - so it'll ring " \
+                        "and that's all. The thing itself won't happen on its own. Say the word " \
+                        "and I'll put it on a real schedule instead.".freeze
+
       # What to say when the claim was about the CALL rather than a record.
       # "I did try now" and "the snapshot call came back clean" are not a wrong
       # tense over a real row - there is nothing under them at all - and the
@@ -763,6 +774,7 @@ module Buddy
           ("the rain hours on Alpine's week" if week_hours_dropped?(body)),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
           *unnamed_week(body).map { |i| "#{i[:title]} on #{i[:day].presence || "later this week"}" },
+          *unowned_items(body).map { |i| "whose #{i[:title]} is - it is #{i[:owner]}'s, not theirs" },
           ("the jobs on today" if jobs_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
         ].compact_blank
@@ -774,12 +786,12 @@ module Buddy
       def weather_dropped?(body)
         return false unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
 
-        figures = WeatherService.today_figures(user: @user)
+        figures = seed_figures
         figures.present? && weather_missing?(body, figures)
       end
 
       def week_dropped?(body)
-        outlook = WeatherService.week_outlook(user: @user)
+        outlook = seed_week_outlook
         return false if Buddy::TodayBriefing.week_line(outlook).blank?
 
         days = Buddy::TodayBriefing.flagged_days(outlook)
@@ -1572,7 +1584,7 @@ module Buddy
         return body unless today_briefing?
         return body unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
 
-        figures = WeatherService.today_figures(user: @user)
+        figures = seed_figures
         return body if figures.blank? || !weather_missing?(body, figures)
 
         line = Buddy::TodayBriefing.weather_line(figures)
@@ -1643,11 +1655,36 @@ module Buddy
       # seed. A seed the turn was told is the whole of it, argued with by a
       # later read of the same service, is the repair manufacturing the
       # disagreement it exists to catch.
+      #
+      # Every reader of today's figures comes through here for that reason -
+      # the correction, the fallback that puts a missing high on, and the
+      # dropped-fact check that sends the draft back for one.
       def seed_figures
         seeded = briefing_facts[:weather]
         return seeded if seeded.is_a?(Hash) && (seeded[:high].present? || seeded[:low].present?)
 
         WeatherService.today_figures(user: @user)
+      end
+
+      # The week's outlook the SEED carried, and nothing when it carried none.
+      #
+      # No live fallback, which is the difference from `seed_figures` above. A
+      # forecast that has ticked since the seed was built is not a fact this
+      # turn was given: the briefing said "rain Tuesday and Wednesday" because
+      # that is what it was handed, and a repair reading a fresher outlook
+      # appends "Rain Tue, Wed & Thu, windy Sun" underneath it - one message
+      # saying the week two ways and disagreeing with itself.
+      #
+      # The two reads straddle the hourly cache write by construction: the
+      # briefing fires on the hour and Weather Refresh runs on the hour, so the
+      # seed and a repair nine seconds later are on opposite sides of it most
+      # mornings that the forecast moves at all.
+      #
+      # Blank means the week was calm when the day was gathered, and a repair
+      # may only ever restore something the briefing was handed - see
+      # briefing_alpine_week, which is the same rule reached by the same road.
+      def seed_week_outlook
+        briefing_facts.dig(:weather, :week)
       end
 
       def correct_figure(body, regexp, actual)
@@ -1667,7 +1704,7 @@ module Buddy
       def with_week_weather(body)
         return body unless today_briefing?
 
-        outlook = WeatherService.week_outlook(user: @user)
+        outlook = seed_week_outlook
         days    = Buddy::TodayBriefing.flagged_days(outlook)
         return body if Buddy::TodayBriefing.week_said?(body, days, today: Buddy::Day.now(@user).to_date)
 
@@ -1923,6 +1960,87 @@ module Buddy
       def day_said?(body, day)
         word = day.to_s[DAY_WORDS]
         word.blank? || body.match?(/\b#{Regexp.escape(word)}/i)
+      end
+
+      # Somebody else's appointment, handed to the reader as their own.
+      #
+      # A briefing opened "You've got the 1pm meeting with <partner>, then
+      # <her other thing> at 6pm" off a seed carrying both items as
+      # `mine: false` with her named as the owner. The first is hers with her
+      # demoted to a guest at it; the second drops her altogether. The reader
+      # had nothing of his own that day, so the whole message was another
+      # person's afternoon handed over to plan around.
+      #
+      # The data and the seed were both right - the flag, the owner, the
+      # `:partner` rule, and a line rendered "1pm · <owner>: <title>". Only the
+      # prose was wrong, which is why this is a check rather than a reworded
+      # rule.
+      #
+      # It sits beside `unnamed_agenda` and `unnamed_week`, which ask whether
+      # the item was NAMED. Both of these were.
+      def unowned_items(body)
+        rows = Array(briefing_facts[:today]) + Array(briefing_facts[:week])
+        rows.select { |item|
+          item.is_a?(::Hash) && item[:mine] == false && item[:owner].present? &&
+            named_in?(body, item) && !owned_in?(body, item)
+        }
+      end
+
+      # CLAUSES, not sentences, and that is the whole of it: one sentence
+      # carried both items and named the owner once, in the half belonging to
+      # the other one. A sentence-wide test reads that as two attributions and
+      # it is none.
+      CLAUSE_SPLIT = /(?<=[.!?])\s+|,|;|\bthen\b|\band\b/i
+
+      def owned_in?(body, item)
+        named = body.split(CLAUSE_SPLIT).map(&:strip).compact_blank
+        named = named.select { |clause| clause_names?(clause, item) }
+        # Split across a clause break rather than sitting in one - nothing to
+        # say about it, and the conservative answer is the quiet one.
+        return true if named.empty?
+
+        named.any? { |clause| subject_of?(clause, item[:owner].to_s, body) }
+      end
+
+      # Half the title's words, or the item's own clock time - the same give
+      # `named_in?` takes, and for the same reason: a briefing writes "chai
+      # pickup" for "Pick up chai from LOC".
+      def clause_names?(clause, item)
+        return true if time_said?(clause, item[:time])
+
+        words = Buddy::Flourish.significant(item[:title])
+        return false if words.empty?
+
+        said = Buddy::Flourish.significant(clause).to_set
+        words.count { |word| said.include?(word) } >= (words.length / 2.0)
+      end
+
+      # Named as whose it is, rather than as who else is going.
+      #
+      # "with <owner>" is the one construction that makes them a companion at
+      # the reader's own appointment, which is exactly the misreading. Every
+      # way a briefing has actually said it right - "<owner>'s yoga", "<owner>
+      # has the 9am", "a hair trim for <owner>" - leaves the name standing once
+      # the companion phrase is taken out.
+      def subject_of?(clause, owner, body)
+        return false if owner.blank?
+        return true if carried_over?(clause, owner, body)
+        return false unless clause.match?(/\b#{Regexp.escape(owner)}\b/i)
+
+        clause.gsub(/\bwith\s+#{Regexp.escape(owner)}\b/i, " ").match?(/\b#{Regexp.escape(owner)}\b/i)
+      end
+
+      # "her 6pm thing", once a sentence already said whose it is.
+      #
+      # A second item belonging to the same person gets a pronoun from anybody
+      # telling it naturally, and demanding the name in every clause would send
+      # a correct draft round again. It gives up nothing on the failure this
+      # exists for: the clause that dropped the owner carried no possessive at
+      # all, only "then".
+      POSSESSIVE_RX = /\b(?:her|his|their)\b/i
+
+      def carried_over?(clause, owner, body)
+        clause.match?(POSSESSIVE_RX) && body.match?(/\b#{Regexp.escape(owner)}\b/i)
       end
 
       # Jobs are the opposite case and get counted as a whole: they ARE meant to
@@ -2709,6 +2827,11 @@ module Buddy
         body = repaired(:unprompted_memory, body) { |b|
           today_briefing? ? Buddy::UnpromptedMemory.trim(b, prompt_memories, briefing_facts) : b
         }
+        # Floating one of their stashed thoughts under a name they never gave
+        # it. The guard above cuts a memory the seed withheld; this one cuts a
+        # memory the seed HANDED OVER and the draft renamed. See
+        # Buddy::StashClaim.
+        body = repaired(:stash_claim, body) { |b| today_briefing? ? Buddy::StashClaim.trim(b, briefing_facts) : b }
         # The weather repairs run today's figures first, then today's hours,
         # then the week at home, then the week in the canyon, so what gets
         # appended reads in the order a person would say it. Each one only fills
@@ -3562,6 +3685,18 @@ module Buddy
         pending = pending_rows?(result)
         kind    = unbacked_claim(body) || (:commanded if !pending && commanded_action_unanswered?(body))
 
+        # A wait holding nothing is its own evidence, and it takes precedence
+        # over whatever the phrasing arms made of the words.
+        #
+        # No regex reaches this shape. "Whisper's nap sound is queued for 2
+        # minutes" names no record, claims no completion and promises nothing in
+        # the future tense the arms recognise - it describes a queue, and the
+        # queue is the thing that isn't there. The machinery already knows, so
+        # asking the sentence is the wrong question: every `then_continue` wait
+        # in the history that came back empty was a reply promising a sequence
+        # that did not exist.
+        kind = :empty_wait if result[:empty_wait] && !pending
+
         # The gate FIRST, so the broad arm below only ever sees a turn that
         # touched nothing. Everything under here already assumed that; it was
         # just being asked after the phrasing rather than before it, which meant
@@ -3588,7 +3723,9 @@ module Buddy
         # what the sentence is misreading rather than what backs it: these go
         # out on a turn that HAS read `recent_actions` and then describes a call
         # that is not in them.
-        return if @read_actions && kind != :call
+        # `:empty_wait` joins `:call` in not getting it, and for the same reason:
+        # the wait is THIS turn's, so the action log has nothing to say about it.
+        return if @read_actions && [:call, :empty_wait].exclude?(kind)
 
         Rails.logger.warn(
           "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \
@@ -3609,6 +3746,7 @@ module Buddy
       # for.
       def retraction_body(kind, pending)
         return PENDING_BODY if pending
+        return EMPTY_WAIT_BODY if kind == :empty_wait
         return NO_CALL_BODY if kind == :call
         return UNDONE_BODY if kind == :commanded
 
@@ -3665,9 +3803,21 @@ module Buddy
       # Something genuinely ran: an acting answering tool settled inside the
       # turn, a level-1 tool fired, or a level-2 row came back executed. A
       # "failed" or "partial" row explicitly does NOT count.
+      #
+      # Nor does a WAIT that came back holding nothing. `set_timer` with
+      # `then_continue: true` runs for real - the countdown exists - but its
+      # only job is to hold the rest of the reply back, and one that deferred
+      # nothing deferred nothing. The reply above it says the thing is queued,
+      # no queue exists, and the countdown then rings at them at the hour the
+      # thing was supposed to happen. `auto_ran` alone vouched for that, which
+      # is how "Whisper's nap sound is queued for 2 minutes" stood with no call
+      # behind it and the sound never played.
+      #
+      # Buddy::ProposalBuilder sets `empty_wait` only when nothing else ran, so
+      # a wait alongside real work still vouches for the turn.
       def executed_anything?(result)
         return true if @acted
-        return true if result[:auto_ran]
+        return true if result[:auto_ran] && !result[:empty_wait]
 
         buttons(result).any? { |b| b["status"].to_s == "executed" }
       end

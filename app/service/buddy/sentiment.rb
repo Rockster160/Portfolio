@@ -3,7 +3,7 @@ module Buddy
   #
   # **This is the whole mood system.** The pet's face is chosen here, on every
   # buddy turn, by reading the conversation and taking the nearest face to what
-  # was read (Buddy::Faces::PROFILES). One small model call, off the turn.
+  # was read (Buddy::Faces::INDEX). One small model call, off the turn.
   #
   # Two things used to do this job and both are gone. The model led its reply
   # with a `[[mood:]]` marker that Turn parsed off the front, or called a
@@ -181,7 +181,7 @@ module Buddy
 
       reading = blended(reading, landed) if acted
       skip    = skipped(reading, acted, landed, unprompted: unprompted)
-      face    = ::Buddy::Faces.nearest(conversation.buddy_theme, reading, skip: skip)
+      face    = ::Buddy::Faces.pick(conversation.buddy_theme, reading, skip: skip)
       return if face.nil? || !worth_changing?(conversation, face, reading, skip)
 
       ::Buddy::ExpressionState.set(conversation, face)
@@ -196,11 +196,14 @@ module Buddy
     # A different face, and enough better to be worth the change.
     def worth_changing?(conversation, face, reading, skip)
       current = conversation.buddy_expression.to_s
+      # Which pet, so the margin measures this pet's copy of the face it is
+      # wearing - see Buddy::Faces::INDEX.
+      theme   = conversation.buddy_theme
       return false if current == face.to_s
 
       # Nothing to hold on to: no face, or one with no profile to measure.
       return true if current.blank?
-      return true if ::Buddy::Faces.profile(current).nil?
+      return true if ::Buddy::Faces.profile(current, theme).nil?
       # `skip` is a face the pet must NOT be wearing, so holding on to it is not
       # one of the options and the margin doesn't get a vote. Without this the
       # two rules cancelled: "an action never leaves the pet resting" picked
@@ -209,8 +212,8 @@ module Buddy
       # after every small favour exactly as before.
       return true if skip.map(&:to_s).include?(current)
 
-      here  = ::Buddy::Faces.distance(::Buddy::Faces.profile(current), reading)
-      there = ::Buddy::Faces.distance(::Buddy::Faces.profile(face), reading)
+      here  = ::Buddy::Faces.distance(::Buddy::Faces.profile(current, theme), reading)
+      there = ::Buddy::Faces.distance(::Buddy::Faces.profile(face, theme), reading)
       here - there > STICKY_MARGIN
     end
 
@@ -279,8 +282,11 @@ module Buddy
     # and it is a rule about the pet rather than a reading of the room, so it
     # belongs here and not in the numbers. Nothing is skipped on a turn that
     # only talked: a flat conversation is allowed to look flat.
+    #
+    # The same turn also puts away the faces that are not what a finished
+    # errand looks like - see Buddy::Faces::NOT_A_CONFIRMATION.
     def skipped(reading, acted, landed, unprompted: false)
-      skip = acted && landed ? [::Buddy::Faces.default] : []
+      skip = acted && landed ? [::Buddy::Faces.default] + ::Buddy::Faces::NOT_A_CONFIRMATION : []
       skip += ::Buddy::Faces::IRRITATED if theirs_to_carry?(reading)
       # Nobody said anything, so there is nobody for the pet to be fond of.
       skip += ::Buddy::Faces::TENDER if unprompted

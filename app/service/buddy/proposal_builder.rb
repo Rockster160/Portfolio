@@ -130,6 +130,15 @@ module Buddy
       auto_ran = false
       action   = nil
       posted   = []
+      # A `then_continue` wait that started and found nothing to hold, on a turn
+      # where nothing else ran either. That shape is a countdown wearing a
+      # sequence's clothes: the reply says the thing is queued, no queue exists,
+      # and the timer rings like a kitchen timer at the hour the thing was meant
+      # to happen. Reported so Buddy::GPT::Turn can take the sentence down - see
+      # `executed_anything?`.
+      wait_ran = false
+      wait_held = false
+      other_ran = false
       # What the steps SAID, as opposed to that they ran. Only collected from
       # the head: a step behind a gate finishes minutes later, long after the
       # message these would go on has been read.
@@ -143,15 +152,20 @@ module Buddy
         deferred = (step.equal?(gate) ? queued : [])
         case step[:kind]
         when :autos
-          auto_ran = run_auto(user, byte_message, step[:calls]) { |r| answers.concat(spoken(r)) } || auto_ran
+          ran       = run_auto(user, byte_message, step[:calls]) { |r| answers.concat(spoken(r)) }
+          auto_ran  = ran || auto_ran
+          other_ran ||= ran
         when :timer
           ran, holding = run_wait!(user, byte_message, step[:calls], deferred: deferred)
-          auto_ran ||= ran
-          carried  ||= holding
+          auto_ran   ||= ran
+          carried    ||= holding
+          wait_ran   ||= ran
+          wait_held  ||= holding
         when :relay
           asked, holding = run_ask!(user, byte_message, step[:calls], deferred: deferred)
-          auto_ran ||= asked
-          carried  ||= holding
+          auto_ran  ||= asked
+          carried   ||= holding
+          other_ran ||= asked
         when :rows
           action = attach_checklist!(user, byte_message, step[:calls], deferred: deferred)
           carried ||= deferred.any?
@@ -163,7 +177,13 @@ module Buddy
 
       run_steps!(user, conversation, byte_message, queued) unless carried
 
-      { action: action, auto_ran: auto_ran, forms: posted, answers: answers }
+      {
+        action:     action,
+        auto_ran:   auto_ran,
+        forms:      posted,
+        answers:    answers,
+        empty_wait: wait_ran && !wait_held && !other_ran && action.nil? && posted.empty?,
+      }
     end
 
     # Re-materialize a proposal from an EXPIRED row so the person doesn't have to

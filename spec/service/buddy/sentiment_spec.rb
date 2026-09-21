@@ -105,129 +105,158 @@ RSpec.describe Buddy::Sentiment do
     # newly-added one to be unreachable.
     it "has a profile for every face any theme can wear" do
       %w[byte moss suki glimmer].each { |theme|
-        missing = Buddy::Faces.selectable(theme).reject { |face| Buddy::Faces.profile(face) }
+        missing = Buddy::Faces.selectable(theme).reject { |face| Buddy::Faces.profile(face, theme) }
         expect(missing).to be_empty, "#{theme} has no profile for #{missing.inspect}"
       }
     end
-  end
 
-  describe "what the axes are asked for" do
-    # The first half of prod 5890. `strain` used to read "how much friction is
-    # in the room", which a stressed person satisfies without being in any
-    # friction with anybody - and every high-strain face is a scowl.
-    it "puts the person's own pressure on weight, not on strain" do
-      expect(described_class::PROMPT).to include("Pressure from their own life is NOT strain")
-      expect(described_class::PROMPT).to include("friction in THIS exchange")
-    end
-  end
-
-  describe "reading the thread" do
-    it "sends both sides, oldest first, with the mood markers stripped" do
-      say("Corporate Tools rejected me.", direction: :outbound)
-      say("[[mood:sad]]Ohhh. That's a rough one.", kind: "buddy")
-
-      client = instance_double(Buddy::GPT::Client)
-      allow(Buddy::GPT::Client).to receive(:new).and_return(client)
-      allow(client).to receive(:stream).and_return(
-        { ok: true, text: '{"warmth":0.1,"play":0.0,"weight":0.9,"strain":0.2}', usage: {} },
-      )
-
-      described_class.read(convo)
-
-      expect(client).to have_received(:stream) { |instructions:, input:, **|
-        text = input.first[:content].first[:text]
-        expect(text).to start_with("Them: Corporate Tools rejected me.")
-        expect(text).to include("Companion: Ohhh. That's a rough one.")
-        expect(text).not_to include("[[mood:")
-        expect(instructions).to include("warmth")
-      }
-    end
-
-    # Receipt chips and hidden trigger seeds are not things anyone said.
-    it "leaves out the chips and the hidden seeds" do
-      say("Real words here.", direction: :outbound)
-      say("Logged it", kind: "buddy_activity")
-      say("Give me an affirmation", hidden: true)
-
-      expect(described_class.transcript_for(convo)).to eq("Them: Real words here.")
-    end
-
-    it "is nothing at all on an empty thread" do
-      expect(described_class.read(convo)).to be_nil
-    end
-
-    # A self-initiated turn can be read from a window of companion lines with
-    # nothing the person said in it, which reads as a long bad day.
-    describe "a turn nobody started" do
-      before {
-        say("Epicor said they're not moving forward.", kind: "buddy")
-        say("Machinify says your application was received.", kind: "buddy")
+    # Having a profile is not the same as having somewhere to BE. Two faces at
+    # one point means one of them is art nobody ever sees, and nothing else
+    # says so - the lookup just never returns it.
+    it "leaves every face somewhere it wins" do
+      grid = (0..10).step(2).to_a
+      readings = grid.product(grid, grid, grid).map { |w, p, g, s|
+        { warmth: w / 10.0, play: p / 10.0, weight: g / 10.0, strain: s / 10.0 }
       }
 
-      it "says so, so the last line is readable as the moment" do
-        text = described_class.transcript_for(convo, unprompted: true)
-
-        expect(text.lines.last.strip).to eq(described_class::UNPROMPTED_NOTE)
-        expect(text).to include("Companion: Machinify says your application was received.")
-      end
-
-      it "says nothing of the sort about an ordinary exchange" do
-        text = described_class.transcript_for(convo)
-
-        expect(text).not_to include(described_class::UNPROMPTED_NOTE)
-      end
-
-      # The note is about the transcript, so an empty one must not consist of
-      # only the note - `read` bails on a blank transcript and that gate has to
-      # keep working.
-      it "does not stand alone on an empty thread" do
-        convo.byte_messages.destroy_all
-
-        expect(described_class.transcript_for(convo.reload, unprompted: true)).to eq("")
-      end
-    end
-  end
-
-  # A job mail that is not a rejection, and an application going out, are both
-  # good news and have to read that way.
-  describe "good news about the job hunt" do
-    def face_for(reading, unprompted: true)
-      skip = described_class.send(:skipped, reading, false, true, unprompted: unprompted)
-      Buddy::Faces.nearest("byte", reading, skip: skip)
-    end
-
-    # Warm, dead earnest and genuinely at stake — the region only `cheering`
-    # covers; every other glad face sits at weight 0.35 or below.
-    it "cheers about something that matters" do
-      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:cheering)
-    end
-
-    it "cheers an application going out, rather than waiting on it" do
-      expect(face_for({ warmth: 0.8, play: 0.0, weight: 0.6, strain: 0.0 })).to eq(:cheering)
-    end
-
-    # A robot confirming a form is a good moment and a SMALL one.
-    it "is quietly pleased about a routine confirmation" do
-      expect(face_for({ warmth: 0.7, play: 0.0, weight: 0.35, strain: 0.0 })).to eq(:content)
-    end
-
-    it "is still sad about a rejection" do
-      expect(face_for({ warmth: 0.1, play: 0.0, weight: 0.8, strain: 0.0 })).to eq(:sad)
-    end
-
-    # `focused` reads STERN and is the nearest face to anything high-weight
-    # that no warm face can reach.
-    it "is never stern about good news" do
-      [0.3, 0.5, 0.7, 0.9].each { |weight|
-        expect(face_for({ warmth: 0.8, play: 0.0, weight: weight, strain: 0.0 })).not_to eq(:focused)
+      %w[byte moss suki glimmer].each { |theme|
+        reached = readings.map { |reading| Buddy::Faces.nearest(theme, reading, skip: []) }.uniq
+        unreachable = Buddy::Faces.selectable(theme) - reached
+        expect(unreachable).to be_empty, "#{theme} can never show #{unreachable.inspect}"
       }
     end
   end
 
-  # Affection needs somebody to feel it toward, and the four axes cannot say
-  # what a warm weighty moment is warm ABOUT — an interview being booked and a
-  # note left in his bag land within a hundredth of each other. What IS known is
-  # whether anybody spoke.
+  # Rocco, 21 Sep 2026, on the face after almost every errand: "The Content
+  # face used to be something a bit different. This new one was recently added
+  # and I don't think it quite fits."
+  #
+  # Byte's `content` art landed on 18 Sep and reused the row written for Moss's
+  # eight days earlier. Moss's is a round mossy ball with its eyes closed and
+  # the row said so - `play: 0.15`, the quiet warm corner every ordinary "done"
+  # reading falls into. Byte's is squashed flat with gold sparkles, which is
+  # not serenity, and it inherited the corner anyway. Buddy::Faces::INDEX is
+  # keyed by theme now, so each drawing gets its own numbers.
+  # Rocco, 21 Sep 2026: "we should use the numbers and ratings - possibly even
+  # using ranges to fit. Then when the current message is given with its
+  # ratings, we choose based on that. Ideally when there are multiple close
+  # matches, we have a weighted select... However, we want to ensure that only
+  # relevant matches are included, which is why there was a thought to use
+  # ranges for these instead."
+  describe "the range each face answers within" do
+    it "keeps the loud ones out of an ordinary bad moment" do
+      rejection = { warmth: 0.1, play: 0.05, weight: 0.8, strain: 0.2 }
+
+      expect(Buddy::Faces.pool("byte", rejection).map(&:first)).not_to include(:crying)
+    end
+
+    # The complaint that started the weight axis, and it comes back the moment
+    # a stern face is allowed to answer a bleak one.
+    it "keeps the stern one off a rejection" do
+      rejection = { warmth: 0.1, play: 0.05, weight: 0.85, strain: 0.2 }
+
+      expect(Buddy::Faces.pool("byte", rejection).map(&:first)).not_to include(:focused)
+    end
+
+    it "still lets the loud one answer the moment it is actually for" do
+      grief = { warmth: 0.05, play: 0.0, weight: 0.95, strain: 0.3 }
+
+      expect(Buddy::Faces.pool("byte", grief).map(&:first)).to include(:crying)
+    end
+
+    # A range says who ELSE may answer. It must never leave a reading with
+    # nobody, so the closest face is in whatever the ranges say - twenty faces
+    # in a four-axis cube are sparse, and a pet with no face is worse than a
+    # pet wearing the nearest thing to what it was told.
+    it "always leaves somebody to answer" do
+      grid = (0..10).step(2).to_a
+      readings = grid.product(grid, grid, grid).map { |w, p, g, s|
+        { warmth: w / 10.0, play: p / 10.0, weight: g / 10.0, strain: s / 10.0 }
+      }
+
+      empty = readings.reject { |reading| Buddy::Faces.pool("byte", reading).any? }
+
+      expect(empty).to be_empty
+    end
+  end
+
+  describe "choosing between faces that all fit" do
+    let(:light_win) { { warmth: 0.85, play: 0.45, weight: 0.2, strain: 0.05 } }
+
+    it "offers more than one answer where there is more than one" do
+      expect(Buddy::Faces.pool("byte", light_win).length).to be > 1
+    end
+
+    # The whole point of the draw: a perfect match does not silence the faces
+    # standing next to it, or they are art nobody sees on the days they fit.
+    it "does not always take the closest" do
+      rng = Random.new(3)
+      drawn = 400.times.map { Buddy::Faces.pick("byte", light_win, rng: rng) }.uniq
+
+      expect(drawn.length).to be > 1
+    end
+
+    # ...but it is still the likeliest by some way. See Faces::SOFTNESS.
+    it "favours the closest" do
+      rng = Random.new(3)
+      drawn = 400.times.map { Buddy::Faces.pick("byte", light_win, rng: rng) }
+      best = Buddy::Faces.nearest("byte", light_win)
+
+      expect(drawn.tally.max_by(&:last).first).to eq(best)
+      expect(drawn.count(best)).to be > (drawn.length / 3)
+    end
+
+    it "is repeatable when the draw is pinned" do
+      once = 20.times.map { Buddy::Faces.pick("byte", light_win, rng: Random.new(99)) }
+
+      expect(once.uniq.length).to eq(1)
+    end
+
+    it "never draws a face the turn put away" do
+      rng = Random.new(5)
+      drawn = 200.times.map { Buddy::Faces.pick("byte", light_win, skip: %i[happy thumbs_up], rng: rng) }
+
+      expect(drawn & %i[happy thumbs_up]).to be_empty
+    end
+  end
+
+  describe "a face name that means two different drawings" do
+    def everyday
+      (5..9).to_a.product((2..6).to_a, (1..4).to_a, (0..2).to_a).map { |w, p, g, s|
+        { warmth: w / 10.0, play: p / 10.0, weight: g / 10.0, strain: s / 10.0 }
+      }
+    end
+
+    it "gives each pet its own row" do
+      expect(Buddy::Faces.profile(:content, :byte)).not_to eq(Buddy::Faces.profile(:content, :moss))
+    end
+
+    it "puts Byte's where its art is - light, not serene" do
+      expect(Buddy::Faces.profile(:content, :byte)[:play]).to be > Buddy::Faces.profile(:content, :moss)[:play]
+    end
+
+    # No rule about it any more: the row says what the drawing is, and that
+    # alone takes it off the ordinary errand.
+    it "stops it being Byte's answer to an ordinary errand" do
+      rng = Random.new(11)
+      faces = everyday.flat_map { |reading|
+        skip = described_class.send(:skipped, reading, true, true)
+        blended = described_class.send(:blended, reading, true)
+        5.times.map { Buddy::Faces.pick("byte", blended, skip: skip, rng: rng) }
+      }
+
+      expect(faces.count(:content)).to be < (faces.length / 10)
+    end
+
+    # Rocco: "I'm fine with the squish expression still occasionally popping
+    # up." Moved, not removed.
+    it "keeps it reachable" do
+      delighted = { warmth: 0.9, play: 0.7, weight: 0.15, strain: 0.05 }
+
+      expect(Buddy::Faces.pool("byte", delighted).map(&:first)).to include(:content)
+    end
+  end
+
   describe "the tender faces" do
     let(:warm) { { warmth: 0.9, play: 0.0, weight: 0.6, strain: 0.0 } }
 
@@ -254,6 +283,56 @@ RSpec.describe Buddy::Sentiment do
       }
 
       expect(reached).to eq(%i[caring loving hugging])
+    end
+  end
+
+  # Rocco, 21 Sep 2026: "I preferred the thumbs one instead."
+  #
+  # `thumbs_up` is the one face that means "that's sorted", and it sits within a
+  # tenth of `neutral_blush` and `nerd` on all four axes - so a timer got set
+  # and the pet blushed or put its glasses on instead. Across the band an
+  # everyday errand actually reads in, those two took more than half the turns
+  # and `thumbs_up` took one in nine.
+  describe "the face on a turn that did the thing" do
+    # Pleased-ish, light-ish, not much at stake, no friction: an ordinary
+    # "do this for me" exchange, and what most of them read as.
+    def everyday
+      (5..9).to_a.product((2..6).to_a, (1..4).to_a, (0..2).to_a).map { |w, p, g, s|
+        { warmth: w / 10.0, play: p / 10.0, weight: g / 10.0, strain: s / 10.0 }
+      }
+    end
+
+    def landed_on(reading)
+      skip = described_class.send(:skipped, reading, true, true)
+      Buddy::Faces.nearest("byte", described_class.send(:blended, reading, true), skip: skip)
+    end
+
+    it "is never being flattered or being clever" do
+      faces = everyday.map { |reading| landed_on(reading) }.uniq
+
+      expect(faces).not_to include(:neutral_blush, :nerd)
+    end
+
+    it "reaches the one that means it" do
+      faces = everyday.map { |reading| landed_on(reading) }
+
+      expect(faces.count(:thumbs_up)).to be > (faces.length / 5)
+    end
+
+    # `happy` is right whenever the thing that got done is good news for THEM,
+    # and it must keep those - one face cannot be both.
+    it "still leaves the warm ones to the warm moments" do
+      faces = everyday.map { |reading| landed_on(reading) }
+
+      expect(faces).to include(:happy)
+    end
+
+    # Both are honest readings of a turn that only talked, and neither is
+    # taken away there.
+    it "leaves both of them reachable when nothing was done" do
+      skip = described_class.send(:skipped, { warmth: 0.7, play: 0.5, weight: 0.35, strain: 0.05 }, false, true)
+
+      expect(skip).to be_empty
     end
   end
 

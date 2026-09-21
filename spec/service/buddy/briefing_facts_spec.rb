@@ -176,7 +176,31 @@ RSpec.describe Buddy::BriefingFacts do
     it "renders the idea, with how long it has been sitting" do
       lines = described_class.stash_lines({ stash: stash })
 
-      expect(lines).to eq(["Repaint the shed (9 days)", "Write up the talk"])
+      expect(lines).to eq(["Repaint the shed (9 days)"])
+    end
+
+    # Twelve of them went out as one paragraph, in order, with the ages
+    # stripped - on a day with no agenda, no chores and no reminders, so the
+    # idle thoughts WERE the briefing and read as a list of assigned tasks.
+    it "floats one, however many are sitting there" do
+      many = (1..12).map { |n| { id: n, idea: "Idea #{n}", waiting: "#{n} days" } }
+
+      expect(described_class.stash_lines({ stash: many }).length).to eq(1)
+    end
+
+    it "skips a row with nothing written on it" do
+      rows = [{ id: 1, idea: "" }, { id: 2, idea: "Repaint the shed" }]
+
+      expect(described_class.stash_lines({ stash: rows })).to eq(["Repaint the shed"])
+    end
+
+    # The guard reads the thought and the section renders it, and they have to
+    # be looking at the same row.
+    it "hands the same row to the line and to the guard" do
+      floated = described_class.stash_floated({ stash: stash })
+
+      expect(floated.length).to eq(1)
+      expect(floated.first[:idea]).to eq("Repaint the shed")
     end
 
     it "puts the section in the block" do

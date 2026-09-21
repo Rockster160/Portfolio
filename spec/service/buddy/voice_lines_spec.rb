@@ -32,6 +32,16 @@ RSpec.describe Buddy::VoiceLines do
         expect(lines.select { |line| line[:mood] == Buddy::Faces.default }).to eq([])
       end
 
+      # A routine line IS a receipt for something asked for, and these carry
+      # their face directly rather than going through Buddy::Sentiment — so
+      # the rule that keeps a blush and a pair of glasses off a finished
+      # errand has to be said here too. See Buddy::Faces::NOT_A_CONFIRMATION.
+      it "#{theme} does not blush or put its glasses on over a routine it was asked to run" do
+        moods = Array(kinds[:routine_run]).pluck(:mood)
+
+        expect(moods & Buddy::Faces::NOT_A_CONFIRMATION).to eq([])
+      end
+
       # Per kind, not per theme: the same hello belongs in more than one set —
       # "Hiii!" is as right at 2pm as it is at 2am — while a routine line
       # appearing twice in one set is a line with double the odds.

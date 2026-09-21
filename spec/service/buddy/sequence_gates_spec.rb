@@ -284,6 +284,30 @@ RSpec.describe "Buddy sequence gates" do
       }
     end
 
+    # The same wait with NOTHING behind it. `then_continue` was passed, the
+    # countdown started, and the queue it was supposed to hold is empty - which
+    # is every "play the sound in 2 minutes" that ended with the sound never
+    # playing and the timer ringing at the hour it should have.
+    def wait_on_nothing!
+      Sidekiq::Testing.fake! {
+        build!([{ tool_name: :set_timer, payload: { seconds: 120, label: "nap sound", then_continue: true } }])
+      }
+    end
+
+    describe "a wait holding nothing" do
+      it "reports itself so the reply above it can be taken down" do
+        expect(wait_on_nothing![:empty_wait]).to be(true)
+      end
+
+      it "opens no gate, because there is nothing to release" do
+        expect { wait_on_nothing! }.not_to change(gates, :count)
+      end
+
+      it "says nothing of the kind when the queue is real" do
+        expect(park_on_a_timer![:empty_wait]).to be(false)
+      end
+    end
+
     # A question to someone who may never answer.
     def park_on_a_person!
       build!([

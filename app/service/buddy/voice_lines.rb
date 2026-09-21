@@ -31,17 +31,22 @@ module Buddy
     # here: add a key, write ten, and Buddy::VoiceLines#pick does the rest.
     LINES = {
       byte:    {
+        # The WORDS are untouched - a squish in one of these is Byte sounding
+        # like itself. The FACES are not: every one of these lands on a routine
+        # somebody asked for, so none of them may be a face that isn't what a
+        # finished errand looks like (Buddy::Faces.not_a_confirmation), which
+        # is what `neutral_blush` and `nerd` were doing here.
         routine_run:         [
-          { say: "*squish* **%<name>s**, going now.", mood: :happy },
+          { say: "*squish* **%<name>s**, going now.", mood: :thumbs_up },
           { say: "On it. **%<name>s**. *boing*", mood: :uwu },
           { say: "**%<name>s** it is. Squish.", mood: :uwu },
-          { say: "Got it. **%<name>s** is in motion.", mood: :neutral_blush },
+          { say: "Got it. **%<name>s** is in motion.", mood: :thumbs_up },
           { say: "Bouncing over to **%<name>s**.", mood: :happy },
-          { say: "Right then. Reshaping around **%<name>s**.", mood: :nerd },
+          { say: "Right then. Reshaping around **%<name>s**.", mood: :happy },
           { say: "One **%<name>s**, coming through. *wobble*", mood: :uwu },
           { say: "Rolling into **%<name>s** for you.", mood: :happy },
           { say: "Happy to. Starting **%<name>s**.", mood: :loving },
-          { say: "*click* Spinning up **%<name>s**.", mood: :nerd },
+          { say: "*click* Spinning up **%<name>s**.", mood: :playful },
         ],
         routine_empty:       [
           { say: "Nothing in it would go, though. Whatever it points at might be gone.", mood: :sad },

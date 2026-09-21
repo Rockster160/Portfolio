@@ -993,6 +993,59 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # A `then_continue` wait is a real countdown, so `auto_ran` vouched for the
+    # whole turn - and the reply above it described a queue that did not exist.
+    # Every one of these in the history was that: a sound that never played, a
+    # list item added on the spot with the countdown behind it, an hour whose
+    # "I'll nudge you for the next thing" had nothing to nudge from.
+    describe "a wait that came back holding nothing" do
+      def empty_wait(text)
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(
+          action: nil, auto_ran: true, forms: [], empty_wait: true,
+        )
+        run([
+          { tool_calls: [{ name: :set_timer, arguments: { "label" => "nap sound", "seconds" => 120, "then_continue" => true } }] },
+          { text: text },
+        ])
+      end
+
+      # No phrasing arm reaches this sentence - it names no record, claims no
+      # completion, and promises nothing in a tense they recognise.
+      it "takes the reply down on the wait alone" do
+        empty_wait("Whisper's nap sound is queued for 2 minutes.")
+
+        expect(reply.body).to eq(described_class::EMPTY_WAIT_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "says both halves: the countdown is real and the thing is not" do
+        empty_wait("Your bedroom hour is on, and I'll nudge you when it's up.")
+
+        expect(reply.body).to include("countdown")
+        expect(reply.body).not_to eq(described_class::SILENT_BODY)
+      end
+
+      it "wins over whatever the phrasing arms made of the words" do
+        empty_wait("Got it - I'll add that to your todo list in 2 minutes.")
+
+        expect(reply.body).to eq(described_class::EMPTY_WAIT_BODY)
+      end
+    end
+
+    # The wait deferred something, so the reply above it is true.
+    it "leaves a wait alone when it is actually holding the queue" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(
+        action: nil, auto_ran: true, forms: [], empty_wait: false,
+      )
+
+      run([
+        { tool_calls: [{ name: :set_timer, arguments: { "label" => "preheat", "seconds" => 60, "then_continue" => true } }] },
+        { text: "Printer's on, and I'll preheat it in a minute." },
+      ])
+
+      expect(reply.body).to eq("Printer's on, and I'll preheat it in a minute.")
+    end
+
     it "leaves the claim alone when a level-1 tool actually fired" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
@@ -3032,10 +3085,17 @@ RSpec.describe Buddy::GPT::Turn do
   describe "a briefing that dropped the week's rain" do
     before { allow(WeatherService).to receive(:week_outlook).and_return("rain Thu & Fri") }
 
+    # Stamped off the service the way Buddy::BriefingFacts builds it, because
+    # the repair reads the seed and not the forecast - see seed_week_outlook.
     def briefing(rounds)
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => { "weather" => { "week" => WeatherService.week_outlook(user: user) } },
+        }
       )
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
@@ -3089,7 +3149,12 @@ RSpec.describe Buddy::GPT::Turn do
       ])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => { "weather" => { "week" => WeatherService.week_outlook(user: user) } },
+        }
       )
       described_class.run!(message, client: client)
 
@@ -3097,10 +3162,162 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.metadata["repairs"]).to be_blank
     end
 
+    # Prod 6661, 21 Sep. Weather Refresh wrote the hourly cache at 14:00:06,
+    # the seed was built at 14:00:07 off the old outlook, and the repair asked
+    # the service again at 14:00:16 and got the new one - so one message said
+    # the week twice and disagreed with itself: "rain is in the mix Tuesday and
+    # Wednesday this week", then "Rain Tue, Wed & Thu, windy Sun this week."
+    # The briefing fires on the hour and the refresh runs on the hour, so the
+    # two reads straddle the write by construction.
+    it "holds the draft to the week the seed carried, not a fresher one" do
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => { "weather" => { "week" => "rain Thu & Fri" } },
+        }
+      )
+      # The forecast ticks between the seed and the repair.
+      allow(WeatherService).to receive(:week_outlook).and_return("rain Thu, Fri & Sat, windy Sun")
+      rounds = [{ text: "Morning! Rain is in the mix Thu and Fri this week." }]
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+
+      expect(reply.body).to eq("Morning! Rain is in the mix Thu and Fri this week.")
+      expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    # The other direction, and the reason there is no live fallback: a week the
+    # seed found calm is a week the briefing was never handed, and a repair may
+    # only ever restore something it was given.
+    it "puts nothing on when the seed carried no week at all" do
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today", "briefing" => {} }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new([{ text: "Morning! Quiet one." }]))
+
+      expect(reply.body).to eq("Morning! Quiet one.")
+    end
+
     it "leaves ordinary turns alone" do
       run([{ text: "Quiet one today." }], text: "how's the week looking")
 
       expect(reply.body).to eq("Quiet one today.")
+    end
+  end
+
+  # Prod 6661, 21 Sep: "You've got the LOC meeting at 1pm with Chelsea, then
+  # Moon wreath crafts with Mary at 6pm" - both items `mine: false, owner:
+  # "Chelsea"` in the seed, and he had nothing of his own that day at all. The
+  # first is hers with her demoted to a guest at it, the second drops her
+  # altogether. See Buddy::GPT::Turn#unowned_items.
+  describe "a briefing that handed over somebody else's day" do
+    let(:partner_facts) {
+      {
+        "name"  => "Rocco",
+        "today" => [
+          {
+            "id"    => 1,
+            "time"  => "1:00 PM",
+            "title" => "LOC meeting",
+            "mine"  => false,
+            "owner" => "Chelsea",
+          },
+          {
+            "id"    => 2,
+            "time"  => "6:00 PM",
+            "title" => "Moon wreath crafts with Mary",
+            "mine"  => false,
+            "owner" => "Chelsea",
+          },
+        ],
+      }
+    }
+
+    def briefing(rounds, facts: partner_facts)
+      client  = FakeBuddyClient.new(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => facts,
+        }
+      )
+      described_class.run!(message, client: client)
+      client
+    end
+
+    it "sends it back rather than telling them it is theirs" do
+      client = briefing([
+        { text: "Hey hey! You've got the LOC meeting at 1pm with Chelsea, then Moon wreath crafts with Mary at 6pm." },
+        { text: "Hey hey! Chelsea has her LOC meeting at 1pm, and her Moon wreath crafts with Mary at 6pm." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to include("Chelsea has her LOC meeting")
+    end
+
+    it "names whose each one is in the nudge" do
+      client = briefing([
+        { text: "Hey hey! You've got the LOC meeting at 1pm with Chelsea, then Moon wreath crafts with Mary at 6pm." },
+        { text: "Hey hey! Chelsea has her LOC meeting at 1pm, and her Moon wreath crafts with Mary at 6pm." },
+      ])
+      nudge = client.calls.last.input.to_s
+
+      expect(nudge).to include("whose LOC meeting is - it is Chelsea's, not theirs")
+      expect(nudge).to include("whose Moon wreath crafts with Mary is")
+    end
+
+    # Every way a briefing has actually said it right, and none of them is the
+    # order the rule asks for twice over. A check that only passed "who, what,
+    # when" would send correct drafts round again.
+    it "leaves a draft that says whose they are alone" do
+      client = briefing([
+        { text: "Hey hey! Chelsea's LOC meeting is at 1pm, and a hair trim for Chelsea at 6pm." },
+      ])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "takes the owner as the subject however the sentence runs" do
+      client = briefing([
+        { text: "Hey hey! At 1pm, Chelsea has the LOC meeting. At 6pm it is her Moon wreath crafts with Mary." },
+      ])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    # The other guard owns this case: an item nobody mentioned is `unnamed_agenda`,
+    # and counting it twice would put it in the nudge twice.
+    it "says nothing about an item the draft never named" do
+      turn = described_class.new(
+        convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+          metadata: {
+            "kind"         => "buddy_trigger",
+            "hidden"       => true,
+            "buddy_action" => "today",
+            "briefing"     => partner_facts,
+          }
+        ),
+        client: FakeBuddyClient.new([]),
+      )
+
+      expect(turn.send(:unowned_items, "Hey hey! Nice quiet one.")).to be_empty
+    end
+
+    it "leaves their own items alone" do
+      mine = {
+        "name"  => "Rocco",
+        "today" => [{ "id" => 3, "time" => "1:00 PM", "title" => "Standup", "mine" => true }],
+      }
+      client = briefing([{ text: "Hey hey! You've got Standup at 1pm." }], facts: mine)
+
+      expect(client.calls.length).to eq(1)
     end
   end
 
@@ -3448,10 +3665,13 @@ RSpec.describe Buddy::GPT::Turn do
 
       # Past mid-afternoon Buddy::BriefingFacts drops the figures and keeps the
       # week, so `weather` can be present with nothing in it to correct from.
+      # The week it DID carry is a fact the draft dropped, and comes back on
+      # the end behind the corrected figures.
       it "falls back to the forecast when the seed carried no figures" do
         seeded_briefing("Morning! High of 93°F today, low of 70°F.", weather: { "week" => "rain Fri" })
 
-        expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
+        expect(reply.body).to start_with("Morning! High of 93°F today, low of 69°F.")
+        expect(reply.body).to include("Rain Fri this week.")
       end
     end
   end
