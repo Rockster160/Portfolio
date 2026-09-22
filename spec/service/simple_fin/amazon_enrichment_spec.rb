@@ -16,6 +16,12 @@ RSpec.describe SimpleFin::AmazonEnrichment do
       {
         "order_id"      => "112-6608200-0828238",
         "item_id"       => "B0C1XLC962",
+        # Where a title Amazon wrote actually lives. `name` is the SHORT one
+        # somebody typed ("Hotend", "Raspberries") and SimpleFin::AmazonNote
+        # hands that back untouched, so a fixture that puts the search spam in
+        # `name` is testing a row that cannot occur.
+        "listed_name"   => "Dogcator Dog Pee Pads Extra Large, 30 Count",
+        "full_name"     => "Dogcator Dog Pee Pads Extra Large, 30 Count",
         "name"          => "Dogcator Dog Pee Pads Extra Large, 30 Count",
         "amount"        => "24.99",
         "delivery_date" => "2026-08-11",
@@ -51,6 +57,17 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     described_class.apply(row)
 
     expect(row.reload.memo).to eq("Dogcator Dog Pee Pads Extra Large")
+  end
+
+  # The board is editable and renaming a row is the point of it. What somebody
+  # typed there is not a title and must not be shortened as if it were.
+  it "takes the name off the board verbatim once somebody has renamed the row" do
+    board(delivery("name" => "Puppy Pads, the big ones"))
+    row = charge
+
+    described_class.apply(row)
+
+    expect(row.reload.memo).to eq("Puppy Pads, the big ones")
   end
 
   it "moves it off the merchant's blanket shopping" do
@@ -137,7 +154,7 @@ RSpec.describe SimpleFin::AmazonEnrichment do
   it "categorizes on the tidied name, not the keyword spam in the title" do
     spam = "27.0 Oz Large Soup Bowls, Stoneware Cereal Set of 4, " \
            "modern dark petrol-Blue Pasta Bowl for Kitchen"
-    board(delivery("name" => spam, "amount" => "24.99"))
+    board(delivery("name" => spam, "listed_name" => spam, "full_name" => spam, "amount" => "24.99"))
     row = charge
 
     described_class.apply(row)

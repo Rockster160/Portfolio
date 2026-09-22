@@ -231,6 +231,11 @@ class SystemController < ApplicationController
       transaction.update!(memo: params[:memo].to_s.strip.presence)
       changed[:memo] = transaction.display_memo
       changed[:from_event] = transaction.memo_from_event?
+      # An Amazon charge's memo IS the name on the delivery board — one name,
+      # last writer owns it — so typing here renames the row the charge paid
+      # for. No-op for every other row, and for a charge whose delivery has
+      # already been cleared off the board. See SimpleFin::AmazonNote.
+      changed[:renamed_delivery] = ::SimpleFin::AmazonNote.rename!(transaction, transaction.memo)
     end
 
     # Marking a charge cancelled changes what the balance is projected to be,

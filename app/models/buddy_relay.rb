@@ -75,9 +75,6 @@ class BuddyRelay < ApplicationRecord
   def self.passed_over_cutoff(conversation)
     return nil if conversation.nil?
 
-    conversation.byte_messages
-      .where(direction: :outbound)
-      .where("byte_messages.metadata->>'hidden' IS DISTINCT FROM 'true'")
-      .order(created_at: :desc).limit(2).pluck(:created_at).second
+    conversation.byte_messages.spoken.order(created_at: :desc).limit(2).pluck(:created_at).second
   end
 end

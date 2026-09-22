@@ -153,4 +153,60 @@ RSpec.describe "add_job_application tool" do
 
     expect(tool[:receipt].call(result, ctx)).to include("[Pellworth Dynamics](")
   end
+
+  # The other half of the job-mail path: mail from a company NOT on the board
+  # opens the row here rather than filing a beat, and it is no less an email for
+  # that. Same question, same answer as add_job_note.
+  describe "the mail behind the card" do
+    let(:email) {
+      user.emails.create!(
+        direction: :inbound,
+        mail_id:   "pell-1@greenhouse.test",
+        subject:   "Thanks for applying",
+        blurb:     "We got it.",
+        timestamp: 3.hours.ago.change(usec: 0),
+      )
+    }
+
+    it "offers the email to read before the tap" do
+      words = tool[:hint].call({ company: "Pellworth Dynamics", email_id: email.id }, ctx)
+
+      expect(words["tap"]).to include("/emails/#{email.id}")
+    end
+
+    it "stamps the first beat with the mail's own clock and a link back" do
+      execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
+      note = user.job_applications.find_by(company: "Pellworth Dynamics").notes.first
+
+      expect(note.occurred_at).to eq(email.timestamp)
+      expect(note.source).to eq("Email")
+      expect(note.url).to include("/emails/#{email.id}")
+    end
+
+    # Without this the same mail keeps reading as outstanding and gets offered
+    # again every time the board is looked at.
+    it "files the mail against the beat it made" do
+      execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
+      note = user.job_applications.find_by(company: "Pellworth Dynamics").notes.first
+
+      expect(email.reload.job_triage[:job_note_id]).to eq(note.id)
+    end
+
+    it "marks it read and archived, here and in the real inbox" do
+      expect(ArchiveMailWorker).to receive(:perform_async).with(email.id)
+
+      execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
+      email.reload
+
+      expect(email).to be_read
+      expect(email).to be_archived
+    end
+
+    it "puts the mail back when the row is unticked" do
+      result = execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
+      mail_revert = result[:reverts].find { |r| r[:model] == "Email" }
+
+      expect(mail_revert[:before]).to eq({ "read_at" => nil, "archived_at" => nil })
+    end
+  end
 end

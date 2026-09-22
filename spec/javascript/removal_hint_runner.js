@@ -95,4 +95,27 @@ out.note = {
   nothing: rowNote(undefined, { status: "executed" }),
 };
 
+// ---- a hint carrying a LINK ----------------------------------------------
+// A job-mail row offers the email it is about, so the beat can be decided by
+// reading it rather than by trusting the summary. This is the only slot on a
+// row that renders markdown - the sublabel is set with textContent, on purpose,
+// because it holds a sender's own words.
+const MAIL = {
+  tap: "[Read the email](https://ardesian.com/emails/51803) - tapping files it and clears it from the inbox",
+  done: "Filed, and the mail archived - untick to take the note back",
+};
+
+out.mail = {
+  // Before the tap: the link is the point, and it has to survive to the row.
+  pending: removalHint("add_job_note", { status: "pending", override: MAIL }),
+  // After: the words change, and the link has done its job.
+  executed: removalHint("add_job_note", { status: "executed", undoable: true, override: MAIL }),
+  // add_job_note is not a removal tool, so without the override it says nothing
+  // at all - which is what it did before any of this.
+  without_override: removalHint("add_job_note", { status: "pending" }),
+  // And the hint still beats the receipt once it has run.
+  note: rowNote({ tool_name: "add_job_note", receipt: "Logged Rejected ✓", hint: MAIL },
+    { status: "executed", undoable: true }),
+};
+
 console.log(JSON.stringify(out));

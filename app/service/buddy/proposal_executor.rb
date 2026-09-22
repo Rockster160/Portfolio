@@ -36,7 +36,7 @@ module Buddy
           Array(action.decision.is_a?(Hash) ? action.decision["value"] : action.decision).to_set(&:to_i)
         end
 
-        buttons.each do |btn|
+        execution_order(buttons).each do |btn|
           id = btn["id"].to_i
           # Already acted on — never re-run (idempotent across repeat taps).
           next if RESOLVED.include?(btn["status"].to_s)
@@ -143,6 +143,44 @@ module Buddy
     end
 
     RESOLVED = %w[executed partial failed].freeze
+
+    # Tools that TAKE A RECORD AWAY. Within one checklist these settle before
+    # anything that adds, whatever order the model listed them in.
+    #
+    # "Undo that Puppy Down, it was Chelsea" proposed the re-credit above the
+    # undo and both were ticked together, so `complete_chore` ran while the row
+    # it replaced was still there: the cooldown anchored on the completion that
+    # was about to be deleted and the new one paid nothing. The undo itself was
+    # fine - it resolved its completion id when the card was BUILT, so it still
+    # removed the right row afterwards. Only the order costs anything, and it
+    # costs it silently.
+    #
+    # One direction, always. A removal running first can't spoil a creation -
+    # the creation is the state they asked to end up in - while a creation
+    # running first collides with whatever the removal was about to free.
+    UNDOING_TOOLS = %w[
+      undo
+      undo_chore_completion
+      cancel_reminder
+      cancel_timer
+      delete_event
+      drop_idea
+      forget_routine
+      forget_term
+      remove_inventory_item
+      remove_list_item
+      unlink_records
+    ].to_set.freeze
+
+    # The rows in the order they should RUN, which is not the order they are
+    # drawn in. `each_with_index` carries the model's own order in as the
+    # tiebreak because `sort_by` is not stable, and shuffling the rows that
+    # tie would be a second ordering bug wearing the fix for the first.
+    def execution_order(buttons)
+      buttons.each_with_index.sort_by { |btn, i|
+        [UNDOING_TOOLS.include?(btn["tool_name"].to_s) ? 0 : 1, i]
+      }.map(&:first)
+    end
 
     # Uncheck-to-undo for a Level-2 row. Reverses every stashed revert
     # descriptor on the button (a counted row carries several), flips it to

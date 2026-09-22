@@ -97,6 +97,12 @@ class JobNote < ApplicationRecord
   # one falls back through the agenda default to the oldest writable calendar.
   FOLLOW_UP_AGENDA_NAME = "Tasks".freeze
 
+  # How long a booking stays correctable by a second one. See `withdraw_booking`
+  # - long enough for the retraction to arrive overnight, short enough that a
+  # second round booked later in the week is its own meeting rather than a
+  # correction of the first.
+  BOOKING_CORRECTION_WINDOW = 1.day
+
   before_validation :normalize_fields
   before_validation :settle_applied_before_receipt, on: :create
   # `after_save`, not `after_create`: a note usually becomes a receipt by being
@@ -105,11 +111,12 @@ class JobNote < ApplicationRecord
   # Gated on the two columns the callback reads so an unrelated touch is free.
   after_save :settle_receipt_after_applied,
     if: -> { acknowledged? && (saved_change_to_tag? || saved_change_to_occurred_at?) }
-  # Asking for times again withdraws the booking those times were for.
+  # Asking for times again withdraws the booking those times were for, and so
+  # does a corrected booking landing behind the first one.
   # `after_commit`, because retiring the other note's calendar row runs that
   # note's own callbacks.
   after_commit :withdraw_booking, on: [:create, :update],
-    if: -> { availability? && previous_changes.key?("tag") }
+    if: -> { (availability? || scheduled?) && previous_changes.key?("tag") }
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —
@@ -266,10 +273,22 @@ class JobNote < ApplicationRecord
   # FUTURE ONLY. An interview that already happened is history, and an
   # availability request weeks later is about the next round rather than a
   # withdrawal of that one.
+  #
+  # A second BOOKING supersedes the first the same way, and that half has its
+  # own limit. "Please disregard the last email, here is the correct time"
+  # arrived three minutes behind the confirmation it replaced and both notes
+  # kept their dates, so the board went on calling the withdrawn one the next
+  # interview - the calendar row was cleared by hand and the note holding it
+  # was not. But two rounds genuinely booked a week apart are also two future
+  # `scheduled` notes, and cancelling the earlier one there would take a real
+  # meeting off the calendar silently. BOOKING_CORRECTION_WINDOW is what
+  # separates them: a correction lands while the first one is still news.
   def withdraw_booking
     return if job_application.nil?
 
     booked = job_application.notes.where(tag: :scheduled).where(follow_up_at: Time.current..)
+    booked = booked.where.not(id: id)
+    booked = booked.where(created_at: BOOKING_CORRECTION_WINDOW.ago..) if scheduled?
     booked.find_each { |note| note.update(follow_up_at: nil) }
   end
 

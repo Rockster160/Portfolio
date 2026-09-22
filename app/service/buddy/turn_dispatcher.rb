@@ -55,6 +55,8 @@ module Buddy
     end
 
     def run_turn!(message, conversation, user)
+      return false if overtaken_retry?(message, conversation)
+
       compacted = Buddy::Compactor.compact!(conversation) if Buddy::Compactor.should_compact?(conversation)
       # Everything before the recap has just left Buddy's context, so this is
       # the last turn that could write down a thought this thread was working
@@ -78,6 +80,36 @@ module Buddy
         settle_ideas(conversation)
         flag_compile(conversation, message)
       }
+    end
+
+    # A retry seed the person got to first.
+    #
+    # Buddy::GPT::Turn#retry_seed! sends a seed round a second time when the
+    # turn it ran ended without the call that seed existed to make, a minute
+    # later so the model isn't answering itself. That minute is long enough for
+    # the person to reply, and when the turn stopped BECAUSE it asked them
+    # something - which of two roles at that company the mail was for - then
+    # replying is exactly what they do next. Their answer makes the call, and
+    # the retry lands behind it and makes it again: a second bubble saying what
+    # the one above it already said, and a second `add_job_note` that put its
+    # own thinner summary over the mail the first had filed.
+    #
+    # Checked here rather than at queue time because the whole point of the
+    # delay is that the thread is still live during it, and checked against
+    # `spoken` because a seed answering itself is what this is trying to stop.
+    # Run under the same per-conversation lock as the turn it is standing down
+    # for, so "have they replied" cannot be asked while that reply is mid-turn.
+    #
+    # The net is for a seed nobody came back to. Once they are in the thread it
+    # is theirs.
+    def overtaken_retry?(message, conversation)
+      meta = message.metadata
+      return false unless meta.is_a?(Hash) && meta["retry_of"].present?
+      return false if conversation.byte_messages.spoken.where("byte_messages.id > ?", message.id).none?
+
+      message.update!(state: :sent)
+      Rails.logger.info("[Buddy] retry seed #{message.id} stood down: they answered first")
+      true
     end
 
     # Note that there was real conversation here, so Buddy::Compile can read it

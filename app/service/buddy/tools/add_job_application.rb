@@ -40,7 +40,8 @@ Buddy::Tools.register(
       values:      JobNote.tags.keys.map(&:to_sym),
       description: "The kind of beat this first one was. An ATS receipt is `acknowledged`; an ask for times is `availability`",
     },
-    occurred_at:      { type: :iso_time, required: false, description: "When it happened, if not now" },
+    email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
+    occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },
     source:           { type: :string, required: false, description: "Where it came from - LinkedIn, a recruiter" },
     url:              { type: :string, required: false, description: "The listing, if there is one" },
     spoke_to:         { type: :string, required: false, description: "Who they dealt with, if a person was named" },
@@ -113,6 +114,7 @@ Buddy::Tools.register(
         note:             body,
         summary:          payload[:summary].presence,
         tag:              tag,
+        email_id:         payload[:email_id],
         occurred_at:      payload[:occurred_at],
         source:           payload[:source].presence,
         url:              payload[:url].presence,
@@ -131,6 +133,21 @@ Buddy::Tools.register(
     { title: "💼 Track #{payload[:company]}", sub: sub.join("\n").presence }
   },
   merge_key:   ->(payload) { "add_job_application:#{payload[:company].to_s.downcase.strip}" },
+  # The mail this row is about, openable BEFORE the tap. Same reasoning as
+  # add_job_note's: a card proposing to open an application off an email is
+  # asking a question only the email can answer.
+  hint:        ->(payload, ctx) {
+    email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
+    if email.nil?
+      nil
+    else
+      url = Rails.application.routes.url_helpers.email_url(id: email.id)
+      {
+        "tap"  => "[Read the email](#{url}) - tapping opens the row and clears it from the inbox",
+        "done" => "On the board, and the mail archived - untick to take the row back",
+      }
+    end
+  },
   # Level 3, same as add_job_note: a whole new row on the board is more than a
   # beat on one, so it waits to be tapped rather than arriving pre-checked.
   level:       3,
@@ -181,18 +198,36 @@ Buddy::Tools.register(
       url:     payload[:url].presence,
     )
 
+    # The mail's own clock, sender and link, exactly as add_job_note stamps
+    # them - the first beat on a new row is no less an email than the fifth on
+    # an old one, and the two sit in the same timeline.
+    email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
+
     note = nil
     if payload[:note].present? || payload[:tag].to_s != "note"
       note = job.notes.create!(
         body:             payload[:note].presence,
         tag:              payload[:tag],
-        occurred_at:      payload[:occurred_at] || Time.current,
-        source:           payload[:source].presence,
+        occurred_at:      email&.timestamp || payload[:occurred_at] || Time.current,
+        source:           (email ? "Email" : payload[:source].presence),
+        url:              (email ? Rails.application.routes.url_helpers.email_url(id: email.id) : nil),
         spoke_to:         payload[:spoke_to].presence,
         follow_up_at:     payload[:follow_up_at],
         duration_minutes: payload[:duration_minutes],
       )
       job.touch_activity!
+      # Without this the same mail keeps reading as outstanding and gets offered
+      # again every time the board is looked at.
+      email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
+    end
+
+    # See add_job_note: confirming is the moment the mail stops being inbox, in
+    # Ardesian here and in the real inbox by way of the worker.
+    mail_before = email&.slice(:read_at, :archived_at)
+    if email && !(email.read? && email.archived?)
+      now = Time.current
+      email.update!(read_at: email.read_at || now, archived_at: email.archived_at || now)
+      ArchiveMailWorker.perform_async(email.id)
     end
 
     job.reload
@@ -213,6 +248,16 @@ Buddy::Tools.register(
           # its first beat with it and there is nothing left half-made.
           [{ op: "created", model: "JobApplication", id: job.id,
              summary: "stopped tracking #{job.company}" }]
+        end
+      ) + (
+        # Only Ardesian's copy comes back - a mail already synced out of the
+        # inbox is not worth a second AppleScript round trip to reverse.
+        if mail_before.present? && mail_before.values.any?(&:nil?)
+          [{ op: "updated", model: "Email", id: email.id,
+             before: mail_before.stringify_keys,
+             summary: "put that mail back in the inbox" }]
+        else
+          []
         end
       ),
     }

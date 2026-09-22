@@ -72,6 +72,13 @@ class Jil::Executor
     # that's already been dealt with. One trigger-name comparison otherwise.
     ::Buddy::PromptDelivery.dispatch(user, trigger, raw_trigger_data)
 
+    # An Amazon charge's note and the name on the delivery board are one name.
+    # Renaming the row renames the note, typing a note renames the row, and the
+    # categorization prompt fills its Notes box from the board at the moment it
+    # is opened rather than the moment the alert arrived. One ownership check
+    # and a string comparison for everything else on the bus.
+    ::SimpleFin::AmazonNote.dispatch(user, trigger, raw_trigger_data)
+
     # The -15 minute pre-standup brief. A Jil task hangs the ScheduledTrigger
     # off the Tech Stand-Up agenda item so it follows the meeting when it moves;
     # what it fires is a Claude session, which is Rails' side of the fence.

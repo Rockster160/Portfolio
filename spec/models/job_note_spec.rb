@@ -417,6 +417,61 @@ RSpec.describe JobNote do
     end
   end
 
+  # iCapital confirmed Thursday and three minutes later sent "Please disregarded
+  # the last email. Here is the correct time" for a Thursday the week after.
+  # Both mails filed their own `scheduled` note, and only the CALENDAR was
+  # cleaned up - by hand. The withdrawn note kept its date, and
+  # `next_interview_at` reads the earliest of those, so the card went on
+  # pointing at a meeting nobody was going to.
+  describe "a corrected booking landing behind the first one" do
+    let!(:booking) { job.notes.create!(tag: :scheduled, follow_up_at: 3.days.from_now) }
+
+    it "takes the superseded interview off the calendar" do
+      item_id = booking.reload.agenda_item_id
+      expect(item_id).to be_present
+
+      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+
+      expect(booking.reload.follow_up_at).to be_nil
+      expect(AgendaItem.find_by(id: item_id)).to be_nil
+    end
+
+    it "keeps its own booking" do
+      correction = job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+
+      expect(correction.reload.follow_up_at).to be_present
+      expect(correction.agenda_item_id).to be_present
+    end
+
+    it "leaves the board naming the corrected time" do
+      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+
+      expect(job.reload.next_interview_at).to be_within(1.minute).of(10.days.from_now)
+    end
+
+    # The half that stops this from cancelling real meetings. Two rounds booked
+    # a week apart are also two future `scheduled` notes, and there is nothing
+    # in the rows themselves to tell that pair from a retraction - only how
+    # close together they were filed.
+    it "leaves a booking filed longer ago than the correction window" do
+      old = travel_to((described_class::BOOKING_CORRECTION_WINDOW + 1.hour).ago) {
+        job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+      }
+
+      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+
+      expect(old.reload.follow_up_at).to be_present
+    end
+
+    it "leaves an interview that already happened" do
+      past = job.notes.create!(tag: :scheduled, follow_up_at: 5.days.ago)
+
+      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+
+      expect(past.reload.follow_up_at).to be_present
+    end
+  end
+
   describe "follow-ups" do
     # Every account gets one on save (User#ensure_default_agenda); the
     # follow-up lands on the oldest writable one unless a preference says

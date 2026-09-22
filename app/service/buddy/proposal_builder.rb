@@ -1165,6 +1165,10 @@ module Buddy
           # asking again means correcting. A repeatable action (a second glass of
           # water) carries no key, so nothing can ever retire it.
           "merge_key" => (p[:merge_key] if Buddy::Tools.supersedes?(p[:tool])),
+          # `{tap:, done:}`, and the only slot on a row that renders markdown -
+          # so the only one that can carry a link. Absent for almost every tool;
+          # a nil here leaves the row exactly as it was.
+          "hint"      => safely { p[:tool][:hint]&.call(p[:payload], ctx) },
         }
       end
 

@@ -145,4 +145,31 @@ RSpec.describe "Checklist removal hints" do
       expect(note["nothing"]).to be_nil
     end
   end
+
+  # A job-mail row offers the email it is about. Deciding whether a mail really
+  # is a rejection means reading it, and before this the only way there was to
+  # leave the thread and go hunting for it in the inbox.
+  describe "the mail behind a job-mail row" do
+    let(:mail) { result["mail"] }
+
+    # The whole point. `sublabel` is set with textContent because it holds a
+    # sender's own words, so this line is the only place a link can live.
+    it "puts the link on the row before it is tapped" do
+      expect(mail["pending"]).to include("](https://ardesian.com/emails/51803)")
+    end
+
+    it "says what the tick did once it has run" do
+      expect(mail["executed"]).to eq("Filed, and the mail archived - untick to take the note back")
+    end
+
+    # add_job_note is not a removal tool, so the line exists only because the
+    # tool asked for it. Every other row is exactly as it was.
+    it "stays silent for the same tool with no hint of its own" do
+      expect(mail["without_override"]).to be_nil
+    end
+
+    it "still beats the receipt for the one slot" do
+      expect(mail["note"]).not_to include("Logged Rejected")
+    end
+  end
 end

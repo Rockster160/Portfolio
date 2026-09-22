@@ -152,6 +152,46 @@ module ByteLocal
     raise "couldn't reach the Mac - it may be asleep"
   end
 
+  # Mark one message read and archived in Mail.app, found by its Message-ID.
+  #
+  # Mail syncs the move, so this is what actually archives it in Gmail - the
+  # `Email` row here is only ever a copy of mail that lives somewhere else.
+  #
+  # Its own ceiling rather than COMMAND_TIMEOUT_SECONDS, because that five
+  # seconds is sized for desk actions that finish in milliseconds and this is a
+  # GUI app that may be mid-sync. Nothing is waiting on it: ArchiveMailWorker
+  # runs it, never the tap.
+  #
+  # Returns the Mac's own answer - `{ ok:, state:, note: }`, where `state` is
+  # "archived", "read" or "absent" - or `{ ok: false, error: }`. Never raises:
+  # the Ardesian side of the archive has already happened by the time this runs,
+  # and a sleeping Mac must not undo it or retry forever.
+  MAIL_TIMEOUT_SECONDS = 25
+
+  def archive_mail(message_id:)
+    id = message_id.to_s.strip
+    return { ok: false, error: "no message id" } if id.empty?
+
+    uri = URI.join(base_url, "/byte/archive_mail")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ message_id: id })
+
+    res = Timeout.timeout(MAIL_TIMEOUT_SECONDS) {
+      Net::HTTP.start(uri.hostname, uri.port,
+        use_ssl: uri.scheme == "https",
+        open_timeout: MAIL_TIMEOUT_SECONDS, read_timeout: MAIL_TIMEOUT_SECONDS,
+      ) { |http| http.request(req) }
+    }
+
+    body = JSON.parse(res.body) rescue {}
+    return body.symbolize_keys if res.is_a?(Net::HTTPSuccess)
+
+    { ok: false, error: body["error"].presence || "the Mac said no (#{res.code})" }
+  rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout, SystemCallError, SocketError, IOError => e
+    Rails.logger.warn("[Byte] archive_mail failed: #{e.class}: #{e.message}")
+    { ok: false, error: "couldn't reach the Mac - it may be asleep" }
+  end
+
   # Ask the Mac to enumerate the Claude Code sessions on disk for a given
   # conversation's cwd. Returns the parsed JSON array, or nil if the Mac
   # is unreachable.

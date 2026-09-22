@@ -217,6 +217,27 @@ Buddy::Tools.register(
     sub   = payload[:summary].presence || payload[:note]
     { title: "💼 #{label} — #{payload[:company]}", sub: sub.to_s.truncate(80).presence }
   },
+  # The line under the row. The whole point of it is the LINK: deciding whether
+  # a mail really is a rejection means reading the mail, and before this the
+  # only way there was to leave the thread and go hunting for it in the inbox.
+  #
+  # `label`'s sublabel cannot carry this - it is set with textContent, on
+  # purpose, because it holds the sender's own words. The hint line is the one
+  # slot that renders markdown, and a click inside it opens rather than ticking
+  # (see linkifyWithoutTicking) - which matters here more than anywhere, since
+  # the row IS a label and a stray tick files a beat on somebody's history.
+  hint:        ->(payload, ctx) {
+    email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
+    if email.nil?
+      nil
+    else
+      url = Rails.application.routes.url_helpers.email_url(id: email.id)
+      {
+        "tap"  => "[Read the email](#{url}) - tapping files it and clears it from the inbox",
+        "done" => "Filed, and the mail archived - untick to take the note back",
+      }
+    end
+  },
   # The same beat said twice in one turn is one beat.
   merge_key:   ->(payload) { "add_job_note:#{payload[:company]}:#{payload[:tag]}:#{payload[:note].to_s.downcase.strip}" },
   # Level 3: an offer that writes nothing until it's tapped.
@@ -278,6 +299,21 @@ Buddy::Tools.register(
     # outstanding and gets offered again every time the board is looked at.
     email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
 
+    # Confirming the beat is the moment the mail stops being inbox. It has been
+    # read - reading it is how the tick got decided - and everything it had to
+    # say is now on the board, which is where it will be looked for.
+    #
+    # Two halves, because an `Email` here is a COPY. This one is Ardesian's, and
+    # is the whole job for domain mail. Mail mirrored in from Gmail still sits
+    # bold in the real inbox, and ArchiveMailWorker is what closes that, off the
+    # tap so a GUI app mid-sync can't hang a checkbox.
+    mail_before = email&.slice(:read_at, :archived_at)
+    if email && !(email.read? && email.archived?)
+      now = Time.current
+      email.update!(read_at: email.read_at || now, archived_at: email.archived_at || now)
+      ArchiveMailWorker.perform_async(email.id)
+    end
+
     job.reload
     # A revision undoes to the note's previous attributes, not to nothing:
     # unticking must never take the mail itself off the board.
@@ -299,6 +335,20 @@ Buddy::Tools.register(
         id:      job.id,
         before:  { "status" => was },
         summary: summary,
+      }
+    end
+
+    # Only Ardesian's copy comes back: unticking is a correction about the
+    # BOARD, and a mail that has already synced its way out of the inbox is not
+    # worth a second AppleScript round trip to reverse. Said plainly in the
+    # row's own `done` hint rather than implied.
+    if mail_before.present? && mail_before.values.any?(&:nil?)
+      reverts << {
+        op:      "updated",
+        model:   "Email",
+        id:      email.id,
+        before:  mail_before.stringify_keys,
+        summary: "put that mail back in the inbox",
       }
     end
 

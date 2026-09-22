@@ -193,6 +193,34 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(btn["sublabel"]).to include("Jul 28")           # timestamp = detail
       end
 
+      # The `hint` slot is the only place on a row that renders markdown, so it
+      # is the only place a link can go. A tool that offers one has to actually
+      # reach the button - without this the lambda is written, never called, and
+      # the row looks exactly as it did before.
+      it "carries a tool's hint onto the row" do
+        Buddy::Tools.register(
+          name:        :spec_hinted,
+          description: "hint plumbing",
+          args:        { thing: { type: :string, required: true } },
+          confirm:     ->(p, _) { { summary: "Do #{p[:thing]}?", resolved: {} } },
+          label:       ->(p, _) { p[:thing].to_s },
+          hint:        ->(p, _) { { "tap" => "[Read it](/emails/#{p[:thing]})", "done" => "Read" } },
+          execute:     ->(_p, _) { {} },
+          receipt:     ->(_r, _) { "done" },
+        )
+        btn = build([{ tool_name: :spec_hinted, payload: { thing: "7" }, span: [0, 0] }])[:action].buttons.first
+
+        expect(btn["hint"]["tap"]).to eq("[Read it](/emails/7)")
+      end
+
+      # Almost every tool has none, and a row is not allowed to change shape
+      # because of a key nobody set.
+      it "leaves the hint empty for a tool that offers none" do
+        btn = build([{ tool_name: :create_chore, payload: { name: "Sweep" }, span: [0, 0] }])[:action].buttons.first
+
+        expect(btn["hint"]).to be_nil
+      end
+
       it "never renders a blank checkbox label" do
         action = build([{ tool_name: :create_chore, payload: { name: "Water the ficus" }, span: [0, 0] }])[:action]
         expect(action.buttons.first["label"]).to eq("Water the ficus")

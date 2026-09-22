@@ -109,6 +109,79 @@ RSpec.describe "add_job_note tool" do
     end
   end
 
+  # Deciding whether a mail really is a rejection means READING it, and the row
+  # used to offer no way there - the sublabel is set with textContent (it holds
+  # the sender's words) so a link in it renders as literal markdown.
+  describe "the mail behind the card" do
+    let(:email) {
+      user.emails.create!(
+        direction: :inbound,
+        mail_id:   "pura-1@applytojob.com",
+        subject:   "We received your resume",
+        blurb:     "Thanks for applying.",
+        timestamp: 1.hour.ago.change(usec: 0),
+      )
+    }
+
+    def hint(**payload)
+      tool[:hint].call({ company: "ApartmentIQ" }.merge(payload), ctx)
+    end
+
+    it "offers the email to read before the tap" do
+      words = hint(email_id: email.id, tag: :rejected)
+
+      expect(words["tap"]).to include("/emails/#{email.id}")
+      expect(words["tap"]).to match(/Read the email/)
+    end
+
+    it "says nothing on a beat that came from a conversation" do
+      expect(hint(tag: :heard_back)).to be_nil
+    end
+
+    # Confirming IS reading it, and everything it said is on the board now.
+    it "marks it read and archived on confirm" do
+      execute(email_id: email.id, tag: :rejected, note: "No thanks.")
+      email.reload
+
+      expect(email).to be_read
+      expect(email).to be_archived
+    end
+
+    # The Ardesian row is a COPY. Gmail mail stays bold in the real inbox until
+    # Mail.app is told, and that runs off the tap so a GUI app mid-sync cannot
+    # hang a checkbox.
+    it "pushes the archive out to the real inbox" do
+      expect(ArchiveMailWorker).to receive(:perform_async).with(email.id)
+
+      execute(email_id: email.id, tag: :rejected, note: "No thanks.")
+    end
+
+    it "leaves a mail that was already filed alone" do
+      email.update!(read_at: 2.days.ago, archived_at: 2.days.ago)
+      expect(ArchiveMailWorker).not_to receive(:perform_async)
+
+      execute(email_id: email.id, tag: :rejected, note: "No thanks.")
+    end
+
+    # Unticking is a correction about the BOARD, so the mail has to come back
+    # out of the archive with the note.
+    it "puts the mail back when the row is unticked" do
+      resolved = confirm(email_id: email.id, tag: :rejected, note: "No thanks.")
+      result   = tool[:execute].call(resolved[:resolved], ctx)
+      mail_revert = result[:reverts].find { |r| r[:model] == "Email" }
+
+      expect(mail_revert).to be_present
+      expect(mail_revert[:before]).to eq({ "read_at" => nil, "archived_at" => nil })
+    end
+
+    it "offers no mail revert when there was no email" do
+      resolved = confirm(tag: :heard_back, note: "They wrote.")
+      result   = tool[:execute].call(resolved[:resolved], ctx)
+
+      expect(result[:reverts].map { |r| r[:model] }).not_to include("Email")
+    end
+  end
+
   # On every other tag `follow_up_at` is a chase, stays optional, and goes on
   # the agenda as a task.
   describe "everything that is not a booking" do
@@ -124,6 +197,7 @@ RSpec.describe "add_job_note tool" do
       expect(item.name).to eq("Send availability: ApartmentIQ")
     end
   end
+
   # Buddy::JobMailOffer files arriving mail on its row as a plain `note`, so
   # this card is the READING of a row that already exists rather than a new one.
   describe "a mail this row already holds" do

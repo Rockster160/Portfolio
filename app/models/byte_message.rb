@@ -90,6 +90,17 @@ class ByteMessage < ApplicationRecord
       .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
   }
 
+  # What the PERSON actually said, and nothing standing in for them. Their own
+  # side of the thread carries hidden trigger seeds, receipt chips and tapped
+  # action pills alongside what they typed, and every one of those is something
+  # the house put there. `readable` is the mirror of this on Buddy's side and
+  # uses the same two exclusions.
+  scope :spoken, -> {
+    where(direction: :outbound)
+      .where("byte_messages.metadata ->> 'kind' IS NULL OR byte_messages.metadata ->> 'kind' NOT IN (?)", SILENT_KINDS)
+      .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
+  }
+
   # Fallback so callers that create messages via `user.byte_messages.create!`
   # (without an explicit conversation) still work — attaches to the user's
   # default conversation. Production callers always pass one explicitly.

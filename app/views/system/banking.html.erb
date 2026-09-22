@@ -1109,6 +1109,12 @@
               // typed — a cleared memo falls back to the linked note.
               cell.textContent = data[field] || "";
               saved = cell.textContent.trim();
+              // An Amazon memo is also the name on the delivery board, and a
+              // rename there is otherwise invisible from here. Say so on the
+              // cell rather than in a banner: it is the cell that did it.
+              if (data.renamed_delivery) {
+                cell.setAttribute("title", "Renamed on the delivery board too");
+              }
               flash(row, true);
             }).catch(function (err) {
               cell.textContent = saved;

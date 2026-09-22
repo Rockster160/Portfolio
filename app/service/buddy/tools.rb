@@ -123,7 +123,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -153,6 +153,17 @@ module Buddy
         label:            label,
         execute:          validate_executor!(execute),
         receipt:          receipt,
+        # The line under a pending row, ABOVE the checkbox's own meaning. One
+        # slot, `{ tap:, done: }`, and the client renders it through the inline
+        # markdown pass - so this is the only place on a row where a LINK is
+        # possible. `sublabel` is set with textContent and always will be: it
+        # carries a person's own words, which must never be read as markup.
+        #
+        # For the shape it was added for: a row proposing to file a beat off an
+        # email, offering the email. Deciding whether a rejection really is one
+        # means reading the mail, and without this the only way there was to
+        # leave the thread and go looking for it.
+        hint:             hint,
         merge_key:        merge_key || ->(_payload) { "#{name}:#{SecureRandom.uuid}" },
         merge_label:      merge_label,
         level:            resolved_level,

@@ -32,6 +32,12 @@ Buddy::Tools.register(
     To change a completion that's already recorded — attach the note you
     missed, correct the time — use `edit_chore_completion`, not a second
     `complete_chore`.
+
+    When you are RE-CREDITING a completion — undoing one and marking the same
+    job for somebody else — pass `at` with the time the original was recorded
+    at. It is the same event and only who did it changed, so leaving `at` off
+    stamps it with the moment of the conversation: a chore done at noon and
+    corrected five minutes later goes into the log as 12:05.
   TXT
   feature:     :chores,
   args:        {

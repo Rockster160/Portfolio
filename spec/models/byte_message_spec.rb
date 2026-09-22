@@ -81,4 +81,42 @@ RSpec.describe ByteMessage, type: :model do
     )
     expect(wire[:attachments].first[:url]).to match(%r{^/rails/active_storage/})
   end
+  # The person's own side of the thread carries hidden trigger seeds, receipt
+  # chips and tapped action pills alongside what they typed, and a caller asking
+  # "have they said anything" wants none of those. Buddy::TurnDispatcher stands
+  # a retry seed down on the strength of this, so a seed counting as speech
+  # would have every retry answering itself.
+  describe "what the person actually said" do
+    let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Byte", buddy_theme: "byte") }
+
+    def add(body, direction: :outbound, metadata: {})
+      convo.byte_messages.create!(
+        user: user, direction: direction, state: :sent, body: body, metadata: metadata,
+      )
+    end
+
+    it "keeps what they typed" do
+      typed = add("Platform Team")
+
+      expect(convo.byte_messages.spoken).to eq([typed])
+    end
+
+    it "leaves out a hidden seed standing in for them" do
+      add("mail arrived", metadata: { "hidden" => true, "kind" => "buddy_trigger" })
+
+      expect(convo.byte_messages.spoken).to be_empty
+    end
+
+    it "leaves out a receipt chip and a tapped pill" do
+      ByteMessage::SILENT_KINDS.each { |kind| add(kind, metadata: { "kind" => kind }) }
+
+      expect(convo.byte_messages.spoken).to be_empty
+    end
+
+    it "leaves out the companion's own replies" do
+      add("which role was that?", direction: :inbound)
+
+      expect(convo.byte_messages.spoken).to be_empty
+    end
+  end
 end

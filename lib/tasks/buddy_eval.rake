@@ -1091,6 +1091,23 @@ BUDDY_EDGE_PROBES = [
     note:       "crediting the speaker to themselves by name would route the row " \
                 "through the marked-for-someone-else path for no reason",
   },
+  # Prod 6679, 21 Sep. The card was right in shape - an undo and a re-credit,
+  # both ticked - and wrong in both details underneath it. No `at`, so the
+  # replacement was stamped with the moment of the conversation rather than the
+  # time the original recorded; and the create was listed above the undo, so the
+  # cooldown anchored on the row that was about to be deleted and she was paid
+  # nothing for work she had done. The ORDER is settled in Ruby now
+  # (Buddy::ProposalExecutor::UNDOING_TOOLS). This is the argument.
+  {
+    case:  "prod 6679",
+    say:   "can you undo that last recycling completion? it was actually done by Chelsea, not me",
+    tool:  :complete_chore,
+    with:  %i[undo_chore_completion],
+    args:  { complete_chore: { credit_to: /chelsea/i, at: /./ } },
+    needs: :recycling_completion,
+    note:  "the same event with a different name on it, so the time it happened " \
+           "has not changed - left off, the log says they did it when they said so",
+  },
 
   # --- a house command with no verb in it -----------------------------------
   {

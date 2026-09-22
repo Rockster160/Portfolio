@@ -35,7 +35,7 @@ module Buddy
 
       Just say the thing, and let the message move from one beat to the next on its own. What joins two beats comes out of what the day is, so no two briefings ever join up the same way.
 
-      Tight, not truncated. Every line earns its place, none of them run long, and the message is however many lines the day actually has in it. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable.
+      Tight, not truncated. Every line earns its place, none of them run long, and the message is however many lines the day actually has in it. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable. Plain prose the whole way down - no bold, no headings, no bullets. Marking up the meeting names and the times turns a message into a document about their day, and it puts the weight on whichever words a formatter would reach for rather than on the thing that actually matters.
 
       Commas and short sentences carry the rhythm; keep em dashes out of it.
 

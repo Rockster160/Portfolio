@@ -309,7 +309,7 @@ module Buddy
         "Then CALL add_job_application with that company - do not offer to, do not ask " \
         "first. It is a level-3 tool, so the card writes nothing until they tap it. " \
         "Give it the `role` if the mail names one, the `tag` that matches what happened, " \
-        "and #{occurred_at ? "occurred_at #{occurred_at.iso8601}" : "the time it arrived"}." \
+        "and#{log_hint(occurred_at, email).presence || " the time it arrived"}." \
         "#{note_hint(body)}",
       ].compact.join("\n")
     end

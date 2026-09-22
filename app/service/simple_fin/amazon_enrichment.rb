@@ -100,10 +100,13 @@ module SimpleFin
       end
 
       def write!(transaction, order)
-        name = order.full_name.presence || order.name.presence || order.listed_name
         attrs = {}
 
-        memo = ::AmazonProductName.tidy(name)
+        # SimpleFin::AmazonNote owns what a row on the board is CALLED, because
+        # the charge's memo and the board's name are the same name kept in step
+        # — read it here and a rename on the board is still the thing shown
+        # months later, rather than the title the first email happened to carry.
+        memo = ::SimpleFin::AmazonNote.for_order(order)
         attrs[:memo] = memo if memo.present? && auto_filled?(transaction)
 
         # Categorized on the TIDIED name, not the raw title. A title is search
@@ -122,8 +125,13 @@ module SimpleFin
         #
         # `asins` rather than `item_ids`: the backfill writes that name, and one
         # field under two names is a field nothing can query.
+        # `item_id` alongside the order number because a split shipment files
+        # several rows — several deliveries, several charges — under one order
+        # number, and without it a rename on one of them would be carried onto
+        # the memo of all of them.
         amazon = {
           "order_id" => order.order_id,
+          "item_id"  => order.item_id,
           "asins"    => asins_for(order),
           "category" => attrs[:category],
           "source"   => "delivery_board",

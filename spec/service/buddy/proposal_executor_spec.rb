@@ -210,4 +210,105 @@ RSpec.describe Buddy::ProposalExecutor do
       expect(action.buttons.first["error_message"]).to be_present
     end
   end
+  # "Undo that last Puppy Down, it was actually Chelsea." The card came back with
+  # the re-credit above the undo and both boxes were ticked at once, so
+  # `complete_chore` ran while the completion it replaced was still sitting
+  # there: the cooldown anchored on the row about to be deleted and the new one
+  # paid nothing. The undo had resolved its completion id when the card was
+  # BUILT, so it still took the right row afterwards - only the order cost
+  # anything, and it cost it silently.
+  describe "which tools go first" do
+    it "names every tool that takes a record away" do
+      expect(described_class::UNDOING_TOOLS).to include("undo", "undo_chore_completion")
+    end
+
+    it "names only tools that exist" do
+      missing = described_class::UNDOING_TOOLS.reject { |name| Buddy::Tools[name.to_sym] }
+
+      expect(missing).to be_empty
+    end
+  end
+
+  describe "the order rows run in" do
+    let(:pair) {
+      [
+        { "id" => 1, "label" => "Re-credit", "tool_name" => "spec_track", "payload" => { "tag" => "create" }, "count" => 1, "status" => "pending" },
+        { "id" => 2, "label" => "Undo",      "tool_name" => "spec_undo", "payload" => { "tag" => "undo" }, "count" => 1, "status" => "pending" },
+      ]
+    }
+
+    # A spec tool rather than the real `undo_chore_completion`, because
+    # `Buddy::Tools.register` writes to a registry the whole process shares and
+    # redefining a live tool would follow this file into every other one.
+    before {
+      executed = @executed
+      Buddy::Tools.register(
+        name:        :spec_undo,
+        description: "takes something away",
+        args:        { tag: { type: :string, required: true } },
+        confirm:     ->(p, _) { { summary: "Undo #{p[:tag]}?", resolved: {} } },
+        label:       ->(p, _) { p[:tag].to_s },
+        execute:     ->(p, _) { executed << p[:tag]; { echoed: p[:tag] } },
+        receipt:     ->(r, _) { "Undid #{r[:echoed]}" },
+      )
+      stub_const("Buddy::ProposalExecutor::UNDOING_TOOLS", Set["spec_undo"])
+    }
+
+    def run_pair(buttons)
+      action = ByteAction.create!(
+        user:              user,
+        byte_conversation: convo,
+        byte_message:      msg,
+        kind:              :custom,
+        tool_name:         "buddy_proposals",
+        multi_select:      true,
+        buttons:           buttons,
+        decision:          { "value" => [1, 2] },
+        tool_input:        {},
+      )
+      described_class.perform(action.id)
+      action.reload
+    end
+
+    it "settles the removal before the thing that replaces it" do
+      run_pair(pair)
+
+      expect(@executed).to eq(["undo", "create"])
+    end
+
+    it "does it however the model listed them" do
+      run_pair(pair.reverse)
+
+      expect(@executed).to eq(["undo", "create"])
+    end
+
+    it "leaves the rows drawn in the order they were proposed" do
+      action = run_pair(pair)
+
+      expect(action.buttons.pluck("id")).to eq([1, 2])
+    end
+
+    # `sort_by` is not stable, so the rows that tie need the model's own order
+    # carried in as the tiebreak - shuffling them would be a second ordering
+    # bug wearing the fix for the first.
+    it "keeps rows that neither remove anything in the order they came" do
+      rows = %w[A B C D].each_with_index.map { |tag, i|
+        { "id" => i + 1, "label" => tag, "tool_name" => "spec_track", "payload" => { "tag" => tag }, "count" => 1, "status" => "pending" }
+      }
+      action = ByteAction.create!(
+        user:              user,
+        byte_conversation: convo,
+        byte_message:      msg,
+        kind:              :custom,
+        tool_name:         "buddy_proposals",
+        multi_select:      true,
+        buttons:           rows,
+        decision:          { "value" => [1, 2, 3, 4] },
+        tool_input:        {},
+      )
+      described_class.perform(action.id)
+
+      expect(@executed).to eq(%w[A B C D])
+    end
+  end
 end

@@ -62,6 +62,13 @@ module Buddy
       # deliberately does NOT unwind whatever the link already did, because that
       # already happened and has its own undo row.
       "RecordLink"            => "RecordLink",
+      # Only ever `updated`, and only ever read_at/archived_at: confirming a
+      # job-mail card files the beat AND clears the mail, so unticking has to
+      # put the mail back in the inbox alongside taking the note off the board.
+      # Nothing here creates or destroys an Email - one is a copy of a message
+      # that lives on a mail server, and deleting the copy would not be an undo
+      # of anything.
+      "Email"                 => "Email",
     }.freeze
 
     # Models where undoing a create HIDES the row instead of deleting it, and
