@@ -150,15 +150,15 @@ RSpec.describe "add_job_note tool" do
     # The Ardesian row is a COPY. Gmail mail stays bold in the real inbox until
     # Mail.app is told, and that runs off the tap so a GUI app mid-sync cannot
     # hang a checkbox.
-    it "pushes the archive out to the real inbox" do
-      expect(ArchiveMailWorker).to receive(:perform_async).with(email.id)
+    it "labels the mail on the Mac so it can be cleared by hand" do
+      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
 
       execute(email_id: email.id, tag: :rejected, note: "No thanks.")
     end
 
     it "leaves a mail that was already filed alone" do
       email.update!(read_at: 2.days.ago, archived_at: 2.days.ago)
-      expect(ArchiveMailWorker).not_to receive(:perform_async)
+      expect(LabelMailWorker).not_to receive(:perform_async)
 
       execute(email_id: email.id, tag: :rejected, note: "No thanks.")
     end

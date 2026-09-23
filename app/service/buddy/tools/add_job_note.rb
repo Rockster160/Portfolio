@@ -233,8 +233,8 @@ Buddy::Tools.register(
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {
-        "tap"  => "[Read the email](#{url}) - tapping files it and clears it from the inbox",
-        "done" => "Filed, and the mail archived - untick to take the note back",
+        "tap"  => "[Read the email](#{url}) - tapping files it and labels the mail",
+        "done" => "Filed, and the mail tagged for you to clear - untick to take the note back",
       }
     end
   },
@@ -299,19 +299,20 @@ Buddy::Tools.register(
     # outstanding and gets offered again every time the board is looked at.
     email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
 
-    # Confirming the beat is the moment the mail stops being inbox. It has been
-    # read - reading it is how the tick got decided - and everything it had to
-    # say is now on the board, which is where it will be looked for.
+    # Confirming the beat is the moment the mail stops being inbox - everything
+    # it had to say is now on the board, which is where it will be looked for.
     #
     # Two halves, because an `Email` here is a COPY. This one is Ardesian's, and
-    # is the whole job for domain mail. Mail mirrored in from Gmail still sits
-    # bold in the real inbox, and ArchiveMailWorker is what closes that, off the
-    # tap so a GUI app mid-sync can't hang a checkbox.
+    # is the whole job for domain mail. Mail mirrored in from Gmail is NOT
+    # archived for him: Mail.app cannot remove a Gmail inbox label, so
+    # LabelMailWorker tags it instead and he clears it himself. It deliberately
+    # does not mark it read either - read and still in the inbox is the one
+    # state worse than untouched.
     mail_before = email&.slice(:read_at, :archived_at)
     if email && !(email.read? && email.archived?)
       now = Time.current
       email.update!(read_at: email.read_at || now, archived_at: email.archived_at || now)
-      ArchiveMailWorker.perform_async(email.id)
+      LabelMailWorker.perform_async(email.id)
     end
 
     job.reload

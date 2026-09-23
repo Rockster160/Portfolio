@@ -152,27 +152,30 @@ module ByteLocal
     raise "couldn't reach the Mac - it may be asleep"
   end
 
-  # Mark one message read and archived in Mail.app, found by its Message-ID.
+  # Hang a Gmail label on one message, found by its Message-ID, so mail the
+  # board has already filed is easy to spot and clear by hand.
   #
-  # Mail syncs the move, so this is what actually archives it in Gmail - the
-  # `Email` row here is only ever a copy of mail that lives somewhere else.
+  # It does NOT archive it and does NOT mark it read. Archiving in Gmail means
+  # removing the INBOX label, which Mail.app cannot do - see mail_label.rb on
+  # the Mac for the whole finding. Marking it read without archiving turned out
+  # to be worse than doing nothing: an unread mail is bold and gets noticed.
   #
   # Its own ceiling rather than COMMAND_TIMEOUT_SECONDS, because that five
   # seconds is sized for desk actions that finish in milliseconds and this is a
-  # GUI app that may be mid-sync. Nothing is waiting on it: ArchiveMailWorker
-  # runs it, never the tap.
+  # GUI app that may be mid-sync. Nothing is waiting on it: LabelMailWorker runs
+  # it, never the tap.
   #
   # Returns the Mac's own answer - `{ ok:, state:, note: }`, where `state` is
-  # "archived", "read" or "absent" - or `{ ok: false, error: }`. Never raises:
-  # the Ardesian side of the archive has already happened by the time this runs,
-  # and a sleeping Mac must not undo it or retry forever.
+  # "labelled", "absent" or "nolabel" - or `{ ok: false, error: }`. Never
+  # raises: the Ardesian side has already happened by the time this runs, and a
+  # sleeping Mac must not undo it or retry forever.
   MAIL_TIMEOUT_SECONDS = 25
 
-  def archive_mail(message_id:)
+  def label_mail(message_id:)
     id = message_id.to_s.strip
     return { ok: false, error: "no message id" } if id.empty?
 
-    uri = URI.join(base_url, "/byte/archive_mail")
+    uri = URI.join(base_url, "/byte/label_mail")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ message_id: id })
 
@@ -188,7 +191,7 @@ module ByteLocal
 
     { ok: false, error: body["error"].presence || "the Mac said no (#{res.code})" }
   rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout, SystemCallError, SocketError, IOError => e
-    Rails.logger.warn("[Byte] archive_mail failed: #{e.class}: #{e.message}")
+    Rails.logger.warn("[Byte] label_mail failed: #{e.class}: #{e.message}")
     { ok: false, error: "couldn't reach the Mac - it may be asleep" }
   end
 

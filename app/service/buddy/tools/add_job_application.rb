@@ -143,8 +143,8 @@ Buddy::Tools.register(
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {
-        "tap"  => "[Read the email](#{url}) - tapping opens the row and clears it from the inbox",
-        "done" => "On the board, and the mail archived - untick to take the row back",
+        "tap"  => "[Read the email](#{url}) - tapping opens the row and labels the mail",
+        "done" => "On the board, and the mail tagged for you to clear - untick to take the row back",
       }
     end
   },
@@ -221,13 +221,12 @@ Buddy::Tools.register(
       email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
     end
 
-    # See add_job_note: confirming is the moment the mail stops being inbox, in
-    # Ardesian here and in the real inbox by way of the worker.
+    # See add_job_note.
     mail_before = email&.slice(:read_at, :archived_at)
     if email && !(email.read? && email.archived?)
       now = Time.current
       email.update!(read_at: email.read_at || now, archived_at: email.archived_at || now)
-      ArchiveMailWorker.perform_async(email.id)
+      LabelMailWorker.perform_async(email.id)
     end
 
     job.reload

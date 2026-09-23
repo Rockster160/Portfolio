@@ -192,8 +192,8 @@ RSpec.describe "add_job_application tool" do
       expect(email.reload.job_triage[:job_note_id]).to eq(note.id)
     end
 
-    it "marks it read and archived, here and in the real inbox" do
-      expect(ArchiveMailWorker).to receive(:perform_async).with(email.id)
+    it "marks Ardesian's copy read and archived, and labels the real one" do
+      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
 
       execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
       email.reload
