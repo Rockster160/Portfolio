@@ -157,6 +157,16 @@ RSpec.describe Emails::JobTriage do
       expect(described_class.instructions(user)).to include("(none on file)")
     end
 
+    # The sender is almost always an applicant tracking system, and a verdict
+    # naming the courier opens a second board row for an application that
+    # already exists - which then has to be merged by hand.
+    it "says the tracking system sending the mail is not the employer" do
+      text = described_class.instructions(user)
+
+      expect(text).to include("the courier is never the company")
+      expect(text).to match(/when it names none, the answer\s+is null/i)
+    end
+
     it "sends the sender, the subject and the blurb" do
       block = described_class.email_block(
         email!(

@@ -42,9 +42,21 @@ Prefer the id when you have one - it can't collide:
 item:list:id:7
 ```
 
+## One colon contains, two colons are exact
+
+`:` before a value is a **substring** test. `::` is **equality**.
+
+```
+item:list:name:Claude        fires on "Claude" AND "Claude Notes"
+item:list:name::Claude       fires on "Claude" only
+event:action::added          exactly "added"
+```
+
+Reach for `::` whenever you know the whole value, which is most of the time.
+
 ## Reaching nested keys
 
-Payloads are nested. Keep adding segments to walk down:
+Payloads are nested. Keep adding segments to walk down, **separated by colons**:
 
 ```
 item:list:name:Groceries     matches { list: { name: "Groceries" } }
@@ -52,13 +64,41 @@ item:list:id:7               matches { list: { id: 7 } }
 item:section:name:Ocs-Backend  matches { section: { name: "Ocs-Backend" } }
 ```
 
+### Dots are not separators
+
+A payload field list - what `read_listener_guide` returns, what `Buddy::TriggerShapes` records - is written in dot notation internally, because that is how a flattened path is stored. **A listener is not.** Copying a field path verbatim produces a single key by that name:
+
+```
+item:list.name::Claude       ONE key called "list.name". Matches nothing, ever.
+item:list:name::Claude       right
+```
+
+The guide renders colons for exactly this reason, and a dotted key is refused when the watch is saved. If you are reading a path from anywhere else, translate the dots.
+
 **A segment that isn't in the payload silently never matches.** It doesn't error and it doesn't warn - `ListenerMatch` can only tell you a listener PARSES, never that its keys exist - so the watch saves cleanly and then sits there forever. `item:sparkle:yes` is a perfectly valid listener that can never fire. This is the single most common way a watch fails, so check the key path against a real payload rather than assuming a field you can see in the UI is in the trigger.
 
-A value with no key at all matches anywhere in the payload, which is almost always too loose:
+## Terms do not have to start at the scope
+
+Only the FIRST term sets the scope. Every term after it is matched against the payload at any depth, so the scope prefix is optional and usually noise:
 
 ```
-item:Milk                    true if ANY field anywhere contains "Milk"
+email:from:venmo subject:/Chelsea Haven paid you/     subject is not email:subject
+event:add name::Game                                  name is not event:name
+item:action::added list:name::Claude                   both fine
 ```
+
+Repeating the scope is equally correct (`item:list:name::Claude`) and is worth it when a bare key would be ambiguous - an `item` payload has its own `id` and a `list:id` underneath it, and `id::379` could take either.
+
+### Open terms
+
+A term with no key at all matches a value anywhere in the payload:
+
+```
+item:Milk                    any field CONTAINING "Milk" (one colon, so substring)
+Milk                         any field or key EQUAL to "Milk" (bare, so exact)
+```
+
+Both are legitimate and both are loose. A bare word is the widest thing you can write and it will fire on events you did not picture, so use one only when the word itself is the whole condition.
 
 ## Regex
 
@@ -81,7 +121,7 @@ item:name:ANY(Milk Eggs Bread)
 
 ## Writing one well
 
-1. **Start from a real payload.** Look at existing tasks on the same scope (`read_listener_guide` returns them) and copy the key paths they use. Guessing at a key name produces a listener that parses fine and never fires.
+1. **Start from a real payload.** Look at existing tasks on the same scope (`read_listener_guide` returns them) and copy the key paths they use. Guessing at a key name produces a listener that parses fine and never fires. A path from a field list is separated by dots - write it with colons.
 2. **Narrow with `action` first.** Most scopes carry one, and "added" versus "removed" is usually the difference between what they asked for and its opposite.
 3. **Anchor names that could be prefixes.** See the substring section above.
 4. **Prefer an id over a name** whenever you have the id, both for precision and because a rename won't break it.

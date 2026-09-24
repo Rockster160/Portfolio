@@ -34,6 +34,7 @@ import {
 } from "./queue";
 import { initIdleReload } from "./idle_reload";
 import { alertStatusLabel } from "./alert_status";
+import { messageTimeLabel } from "./message_time";
 import { initAlertStrip } from "./alert_strip";
 import { configure as configureApi, sendMessage, drainQueue } from "./api";
 import {
@@ -825,9 +826,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Time / attachments / state apply to every kind — used to live inside
     // renderThoughts by mistake, which meant non-claude messages had blank
     // times and unpainted attachments.
-    node.querySelector("[data-time]").textContent = formatTime(
-      message.created_at,
-    );
+    // The date rides along once the message isn't today's - a thread is
+    // scrollback, and a bare clock on a bubble from Tuesday reads as this
+    // morning. See ./message_time.
+    const stamp = node.querySelector("[data-time]");
+    stamp.textContent = messageTimeLabel(message.created_at);
+    // It is a `<time>`, so the machine-readable half belongs on it too, and it
+    // is what a hover shows.
+    if (message.created_at) stamp.dateTime = message.created_at;
     // Raw ISO stamp so reorderActiveTail can sort settled messages by
     // effective "sent" time. Claude responses have their created_at
     // bumped on finalisation (touch_created_at); action-requests keep
@@ -1427,9 +1433,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     node.className = `byte-msg byte-msg-outbound ${held ? "byte-msg-queued" : "byte-msg-pending"}`;
     node.querySelector("[data-body]").textContent = entry.body || "";
     paintQuote(node, entry.metadata?.reply_to);
-    node.querySelector("[data-time]").textContent = formatTime(
-      new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString(),
-    );
+    // A queued send is almost always this second, but one held offline over a
+    // night is exactly the bubble that needs its date.
+    const queuedAt = new Date(
+      entry.client_ts || entry.queued_at || Date.now(),
+    ).toISOString();
+    const queuedStamp = node.querySelector("[data-time]");
+    queuedStamp.textContent = messageTimeLabel(queuedAt);
+    queuedStamp.dateTime = queuedAt;
     // Optimistic image previews (objectURLs) while the send is in flight; the
     // server bubble replaces these with the real attachments on delivery.
     // After a reload the objectURLs are gone but the signed ids survive, so a

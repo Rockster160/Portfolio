@@ -1914,6 +1914,9 @@ html.html-ctr-byte body {
 
     time {
       font-variant-numeric: tabular-nums;
+      // The label carries a date on anything that isn't today's, and wrapping it
+      // between the date and the clock puts one bubble's timestamp on two lines.
+      white-space: nowrap;
     }
 
     .byte-msg-state {

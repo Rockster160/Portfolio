@@ -121,6 +121,17 @@ RSpec.describe Buddy::TriggerShapes do
       it "is empty for someone whose bus has never fired" do
         expect(described_class.for_user(create(:user))).to be_empty
       end
+
+      # The reader of this list is about to write a listener with it, and a
+      # listener separates keys with colons. A dotted path copied out of here
+      # becomes one key by that name and matches nothing.
+      it "writes nested paths the way a listener takes them" do
+        described_class.observe(user, :item, { "action" => "added", "list" => { "name" => "Claude" } })
+
+        fields = described_class.for_user(user).find { |e| e[:scope] == "item" }[:fields]
+        expect(fields).to include("list:name (string: Claude)")
+        expect(fields.grep(/\./)).to be_empty
+      end
     end
 
     describe "on the bus" do
@@ -141,7 +152,7 @@ RSpec.describe Buddy::TriggerShapes do
 
         section = Buddy::Context.full(user, convo)[:trigger_shapes]
 
-        expect(section.find { |e| e[:scope] == "item" }[:fields]).to include("list.name (string: Shopping)")
+        expect(section.find { |e| e[:scope] == "item" }[:fields]).to include("list:name (string: Shopping)")
         expect(Buddy::GPT::ContextTool::SECTIONS).to include(:trigger_shapes)
         expect(Buddy::Features::SECTIONS[:jil]).to include(:trigger_shapes)
       end

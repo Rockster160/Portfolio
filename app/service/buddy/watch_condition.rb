@@ -275,6 +275,12 @@ module Buddy
     end
 
     def validate_listener!(ctx, listener)
+      # A notation fault before the generic shape check: both produce a listener
+      # that never fires, and only one of them can be described.
+      if (fault = ::Jil::ListenerMatch.fault(listener))
+        raise "#{fault} That watch could never fire as written."
+      end
+
       unless ::Jil::ListenerMatch.valid?(listener, user: ctx.user)
         named = ::Jil::ListenerMatch.scope_of(listener)
         raise(

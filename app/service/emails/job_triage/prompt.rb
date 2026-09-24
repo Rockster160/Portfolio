@@ -64,8 +64,18 @@ module Emails
         Reply with JSON and nothing else:
         {"job": true|false, "kind": "<a few words: recruiter outreach, application
         status, interview scheduling, take-home, offer, rejection, ...>",
-        "company": "<company name, or null if there isn't one>",
+        "company": "<the employer the mail is about, or null>",
         "headline": "<one short line saying what happened>"}
+
+        `company` is whoever would be EMPLOYING them. Most of this mail is sent by
+        an applicant tracking system on an employer's behalf - Greenhouse, Lever,
+        Ashby, Workday, iCIMS and the rest - and the courier is never the company.
+        Neither is a job board, a scheduling tool, or a mail provider.
+
+        Read the employer out of what the mail SAYS. When it names none, the answer
+        is null, even when the sending domain or the signature offers a brand you
+        could put there. A wrong company opens a second row on their board for an
+        application they already have; null leaves it alone.
       TEXT
     end
   end

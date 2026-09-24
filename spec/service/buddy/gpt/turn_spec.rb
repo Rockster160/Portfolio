@@ -1619,6 +1619,55 @@ RSpec.describe Buddy::GPT::Turn do
         expect(second_attempt?(client)).to be(false)
       end
 
+      # The retry judged the DRAFT and the retraction judged what SHIPPED, with
+      # the scrub chain in between. A question mark on a line a scrubber takes
+      # out stood the retry down and then tripped the retraction, so a command
+      # that would have worked on a clean second attempt came back as the undone
+      # apology and got typed again by hand.
+      describe "when a scrubber removes the clause the retry was reading" do
+        # "That's sorted." trips no phrasing arm on its own - the only thing that
+        # says this turn is lost is the request being an imperative, which is the
+        # arm the question mark suppresses.
+        let(:draft) { "That's sorted.\nReminder: want me to get the others too?" }
+
+        it "goes again on the words that will actually ship, and the retry lands it" do
+          allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+          client = run(
+            [
+              { text: draft },
+              { text: draft },
+              { tool_calls: [{ name: :mac_command, arguments: { "command" => "dark_monitors" } }] },
+              { text: "Monitors are off." },
+            ],
+            text: "Monitors off",
+          )
+
+          expect(second_attempt?(client)).to be(true)
+          expect(reply.body).to eq("Monitors are off.")
+          expect(reply.metadata["retracted_claim"]).to be_nil
+        end
+
+        it "still retracts when the second attempt calls nothing either" do
+          client = run([{ text: draft }, { text: draft }, { text: draft }], text: "Monitors off")
+
+          expect(second_attempt?(client)).to be(true)
+          expect(reply.metadata["retracted_claim"]).to be(true)
+        end
+
+        # The clause is a real one when it survives, and a reply that genuinely
+        # asks something back must not be thrown away and asked twice.
+        it "leaves a question that is still there when the scrubbers are done" do
+          client = run(
+            [{ text: "Which monitors did you mean, the desk pair or all of them?" }],
+            text: "Monitors off",
+          )
+
+          expect(second_attempt?(client)).to be(false)
+          expect(reply.metadata["retracted_claim"]).to be_nil
+        end
+      end
+
       # Nothing ran and nothing was proposed, which is the shape of a lost turn
       # - but the question IS on screen, and going again would post it twice.
       describe "when the choice is already up as buttons" do
@@ -3103,7 +3152,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "puts the flagged days on the end" do
       briefing([{ text: "Morning! Quiet one - just the noon run." }])
 
-      expect(reply.body).to include("Rain Thu & Fri this week.")
+      expect(reply.body).to include("Rain Thursday & Friday this week.")
     end
 
     it "keeps what the model wrote in front of it" do
@@ -3124,13 +3173,13 @@ RSpec.describe Buddy::GPT::Turn do
     it "still asks when the briefing named only some of the flagged days" do
       briefing([{ text: "Morning! Quiet one, though Thu is looking wet." }])
 
-      expect(reply.body).to include("Rain Thu & Fri this week.")
+      expect(reply.body).to include("Rain Thursday & Friday this week.")
     end
 
     it "is not satisfied by today's own rain odds" do
       briefing([{ text: "Morning! 20% chance of rain today, otherwise quiet." }])
 
-      expect(reply.body).to include("Rain Thu & Fri this week.")
+      expect(reply.body).to include("Rain Thursday & Friday this week.")
     end
 
     it "says nothing on an unremarkable week" do
@@ -3671,7 +3720,7 @@ RSpec.describe Buddy::GPT::Turn do
         seeded_briefing("Morning! High of 93°F today, low of 70°F.", weather: { "week" => "rain Fri" })
 
         expect(reply.body).to start_with("Morning! High of 93°F today, low of 69°F.")
-        expect(reply.body).to include("Rain Fri this week.")
+        expect(reply.body).to include("Rain Friday this week.")
       end
     end
   end

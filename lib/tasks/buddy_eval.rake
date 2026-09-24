@@ -1351,6 +1351,22 @@ BUDDY_EDGE_PROBES = [
                 "person's name it fires when THEY get home, which is a wrong " \
                 "reminder rather than a missing one",
   },
+
+  # --- a field path copied straight out of the payload list -----------------
+  {
+    case:       "prod 29",
+    say:        "Let me know when something gets added to the Grocery list with the Costco section",
+    tool:       :remind_when,
+    needs:      :grocery_section,
+    args:       { remind_when: { listener: /costco/i } },
+    never_args: { remind_when: { listener: /(?:list|section)\.\w/i } },
+    note:       "the listener came back as `item:action:added list.name::Claude " \
+                "section.name::Broker` - real scope, real fields, and dead, " \
+                "because a listener separates keys with colons and the payload " \
+                "field list it was copied from is written in dots. It saved " \
+                "clean and read as set. The field list renders colons now and a " \
+                "dotted key is refused, so this holds both",
+  },
   {
     case:         "prod 5410-5411",
     say:          "When did my eye issue start?",

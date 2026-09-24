@@ -260,8 +260,20 @@ module Buddy
         seen = values[k]
         seen = (seen.is_a?(Array) && seen.any? ? seen.join(" | ") : nil)
         detail = [type, seen].compact.join(": ")
-        detail.present? ? "#{k} (#{detail})" : k
+        path   = listener_path(k)
+        detail.present? ? "#{path} (#{detail})" : path
       }
+    end
+
+    # Stored paths are DotHash notation (`list.name`) because that is what the
+    # flattener produces and what `known_values` is keyed by. A listener
+    # separates keys with COLONS, and this list is read by something that is
+    # about to write one, so it is rendered in the notation it gets copied into.
+    # A dotted path copied verbatim becomes ONE key by that name, which equals
+    # no path segment and matches nothing - silently, because a watch that
+    # cannot fire is indistinguishable from one whose condition hasn't happened.
+    def listener_path(key)
+      key.to_s.tr(".", ":")
     end
 
     # The closed set of values a key has ever fired with, or nil when there

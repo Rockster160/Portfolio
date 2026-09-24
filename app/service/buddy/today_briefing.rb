@@ -112,10 +112,15 @@ module Buddy
     # silence. Whenever the model writes its own the model's is what ships,
     # because it can put the figures in a sentence that belongs to the rest of
     # the message and this can only put them on the end.
+    # A percentage only when there is one to give. `day_notable` labels a day off
+    # the forecast's `main` as well as its `pop`, so "Rain" with a chance that
+    # rounds to zero is a real state and "a 0% chance of rain" is a sentence
+    # arguing with itself. The label is still worth saying; the number is what
+    # has to go.
     NOTABLE_CLAUSES = {
-      "rain"   => ->(pop) { "a #{pop}% chance of rain" },
-      "storms" => ->(pop) { "storms around, #{pop}% chance" },
-      "snow"   => ->(pop) { "snow, #{pop}% chance" },
+      "rain"   => ->(pop) { pop.positive? ? "a #{pop}% chance of rain" : "a bit of rain around" },
+      "storms" => ->(pop) { pop.positive? ? "storms around, #{pop}% chance" : "storms around" },
+      "snow"   => ->(pop) { pop.positive? ? "snow, #{pop}% chance" : "snow around" },
       "windy"  => ->(_pop) { "wind worth knowing about" },
     }.freeze
 
@@ -145,10 +150,26 @@ module Buddy
       outlook = outlook.to_s.strip
       return nil if outlook.blank?
 
-      "#{outlook[0].upcase}#{outlook[1..]} this week."
+      said = expand_days(outlook)
+      "#{said[0].upcase}#{said[1..]} this week."
     end
 
-    DAY_ABBREVS = %w[Mon Tue Wed Thu Fri Sat Sun].freeze
+    # Taken from the formatter rather than hand-kept, so the abbreviations this
+    # knows are exactly the ones `strftime("%a")` produces.
+    DAY_NAMES   = ::Date::ABBR_DAYNAMES.zip(::Date::DAYNAMES).to_h.freeze
+    DAY_ABBREVS = DAY_NAMES.keys.freeze
+
+    # `week_outlook` writes days as `%a` because it is compact SEED input, and
+    # this is the one place that string becomes prose. "Rain Mon this week." is
+    # not a sentence anybody writes - the briefings that wrote their own week off
+    # the same forecast both spelled the day out.
+    #
+    # Expanded here rather than at the source so the seed stays compact, and
+    # safely, because `flagged_days` and `week_said?` both read the raw outlook
+    # before this runs (see Buddy::GPT::Turn#with_week_weather).
+    def expand_days(outlook)
+      outlook.gsub(/\b(#{DAY_ABBREVS.join("|")})\b/) { DAY_NAMES[::Regexp.last_match(1)] }
+    end
 
     # The days `week_outlook` flagged, as the abbreviations it wrote them in.
     def flagged_days(outlook)
@@ -324,8 +345,14 @@ module Buddy
     # `week_said?` needs them kept apart, and everything else wants them flat.
     def day_word_groups(days, today)
       days.map { |abbrev|
-        wday  = (DAY_ABBREVS.index(abbrev).to_i + 1) % 7
-        names = [abbrev, Date::DAYNAMES[wday]]
+        full = DAY_NAMES[abbrev]
+        # Only `flagged_days` feeds this, and it can only return an abbreviation
+        # this knows. Anything else is the abbreviation and nothing derived from
+        # it, rather than a weekday picked by an index that fell through to 0.
+        next [abbrev] if full.nil?
+
+        wday  = Date::DAYNAMES.index(full).to_i
+        names = [abbrev, full]
         names << "tomorrow" if today.tomorrow.wday == wday
         names << "weekend" if [0, 6].include?(wday)
         names

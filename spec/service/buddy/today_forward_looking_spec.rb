@@ -747,6 +747,16 @@ RSpec.describe "Buddy Today forward-looking" do
       it "says nothing at all without both figures" do
         expect(Buddy::TodayBriefing.weather_line(high: 93, low: nil, rain: 0, notable: nil)).to be_nil
       end
+
+      # `day_notable` labels a day off the forecast's `main` as well as its
+      # `pop`, so rain at a chance that rounds to zero is a real reading. The
+      # label still belongs in the sentence; "a 0% chance of rain" does not.
+      it "keeps the label and drops a percentage of nothing" do
+        line = Buddy::TodayBriefing.weather_line(high: 61, low: 44, rain: 0, notable: "rain")
+
+        expect(line).to eq("High of 61°F today, low of 44°F, with a bit of rain around.")
+        expect(line).not_to include("0%")
+      end
     end
 
     # 26 Aug: all three seeds carried "This week to flag: rain Thu, Fri, Sat &
@@ -755,14 +765,25 @@ RSpec.describe "Buddy Today forward-looking" do
     # also ended on the identical weather_line string, which is the tell - none
     # of the models wrote weather at all, and only today's half had a fallback.
     describe "the week's flagged days" do
-      it "composes a line off the outlook it was given" do
+      # The outlook is compact because it is SEED input. This is the one place it
+      # becomes prose, and a published sentence spells the day out - the
+      # briefings that wrote their own week off the same forecast all did.
+      it "composes a line off the outlook it was given, in words" do
         expect(Buddy::TodayBriefing.week_line("rain Thu, Fri, Sat & Sun"))
-          .to eq("Rain Thu, Fri, Sat & Sun this week.")
+          .to eq("Rain Thursday, Friday, Saturday & Sunday this week.")
       end
 
       it "carries more than one kind of weather" do
         expect(Buddy::TodayBriefing.week_line("snow Mon, windy Fri"))
-          .to eq("Snow Mon, windy Fri this week.")
+          .to eq("Snow Monday, windy Friday this week.")
+      end
+
+      it "leaves the abbreviations in the outlook for the readers that scan them" do
+        outlook = "rain Mon"
+
+        expect(Buddy::TodayBriefing.week_line(outlook)).to eq("Rain Monday this week.")
+        expect(Buddy::TodayBriefing.flagged_days(outlook)).to eq(%w[Mon])
+        expect(outlook).to eq("rain Mon")
       end
 
       it "says nothing on an unremarkable week" do

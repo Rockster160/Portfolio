@@ -309,6 +309,13 @@ class BuddyEvalWorld
     reuse(list.list_items.detect { |item| item.name.match?(/oat milk/i) }) {
       ListItem.create!(list: list, name: "Oat milk")
     }
+
+    # A watch on "added to the Grocery list in <section>" needs a section to
+    # name. A listener pointing at a section that doesn't exist is refused
+    # before it saves, so without this the probe fails on the wrong thing.
+    reuse(list.sections.detect { |section| section.name.match?(/costco/i) }) {
+      Section.create!(list: list, name: "Costco")
+    }
   end
 
   # Anchored to THEIR morning rather than "four hours ago". A run at 9pm put

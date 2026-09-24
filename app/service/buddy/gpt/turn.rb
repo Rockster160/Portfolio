@@ -742,9 +742,44 @@ module Buddy
         # for a model that has now written the same call as prose twice.
         return true if body.match?(TOOL_CALL_LEAK_RX)
 
-        unbacked_claim(body).present? ||
-          self.class.silent_turn_claim?(body, asked: asked_about_state?) ||
-          commanded_action_unanswered?(body)
+        # The three arms below are `retract_false_claim!`'s, so they are asked
+        # about the words that will SHIP rather than the draft. See
+        # `delivered_text`.
+        said = delivered_text(outcome[:text])
+        unbacked_claim(said).present? ||
+          self.class.silent_turn_claim?(said, asked: asked_about_state?) ||
+          commanded_action_unanswered?(said)
+      end
+
+      # Every scrubber that can only take words AWAY, in the order
+      # finalize_success runs them. Extracted so one list serves both readers;
+      # the repair LABELS stay with the caller, because only the delivered pass
+      # is a repair.
+      def trimmed_of_removals(body, report: true)
+        body = without_briefing_claim(body, report: report)
+        body = without_empty_chore_note(body)
+        without_leaked_reminder(body)
+      end
+
+      # What the reply is going to say, asked before it is written.
+      #
+      # `start_over?` judged the DRAFT and `retract_false_claim!` judges what was
+      # DELIVERED, with the scrub chain in between. A draft that asked a question
+      # or said it couldn't, in a clause a scrubber then removed, reads as honest
+      # to the retry and as a bare claim to the retraction: the turn stands its
+      # own second attempt down and then retracts itself. That is the one
+      # outcome both of them exist to prevent, and it leaves the person typing
+      # "Again" to get work a retry would have done - which it then does, first
+      # time, because a fresh turn was all it needed.
+      #
+      # Cheap: these only remove, none records a repair and none touches @reply.
+      # `report: false` because this pass is speculative - the delivered one is
+      # what a briefing that turned out to be nothing gets reported for, once.
+      def delivered_text(text)
+        Buddy::Restatement.collapse(trimmed_of_removals(display_body(text), report: false))
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] could not scrub the draft: #{e.class}: #{e.message}")
+        text.to_s
       end
 
       # Facts the seed handed over and the draft didn't say.
@@ -2203,13 +2238,15 @@ module Buddy
       # the "briefing" was only ever the claim.
       MIN_BRIEFING_CHARS = 25
 
-      def without_briefing_claim(body)
+      # `report: false` for the speculative pass `delivered_text` makes - the same
+      # briefing would otherwise be reported twice for one turn.
+      def without_briefing_claim(body, report: true)
         return body unless today_briefing?
 
         stripped = body.to_s.gsub(BRIEFING_CLAIM_RX, "").squeeze(" ").strip
         return body if stripped == body.to_s.strip
 
-        if stripped.length < MIN_BRIEFING_CHARS
+        if report && stripped.length < MIN_BRIEFING_CHARS
           # Nothing was written. Report loudly rather than shipping either the
           # lie or an empty message — what's left is a bare hello, which is
           # useless but at least true.
@@ -2801,10 +2838,7 @@ module Buddy
 
       def finalize_success(outcome)
         @repairs = []
-        body = display_body(outcome[:text])
-        body = without_briefing_claim(body)
-        body = without_empty_chore_note(body)
-        body = without_leaked_reminder(body)
+        body = trimmed_of_removals(display_body(outcome[:text]))
         # One thing said twice: a single call with no tools answers the question
         # and then answers it again, reworded. See
         # Buddy::Restatement for why this compares word sets rather than

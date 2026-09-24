@@ -172,6 +172,13 @@ class BuddyWatch < ApplicationRecord
   # the one failure a reminder must not have: they'd believe it was set.
   def listener_parses
     return if listener.blank?
+
+    # Named first: a listener can be well-formed, name a real scope and real
+    # fields, and still be dead on a notation slip. "isn't a listener that would
+    # ever fire" is true of that and tells whoever wrote it nothing.
+    if (fault = ::Jil::ListenerMatch.fault(listener))
+      return errors.add(:listener, fault)
+    end
     return if ::Jil::ListenerMatch.valid?(listener, user: user) && ::Jil::ListenerMatch.scope_of(listener) == trigger_scope
 
     errors.add(:listener, "isn't a listener that would ever fire")

@@ -161,5 +161,54 @@ class Jil
     rescue StandardError
       false
     end
+
+    # A key path written with dots instead of colons. Keys are compared against
+    # the segments of a payload path, so `list.name` is one key by that name and
+    # equals none of them - the listener parses, names a real scope, names real
+    # fields, and can never match.
+    #
+    # It is worth its own check because the notation arrives from somewhere that
+    # looks authoritative: Buddy::TriggerShapes reports fields in DotHash form,
+    # which is what a field list is keyed by. That list renders colons now, so
+    # this is the net rather than the fix - and it is needed because the failure
+    # is silent. A watch with a dead listener saves, reads as set, and looks
+    # exactly like one whose condition simply hasn't happened yet.
+    #
+    # Only KEY positions are checked. A dot is ordinary in a VALUE - a domain, a
+    # street address, a decimal - and a term with nothing under it is a value.
+    DOTTED_KEY_RX = /\A[a-z0-9_-]+(?:\.[a-z0-9_-]+)+\z/i
+
+    # A sentence saying why this listener can never fire, or nil. The companion
+    # to Buddy::ListenerTargets.missing, which answers the same question about
+    # the things a listener NAMES rather than the way it is written.
+    def fault(listener)
+      terms(listener).filter_map { |term| dotted_key(term) }.first
+    rescue StandardError => e
+      Rails.logger.warn("[ListenerMatch] fault check failed: #{e.class}: #{e.message}")
+      nil
+    end
+
+    def dotted_key(term)
+      key = key_names(::Tokenizing::Breaker.call(term.to_s)).find { |name| name.match?(DOTTED_KEY_RX) }
+      return nil if key.nil?
+
+      "`#{key}` separates its keys with dots, and a listener uses colons - write " \
+        "`#{key.tr(".", ":")}`. A payload field list shows paths, not listener syntax."
+    end
+
+    # Every name a broken-down term uses as a KEY. A key with nothing under it
+    # is a bare value being matched anywhere in the payload, not a key.
+    def key_names(broken, out=[])
+      return out unless broken.is_a?(::Hash)
+
+      broken[:keys]&.each { |name, under|
+        next if under.blank?
+
+        out << name.to_s
+        under.each_value { |vals| ::Array.wrap(vals).each { |val| key_names(val, out) } }
+      }
+      broken[:vals]&.each_value { |vals| ::Array.wrap(vals).each { |val| key_names(val, out) } }
+      out
+    end
   end
 end
