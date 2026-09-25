@@ -1337,6 +1337,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // A row that exists so something else has an anchor, and is never drawn:
+  // Buddy quick-action triggers post an outbound "message" whose only purpose is
+  // to give the Mac somewhere to reply, and a trigger seed is what the reply
+  // hangs on. The visible thing is always the reply that comes back.
+  //
+  // ONE definition, because every path that mounts a node has to ask it and the
+  // one that forgot was scrollback — where these surfaced as bubbles the person
+  // appeared to have typed. The server subtracts them too now
+  // (ByteMessage.not_hidden); this stays because the live socket does not.
+  function isHiddenMessage(message) {
+    return message?.metadata?.hidden === true;
+  }
+
   // `live` distinguishes a paint driven by a fresh WS event (true) from
   // one driven by cache/history hydration (false). Only live paints get
   // to run the "actively streaming" cursor/pulse animations — on reload,
@@ -1344,12 +1357,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // months-old orphan from a crashed process, and forcing it to spin
   // forever is the runaway-thinking-process bug the user hit.
   function upsertMessage(message, opts = {}) {
-    // Buddy quick-action triggers post an outbound "message" whose only
-    // purpose is to give the Mac a reply anchor. It should never render
-    // as a fake user bubble — the visible thing is the Buddy reply that
-    // comes back. Drop it silently if it's already mounted; skip mount
-    // otherwise.
-    if (message?.metadata?.hidden === true) {
+    // Drop it silently if it's already mounted; skip mount otherwise.
+    if (isHiddenMessage(message)) {
       const existing = nodeForServerMessage(message);
       if (existing) existing.remove();
       return;
@@ -2099,12 +2108,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const frag = document.createDocumentFragment();
       older.forEach((m) => {
-        // Only mount what isn't already on screen. This path builds nodes
-        // directly rather than going through upsertMessage — it has to, to
-        // prepend the whole page in one insert and keep the scroll anchored —
-        // so it carries its own guard. Without it, any overlap between the
-        // fetched page and what's already mounted (a repeat call, a refetch
-        // that already landed) renders the same message twice.
+        // This path builds nodes directly rather than going through
+        // upsertMessage — it has to, to prepend the whole page in one insert and
+        // keep the scroll anchored — so it carries upsertMessage's guards
+        // itself. Both of them: hidden rows are never drawn, and only mounting
+        // what isn't already on screen stops any overlap between the fetched
+        // page and what is mounted (a repeat call, a refetch that already
+        // landed) from rendering the same message twice.
+        if (isHiddenMessage(m)) return;
         if (nodeForServerMessage(m)) return;
 
         const node = newMessageNode();

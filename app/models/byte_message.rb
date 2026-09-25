@@ -78,6 +78,16 @@ class ByteMessage < ApplicationRecord
   # table as real messages and are not things anyone reads.
   SILENT_KINDS = %w[buddy_activity action_chip buddy_trigger].freeze
 
+  # Rows that exist so something else has an anchor, and are never drawn: a
+  # trigger seed the reply hangs on, a quick-action post that gives the Mac
+  # somewhere to answer, the `/today` seed. They are real persisted messages, so
+  # every reader of the thread has to subtract them, and any reader that forgets
+  # renders the house's own scaffolding as a bubble the person appears to have
+  # typed.
+  scope :not_hidden, -> {
+    where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
+  }
+
   # What counts as something the person still has to look at. ONE definition,
   # shared by the drawer badge, the hamburger badge, the iOS home-screen badge
   # and the push payload's count — four surfaces that would otherwise disagree
@@ -85,9 +95,8 @@ class ByteMessage < ApplicationRecord
   # `app/javascript/src/pages/byte/unread.js` for the live path; keep them
   # together.
   scope :readable, -> {
-    where(direction: :inbound, state: SETTLED_STATES)
+    not_hidden.where(direction: :inbound, state: SETTLED_STATES)
       .where("byte_messages.metadata ->> 'kind' IS NULL OR byte_messages.metadata ->> 'kind' NOT IN (?)", SILENT_KINDS)
-      .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
   }
 
   # What the PERSON actually said, and nothing standing in for them. Their own
@@ -96,9 +105,8 @@ class ByteMessage < ApplicationRecord
   # the house put there. `readable` is the mirror of this on Buddy's side and
   # uses the same two exclusions.
   scope :spoken, -> {
-    where(direction: :outbound)
+    not_hidden.where(direction: :outbound)
       .where("byte_messages.metadata ->> 'kind' IS NULL OR byte_messages.metadata ->> 'kind' NOT IN (?)", SILENT_KINDS)
-      .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
   }
 
   # Fallback so callers that create messages via `user.byte_messages.create!`

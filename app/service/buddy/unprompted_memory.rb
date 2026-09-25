@@ -37,19 +37,20 @@ module Buddy
       return text if text.blank?
 
       rows = Array(memories)
-      # Two pools, two bars. See `names?` for why a preference needs to be
-      # named twice over and everything else only once.
+      # Two pools, two bars, and two different things being counted: a carried
+      # memory convicts on one word out of all of them together, a preference on
+      # two words out of ONE note. See `names?` and `loose_word_sets`.
       light, heavy = rows.partition { |memory| memory.respond_to?(:kind_preference?) && memory.kind_preference? }
       private_words = distinctive(heavy, facts)
-      loose_words   = distinctive(light, facts)
-      return text if private_words.empty? && loose_words.empty?
+      loose_sets    = loose_word_sets(light, facts)
+      return text if private_words.empty? && loose_sets.empty?
 
       kept = []
       # Same split and the same separator handling as Buddy::DayClaim and
       # `without_empty_chore_note`: the break that led INTO a dropped sentence
       # leaves with it.
       text.split(/((?<=[.!?])\s+)/).each { |part|
-        if names?(part, private_words, at_least: 1) || names?(part, loose_words, at_least: 2)
+        if names?(part, private_words, at_least: 1) || loose_sets.any? { |words| names?(part, words, at_least: 2) }
           Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a prompt-resident memory")
           kept.pop
         else
@@ -77,6 +78,30 @@ module Buddy
       }.uniq.reject { |word| said.include?(word) || word.length < 4 }
     end
 
+    # Each preference's own words, ONE LIST PER NOTE rather than all of them
+    # poured into a single bag.
+    #
+    # The bar was two words and the bag was every preference at once, so two
+    # words out of two DIFFERENT notes convicted a sentence - and against
+    # twenty-odd live preferences almost any warm sentence clears that. A
+    # briefing lost the only line on it that way: the float sentence said a
+    # two-week-old thought was still `sitting` there and invited her to get
+    # `back` to it, and those two words came from two unrelated notes, one about
+    # a pile of thoughts and one about being distracted.
+    #
+    # `names?`'s own comment has always described a per-note rule - "the
+    # preferences worth guarding are whole phrases and land several of their
+    # words in one sentence". This is the code catching up with it.
+    #
+    # A word that two different notes BOTH use is dropped as well, on the same
+    # ground the facts are subtracted on: vocabulary two notes share is ordinary
+    # vocabulary, and belongs to neither of them.
+    def loose_word_sets(memories, facts)
+      lists  = Array(memories).map { |memory| distinctive([memory], facts) }
+      shared = lists.flatten.tally.filter_map { |word, count| word if count > 1 }.to_set
+      lists.map { |words| words.reject { |word| shared.include?(word) } }.reject(&:empty?)
+    end
+
     # One distinctive word is enough for a carried memory, and that is
     # deliberate. A briefing has no reason to reach for a word that is in one of
     # those and in nothing it was handed; the cost of dropping a sentence is a
@@ -87,7 +112,8 @@ module Buddy
     # vocabulary. A note reading "my list means the Ongoing TO DO list"
     # contributes `list`, and at a one-word bar that convicts every sentence
     # about a list - while the preferences worth guarding are whole phrases and
-    # land several of their words in one sentence.
+    # land several of their words in one sentence. Two words of the SAME note,
+    # which is what `loose_word_sets` exists to ask.
     def names?(part, private_words, at_least: 1)
       return false if private_words.empty?
 

@@ -929,6 +929,48 @@ RSpec.describe ByteController, type: :controller do
         expect(body2["has_more"]).to eq(false)
       end
 
+      # A trigger seed is a real row in the thread: persisted so the reply Buddy
+      # sends has something to hang on, and carrying the whole "[nothing was said
+      # to you - this fired on its own]" preamble as its body. The client dropped
+      # them on the live path and the scrollback page built its nodes itself, so
+      # they came back as bubbles the person appeared to have typed - a fifth of a
+      # busy day in this thread is seeds.
+      it "leaves the hidden trigger seeds out of the history" do
+        said = rocco.byte_messages.create!(body: "mine", direction: :outbound, created_at: 2.hours.ago)
+        seed = rocco.byte_messages.create!(
+          body:       "[nothing was said to you - this fired on its own]",
+          direction:  :outbound,
+          created_at: 1.hour.ago,
+          metadata:   { kind: :buddy_trigger, hidden: true },
+        )
+
+        get :messages
+
+        ids = JSON.parse(response.body).fetch("messages").map { |m| m["id"] }
+        expect(ids).to eq([said.id])
+        expect(ids).not_to include(seed.id)
+      end
+
+      # `has_more` and `oldest_id` are answered from the same relation the page
+      # comes out of, so a thread whose only older rows are seeds has to report
+      # nothing older - otherwise the spinner promises a page that paints nothing.
+      it "does not count them as older history still to come" do
+        rocco.byte_messages.create!(
+          body:       "seed",
+          direction:  :outbound,
+          created_at: 3.hours.ago,
+          metadata:   { hidden: true },
+        )
+        shown = rocco.byte_messages.create!(body: "shown", direction: :outbound, created_at: 1.hour.ago)
+
+        get :messages, params: { limit: 5 }
+
+        body = JSON.parse(response.body)
+        expect(body["messages"].map { |m| m["id"] }).to eq([shown.id])
+        expect(body["has_more"]).to eq(false)
+        expect(body["oldest_id"]).to eq(shown.id)
+      end
+
       it "caps `limit` at MAX_LIMIT" do
         15.times { |i| rocco.byte_messages.create!(body: "m#{i}", direction: :outbound) }
         # Ridiculous limit — should be silently capped, no error.

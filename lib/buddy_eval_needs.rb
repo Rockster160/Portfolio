@@ -161,6 +161,7 @@ module BuddyEvalNeeds
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },
     pending_prompt:       { label: "a pending prompt",             check: ->(u) { u.prompts.unanswered.exists? } },
     whisper_sound_fn:     { label: "the Whisper Sound function",   check: ->(u) { jil(u, /whisper sound/i) } },
+    quiet_fn:             { label: "the Whisper Quiet For function", check: ->(u) { jil(u, /whisper quiet/i) } },
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },

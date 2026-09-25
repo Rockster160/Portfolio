@@ -923,6 +923,31 @@ RSpec.describe "Buddy Today forward-looking" do
           expect(said?("Horsetail Falls is looking wet Thu and Fri.")).to be(false)
         end
 
+        # Prod 6834, 24 Sep 8:00am. The model wrote the home week correctly and
+        # got "Rain Mon & Tue this week." stapled under it anyway, because it put
+        # the home week and the canyon in ONE sentence and the canyon grep threw
+        # the sentence away whole. The only weather-ish thing left was "High 79,
+        # low 52.", which carries no forecast word, so the check said unsaid.
+        it "reads the home half of a sentence that adds the canyon after it" do
+          both = "This week's got rain on Monday and Tuesday, and Alpine's following that " \
+                 "same beat, with Monday at 86% and Tuesday at 52%."
+
+          days = Buddy::TodayBriefing.flagged_days("rain Mon & Tue")
+
+          expect(Buddy::TodayBriefing.week_said?(both, days, today: Date.new(2026, 9, 24))).to be(true)
+        end
+
+        # The trade the old comment conceded and no longer has to.
+        it "reads it in the short form too" do
+          expect(said?("Rain Thu and Fri here, and Alpine's wet too.")).to be(true)
+        end
+
+        # Cut at the clause, not at the word: with no boundary in front of it the
+        # canyon owns the forecast, however late in the sentence it is named.
+        it "still refuses a forecast that only turns out to be the canyon's at the end" do
+          expect(said?("Rain Thu and Fri up Alpine.")).to be(false)
+        end
+
         it "still counts a home sentence sitting next to an Alpine one" do
           body = "Alpine is soaked tomorrow morning. Rain here Thu and Fri as well."
 

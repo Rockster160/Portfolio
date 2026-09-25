@@ -80,6 +80,76 @@ RSpec.describe Buddy::UnpromptedMemory do
 
       expect(trim_pref(body, note)).to eq(body)
     end
+
+    # Prod 24 Sep, 8:30am. A briefing of three lines lost the third, which was
+    # the only one carrying anything: a two-week-old thought floated out of ON
+    # THEIR MIND. `repairs` recorded `unprompted_memory` and nothing else.
+    #
+    # The bar was two words and the pool was all twenty-odd preferences at once,
+    # so the two words came out of two unrelated notes - one about a pile of
+    # thoughts, one about being distracted. Nothing about either of them was said
+    # back; the sentence just used ordinary words that happened to appear in
+    # them, which a big enough pool makes almost unavoidable.
+    describe "several preferences at once" do
+      def trim_all(body, *notes)
+        described_class.trim(body, notes.map { |n| preference.new(n) }, facts)
+      end
+
+      it "does not convict on one word each from two different notes" do
+        body = "Morning! That fridge-leftovers thought is still sitting there if you want to get back to it."
+
+        kept = trim_all(
+          body,
+          "When something is sitting in the pile, hold it in your head for a moment before you drop it.",
+          "When I get distracted, nudge me back to the task I was doing.",
+        )
+
+        expect(kept).to eq(body)
+      end
+
+      # The bar is per note, so a pool of twenty cannot quietly lower it. Every
+      # extra note used to make every sentence easier to convict.
+      it "does not get easier to convict as the pool grows" do
+        body = "Morning! That fridge-leftovers thought is still sitting there if you want to get back to it."
+        notes = [
+          "When something is sitting in the pile, hold it in your head for a moment.",
+          "When I get distracted, nudge me back to the task I was doing.",
+          "Unfinished things should stay at the forefront so they are not forgotten.",
+          "Keep the project list short and tell me what is next.",
+        ]
+
+        expect(trim_all(body, *notes)).to eq(body)
+      end
+
+      # And the guard itself is untouched: two words of ONE note still convicts,
+      # with others sitting in the pool alongside it.
+      it "still drops a sentence that names one note twice over" do
+        body = "Morning! The tribunal hearing is close now, so a softer touch this week."
+
+        kept = trim_all(
+          body,
+          "Be mindful about how the tribunal hearing might be weighing on me.",
+          "When I get distracted, nudge me back to the task I was doing.",
+          "Keep the project list short and tell me what is next.",
+        )
+
+        expect(kept).to eq("Morning!")
+      end
+
+      # A word two notes both use is ordinary by demonstration, so it stops
+      # counting for either of them - the same subtraction the facts get.
+      it "ignores a word two notes have in common" do
+        body = "Morning! The recycling is still sitting by the door."
+
+        kept = trim_all(
+          body,
+          "Things sitting around bother me.",
+          "I hate sitting still for long.",
+        )
+
+        expect(kept).to eq(body)
+      end
+    end
   end
 
   # The words in a carried memory are the most private thing this system holds.

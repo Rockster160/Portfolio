@@ -352,4 +352,57 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::JobHunt.applications_for(user, "Acme Talent Acquisition")).to be_empty
     end
   end
+
+  # Prod 24 Sep, 2:08pm. "Thank you for applying to OpenAI" resolved onto an
+  # OnBoard application, because a jobhunt note on that row happened to contain
+  # the word openai and it was the only thing on the board that did. One hit, so
+  # `rows.one?` called it settled. Nine model calls then went into pushing a note
+  # onto the wrong company - and the guard that refused it is the only thing that
+  # worked, so nothing was filed anywhere.
+  #
+  # The classifier was right: the mail IS from OpenAI. The matcher was reading
+  # note bodies, which the search box wants and a resolution must not.
+  describe ".applications_for reads the company and nothing else" do
+    let!(:onboard) { user.job_applications.create!(company: "OnBoard", role: "Senior Engineer") }
+
+    it "does not resolve a company off a note that merely mentions it" do
+      onboard.notes.create!(body: "Sourced from the openai jobs page", tag: :note, occurred_at: Time.current)
+
+      expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to be_empty
+      expect(Buddy::JobHunt.resolve_application(user, "OpenAI")).to be_nil
+    end
+
+    it "does not resolve one off a link either" do
+      onboard.update!(url: "https://jobs.example.com/openai-partner/role/8")
+
+      expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to be_empty
+    end
+
+    # The row that was actually meant existed seven seconds later. Once it does,
+    # the company field answers on its own.
+    it "finds the row once the company itself is on the board" do
+      onboard.notes.create!(body: "Sourced from the openai jobs page", tag: :note, occurred_at: Time.current)
+      real = user.job_applications.create!(company: "OpenAI", role: "Applied AI Engineer, Codex Core Agent")
+
+      expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to eq([real])
+      expect(Buddy::JobHunt.resolve_application(user, "OpenAI")).to eq(real)
+    end
+
+    # Narrowing to one field must not cost the typo allowance, which is the
+    # reason a fuzzy weight is on the company in the first place.
+    it "still catches a misspelled company" do
+      user.job_applications.create!(company: "Netflix", role: "Staff Engineer")
+
+      expect(Buddy::JobHunt.applications_for(user, "Netflx").map(&:company)).to eq(["Netflix"])
+    end
+
+    # A role is still how two rows at ONE company are told apart - that is
+    # `resolve_application`'s own step, and it is downstream of this.
+    it "leaves the role doing its own job of picking between rows" do
+      user.job_applications.create!(company: "Stripe", role: "Staff Backend Engineer")
+      picked = user.job_applications.create!(company: "Stripe", role: "Product Designer")
+
+      expect(Buddy::JobHunt.resolve_application(user, "Stripe", said: "Product Designer")).to eq(picked)
+    end
+  end
 end

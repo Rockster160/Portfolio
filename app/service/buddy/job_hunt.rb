@@ -66,12 +66,20 @@ module Buddy
     # applications - three Aledade roles in one day - and a resolver that
     # answered with the first of them was the whole of why two of those jobs
     # ended up on one timeline.
+    #
+    # `by_company` rather than the full search: this is a RESOLUTION, and the
+    # only field that can answer it is the company's own name. An OpenAI
+    # confirmation landed on an OnBoard row because a jobhunt note on that row
+    # mentioned openai and nothing else on the board did, so `rows.one?` called
+    # it settled. The classifier had been right; the matcher was reading note
+    # bodies. Role, tag, link and status weights stay where they were written
+    # for, which is the search box on the board itself.
     def applications_for(user, company)
       name = company.to_s.strip
       return [] if name.empty?
 
       board = JobApplication.where(user: user)
-      hits  = JobSearch.call(board, normalize(name)).to_a
+      hits  = JobSearch.by_company(board, normalize(name)).to_a
       return hits if hits.any?
 
       # Still nothing: try the leading word on its own, for the "Netflix Talent
@@ -80,7 +88,7 @@ module Buddy
       head = normalize(name).split.first
       return [] if head.blank?
 
-      matches = JobSearch.call(board, head).to_a
+      matches = JobSearch.by_company(board, head).to_a
       # One head word matching two DIFFERENT companies is still a coin toss, and
       # a note on the wrong company is worse than no note. Two rows for the SAME
       # company is not a coin toss - it is the thing this exists to return.

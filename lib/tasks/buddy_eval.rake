@@ -1146,6 +1146,24 @@ BUDDY_EDGE_PROBES = [
            "task's `listener` string. They are there now and nothing re-checks it",
   },
 
+  # --- an end time, not a duration the model works out itself ---------------
+  {
+    case: "prod 6859-6861, 24 Sep",
+    say:  "quiet until 12:30",
+    tool: :call_jil_function,
+    needs: :quiet_fn,
+    # The clock time as they said it. The function resolves it in Ruby now, so a
+    # minute count here is the model doing arithmetic it has no reason to do -
+    # and the one it did was anchored on the previous message in the thread
+    # rather than on the clock.
+    args:       { call_jil_function: { or_until: /12:?30/ } },
+    never_args: { call_jil_function: { quiet_for: /\d/ } },
+    note: "set quiet until 12:53 off `quiet_for: 124`, which is 124 minutes from " \
+          "10:26am - the time the message BEFORE it landed. 101 was the right " \
+          "figure and `time_preamble` had 10:49 at the top of the prompt the " \
+          "whole time. 23 minutes of extra silence, uncorrected",
+  },
+
   {
     case:  "prod 5272-5273",
     say:   "Lock the car, please.",

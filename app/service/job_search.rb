@@ -51,9 +51,27 @@ class JobSearch
     new(jobs, query).results
   end
 
-  def initialize(jobs, query)
+  # The same ranking with every field but the company switched off, for callers
+  # RESOLVING rather than searching: which row on the board is this piece of mail
+  # about.
+  #
+  # A note body that happens to say "openai" is a fine reason to show someone a
+  # row when they type it into a search box, and no reason at all to file a beat
+  # on it. An OpenAI confirmation resolved onto an OnBoard application that way —
+  # a jobhunt note on the row mentioned openai, it was the only hit on the board
+  # at that instant, so `rows.one?` made it an answer. Nine model calls then went
+  # into arguing the model out of writing the note it had correctly refused.
+  #
+  # Fuzzy still applies, so a typo or a shortened name is still caught. What is
+  # gone is a match on something the company merely APPEARS IN.
+  def self.by_company(jobs, query)
+    new(jobs, query, company_only: true).results
+  end
+
+  def initialize(jobs, query, company_only: false)
     @jobs = jobs
     @tokens = query.to_s.downcase.split(/\s+/).compact_blank
+    @company_only = company_only
   end
 
   def results
@@ -103,6 +121,8 @@ class JobSearch
   end
 
   def best_for(token, fields)
+    return company_score(token, fields[:company]) if @company_only
+
     scores = [
       company_score(token, fields[:company]),
       (WEIGHTS[:role] if fields[:role].include?(token)),

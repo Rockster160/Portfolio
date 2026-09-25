@@ -253,13 +253,38 @@ module Buddy
     # "Alpine" the place, "Horsetail" the trailhead they actually drive to.
     ALPINE_PLACE_RX = /\b(?:alpine|horsetail)\b/i
 
-    # Sentences that are about the weather where they LIVE.
+    # What each sentence says about the weather where they LIVE - up to the point
+    # it turns to the canyon, if it does.
     #
-    # Dropping a sentence naming the canyon costs a briefing that mentions both
-    # in one breath ("Rain Wed and Thu here, and Alpine's wet too") a second
-    # line. Same trade as everything else in this file: a duplicate is visible.
+    # Naming the canyon used to throw the whole sentence away, and a briefing that
+    # mentions both in one breath is an ordinary thing to write: "This week's got
+    # rain on Monday and Tuesday, and Alpine's following that same beat" said the
+    # home week perfectly, lost its sentence to the word Alpine, and got the week
+    # stapled underneath it saying the same thing over again.
+    #
+    # The comment that stood here called that duplicate the cheaper error, and
+    # against a silence it is - but it is not a trade worth making when the home
+    # half of the sentence is sitting right there in front of the comma.
     def home_sentences(body)
-      sentences(body).grep_v(ALPINE_PLACE_RX)
+      sentences(body).filter_map { |sentence| home_half(sentence) }
+    end
+
+    # The sentence, or the clause it opens with when the canyon comes later.
+    #
+    # Cut at the CLAUSE boundary rather than at the word, because "Rain Thu and
+    # Fri up Alpine" would otherwise hand back "Rain Thu and Fri up" and count a
+    # canyon forecast as the home one. With no boundary in front of it the canyon
+    # owns the sentence, which is the 12 Sep miss this whole check exists for:
+    # "Alpine looks rainy tomorrow..., and the rest of the week there's rain odds
+    # on Monday, Thu, and Fri" is all one forecast, and it is not theirs.
+    def home_half(sentence)
+      canyon = sentence =~ ALPINE_PLACE_RX
+      return sentence if canyon.nil?
+
+      at = connector_before(sentence, canyon)
+      return nil if at.nil?
+
+      sentence[0...at].strip.presence
     end
 
     # A claim that the week is quiet, on a week that isn't.
@@ -326,11 +351,21 @@ module Buddy
       week = sentence =~ WEEK_WORD_RX
       return [nil, sentence] if week.nil?
 
-      cut = nil
-      sentence.enum_for(:scan, CONNECTOR_RX).each { cut = Regexp.last_match if Regexp.last_match.begin(0) < week }
-      return [nil, sentence] if cut.nil?
+      at = connector_before(sentence, week)
+      return [nil, sentence] if at.nil?
 
-      [sentence[0...cut.begin(0)], sentence[cut.begin(0)..]]
+      [sentence[0...at], sentence[at..]]
+    end
+
+    # Where the LAST clause boundary before `index` begins, or nil if the
+    # sentence has none in front of it. Both callers want the same thing - the
+    # part of the sentence that comes before the turn it takes - and the last one
+    # rather than the first, so "High 79, low 52, and this week..." cuts at the
+    # week rather than at the low.
+    def connector_before(sentence, index)
+      cut = nil
+      sentence.enum_for(:scan, CONNECTOR_RX).each { cut = Regexp.last_match if Regexp.last_match.begin(0) < index }
+      cut&.begin(0)
     end
 
     # Sentences, and also lines: a briefing is half prose and half bullets, and

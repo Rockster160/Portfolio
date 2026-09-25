@@ -124,7 +124,10 @@ module Buddy
         aliases: ["quiet mode", "quiet hours"],
         kind:    :activity,
         notes:   "Set it with the \"Whisper Quiet For\" function, never a timer. \"Quiet time for an hour\" " \
-                 "means quiet until an hour from now - a countdown named \"quiet time\" does nothing at all.",
+                 "means quiet until an hour from now - a countdown named \"quiet time\" does nothing at all. " \
+                 "When they name the time it should END rather than how long it should last, put that in the " \
+                 "function's `or until` argument in the words they used and leave the minutes alone. The " \
+                 "function reads the clock itself, so there is no subtraction for you to do.",
       },
 
       # Devices are the one kind where `meaning` is load-bearing rather than

@@ -48,9 +48,16 @@ class ByteConversation < ApplicationRecord
   # the bare association did. Ordering is by the message's own created_at, so
   # sharing something old drops it into the thread where it happened rather than
   # at the bottom — it is the same event, not a new one.
+  #
+  # `not_hidden` because SHOWS is what this means: a trigger seed is a real row
+  # in the thread that nobody is meant to read, and handing it to a caller named
+  # `visible_messages` puts the subtraction on the caller. It is also what makes
+  # a page of 50 fifty BUBBLES — a fifth of a busy day is seeds, and counting
+  # them shortens every page of scrollback by however many it happened to catch.
   def visible_messages
     shared = ByteMessageShare.where(byte_conversation_id: id).select(:byte_message_id)
-    ByteMessage.where(byte_conversation_id: id).or(ByteMessage.where(id: shared))
+    scope  = ByteMessage.where(byte_conversation_id: id).or(ByteMessage.where(id: shared))
+    scope.not_hidden
   end
 
   # `cursor` runs `cursor-agent` on the Mac the way `claude` runs `claude -p`:
