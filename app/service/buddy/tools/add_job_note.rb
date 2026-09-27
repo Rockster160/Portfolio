@@ -45,6 +45,15 @@ Buddy::Tools.register(
     in, times to send back - and a `follow_up_at` on it puts "Send availability"
     on the agenda as a task. Use `scheduled` only once the mail names the slot.
 
+    **A booking called off is `cancelled`, and that is the whole of it.** It is
+    `scheduled` undone: filing it takes the meeting off their calendar, which is
+    the thing that stops being true. Do NOT reach for `scheduled` again - that
+    tag BOOKS, so it would put the cancelled interview back. `withdrew` is them
+    pulling out, `rejected` is the application being over, and a round falling
+    through is neither; if the mail says both, those are two beats and the
+    cancellation is the smaller one. No date belongs on it - the date that
+    mattered was on the booking it cancels.
+
     **An ATS receipt is `acknowledged`, not `applied` and not `heard_back`.**
     "Thanks for applying, a real human will review this" is a machine saying it
     arrived. `applied` is a thing THEY did, so putting it on a robot's reply
@@ -95,7 +104,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat. An ATS receipt is `acknowledged`; an ask for times is `availability`, not `scheduled`. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat. An ATS receipt is `acknowledged`; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again. offer/rejected/withdrew also settle the application",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

@@ -2456,6 +2456,107 @@ RSpec.describe Buddy::GPT::Turn do
   # with five other arms and something else had already spent it. So the hello
   # is no longer requested: if the reply doesn't have one, one goes on the
   # front, in the pet's own words.
+  # Prod 6927 (Fri 25 Sep 8:30am) and 6975 (Sat 26 Sep 8:30am). Both mornings,
+  # the whole of what Eve received was SILENT_BODY - "This one hasn't actually
+  # happened - nothing ran, so there's no receipt for it." She had no briefing for
+  # two days, and in its place a sentence about a receipt for a thing she had
+  # never asked for. Four model calls each, against one for the briefings that
+  # worked.
+  #
+  # Nothing was wrong with the words. Friday carried `repairs:
+  # ["unprompted_memory"]` and Saturday carried NO repairs at all and was
+  # retracted just the same, which is what says the repair was a passenger.
+  #
+  # Two things line up to do it, and both are structural:
+  #   * `retract_false_claim!`'s gate is `executed_anything?`, and a briefing
+  #     executes nothing by construction - so the gate is open every morning.
+  #   * `asked_about_state?` returns false on a self-initiated turn, which ARMS
+  #     the passive half of SILENT_TURN_STATE_RX. "That's on your calendar" is a
+  #     sentence about their day; the arm reads it as Buddy claiming to have put
+  #     it there.
+  describe "a briefing written in the ordinary voice of somebody's day" do
+    def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: seed,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    def briefing_turn
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      turn = described_class.new(message, client: FakeBuddyClient.new([]))
+      # `converse` sets this; asking `start_over?` on its own has to stand in for
+      # it, or the budget check compares against nil.
+      turn.instance_variable_set(:@deadline, Time.current + described_class::TURN_BUDGET_SECONDS)
+      turn
+    end
+
+    # The passive arm, which is the one that actually fired. The sentence itself
+    # may still be trimmed by Buddy::DayClaim - a briefing naming a day the seed
+    # said nothing about is a false fact whatever else is true of it - and that is
+    # the correct scrubber doing the correct thing. What must not happen is the
+    # whole briefing being replaced by a receipt.
+    it "is not retracted for saying where something already is" do
+      said = "Hey hey! High of 79 and low of 52, with rain coming Monday. " \
+             "Trash night is Thursday, and that's on your calendar."
+      briefing([{ text: said }])
+
+      expect(reply.metadata["retracted_claim"]).to be_nil
+      expect(reply.body).not_to eq(described_class::SILENT_BODY)
+      expect(reply.body).to include("Hey hey!")
+    end
+
+    it "is not retracted however that sentence is turned" do
+      [
+        "Those are all on your list already.",
+        "Hey hey! The dentist and the school run are both scheduled.",
+        "Morning! Your two reminders for the afternoon are set.",
+        "Hi! That one's logged from yesterday, so it's off your plate.",
+      ].each do |honest|
+        briefing([{ text: honest }])
+
+        expect(reply.metadata["retracted_claim"]).to be_nil, "wrongly retracted: #{honest}"
+      end
+    end
+
+    # Four model calls, not one, and two of them went on the retry: `start_over?`
+    # asks the same three arms, so it fired first and the retraction then fired on
+    # the second attempt's words. Asked directly, because a full run has its own
+    # reasons to go round again (a dropped fact is one, and a legitimate one).
+    it "does not spend a second attempt on those three arms" do
+      turn = briefing_turn
+      said = { text: "Hey hey! Trash night is Thursday, and that's on your calendar.", proposals: [] }
+
+      expect(turn.send(:start_over?, said, 1)).to be(false)
+    end
+
+    # The stand-down is scoped to the three arms about Buddy having ACTED.
+    # Everything that checks the briefing against its own SEED still runs, and
+    # `dropped_briefing_facts` is the one that shares this method.
+    it "still starts over when the briefing dropped what the seed handed it" do
+      turn = briefing_turn
+      dropped = { text: "Hey hey! Nothing much on.", proposals: [] }
+      allow(turn).to receive(:dropped_briefing_facts).and_return([:weather])
+
+      expect(turn.send(:start_over?, dropped, 1)).to be(true)
+    end
+
+    # And an ordinary turn is untouched: the same sentence off a typed message is
+    # still a claim about Buddy, because a typed message asked for something.
+    it "still retracts the same sentence on a turn somebody asked for" do
+      allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil])
+      run([{ text: "Those are all on your list already." }], text: "add milk and eggs")
+
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+  end
+
   describe "a briefing that opens cold" do
     def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
       message = convo.byte_messages.create!(

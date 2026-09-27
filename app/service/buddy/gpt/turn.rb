@@ -731,10 +731,13 @@ module Buddy
         # that nothing ran and nothing is waiting on a tap.
         return true if seed_skipped_its_call?
 
-        # Behind the same guards as everything else. A briefing trips none of
-        # them - it calls nothing and proposes nothing - but a second attempt
-        # after something HAS run would run it twice, and that outranks a
-        # dropped sentence.
+        # Behind the same guards as everything else: a second attempt after
+        # something HAS run would run it twice, and that outranks a dropped
+        # sentence.
+        #
+        # This used to read "a briefing trips none of them - it calls nothing and
+        # proposes nothing", which had it backwards. Calling nothing is the
+        # condition the arms below FIRE on; see the stand-down further down.
         body = outcome[:text].to_s
         return true if dropped_briefing_facts(body).any?
         # Survived its own corrective round. A second attempt is a fresh build
@@ -745,6 +748,23 @@ module Buddy
         # The three arms below are `retract_false_claim!`'s, so they are asked
         # about the words that will SHIP rather than the draft. See
         # `delivered_text`.
+        #
+        # And they are not asked about a briefing. The premise that used to stand
+        # above `dropped_briefing_facts` had it backwards twice running: calling
+        # nothing is what OPENS the retraction gate, not what closes it, and
+        # `asked_about_state?` stands down on a self-initiated turn, which arms
+        # the passive half of SILENT_TURN_STATE_RX against ordinary briefing
+        # prose. "It's on your list" is a sentence about THEIR day, and the arm
+        # reads it as Buddy claiming to have put it there.
+        #
+        # Everything above this line still runs, because it is the briefing's own
+        # correctness: `dropped_briefing_facts` is a briefing check, and so is the
+        # leak. What stands down is only the three arms about Buddy having ACTED -
+        # a briefing is offered no tools, so it has no such claim to make, and the
+        # prose is policed by Buddy::DayClaim, StashClaim, UnpromptedMemory and
+        # BriefingClaim, each against the facts the seed actually carried.
+        return false if today_briefing?
+
         said = delivered_text(outcome[:text])
         unbacked_claim(said).present? ||
           self.class.silent_turn_claim?(said, asked: asked_about_state?) ||
@@ -3736,6 +3756,17 @@ module Buddy
         # just being asked after the phrasing rather than before it, which meant
         # the phrasing was doing work the machinery had already done.
         return if executed_anything?(result)
+
+        # A briefing executes nothing BY CONSTRUCTION, so that gate is open on
+        # every one of them, every morning - and it ate two of Eve's whole,
+        # leaving "This one hasn't actually happened" where her day should have
+        # been. Nothing in the words was wrong; the second day carried no repairs
+        # at all and was retracted just the same.
+        #
+        # A briefing makes no claim about Buddy having acted, because it is handed
+        # nothing to act with. See `start_over?`, which stands the same three arms
+        # down for the same reason.
+        return if today_briefing?
 
         # Nothing ran, nothing is waiting on a tap, and the reply is written in
         # the voice of having acted. See SILENT_TURN_CLAIM_RX - this is the arm

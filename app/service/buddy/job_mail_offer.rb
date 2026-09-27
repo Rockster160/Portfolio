@@ -261,7 +261,10 @@ module Buddy
               "your reply; the card carries it. You can link the row as #{job_url(job)}."
           else
             "Say in ONE short sentence what this mail actually says - they have not read it, " \
-              "so lead with the substance rather than that mail arrived. Do not quote it back " \
+              "so lead with the substance rather than that mail arrived. NAME THE COMPANY in " \
+              "it: this sentence is the notification, and it lands on a lock screen with none " \
+              "of the card beside it, so a beat with no company attached could be any of the " \
+              "applications they have open. Do not quote it back " \
               "at them and do not paste any of it into your reply; the card carries it. " \
               "You can link the row as #{job_url(job)} if it reads naturally" \
               "#{", or the mail itself as #{mail_url(email)}" if email.present?}. One link, " \
@@ -322,9 +325,13 @@ module Buddy
     def booking_hint
       " If the mail names a TIME, the beat is `scheduled` and that time goes in " \
         "`follow_up_at` - it is the appointment, and it is what puts it on their " \
-        "calendar. Read it in their own zone, the way the mail writes it. Pass " \
+        "calendar. Check WHICH ZONE it is written in before you pass it: a calendar " \
+        "invite states its own, and an organiser on the other side of the country " \
+        "writes theirs rather than his. Convert it. Pass " \
         "`duration_minutes` too when the mail says how long (\"about 20 minutes\", " \
-        "an invite reading 2:00-2:20); without one it books an hour."
+        "an invite reading 2:00-2:20); without one it books an hour. If the booking is " \
+        "being CALLED OFF rather than made, the beat is `cancelled` and it takes no " \
+        "time at all - see the tag list."
     end
 
     # The company is on the board more than once and the mail does not say which

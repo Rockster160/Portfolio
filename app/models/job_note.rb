@@ -39,6 +39,7 @@ class JobNote < ApplicationRecord
     scheduled:      10,
     acknowledged:   11,
     availability:   12,
+    cancelled:      13,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
@@ -55,6 +56,21 @@ class JobNote < ApplicationRecord
   # both says an interview exists that doesn't and offers to put it on the
   # calendar as a timed event.
   #
+  # `cancelled` is `scheduled` undone. It closes the booking cluster rather than
+  # splitting it: scheduled-then-interview is the order those two happen in and
+  # nothing goes between them, so the cancellation sits at the end of the three
+  # beats it belongs with. A booked phone screen was called off by the organiser -
+  # METHOD:CANCEL on the same UID - and there was no value on this list for it.
+  # `withdrew` is THEM pulling out, `rejected` settles the whole application, and
+  # neither had happened. So the beat was filed as `scheduled` a second time,
+  # which is the tag that BOOKS a meeting: the card offered to put the cancelled
+  # interview back on the calendar, and the calendar row from the first booking
+  # sat there until it was read out in a briefing a day later.
+  #
+  # It does NOT settle the application - see IMPLIED_STATUS. A round falling
+  # through is not the process ending, and at KODE Health the rejection that did
+  # end it arrived four hours afterwards as its own beat.
+  #
   # `acknowledged` is the ATS auto-reply, and it needed a tag of its own because
   # neither neighbour is honest about it. `applied` is a thing THEY did, and
   # stamping it on a machine's receipt says they applied twice; `heard_back` is
@@ -70,6 +86,7 @@ class JobNote < ApplicationRecord
     "availability"   => "Availability",
     "scheduled"      => "Scheduled",
     "interview"      => "Interview",
+    "cancelled"      => "Cancelled",
     "take_home"      => "Take-home",
     "offer"          => "Offer",
     "rejected"       => "Rejected",
@@ -112,11 +129,12 @@ class JobNote < ApplicationRecord
   after_save :settle_receipt_after_applied,
     if: -> { acknowledged? && (saved_change_to_tag? || saved_change_to_occurred_at?) }
   # Asking for times again withdraws the booking those times were for, and so
-  # does a corrected booking landing behind the first one.
+  # does a corrected booking landing behind the first one - and so, most plainly
+  # of all, does the organiser calling it off.
   # `after_commit`, because retiring the other note's calendar row runs that
   # note's own callbacks.
   after_commit :withdraw_booking, on: [:create, :update],
-    if: -> { (availability? || scheduled?) && previous_changes.key?("tag") }
+    if: -> { (availability? || scheduled? || cancelled?) && previous_changes.key?("tag") }
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —
@@ -256,7 +274,8 @@ class JobNote < ApplicationRecord
     job_application.touch_activity!
   end
 
-  # A company that asks for availability has cancelled whatever was booked.
+  # A company that asks for availability has cancelled whatever was booked - and a
+  # `cancelled` note says so outright, which is the case this was missing.
   #
   # The two notes are different rows: the mail saying "she can no longer meet on
   # the 24th, send more times" lands as its own `availability` note, while the

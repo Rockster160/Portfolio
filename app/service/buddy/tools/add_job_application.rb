@@ -38,7 +38,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat this first one was. An ATS receipt is `acknowledged`; an ask for times is `availability`",
+      description: "The kind of beat this first one was. An ATS receipt is `acknowledged`; an ask for times is `availability`; a booking called off is `cancelled`",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

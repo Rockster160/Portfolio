@@ -214,6 +214,86 @@ RSpec.describe JobNote do
     end
   end
 
+  # Prod, KODE Health, Fri 25 Sep. Three beats landed on one application that day
+  # and the middle one went nowhere. 10:34am the phone screen was booked (note 151,
+  # `scheduled`, agenda item 1174 on Fri 2 Oct). 12:13pm the organiser cancelled it
+  # - METHOD:CANCEL, STATUS:CANCELLED, same UID - and Buddy said so out loud and
+  # then wrote NOTHING: there is no note on the row for that mail at all.
+  #
+  # There was nothing on the tag list for it. `withdrew` is the candidate pulling
+  # out, `rejected` settles the application, and neither had happened. So the card
+  # it did offer was `scheduled` again - which is the tag that BOOKS - and tapping
+  # it would have put the cancelled interview on the calendar a second time.
+  #
+  # The live cost was the calendar. Item 1174 survived the cancellation AND the
+  # rejection four hours later, and the following morning's briefing read out
+  # "Friday's got Interview: KODE Health at 8am."
+  describe "the cancelled tag" do
+    it "reads as Cancelled and needs no body" do
+      note = job.notes.create!(tag: :cancelled, occurred_at: 1.hour.ago)
+
+      expect(note.tag_label).to eq("Cancelled")
+      expect(note.body).to be_nil
+    end
+
+    # The whole of what the tag is for.
+    it "takes the booked interview off the calendar" do
+      at      = 5.days.from_now.change(hour: 8, min: 0)
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      item    = booking.follow_up_item
+      expect(item).to be_present
+
+      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_nil
+      expect(booking.follow_up_item).to be_nil
+      expect(AgendaItem.find_by(id: item.id)).to be_nil
+    end
+
+    # The note holding the booking stays - it is still the record that an
+    # interview was once booked. Only the date it was waiting on goes.
+    it "keeps the booking note itself" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
+
+      expect(job.notes.where(tag: :scheduled)).to include(booking)
+    end
+
+    # A round falling through is not the process ending. At KODE Health the
+    # rejection that did end it came four hours later, as its own beat.
+    it "leaves the application where it was" do
+      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
+
+      expect(job.reload.status).to eq("active")
+    end
+
+    # An interview that already happened is history, and a cancellation weeks
+    # afterwards is about something else. Same rule `availability` withdraws by.
+    it "leaves a booking that is already in the past alone" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
+
+      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_present
+    end
+
+    # No window, unlike a corrected booking: a cancellation is not a correction
+    # that has to land while the first one is still news.
+    it "cancels a booking made days earlier" do
+      booking = travel_to(4.days.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now) }
+
+      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_nil
+    end
+
+    # It is on the list the model can actually see, which is the half that failed:
+    # the beat was unfileable, so it was filed as the thing that books.
+    it "is offered to the model as a tag it can pass" do
+      expect(Buddy::Tools[:add_job_note][:args][:tag][:values]).to include(:cancelled)
+    end
+  end
+
   # A booked interview is a different animal from a chase: the date on the note
   # is the appointment itself, so it goes on the calendar as a timed event
   # rather than as a task called "Follow up".
@@ -222,6 +302,15 @@ RSpec.describe JobNote do
       keys = JobNote::TAG_LABELS.keys
 
       expect(keys[keys.index("scheduled") + 1]).to eq("interview")
+    end
+
+    # The booking beats read in the order they happen and nothing is interleaved
+    # with them, so a reader of the dropdown gets the sequence rather than a list.
+    it "keeps the whole booking cluster together" do
+      keys = JobNote::TAG_LABELS.keys
+      first = keys.index("availability")
+
+      expect(keys[first, 4]).to eq(%w[availability scheduled interview cancelled])
     end
 
     it "writes the interview onto the agenda as an event" do

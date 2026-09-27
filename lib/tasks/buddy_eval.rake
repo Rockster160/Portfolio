@@ -567,6 +567,30 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the time IS the note; without it nothing reaches the calendar",
   },
+  # --- a booking called off ---------------------------------------------------
+  # Prod, KODE Health, 25 Sep 12:13pm. The organiser cancelled the phone screen
+  # (METHOD:CANCEL on the same UID) and the beat reached nothing: no note was
+  # written for that mail at all, and the card that was offered instead said
+  # `tag: "scheduled"` - the tag that BOOKS. Tapping it would have put the
+  # cancelled interview on the calendar a second time. The agenda row from the
+  # first booking survived the cancellation AND the rejection four hours later,
+  # and was read out in the next morning's briefing.
+  #
+  # There was no value on the tag list for it, which is the half that's fixed.
+  # This is whether the model can find it.
+  {
+    case:  "prod, KODE Health 25 Sep",
+    say:   "Halloway Systems just cancelled the phone screen they booked with me - log that",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item set_reminder],
+    args:  { add_job_note: { tag: "cancelled" } },
+    # `scheduled` is what it reached for, and it is the one tag that makes it
+    # worse. The two that settle the application are wrong for a different
+    # reason: a round falling through is not the process ending.
+    never_args: { add_job_note: { tag: /\A(?:scheduled|withdrew|rejected)\z/ } },
+    needs: :halloway_application,
+    note:  "no tag existed for a cancellation, so it was filed as a second booking",
+  },
   # --- one company, several jobs --------------------------------------------
   # Prod 15 Sep: three Aledade PBC roles applied to in one day. The resolver
   # took a company and only a company and answered with the FIRST row, so two of

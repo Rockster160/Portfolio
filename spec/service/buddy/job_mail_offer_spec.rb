@@ -64,6 +64,33 @@ RSpec.describe Buddy::JobMailOffer do
 
     # The record must not depend on the model making a call or the person
     # tapping a card.
+    # Prod 6937, 25 Sep 10:34am, in full: "Phone screen is scheduled on Microsoft
+    # Teams." The seed says the reply IS the notification, and as a push that
+    # sentence says a phone screen exists somewhere and nothing else - against five
+    # live applications that day. Every other job-mail notification in the window
+    # named its company; the card carries it, and the card is not what lands on a
+    # lock screen.
+    it "asks for the company in the sentence that becomes the notification" do
+      body = call.body
+
+      expect(body).to include("NAME THE COMPANY")
+      expect(body).to match(/lock screen/)
+    end
+
+    # Prod 6937 and 6942 read the same DTSTART line two hours apart. The ics said
+    # `TZID=Eastern Standard Time:...T100000`, which is 8am where he is, and the
+    # instruction to read it "the way the mail writes it" is what invited 10am.
+    it "says to check which zone a named time is written in" do
+      body = call.body
+
+      expect(body).to match(/WHICH ZONE/)
+      expect(body).not_to include("the way the mail writes it")
+    end
+
+    it "points a called-off booking at the tag for it" do
+      expect(call.body).to include("`cancelled`")
+    end
+
     describe "filing the mail on the row" do
       let(:email) {
         user.emails.create!(
