@@ -149,8 +149,14 @@ RSpec.describe "Buddy credited chore completion" do
 
     # The day the row would LAND on, not today - so backdating one to a day
     # that is already covered is caught, and backdating to a free one isn't.
+    #
+    # Yesterday is worked out in the PERSON'S zone, because `ChoreDay` is: it
+    # takes 4am in America/Denver as the boundary. Specs run in UTC, where the
+    # date turns six hours early, so a plain `Time.current - 1.day` lands on
+    # TODAY'S chore day every evening from 6pm and the third case below then
+    # collided with the row the first one wrote.
     it "reads the backdated day rather than the clock" do
-      yesterday = (Time.current - 1.day).change(hour: 14).iso8601
+      yesterday = recorder.timezone { (Time.current - 1.day).change(hour: 14) }.iso8601
 
       run({ chore: "Recycling", at: yesterday, credit_to: "wren" })
 

@@ -39,9 +39,62 @@ RSpec.describe CleanVisitorsWorker, type: :worker do
 
     it "keeps a guest that owns a record on a has_many without a dependent option" do
       guest = make_guest
-      UserCache.create!(user: guest, key: "anything", data: { a: 1 })
+      ActionEvent.create!(user: guest, name: "Coffee", timestamp: 2.weeks.ago)
 
       expect { described_class.new.perform }.not_to change(User, :count)
+    end
+
+    # A cache entry and a dashboard row are written FOR a guest by whatever page
+    # it landed on, so neither says the account was used. Holding accounts on
+    # them left 531 sitting months past retention owning nothing else.
+    it "sweeps a guest held up only by a cache entry" do
+      guest = make_guest
+      cache = UserCache.create!(user: guest, key: "anything", data: { a: 1 })
+
+      expect { described_class.new.perform }.to change(User, :count).by(-1)
+      expect(UserCache.exists?(cache.id)).to be(false)
+    end
+
+    it "sweeps a guest held up only by a dashboard row" do
+      guest = make_guest
+      dashboard = UserDashboard.create!(user: guest)
+
+      expect { described_class.new.perform }.to change(User, :count).by(-1)
+      expect(UserDashboard.exists?(dashboard.id)).to be(false)
+    end
+
+    # Neither table has a foreign key to `users`, so skipping the check without
+    # clearing the rows would leave them pointing at an id that is gone.
+    it "leaves no derived rows behind pointing at a deleted account" do
+      guest = make_guest
+      UserCache.create!(user: guest, key: "anything", data: { a: 1 })
+      UserDashboard.create!(user: guest)
+
+      described_class.new.perform
+
+      expect(UserCache.where(user_id: guest.id)).to be_empty
+      expect(UserDashboard.where(user_id: guest.id)).to be_empty
+    end
+
+    # The derived rows are not a licence to delete an account that was used.
+    it "still keeps a guest whose cache sits beside a real record" do
+      guest = make_guest
+      UserCache.create!(user: guest, key: "anything", data: { a: 1 })
+      Task.create!(user: guest, name: "Held", listener: "tell:held", code: "// noop")
+
+      expect { described_class.new.perform }.not_to change(User, :count)
+      expect(UserCache.where(user_id: guest.id)).to be_present
+    end
+
+    # A real account's cache is not swept by a sweep aimed at guests.
+    it "leaves a real account's cache alone" do
+      user = travel_to(2.years.ago) { FactoryBot.create(:user, phone: "5559990202") }
+      cache = UserCache.create!(user: user, key: "anything", data: { a: 1 })
+      make_guest
+
+      described_class.new.perform
+
+      expect(UserCache.exists?(cache.id)).to be(true)
     end
 
     it "separates owners from non-owners inside a single batch" do

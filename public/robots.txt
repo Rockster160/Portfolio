@@ -1,5 +1,23 @@
-# See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+# Default-deny, with the public pages named. Everything else on this host is
+# somebody's household data behind a login, and a crawler that walks one of those
+# paths is handed a guest account it can never use - `authorize_user_or_guest`
+# mints a row per request for a client that keeps no cookie, which is where
+# 4,500 accounts a day were coming from.
 #
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+# Deny-by-default rather than a list of app paths so that a new route is out of
+# the index until somebody puts it in, which is the right way round for an app
+# where almost nothing is meant to be read by a stranger.
+#
+# `Allow: /$` is the landing page and only the landing page - Ardesian's own
+# page, which has every reason to be indexed. The rest are the reference pages
+# linked off it.
+User-agent: *
+Disallow: /
+Allow: /$
+Allow: /playground
+Allow: /blockly
+Allow: /icons
+Allow: /map
+Allow: /mtg-glossary
+Allow: /lorcana-glossary
+Allow: /privacy-policy

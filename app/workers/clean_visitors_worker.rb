@@ -21,9 +21,22 @@ class CleanVisitorsWorker
   # short enough that a real backlog drains tonight rather than over weeks.
   RESUME_DELAY = 1.minute
 
-  # Vacuumed after a sweep that actually deleted something. These are the only
-  # two tables this worker removes rows from.
+  # Vacuumed after a sweep that actually deleted something. The derived tables
+  # below are emptied too, but they hold a row per guest at most and are not
+  # worth a vacuum of their own.
   VACUUM_TABLES = %i[users ip_visits].freeze
+
+  # Rows the app writes FOR a user rather than ones the user wrote. A cache entry
+  # is derived data by definition, and the dashboard row comes from a first page
+  # view rather than from anybody arranging one. Counting either as ownership is
+  # what left 531 guests sitting months past retention owning nothing else - 265
+  # held by a cache, 107 by a dashboard - so they go with the account instead of
+  # holding it up.
+  #
+  # Neither table has a foreign key to `users`, so leaving them would orphan the
+  # rows rather than abort the delete. That is why they are removed rather than
+  # merely ignored.
+  DERIVED_TABLES = { user_caches: :user_id, user_dashboards: :user_id }.freeze
 
   # An IP is kept far longer than a guest account, because the count IS the
   # record — it's what tells a regular from a newcomer from a stranger, and
@@ -142,7 +155,9 @@ class CleanVisitorsWorker
   # keeps failing never drains. Union both sources so the check matches what
   # the database will actually enforce.
   def child_columns
-    @child_columns ||= (reflection_columns | foreign_key_columns).sort
+    @child_columns ||= (reflection_columns | foreign_key_columns).reject { |table, _column|
+      DERIVED_TABLES.key?(table.to_sym)
+    }.sort
   end
 
   def reflection_columns
@@ -171,9 +186,24 @@ class CleanVisitorsWorker
   # is no dependent: :destroy work to do — and skipping instantiation is the
   # difference between minutes and hours at this volume.
   def delete_batch(ids)
+    clear_derived(ids)
     ::User.where(id: ids).delete_all
   rescue ::ActiveRecord::InvalidForeignKey => e
     ::Rails.logger.warn("[CleanVisitorsWorker] skipped batch of #{ids.size}: #{e.message}")
     0
+  end
+
+  # Ahead of the accounts, so a batch that aborts on a constraint leaves the
+  # derived rows gone and the users behind rather than the other way round. The
+  # next sweep picks those users up again and finds nothing left to clear.
+  def clear_derived(ids)
+    DERIVED_TABLES.each { |table, column|
+      quoted = ::User.connection.quote_table_name(table)
+      quoted_column = ::User.connection.quote_column_name(column)
+
+      ::User.connection.delete(
+        ::User.sanitize_sql_array(["DELETE FROM #{quoted} WHERE #{quoted_column} IN (?)", ids]),
+      )
+    }
   end
 end

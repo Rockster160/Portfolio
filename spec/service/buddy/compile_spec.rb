@@ -720,20 +720,25 @@ RSpec.describe Buddy::Compile do
     # much sooner time." It was shown the row and not the date on it, so it had
     # nothing to judge "too far out" against and pulling it in was never a move
     # it was in a position to make.
+    # Both of these count days in the PERSON'S zone, because `pending_when` does -
+    # it takes `Buddy::Day.zone(user)` and subtracts two dates inside it. Specs
+    # run in UTC, so a plain `1.day.from_now` is a different date from the one
+    # the prompt will label for the six hours after UTC midnight, which here is
+    # every evening from 6pm. That window used to read as "in 2 days".
     it "says when each pending follow-up is due, and how heavy it is" do
-      mood_check.update!(check_in_at: 96.days.from_now, severity: 86)
+      mood_check.update!(check_in_at: user.timezone { 96.days.from_now }, severity: 86)
       flare
       fake = stub_quiet
 
       described_class.run!(convo)
 
       brief = fake.calls.first.input.first[:content]
-      expect(brief).to match(/in 9[56] days/)
+      expect(brief).to include("in 96 days")
       expect(brief).to include("sev 86")
     end
 
     it "says so plainly when one is due tomorrow" do
-      mood_check.update!(check_in_at: 1.day.from_now.change(hour: 18))
+      mood_check.update!(check_in_at: user.timezone { 1.day.from_now.change(hour: 18) })
       flare
       fake = stub_quiet
 
