@@ -43,12 +43,30 @@ module Buddy
       # offer; without them a second job at a known company resolves to whichever
       # row came first.
       job = JobHunt.resolve_application(user, verdict[:company], said: mail_said(verdict, metadata))
-      # No company on the verdict, but the mail named a ROLE. A generic ATS
-      # address with "thank you for your interest in joining our team" gives the
-      # classifier nothing to put in `company`, and it is right not to guess -
-      # but the board may still hold exactly one row for the role it names.
-      # See JobHunt.resolve_by_role for the receipt this lost.
-      job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if verdict[:company].blank?
+      rows = (job.nil? ? board_rows(user, verdict) : [])
+      # Nothing on the board under the name the verdict gave, but the mail named
+      # a ROLE. Two shapes reach this, and the role is the only handle either of
+      # them leaves:
+      #
+      # No company at all - a generic ATS address with "thank you for your
+      # interest in joining our team" gives the classifier nothing to put in
+      # `company`, and it is right not to guess. See JobHunt.resolve_by_role for
+      # the receipt that lost.
+      #
+      # A company that is simply WRONG - the board host read as the employer.
+      # A Workable receipt named "OpenDataJobs", which is the board Peregrine
+      # Advisors posts on, 96 seconds after the Peregrine application went out.
+      # `company` was present, so the role was never asked, and the confirmation
+      # opened a second application for a company that does not exist: the
+      # `applied` beat on row 89 and its receipt on row 90, neither row holding
+      # both halves of one application.
+      #
+      # `resolve_by_role` is safe to ask with a name in hand because it demands
+      # the WHOLE role and exactly one match - see WHOLE_ROLE. A genuinely new
+      # company whose role also matches one existing row is the case it can get
+      # wrong, and it is the narrower mistake: a note on a real neighbour rather
+      # than a phantom company on the board.
+      job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if rows.none?
       # The watcher hands the words over because it read the message off disk.
       # The domain inbox doesn't, and for its first week that meant the seed
       # carried no message at ALL — so the trimming habit below was never even
@@ -69,7 +87,6 @@ module Buddy
       if job.nil?
         return deliver_card(user, conversation, card, metadata, verdict) if verdict[:company].blank?
 
-        rows = JobHunt.applications_for(user, verdict[:company])
         seed = (
           if rows.any?
             ambiguous_seed(verdict, rows, metadata, occurred_at, email, body, outgoing)
@@ -171,6 +188,16 @@ module Buddy
       return "that email" if company.blank?
 
       outgoing ? "your email to #{company}" : "the email from #{company}"
+    end
+
+    # Every row already on the board under the name the verdict gave, and none
+    # when it gave no name. Read once, because it decides both whether to fall
+    # back to the role and, failing that, whether the seed asks WHICH row or
+    # proposes a new company.
+    def board_rows(user, verdict)
+      return [] if verdict[:company].blank?
+
+      JobHunt.applications_for(user, verdict[:company])
     end
 
     def deliver_card(user, conversation, card, metadata, verdict)

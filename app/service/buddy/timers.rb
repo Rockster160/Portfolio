@@ -142,6 +142,14 @@ module Buddy
 
       meta = last.metadata.is_a?(Hash) ? last.metadata : {}
       return false unless PROSE_KINDS.include?(meta["kind"].to_s)
+      # A card is not a question anybody types an answer to - it is answered by
+      # tapping it, and it holds its own decision. `"Who did: Puppy Down?"` is a
+      # record-link `ask_who` card: right `kind`, and a question mark in the
+      # label. It had been submitted 51 minutes earlier and was still the newest
+      # message in the thread, so a plain `12m` went the long way round - four
+      # model calls, 9.6 cents and 12.7 seconds against 88ms, for the same timer
+      # the same words had set on the fast path an hour before.
+      return false if meta["source"] == "form"
 
       last.body.to_s.match?(QUESTION_RX)
     rescue StandardError

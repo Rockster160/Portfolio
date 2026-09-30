@@ -426,6 +426,52 @@ RSpec.describe Buddy::JobMailOffer do
     end
   end
 
+  # A named company is not the same as a real one. Prod 7111-7113: the Workable
+  # receipt for the Peregrine Advisors application named "OpenDataJobs", the
+  # board Peregrine posts on, 96 seconds after the application went out. It
+  # opened row 90 for a company that does not exist, and left one application in
+  # two halves - the `applied` beat on 89, its confirmation on 90.
+  context "when the company named is not on the board but the role is" do
+    let!(:job) {
+      user.job_applications.create!(company: "Peregrine Advisors", role: "Generative AI Engineer")
+    }
+
+    before {
+      verdict[:company]  = "OpenDataJobs"
+      verdict[:headline] = "Application received for Generative AI Engineer"
+      metadata[:subject] = "Thank you for applying"
+    }
+
+    it "files the mail on the row whose role it names" do
+      message = call
+
+      expect(message.body).to include("belongs to an application already on their board")
+      expect(message.metadata["job_application_id"]).to eq(job.id)
+    end
+
+    it "does not propose a new company" do
+      expect(call.body).not_to include("NOT on their board yet")
+    end
+
+    # WHOLE_ROLE and `matches.one?` are what make the fallback safe with a name
+    # in hand. Two rows answering to the role is a coin toss, and the company
+    # name - wrong or not - is the better thing to go on.
+    it "proposes the company when two rows answer to the same role" do
+      user.job_applications.create!(company: "Globex", role: "Generative AI Engineer")
+
+      body = call.body
+
+      expect(body).to include("NOT on their board yet")
+      expect(body).to include("Company: OpenDataJobs")
+    end
+
+    it "proposes the company when no row answers to the role" do
+      verdict[:headline] = "Application received for Staff Platform Engineer"
+
+      expect(call.body).to include("NOT on their board yet")
+    end
+  end
+
   # It used to refuse a settled one, and post a bare card with nowhere for the
   # message to go. But the last word from a company is usually the rejection,
   # and it arriving is the beat that closes the row - see prod 5759, where

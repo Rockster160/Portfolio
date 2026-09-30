@@ -90,13 +90,31 @@ module AuthHelper
     redirect_to login_path, **msg
   end
 
+  # A guest account is for somebody who has ARRIVED — a page in front of them,
+  # with things on it they can act on and nowhere to put the result. A data
+  # endpoint reached carrying no session is not an arrival. It is a client whose
+  # session lapsed, or one that keeps no session at all, and minting an account
+  # for it hands the next write to an empty stranger instead of asking the
+  # client to sign in again.
+  #
+  # `navigable_request?` already draws exactly this line, and its own comment
+  # names two of the four endpoints that were doing the minting. One day's
+  # crawl: 21,675 guest accounts, and the request that created each one was
+  # `/chores/icons.json` 13,235 times, `/agenda/sync/bootstrap` 4,477,
+  # `/agenda_preference` 1,421 — every one of them `Sec-Fetch-Dest: empty` or
+  # `serviceworker` with `Accept: application/json`. TWO were a page.
+  #
+  # A real first visit is unaffected: the page navigation mints, and the fetches
+  # it fires carry the session it was given. The shared-recipe and playground
+  # links that this filter exists for are page navigations and always were.
   def authorize_user_or_guest
-    if current_user.blank?
-      store_previous_url
-      create_guest_user
+    return if current_user.present?
+    return head(:unauthorized) unless navigable_request?
 
-      flash.now[:notice] = "We've signed you up with a guest account!"
-    end
+    store_previous_url
+    create_guest_user
+
+    flash.now[:notice] = "We've signed you up with a guest account!"
   end
 
   def authorize_user

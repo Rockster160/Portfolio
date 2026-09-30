@@ -115,10 +115,11 @@ RSpec.describe Buddy::Timers do
     describe ".parse_request in a conversation" do
       let(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
 
-      def buddy_says(body, kind: :buddy)
+      def buddy_says(body, kind: :buddy, **meta)
         conversation.byte_messages.create!(
           user: user, direction: :inbound, state: :delivered,
-          body: body, metadata: { "kind" => kind.to_s }, delivered_at: Time.current
+          body: body, metadata: { "kind" => kind.to_s }.merge(meta.stringify_keys),
+          delivered_at: Time.current
         )
       end
 
@@ -150,6 +151,31 @@ RSpec.describe Buddy::Timers do
         buddy_says("Suki set a 5 min timer for pasta ⏲", kind: :buddy_activity)
 
         expect(parse("10m tea")).to eq(seconds: 600, label: "tea")
+      end
+
+      # A card is answered by tapping it, not by typing at it - and it sits there
+      # as the newest message in the thread long after it was settled. Prod 7144
+      # was an `ask_who` card submitted at 10:01pm; at 10:52pm a bare `12m` went
+      # the long way round because of it - four model calls, 9.6 cents and 12.7
+      # seconds against the 88ms the same words cost an hour before.
+      it "ignores a form card, which is not a question anybody types into" do
+        buddy_says("Who did: Puppy Down?", kind: :buddy_reply, source: "form")
+
+        expect(parse("12m")).to eq(seconds: 720, label: nil)
+      end
+
+      it "ignores a form card that is still waiting to be answered" do
+        buddy_says("Who did: Recycling?", kind: :buddy_reply, source: "form")
+
+        expect(parse("5m")).to eq(seconds: 300, label: nil)
+      end
+
+      # The half that must keep working: a real question is prose, with no source.
+      it "still declines a bare duration after a real question" do
+        buddy_says("Who did: Puppy Down?", kind: :buddy_reply, source: "form")
+        buddy_says("How long do you want it for?")
+
+        expect(parse("12m")).to be_nil
       end
 
       it "takes an explicit timer request even mid-question" do
