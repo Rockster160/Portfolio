@@ -9,6 +9,12 @@ RSpec.describe "Interview tracker", type: :request do
 
   before { post login_path, params: { user: { username: user.username, password: "password123" } } }
 
+  # The number printed on one status chip, by its label.
+  def chip_count(label)
+    pattern = /#{label}\s*<span class="chip-count">(\d+)<\/span>/
+    response.body[pattern, 1]&.to_i
+  end
+
   # The order of the wall, by application id.
   def card_order
     response.body.scan(/<a class="interview-card[^>]*href="\/interviews\/(\d+)"/).flatten.map(&:to_i)
@@ -184,6 +190,64 @@ RSpec.describe "Interview tracker", type: :request do
 
       get interviews_path(q: "netflix", status: :all)
       expect(card_order.size).to eq(2)
+    end
+
+    # Each chip is a link that keeps the query, so its number has to be the
+    # number of rows tapping it lands on. Counted off the board instead, a
+    # search for one company printed the whole board's totals beside every
+    # chip - true of nothing on screen, and wrong about where the link went.
+    describe "the status chips during a search" do
+      before do
+        user.job_applications.create!(company: "Netflix Games", status: :rejected)
+        user.job_applications.create!(company: "Netflix Studios", status: :closed)
+        user.job_applications.create!(company: "Hooli", status: :rejected)
+      end
+
+      it "counts only the matches in each status" do
+        get interviews_path(q: "netflix", status: :all)
+
+        expect(chip_count("All")).to eq(3)
+        expect(chip_count("Rejected")).to eq(1)
+        expect(chip_count("Closed")).to eq(1)
+        expect(chip_count("Live")).to eq(1)
+      end
+
+      # Hooli is rejected and on the board, and has nothing to do with this
+      # search. Before, it was counted on the Rejected chip regardless.
+      it "leaves out a row the query never matched" do
+        get interviews_path(q: "netflix", status: :all)
+
+        expect(chip_count("Rejected")).to eq(1)
+      end
+
+      # A chip whose status the search emptied prints a zero rather than the
+      # count it would have had.
+      it "says zero for a status with no matches" do
+        get interviews_path(q: "hooli", status: :all)
+
+        expect(chip_count("Rejected")).to eq(1)
+        expect(chip_count("Live")).to eq(0)
+        expect(chip_count("Offers")).to eq(0)
+      end
+
+      # The count and the wall are one answer read two ways: whatever a chip
+      # promises, tapping it has to show.
+      it "matches what the chip actually opens" do
+        get interviews_path(q: "netflix", status: :all)
+        promised = chip_count("Rejected")
+
+        get interviews_path(q: "netflix", status: :rejected)
+
+        expect(card_order.size).to eq(promised)
+      end
+
+      it "goes back to the whole board once the query is cleared" do
+        get interviews_path(status: :all)
+
+        # Netflix + Anrok live, Netflix Games + Hooli rejected, Studios closed.
+        expect(chip_count("All")).to eq(5)
+        expect(chip_count("Rejected")).to eq(2)
+      end
     end
 
     it "offers the wider search when a narrowed one finds nothing" do

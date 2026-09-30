@@ -16,10 +16,20 @@ class JobApplicationsController < ApplicationController
   def index
     @filter = params[:status].presence&.to_s || "live"
     @query = params[:q].to_s.strip
-    # Search RANKS, the status chips NARROW, and they compose — JobSearch takes
-    # whatever relation the filter left and orders it by how well each row
-    # answers the query.
-    @jobs = surface_interviews(JobSearch.call(filtered_jobs.includes(:notes), @query))
+    # Search RANKS, the status chips NARROW, and they compose.
+    #
+    # With a query the WHOLE board is searched once and narrowed in Ruby, where
+    # searching the already-filtered scope would be the obvious thing. The
+    # reason is the chips: each one prints a count, each one is a link that
+    # keeps the query, and the count has to be the number of rows that link
+    # actually lands on. Counting off the board instead promised "Rejected 8"
+    # during a search that had one rejected match - a number that was true of
+    # nothing on screen and wrong about where the link went.
+    #
+    # One pass answers both, so they cannot disagree.
+    matched = (JobSearch.call(searchable_jobs, @query) if @query.present?)
+    rows = matched ? matched.select { |job| in_filter?(job) } : filtered_jobs.includes(:notes).to_a
+    @jobs = surface_interviews(rows)
     # JSON is the local job hunter asking what is already on the board so it
     # never applies to the same company twice. It wants the rows and nothing
     # else, so it returns before the page's own furniture is loaded.
@@ -27,7 +37,7 @@ class JobApplicationsController < ApplicationController
       return render json: { jobs: @jobs.map { |job| serialize(job) } }
     end
 
-    @counts = current_user.job_applications.group(:status).count
+    @counts = status_counts(matched)
     @live_jobs = current_user.job_applications.live.order(:company).to_a
     @new_job = current_user.job_applications.new
     load_upcoming
@@ -149,6 +159,33 @@ class JobApplicationsController < ApplicationController
     return scope.where(status: @filter) if JobApplication.statuses.key?(@filter)
 
     scope.live
+  end
+
+  # Everything, ranked by the query. `ordered` so a tie in score still falls
+  # back to "what happened most recently", the way the unsearched wall does.
+  def searchable_jobs
+    current_user.job_applications.ordered.includes(:notes)
+  end
+
+  # `filtered_jobs` in Ruby, for narrowing a set that has already been searched
+  # and ranked. Re-running the filter in SQL would throw the ranking away.
+  def in_filter?(job)
+    return true if @filter == "all"
+    return job.status == @filter if JobApplication.statuses.key?(@filter)
+
+    JobApplication::LIVE_STATUSES.include?(job.status.to_sym)
+  end
+
+  # What each chip prints. Off the board when nothing is being searched; off
+  # the MATCHES when something is, so the number on a chip is the number of
+  # rows tapping it shows.
+  #
+  # Sparse either way - `group(:status).count` omits a status nobody holds, and
+  # the view reads it with `.to_i` for exactly that reason.
+  def status_counts(matched)
+    return current_user.job_applications.group(:status).count if matched.nil?
+
+    matched.group_by(&:status).transform_values(&:size)
   end
 
   # A booked interview outranks recency. It's the one thing on this page with a

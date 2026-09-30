@@ -214,6 +214,81 @@ RSpec.describe Buddy::BriefingFacts do
     end
   end
 
+  # Ten of eleven mornings, eight unbroken, always the same thought: the count
+  # moved into Ruby and the RARITY was left to a sentence in the prompt.
+  describe "how often a thought is floated" do
+    def stashed(idea, created:, surfaced: nil)
+      memory = user.buddy_memories.create!(kind: :stash, content: idea, category: :home)
+      memory.update_columns(created_at: created, surfaced_at: surfaced)
+      memory
+    end
+
+    def hashes(rows)
+      rows.map { |m| { id: m.id, idea: m.content, waiting: "7 weeks", category: "home" } }
+    end
+
+    def due(rows, now: Time.current) = described_class.stash_due(user, hashes(rows), now)
+
+    # The one most at risk of going quietly missing, which is the call
+    # `Buddy::Context#stashed_ideas` already makes.
+    it "takes the oldest thought nobody has been told about" do
+      old = stashed("Kennel auto-open idea", created: 7.weeks.ago)
+      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
+
+      expect(due([old, recent]).map { |i| i[:id] }).to eq([old.id])
+    end
+
+    # NOTHING, rather than a line the model is asked to use sparingly - the rule
+    # asking for the float comes off with the section.
+    it "says nothing at all while one is still warm" do
+      old = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 1.day.ago)
+      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
+
+      expect(due([old, recent])).to be_empty
+    end
+
+    it "takes the section and its writing rule off together" do
+      stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 1.day.ago)
+      facts = { today: [], due: [], jobs: [], weather: nil, week: [], stash: [] }
+
+      expect(described_class.block(facts)).not_to include("ON THEIR MIND")
+      expect(described_class.stash_lines(facts)).to be_empty
+    end
+
+    # The old behaviour: the pick was the oldest, and the oldest does not change
+    # until it is settled, so it was the same thought every morning forever.
+    it "moves on to the next one rather than back to the top" do
+      old = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 4.days.ago)
+      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
+
+      expect(due([old, recent]).map { |i| i[:id] }).to eq([recent.id])
+    end
+
+    it "comes back round once they have all had a turn" do
+      first = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 9.days.ago)
+      second = stashed("Glimmer iPad controls", created: 4.weeks.ago, surfaced: 4.days.ago)
+
+      expect(due([first, second]).map { |i| i[:id] }).to eq([first.id])
+    end
+
+    # `updated_at` is what the daily audit reads to tell an edit from an
+    # untouched row, so a float must not look like one.
+    it "stamps surfaced_at and leaves updated_at where it was" do
+      row = stashed("Kennel auto-open idea", created: 7.weeks.ago)
+      row.update_columns(updated_at: 3.days.ago)
+      before = row.reload.updated_at
+
+      described_class.mark_floated!(user, { id: row.id })
+
+      expect(row.reload.surfaced_at).to be_present
+      expect(row.reload.updated_at).to be_within(1.second).of(before)
+    end
+
+    it "stamps nothing for a row it was handed without an id" do
+      expect { described_class.mark_floated!(user, { idea: "No id" }) }.not_to raise_error
+    end
+  end
+
   describe "how a line reads" do
     # Rocco: "'You have yoga tomorrow' is absolutely incorrect. 'Chelsea has
     # yoga tomorrow' is accurate and acceptable."

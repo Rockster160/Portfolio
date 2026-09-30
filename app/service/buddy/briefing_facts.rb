@@ -106,7 +106,7 @@ module Buddy
         due:     Array(served[:upcoming_reminders]).select { |r| r[:status].blank? },
         jobs:    Array(served[:chores_due_today]),
         week:    Array(served[:upcoming_notable]),
-        stash:   Array(served[:stashed_ideas]),
+        stash:   stash_due(user, Array(served[:stashed_ideas]), now),
         waiting: Array(served[:pending_relays]),
         weather: weather(user, now),
         alpine:  (alpine?(user) ? alpine_lines(user, now) : {}),
@@ -269,6 +269,69 @@ module Buddy
       stash_floated(facts).map { |idea|
         [idea[:idea], ("(#{idea[:waiting]})" if idea[:waiting].present?)].compact_blank.join(" ")
       }
+    end
+
+    # How long a floated thought stays quiet afterwards.
+    #
+    # "Occasionally, and not most days" is what the rule asks for, and the rarity
+    # was the one part of this section still left to the model. The COUNT moved
+    # into Ruby as STASH_FLOAT on 21 Sep and the rarity did not - so from then on
+    # the model was handed the same single line under the same heading every
+    # morning, which reads as an instruction to say it. It said it on ten of the
+    # next eleven mornings, eight of them unbroken, and always the SAME thought:
+    # the pick is the oldest, and the oldest does not change until it is settled.
+    #
+    # The comment that used to stand here had already named this - "the same
+    # thought is picked every morning until it is settled, so floating it daily
+    # is nagging" - and then left it to a sentence in a prompt.
+    #
+    # Three days. Turn this one number to change how often he hears about them;
+    # it is the whole control.
+    STASH_SPACING = 3.days
+
+    # The thought to float this morning, or nothing at all.
+    #
+    # Nothing is the ordinary answer, and it has to be NOTHING rather than a line
+    # the model is told to use sparingly: `applicable_rules` adds the stash rule
+    # off `stash_lines`, so the section and the instruction asking for it come off
+    # together and there is nothing left to be tempted by.
+    #
+    # Ordered so a thought that has never been raised goes first - oldest of
+    # those, the one most at risk of going quietly missing, which is the call
+    # `stashed_ideas` already makes - and then the one raised longest ago. That
+    # rotates through the pile instead of returning to the top of it, so the same
+    # idea comes round every eight floats rather than every morning.
+    #
+    # Reads `surfaced_at`, which has been a column on this table since the
+    # BuddyIdea merge with nothing using it.
+    def stash_due(user, ideas, now)
+      return [] if user.nil? || ideas.empty?
+
+      ids = ideas.filter_map { |idea| idea[:id] }
+      return ideas.first(STASH_FLOAT) if ids.empty?
+
+      rows = BuddyMemory.kind_stash.where(user: user, id: ids)
+      # One raised inside the window is still warm, whichever one it was.
+      return [] if rows.exists?(surfaced_at: (now - STASH_SPACING)..)
+
+      pick = rows.order(Arel.sql("surfaced_at ASC NULLS FIRST, created_at ASC")).first
+      return [] if pick.nil?
+
+      ideas.select { |idea| idea[:id] == pick.id }
+    end
+
+    # Written when the briefing actually SAID it - see
+    # Buddy::GPT::Turn#stamp_floated_stash for why that and not the seed.
+    #
+    # `surfaced_at` alone. `updated_at` is what the daily audit reads to tell an
+    # edit from an untouched row, so stamping it every time a briefing mentioned
+    # something would put a false edit on the record every few days.
+    def mark_floated!(user, idea, now: Time.current)
+      id = idea.is_a?(::Hash) ? idea[:id] : nil
+      return if user.nil? || id.blank?
+
+      BuddyMemory.where(user: user, id: id)
+        .update_all(surfaced_at: now) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # WHICH of them the briefing was handed, as the rows themselves.

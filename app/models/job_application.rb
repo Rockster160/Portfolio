@@ -28,7 +28,14 @@ class JobApplication < ApplicationRecord
 
   # Neither rejected nor closed. This is what the index shows unless asked
   # otherwise — "hide the rejected by default".
-  scope :live,    -> { where(status: [:active, :offer]) }
+  #
+  # Named because the index needs the same answer in Ruby: a search narrows the
+  # chip counts, and those are counted off an already-loaded array rather than
+  # re-queried per status. Two copies of "which statuses are live" is exactly
+  # the drift that ends with a chip and its own wall disagreeing.
+  LIVE_STATUSES = %i[active offer].freeze
+
+  scope :live,    -> { where(status: LIVE_STATUSES) }
   scope :ordered, -> { order(Arel.sql("COALESCE(last_activity_at, created_at) DESC")) }
 
   # The site's autogen palette. A colour is assigned at creation rather than

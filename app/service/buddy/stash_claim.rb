@@ -60,7 +60,7 @@ module Buddy
 
       said  = Buddy::Flourish.significant(idea[:idea]).to_set
       rest  = elsewhere(facts)
-      marks = said.reject { |word| rest.include?(word) || word.length < MIN_LENGTH }
+      marks = distinctive(said, rest)
       return text if marks.empty?
 
       kept = []
@@ -81,6 +81,40 @@ module Buddy
     rescue StandardError => e
       Rails.logger.warn("[Buddy::StashClaim] trim failed: #{e.class}: #{e.message}")
       body.to_s
+    end
+
+    # The words that are the thought's OWN: in it, and nowhere else in the day.
+    def distinctive(said, rest)
+      said.reject { |word| rest.include?(word) || word.length < MIN_LENGTH }
+    end
+
+    # The same, read straight off the facts. Separate from `distinctive` because
+    # `trim` already holds both sets and `elsewhere` stringifies the whole day.
+    def marks(facts)
+      idea = Buddy::BriefingFacts.stash_floated(facts).first
+      return [] if idea.blank?
+
+      distinctive(Buddy::Flourish.significant(idea[:idea]).to_set, elsewhere(facts))
+    end
+
+    # Did the briefing float the thought at all?
+    #
+    # Asked before `dropped_briefing_facts` complains that the AGE went missing,
+    # and the whole reason that arm is safe. The rule asks for the float
+    # "occasionally, and not most days", so a briefing that left the thought out
+    # entirely is correct - and nudging it to put back an age it was right not to
+    # say would turn a rare mention into a daily one.
+    #
+    # Measured over the whole body rather than per sentence, because this is not
+    # asking which sentence is about the thought. Same ratio `renamed?` uses,
+    # from the other side: there, landing less than half the marks means the
+    # sentence renamed it; here, landing half or more means it reached it.
+    def named?(body, facts)
+      marks = marks(facts)
+      return false if marks.empty?
+
+      words = Buddy::Flourish.significant(body.to_s).to_set
+      marks.count { |word| words.include?(word) } >= (marks.length * NAMED_ENOUGH)
     end
 
     # Every word the day carried OTHER than what is on their mind.

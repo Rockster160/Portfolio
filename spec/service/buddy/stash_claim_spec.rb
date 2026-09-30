@@ -62,6 +62,29 @@ RSpec.describe Buddy::StashClaim do
     expect(trim(body)).to eq(body)
   end
 
+  # Asked before `dropped_briefing_facts` complains the AGE went missing, and
+  # the whole reason that arm cannot nag: a briefing is allowed to skip the
+  # float entirely.
+  describe ".named?" do
+    def named?(body) = described_class.named?(body, facts)
+
+    it "is true when the thought is named as they wrote it" do
+      expect(named?("Also, that Desk storage for Rocco thing is still sitting there!")).to be(true)
+    end
+
+    it "is false when the briefing never floated it" do
+      expect(named?("Morning! Hike with Nathan at 6am, high of 72.")).to be(false)
+    end
+
+    it "is false when the float reached for it and named something else" do
+      expect(named?("that front room drinks thing for Rocco is still sitting there")).to be(false)
+    end
+
+    it "is false when the seed carried no stash" do
+      expect(described_class.named?("Desk storage for Rocco", facts.except(:stash))).to be(false)
+    end
+  end
+
   it "does nothing when the seed carried no stash at all" do
     body = "Also, that front room drinks thing for Rocco is still sitting there!"
 

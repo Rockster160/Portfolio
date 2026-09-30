@@ -131,10 +131,27 @@ class JobNote < ApplicationRecord
   # Asking for times again withdraws the booking those times were for, and so
   # does a corrected booking landing behind the first one - and so, most plainly
   # of all, does the organiser calling it off.
+  #
+  # And so does the application ENDING. A rejection leaves no future interview
+  # standing, which is not a reading of the mail - it is what `rejected` means,
+  # and `IMPLIED_STATUS` already settles the row on it. That was the beat which
+  # actually turned up at KODE Health: the phone screen was cancelled at 12:13pm
+  # and the rejection landed at 4:14pm, and because this list held only the three
+  # booking tags, a rejected application kept a Friday interview on the calendar
+  # and read it out on four consecutive mornings. `withdrew` is the same fact
+  # from the other side.
+  #
+  # `withdraw_booking` needs nothing for it: the `BOOKING_CORRECTION_WINDOW`
+  # narrowing is `if scheduled?` only, so a rejection correctly reaches every
+  # future booking on the row rather than just the recent ones.
+  #
   # `after_commit`, because retiring the other note's calendar row runs that
   # note's own callbacks.
   after_commit :withdraw_booking, on: [:create, :update],
-    if: -> { (availability? || scheduled? || cancelled?) && previous_changes.key?("tag") }
+    if: -> {
+      (availability? || scheduled? || cancelled? || rejected? || withdrew?) &&
+        previous_changes.key?("tag")
+    }
 
   # An untagged note IS its words, so it needs some. Every other tag already
   # says what happened — "logged an interview on the 14th" is a whole fact —

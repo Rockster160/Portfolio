@@ -425,18 +425,50 @@ module Buddy
     # day unrepairable.
     RAIN_WINDOW_RX = /\A(?<hour>\d{1,2})(?::\d{2})?(?<mer>am|pm)?(?:-\d{1,2}(?::\d{2})?(?<end>am|pm))?/i
 
-    # Did the briefing already give one of the hours?
+    # Today's rain windows the briefing didn't give.
     #
-    # Generous in the same direction `week_said?` is: an hour named in any of
-    # the ways a person writes a clock time suppresses the repair, because a
-    # second set of hours under ones the model wrote itself reads worse than a
-    # rare miss. Only the START of each window is looked for - "rain from 6
-    # tonight" is the sentence the rule wanted and it never names the end.
-    def rain_hours_said?(body, windows)
-      starts = window_starts(windows)
-      return true if body.blank? || starts.empty?
+    # Per window rather than `any?`. That is the third time this trade has come
+    # up in this file and the third time it has gone this way - `week_said?` and
+    # `week_odds_missing` both started as `any?` and both were reversed on the
+    # same discovery. The comment that stood here defended it as "a second set of
+    # hours under ones the model wrote itself reads worse than a rare miss", and
+    # the miss turned out not to be rare: a seed carrying four windows got three
+    # back, and the sentence ran straight from midnight to the following
+    # afternoon, so nothing in it read as absent.
+    #
+    # Restoring only what went missing is what makes the trade unnecessary in the
+    # first place - the line reads "Rain in Alpine 2-3am." rather than reciting
+    # all four back.
+    #
+    # Only the START of each window is looked for: "rain from 6 tonight" is the
+    # sentence the rule wanted and it never names the end.
+    def rain_hours_missing(body, windows)
+      return [] if body.blank?
 
-      starts.any? { |m| window_said?(body, m) }
+      said = weather_sentences(body)
+      Array(windows).compact_blank.reject { |window|
+        start = window_starts([window]).first
+        # No meridiem anywhere in the window leaves nothing to search for, and a
+        # window nobody can look for is not one to staple back on.
+        start.nil? || window_said?(said, start)
+      }
+    end
+
+    # Only the sentences that are ABOUT the weather.
+    #
+    # A clock time anywhere else in a briefing is not evidence that a forecast
+    # was given, and that is exactly the miss: "Thursday has your iCapital
+    # interview at 10am" suppressed a 10am-3pm rain window, because an unrelated
+    # agenda item happened to fall on the same o'clock. The 7-9am window beside
+    # it survived only because nothing else that morning was at 7.
+    #
+    # `week_said?` has narrowed this way since it was written, for the same
+    # reason. Narrowing to the sentences naming ALPINE was the other candidate
+    # and is the wrong one: the model writes today's canyon hours without naming
+    # the canyon at all ("rain off and on from 11am to 3pm"), so a place test
+    # would read every window as dropped and staple all of them back.
+    def weather_sentences(body)
+      sentences(body).select { |sentence| sentence.match?(WEATHER_WORDS_RX) }.join(" ")
     end
 
     def window_starts(windows)
@@ -449,6 +481,42 @@ module Buddy
     def window_said?(body, start)
       mer = (start[:mer] || start[:end]).downcase.chars.join("\\.?")
       body.match?(/(?<!\d)#{start[:hour]}\s*(?::\d{2})?\s*(?:#{mer}\.?|(?:-|\u2013|to)\s*\d)/i)
+    end
+
+    # Ages as BuddyMemory#waiting_label writes them: "today", "since yesterday",
+    # "N days" up to 13, "N weeks" beyond that.
+    AGE_RX = /\A(?<count>\d+)\s+(?<unit>day|week)s?\z/i
+
+    # Spelled out, because a briefing writes prose rather than a field. Moss got
+    # seven weeks right as "seven weeks is a long time to carry that one!", and a
+    # digit-only test would have called that a drop and nudged a correct
+    # briefing. Only as far as the labels reach.
+    AGE_WORDS = %w[
+      zero one two three four five six seven eight nine ten eleven twelve thirteen
+    ].freeze
+
+    # Did the float say how long the thought has been sitting there?
+    #
+    # The rule asks for the age in the same breath as the thought, and gives the
+    # reason in its own sentence: "A thought from a fortnight ago, renamed and
+    # read back without its age, arrives as a job somebody set them this
+    # morning." That is not a preference about style. A three-week-old note came
+    # back as "the little one to keep an eye on today... maybe a good day to chip
+    # away at them a bit", which is a task somebody was set this morning.
+    #
+    # Six losses across two windows, four of them on days the thought itself came
+    # through perfectly - so the thought is not what needs restoring, the bracket
+    # is. Only ever asked when the thought WAS named: see Buddy::StashClaim.named?.
+    def stash_age_said?(body, idea)
+      waiting = (idea.is_a?(::Hash) ? idea[:waiting] : nil).to_s
+      return true if waiting.blank? || body.blank?
+
+      age = AGE_RX.match(waiting)
+      # "today" and "since yesterday" carry no figure, so the words ARE the age.
+      return body.to_s.match?(/\b#{Regexp.escape(waiting)}\b/i) if age.nil?
+
+      forms = [age[:count], AGE_WORDS[age[:count].to_i]].compact_blank
+      body.to_s.match?(/\b(?:#{forms.map { |f| Regexp.escape(f) }.join("|")})[\s-]*#{age[:unit]}s?\b/i)
     end
 
     # A day in Alpine's WEEK, as PlungeAdvisor.loose_rain writes one:
@@ -471,13 +539,16 @@ module Buddy
     end
 
     # The timed Alpine days whose hours the briefing didn't give. Per day, for
-    # the reason `week_odds_missing` gives.
+    # the reason `week_odds_missing` gives, and against the weather sentences
+    # only, for the reason `weather_sentences` gives - this is the check the
+    # iCapital collision was found on.
     def week_hours_missing(body, lines)
       return [] if body.blank?
 
+      said = weather_sentences(body)
       Array(lines).filter_map { |line| ALPINE_HOURS_RX.match(line.to_s) }.select { |m|
         start = window_starts([m[:window]]).first
-        start && !window_said?(body, start)
+        start && !window_said?(said, start)
       }
     end
 
@@ -494,7 +565,7 @@ module Buddy
     # a wording change.
     #
     # Per day rather than `any?`, which is the opposite call from `week_said?`
-    # and `rain_hours_said?` above. Those two ask whether a SUBJECT was raised;
+    # and `week_said?` above. Those ask whether a SUBJECT was raised;
     # this one asks whether four specific figures are present, and three out of
     # four is the failure - the one that goes missing is as likely to be the
     # 100% as not.
@@ -509,8 +580,12 @@ module Buddy
     # Only the ones that went missing, so a briefing that gave two of four
     # doesn't get both of them read back at it. The timed days first, because
     # they are the sooner ones.
+    # The hours parts carry the KIND, because `PlungeAdvisor.timed_rain` only
+    # ever writes rain windows into that list and a bare range does not say so.
+    # "In Alpine, tomorrow 7-9am and Tuesday rain at 62%." puts a time range
+    # with no subject next to a percentage, and it reads as an appointment.
     def week_odds_line(missing, hours=[])
-      parts = Array(hours).map { |m| "#{m[:day]} #{m[:window]}" }
+      parts = Array(hours).map { |m| "rain #{m[:day]} #{m[:window]}" }
       parts += Array(missing).map { |m| "#{m[:day]} #{m[:kind].downcase} at #{m[:pop]}%" }
       return nil if parts.empty?
 

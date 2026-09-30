@@ -268,6 +268,36 @@ module Buddy
           (?:(?:now|all)\s+)?
           (?:added|set|logged|saved|scheduled|done|in\s+there|
              on\s+(?:the|your)\s+\w+)\b
+        # The same claim with the record NAMED instead of pronouned. Buddy is
+        # told everywhere else to name the thing rather than gesture at it, so
+        # the reply that follows the house style is the one shape the subjects
+        # above cannot see.
+        #
+        # Matched on the DELIMITERS rather than a word budget, the way
+        # COMPLETION_CLAIM_RX does it for the same reason: a bare gap of a few
+        # words also swallows "dinner is done" and "the laundry is done", which
+        # are honest sentences about the world rather than about a record.
+        # Backticks and bold are how a record name is written here, and they
+        # cannot appear by accident.
+        | (?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
+            (?:(?:'|\u2019)s|\s+(?:is|are))\s+
+            (?:(?:now|all)\s+)?
+            (?:added|set|logged|saved|scheduled|done|in\s+there)\b
+        # A MODE reported with a DURATION on it. "Whisper quiet is on for 2
+        # hours" came back off a turn that called nothing, and he caught it
+        # himself eight minutes later - the window he asked for at 11:45 began
+        # when he complained. Here the subject is named rather than delimited,
+        # so the predicate carries the whole weight: "on for <number>" is a
+        # window somebody had to open, and on a turn that touched nothing and
+        # answered no question about state it has no true reading.
+        #
+        # Deliberately NOT added to COMPLETION_CLAIM_RX's `is on low|high|now`
+        # arm, which is where it first looks like it belongs. That arm is asked
+        # with no `@acted` gate, so the same sentence after a SUCCESSFUL call
+        # would spend a corrective round rewriting a reply that was right.
+        | \b\w+(?:\s+\w+){0,2}
+            (?:(?:'|\u2019)s|\s+(?:is|are))\s+
+            (?:on|off)\s+for\s+\d
       /xi
 
       # A reply on a turn that touched nothing, written as though it had.
@@ -831,6 +861,7 @@ module Buddy
           *unnamed_week(body).map { |i| "#{i[:title]} on #{i[:day].presence || "later this week"}" },
           *unowned_items(body).map { |i| "whose #{i[:title]} is - it is #{i[:owner]}'s, not theirs" },
           ("the jobs on today" if jobs_dropped?(body)),
+          ("how long the stashed thought has been sitting" if stash_age_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
         ].compact_blank
       rescue StandardError => e
@@ -854,8 +885,7 @@ module Buddy
       end
 
       def rain_hours_dropped?(body)
-        windows = briefing_rain_windows
-        windows.present? && !Buddy::TodayBriefing.rain_hours_said?(body, windows)
+        Buddy::TodayBriefing.rain_hours_missing(body, briefing_rain_windows).any?
       end
 
       def week_odds_dropped?(body)
@@ -1789,10 +1819,12 @@ module Buddy
       def with_rain_hours(body)
         return body unless today_briefing?
 
-        windows = briefing_rain_windows
-        return body if Buddy::TodayBriefing.rain_hours_said?(body, windows)
+        # Only what went missing, so a briefing that gave three of four windows
+        # gets the fourth back rather than all four read at it again.
+        missing = Buddy::TodayBriefing.rain_hours_missing(body, briefing_rain_windows)
+        return body if missing.empty?
 
-        line = Buddy::TodayBriefing.rain_hours_line(windows)
+        line = Buddy::TodayBriefing.rain_hours_line(missing)
         return body if line.blank?
 
         "#{body.rstrip}\n\n#{line}"
@@ -2110,6 +2142,23 @@ module Buddy
       def jobs_dropped?(body)
         words = job_words
         words.any? && words.none? { |word| body.match?(/\b#{Regexp.escape(word)}/i) }
+      end
+
+      # Only ever when the thought was actually FLOATED. Leaving it out is legal -
+      # the rule asks for it "occasionally, and not most days" - so an arm that
+      # fired on a briefing which correctly skipped it would turn a rare mention
+      # into a daily one, and the nudge would be asking for the age of something
+      # the briefing was right not to raise.
+      #
+      # The thought itself needs no arm: it came through on all six of the
+      # briefings that lost the bracket, and Buddy::StashClaim already cuts a
+      # float that reaches for the thought and names none of it.
+      def stash_age_dropped?(body)
+        idea = Buddy::BriefingFacts.stash_floated(briefing_facts).first
+        return false if idea.blank?
+        return false unless Buddy::StashClaim.named?(body, briefing_facts)
+
+        !Buddy::TodayBriefing.stash_age_said?(body, idea)
       end
 
       # Four letters and up, so "the", "out" and "and" don't make every draft
@@ -2856,6 +2905,28 @@ module Buddy
         msg
       end
 
+      # Record that a stashed thought was raised, so the next few mornings leave it
+      # alone. See Buddy::BriefingFacts::STASH_SPACING for the count of them.
+      #
+      # On the REPLY, not on the seed. The seed carrying the section is only a
+      # decision to OFFER the thought; this is the thing that reached him. The
+      # rule asks for the float "occasionally, and not most days", so a briefing
+      # that declines to mention it has raised nothing - stamping there would take
+      # the thought away for three days without him ever having heard it.
+      #
+      # Reuses `StashClaim.named?`, which is the same question the age arm asks:
+      # did the words reach the thought at all. So a float that got cut for
+      # renaming it stamps nothing either, and it comes back tomorrow.
+      def stamp_floated_stash(body)
+        return unless today_briefing?
+        return unless Buddy::StashClaim.named?(body, briefing_facts)
+
+        idea = Buddy::BriefingFacts.stash_floated(briefing_facts).first
+        Buddy::BriefingFacts.mark_floated!(@user, idea)
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] could not stamp the floated stash: #{e.class}: #{e.message}")
+      end
+
       def finalize_success(outcome)
         @repairs = []
         body = trimmed_of_removals(display_body(outcome[:text]))
@@ -2907,6 +2978,7 @@ module Buddy
         # message with nothing to say back.
         spoke = body.present? && body.strip != PLACEHOLDER
         @reply.update!(state: :delivered, body: (spoke ? body : ""), delivered_at: Time.current)
+        stamp_floated_stash(body) if spoke
 
         proposals = outcome[:proposals]
         result    = build_proposals(proposals)

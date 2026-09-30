@@ -1042,23 +1042,63 @@ RSpec.describe "Buddy Today forward-looking" do
   # "3-6pm" has no meridiem of its own, so no start was found and that read as
   # "already said"; and tomorrow's hours had no repair at all.
   describe "Alpine's rain hours" do
+    def missing(body, windows) = Buddy::TodayBriefing.rain_hours_missing(body, windows)
+
     it "reads the start of a window that says its meridiem once" do
-      expect(Buddy::TodayBriefing.rain_hours_said?("Rain is in the forecast for Alpine.", ["3-6pm"])).to be(false)
+      expect(missing("Rain is in the forecast for Alpine.", ["3-6pm"])).to eq(["3-6pm"])
     end
 
     it "still reads a window with a meridiem on each end" do
-      expect(Buddy::TodayBriefing.rain_hours_said?("Rain is in the forecast.", ["11am-2pm"])).to be(false)
-      expect(Buddy::TodayBriefing.rain_hours_said?("Rain from 11am.", ["11am-2pm"])).to be(true)
+      expect(missing("Rain is in the forecast.", ["11am-2pm"])).to eq(["11am-2pm"])
+      expect(missing("Rain from 11am.", ["11am-2pm"])).to be_empty
     end
 
     it "counts the hours written the way the seed writes them" do
-      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain 3-6pm.", ["3-6pm"])).to be(true)
-      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain from 3 to 6pm.", ["3-6pm"])).to be(true)
-      expect(Buddy::TodayBriefing.rain_hours_said?("Alpine rain from 3pm.", ["3-6pm"])).to be(true)
+      expect(missing("Alpine rain 3-6pm.", ["3-6pm"])).to be_empty
+      expect(missing("Alpine rain from 3 to 6pm.", ["3-6pm"])).to be_empty
+      expect(missing("Alpine rain from 3pm.", ["3-6pm"])).to be_empty
     end
 
     it "is not satisfied by a figure ending in the same digit" do
-      expect(Buddy::TodayBriefing.rain_hours_said?("A high of 73-ish.", ["3-6pm"])).to be(false)
+      expect(missing("A high of 73-ish.", ["3-6pm"])).to eq(["3-6pm"])
+    end
+
+    # Prod 7040/7041, 28 Sep: four windows in, three out, and the sentence ran
+    # from midnight to the following afternoon so nothing read as absent.
+    it "names only the window that went missing" do
+      windows = ["11am-3pm", "5-6pm", "7pm-12am", "2-3am"]
+      body    = "Rain off and on from 11am to 3pm, again 5pm to 6pm, and 7pm to midnight."
+
+      expect(missing(body, windows)).to eq(["2-3am"])
+      expect(Buddy::TodayBriefing.rain_hours_line(missing(body, windows))).to eq("Rain in Alpine 2-3am.")
+    end
+
+    # An agenda item at the same o'clock is not a forecast. Prod 7004/7006: the
+    # 10am-3pm window vanished because the briefing said "iCapital interview at
+    # 10am" somewhere else entirely.
+    it "does not let an unrelated clock time count as the hours" do
+      body = "Thursday has your iCapital interview at 10am. Rain in Alpine 7-9am."
+
+      expect(missing(body, ["7-9am", "10am-3pm"])).to eq(["10am-3pm"])
+    end
+
+    it "asks the same of the week's hours" do
+      lines = ["tomorrow 10am-3pm"]
+      body  = "Thursday has your iCapital interview at 10am."
+
+      expect(Buddy::TodayBriefing.week_hours_missing(body, lines).map { |m| m[:window] }).to eq(["10am-3pm"])
+    end
+
+    # A time range sitting next to a percentage with no weather word on it reads
+    # as an appointment.
+    it "says what the week's hours are hours OF" do
+      lines   = ["tomorrow 7-9am", "Tuesday, rain at 62% - no hours that far out"]
+      body    = "Morning!"
+      hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
+      missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
+
+      expect(Buddy::TodayBriefing.week_odds_line(missing, hours))
+        .to eq("In Alpine, rain tomorrow 7-9am and Tuesday rain at 62%.")
     end
 
     it "names tomorrow's hours when the briefing left them out" do
@@ -1067,7 +1107,7 @@ RSpec.describe "Buddy Today forward-looking" do
       hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
       missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
 
-      expect(Buddy::TodayBriefing.week_odds_line(missing, hours)).to eq("In Alpine, tomorrow 1-7pm.")
+      expect(Buddy::TodayBriefing.week_odds_line(missing, hours)).to eq("In Alpine, rain tomorrow 1-7pm.")
     end
 
     it "leaves tomorrow alone when the briefing gave its hours" do

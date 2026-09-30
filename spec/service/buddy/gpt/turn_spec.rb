@@ -1969,6 +1969,17 @@ RSpec.describe Buddy::GPT::Turn do
         "That's scheduled.",
         "I've queued that up for you.",
         "I noted that down.",
+        # Prod 7062-7066, 28 Sep: "quiet for 2 hours" answered in a voice with
+        # no "I" in it and no pronoun either, so both halves walked past it. He
+        # caught it eight minutes later and the window began when he complained.
+        "*whisk* Whisper quiet is on for 2 hours.",
+        "Quiet's on for 30 minutes.",
+        "The fan is off for 20 minutes.",
+        # The house style is to NAME the record, which is what put these outside
+        # a subject list made of pronouns.
+        "`Recycling` is done.",
+        "**Take out the bins** is added.",
+        "`Water the plants` is now scheduled.",
       ].each do |faked|
         it "catches #{faked.inspect}" do
           run([{ text: faked }])
@@ -2014,6 +2025,13 @@ RSpec.describe Buddy::GPT::Turn do
         "I've changed my mind about that one.",
         "That changed everything, honestly.",
         "The list is set up the way you like it.",
+        # A named subject with no delimiters around it, which is why the arm
+        # asks for backticks or bold rather than a word budget. These are
+        # sentences about the world, not about a record.
+        "Dinner is done.",
+        "The laundry is done.",
+        "The heater is on for another hour.",
+        "Whisper quiet is something I can turn on.",
       ].each do |honest|
         it "leaves #{honest.inspect} alone" do
           run([{ text: honest }])
@@ -2053,6 +2071,15 @@ RSpec.describe Buddy::GPT::Turn do
         run([{ text: "It's on your list." }], text: "Can you add milk to the list?")
 
         expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      # The named-subject and duration shapes stand down here for the same
+      # reason the pronoun ones do: asked how things stand, reporting them is
+      # the answer rather than a claim.
+      it "leaves a mode reported back to them alone" do
+        run([{ text: "Whisper quiet is on for 2 hours." }], text: "how long is quiet on for?")
+
+        expect(reply.body).to eq("Whisper quiet is on for 2 hours.")
       end
     end
 
@@ -2474,6 +2501,52 @@ RSpec.describe Buddy::GPT::Turn do
   #     the passive half of SILENT_TURN_STATE_RX. "That's on your calendar" is a
   #     sentence about their day; the arm reads it as Buddy claiming to have put
   #     it there.
+  # The float is spaced in Ruby now (Buddy::BriefingFacts::STASH_SPACING), and
+  # the spacing is only as good as the thing that records a float happened.
+  describe "recording that a stashed thought was floated" do
+    let(:memory) {
+      user.buddy_memories.create!(kind: :stash, content: "Kennel auto-open idea", category: :home)
+    }
+
+    def floated(text)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "Their day.",
+        metadata: {
+          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
+          "briefing" => {
+            "stash" => [{ "id" => memory.id, "idea" => "Kennel auto-open idea", "waiting" => "7 weeks" }],
+          },
+        },
+      )
+      described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
+      memory.reload.surfaced_at
+    end
+
+    it "stamps the thought the briefing actually raised" do
+      expect(floated("Morning! That Kennel auto-open idea is still sitting there from 7 weeks ago.")).to be_present
+    end
+
+    # Leaving it out is legal - the rule asks for the float "occasionally, and
+    # not most days" - so a morning that said nothing about it has raised
+    # nothing, and stamping here would take the thought away for three days
+    # without him ever having heard it.
+    it "stamps nothing on a morning that left it out" do
+      expect(floated("Morning! Quiet one today, nothing on the calendar.")).to be_nil
+    end
+
+    # Same question the age arm asks: did the words reach the thought at all. A
+    # float cut for renaming it has raised nothing either.
+    it "stamps nothing when the float named something else" do
+      expect(floated("Morning! That front room drinks thing is still sitting there.")).to be_nil
+    end
+
+    it "leaves an ordinary turn alone" do
+      run([{ text: "That Kennel auto-open idea is still sitting there." }], text: "what was that kennel thing")
+
+      expect(memory.reload.surfaced_at).to be_nil
+    end
+  end
+
   describe "a briefing written in the ordinary voice of somebody's day" do
     def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
       message = convo.byte_messages.create!(
@@ -3538,8 +3611,15 @@ RSpec.describe Buddy::GPT::Turn do
 
     # Same trade as the figures above: the model gets told what it left out and
     # writes it in, and the append is what happens when that fails too.
+    #
+    # The retry names BOTH windows, because the check is per window now - one of
+    # two is a partial answer and the missing one gets appended, which is the
+    # whole point of the change.
     it "asks for it again rather than writing it on the end" do
-      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }, { text: "Morning! Quiet one, rain in Alpine 6pm-8pm." }])
+      client  = FakeBuddyClient.new([
+        { text: "Morning! Quiet one." },
+        { text: "Morning! Quiet one, rain in Alpine 6pm-8pm and 11pm-12am." },
+      ])
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
         metadata: {
@@ -3551,6 +3631,19 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(client.calls.length).to eq(2)
       expect(reply.metadata["repairs"]).to be_blank
+    end
+
+    # Prod 7040/7041, 28 Sep: four windows handed over, three said, and the
+    # sentence ran from midnight to the following afternoon so nothing read as
+    # missing.
+    it "appends only the window a second attempt still left out" do
+      briefing([
+        { text: "Morning! Quiet one." },
+        { text: "Morning! Quiet one, rain in Alpine 6pm-8pm." },
+      ])
+
+      expect(reply.body).to include("Rain in Alpine 11pm-12am.")
+      expect(reply.body).not_to include("6pm-8pm and 11pm-12am")
     end
 
     it "leaves ordinary turns alone" do

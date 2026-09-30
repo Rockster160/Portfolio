@@ -125,6 +125,48 @@ RSpec.describe "Buddy Today briefing" do
   # 5 Sep: the week staple fired on all three morning briefings and on two of
   # them landed directly under a sentence saying the opposite, so each one said
   # two contradicting things about the same week.
+  # The bracket on the stash line, which the prompt lost six times across two
+  # windows before this moved into Ruby.
+  describe ".stash_age_said?" do
+    def said?(body, waiting: "7 weeks")
+      Buddy::TodayBriefing.stash_age_said?(body, { idea: "Kennel auto-open idea", waiting: waiting })
+    end
+
+    it "takes the figure as written" do
+      expect(said?("that kennel auto-open idea, sitting there from 7 weeks ago")).to be(true)
+      expect(said?("it has been sitting there for 7 weeks now")).to be(true)
+    end
+
+    # Moss wrote "seven weeks is a long time to carry that one!" and got it
+    # right. A digit-only test would have nudged a correct briefing.
+    it "takes the figure spelled out" do
+      expect(said?("seven weeks is a long time to carry that one!")).to be(true)
+      expect(said?("three weeks on and it is still there", waiting: "3 weeks")).to be(true)
+    end
+
+    # The two real misses, verbatim.
+    it "catches the paraphrases that dropped it" do
+      expect(said?("still sitting there from a while back")).to be(false)
+      expect(said?("Fridge leftovers are still on your mind", waiting: "3 weeks")).to be(false)
+    end
+
+    it "does not take a different figure as the age" do
+      expect(said?("that idea from 2 weeks ago")).to be(false)
+      expect(said?("7 days of that", waiting: "7 weeks")).to be(false)
+    end
+
+    # "today" and "since yesterday" carry no figure, so the words are the age.
+    it "reads the wordy labels as themselves" do
+      expect(said?("you stashed that today", waiting: "today")).to be(true)
+      expect(said?("that one has been there since yesterday", waiting: "since yesterday")).to be(true)
+      expect(said?("that one is still hanging around", waiting: "since yesterday")).to be(false)
+    end
+
+    it "asks nothing of a row with no age on it" do
+      expect(said?("anything at all", waiting: nil)).to be(true)
+    end
+  end
+
   describe ".without_calm_week" do
     let(:days) { %w[Sun Mon] }
 

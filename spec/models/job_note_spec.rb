@@ -228,6 +228,70 @@ RSpec.describe JobNote do
   # The live cost was the calendar. Item 1174 survived the cancellation AND the
   # rejection four hours later, and the following morning's briefing read out
   # "Friday's got Interview: KODE Health at 8am."
+  # Prod application 73: cancelled at 12:13pm, rejected at 4:14pm, and the
+  # Friday interview stayed on the calendar through both because the guard held
+  # only the three booking tags.
+  describe "an application ending" do
+    it "takes a future interview off the calendar when the rejection lands" do
+      at      = 5.days.from_now.change(hour: 8, min: 0)
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      item    = booking.follow_up_item
+      expect(item).to be_present
+
+      job.notes.create!(tag: :rejected, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_nil
+      expect(AgendaItem.find_by(id: item.id)).to be_nil
+    end
+
+    it "does the same when they withdraw" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+
+      job.notes.create!(tag: :withdrew, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_nil
+    end
+
+    # A rejection is not a correction, so no window narrows it - every future
+    # booking on the row goes, however long ago it was made.
+    it "reaches a booking made weeks earlier" do
+      booking = travel_to(3.weeks.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 30.days.from_now) }
+
+      job.notes.create!(tag: :rejected, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_nil
+    end
+
+    # History stays history. An interview that already happened is not undone by
+    # the rejection that followed it.
+    it "leaves an interview that already happened alone" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
+
+      job.notes.create!(tag: :rejected, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_present
+    end
+
+    # The note itself is the record that a round was booked, same as everywhere
+    # else this callback runs.
+    it "keeps the booking note" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+      job.notes.create!(tag: :rejected, occurred_at: Time.current)
+
+      expect(job.notes.where(tag: :scheduled)).to include(booking)
+    end
+
+    # An offer is not the end of the process and settles no booking - the last
+    # round can be booked and an offer made before it.
+    it "leaves a booking standing on an offer" do
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+
+      job.notes.create!(tag: :offer, occurred_at: Time.current)
+
+      expect(booking.reload.follow_up_at).to be_present
+    end
+  end
+
   describe "the cancelled tag" do
     it "reads as Cancelled and needs no body" do
       note = job.notes.create!(tag: :cancelled, occurred_at: 1.hour.ago)
