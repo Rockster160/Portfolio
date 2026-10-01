@@ -272,6 +272,19 @@ class Jil::Methods::Chore < Jil::Methods::Base
     chore
   end
 
+  # Chore.done_today("Vitamins") → true once today's occurrence is finished:
+  # done as many times as its target, or skipped. Reads the same row the
+  # Chores app draws, so household completions count for everyone. False when
+  # no chore matches. A timed `mark_due` asks this first — a mark lands on a
+  # chore that was already done and puts its list item back for nothing.
+  def done_today(name_or_chore)
+    chore = load_chore(name_or_chore)
+    return false if chore.nil?
+
+    row = ::ChoreSerializer.new(chore, viewer: @jil.user).as_json
+    row[:skipped_today] || row[:done_count_today].to_i >= row[:target_count].to_i
+  end
+
   # Chore.unmark_due("Vitamins") → clear the "needs to get done"
   # stamp without completing the chore. No-op when not stamped.
   # Returns the Chore (or nil if no match).

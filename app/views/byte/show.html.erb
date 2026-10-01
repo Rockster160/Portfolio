@@ -55,6 +55,7 @@
      style="--byte-font-scale: <%= current_user.byte_font_scale / 100.0 %>"
      data-font-scale="<%= current_user.byte_font_scale %>"
      data-font-scale-url="<%= byte_font_scale_path %>"
+     data-affirmation-url="<%= byte_affirmation_action_path %>"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
      data-send-url="<%= byte_messages_path %>"
@@ -137,9 +138,23 @@
     <%# ever one thing on screen to read, and the back row says where you are. %>
     <div class="byte-actions-menu" data-byte-actions-menu hidden>
       <div class="byte-actions-panel" data-actions-panel="root">
-        <button type="button" data-buddy-action="quick">
-          Quick<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
-        </button>
+        <%# Saved routines, pinned ones first, at the top of the list itself. %>
+        <%# They sat a level down behind a "Quick" row until 2026-10-01, %>
+        <%# which put the one-tap things two taps away: "Hiding them behind %>
+        <%# several clicks is not quick." %>
+        <%#%>
+        <%# Rendered here AND re-read when the menu opens. Server-side so the %>
+        <%# rows are already in place on the first frame - a fetch on open was %>
+        <%# fine when this was a panel of its own, but at the top of the root %>
+        <%# list a loading line would push every row under it down on %>
+        <%# every open. The re-read is what makes a routine saved since show up %>
+        <%# without a reload. %>
+        <div class="byte-actions-list" data-buddy-quick-list>
+          <% current_user.buddy_routines.for_quick.each do |routine| %>
+            <button type="button" data-quick-routine="<%= routine.id %>"
+                    title="<%= routine.description.presence %>"><%= routine.name %></button>
+          <% end %>
+        </div>
         <button type="button" data-buddy-action="suggest">
           What now?<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
         </button>
@@ -149,17 +164,13 @@
         <button type="button" data-buddy-action="checkin">
           Check-in<span class="byte-actions-more" aria-hidden="true">&rsaquo;</span>
         </button>
-        <button type="button" data-buddy-action="affirmation">Affirmation</button>
-      </div>
-
-      <%# Saved routines, starred ones first. The only panel whose contents come %>
-      <%# from the server, so it fills on open rather than being rendered here - %>
-      <%# which also means saving one shows up the next time this is opened. %>
-      <div class="byte-actions-panel" data-actions-panel="quick" hidden>
-        <button type="button" class="byte-actions-back" data-actions-back>
-          <span aria-hidden="true">&lsaquo;</span> Quick actions
-        </button>
-        <div class="byte-actions-list" data-buddy-quick-list></div>
+        <%# The one row here that acts rather than opening its own options, and %>
+        <%# the one that can be switched off in Settings - see %>
+        <%# User#byte_affirmation? for why it is a preference and not a routine %>
+        <%# like everything above it. Rendered either way so the toggle can %>
+        <%# show and hide it without a reload. %>
+        <button type="button" data-buddy-action="affirmation" data-byte-affirmation-row
+                <%= "hidden" unless current_user.byte_affirmation? %>>Affirmation</button>
       </div>
 
       <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>
@@ -764,6 +775,20 @@
         </div>
         <div class="byte-setting-control">
           <button type="button" class="byte-setting-toggle" data-byte-mute aria-pressed="true">On</button>
+        </div>
+      </div>
+      <%# Affirmation is a row in the actions list rather than a thing with %>
+      <%# options, and the only one there somebody might not want: "Affirmation %>
+      <%# should just be a Quick Action that can be removed if the user so %>
+      <%# chooses." Off takes the row away. %>
+      <div class="byte-setting">
+        <div class="byte-setting-label">
+          <span class="byte-setting-name">Affirmation</span>
+          <span class="byte-setting-hint">A row in the actions list.</span>
+        </div>
+        <div class="byte-setting-control">
+          <button type="button" class="byte-setting-toggle<%= " on" if current_user.byte_affirmation? %>"
+                  data-byte-affirmation aria-pressed="<%= current_user.byte_affirmation? %>"><%= current_user.byte_affirmation? ? "On" : "Off" %></button>
         </div>
       </div>
       <div class="byte-setting">

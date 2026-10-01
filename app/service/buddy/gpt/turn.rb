@@ -860,7 +860,7 @@ module Buddy
           *unnamed_agenda(body).map { |i| i[:title].to_s },
           *unnamed_week(body).map { |i| "#{i[:title]} on #{i[:day].presence || "later this week"}" },
           *unowned_items(body).map { |i| "whose #{i[:title]} is - it is #{i[:owner]}'s, not theirs" },
-          ("the jobs on today" if jobs_dropped?(body)),
+          *dropped_jobs(body),
           ("how long the stashed thought has been sitting" if stash_age_dropped?(body)),
           *unsaid_departures(body).map { |i| "when to leave for #{i[:title]}" },
         ].compact_blank
@@ -2139,9 +2139,31 @@ module Buddy
       # Matched on the words rather than the rows, since a job reaches a
       # sentence conjugated - "Fold Laundry" arrives as "fold the laundry" - and
       # the group word is what a summarized one leaves behind.
-      def jobs_dropped?(body)
-        words = job_words
-        words.any? && words.none? { |word| body.match?(/\b#{Regexp.escape(word)}/i) }
+      #
+      # Nothing said at all stays the one blanket line, and the day that lost
+      # all eleven of its chores is why: that is answered by summarizing them,
+      # not by eleven sentences.
+      #
+      # Once SOMETHING was said it is counted per group, because one group's
+      # words used to answer for every other group's. Rocco's trash-day
+      # briefing spelled out all three trash chores and never said recycling -
+      # the other half of the same day - and "trash" cleared the whole check;
+      # Chelsea's, off the same facts, said both. A group is the unit the
+      # summarizing rule works in, so it is the unit this counts in; a lone
+      # ungrouped chore is NOT counted this way, being the one thing a
+      # summarized day is allowed to leave behind.
+      def dropped_jobs(body)
+        rows    = job_rows
+        buckets = job_word_buckets(rows)
+        return [] if buckets.empty?
+
+        every = buckets.values.flatten
+        return ["the jobs on today"] if every.none? { |word| job_word_said?(body, word) }
+
+        groups = rows.filter_map { |row| row[:group].presence }.uniq
+        distinct_job_words(buckets).slice(*groups).filter_map { |group, words|
+          "the #{group} jobs" if words.none? { |word| job_word_said?(body, word) }
+        }
       end
 
       # Only ever when the thought was actually FLOATED. Leaving it out is legal -
@@ -2161,13 +2183,37 @@ module Buddy
         !Buddy::TodayBriefing.stash_age_said?(body, idea)
       end
 
+      def job_rows
+        Array(briefing_facts[:jobs]).select { |row| row.is_a?(::Hash) }
+      end
+
+      def job_word_said?(body, word)
+        body.match?(/\b#{Regexp.escape(word)}/i)
+      end
+
       # Four letters and up, so "the", "out" and "and" don't make every draft
-      # look like it mentioned the jobs.
-      def job_words
-        rows = Array(briefing_facts[:jobs]).select { |row| row.is_a?(::Hash) }
-        rows.flat_map { |row|
-          [row[:group], row[:name]].compact_blank.join(" ").scan(/[[:alpha:]]{4,}/)
-        }.uniq
+      # look like it mentioned the jobs. One bucket per group, and one for each
+      # chore that belongs to no group.
+      def job_word_buckets(rows)
+        buckets = rows.group_by { |row| row[:group].presence || row[:name].to_s }
+        buckets.transform_values { |members|
+          members.flat_map { |row|
+            [row[:group], row[:name]].compact_blank.join(" ").scan(/[[:alpha:]]{4,}/)
+          }.uniq
+        }
+      end
+
+      # A word two buckets share cannot tell them apart, and one of them being
+      # said answered for both: "Gather trash" and "Gather recycling" each
+      # leave "Gather", so the briefing that spelled out the trash and lost the
+      # recycling still had a recycling word in it. A group left with no word of
+      # its own drops out of the check rather than counting as said, since
+      # nothing in the body could settle it either way - across a month of
+      # briefings that has not happened once.
+      def distinct_job_words(buckets)
+        counts = buckets.values.flatten.tally
+        pruned = buckets.transform_values { |words| words.select { |word| counts[word] == 1 } }
+        pruned.reject { |_key, words| words.empty? }
       end
 
       def unsaid_departures(body)

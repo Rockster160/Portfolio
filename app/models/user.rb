@@ -171,6 +171,24 @@ class User < ApplicationRecord
     self.byte_prefs = byte_prefs.to_h.merge("font_scale" => scale)
   end
 
+  # Whether Affirmation sits in the actions list. It is the one built-in there
+  # that fires straight off rather than opening its own options, and the one
+  # that cannot be a saved routine instead: a routine runs deterministically
+  # with no model call (Buddy::Routines.run!) and an affirmation is a model
+  # turn by definition. So it is a preference rather than a record, and
+  # switching it off is what deleting a routine would be for one of these.
+  #
+  # Absent means on, which is what it was for everybody before the switch
+  # existed.
+  def byte_affirmation?
+    byte_prefs.to_h["affirmation"] != false
+  end
+
+  def byte_affirmation=(value)
+    on = ActiveModel::Type::Boolean.new.cast(value)
+    self.byte_prefs = byte_prefs.to_h.merge("affirmation" => on.present?)
+  end
+
   # Icons this person has most recently reacted with, newest first. Raw — see
   # Buddy::Reactions.recents_for for the list the picker row actually shows,
   # which pads this out with sensible defaults.

@@ -418,6 +418,35 @@ RSpec.describe Jil::Methods::Chore do
     end
   end
 
+  describe "#done_today" do
+    def done_today(name)
+      Jil::Executor.call(user,
+        <<~JIL,
+          done = Chore.done_today("#{name}")::Boolean
+          out = Global.return(done)::Boolean
+        JIL
+      ).result
+    end
+
+    it "is false before today's occurrence is done" do
+      expect(done_today("Wordle")).to be(false)
+    end
+
+    it "is true once it's been completed today" do
+      ChoreCompleter.new(chore, user, at: Time.current).call
+      expect(done_today("Wordle")).to be(true)
+    end
+
+    it "is false for a completion on an earlier day" do
+      ChoreCompleter.new(chore, user, at: 2.days.ago).call
+      expect(done_today("Wordle")).to be(false)
+    end
+
+    it "is false when nothing matches" do
+      expect(done_today("Nonexistent")).to be(false)
+    end
+  end
+
   describe "#complete" do
     it "name-only form completes at Time.current with no note" do
       code = <<~'JIL'

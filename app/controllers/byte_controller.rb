@@ -643,6 +643,17 @@ class ByteController < ApplicationController
     render json: { scale: current_user.byte_font_scale }
   end
 
+  # Whether Affirmation is one of the rows in the actions list. Same shape as
+  # font_scale and for the same reason: a preference about what Buddy offers
+  # belongs to the person rather than to one browser.
+  def affirmation_action
+    return head(:forbidden) unless current_user&.byte_access?
+
+    current_user.byte_affirmation = params[:on]
+    current_user.save!
+    render json: { on: current_user.byte_affirmation? }
+  end
+
   # Per device. The subscription-less form is the legacy whole-person key,
   # which nothing writes anymore — kept so an older caller reads a miss rather
   # than raising.

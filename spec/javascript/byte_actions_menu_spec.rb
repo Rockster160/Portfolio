@@ -64,8 +64,8 @@ RSpec.describe "Byte actions menu" do
     expect(result["armed"]).to eq(["work"])
   end
 
-  # Reopening onto whichever panel the last tap left showing hides the other
-  # four, and the only way out is a back row nobody expected to need.
+  # Reopening onto whichever panel the last tap left showing hides the rest of
+  # the list, and the only way out is a back row nobody expected to need.
   it "comes back to the root list on the next open" do
     expect(result["reopened"]["panel"]).to eq("root")
   end
@@ -96,12 +96,31 @@ RSpec.describe "Byte actions menu" do
     end
   end
 
-  # The only panel whose contents come from the server, so it's the only one
-  # that can be shown before it has anything in it.
+  # Rocco, 2026-10-01: "Other quick actions should be immediately available in
+  # the list that shows up when clicking the quick action button. Hiding them
+  # behind several clicks is not quick."
+  #
+  # They were behind a "Quick" row of their own, which made the one-tap things
+  # two taps. Now they ARE the top of the root list, rendered by the server and
+  # re-read on each open.
   describe "the saved routines" do
-    it "fills from the server" do
-      expect(result["quick_loaded"]["panel"]).to eq("quick")
-      expect(result["quick_loaded"]["rows"]).to eq([{ "id" => "5", "label" => "Wind down" }])
+    # Server-rendered, so they are there on the first frame. Fetching them on
+    # open was fine while they had a panel to themselves; at the top of the
+    # root list a loading line pushes every row under it down on every open.
+    it "is already in the list before any request answers" do
+      expect(result["rows_at_boot"]).to eq([{ "id" => "5", "label" => "Wind down" }])
+    end
+
+    it "sits in the root list rather than a panel of its own" do
+      expect(result["after_open"]["panel"]).to eq("root")
+    end
+
+    # The re-read is what the fetch is still for: one saved since this page
+    # loaded shows up without a reload.
+    it "picks up one saved since the page loaded" do
+      expect(result["after_open"]["rows"]).to eq(
+        [{ "id" => "5", "label" => "Wind down" }, { "id" => "9", "label" => "Cup water" }],
+      )
     end
 
     it "runs the one tapped and closes" do
@@ -111,16 +130,21 @@ RSpec.describe "Byte actions menu" do
       expect(result["after_routine"]["open"]).to be(false)
     end
 
-    # The count is the second half: a refill has to clear the rows it drew last
-    # time, or the panel only grows and an emptied list still shows the routine
-    # that used to be in it, under a sentence saying there are none.
-    it "says what would produce one when there are none" do
-      expect(result["quick_empty"]["text"]).to eq("No routines saved yet — ask to save one.")
-      expect(result["quick_empty"]["rows"]).to eq(0)
+    # It used to write "Couldn't load those." in, which was right when that was
+    # the whole content of the panel. Here the rows are already correct, and a
+    # request nobody asked for is no reason to take them away.
+    it "leaves the rows standing when the re-read fails" do
+      expect(result["after_failed_refresh"]["rows"]).to eq(
+        [{ "id" => "5", "label" => "Wind down" }, { "id" => "9", "label" => "Cup water" }],
+      )
     end
 
-    it "goes back to the list" do
-      expect(result["quick_back"]["panel"]).to eq("root")
+    # The count is the second half: a redraw has to clear the rows it drew last
+    # time, or the list only grows and an emptied one still shows the routine
+    # that used to be in it, under a sentence saying there are none.
+    it "says what would produce one when there are none" do
+      expect(result["empty"]["text"]).to eq("No routines saved yet — ask to save one.")
+      expect(result["empty"]["rows"]).to eq(0)
     end
   end
 end

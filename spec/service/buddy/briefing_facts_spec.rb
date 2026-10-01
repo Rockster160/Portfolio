@@ -344,5 +344,21 @@ RSpec.describe Buddy::BriefingFacts do
       expect(described_class.job_lines(rows))
         .to eq(["trash: Gather trash, Take out trash bags", "Replace Air Filter · 5x"])
     end
+
+    # Which rules reach the prompt is decided on the facts, so a multiplier the
+    # grouped branch dropped put "tack it onto the job" in front of the model
+    # with no multiplier anywhere in the lines it reads. Both trash-day
+    # briefings on 30 Sep went out without it.
+    it "keeps a multiplier on a job inside a group" do
+      rows = [
+        { id: 15, name: "Gather trash", group: "trash" },
+        { id: 19, name: "Take trash cans out", group: "trash", hot: "2x" },
+        { id: 17, name: "Take out trash bags", group: "trash" },
+      ]
+
+      lines = described_class.job_lines(rows)
+
+      expect(lines).to eq(["trash: Gather trash, Take trash cans out · 2x, Take out trash bags"])
+    end
   end
 end

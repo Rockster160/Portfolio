@@ -522,8 +522,8 @@ html.html-ctr-byte body {
   line-height: 1;
 }
 
-// Server-filled routine rows. A sentence while it's loading or empty, so it
-// reads as body text rather than a button nobody can press.
+// The saved routines, at the top of the root list. A sentence when there are
+// none, so it reads as body text rather than a button nobody can press.
 .byte-actions-panel .byte-actions-list {
   display: flex;
   flex-direction: column;
@@ -532,7 +532,14 @@ html.html-ctr-byte body {
   font-size: 12px;
   color: var(--bs-muted);
 
-  &:has(button) { padding: 0; }
+  // A rule under the routines, so the person's own buttons and the built-in
+  // asks below them read as two halves rather than one long list. Only when
+  // there is something in it - an empty sentence needs nothing drawn under it.
+  &:has(button) {
+    padding: 0 0 3px;
+    margin-bottom: 1px;
+    border-bottom: 1px solid var(--bs-border);
+  }
 
   button {
     padding: 8px 10px !important;

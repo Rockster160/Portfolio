@@ -67,13 +67,13 @@ function node(tag, { cls = "", data = {}, text = "" } = {}) {
     querySelectorAll(selector) { return el.all().filter((c) => c.matches(selector)); },
   };
 
-  // The removal openQuick does before refilling: setting text drops the rows.
+  // The removal a refresh does before redrawing: setting text drops the rows.
   Object.defineProperty(el, "text", { get: () => el.textContent });
   return el;
 }
 
-// `textContent = "…"` has to wipe the children, or a reload of the routine
-// panel stacks the new rows under the old ones and nothing ever shrinks.
+// `textContent = "…"` has to wipe the children, or a refresh of the routine
+// rows stacks the new ones under the old and nothing ever shrinks.
 function textNode(tag, opts) {
   const el = node(tag, opts);
   let text = el.textContent;
@@ -95,10 +95,13 @@ globalThis.document = {
 
 const requests = [];
 let routinePayload = { routines: [{ id: 5, name: "Wind down", enabled: true, position: 0 }] };
+let routinesFail   = false;
 
 globalThis.fetch = async (url, opts = {}) => {
   requests.push({ url, method: opts.method || "GET", body: opts.body ? JSON.parse(opts.body) : null });
   if (url === "/buddy/routines") {
+    if (routinesFail) return { ok: false, status: 503, json: async () => ({}) };
+
     return { ok: true, json: async () => routinePayload };
   }
   return { ok: true, json: async () => ({}) };
@@ -123,14 +126,17 @@ function panel(name) {
 }
 
 const root = panel("root");
+
+// The routines are the top of the root list now, and the server renders them
+// into it - see byte/show.html.erb - so the list starts with a row in it
+// rather than empty and waiting on a tap.
+const quickList = root.appendChild(textNode("div", { cls: "byte-actions-list", data: { buddyQuickList: "" } }));
+quickList.appendChild(node("button", { data: { quickRoutine: "5" }, text: "Wind down" }));
+
 const rows = {};
-["quick", "suggest", "stash", "checkin", "affirmation"].forEach((kind) => {
+["suggest", "stash", "checkin", "affirmation"].forEach((kind) => {
   rows[kind] = root.appendChild(node("button", { data: { buddyAction: kind } }));
 });
-
-const quickPanel = panel("quick");
-const quickBack  = quickPanel.appendChild(node("button", { cls: "byte-actions-back", data: { actionsBack: "" } }));
-const quickList  = quickPanel.appendChild(textNode("div", { cls: "byte-actions-list", data: { buddyQuickList: "" } }));
 
 const suggestPanel = panel("suggest");
 suggestPanel.appendChild(node("button", { cls: "byte-actions-back", data: { actionsBack: "" } }));
@@ -166,6 +172,11 @@ const state = () => ({ open: !menu.hidden, panel: shown(), expanded: menuToggle.
 const out = {};
 
 out.closed_at_boot = state();
+
+// What the server rendered, before any fetch has answered. Captured here
+// because every open fires a refresh.
+const routineRows = () => quickList.children.map((c) => ({ id: c.dataset.quickRoutine, label: c.textContent }));
+out.rows_at_boot = routineRows();
 
 tapToggle();
 out.opened = state();
@@ -216,28 +227,42 @@ out.non_buddy = { ...state(), toggle_hidden: menuToggle.hidden };
 buddy.onModeChange("buddy");
 out.back_to_buddy = { toggle_hidden: menuToggle.hidden };
 
-// ---- the one panel filled from the server -------------------------------
+// ---- the rows that come from the server ---------------------------------
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
 (async () => {
-  tapToggle();
-  await Promise.resolve(rows.quick && tap(rows.quick));
-  await new Promise((r) => setTimeout(r, 0));
-  out.quick_loaded = {
-    ...state(),
-    rows: quickList.children.map((c) => ({ id: c.dataset.quickRoutine, label: c.textContent })),
+  await settle();
+
+  // An open re-reads them, so one saved since the page loaded is there with no
+  // reload and no tap of its own.
+  routinePayload = {
+    routines: [
+      { id: 5, name: "Wind down", enabled: true, position: 0 },
+      { id: 9, name: "Cup water", enabled: true, position: null },
+    ],
   };
+  tapToggle();
+  await settle();
+  out.after_open = { ...state(), rows: routineRows() };
 
   tap(quickList.children[0]);
   out.after_routine = state();
 
-  // Nothing saved: the panel says the thing that would produce one.
+  // A refresh that fails leaves the rows standing. They are server-rendered
+  // and still correct, and a request nobody asked for is no reason to wipe
+  // them.
+  routinesFail = true;
+  tapToggle();
+  await settle();
+  out.after_failed_refresh = { ...state(), rows: routineRows(), text: quickList.textContent };
+  routinesFail = false;
+  tapToggle();
+
+  // Nothing saved: the list says the thing that would produce one.
   routinePayload = { routines: [] };
   tapToggle();
-  tap(rows.quick);
-  await new Promise((r) => setTimeout(r, 0));
-  out.quick_empty = { ...state(), text: quickList.textContent, rows: quickList.children.length };
-
-  tap(quickBack);
-  out.quick_back = state();
+  await settle();
+  out.empty = { ...state(), text: quickList.textContent, rows: quickList.children.length };
 
   out.armed = stashed;
   out.requests = requests;

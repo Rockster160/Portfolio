@@ -324,6 +324,7 @@
   #uncomplete(String:Name)::Boolean
   #mark_due(String:Name)::Chore
   #unmark_due(String:Name)::Chore
+  #done_today(String:Name)::Boolean
   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
   #sync_completion(String:"Chore Name" Hash:"Completion" Hash:"Event Attrs")::Boolean
   #balance::Numeric

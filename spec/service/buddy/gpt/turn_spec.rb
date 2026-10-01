@@ -3033,8 +3033,12 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.metadata["repairs"]).to be_blank
     end
 
+    # A job reaches a sentence conjugated - "Fold Laundry" arrives as "laundry
+    # to fold" - and the WORDS are what gets matched rather than the row. The
+    # trash is in there too because groups are counted one by one now: a body
+    # that names the laundry and skips trash day has dropped a group.
     it "takes a conjugated one as said" do
-      client = briefing([{ text: "Morning! Chelsea's care giver meeting is at 11:00 AM, drinks at 9:00 PM, and there's laundry to fold." }])
+      client = briefing([{ text: "Morning! Chelsea's meeting is at 11:00 AM, drinks at 9:00 PM, laundry to fold, and it's trash day." }])
 
       expect(client.calls.length).to eq(1)
     end
@@ -3051,6 +3055,87 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(user_says("what's up"), client: client)
 
       expect(client.calls.length).to eq(1)
+    end
+  end
+
+  # Both halves of a trash Wednesday are groups of their own, and one group's
+  # words answered for the other: 7161 spelled out all three trash chores,
+  # never said recycling, and "trash" cleared the whole check. Chelsea's 7170,
+  # off the same five jobs, said both.
+  describe "a briefing that dropped one group of jobs" do
+    let(:facts) {
+      {
+        "name" => "Rocco",
+        "jobs" => [
+          { "id" => 15, "name" => "Gather trash", "group" => "trash" },
+          { "id" => 19, "name" => "Take trash cans out", "group" => "trash", "hot" => "2x" },
+          { "id" => 17, "name" => "Take out trash bags", "group" => "trash" },
+          { "id" => 14, "name" => "Gather recycling", "group" => "recycling" },
+          { "id" => 16, "name" => "Take out recycling", "group" => "recycling" },
+        ],
+      }
+    }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "buddy_action" => "today",
+          "briefing"     => facts,
+        }
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    def nudges(client)
+      client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
+    end
+
+    it "names the group it lost" do
+      full   = "Morning! It's trash day, and the recycling goes out too."
+      client = briefing([
+        { text: "Morning! Gather trash, Take trash cans out, and Take out trash bags today." },
+        { text: full },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("the recycling jobs")
+      expect(reply.body).to eq(full)
+    end
+
+    it "takes both groups summarized as said" do
+      client = briefing([{ text: "Morning! It's trash and recycling day." }])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    # "Gather trash" and "Gather recycling" both leave "Gather", so a shared
+    # word cannot tell the two groups apart.
+    it "does not let a shared word answer for the group that went missing" do
+      client = briefing([
+        { text: "Morning! Gather trash and get the cans out today." },
+        { text: "Morning! It's trash and recycling day." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("the recycling jobs")
+    end
+
+    # A day that lost every chore it had is answered by summarizing them, not
+    # by a sentence each, so that stays the one blanket line.
+    it "asks for the jobs as a whole when nothing at all was said" do
+      client = briefing([
+        { text: "Morning! Looks pretty light so far." },
+        { text: "Morning! It's trash and recycling day." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(nudges(client)).to include("the jobs on today")
+      expect(nudges(client)).not_to include("the recycling jobs")
     end
   end
 

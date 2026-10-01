@@ -47,7 +47,7 @@ async function fetchQuickRoutines() {
     credentials: "same-origin",
     headers:     { Accept: "application/json" },
   });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`http_${res.status}`);
   const data = await res.json().catch(() => null);
   return quickOrder(data?.routines);
 }
@@ -74,12 +74,13 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   };
 
   // Always back to the root. The panel left showing belongs to a tap that has
-  // long since been answered, and reopening onto it would hide the other four.
+  // long since been answered, and reopening onto it would hide the whole list.
   const openMenu = () => {
     if (!menu) return;
     showPanel("root");
     menu.hidden = false;
     if (menuToggle) menuToggle.setAttribute("aria-expanded", "true");
+    refreshQuick();
   };
 
   const setActive = (isBuddy) => {
@@ -123,38 +124,42 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   // that left a non-"thinking" face on screen, which clearThinking won't undo.
   const restExpression = () => paint(restingExpression);
 
-  // The only panel filled from the server. Shown first and populated after, so
-  // a slow request shows the panel with "loading" rather than swallowing the
-  // tap and looking broken.
-  const openQuick = async () => {
+  const quickButton = (routine) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.quickRoutine = String(routine.id);
+    btn.textContent = routine.name;
+    if (routine.description) btn.title = routine.description;
+    return btn;
+  };
+
+  // The one part of the list that comes from the server. The rows are already
+  // rendered (see byte/show.html.erb), so this is a re-read on open rather
+  // than a fill, and that is what makes a routine saved since this page loaded
+  // show up without a reload.
+  //
+  // A failed fetch leaves the rendered rows standing and says nothing. It used
+  // to write "Couldn't load those." into the panel, which was right when that
+  // was the panel's whole content; here it would wipe a list that is already
+  // correct over a request nobody asked for.
+  const refreshQuick = async () => {
     if (!quickList) return;
 
-    showPanel("quick");
-    quickList.textContent = "Loading…";
     let routines = [];
     try {
       routines = await fetchQuickRoutines();
     } catch (_) {
-      quickList.textContent = "Couldn't load those.";
-      return;
-    }
-
-    if (routines.length === 0) {
-      // Empty here now means there genuinely aren't any, so it says the thing
-      // that would actually produce one.
-      quickList.textContent = NO_ROUTINES;
       return;
     }
 
     quickList.textContent = "";
-    routines.forEach((r) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.dataset.quickRoutine = String(r.id);
-      btn.textContent = r.name;
-      if (r.description) btn.title = r.description;
-      quickList.appendChild(btn);
-    });
+    // Empty means there genuinely aren't any, so it says the thing that would
+    // actually produce one.
+    if (routines.length === 0) {
+      quickList.textContent = NO_ROUTINES;
+      return;
+    }
+    routines.forEach((routine) => { quickList.appendChild(quickButton(routine)); });
   };
 
   // Runs server-side with no model turn, so there's no "thinking" flip to make
@@ -279,7 +284,6 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
       const action = e.target.closest("[data-buddy-action]");
       if (action) {
         const kind = action.dataset.buddyAction;
-        if (kind === "quick") return openQuick();
         if (kind === "suggest") return showPanel("suggest");
         if (kind === "stash") return showPanel("stash");
         if (kind === "checkin") return showPanel("checkin");

@@ -213,9 +213,20 @@ module Buddy
     def job_lines(rows)
       grouped, singles = Array(rows).partition { |row| row[:group].present? }
       lines = grouped.group_by { |row| row[:group] }.map { |group, members|
-        "#{group}: #{members.pluck(:name).join(", ")}"
+        "#{group}: #{members.map { |row| job_name(row) }.join(", ")}"
       }
-      lines + singles.map { |row| [row[:name], row[:hot]].compact_blank.join(" · ") }
+      lines + singles.map { |row| job_name(row) }
+    end
+
+    # The multiplier rides on the job wherever the job is written, grouped or
+    # not. Which rules reach the prompt is decided on the FACTS
+    # (Buddy::TodayBriefing.applicable_rules), so a multiplier sitting inside a
+    # group put "tack it onto the job" in front of the model with no multiplier
+    # anywhere in the lines it reads: `members.pluck(:name)` had dropped it.
+    # Both trash-day briefings on 30 Sep named the three trash chores and
+    # neither could say that one of them paid double.
+    def job_name(row)
+      [row[:name], row[:hot]].compact_blank.join(" · ")
     end
 
     def weather_lines(weather)

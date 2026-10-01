@@ -2534,6 +2534,46 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   paintMute();
 
+  // Whether Affirmation is one of the rows in the actions list. A preference
+  // rather than a routine they could delete - see User#byte_affirmation? for
+  // why it cannot be one - so this is where it comes off.
+  //
+  // Paints the row and the button from the answer the server gives back, not
+  // from what was tapped, so a save that failed leaves both saying what is
+  // actually stored rather than what was asked for.
+  const affirmBtn = document.querySelector("[data-byte-affirmation]");
+  const affirmRow = document.querySelector("[data-byte-affirmation-row]");
+  const paintAffirmation = (on) => {
+    if (affirmBtn) {
+      affirmBtn.textContent = on ? "On" : "Off";
+      affirmBtn.setAttribute("aria-pressed", String(on));
+      affirmBtn.classList.toggle("on", on);
+    }
+    if (affirmRow) affirmRow.hidden = !on;
+  };
+  affirmBtn?.addEventListener("click", async () => {
+    const url = app.dataset.affirmationUrl;
+    if (!url) return;
+
+    const next = affirmBtn.getAttribute("aria-pressed") !== "true";
+    try {
+      const res = await fetch(url, {
+        method:      "POST",
+        credentials: "same-origin",
+        headers:     {
+          "Content-Type": "application/json",
+          Accept:         "application/json",
+          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+        },
+        body: JSON.stringify({ on: next }),
+      });
+      if (!res.ok) return;
+
+      const data = await res.json().catch(() => null);
+      paintAffirmation(data ? data.on === true : next);
+    } catch (_e) { /* the row stays as it was, which is what is still stored */ }
+  });
+
   // Buddy naps while the realtime channel is down. The hero renders
   // `sleeping` by default (server-side), so a broken/absent JS bundle
   // leaves Byte honestly asleep instead of fake-awake. Once the Monitor
