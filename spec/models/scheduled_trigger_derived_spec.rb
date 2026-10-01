@@ -50,6 +50,53 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       expect(sched.reload.execute_at).to be_within(1.second).of(old_execute_at)
     end
 
+    # A move that lands the trigger in the past would fire it on the spot —
+    # the "reminder arrived at the event" that trigger_for refuses on create.
+    it "removes a derived row the move puts in the past" do
+      user.scheduled_triggers.create!(
+        source_item: event, name: "suite-reminder", offset_seconds: -30 * 60,
+        trigger: "suite-reminder", execute_at: event.start_at - 30.minutes, data: {}
+      )
+      soon = 10.minutes.from_now
+      expect {
+        event.update!(start_at: soon, end_at: soon + 30.minutes)
+      }.to change { ScheduledTrigger.derived.count }.by(-1)
+    end
+
+    describe "a row measured from end_at" do
+      let!(:sched) {
+        user.scheduled_triggers.create!(
+          source_item: event, name: "nav-home", offset_seconds: -10 * 60,
+          source_edge: :end, trigger: "nav-home",
+          execute_at: event.end_at - 10.minutes, data: {}
+        )
+      }
+
+      it "follows end_at, not start_at, when the event moves" do
+        new_start = event.start_at + 3.hours
+        event.update!(start_at: new_start, end_at: new_start + 30.minutes)
+
+        expect(sched.reload.execute_at).to be_within(1.second).of(new_start + 20.minutes)
+      end
+
+      it "follows a change to end_at alone" do
+        longer = event.end_at + 1.hour
+        event.update!(end_at: longer)
+
+        expect(sched.reload.execute_at).to be_within(1.second).of(longer - 10.minutes)
+      end
+
+      it "leaves a start_at row alone when only end_at changes" do
+        start_row = user.scheduled_triggers.create!(
+          source_item: event, name: "suite-reminder", offset_seconds: -300,
+          trigger: "suite-reminder", execute_at: event.start_at - 5.minutes, data: {}
+        )
+        event.update!(end_at: event.end_at + 1.hour)
+
+        expect(start_row.reload.execute_at).to be_within(1.second).of(event.start_at - 5.minutes)
+      end
+    end
+
     it "destroys derived rows when source is destroyed (FK cascade)" do
       user.scheduled_triggers.create!(
         source_item: event, name: "suite-reminder", offset_seconds: -300,
@@ -181,6 +228,18 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       expect {
         Jil::Executor.call(user, code, event.reload.serialize.merge(id: event.id))
       }.to change { ScheduledTrigger.derived.count }.by(-1)
+    end
+
+    it "Global.trigger_for_end stamps the row as measured from end_at" do
+      end_code = <<~JIL
+        src = Global.input_data()::Hash
+        out = Global.trigger_for_end(src, "nav-home", -10, "minutes", "nav-home", {})::Schedule
+      JIL
+      Jil::Executor.call(user, end_code, event.serialize.merge(id: event.id))
+
+      sched = ScheduledTrigger.derived.sole
+      expect(sched).to be_source_edge_end
+      expect(sched.execute_at).to be_within(1.second).of(event.end_at - 10.minutes)
     end
 
     it "Global.remove_trigger_for destroys the row" do

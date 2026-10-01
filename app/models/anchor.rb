@@ -134,16 +134,11 @@ class Anchor < ApplicationRecord
     { triggers: propagate_triggers!, tasks: propagate_tasks! }
   end
 
+  # A move that puts a trigger in the past removes it rather than letting it
+  # fire on the spot - see ScheduledTrigger#follow_source!.
   def propagate_triggers!
-    ::ScheduledTrigger.not_started.where(anchor_occurrence_id: occurrences.select(:id))
-      .includes(:anchor_occurrence).find_each.count { |trigger|
-        at = trigger.anchor_occurrence.occurs_at + trigger.offset_seconds.to_i
-        next false if at == trigger.execute_at
-
-        trigger.update_columns(execute_at: at)
-        ::Jil::Schedule.update(trigger)
-        true
-      }
+    scope = ::ScheduledTrigger.not_started.where(anchor_occurrence_id: occurrences.select(:id))
+    scope.includes(:anchor_occurrence).find_each.count { |trigger| trigger.follow_source!.present? }
   end
 
   def propagate_tasks!

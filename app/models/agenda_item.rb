@@ -76,7 +76,7 @@ class AgendaItem < ApplicationRecord
 
   before_save :clear_notified_at_on_future_reschedule
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
-  after_update_commit :propagate_start_at_to_derived_triggers, if: :saved_change_to_start_at?
+  after_update_commit :propagate_to_derived_triggers, if: :times_changed?
   after_update_commit :purge_pending_derived_triggers, if: :saved_change_to_status?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy, unless: :agenda_gone?
@@ -838,19 +838,20 @@ class AgendaItem < ApplicationRecord
     zone.at(timestamp.to_i).to_date
   end
 
-  # When this item's start_at moves, every derived ScheduledTrigger's
-  # execute_at moves with it (source.start_at + offset_seconds). Already-
-  # started rows are skipped — their automation has already begun. Only
-  # the not-yet-started rows get rescheduled in Sidekiq via
-  # Jil::Schedule.update, which cancels the old job and enqueues the new.
-  def propagate_start_at_to_derived_triggers
-    return if start_at.blank?
+  def times_changed?
+    saved_change_to_start_at? || saved_change_to_end_at?
+  end
 
-    derived_triggers.not_started.find_each do |sched|
-      new_execute_at = start_at + sched.offset_seconds.to_i
-      sched.update_columns(execute_at: new_execute_at)
-      ::Jil::Schedule.update(sched)
-    end
+  # When this item's start_at or end_at moves, every derived ScheduledTrigger
+  # follows the edge it was measured from (`source_edge`) - see
+  # ScheduledTrigger#follow_source!, which also drops a row the move put in the
+  # past. Already-started rows are skipped — their automation has already
+  # begun.
+  def propagate_to_derived_triggers
+    derived_triggers.not_started.find_each { |sched|
+      sched.source_item = self
+      sched.follow_source!
+    }
   end
 
   # When an occurrence becomes cancelled — directly via cancel_occurrence!

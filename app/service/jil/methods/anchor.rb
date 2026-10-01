@@ -117,6 +117,10 @@ class Jil::Methods::Anchor < Jil::Methods::Base
       data:           @jil.cast(data.presence || {}, :Hash),
       auth_type:      :trigger,
       auth_type_id:   @jil.task&.id,
+      # Un-fired for the same reason Global#trigger_for does it: `ready` is
+      # `not_started`, so a spent row re-armed to a future time never comes due.
+      started_at:     nil,
+      completed_at:   nil,
     )
 
     ::Jil::Schedule.update(record)

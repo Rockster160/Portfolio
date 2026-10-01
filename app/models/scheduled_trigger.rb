@@ -11,7 +11,8 @@
 #  jid                  :text
 #  name                 :text
 #  offset_seconds       :integer
-#  started_at           :datetime
+#  source_edge          :integer          default("start"), not null
+#  started_at          :datetime
 #  trigger              :text             not null
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
@@ -35,6 +36,10 @@ class ScheduledTrigger < ApplicationRecord
   belongs_to :anchor_occurrence, optional: true
 
   enum :auth_type, ::Execution.auth_types
+  # Which edge of the source AgendaItem offset_seconds is measured from -
+  # trigger_for uses start_at, trigger_for_end uses end_at. Propagation has to
+  # know, or a "10 min before it ends" lands 10 min before it STARTS on a move.
+  enum :source_edge, { start: 0, end: 1 }, prefix: true
 
   timestamp_bool :execute_at, :completed_at, :started_at
 
@@ -86,6 +91,47 @@ class ScheduledTrigger < ApplicationRecord
     return nil if user.nil?
 
     ByteConversation.for_self_initiated(user)
+  end
+
+  # Where a derived row belongs given its source as it stands now. nil when the
+  # edge it hangs off is gone - an end-anchored row whose item lost its end_at.
+  def derived_execute_at
+    edge = (
+      if anchor_occurrence_id?
+        anchor_occurrence&.occurs_at
+      elsif source_edge_end?
+        source_item&.end_at
+      else
+        source_item&.start_at
+      end
+    )
+    edge && (edge + offset_seconds.to_i)
+  end
+
+  # Moves a pending derived row onto `derived_execute_at`, or removes it when
+  # that has already gone by. The create paths (trigger_for, Anchor.trigger)
+  # refuse a past time because it fires the instant it exists; a MOVE into the
+  # past is the same trigger arriving by another road, so it gets the same
+  # answer. Returns :moved, :removed, or nil when it was already right.
+  #
+  # Unmoved is checked BEFORE past: a source write visits every pending row on
+  # it, and one that is simply due - waiting on the runner, or a positive offset
+  # off an earlier occurrence - is not this move's to delete.
+  def follow_source!
+    at = derived_execute_at
+    return remove_derived! if at.nil?
+    return nil if at == execute_at
+    return remove_derived! if at <= ::Time.current
+
+    update_columns(execute_at: at)
+    ::Jil::Schedule.update(self)
+    :moved
+  end
+
+  def remove_derived!
+    ::Jil::Schedule.cancel(self)
+    destroy!
+    :removed
   end
 
   def running? = started? && !completed?

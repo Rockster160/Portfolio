@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_16_181150) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_01_222359) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1555,6 +1555,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_181150) do
     t.integer "offset_seconds"
     t.jsonb "condition"
     t.bigint "anchor_occurrence_id"
+    t.integer "source_edge", default: 0, null: false
     t.index ["anchor_occurrence_id"], name: "index_scheduled_triggers_on_anchor_occurrence_id"
     t.index ["execute_at"], name: "index_scheduled_triggers_on_pending_execute_at", where: "(jid IS NULL)"
     t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"

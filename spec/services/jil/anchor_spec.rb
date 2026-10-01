@@ -232,13 +232,43 @@ RSpec.describe "Jil: Anchor", type: :service do
 
     describe "when the anchor moves" do
       it "carries the pending trigger with it" do
-        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
-
-        anchor.set_occurrence(tonight + 18.minutes, identifier: "2026-08-19")
+        travel_to(tz.local(2026, 8, 19, 12, 0)) do
+          schedule
+          anchor.set_occurrence(tonight + 18.minutes, identifier: "2026-08-19")
+        end
 
         expect(user.scheduled_triggers.sole.execute_at).to(
           be_within(1.second).of(tonight + 13.minutes),
         )
+      end
+
+      # Created into the past it would be refused; moved into the past it's the
+      # same trigger firing the instant it lands, so it goes the same way.
+      it "removes a trigger the move puts in the past" do
+        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
+
+        travel_to(tz.local(2026, 8, 19, 20, 10)) {
+          anchor.set_occurrence(tonight - 30.minutes, identifier: "2026-08-19")
+        }
+
+        expect(user.scheduled_triggers.count).to eq(0)
+      end
+    end
+
+    describe "re-arming a trigger that has already fired" do
+      it "un-fires the row, so it can come due again" do
+        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
+        user.scheduled_triggers.sole.update!(started_at: tonight, completed_at: tonight)
+
+        travel_to(tz.local(2026, 8, 19, 20, 22)) do
+          anchor.set_occurrence(tonight + 40.minutes, identifier: "2026-08-19")
+          schedule("sun:sunset[2026-08-19]-5m")
+        end
+
+        trigger = user.scheduled_triggers.sole
+        expect(trigger.execute_at).to be_within(1.second).of(tonight + 35.minutes)
+        expect(trigger.started_at).to be_nil
+        expect(trigger.completed_at).to be_nil
       end
     end
 
@@ -310,8 +340,10 @@ RSpec.describe "Jil: Anchor", type: :service do
 
       # A move that lands the trigger later must not let the old time fire it.
       it "fires at the moved time, not the original" do
-        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
-        anchor.set_occurrence(tonight + 30.minutes, identifier: "2026-08-19")
+        travel_to(tz.local(2026, 8, 19, 12, 0)) do
+          schedule
+          anchor.set_occurrence(tonight + 30.minutes, identifier: "2026-08-19")
+        end
 
         travel_to(tonight - 5.minutes + 1.second) { run_worker }
         expect(listener.executions.count).to eq(0)

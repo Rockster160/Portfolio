@@ -115,7 +115,7 @@ A **cron** is the right tool for "every sunset, forever" — it re-arms itself a
 s = Anchor.trigger("sun:sunset-5m", "porch-lights", "porch_lights", {})::Schedule
 ```
 
-That fires the `porch_lights` listener five minutes before the next sunset, with whatever data you pass reaching the task as its input. It's keyed by (occurrence, name), so calling it again for the same occurrence updates that row rather than stacking another — and different names on the same occurrence stay separate.
+That fires the `porch_lights` listener five minutes before the next sunset, with whatever data you pass reaching the task as its input. It's keyed by (occurrence, name), so calling it again for the same occurrence updates that row rather than stacking another (and un-fires it, if it had already run, so a moved occurrence can bring it round again) — and different names on the same occurrence stay separate.
 
 It refuses to schedule a moment that has already gone by, rather than creating something that fires the instant it exists.
 
@@ -127,6 +127,7 @@ Writing an occurrence re-resolves everything hanging off it, immediately:
 
 - **Cron tasks** are re-saved, so `next_trigger_at` is recomputed from the new answer. They don't wait until their next run to notice.
 - **Derived triggers** follow the specific occurrence they were bound to.
+- **A move into the past removes the trigger** rather than letting it fire the instant it lands — the same answer `Anchor.trigger` gives when asked to create one there. Only a trigger the write actually *moved* is affected; one that is simply due and waiting on the runner is left alone.
 
 This is the reason anchors are worth a record rather than a cron string. A cron resolves once and is then a fixed stamp; an anchor keeps the question, so a forecast that shifts three minutes at 4pm moves tonight's 8:19pm task to 8:22pm without anyone re-running anything.
 

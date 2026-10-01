@@ -234,6 +234,10 @@ RSpec.describe Anchor do
 
     before { allow(Jil::Schedule).to receive(:update) }
 
+    # A move that lands a trigger in the past removes it, so these have to be
+    # moved from inside the day they're about.
+    around { |example| travel_to(now) { example.run } }
+
     def anchored_trigger(occurrence, offset: -300)
       user.scheduled_triggers.create!(
         trigger: :lights, name: :"porch-lights", anchor_occurrence: occurrence,
@@ -310,6 +314,26 @@ RSpec.describe Anchor do
       anchor.set_occurrence(tz.local(2026, 8, 19, 20, 40), identifier: "2026-08-19")
 
       expect(other.reload.execute_at).to be_within(1.second).of(tz.local(2026, 8, 19, 20, 24))
+    end
+
+    it "removes a trigger the move puts in the past" do
+      occurrence = anchor.set_occurrence(tz.local(2026, 8, 19, 20, 24), identifier: "2026-08-19")
+      trigger = anchored_trigger(occurrence)
+
+      anchor.set_occurrence(now - 1.hour, identifier: "2026-08-19")
+
+      expect(ScheduledTrigger.find_by(id: trigger.id)).to be_nil
+    end
+
+    # Due and waiting on the runner is not something a write elsewhere on the
+    # anchor gets to cancel - only a row that write actually moved.
+    it "keeps a past-due trigger the write didn't move" do
+      earlier = anchor.set_occurrence(now - 10.minutes, identifier: "earlier")
+      trigger = anchored_trigger(earlier, offset: 300)
+
+      anchor.set_occurrence(tz.local(2026, 8, 19, 20, 24), identifier: "2026-08-19")
+
+      expect(trigger.reload.execute_at).to be_within(1.second).of(now - 5.minutes)
     end
 
     it "settles rather than churning when the same time is restated" do
