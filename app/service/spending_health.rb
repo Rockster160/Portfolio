@@ -40,6 +40,15 @@ module SpendingHealth
   # How far back the buckets reach beyond the start of the month. The week can
   # begin on a Monday in the previous one.
   LOOKBACK_DAYS = 7
+  # Bills, not spending. The month/week/day bars are what is being chosen, and
+  # nobody chooses the power bill or the mortgage — they land whatever the week
+  # was like. `card payment` is money moving between accounts that the transfer
+  # pairing missed.
+  BILL_CATEGORIES = [:utilities, :mortgage, :"card payment", :insurance, :taxes].freeze
+  # Loan payments carry no category of their own (the Nissan lease reads as
+  # nothing, and "NISSAN" alone would call it car), so they are caught by what
+  # the bank calls them.
+  LOAN_PATTERN = /\b(loan|lease|mortgage)\b/i
 
   class << self
     def refresh!(user: ::User.me)
@@ -82,6 +91,9 @@ module SpendingHealth
     # Grouped in Ruby rather than SQL: a perceived day is local-3am to
     # local-3am, so grouping in Postgres means an AT TIME ZONE dance around a
     # column that carries no zone, and it is ~150 rows a month.
+    #
+    # Bills and loan payments are left out entirely, large bucket included:
+    # they are not what the budget is a budget of.
     def buckets(user)
       zone = ::Buddy::Day.zone(user)
       today = ::Buddy::Day.today(user)
@@ -89,8 +101,10 @@ module SpendingHealth
       to = ::Buddy::Day.range(user, date: today).last
 
       scope = ::BankTransaction.countable.spending.where(occurred_at: from...to)
-      pairs = scope.pluck(:occurred_at, :amount_cents)
-      pairs.each_with_object({ days: {}, large_days: {} }) { |(at, cents), acc|
+      scope = scope.where.not(category: BILL_CATEGORIES).or(scope.where(category: nil))
+      rows = scope.pluck(:occurred_at, :amount_cents, :payee, :description)
+      rows = rows.reject { |*, payee, description| LOAN_PATTERN.match?("#{payee} #{description}") }
+      rows.each_with_object({ days: {}, large_days: {} }) { |(at, cents), acc|
         into = acc[cents.abs > LARGE_CENTS ? :large_days : :days]
         key = ::Buddy::Day.perceived_date(at.in_time_zone(zone)).to_s
         into[key] = into.fetch(key, 0) + cents.abs

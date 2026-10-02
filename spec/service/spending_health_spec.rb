@@ -74,6 +74,24 @@ RSpec.describe SpendingHealth do
     end
   end
 
+  it "leaves out bills and loan payments" do
+    travel_to(zone.local(2026, 9, 13, 10)) do
+      spend(zone.local(2026, 9, 13, 9), 500, category: "groceries")
+      spend(zone.local(2026, 9, 13, 9), 300)
+      spend(zone.local(2026, 9, 13, 9), 57_180, category: "utilities")
+      spend(zone.local(2026, 9, 13, 9), 139_325, category: "mortgage")
+      spend(zone.local(2026, 9, 13, 9), 20_000, category: "card payment")
+      spend(
+        zone.local(2026, 9, 13, 9),
+        45_000,
+        payee:       "Nissan Finance",
+        description: "Nissan Auto Lease 25011430465",
+      )
+
+      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 800 }, large_days: {} }))
+    end
+  end
+
   describe ".refresh!" do
     it "stores the budget with the buckets and asks the cell to redraw" do
       travel_to(zone.local(2026, 9, 13, 10)) do

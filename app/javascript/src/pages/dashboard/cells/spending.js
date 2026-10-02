@@ -268,6 +268,10 @@ import { dash_colors, clamp } from "../vars"
   //
   // Drawn blank without a balance: a total missing an account is a wrong
   // number, and a bar of it is a wrong shape.
+  //
+  // Hover names the date it has to last to rather than the figures — the fill
+  // already says how much, and the ☼ is only readable knowing what it counts
+  // down to.
   function balanceBar(row, now_ms) {
     const cents = cell.data.balance_cents
     const goal = cell.data.balance_goal || {}
@@ -276,9 +280,12 @@ import { dash_colors, clamp } from "../vars"
     }
 
     const fraction = cents / goal.cents
+    const through = localDate(goal.through).toLocaleDateString("en-US", {
+      month: "short", day: "numeric",
+    })
     const text = (
       cell.data.hover === row
-        ? Text.justify(bar_width, "  Balance", money(cents) + " / " + money(goal.cents) + "  ")
+        ? Text.justify(bar_width, "  Balance", "thru " + through + "  ")
         : "  Balance"
     )
     const mark = remainingOf(
