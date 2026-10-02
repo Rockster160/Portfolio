@@ -62,11 +62,12 @@ module Buddy
       # both halves of one application.
       #
       # `resolve_by_role` is safe to ask with a name in hand because it demands
-      # the WHOLE role and exactly one match - see WHOLE_ROLE. A genuinely new
-      # company whose role also matches one existing row is the case it can get
-      # wrong, and it is the narrower mistake: a note on a real neighbour rather
-      # than a phantom company on the board.
-      job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if rows.none?
+      # the WHOLE role, exactly one match, and a role with a word of its own on
+      # the board - see telling_role_words, which is there because the case
+      # named here as the narrower mistake arrived two days later and was not
+      # narrow. A Motorola verify-account mail filed on Shopify's row and was
+      # announced as Shopify, off the two words "Software Engineer".
+      job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if job.nil? && rows.none?
       # The watcher hands the words over because it read the message off disk.
       # The domain inbox doesn't, and for its first week that meant the seed
       # carried no message at ALL — so the trimming habit below was never even
@@ -257,11 +258,29 @@ module Buddy
             # all reaches here too, and that is the common case. Stating it as a
             # different role and ordering `add_job_application` opens a
             # duplicate row for the job the mail was the receipt for.
+            #
+            # ONCE is a fact rather than a hedge. `resolve_application` hands
+            # back a row without consulting the role ONLY when the company holds
+            # exactly one of them (`rows.one?`); every other path through it
+            # requires the role to be named, which is the same test `same_role`
+            # just failed. So arriving here means one row, and all 17 firings in
+            # prod bear that out - one row, every time.
+            #
+            # Which is why a differing TITLE is not evidence of a second
+            # application. The board's title comes from the posting and the
+            # mail's from the ATS, and one job is routinely written both ways.
+            # EasyLlama 95 reads "Founding Platform Engineer -- Ruby on Rails",
+            # off LinkedIn; Ashby rejected "Staff Software Engineer, Platform".
+            # The old wording called that a SEPARATE application and ordered one,
+            # so row 107 was opened and closed as rejected for a job nobody ever
+            # applied to twice - leaving the row that WAS rejected reading active.
             "#{outgoing ? "They just SENT this" : "Job mail just arrived"}, and their board " \
-              "has this COMPANY on it, for the role below - but nothing in this mail says " \
-              "whether it is about that job or another one there. If it is the same job, " \
-              "add the note to the row below. If the mail names a different role, that is a " \
-              "SEPARATE application: open it with `add_job_application`."
+              "has this COMPANY on it ONCE, for the role below - but nothing in this mail " \
+              "says whether it is about that job. Add the note to the row below. A title " \
+              "that reads differently is not a second application: the board's title comes " \
+              "from the posting and the mail's from the ATS, and one job is routinely " \
+              "written both ways. Open a SEPARATE one with `add_job_application` only if " \
+              "the mail itself says they applied to something ELSE there."
           end
         ),
         "",

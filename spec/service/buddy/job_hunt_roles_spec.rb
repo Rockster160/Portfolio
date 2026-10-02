@@ -85,6 +85,47 @@ RSpec.describe Buddy::JobHunt do
     it "returns nothing when no role on the board is named" do
       expect(described_class.resolve_by_role(user, "Thank you for your interest in joining our team")).to be_nil
     end
+
+    # Prod 51932, 1 Oct. A Workday "verify your candidate account" mail named
+    # Motorola Solutions, whose row jobhunt did not open until ten minutes
+    # later. Its headline named a "Software Engineer application" and the only
+    # row whose whole role is "Software Engineer" was Shopify's, weeks old. The
+    # note was filed there in Ruby and the briefing announced Shopify.
+    #
+    # Containment runs backwards as the title gets more ordinary: the generic
+    # one is the EASIEST to name in full, so it wins the most mail. The test is
+    # a word of its own - a word two rows share cannot tell them apart, and a
+    # title built only from shared words tells nothing apart.
+    describe "a role with no word of its own" do
+      # The board around it, which is what makes "software" and "engineer"
+      # ordinary. On the real one, engineer is on 76 rows of 98 and software on
+      # 37.
+      before {
+        application("ApartmentIQ", "Senior Software Engineer")
+        application("Symetra", "Staff Software Engineer")
+        application("Machinify", "Software Architect")
+      }
+
+      it "refuses a generic title, however exactly it is named" do
+        application("Shopify", "Software Engineer")
+
+        hit = described_class.resolve_by_role(user, "Verify candidate account for Software Engineer application")
+
+        expect(hit).to be_nil
+      end
+
+      # The one the fallback was built for. "generative" is on one row and
+      # nothing else, which is the whole of what makes the role a handle - and
+      # it holds with "AI" dropped for being two letters, where counting words
+      # would not.
+      it "still takes a role that owns one of its words" do
+        application("Peregrine Advisors", "Generative AI Engineer")
+
+        hit = described_class.resolve_by_role(user, "Application received for Generative AI Engineer")
+
+        expect(hit&.company).to eq("Peregrine Advisors")
+      end
+    end
   end
 
   # Two rows at one company, and SAME_ROLE clears both on seniority and

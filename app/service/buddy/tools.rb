@@ -140,6 +140,11 @@ module Buddy
       # level 1 is a contradiction — a checkbox asking permission to look
       # something up.
       raise ArgumentError, "answers: only makes sense on a level-1 tool" if answers && resolved_level != 1
+      # A typo here is silent and widening - anything truthy that isn't
+      # `:pending` retires executed rows as well.
+      unless [true, false, nil, :pending].include?(supersedes)
+        raise ArgumentError, "supersedes: must be true, false or :pending"
+      end
       # ...and for the same reason there's nothing for ProposalBuilder to chip:
       # the tool has already run and reported by the time the reply exists. One
       # that still wants a receipt posts its own (see Buddy::ActivityChip).
@@ -201,7 +206,18 @@ module Buddy
         # target holds one state: an item is on a list once, a prompt has one
         # answer. Water drunk twice is two completions, so complete_chore and
         # log_event stay false even though they merge inside a single turn.
-        supersedes:       supersedes && !merge_key.nil?,
+        #
+        # `:pending` is the narrower kind, and the difference is what the key
+        # NAMES. `true` reaches an executed row because its key names the record
+        # the replacement has just rewritten, so the old row's undo would delete
+        # the new one's work. Where the key names a QUESTION instead, each call
+        # writes a record of its own and the first one's survives: retiring that
+        # row would take away the untick that is the only way back. Only the
+        # untapped ask is retired there. See Buddy::Supersede::PENDING_ONLY.
+        #
+        # Kept as the value rather than coerced to a boolean, so `&&` is wrong
+        # here: `:pending && true` is `true`, which would silently widen it.
+        supersedes:       (merge_key.nil? ? false : supersedes),
         # Whether this call still means the same thing replayed weeks later
         # inside a BuddyRoutine. False where an argument names a specific row
         # the person pointed at in the moment — a prompt id, an idea id, "the

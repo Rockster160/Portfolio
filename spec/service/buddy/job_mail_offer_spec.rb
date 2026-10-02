@@ -166,12 +166,54 @@ RSpec.describe Buddy::JobMailOffer do
         expect(call.body).not_to include("different role than")
       end
 
-      it "says it cannot tell, and leaves both doors open" do
+      it "says it cannot tell, and points at the row it has" do
         body = call.body
 
         expect(body).to include("nothing in this mail says")
-        expect(body).to include("add the note to the row below")
+        expect(body).to include("Add the note to the row below")
         expect(body).to include("add_job_application")
+      end
+    end
+
+    # Prod 7296/7297, 1 Oct. Ashby rejected EasyLlama's "Staff Software
+    # Engineer, Platform"; the board's one EasyLlama row reads "Founding
+    # Platform Engineer -- Ruby on Rails", which is LinkedIn's title for the
+    # same job. The seed called a differing title a SEPARATE application and
+    # ordered one, so row 107 was opened and closed as rejected for a job
+    # nothing was ever applied to twice - and the row that WAS rejected stayed
+    # reading active.
+    #
+    # Reaching this branch MEANS one row: resolve_application hands a row back
+    # without consulting the role only when the company holds exactly one.
+    describe "when the mail's title for the job differs from the board's" do
+      let!(:job) {
+        user.job_applications.create!(company: "EasyLlama", role: "Founding Platform Engineer -- Ruby on Rails")
+      }
+
+      before {
+        verdict[:company]  = "EasyLlama"
+        verdict[:headline] = "Application for Staff Software Engineer, Platform role rejected"
+        metadata[:subject] = "EasyLlama Application Update"
+      }
+
+      it "says the company is on the board once" do
+        expect(call.body).to include("has this COMPANY on it ONCE")
+      end
+
+      it "does not call a differing title a second application" do
+        body = call.body
+
+        expect(body).to include("not a second application")
+        expect(body).not_to include("that is a SEPARATE application")
+      end
+
+      # The door stays open, but it takes the mail SAYING so rather than two
+      # titles that read differently.
+      it "keeps opening one available for a mail that really says so" do
+        body = call.body
+
+        expect(body).to include("add_job_application")
+        expect(body).to include("applied to something ELSE there")
       end
     end
 

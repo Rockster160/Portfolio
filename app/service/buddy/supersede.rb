@@ -29,6 +29,14 @@ module Buddy
     # and stays exactly as it is.
     REPLACEABLE = %w[pending executed].freeze
 
+    # ...and all a `supersedes: :pending` tool can retire. Its key names a
+    # QUESTION rather than a record, so the replacement writes its own and the
+    # earlier one is still there afterwards — a rescheduled interview leaves the
+    # first booking's note and its calendar entry standing, and the untick on
+    # that row is the only way to take them back. Retiring it would read as
+    # tidying up and quietly remove the undo.
+    PENDING_ONLY = %w[pending].freeze
+
     # Retire whatever `action` replaces. `keys` are the merge_keys it just
     # posted; anything earlier in the same conversation carrying one of them is
     # done with.
@@ -103,18 +111,28 @@ module Buddy
         hit = false
         buttons.each { |btn|
           next unless wanted.include?(btn["merge_key"].to_s)
-          next unless REPLACEABLE.include?(btn["status"].to_s)
+          next unless replaceable(btn).include?(btn["status"].to_s)
 
           # Kept so the row can still render as "this DID run, and then got
           # replaced" rather than flattening into "never happened".
           btn["superseded_from"] = btn["status"]
           btn["status"]          = STATUS
-          # The replacement owns that record now; undoing this row would delete it.
+          # On an executed row the replacement owns that record now, and undoing
+          # this one would delete it. On a pending row there is nothing to undo.
           btn["undoable"] = false
           hit = true
         }
         action.buttons = buttons if hit
         hit
+      end
+
+      # Which states THIS row can be retired from, which is the tool's call: an
+      # executed row is only replaceable where the new call owns what the old
+      # one wrote. An unknown tool keeps the old behaviour rather than widening
+      # or narrowing on a guess.
+      def replaceable(btn)
+        tool = Buddy::Tools[btn["tool_name"]].to_h
+        tool[:supersedes] == :pending ? PENDING_ONLY : REPLACEABLE
       end
 
       # Nothing to rewrite on a form — retiring one is entirely the state change

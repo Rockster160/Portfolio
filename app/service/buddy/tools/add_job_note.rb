@@ -248,7 +248,32 @@ Buddy::Tools.register(
     end
   },
   # The same beat said twice in one turn is one beat.
-  merge_key:   ->(payload) { "add_job_note:#{payload[:company]}:#{payload[:tag]}:#{payload[:note].to_s.downcase.strip}" },
+  #
+  # A booking is the exception and is keyed on the JOB instead of on the words,
+  # because a job has one next interview and a reschedule IS that booking at a
+  # new time. Three have arrived as a correcting mail behind the first and every
+  # one left two cards up for one interview: iCapital on 21 Sep (Sep 24 1pm,
+  # then "Please disregarded the last email" two minutes later) and again on
+  # 1 Oct (Oct 5 9am, then "Please ignore the last confirmation" at 3:07pm), and
+  # KODE Health on 25 Sep. Two of them put the cancelled slot on the calendar -
+  # agenda items 1159 and 1174, both deleted by hand afterwards - and the 1 Oct
+  # one left an Oct 5 card tappable with the interview moved to Oct 7.
+  #
+  # The words cannot be the key here: a reschedule arrives as a DIFFERENT mail
+  # saying a different time, which is the whole point of it.
+  merge_key:   ->(payload) {
+    if payload[:tag].to_s == "scheduled" && payload[:job_id].present?
+      "add_job_note:scheduled:job:#{payload[:job_id]}"
+    else
+      "add_job_note:#{payload[:company]}:#{payload[:tag]}:#{payload[:note].to_s.downcase.strip}"
+    end
+  },
+  # Only the UNTAPPED card, never a filed one: the note and the calendar entry a
+  # tap already wrote are a record this does not own, and that row's untick is
+  # the only way back. It also makes a genuine second round safe, because one
+  # arrives weeks later - long after the first card was answered - where a
+  # correction arrives while the first is still sitting there unanswered.
+  supersedes:  :pending,
   # Level 3: an offer that writes nothing until it's tapped.
   #
   # It was level 2 - written on arrival, pre-checked, undo by unchecking - and

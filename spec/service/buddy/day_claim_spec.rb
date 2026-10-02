@@ -6,9 +6,11 @@ require "rails_helper"
 # day to Tuesday by reading her own sentence from the night before forward
 # unchanged. See Buddy::DayClaim.
 RSpec.describe Buddy::DayClaim do
-  # What Suki actually had, verbatim.
+  # What Suki actually had, in the shape the seed actually carries it - seed
+  # 6135's `weather` is a hash with a `week` outlook in it, and the day check
+  # reads that field rather than the facts' text.
   let(:facts) {
-    { weather: ["High 74°F, low 53°F", "This week: rain Wed, Thu & Fri"] }
+    { weather: { low: 53, high: 74, week: "rain Wed, Thu & Fri" } }
   }
 
   def trim(body) = described_class.trim(body, facts)
@@ -78,5 +80,73 @@ RSpec.describe Buddy::DayClaim do
 
   it "hands the body back untouched when the facts are empty" do
     expect(described_class.trim("Morning!", {})).to eq("Morning!")
+  end
+
+  # Prod 7239/7240, 1 Oct. Byte opened Thursday's briefing "Busy one tomorrow,
+  # but a good one" over a day holding a 10am iCapital interview. Read on a lock
+  # screen that moves the interview to Friday.
+  #
+  # The word was in the facts - as the title of an 8pm chore, "Set alarm for
+  # tomorrow!" - so the overlap test had its evidence handed to it by the one
+  # thing on the day that was not about tomorrow at all.
+  describe "a day word that is part of a NAME" do
+    let(:facts) {
+      {
+        today:   [
+          { time: "10am", title: "Interview: iCapital" },
+          { time: "8pm", title: "Set alarm for tomorrow!" },
+        ],
+        week:    [
+          { day: "Saturday", time: "8am", title: "Fun Run!" },
+          { day: "Tuesday", time: "5:30pm", title: "IT Performance" },
+        ],
+        weather: { low: 52, high: 76 },
+      }
+    }
+
+    it "drops a claim about tomorrow when nothing is scheduled for tomorrow" do
+      body = "Hey hey, Rocco! Busy one tomorrow, but a good one."
+
+      expect(trim(body)).to eq("Hey hey, Rocco!")
+    end
+
+    # The other half: the week IS what says which days are covered, so a day it
+    # names is reporting rather than inventing.
+    it "keeps a claim about a day the week has something on" do
+      body = "Morning! Saturday is the one to watch."
+
+      expect(trim(body)).to eq(body)
+    end
+
+    it "keeps tomorrow once the week actually has something on it" do
+      facts[:week] << { day: "tomorrow", time: "6:30pm", title: "Crochet with Eve" }
+      body = "Morning! Tomorrow has its own thing going on."
+
+      expect(trim(body)).to eq(body)
+    end
+  end
+
+  # Prod 6381, 16 Sep. The seed's outlook read "rain Thu, Fri & Sat" and the
+  # briefing wrote the days out in full, which is what it is asked to do - so
+  # the sentence shares no WORD with the facts ("rainy" is not "rain",
+  # "Thursday" is not "Thu") and anything comparing word sets cuts a correct
+  # forecast. The days are read off the outlook, abbreviations expanded, for
+  # exactly this.
+  it "keeps the week's own rain, spelled out" do
+    facts[:weather][:week] = "rain Thu, Fri & Sat"
+    body = "Morning! This week looks rainy on Thursday, Friday, and Saturday too!"
+
+    expect(trim(body)).to eq(body)
+  end
+
+  # No schedule in the facts at all is not "no day is covered" - it is nothing
+  # to judge days by, so the overlap test is left to it and a sentence it clears
+  # survives. An empty set in place of that would have cut this one, because
+  # nothing can be said to cover tomorrow.
+  it "falls back to the overlap when the facts carry no week at all" do
+    bare = { weather: { low: 52, high: 76, notable: "rain" } }
+    body = "Morning! Rain is coming tomorrow."
+
+    expect(described_class.trim(body, bare)).to eq(body)
   end
 end

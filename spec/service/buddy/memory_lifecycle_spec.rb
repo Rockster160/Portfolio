@@ -178,10 +178,17 @@ RSpec.describe "BuddyMemory lifecycle" do
 
       # Placed against everything else pending rather than dropped onto the
       # clock - two check-ins must never land in one sitting.
+      # The second `remember` is put a second later ON PURPOSE. CheckIns.ordered
+      # breaks its ties on `created_at.to_i`, which is whole seconds, and the
+      # queue it sorts comes off a query with no ORDER BY - so two facts
+      # remembered inside one second are placed in whichever order Postgres
+      # happened to scan them, and which one gets the later slot is a coin toss
+      # that turns up as this example failing in a full run and passing alone.
+      # Spacing is what is under test here, not the tie.
       it "spaces it against the check-ins already queued" do
         remember("Rocco was laid off at OCS", check_in_days: 1)
         first = BuddyMemory.last.check_in_at
-        remember("Rocco's dad is having a scan", check_in_days: 1)
+        travel(1.second) { remember("Rocco's dad is having a scan", check_in_days: 1) }
         second = BuddyMemory.last.check_in_at
 
         expect(second).to be > first

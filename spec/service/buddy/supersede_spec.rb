@@ -45,6 +45,104 @@ RSpec.describe Buddy::Supersede do
     action.reload.buttons
   end
 
+  # Prod 1164/1166, 1 Oct. iCapital confirmed a Zoom interview for Mon Oct 5 at
+  # 9am; at 3:07pm they wrote "Please ignore the last confirmation" and gave Wed
+  # Oct 7 at 8am instead. The Oct 7 note was filed and the calendar is right,
+  # but the Oct 5 CARD stayed pending - one tap away from booking a slot that
+  # had been called off.
+  #
+  # Three of these: iCapital again on 21 Sep ("Please disregarded the last
+  # email", two minutes behind the first) and KODE Health on 25 Sep. Two put the
+  # cancelled slot on the calendar, agenda items 1159 and 1174, both deleted by
+  # hand.
+  describe "a rescheduled interview" do
+    # `job_search` is owner-only (Buddy::Features::OWNER_ONLY), so a fixture
+    # account cannot reach add_job_note at all - the call is dropped before a
+    # row is ever built.
+    let(:user) { User.me }
+    let!(:job) { user.job_applications.create!(company: "iCapital", role: "Full Stack Engineer") }
+
+    # `User.me` is ONE object for the whole process (`@@me ||=`), so the grant
+    # outlives this example IN MEMORY even though its row is rolled back with
+    # the transaction. Left dirty it hands the next spec a feature its account
+    # should not have. Put back by assignment, not a write - the row never
+    # needed changing.
+    around { |example|
+      held = Array(user.buddy_features).dup
+      user.grant_buddy_features!(:job_search)
+      example.run
+      user.buddy_features = held
+    }
+
+    def book(call_id, at)
+      turn!("job mail", [{
+        name:      :add_job_note,
+        call_id:   call_id,
+        arguments: {
+          "company"      => "iCapital",
+          "tag"          => "scheduled",
+          "note"         => "You are confirmed for your Zoom Interview on #{at}.",
+          "follow_up_at" => at,
+        },
+      }])
+    end
+
+    def note(call_id, body)
+      turn!("job mail", [{
+        name:      :add_job_note,
+        call_id:   call_id,
+        arguments: { "company" => "iCapital", "tag" => "note", "note" => body },
+      }])
+    end
+
+    it "retires the booking it corrects" do
+      book("c1", "2026-10-05T09:00:00-06:00")
+      book("c2", "2026-10-07T08:00:00-06:00")
+
+      first, second = checklists.to_a
+      expect(rows(first).first["status"]).to eq("superseded")
+      expect(rows(second).first["status"]).to eq("pending")
+    end
+
+    # Keyed on the JOB, because the words are the one thing a reschedule is
+    # certain to change - a key built from them can never match the booking it
+    # replaces.
+    it "keys a booking on the job rather than on what the mail said" do
+      book("c1", "2026-10-05T09:00:00-06:00")
+
+      expect(rows(checklists.first).first["merge_key"]).to eq("add_job_note:scheduled:job:#{job.id}")
+    end
+
+    # Everything that is not a booking stays keyed on its words, so two
+    # different beats on one row never collapse into one.
+    it "leaves a plain note keyed on what it says" do
+      note("c1", "Thanks for the update.")
+      note("c2", "Sending availability now.")
+
+      first, second = checklists.to_a
+      expect(rows(first).first["status"]).to eq("pending")
+      expect(rows(second).first["status"]).to eq("pending")
+    end
+
+    # The half that must NOT happen. A tapped booking has written a note and a
+    # calendar entry, and the replacement does not own either of them - the
+    # untick on that row is the only way to take them back.
+    it "leaves a booking that was already tapped standing, undo and all" do
+      book("c1", "2026-10-05T09:00:00-06:00")
+      action = checklists.first
+      action.apply_decision!(value: [rows(action).first["id"]])
+      Buddy::ProposalExecutor.perform(action.id)
+      expect(rows(action).first["status"]).to eq("executed")
+
+      book("c2", "2026-10-07T08:00:00-06:00")
+
+      filed = rows(checklists.first).first
+      expect(filed["status"]).to eq("executed")
+      expect(filed["undoable"]).not_to be(false)
+      expect(job.notes.where(tag: :scheduled).count).to eq(1)
+    end
+  end
+
   describe "a corrected list item" do
     it "retires the earlier row and leaves the corrected one live" do
       add_item("c1")

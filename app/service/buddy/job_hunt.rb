@@ -170,10 +170,55 @@ module Buddy
       said = role_words(text)
       return nil if said.empty?
 
-      matches = JobApplication.where(user: user).select { |job|
-        role_named_in?(job, text, ratio: WHOLE_ROLE)
+      rows    = JobApplication.where(user: user).to_a
+      telling = telling_role_words(rows)
+      matches = rows.select { |job|
+        role_words(job.role).intersect?(telling) && role_named_in?(job, text, ratio: WHOLE_ROLE)
       }
       matches.one? ? matches.first : nil
+    end
+
+    # The role words that belong to exactly ONE row on the board, which is what
+    # makes a role able to single a row out at all. `role_words` is already
+    # unique per role, so the tally counts ROWS rather than mentions.
+    #
+    # The ratio above cannot speak to this, and containment gets WEAKER as the
+    # title gets more ordinary: every word of "Software Engineer" turns up in
+    # half the job mail ever sent, so the most generic title on the board wins
+    # the most of it.
+    #
+    # Prod 51932, 1 Oct. A Workday "verify your candidate account" mail named
+    # Motorola Solutions, whose row jobhunt did not open until ten minutes
+    # later. Its headline named a "Software Engineer application"; the one row
+    # whose whole role is "Software Engineer" was Shopify's, weeks old; the note
+    # was filed there before any of it reached a model, and the briefing
+    # announced Shopify.
+    #
+    # A word of its OWN is the test, and it is the same instrument the briefing
+    # uses to tell two chore groups apart: a word two rows share cannot
+    # distinguish them, and a title built entirely out of shared words
+    # distinguishes nothing. Measured on the board as it stands, 54 of 98 roles
+    # are built only from the common vocabulary - engineer appears on 76 of
+    # them, software on 37, senior on 32 - and both fallback matches that were
+    # RIGHT own a word outright: "generative" for Peregrine, "principle" for
+    # National Quality Systems. Shopify's "Software Engineer" owns nothing.
+    #
+    # A word COUNT was tried and is wrong: `significant` drops anything under
+    # three letters, so "Generative AI Engineer" counts two and a floor of three
+    # refuses the very case the fallback was built for.
+    #
+    # `matches.one?` was already refusing the generic titles that REPEAT -
+    # "Senior Software Engineer" names six rows, "Staff Software Engineer"
+    # eight. This is for the ones it cannot: a generic title that happens to be
+    # the only one of its kind, which 104 and 101 both are today.
+    #
+    # Distinctiveness is relative to the board, which is the only corpus there
+    # is and a fair one at 98 rows of nearly all one discipline. It does mean a
+    # nearly-empty board makes every word distinctive; a hand-kept list of
+    # generic words would not rot any slower.
+    def telling_role_words(rows)
+      counts = rows.flat_map { |job| role_words(job.role) }.tally
+      counts.filter_map { |word, rows_with_it| word if rows_with_it == 1 }
     end
 
     # Through Flourish so the filler words go - "and", "for", "the" - and both
