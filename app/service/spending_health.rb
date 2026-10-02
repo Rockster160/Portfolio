@@ -22,12 +22,6 @@ module SpendingHealth
   # month gets a slightly smaller daily allowance than a 30-day one, which is
   # the point of dividing rather than fixing a number.
   MONTHLY_CENTS = 400_000
-  # A purchase ABOVE this is a large one: rent-sized, tuition-sized, a flight.
-  # One of those lands on a single day and would read as that day and that week
-  # being blown, when it was planned money. So they are bucketed apart — the
-  # bars never draw them, and the cell takes the month's large purchases off
-  # the month's budget instead, which lowers every day of it evenly.
-  LARGE_CENTS = 50_000
   # The top bar: everything there is, against what it is meant to hold, over
   # the stretch it has to last. From the layoff to the end of the year. `from`
   # and `through` are both whole perceived days, so the range runs from 3am on
@@ -61,14 +55,9 @@ module SpendingHealth
       data
     end
 
-    # Cents spent per perceived day, with the large purchases in buckets of
-    # their own, plus the budget those days are measured against. Dates are ISO
-    # strings because that is what survives the trip through JSON and back out
-    # to the cell.
-    #
-    # The large ones are dated rather than totalled for the same reason the
-    # rest are: at the turn of the month last month's rent has to stop coming
-    # off the budget, with nothing pushed to say so.
+    # Cents spent per perceived day, plus the budget those days are measured
+    # against. Dates are ISO strings because that is what survives the trip
+    # through JSON and back out to the cell.
     #
     # The balance is the home cell's figure — cumulative and projected, see
     # SimpleFin::DashboardCache — and nil when an account has none yet, which
@@ -92,8 +81,10 @@ module SpendingHealth
     # local-3am, so grouping in Postgres means an AT TIME ZONE dance around a
     # column that carries no zone, and it is ~150 rows a month.
     #
-    # Bills and loan payments are left out entirely, large bucket included:
-    # they are not what the budget is a budget of.
+    # Bills and loan payments are left out: they are not what the budget is a
+    # budget of. Everything else counts on the day it landed, whatever its size
+    # — the mortgage and the lease were what a size cutoff was really keeping
+    # off the bars, and those are filtered by what they ARE now.
     def buckets(user)
       zone = ::Buddy::Day.zone(user)
       today = ::Buddy::Day.today(user)
@@ -104,11 +95,12 @@ module SpendingHealth
       scope = scope.where.not(category: BILL_CATEGORIES).or(scope.where(category: nil))
       rows = scope.pluck(:occurred_at, :amount_cents, :payee, :description)
       rows = rows.reject { |*, payee, description| LOAN_PATTERN.match?("#{payee} #{description}") }
-      rows.each_with_object({ days: {}, large_days: {} }) { |(at, cents), acc|
-        into = acc[cents.abs > LARGE_CENTS ? :large_days : :days]
+      days = rows.each_with_object({}) { |(at, cents), acc|
         key = ::Buddy::Day.perceived_date(at.in_time_zone(zone)).to_s
-        into[key] = into.fetch(key, 0) + cents.abs
+        acc[key] = acc.fetch(key, 0) + cents.abs
       }
+
+      { days: days }
     end
 
     # Writing the cache key moves nothing on screen by itself — the Jil task

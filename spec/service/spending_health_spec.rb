@@ -41,18 +41,14 @@ RSpec.describe SpendingHealth do
     end
   end
 
-  # Over $500 is planned money landing on one day. It is kept, but apart, so the
-  # cell can take it off the month's budget instead of off that day.
-  it "buckets purchases over $500 apart from the rest" do
+  # Size is no reason to leave a purchase out — bills are filtered by what they
+  # are, so a big one that is NOT a bill is the day's spending like any other.
+  it "counts large purchases on the day they landed" do
     travel_to(zone.local(2026, 9, 13, 10)) do
-      spend(zone.local(2026, 9, 13, 9), 50_000)
-      spend(zone.local(2026, 9, 13, 9), 50_001)
-      spend(zone.local(2026, 9, 12, 9), 140_000)
+      spend(zone.local(2026, 9, 13, 9), 500)
+      spend(zone.local(2026, 9, 13, 9), 140_000, category: "home")
 
-      expect(described_class.buckets(user)).to(eq({
-        days:       { "2026-09-13" => 50_000 },
-        large_days: { "2026-09-13" => 50_001, "2026-09-12" => 140_000 },
-      }))
+      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 140_500 } }))
     end
   end
 
@@ -70,7 +66,7 @@ RSpec.describe SpendingHealth do
       out.update!(transfer_counterpart: back)
       back.update!(transfer_counterpart: out)
 
-      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 500 }, large_days: {} }))
+      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 500 } }))
     end
   end
 
@@ -88,7 +84,7 @@ RSpec.describe SpendingHealth do
         description: "Nissan Auto Lease 25011430465",
       )
 
-      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 800 }, large_days: {} }))
+      expect(described_class.buckets(user)).to(eq({ days: { "2026-09-13" => 800 } }))
     end
   end
 
@@ -107,7 +103,6 @@ RSpec.describe SpendingHealth do
           balance_cents:     nil,
           balance_goal:      described_class::BALANCE_GOAL,
           days:              { "2026-09-13": 500 },
-          large_days:        {},
           caffeine_limit_mg: ::CaffeineIntake::DAILY_LIMIT_MG,
           caffeine:          { "2026-09-13": 200 },
         }))

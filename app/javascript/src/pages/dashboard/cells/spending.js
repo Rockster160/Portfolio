@@ -3,23 +3,25 @@ import { Text } from "../_text"
 import { dash_colors, clamp } from "../vars"
 
 // Health bars for the money: everything there is against what it is meant to
-// last on, then how much is left on the month, the week (Monday to Sunday) and
-// today. Each bar carries its own clock — a ☼ on the cell for how much of THAT
+// last on, then how much is left on the month and today. Each bar carries its own clock — a ☼ on the cell for how much of THAT
 // bar's range is left — so money draining faster than the clock reads as a
 // fill ending short of its ☼. That is the thing this cell
 // exists to show, and it is a SHAPE, not a sum. Nothing carries a number at
 // rest; a glance should not be a reckoning. Hover a bar and its own line spells
 // the figures out, in place.
 //
+// Under them, the last seven days drawn the way the Fitness cell draws a habit:
+// the day names, newest first, and under each a ✓ or 𐄂 for whether that day
+// stayed inside the daily allowance. The `7` column leads it with the same
+// verdict on the seven together — a blown Saturday can still be a fine week.
+//
 // The server sends DAILY BUCKETS, not the three totals, so the sums happen
 // here against the browser's own clock. That is what makes a dashboard left
 // open overnight roll onto the new day at 3am without anything being pushed to
 // it — nothing writes to the bank at 3am to say the day changed.
 //
-// Purchases over $500 arrive in `large_days`, apart from the rest, and no bar
-// draws them: rent landing on the 1st is planned money, not the 1st and its
-// week being blown. What they cost comes off the MONTH'S budget instead, so the
-// month, week and day allowances all shrink evenly to make room for them.
+// Bills and loan payments never reach it — the server leaves them out — so
+// every purchase, large or small, counts on the day it landed.
 //
 // The Claude bars are the same reading for the plan's rate limits: what is
 // left of the 5-hour session and of the week, against how much of each window
@@ -52,15 +54,16 @@ import { dash_colors, clamp } from "../vars"
   const blank = " ".repeat(cell_width)
   // Where the bars sit in the rendered lines — `hover` reports a line index,
   // and only these answer to it. Bars that are one reading stack with nothing
-  // between them; the gaps made them look like unrelated ones. The blanks that
-  // are left separate the GROUPS — the money, Claude, the caffeine.
+  // between them; the gaps made them look like unrelated ones. The one blank
+  // left separates the money from Claude. There used to be a second, before
+  // the caffeine, and the two-line week strip took its place.
   const balance_row = 0
   const month_row = 1
-  const week_row = 2
-  const today_row = 3
-  const session_row = 5
-  const claude_week_row = 6
+  const today_row = 2
+  const session_row = 6
+  const claude_week_row = 7
   const caffeine_row = 8
+  const rolling_days = 7
 
   // How long each of the plan's windows runs. The server only says when one
   // RESETS, so where it began is counted back from that.
@@ -375,6 +378,34 @@ import { dash_colors, clamp } from "../vars"
     return bar(row, text, mg / limit_mg, undefined, remaining <= 0, remaining <= 0.25)
   }
 
+  // A mark is three wide to sit under its day's name. Padded by hand rather
+  // than with padStart: 𐄂 is outside the BMP, two UTF-16 units to `length`,
+  // and would come out a column short.
+  function verdict(spent, allowance) {
+    const over = spent > allowance
+    return Text.color(over ? dash_colors.red : dash_colors.green, over ? "𐄂" : "✓")
+  }
+
+  // The last seven perceived days, today included and so far, each against
+  // the day's allowance — the current month's, so a day that fell in last
+  // month is judged by the same yardstick as the rest of the strip. The `7`
+  // is their sum against seven of them.
+  function weekStrip(today, day_budget) {
+    const days = []
+    for (let idx = 0; idx < rolling_days; idx++) { days.push(addDays(today, -idx)) }
+
+    const names = days.map(function(day) { return weekdays[day.getDay()] }).join(" ")
+    const marks = days.map(function(day) {
+      return "  " + verdict(spentOver(day, 1), day_budget)
+    }).join(" ")
+    const total = spentOver(addDays(today, -(rolling_days - 1)), rolling_days)
+
+    return [
+      "    " + names + " ",
+      " 7" + verdict(total, day_budget * rolling_days) + " " + marks + " ",
+    ]
+  }
+
   // Which line the pointer is on. Redrawing replaces the line divs under the
   // cursor, so the next mousemove reports the same row and this exits early
   // rather than looping.
@@ -396,16 +427,8 @@ import { dash_colors, clamp } from "../vars"
     const month_end = new Date(today.getFullYear(), today.getMonth() + 1, 1)
     const in_month = addDays(month_end, -1).getDate()
 
-    // Only THIS month's large purchases: last month's rent stops coming off
-    // the budget at the turn of the month by itself.
-    const large = spentOver(month_start, in_month, cell.data.large_days || {})
-    const month_budget = Math.max((cell.data.budget_cents || 0) - large, 0)
+    const month_budget = cell.data.budget_cents || 0
     const day_budget = month_budget / in_month
-    const week_budget = day_budget * 7
-
-    // getDay() counts from Sunday; the week starts on Monday.
-    const week_start = addDays(today, -((today.getDay() + 6) % 7))
-    const week_end = addDays(week_start, 7)
 
     // Every range ends at a 3am, the same rollover the buckets are dated by.
     const now_ms = now.getTime()
@@ -413,20 +436,16 @@ import { dash_colors, clamp } from "../vars"
     const month_left = remainingOf(
       dayStart(month_start).getTime(), dayStart(month_end).getTime(), now_ms,
     )
-    const week_left = remainingOf(
-      dayStart(week_start).getTime(), dayStart(week_end).getTime(), now_ms,
-    )
     const today_left = remainingOf(dayStart(today).getTime(), tomorrow, now_ms)
 
     const lines = [
       balanceBar(balance_row, now_ms),
       spendBar(month_row, "Month", spentOver(month_start, day_of_month), month_budget, month_left),
-      spendBar(week_row, "Week", spentOver(week_start, 7), week_budget, week_left),
       spendBar(today_row, "Today", spentOver(today, 1), day_budget, today_left),
+      ...weekStrip(today, day_budget),
       blank,
       claudeBar(session_row, "Claude session", "five_hour", now),
       claudeBar(claude_week_row, "Claude week", "seven_day", now),
-      blank,
       caffeineBar(
         caffeine_row,
         (cell.data.caffeine || {})[cell.data.day_key] || 0,
@@ -442,7 +461,7 @@ import { dash_colors, clamp } from "../vars"
     text: "Loading...",
     data: {
       budget_cents: 0, balance_cents: undefined, balance_goal: {},
-      days: {}, large_days: {}, caffeine_limit_mg: 0, caffeine: {}, claude: {},
+      days: {}, caffeine_limit_mg: 0, caffeine: {}, claude: {},
       day_key: undefined, hover: -1,
     },
     // Only the clock moves between pushes. Redrawing is free and walks every
@@ -481,7 +500,6 @@ import { dash_colors, clamp } from "../vars"
           cell.data.balance_cents = data.balance_cents
           cell.data.balance_goal = data.balance_goal || {}
           cell.data.days = data.days || {}
-          cell.data.large_days = data.large_days || {}
           cell.data.caffeine_limit_mg = data.caffeine_limit_mg || 0
           cell.data.caffeine = data.caffeine || {}
           cell.data.claude = data.claude || {}
