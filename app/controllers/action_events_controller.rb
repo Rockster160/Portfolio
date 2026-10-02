@@ -144,8 +144,7 @@ class ActionEventsController < ApplicationController
 
   def create
     event = ActionEvent.create(event_params)
-    jil_trigger(:event, event.with_jil_attrs(action: :added))
-    ::ActionEventBroadcastWorker.perform_async(event.id)
+    notify(event, :added) if event.persisted?
 
     respond_to do |format|
       format.json {
@@ -165,39 +164,38 @@ class ActionEventsController < ApplicationController
   end
 
   def update
-    @event = ActionEvent.find(params[:id])
+    @event = current_user.action_events.find(params[:id])
 
     @event.update(event_params)
-    attrs = { action: :changed }
-    attrs[:changes] = @event.saved_changes if @event.saved_changes.present?
-    jil_trigger(:event, @event.with_jil_attrs(attrs))
-    ::ActionEventBroadcastWorker.perform_async(@event.id, false)
+    notify(@event, :changed, update_streak: false)
   end
 
   def destroy
     event = current_user.action_events.find(params[:id])
 
     if event.destroy
-      jil_trigger(:event, event.with_jil_attrs(action: :removed))
+      notify(event, :removed)
     else
       flash[:alert] = "Failed to destroy event."
     end
 
-    # Reset following event streak info
-    matching_events = ActionEvent
-      .where(user_id: event.user_id)
-      .ilike(name: event.name)
-      .where.not(id: event.id)
-    following = matching_events.where("timestamp > ?", event.timestamp).order(:timestamp).first
-    UpdateActionStreak.perform_async(following.id) if following.present?
-    # / streak info
-
-    ActionEventBroadcastWorker.perform_async
-    ::RecentEventsBroadcast.call if event.present?
+    # The broadcast worker looks the event up by id and finds nothing once it
+    # is gone, so the recent list is redrawn here instead.
+    ::RecentEventsBroadcast.call
     redirect_to request.referer || action_events_path
   end
 
   private
+
+  # Same side effects as a Jil or Buddy mutation — the :event trigger, the
+  # streak, and the dashboard caches a drink or a purchase moves. A delete from
+  # this page used to leave a removed drink on the Caffeine bar.
+  def notify(event, action, update_streak: true)
+    ::ActionEventNotifier.notify(
+      current_user, event, action,
+      update_streak: update_streak, auth: jil_auth_type, auth_id: jil_auth_id
+    )
+  end
 
   def event_params
     if params.key?(:action_event)
