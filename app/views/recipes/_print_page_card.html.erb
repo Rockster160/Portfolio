@@ -1,0 +1,28 @@
+<%
+  cleared_slots = slot_ids.dup
+  cleared_slots[slot_index] = nil
+  clear_href = print_recipes_path(layout: layout_name, slots: cleared_slots.map { |x| x || "" }.join(","))
+
+  total_len = page.content.to_s.length
+  density = case total_len
+            when 0..900 then nil
+            when 901..1600 then :dense
+            else :"very-dense"
+            end
+%>
+<%= tag.div(class: ["slot", "page-slot", density].compact) do %>
+  <div class="slot-actions">
+    <a href="<%= clear_href %>" title="Change (clear this slot)">Change</a>
+    <button type="button" onclick="window.location.reload()" title="Reload from server">↻</button>
+    <a href="<%= page_path(page) %>" target="_blank" title="Edit page in a new tab">Edit</a>
+  </div>
+
+  <h1 class="card-title"><%= page.name %></h1>
+  <hr class="rule">
+
+  <div class="card-body">
+    <div class="col-directions">
+      <div class="md"><%= Markdown.new(page.content.to_s, user: current_user).to_html %></div>
+    </div>
+  </div>
+<% end %>

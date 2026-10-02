@@ -52,16 +52,24 @@ class RecipesController < ApplicationController
     @layout = %i[card full].map(&:to_s).include?(params[:layout]) ? params[:layout].to_sym : :card
     slot_count = @layout == :card ? 4 : 1
 
-    raw_slots = params[:slots].to_s.split(",", slot_count).map { |s| s.strip.to_i.nonzero? }
+    raw_slots = params[:slots].to_s.split(",", slot_count).map { |s| s.strip.presence }
     raw_slots = raw_slots + Array.new(slot_count - raw_slots.length, nil)
 
-    lookup_ids = raw_slots.compact.uniq
-    viewable = Recipe.viewable(current_user).where(id: lookup_ids).index_by(&:id)
+    parsed = raw_slots.map { |token| token.to_s.match(/\A(p)?(\d+)\z/) }
+    recipe_ids = parsed.filter_map { |m| m[2].to_i if m && !m[1] }
+    page_ids = parsed.filter_map { |m| m[2].to_i if m && m[1] }
+    recipes = Recipe.viewable(current_user).where(id: recipe_ids).index_by(&:id)
+    pages = pickable_pages.where(id: page_ids).index_by(&:id)
 
-    @slot_ids = raw_slots.map { |id| id && viewable.key?(id) ? id : nil }
-    @slot_recipes = @slot_ids.map { |id| id && viewable[id] }
-    @primary = @slot_recipes.compact.first
+    @slot_items = parsed.map { |m|
+      next unless m
+
+      m[1] ? pages[m[2].to_i] : recipes[m[2].to_i]
+    }
+    @slot_ids = @slot_items.map { |item| item && print_slot_token(item) }
+    @primary = @slot_items.find { |item| item.is_a?(Recipe) }
     @pickable = Recipe.viewable(current_user).order(Arel.sql("LOWER(title)"))
+    @pickable_pages = pickable_pages.order(Arel.sql("LOWER(pages.name)"))
 
     render layout: "print"
   end
@@ -77,6 +85,16 @@ class RecipesController < ApplicationController
   end
 
   private
+
+  def pickable_pages
+    Page.where(user_id: current_user.id).or(
+      Page.where(id: current_user.shared_pages.select(:page_id)),
+    )
+  end
+
+  def print_slot_token(item)
+    item.is_a?(Page) ? "p#{item.id}" : item.id
+  end
 
   def authorize_owner
     return if @recipe.user == current_user

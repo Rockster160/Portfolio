@@ -3,10 +3,16 @@
 %>
 <div class="sheet <%= @layout == :card ? 'cards' : 'full' %>">
   <% (0...slot_count).each do |i| %>
-    <% recipe = @slot_recipes[i] %>
-    <% if recipe %>
+    <% item = @slot_items[i] %>
+    <% if item.is_a?(Page) %>
+      <%= render "print_page_card",
+        page: item,
+        slot_ids: @slot_ids,
+        slot_index: i,
+        layout_name: @layout %>
+    <% elsif item %>
       <%= render "print_card",
-        recipe: recipe,
+        recipe: item,
         slot_ids: @slot_ids,
         slot_index: i,
         pickable: @pickable,
@@ -16,6 +22,7 @@
         slot_ids: @slot_ids,
         slot_index: i,
         pickable: @pickable,
+        pickable_pages: @pickable_pages,
         layout_name: @layout %>
     <% end %>
   <% end %>

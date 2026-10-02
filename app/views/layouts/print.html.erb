@@ -203,6 +203,32 @@
       font-style: italic;
     }
 
+    .md table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 3px 0 5px;
+      font-size: 0.92em;
+      line-height: 1.2;
+    }
+    .md th, .md td {
+      border: 0.5px solid #b8b8b8;
+      padding: 1.5px 5px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .md th {
+      font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 0.8em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #555;
+      background: #f0eee6;
+      border-bottom: 1px solid #6a6a6a;
+    }
+    .md tr:nth-child(even) td { background: #f8f6ef; }
+    .full .md th, .full .md td { padding: 4px 8px; }
+
     .slot.dense .md { font-size: 8pt; line-height: 1.22; }
     .slot.very-dense .md { font-size: 7pt; line-height: 1.18; }
 
@@ -249,6 +275,13 @@
       border-bottom: 1px solid #f0f0f0;
     }
     .picker-list a:hover { background: #eef; }
+    .picker-list a .kind {
+      float: right;
+      color: #999;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
     .picker-list a.hidden { display: none; }
     .picker-empty {
       color: #999;
