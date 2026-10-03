@@ -237,4 +237,78 @@ RSpec.describe ListItem do
       )
     end
   end
+
+  # Clearing a row off the owner's Claude list tells terminal-pet the session
+  # was seen. The hooks' own delete-and-repost on every state change must not.
+  describe "acking the pet" do
+    let(:list)     { create(:list, name: "Claude", user: User.me) }
+    let(:section)  { create(:section, list: list, name: "Portfolio") }
+
+    before { allow(PetWorker).to receive(:tell) }
+
+    def remove(name, section: self.section, quiet: false)
+      item = create(:list_item, list: list, name: name, section: section)
+      item.quiet_for_pet = quiet
+      item.soft_destroy
+    end
+
+    it "acks the label and the section, without the > or the state" do
+      remove(">memory Done")
+
+      expect(PetWorker).to have_received(:tell).with(:ack, ["memory"], ["Portfolio"])
+    end
+
+    it "strips every state the hooks write" do
+      ["…", "...", "Permission", "Error", "Rate limited", "Stopped", "Stalled"].each { |state|
+        remove(">keyb #{state}")
+      }
+
+      expect(PetWorker).to have_received(:tell).with(:ack, ["keyb"], ["Portfolio"]).exactly(7).times
+    end
+
+    it "leaves a label that merely ends in a state word alone" do
+      remove(">abandon Done")
+
+      expect(PetWorker).to have_received(:tell).with(:ack, ["abandon"], ["Portfolio"])
+    end
+
+    it "sends the label alone when the row has no section" do
+      remove(">keyb Done", section: nil)
+
+      expect(PetWorker).to have_received(:tell).with(:ack, ["keyb"], [])
+    end
+
+    it "acks when the box is checked" do
+      item = create(:list_item, list: list, name: ">memory Done", section: section)
+      item.checked = "true"
+
+      expect(PetWorker).to have_received(:tell).with(:ack, ["memory"], ["Portfolio"])
+    end
+
+    it "says nothing when the hooks replace their own row" do
+      remove(">memory …", quiet: true)
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "says nothing when nothing is left of the name" do
+      remove(">Done")
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "says nothing for a row on any other list" do
+      other = create(:list, name: "Groceries", user: User.me)
+      create(:list_item, list: other, name: ">memory Done").soft_destroy
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "says nothing for someone else's Claude list" do
+      theirs = create(:list, name: "Claude", user: create(:user))
+      create(:list_item, list: theirs, name: ">memory Done").soft_destroy
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+  end
 end

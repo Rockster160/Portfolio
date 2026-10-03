@@ -19,16 +19,24 @@
 
 class ListItem < ApplicationRecord
   attr_accessor :do_not_broadcast
+  # Set when the Claude Code hooks remove their own row on a state change - a
+  # row being REPLACED, not one somebody read and cleared. See #ack_pet.
+  attr_accessor :quiet_for_pet
 
   belongs_to :list
   belongs_to :section, optional: true
 
   before_save :set_sort_order, :normalize_values
   after_commit :broadcast_commit
+  after_update_commit :ack_pet, if: -> { saved_change_to_deleted_at? && deleted? }
 
   validates :name, presence: true
 
   default_scope { where(deleted_at: nil) }
+
+  # The state the Claude Code hooks put after a session's label: `>memory Done`,
+  # `>keyb …`. See ~/.claude/hooks/list-state.sh.
+  CLAUDE_ROW_STATE = /(?:\A|\s+)(?:…|\.{3}|Done|Permission|Error|Rate limited|Stopped|Stalled)\s*\z/i
 
   scope :ordered, -> { order("list_items.sort_order DESC NULLS LAST") }
   scope :important, -> { where(important: true) }
@@ -205,6 +213,22 @@ class ListItem < ApplicationRecord
     self.formatted_name = self.class.format_name(name)
     self.category = category.squish.titleize.presence if category
     true
+  end
+
+  # A row cleared off the owner's Claude list tells terminal-pet the session was
+  # seen: `pet ack <label> <section>`. Only rows that were removed by hand - the
+  # hooks delete and repost a row on every state change, and acking those would
+  # clear a session's alert the moment it went up.
+  def ack_pet
+    return if quiet_for_pet
+    return unless list&.parameterized_name == "claude" && list.owned_by_user?(::User.me)
+
+    label = name.to_s.sub(/\A\s*>+/, "").squish.sub(CLAUDE_ROW_STATE, "")
+    # A bare `ack` acknowledges every session, so a row with nothing left of its
+    # name says nothing at all.
+    return if label.blank?
+
+    PetWorker.tell(:ack, label.split, section&.name.to_s.split)
   end
 
   # The list-wide snapshots go out through List#broadcast! rather than a second

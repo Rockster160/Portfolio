@@ -158,8 +158,12 @@ RSpec.describe "Checklist removal hints" do
       expect(mail["pending"]).to include("](https://ardesian.com/emails/51803)")
     end
 
-    it "says what the tick did once it has run" do
-      expect(mail["executed"]).to eq("Filed, and the mail archived - untick to take the note back")
+    # Rocco, 2 Oct: *"after clicking the track/acknowledge checkbox it no longer
+    # shows a link to the email"*. The words change once it has run; the way
+    # back to the mail does not go away with them.
+    it "still offers the mail once it has run" do
+      expect(mail["executed"]).to include("](https://ardesian.com/emails/51803)")
+      expect(mail["executed"]).to include("untick to take the note back")
     end
 
     # add_job_note is not a removal tool, so the line exists only because the
@@ -168,8 +172,15 @@ RSpec.describe "Checklist removal hints" do
       expect(mail["without_override"]).to be_nil
     end
 
-    it "still beats the receipt for the one slot" do
-      expect(mail["note"]).not_to include("Logged Rejected")
+    # A removal row's receipt only repeats its hint, so there the hint still wins
+    # on its own (`note.hint_beats_receipt` above). These rows are not removals -
+    # they borrow the slot because it is the only one that renders markdown - and
+    # their receipt is the only thing that can name the BOARD row, which did not
+    # exist when the hint was written. He needed both: one to read the mail, one
+    # to go and merge the row it had just made a duplicate of.
+    it "shares the slot with the receipt, so both links are reachable" do
+      expect(mail["note"]).to include("](https://ardesian.com/interviews/88)")
+      expect(mail["note"]).to include("](https://ardesian.com/emails/51803)")
     end
   end
 end

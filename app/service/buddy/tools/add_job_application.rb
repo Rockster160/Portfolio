@@ -144,7 +144,12 @@ Buddy::Tools.register(
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {
         "tap"  => "[Read the email](#{url}) - tapping opens the row and labels the mail",
-        "done" => "On the board, and the mail tagged for you to clear - untick to take the row back",
+        # STILL A LINK AFTER THE TAP. This read "On the board, and the mail
+        # tagged for you to clear", which repeated the receipt beside it and
+        # offered nowhere to go - and a ticked row is exactly when there is
+        # somewhere: the row this just made may be a duplicate that needs
+        # merging. The receipt names the board row, so this one names the mail.
+        "done" => "[The mail](#{url}) is tagged for you to clear - untick to take the row back",
       }
     end
   },

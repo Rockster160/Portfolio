@@ -243,7 +243,9 @@ Buddy::Tools.register(
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {
         "tap"  => "[Read the email](#{url}) - tapping files it and labels the mail",
-        "done" => "Filed, and the mail tagged for you to clear - untick to take the note back",
+        # The receipt beside this one names the board row and links it, so this
+        # keeps the MAIL reachable. See add_job_application's for why both.
+        "done" => "[The mail](#{url}) is tagged for you to clear - untick to take the note back",
       }
     end
   },

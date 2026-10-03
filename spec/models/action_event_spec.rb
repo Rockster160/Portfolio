@@ -105,4 +105,43 @@ RSpec.describe ActionEvent do
       expect(described_class.search_data_merchant("")).to be_empty
     end
   end
+
+  # terminal-pet lives on the owner's Mac; a drink or a meal they log feeds it.
+  describe "feeding the pet" do
+    before { allow(PetWorker).to receive(:tell) }
+
+    it "feeds 10 for a drink" do
+      User.me.action_events.create!(name: "Drink", notes: "Mtn Dew Zero")
+
+      expect(PetWorker).to have_received(:tell).with(:feed, 10)
+    end
+
+    it "feeds 80 for food, whatever the case of the name" do
+      User.me.action_events.create!(name: "food")
+
+      expect(PetWorker).to have_received(:tell).with(:feed, 80)
+    end
+
+    it "says nothing for any other event" do
+      User.me.action_events.create!(name: "Shower")
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "says nothing for someone else's drink" do
+      create(:user).action_events.create!(name: "Drink")
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "says nothing when an existing drink is edited" do
+      event = User.me.action_events.create!(name: "Drink")
+      RSpec::Mocks.space.proxy_for(PetWorker).reset
+      allow(PetWorker).to receive(:tell)
+
+      event.update!(notes: "Cherry Coke Zero")
+
+      expect(PetWorker).not_to have_received(:tell)
+    end
+  end
 end

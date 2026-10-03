@@ -100,21 +100,28 @@ out.note = {
 // reading it rather than by trusting the summary. This is the only slot on a
 // row that renders markdown - the sublabel is set with textContent, on purpose,
 // because it holds a sender's own words.
+//
+// AND IT STILL CARRIES ONE AFTER THE TAP. This used to read "Filed, and the
+// mail archived" - no link, and because a hint beat the receipt it also hid the
+// receipt's link to the board row. A ticked row was a dead end at the one
+// moment he had somewhere to go.
 const MAIL = {
   tap: "[Read the email](https://ardesian.com/emails/51803) - tapping files it and clears it from the inbox",
-  done: "Filed, and the mail archived - untick to take the note back",
+  done: "[The mail](https://ardesian.com/emails/51803) is tagged for you to clear - untick to take the note back",
 };
 
 out.mail = {
   // Before the tap: the link is the point, and it has to survive to the row.
   pending: removalHint("add_job_note", { status: "pending", override: MAIL }),
-  // After: the words change, and the link has done its job.
+  // After: different words, and still a way back to the mail.
   executed: removalHint("add_job_note", { status: "executed", undoable: true, override: MAIL }),
   // add_job_note is not a removal tool, so without the override it says nothing
   // at all - which is what it did before any of this.
   without_override: removalHint("add_job_note", { status: "pending" }),
-  // And the hint still beats the receipt once it has run.
-  note: rowNote({ tool_name: "add_job_note", receipt: "Logged Rejected ✓", hint: MAIL },
+  // BOTH now. The receipt names the board row it just wrote and links it; the
+  // hint names the mail. Only a row that brought its own hint gets this - a
+  // removal row's receipt really would only repeat its hint.
+  note: rowNote({ tool_name: "add_job_note", receipt: "Logged Rejected on [Corporate Tools](https://ardesian.com/interviews/88) ✓", hint: MAIL },
     { status: "executed", undoable: true }),
 };
 

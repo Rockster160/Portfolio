@@ -44,4 +44,41 @@ RSpec.describe "List items API", type: :request do
 
     expect(body.dig("data", "section_id")).to be_nil
   end
+
+  # The hooks reach this with an API key and delete their own row on every state
+  # change. That is a row being replaced, not one someone read, so it must not
+  # tell terminal-pet the session was seen. See ListItem#ack_pet.
+  describe "acking the pet" do
+    let(:list) { create(:list, name: "Claude", user: user) }
+    let(:section) { create(:section, list: list, name: "Portfolio") }
+    let!(:item) { create(:list_item, list: list, name: ">memory Done", section: section) }
+
+    before {
+      # The pet acks only the owner's Claude list; stand this user in for them.
+      allow(User).to receive(:me).and_return(user)
+      allow(PetWorker).to receive(:tell)
+    }
+
+    def remove(headers={})
+      delete "/api/v1/lists/#{list.id}/list_items",
+        params:  { id: item.id }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }.merge(headers)
+    end
+
+    it "stays quiet when the hooks remove it with their key" do
+      key = user.api_keys.create!(name: "Claude hooks")
+      remove("HTTP_AUTHORIZATION" => "Bearer #{key.key}")
+
+      expect(item.reload).to be_deleted
+      expect(PetWorker).not_to have_received(:tell)
+    end
+
+    it "acks when a signed-in person removes it" do
+      post login_path, params: { user: { username: user.username, password: "password123" } }
+      remove
+
+      expect(item.reload).to be_deleted
+      expect(PetWorker).to have_received(:tell).with(:ack, ["memory"], ["Portfolio"])
+    end
+  end
 end

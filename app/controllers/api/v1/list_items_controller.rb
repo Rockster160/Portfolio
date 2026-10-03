@@ -44,23 +44,36 @@ class Api::V1::ListItemsController < Api::V1::BaseController
   end
 
   def update
-    was_deleted = current_item&.deleted?
-    current_item.update(list_item_params)
-    trigger(transition(was_deleted, current_item), current_item)
+    # One instance: `current_item` looks the row up again on every call, and the
+    # flag has to be on the copy that gets saved.
+    item = current_item
+    was_deleted = item.deleted?
+    item.quiet_for_pet = api_key_request?
+    item.update(list_item_params)
+    trigger(transition(was_deleted, item), item)
 
-    serialize current_item
+    serialize item
   end
 
   def destroy
     # Only when something actually left. A permanent item can't be removed and
     # a second DELETE removes nothing, and both used to announce a removal.
-    removed = !current_item.permanent? && current_item.soft_destroy
-    trigger(:removed, current_item) if removed
+    item = current_item
+    item.quiet_for_pet = api_key_request?
+    removed = !item.permanent? && item.soft_destroy
+    trigger(:removed, item) if removed
 
-    serialize current_item
+    serialize item
   end
 
   private
+
+  # A script, not a person. The Claude Code hooks delete and repost their row on
+  # every state change through here, so a removal they make is a row being
+  # replaced and must not tell the pet the session was seen. See ListItem#ack_pet.
+  def api_key_request?
+    @auth_type == :api_key
+  end
 
   def trigger(action, item)
     # added | changed | removed

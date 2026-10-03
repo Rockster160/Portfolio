@@ -195,6 +195,36 @@ module ByteLocal
     { ok: false, error: "couldn't reach the Mac - it may be asleep" }
   end
 
+  # Tell terminal-pet, on the Mac, that something happened: `pet(:feed, 10)`
+  # when a drink or a meal is logged, `pet(:ack, "memory", "Portfolio")` when a
+  # row comes off the Claude list. A verb and its words, never a line - the Mac
+  # allowlists both (see ~/code/Byte/pet.rb).
+  #
+  # Returns the Mac's answer, `{ ok:, sent:, reply: }`, or `{ ok: false, error: }`.
+  # Never raises: the pet is a toy watching the real thing, and a sleeping Mac
+  # must not fail the event it was told about.
+  def pet(verb, *words)
+    uri = URI.join(base_url, "/byte/pet")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ verb: verb, words: words.flatten.map(&:to_s) })
+
+    res = Timeout.timeout(COMMAND_TIMEOUT_SECONDS) {
+      Net::HTTP.start(uri.hostname, uri.port,
+        use_ssl: uri.scheme == "https",
+        open_timeout: COMMAND_TIMEOUT_SECONDS, read_timeout: COMMAND_TIMEOUT_SECONDS,
+      ) { |http| http.request(req) }
+    }
+
+    body = JSON.parse(res.body) rescue {}
+    return body.symbolize_keys if res.is_a?(Net::HTTPSuccess)
+
+    { ok: false, error: body["error"].presence || "the Mac said no (#{res.code})" }
+  rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout,
+         SystemCallError, SocketError, IOError => e
+    Rails.logger.warn("[Byte] pet #{verb} failed: #{e.class}: #{e.message}")
+    { ok: false, error: "couldn't reach the Mac - it may be asleep" }
+  end
+
   # Ask the Mac to enumerate the Claude Code sessions on disk for a given
   # conversation's cwd. Returns the parsed JSON array, or nil if the Mac
   # is unreachable.

@@ -234,8 +234,31 @@ export function rowNote(btn, { status, undoable } = {}) {
     undoable,
     override: btn?.hint,
   });
+  const receipt = status === "executed" ? (btn?.receipt || "").trim() : "";
+
+  // BOTH, unless the row is a REMOVAL — and the removal is the whole reason the
+  // hint ever won this slot on its own.
+  //
+  // On a removal the receipt restates the hint: "Removed Pickup Whisper Dinner
+  // ✓" under "Removed — untick to put it back" says the same word twice. Nowhere
+  // else does it. The job-mail rows are not removals; they borrow this slot
+  // because it is the only one on a row that renders markdown, and for them the
+  // receipt is news the hint CANNOT carry — the board row did not exist when the
+  // hint was written, so only the receipt can name it and link to it.
+  //
+  // Keyed on REMOVAL_TOOLS rather than on "did the row bring its own hint",
+  // because the before-bed checklist overrides the hint on a removal tool and
+  // would have got the duplication back.
+  //
+  // Rocco, 2 Oct: *"after clicking the track/acknowledge checkbox it no longer
+  // shows a link to the email. It should show a link to the email and/or the
+  // interview page so that I can open it and take a look/merge/update them."*
+  // A ticked row was a dead end at exactly the moment he had somewhere to go —
+  // two rows for one application, needing a merge, and no way in from the card
+  // that had just made the second one.
+  if (receipt && hint && !REMOVAL_TOOLS[btn?.tool_name]) return `${receipt} — ${hint}`;
   if (hint) return hint;
-  if (status === "executed") return (btn?.receipt || "").trim() || null;
+  if (receipt) return receipt;
   if (status === "undone") return (btn?.undo_note || "").trim() || null;
 
   return null;

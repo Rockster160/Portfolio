@@ -19,6 +19,11 @@ class ActionEvent < ApplicationRecord
   validates :name, presence: true
 
   before_save { self.timestamp ||= ::Time.current }
+  after_create_commit :feed_pet
+
+  # How much of terminal-pet's hunger each logged event fills, by event name.
+  # The pet lives on the owner's Mac, so only their events reach it.
+  PET_FEEDS = { drink: 10, food: 80 }.freeze
 
   # `:data` exposes every jsonb key generically — `data:transfer!::true`,
   # `data:amount>100`. The aliases below stay for the shapes a bare key lookup
@@ -56,4 +61,13 @@ class ActionEvent < ApplicationRecord
 
     where(terms.map { "data->>'merchant' ILIKE ?" }.join(" OR "), *terms)
   }
+
+  private
+
+  def feed_pet
+    return unless user&.me?
+
+    amount = PET_FEEDS[name.to_s.downcase.to_sym]
+    PetWorker.tell(:feed, amount) if amount
+  end
 end
