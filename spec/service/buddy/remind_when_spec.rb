@@ -178,6 +178,39 @@ RSpec.describe "remind_when tool" do
     expect(w.match["place"]).to eq("name" => "the Plunge in Alpine", "loc" => [40.45, -111.77])
   end
 
+  # Prod watch 31, 2 Oct: "Next time I'm here can you remind me that I like the
+  # strawberry lemonade", said from inside Slackwater. `geocode("Slackwater")`
+  # answered 39.982, -76.356 - the Susquehanna, in Pennsylvania - and the watch
+  # was stored with it. 1,867 miles from the house, so the coordinate arm of
+  # BuddyWatch#place_matches? can never hit, and the name arm compares against
+  # the arrival payload's `location`, which LocationCache fills with a nearby
+  # contact or a reverse-geocoded CITY. The watch sat there reading as pending.
+  #
+  # Same failure as agenda_item 1054's "Neurodiversity Clinic" in Melbourne, and
+  # the same cap answers it - AgendaTravelChain::Resolver::MAX_DRIVE_MILES.
+  describe "a place that geocodes to the other side of the country" do
+    before {
+      allow_any_instance_of(AddressBook).to receive(:current_loc).and_return([40.48, -111.99])
+      allow_any_instance_of(AddressBook).to receive(:geocode).and_return([39.9823212, -76.3560719])
+    }
+
+    it "refuses the coordinates and asks where the place is" do
+      expect { run(text: "I like the strawberry lemonade", trigger: "arrive", target: "Slackwater") }
+        .not_to(change(BuddyWatch, :count))
+
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).to match(/Not sure where Slackwater is/)
+    end
+
+    it "still takes a place within driving distance" do
+      allow_any_instance_of(AddressBook).to receive(:geocode).and_return([40.76, -111.89])
+
+      expect { run(text: "I like the strawberry lemonade", trigger: "arrive", target: "Slackwater") }
+        .to change(BuddyWatch, :count).by(1)
+      expect(BuddyWatch.last.match["place"]).to eq("name" => "Slackwater", "loc" => [40.76, -111.89])
+    end
+  end
+
   it "captures a known place's coordinates so matching survives a rename" do
     contact = user.contacts.create!(name: "Serenity")
     contact.addresses.create!(user: user, street: "123 Calm Way", lat: 40.5, lng: -111.9, primary: true)

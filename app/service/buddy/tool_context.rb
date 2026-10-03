@@ -693,9 +693,29 @@ module Buddy
         return place_hash(name, location, via, known: valid_loc?(via))
       end
 
-      # 3. A general place we can geocode (a real spot, not a private nickname).
-      geo = user.address_book.geocode(name)
-      return place_hash(name, nil, geo, known: true) if valid_loc?(geo)
+      # 3. A general place (a real spot, not a private nickname), through the
+      #    resolver that already knows a bare venue name geocodes CONFIDENTLY to
+      #    the wrong continent: it throws away a result further away than anyone
+      #    drives and falls through to Places, biased to where they are, which
+      #    is the right tool for a bare name anyway.
+      #
+      #    `geocode` on its own put "Slackwater" at 39.982, -76.356 - a stretch
+      #    of the Susquehanna in Pennsylvania, 1,867 miles from the house - and
+      #    the watch built on it could never fire. Neither arm of
+      #    BuddyWatch#place_matches? can save it: the coordinates are nowhere
+      #    they will ever be, and the name fallback compares against the arrival
+      #    payload's `location`, which is a nearby contact or a reverse-geocoded
+      #    CITY and never a pub. A watch that cannot fire looks exactly like one
+      #    whose condition hasn't happened yet, so it just reads as waiting.
+      spot = ::AgendaTravelChain::Resolver.new(user).resolve_location(name)
+      if spot
+        # The resolver hands the query straight back as the address when a
+        # direct geocode answered it, so only a Places hit is a street worth
+        # keeping next to the name.
+        street = spot[:address].to_s.strip.presence
+        street = nil if street&.casecmp(name)&.zero?
+        return place_hash(name, street, [spot[:lat], spot[:lng]], known: true)
+      end
 
       # 4. Nothing resolved - we genuinely don't know where this is.
       place_hash(name, nil, nil, known: false)
@@ -713,13 +733,21 @@ module Buddy
         return { "label" => "home", "lat" => WeatherService::HOME_LAT, "lng" => WeatherService::HOME_LNG }
       end
 
-      # resolve_place_location already cascades contact → agenda → geocode.
+      # resolve_place_location already cascades contact → agenda → nearby place.
       place = resolve_place_location(name)
       label = place["name"].presence || name
       loc   = place["loc"]
-      return { "label" => label } unless valid_loc?(loc)
+      return { "label" => label, "lat" => loc[0], "lng" => loc[1] } if valid_loc?(loc)
 
-      { "label" => label, "lat" => loc[0], "lng" => loc[1] }
+      # A place they ASK about is not a place they are driving to, so the
+      # cascade's refusal to believe a far-away geocode is the wrong answer
+      # here - "what's it like in Moab" and a trip two states over are both
+      # ordinary. Raw geocode, which is what the note above has always said
+      # this does.
+      geo = user.address_book.geocode(name)
+      return { "label" => label, "lat" => geo[0], "lng" => geo[1] } if valid_loc?(geo)
+
+      { "label" => label }
     end
 
     # ---- jil ----
