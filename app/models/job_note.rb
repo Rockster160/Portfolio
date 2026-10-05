@@ -93,6 +93,22 @@ class JobNote < ApplicationRecord
     "withdrew"       => "Withdrew",
   }.freeze
 
+  # The beats that mean HIS MOVE, and what each one is asking for. A timeline
+  # ending on one of these is an application waiting on him rather than on them,
+  # which is the difference between a board you read and a board you work from.
+  #
+  # `heard_back` and `responded` are the pair that makes the rule legible: they
+  # wrote, then you wrote back. Ending on the first is your move; ending on the
+  # second is theirs. `scheduled` is deliberately out - turning up is not a task,
+  # and the booking already has the loudest strip on the page. So are
+  # `cancelled` (they rebook) and `recruiter_call`/`interview` (they decide).
+  BALL_IN_COURT = {
+    "availability" => "Send availability",
+    "take_home"    => "Take-home to do",
+    "offer"        => "Answer the offer",
+    "heard_back"   => "Reply to them",
+  }.freeze
+
   # A tag that settles the whole application, not just this moment in it.
   # Logging the rejection IS marking the job rejected — having to then go and
   # change a dropdown saying the same thing is how a tracker goes stale.
@@ -186,6 +202,34 @@ class JobNote < ApplicationRecord
     scope.where.not(follow_up_at: nil).order(:follow_up_at)
   }
 
+  # The LAST beat on an application, one row per application. A timeline is read
+  # from the end: what has to happen next is a question about the most recent
+  # thing that happened, and an older note of the same tag is history.
+  scope :latest_per_application, -> {
+    where(
+      "job_notes.id = (" \
+      "SELECT inner_notes.id FROM job_notes inner_notes " \
+      "WHERE inner_notes.job_application_id = job_notes.job_application_id " \
+      "ORDER BY inner_notes.occurred_at DESC, inner_notes.id DESC LIMIT 1)",
+    )
+  }
+
+  # Where the BALL IS. `follow_ups_for` answers a different question - it reads
+  # `follow_up_at`, so it only ever sees a beat somebody put a date on, and
+  # three of the four tags that mean "your move" routinely arrive without one.
+  # An availability request is the clearest: it is a task with no deadline
+  # attached, so it showed up in neither strip and sat on the board as an
+  # ordinary note between two things the company did.
+  #
+  # Longest-waiting first. A request from nine days ago is more overdue than
+  # this morning's, and sorting by date descending buries exactly the one that
+  # has been ignored.
+  scope :waiting_on_you_for, ->(user) {
+    scope = joins(:job_application).where(job_applications: { user_id: user.id })
+    scope = scope.merge(JobApplication.live).where(tag: BALL_IN_COURT.keys)
+    scope.latest_per_application.reorder(occurred_at: :asc, id: :asc)
+  }
+
   # Owed now: due today in THEIR day, or already missed.
   #
   # The zone is the whole of it. There is no `config.time_zone`, so a bare
@@ -210,6 +254,15 @@ class JobNote < ApplicationRecord
 
   def tag_label
     TAG_LABELS[tag] || "Note"
+  end
+
+  # What this beat is asking HIM for, or nil when the next move is theirs. One
+  # table for the strip at the top of the board and for the row on the calendar,
+  # which were two half-answers: `follow_up_attrs` named the availability case
+  # and called the other three "Follow up", which says nothing about what is
+  # owed when what is owed is a take-home.
+  def owed
+    BALL_IN_COURT[tag.to_s]
   end
 
   # "45m", "1h 15m". Nil when nobody said, which is most of them.
@@ -319,11 +372,19 @@ class JobNote < ApplicationRecord
   # `scheduled` notes, and cancelling the earlier one there would take a real
   # meeting off the calendar silently. BOOKING_CORRECTION_WINDOW is what
   # separates them: a correction lands while the first one is still news.
+  #
+  # ONLY BACKWARDS, and that is the `occurred_at` bound rather than the
+  # `created_at` one. A booking made after this note's moment is the ANSWER to
+  # it, not a casualty of it: Neighbor sent a booking link at 10:38 and he
+  # picked Thursday 11am off it at 12:28, so retagging the 10:38 arrival to
+  # `availability` - which is what it always was - reached forwards and took
+  # Thursday off the calendar. Every backdated repair has the same shape, and so
+  # does a watcher that delivers two mails out of order.
   def withdraw_booking
     return if job_application.nil?
 
     booked = job_application.notes.where(tag: :scheduled).where(follow_up_at: Time.current..)
-    booked = booked.where.not(id: id)
+    booked = booked.where.not(id: id).where(occurred_at: ..occurred_at)
     booked = booked.where(created_at: BOOKING_CORRECTION_WINDOW.ago..) if scheduled?
     booked.find_each { |note| note.update(follow_up_at: nil) }
   end
@@ -388,15 +449,7 @@ class JobNote < ApplicationRecord
     # What the row on the agenda is FOR. "Follow up: ApartmentIQ" against an ask
     # for times says nothing about what is owed; the whole point of the tag is
     # that there is a specific thing to do.
-    prefix  = (
-      if scheduled?
-        "Interview"
-      elsif availability?
-        "Send availability"
-      else
-        "Follow up"
-      end
-    )
+    prefix  = (scheduled? ? "Interview" : owed.presence || "Follow up")
 
     {
       name:     "#{prefix}: #{job_application.company}",

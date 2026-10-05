@@ -9,6 +9,23 @@ module JobApplicationsHelper
     time.strftime(at_time ? "%A, %b %-d at %-I:%M %p" : "%A, %b %-d")
   end
 
+  # How long something has been sitting on him, for the "Waiting on you" strip.
+  #
+  # Age rather than a date, because the question this strip answers is "which of
+  # these have I been ignoring" — and "Sep 26" needs arithmetic before it says
+  # that. `time_ago_in_words` is the wrong shape here too: "9 days" is the whole
+  # of what matters and "about 9 days" is longer and vaguer.
+  def waiting_age(time, now: Time.current)
+    return nil if time.blank?
+
+    days = (now.to_date - time.to_date).to_i
+    case days
+    when ..0 then "today"
+    when 1   then "yesterday"
+    else          "#{days} days"
+    end
+  end
+
   # A note body, verbatim, with its links clickable.
   #
   # The body is printed as typed rather than through `simple_format` — the

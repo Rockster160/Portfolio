@@ -67,6 +67,18 @@ RSpec.describe JobApplication do
     end
   end
 
+  describe "#jobhunt_url" do
+    it "is nothing at all until the row knows its local id" do
+      expect(user.job_applications.create!(company: "Acme").jobhunt_url).to be_nil
+    end
+
+    it "points at the job's page in the local hunter" do
+      job = user.job_applications.create!(company: "Acme", jobhunt_job_id: 631)
+
+      expect(job.jobhunt_url).to eq("http://localhost:8790/jobs/631")
+    end
+  end
+
   describe "#merge_with!" do
     let(:receipt_at) { Time.zone.parse("2026-09-17 16:41:31") }
     # jobhunt's row: the role, the listing, the moment it says it submitted.
@@ -103,6 +115,28 @@ RSpec.describe JobApplication do
       expect(JobApplication.exists?(keep.id)).to be(true)
       expect(JobApplication.exists?(drop.id)).to be(false)
       expect(keep.notes.reload.map(&:tag)).to contain_exactly("applied", "acknowledged")
+    end
+
+    # The one pointer nothing else can reconstruct: jobhunt remembers the board
+    # row by id, and a merge that loses the local id strands the local page even
+    # though the surviving row is the one jobhunt now talks to.
+    it "carries the local job id over to the row that survives" do
+      drop.update!(jobhunt_job_id: 463)
+      keep.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
+
+      keep.merge_with!(drop)
+
+      expect(keep.reload.jobhunt_job_id).to eq(463)
+      expect(keep.jobhunt_url).to eq("http://localhost:8790/jobs/463")
+    end
+
+    it "keeps its own local id when both rows have one" do
+      keep.update!(jobhunt_job_id: 182)
+      drop.update!(jobhunt_job_id: 463)
+
+      keep.merge_with!(drop)
+
+      expect(keep.reload.jobhunt_job_id).to eq(182)
     end
 
     it "keeps the row it was called on when neither was recorded by jobhunt" do

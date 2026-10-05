@@ -140,7 +140,7 @@ class JobApplicationsController < ApplicationController
   # application. Nil means the new one wouldn't save, and the caller bails.
   def pick_or_build_job
     chosen = current_user.job_applications.find_by(id: params[:job_application_id])
-    return chosen if chosen
+    return stamp_jobhunt_id(chosen) if chosen
 
     job = current_user.job_applications.new(job_params)
     return job if job.save
@@ -165,6 +165,24 @@ class JobApplicationsController < ApplicationController
   # back to "what happened most recently", the way the unsearched wall does.
   def searchable_jobs
     current_user.job_applications.ordered.includes(:notes)
+  end
+
+  # jobhunt names the row it is adding a beat to, and `job_params` is ignored on
+  # that branch - deliberately, because the rest of it is this board's to own:
+  # the status, the role as he typed it, a logo he cropped. Its own job id is the
+  # exception, since nothing here can know it and the row it lands on is often
+  # one jobhunt did not open (Buddy files the ATS receipt first as often as not).
+  #
+  # FILLS A BLANK ONLY. Overwriting would let a second job at the same company
+  # repoint an existing row at itself.
+  def stamp_jobhunt_id(job)
+    # `job_params` REQUIRES the key, and the note-only shape jobhunt posts to add
+    # a beat to a row it already knows carries no `job_application` at all.
+    return job if params[:job_application].blank?
+
+    local = job_params[:jobhunt_job_id].presence
+    job.update(jobhunt_job_id: local) if local && job.jobhunt_job_id.blank?
+    job
   end
 
   # `filtered_jobs` in Ruby, for narrowing a set that has already been searched
@@ -209,11 +227,23 @@ class JobApplicationsController < ApplicationController
   #
   # An interview that has already happened leaves both strips — it's history,
   # and the timeline on the job is where history goes.
+  #
+  # THREE strips now, and the new one is not a third flavour of the same thing.
+  # Both of the originals read `follow_up_at`, so between them they could only
+  # ever show a beat somebody had put a DATE on — and the beats that mean "your
+  # move" mostly arrive without one. An availability request is the plainest
+  # case: a task with no deadline attached, invisible above the fold, sitting on
+  # the wall as an ordinary note between two things the company did.
+  # `waiting_on_you_for` asks where the ball is instead, off the last beat.
+  #
+  # The chase list SUBTRACTS it. A dated availability note is one obligation, and
+  # printing it in both strips reads as two.
   def load_upcoming
     notes = JobNote.follow_ups_for(current_user).includes(:job_application).to_a
     booked, chases = notes.partition(&:scheduled?)
     @interviews = booked.select { |note| note.follow_up_at.future? }
-    @follow_ups = chases.first(5)
+    @waiting = JobNote.waiting_on_you_for(current_user).includes(:job_application).to_a
+    @follow_ups = (chases - @waiting).first(5)
   end
 
   # The index's one form does both jobs at once, so the note fields arrive
@@ -238,6 +268,7 @@ class JobApplicationsController < ApplicationController
       :logo,
       :source,
       :url,
+      :jobhunt_job_id,
     )
   end
 

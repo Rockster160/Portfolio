@@ -553,10 +553,15 @@ BUDDY_EDGE_PROBES = [
   },
   # --- an invitation to an interview is not an interview ---------------------
   # Prod 5 Oct, Neighbor. A mail from the hiring manager arranging a technical
-  # video interview was filed `interview` - the word in its own subject line.
-  # Two costs: a conversation on the timeline that had not happened, and, because
-  # `interview` books nothing, the interview being arranged reached no calendar
-  # at all. `scheduled` is the only tag that syncs.
+  # video interview was filed `interview` - the word in its own subject line. It
+  # put a conversation on the timeline that had not happened, and `interview`
+  # books nothing, so had the Lever confirmation not come through on its own two
+  # hours later the interview would have reached no calendar at all. `scheduled`
+  # is the only tag that syncs.
+  #
+  # The mail as it actually arrived named no time - it handed over a Lever
+  # booking link - so the second probe is the faithful one and this is the
+  # variant where a time IS named.
   {
     case:  "prod 5 Oct Neighbor",
     say:   "Luke at Halloway Systems emailed to set up a technical video " \
@@ -571,8 +576,8 @@ BUDDY_EDGE_PROBES = [
   # a booking either - there is nothing to book yet.
   {
     case:  "prod 5 Oct Neighbor, no time named",
-    say:   "Halloway Systems wrote asking to get a technical interview on the " \
-           "books - no time yet, they want to know when I'm free",
+    say:   "Luke at Halloway Systems sent over a link to book a technical " \
+           "interview - no time on it, I pick the slot",
     tool:  :add_job_note,
     avoid: %i[add_agenda_item set_reminder],
     args:  { add_job_note: { tag: "availability" } },

@@ -55,6 +55,14 @@
             <% if @job.url.present? %>
               <a href="<%= @job.url %>" target="_blank" rel="noopener">the listing</a>
             <% end %>
+            <%# The employer's listing is dead weeks later as often as not. The
+               local one is the working copy — the description as it was
+               scraped, the score and why, the answers already given, the letter
+               that was sent — and it only opens on his own machine, which is
+               where the timeline is being read. %>
+            <% if @job.jobhunt_url.present? %>
+              <a href="<%= @job.jobhunt_url %>" target="_blank" rel="noopener">the local posting</a>
+            <% end %>
             <span>tracked since <%= @job.created_at.strftime("%b %-d, %Y") %></span>
           </div>
         </div>

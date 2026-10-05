@@ -436,6 +436,35 @@ RSpec.describe TeslaCacheStore do
       described_class.record_telemetry(Location: { latitude: 40.7, longitude: -111.9 })
       expect(car_data.dig(:location, :name)).to eq("Salt Lake City")
     end
+
+    # `ts` moves on every push; `moved_at` is when the car last went somewhere.
+    it "keeps moved_at while the car stays put and restarts it once it leaves" do
+      first = Time.current
+      travel_to(first) { described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 }) }
+      first_ms = car_data.dig(:location, :moved_at)
+
+      travel_to(first + 10.minutes) {
+        described_class.record_telemetry(Location: { latitude: 40.50001, longitude: -111.50001 })
+      }
+      expect(car_data.dig(:location, :moved_at)).to eq(first_ms)
+      expect(car_data.dig(:location, :ts)).to be > first_ms
+
+      travel_to(first + 20.minutes) { described_class.record_telemetry(Location: { latitude: 40.6, longitude: -111.5 }) }
+      expect(car_data.dig(:location, :moved_at)).to eq(car_data.dig(:location, :ts))
+      expect(car_data.dig(:location, :moved_at)).to be > first_ms
+    end
+
+    it "keeps drive.shifted_at across speed ticks and restarts it on a gear change" do
+      first = Time.current
+      travel_to(first) { described_class.record_telemetry(Gear: "ShiftStateP") }
+      first_ms = car_data.dig(:drive, :shifted_at)
+
+      travel_to(first + 10.minutes) { described_class.record_telemetry(VehicleSpeed: 0, Gear: "ShiftStateP") }
+      expect(car_data.dig(:drive, :shifted_at)).to eq(first_ms)
+
+      travel_to(first + 20.minutes) { described_class.record_telemetry(Gear: "ShiftStateD") }
+      expect(car_data.dig(:drive, :shifted_at)).to be > first_ms
+    end
   end
 
   # `updated_at` is what the dashboard renders as "x ago". It has to mean "when

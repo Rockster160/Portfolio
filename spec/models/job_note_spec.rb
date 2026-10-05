@@ -398,9 +398,30 @@ RSpec.describe JobNote do
       note = job.notes.create!(tag: :heard_back, follow_up_at: 2.days.from_now)
 
       item = note.follow_up_item
-      expect(item.name).to eq("Follow up: Acme")
       expect(item.kind).to eq("task")
       expect(item.end_at).to be_nil
+    end
+
+    # The row says what is OWED. "Follow up: Acme" against a take-home says
+    # nothing about what the task is, which is the whole point of the tag -
+    # `BALL_IN_COURT` is the one table both this and the board's strip read.
+    it "names what is owed, for every tag that is owed something" do
+      names = JobNote::BALL_IN_COURT.keys.map { |tag|
+        job.notes.create!(tag: tag, body: "x", follow_up_at: 2.days.from_now).follow_up_item.name
+      }
+
+      expect(names).to eq([
+        "Send availability: Acme",
+        "Take-home to do: Acme",
+        "Answer the offer: Acme",
+        "Reply to them: Acme",
+      ])
+    end
+
+    it "falls back to a plain chase when the next move is theirs" do
+      note = job.notes.create!(tag: :responded, body: "Wrote back", follow_up_at: 2.days.from_now)
+
+      expect(note.follow_up_item.name).to eq("Follow up: Acme")
     end
 
     # Re-tagging has to convert the row it already wrote. Leaving an event
@@ -567,6 +588,29 @@ RSpec.describe JobNote do
       job.notes.create!(tag: :availability, body: "Please send more times")
 
       expect(past.reload.follow_up_at).to be_present
+    end
+
+    # Neighbor mailed a booking link at 10:38 and he picked Thursday 11am off it
+    # at 12:28. The 10:38 arrival was filed `interview` by mistake, and
+    # retagging it to `availability` - which is what it always was - reached
+    # FORWARDS and took Thursday off the calendar.
+    it "leaves a booking made after the request it answers" do
+      arrival = job.notes.create!(tag: :interview, occurred_at: 2.hours.ago)
+      picked  = job.notes.create!(tag: :scheduled, follow_up_at: 3.days.from_now)
+
+      arrival.update!(tag: :availability)
+
+      expect(picked.reload.follow_up_at).to be_present
+    end
+
+    it "still reaches a booking made before it" do
+      booked = job.notes.create!(
+        tag: :scheduled, follow_up_at: 3.days.from_now, occurred_at: 2.hours.ago,
+      )
+
+      job.notes.create!(tag: :availability, body: "Please send more times")
+
+      expect(booked.reload.follow_up_at).to be_nil
     end
   end
 

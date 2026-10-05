@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_01_222359) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_05_194708) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1235,6 +1235,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_01_222359) do
     t.datetime "last_activity_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "jobhunt_job_id"
     t.index ["user_id", "last_activity_at"], name: "index_job_applications_on_user_id_and_last_activity_at"
     t.index ["user_id", "status"], name: "index_job_applications_on_user_id_and_status"
     t.index ["user_id"], name: "index_job_applications_on_user_id"

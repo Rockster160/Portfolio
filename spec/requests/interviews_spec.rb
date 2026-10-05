@@ -147,6 +147,86 @@ RSpec.describe "Interview tracker", type: :request do
     end
   end
 
+  # Everything above the fold read `follow_up_at`, so an availability request -
+  # which arrives as a task with no date on it - appeared in neither strip and
+  # sat on the wall as an ordinary note between two things the company did.
+  describe "the waiting-on-you strip" do
+    let!(:job) { user.job_applications.create!(company: "Neighbor") }
+
+    # The markup of one row of the strip, by what is owed.
+    def waiting_row(owed)
+      response.body[/<span class="waiting-what">#{owed}<\/span>(.{0,300}?)<\/li>/m, 1]
+    end
+
+    it "shows an availability request with no date on it at all" do
+      job.notes.create!(tag: :availability, body: "Pick a slot", occurred_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(response.body).to include("Waiting on you")
+      expect(waiting_row("Send availability")).to include("Neighbor")
+      expect(waiting_row("Send availability")).to include("2 days")
+    end
+
+    it "links the mail when the note carries one" do
+      job.notes.create!(tag: :availability, url: "https://ardesian.com/emails/51803")
+
+      get interviews_path
+
+      expect(waiting_row("Send availability")).to include("https://ardesian.com/emails/51803")
+    end
+
+    it "says nothing once the beat it was waiting on is answered" do
+      job.notes.create!(tag: :availability, occurred_at: 2.days.ago)
+      job.notes.create!(tag: :scheduled, follow_up_at: 3.days.from_now)
+
+      get interviews_path
+
+      expect(response.body).not_to include("Waiting on you")
+      expect(response.body).to include("Interviews booked")
+    end
+
+    it "reads the LAST beat, not any beat" do
+      job.notes.create!(tag: :heard_back, body: "Luke wrote", occurred_at: 3.days.ago)
+      job.notes.create!(tag: :responded, body: "Wrote back", occurred_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(response.body).not_to include("Waiting on you")
+    end
+
+    it "leaves a dead application out of it" do
+      job.update!(status: :rejected)
+      job.notes.create!(tag: :take_home, body: "Build a thing")
+
+      get interviews_path
+
+      expect(response.body).not_to include("Waiting on you")
+    end
+
+    # Longest-waiting first: the one being ignored is the one worth printing at
+    # the top, and newest-first buries exactly that.
+    it "puts the oldest at the top" do
+      other = user.job_applications.create!(company: "Halloway")
+      job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
+      other.notes.create!(tag: :take_home, body: "Build a thing", occurred_at: 9.days.ago)
+
+      get interviews_path
+
+      expect(response.body.index("Take-home to do")).to be < response.body.index("Send availability")
+    end
+
+    # One obligation, printed once. A dated availability note is in both lists.
+    it "keeps the dated one out of the chase list" do
+      job.notes.create!(tag: :availability, body: "Pick a slot", follow_up_at: 1.day.from_now)
+
+      get interviews_path
+
+      expect(response.body).to include("Waiting on you")
+      expect(response.body).not_to include("Following up")
+    end
+  end
+
   describe "GET /interviews?q=" do
     let!(:netflix) { user.job_applications.create!(company: "Netflix") }
     let!(:anrok) { user.job_applications.create!(company: "Anrok") }
@@ -490,6 +570,74 @@ RSpec.describe "Interview tracker", type: :request do
 
       expect(theirs.notes.reload).to be_empty
       expect(response).to have_http_status(:redirect)
+    end
+  end
+
+  # The board's `url` is the EMPLOYER's posting and goes dead; the local one is
+  # the working copy. The pointer only ever existed the other way round, so
+  # reaching it from a timeline meant searching jobhunt by company.
+  describe "the local posting link" do
+    let(:job) { user.job_applications.create!(company: "GitLab") }
+
+    it "shows it once the row knows its local id" do
+      job.update!(jobhunt_job_id: 182)
+
+      get interview_path(job)
+
+      expect(response.body).to include(">the local posting</a>")
+      expect(response.body).to include("http://localhost:8790/jobs/182")
+    end
+
+    it "says nothing for a row jobhunt never touched" do
+      get interview_path(job)
+
+      expect(response.body).not_to include("the local posting")
+    end
+
+    # jobhunt names the row it is writing to and the board ignores the rest of
+    # `job_application` on that branch, so this had to be let through on its own.
+    it "takes the id from a note jobhunt files on an existing row" do
+      post interviews_path, params: {
+        job_application_id: job.id,
+        job_application:    { jobhunt_job_id: 182 },
+        job_note:           { tag: :applied, source: "jobhunt", body: "Submitted" },
+      }
+
+      expect(job.reload.jobhunt_job_id).to eq(182)
+    end
+
+    # A second job at the same company must not repoint the row at itself.
+    it "never overwrites an id the row already has" do
+      job.update!(jobhunt_job_id: 182)
+
+      post interviews_path, params: {
+        job_application_id: job.id,
+        job_application:    { jobhunt_job_id: 999 },
+        job_note:           { tag: :note, body: "Another role" },
+      }
+
+      expect(job.reload.jobhunt_job_id).to eq(182)
+    end
+
+    # The note-only shape, which carries no `job_application` key at all -
+    # `job_params` would raise on it.
+    it "still takes a note with no application attributes beside it" do
+      post interviews_path, params: {
+        job_application_id: job.id,
+        job_note:           { tag: :note, source: "jobhunt", body: "Form reopened" },
+      }
+
+      expect(response).to have_http_status(:redirect)
+      expect(job.notes.reload.map(&:body)).to eq(["Form reopened"])
+    end
+
+    it "takes it on a row jobhunt opens itself" do
+      post interviews_path, params: {
+        job_application: { company: "Huntress", jobhunt_job_id: 463 },
+        job_note:        { tag: :applied, source: "jobhunt" },
+      }
+
+      expect(user.job_applications.find_by(company: "Huntress").jobhunt_job_id).to eq(463)
     end
   end
 

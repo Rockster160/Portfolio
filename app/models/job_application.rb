@@ -72,6 +72,10 @@ class JobApplication < ApplicationRecord
     update_columns(last_activity_at: latest, updated_at: Time.current)
   end
 
+  # Where the local job hunter answers. Its own default (`web.port`, 8790) on
+  # localhost, overridable for the one case that is not his laptop.
+  JOBHUNT_HOST = ENV.fetch("JOBHUNT_HOST", "http://localhost:8790").freeze
+
   # How close behind its receipt an `applied` beat has to land to be read as the
   # same moment, and where a merge puts it. See `settle_merged_applied`.
   MERGE_RECEIPT_WINDOW = 1.hour
@@ -101,6 +105,23 @@ class JobApplication < ApplicationRecord
 
   def jobhunt_row?
     JobNote.exists?(job_application_id: id, tag: :applied, source: "jobhunt")
+  end
+
+  # The job's page in the LOCAL job hunter, or nil when it has no row there.
+  #
+  # Worth having beside `url` rather than instead of it: `url` is the EMPLOYER's
+  # posting, which is dead weeks later as often as not, while this is the working
+  # copy - the description as it was scraped, the score and why, the answers
+  # already given, the letter that was sent. The pointer only ever existed the
+  # other way round (jobhunt keeps `rails_job_id` and links out to the board), so
+  # reaching the local page from a timeline meant searching jobhunt by company.
+  #
+  # Only ever reachable from his own machine, which is the point - it is the
+  # page he is reading the timeline next to.
+  def jobhunt_url
+    return nil if jobhunt_job_id.blank?
+
+    "#{JOBHUNT_HOST}/jobs/#{jobhunt_job_id}"
   end
 
   # What the card shows when there's no logo: the company's first letter over
@@ -134,7 +155,7 @@ class JobApplication < ApplicationRecord
     transaction do
       # A blank here is nothing known, so the other row's answer is better. A
       # value on both is a disagreement and this row's is kept.
-      [:role, :source, :url, :logo].each { |field|
+      [:role, :source, :url, :logo, :jobhunt_job_id].each { |field|
         self[field] = other[field] if self[field].blank?
       }
 

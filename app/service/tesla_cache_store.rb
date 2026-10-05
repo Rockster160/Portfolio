@@ -128,7 +128,7 @@ class TeslaCacheStore
     def car_data        = User.me.caches.get(CAR_DATA_KEY)  || {}
 
     def refresh_car_data!
-      composed = compose(endpoint_cache, telemetry_cache)
+      composed = compose(endpoint_cache, telemetry_cache, car_data)
       User.me.caches.set(CAR_DATA_KEY, composed)
       composed
     end
@@ -215,7 +215,7 @@ class TeslaCacheStore
     end
 
     # Compose the projected car_data from both raw caches.
-    def compose(endpoint_cache_hash, telemetry_cache_hash)
+    def compose(endpoint_cache_hash, telemetry_cache_hash, prev={})
       ep = endpoint_cache_hash[:current] || {}
       tel = telemetry_cache_hash[:current] || {}
       sec_ts = (telemetry_cache_hash[:section_ts] || {}).symbolize_keys
@@ -225,7 +225,7 @@ class TeslaCacheStore
       # Hoisted: compose_trip needs to know where the car is, and
       # compose_location resolves a contact name / reverse-geocodes, so it must
       # not be built twice.
-      location = compose_location(ep, tel, sec_ts)
+      location = compose_location(ep, tel, sec_ts, prev[:location])
 
       {
         state:      ep[:state] || (tel.any? ? "online" : nil),
@@ -235,7 +235,7 @@ class TeslaCacheStore
         location:   location,
         battery:    compose_battery(ep, sec_ts),
         charging:   compose_charging(ep, tel, sec_ts, ep_ts),
-        drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts),
+        drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts, prev[:drive]),
         trip:       compose_trip(ep, tel, sec_ts, field_ts, ep_ts, location),
         climate:    compose_climate(ep, tel, sec_ts),
         doors:      compose_doors(ep, tel, sec_ts),
@@ -247,19 +247,32 @@ class TeslaCacheStore
       }.compact
     end
 
-    def compose_location(ep, tel, sec_ts)
+    def compose_location(ep, tel, sec_ts, prev_location=nil)
       loc = tel[:Location]
       lat = (loc.is_a?(Hash) ? (loc[:latitude] || loc[:lat]) : nil) || ep.dig(:drive_state, :latitude)
       lng = (loc.is_a?(Hash) ? (loc[:longitude] || loc[:lng] || loc[:lon]) : nil) || ep.dig(:drive_state, :longitude)
       return nil unless lat && lng
 
+      ts = sec_ts[:location] || ep.dig(:drive_state, :timestamp)
       {
-        lat:     lat.to_f.round(6),
-        lng:     lng.to_f.round(6),
-        name:    location_name(lat, lng),
-        heading: (tel[:GpsHeading] || ep.dig(:drive_state, :heading))&.to_f&.round(1),
-        ts:      sec_ts[:location] || ep.dig(:drive_state, :timestamp),
+        lat:      lat.to_f.round(6),
+        lng:      lng.to_f.round(6),
+        name:     location_name(lat, lng),
+        heading:  (tel[:GpsHeading] || ep.dig(:drive_state, :heading))&.to_f&.round(1),
+        ts:       ts,
+        moved_at: moved_at(prev_location, [lat.to_f, lng.to_f], ts),
       }.compact
+    end
+
+    # `ts` moves on every Location push, parked or not, so it can't say when the
+    # car last went anywhere. This carries the previous stamp forward while the
+    # car stays within `near?`'s ~100m (GPS drift in a parked car stays well
+    # inside that) and restarts it once the car is somewhere else.
+    def moved_at(prev_location, here, ts)
+      was = coord_pair(prev_location)
+      return ts if was.nil? || !near?(was, here)
+
+      prev_location[:moved_at] || ts
     end
 
     def compose_battery(ep, _sec_ts)
@@ -306,7 +319,7 @@ class TeslaCacheStore
       }.compact
     end
 
-    def compose_drive(ep, tel, sec_ts, field_ts, ep_ts)
+    def compose_drive(ep, tel, sec_ts, field_ts, ep_ts, prev_drive=nil)
       speed_raw = tel[:VehicleSpeed]
       speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
       # Gear is pushed on CHANGE, not on an interval — so a single missed
@@ -328,14 +341,25 @@ class TeslaCacheStore
       else
         ep_shift || tel_shift
       end
+      ts = sec_ts[:drive] || ep.dig(:drive_state, :timestamp)
 
       {
-        speed_mph: speed.to_i,
-        moving:    speed.to_i.positive?,
-        shift:     shift,
-        parked:    shift.to_s == "P",
-        ts:        sec_ts[:drive] || ep.dig(:drive_state, :timestamp),
+        speed_mph:  speed.to_i,
+        moving:     speed.to_i.positive?,
+        shift:      shift,
+        parked:     shift.to_s == "P",
+        ts:         ts,
+        shifted_at: shifted_at(prev_drive, shift, ts),
       }.compact
+    end
+
+    # When the gear last changed — the same carry-forward as `moved_at`, since
+    # the drive stamp also moves on every speed tick.
+    def shifted_at(prev_drive, shift, ts)
+      return nil if shift.nil?
+      return ts unless prev_drive.is_a?(::Hash) && prev_drive[:shift] == shift
+
+      prev_drive[:shifted_at] || ts
     end
 
     # Tesla fleet-telemetry pushes ShiftState as an enum. The expected

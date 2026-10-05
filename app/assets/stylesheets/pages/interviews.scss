@@ -15,6 +15,8 @@
   --iv-booked: #b45309;
   --iv-booked-soft: #{rgba(#b45309, 0.09)};
   --iv-booked-ink: #{white};
+  --iv-waiting: #b91c1c;
+  --iv-waiting-soft: #{rgba(#b91c1c, 0.09)};
   --iv-surface: #{rgba(white, 0.55)};
   --iv-line: #{rgba($grey-blue, 0.35)};
   --iv-muted: #{$grey-blue};
@@ -50,9 +52,63 @@
     user-select: none;
   }
 
+  // ---- Waiting on you --------------------------------------------------
+  // Carries the same weight as the booked strip below — solid fill, 4px spine,
+  // its own colour — because it is the half of the page that is a to-do list.
+  // Red rather than amber: amber is the booked interview's, and these two must
+  // never be mistaken for each other at a glance.
+  .interview-waiting {
+    margin-bottom: 8px;
+    border: 1px solid var(--iv-waiting);
+    border-left: 4px solid var(--iv-waiting);
+    border-radius: 10px;
+    background: var(--iv-waiting-soft);
+    padding: 10px 14px;
+
+    h3 {
+      margin: 0 0 6px;
+      color: var(--iv-waiting);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      padding: 3px 0;
+      font-size: 15px;
+    }
+
+    // What is owed leads the row, because that is the part that differs between
+    // them — the company name is where it is on every other strip on the page.
+    .waiting-what {
+      color: var(--iv-waiting);
+      font-weight: bold;
+    }
+
+    .waiting-age {
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+
+    .waiting-link {
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+  }
+
   // ---- Interviews booked -----------------------------------------------
-  // The one thing on this page you have to turn up to, so it gets the only
-  // solid fill above the fold and sits above what you merely owe people.
+  // The one thing on this page you have to turn up to, so it sits above what you
+  // merely owe people and matches the waiting strip's weight.
   .interview-booked {
     margin-bottom: 8px;
     border: 1px solid var(--iv-booked);
@@ -711,6 +767,8 @@
   --iv-booked: #f0a35e;
   --iv-booked-soft: #{rgba(#f0a35e, 0.14)};
   --iv-booked-ink: #{$grey-dark};
+  --iv-waiting: #f87171;
+  --iv-waiting-soft: #{rgba(#f87171, 0.14)};
   --iv-surface: #{rgba(black, 0.18)};
   --iv-line: #{rgba($grey-light, 0.22)};
   --iv-muted: #{rgba($grey-light, 0.62)};
