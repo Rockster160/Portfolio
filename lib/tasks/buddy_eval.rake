@@ -551,6 +551,34 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "no time is agreed yet; `scheduled` would invent the interview",
   },
+  # --- an invitation to an interview is not an interview ---------------------
+  # Prod 5 Oct, Neighbor. A mail from the hiring manager arranging a technical
+  # video interview was filed `interview` - the word in its own subject line.
+  # Two costs: a conversation on the timeline that had not happened, and, because
+  # `interview` books nothing, the interview being arranged reached no calendar
+  # at all. `scheduled` is the only tag that syncs.
+  {
+    case:  "prod 5 Oct Neighbor",
+    say:   "Luke at Halloway Systems emailed to set up a technical video " \
+           "interview on Thursday at 10am - log it",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item add_job_application],
+    args:  { add_job_note: { tag: "scheduled" } },
+    needs: :halloway_application,
+    note:  "`interview` means he was IN the conversation; a mail arranging one books it",
+  },
+  # The same mail with no time in it. Still not an `interview`, and this time not
+  # a booking either - there is nothing to book yet.
+  {
+    case:  "prod 5 Oct Neighbor, no time named",
+    say:   "Halloway Systems wrote asking to get a technical interview on the " \
+           "books - no time yet, they want to know when I'm free",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item set_reminder],
+    args:  { add_job_note: { tag: "availability" } },
+    needs: :halloway_application,
+    note:  "trying to arrange one is `availability`; `interview` claims it happened",
+  },
   # --- a booked interview without its time is not booked --------------------
   # Prod 56/57, 16 Sep. Two Scheduled notes for one ApartmentIQ call, each
   # carrying "Sep 17 at 2pm MDT" in its own summary line and NEITHER carrying it

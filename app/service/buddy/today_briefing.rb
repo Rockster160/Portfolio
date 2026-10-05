@@ -35,7 +35,7 @@ module Buddy
 
       Just say the thing, and let the message move from one beat to the next on its own. What joins two beats comes out of what the day is, so no two briefings ever join up the same way.
 
-      Tight, not truncated. Every line earns its place, none of them run long, and the message is however many lines the day actually has in it. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable. Plain prose the whole way down - no bold, no headings, no bullets. Marking up the meeting names and the times turns a message into a document about their day, and it puts the weight on whichever words a formatter would reach for rather than on the thing that actually matters.
+      Tight, not truncated. Every line earns its place, none of them run long, and the message is however many lines the day actually has in it. Break it into short paragraphs with a blank line between distinct beats so it renders clean and skimmable. Prose the whole way down - no headings, no sections, no bullets. Structure is what turns a message into a document about their day, and a day is not a document. **Bold** is fine and welcome where it lands on the thing that actually matters; what it must not become is every name and every time in turn, which puts the weight on whichever words a formatter would reach for and reads as markup rather than emphasis.
 
       Commas and short sentences carry the rhythm; keep em dashes out of it.
 
@@ -526,13 +526,20 @@ module Buddy
     ALPINE_ODDS_RX = /\A(?<day>[A-Za-z]+),\s*(?<kind>[a-z]+)\s+at\s+(?<pop>\d{1,3})%/i
 
     # A timed day in Alpine's week, as PlungeAdvisor.timed_rain writes one:
-    # "tomorrow 1-7pm", "Thursday 8am-1pm".
+    # "tomorrow, rain 1-7pm", "Thursday, rain 8am-1pm". The weather word is
+    # REQUIRED, and it is required in the seed for the reason `timed_rain`
+    # gives. Still disjoint from ALPINE_ODDS_RX, which needs an "at N%" the
+    # window pattern cannot swallow.
     #
     # These were said to be `rain_hours_line`'s business, and it only ever takes
     # TODAY's windows, so nothing restored them at all - morning after morning
     # the seed carried tomorrow's Alpine hours and the briefing went out without
     # them.
-    ALPINE_HOURS_RX = /\A(?<day>[A-Za-z]+)\s+(?<window>\d{1,2}(?::\d{2})?(?:am|pm)?(?:-\d{1,2}(?::\d{2})?(?:am|pm))?)\s*\z/i
+    ALPINE_HOURS_RX = /
+      \A(?<day>[A-Za-z]+),\s*rain\s+
+      (?<window>\d{1,2}(?::\d{2})?(?:am|pm)?(?:-\d{1,2}(?::\d{2})?(?:am|pm))?)
+      \s*\z
+    /xi
 
     def alpine_week_odds(lines)
       Array(lines).filter_map { |line| ALPINE_ODDS_RX.match(line.to_s) }

@@ -1,6 +1,6 @@
-import { Time } from "./_time"
-import { Text } from "../_text"
-import { dash_colors, clamp } from "../vars"
+import { Time } from "./_time";
+import { Text } from "../_text";
+import { dash_colors, clamp } from "../vars";
 
 // Health bars for the money: everything there is against what it is meant to
 // last on, then how much is left on the month and today. Each bar carries its own clock — a ☼ on the cell for how much of THAT
@@ -39,58 +39,60 @@ import { dash_colors, clamp } from "../vars"
 // the day's milligrams land rather than draining as they go, and it carries no
 // ☼ — the fill against the limit is the whole reading. Its buckets arrive in
 // the same payload for the same reason — one cell, one broadcast.
-(function() {
-  let cell = undefined
+(function () {
+  let cell = undefined;
 
-  const cell_width = 32
-  const cell_height = 9
+  const cell_width = 32;
+  const cell_height = 9;
   // One space of margin either side, same as the Timers cell it replaced.
-  const bar_width = cell_width - 2
+  const bar_width = cell_width - 2;
   // The day rolls at 3am, not midnight — matches User#perceived_today and
   // Buddy::Day on the server, and agenda.js on this side.
-  const rollover_hour = 3
+  const rollover_hour = 3;
 
   // A blank line, not "": the renderer measures line height off content.
-  const blank = " ".repeat(cell_width)
+  const blank = " ".repeat(cell_width);
   // Where the bars sit in the rendered lines — `hover` reports a line index,
   // and only these answer to it. Bars that are one reading stack with nothing
   // between them; the gaps made them look like unrelated ones. The one blank
   // left separates the money from Claude. There used to be a second, before
   // the caffeine, and the two-line week strip took its place.
-  const balance_row = 0
-  const month_row = 1
-  const today_row = 2
-  const session_row = 6
-  const claude_week_row = 7
-  const caffeine_row = 8
-  const rolling_days = 7
+  const balance_row = 0;
+  const month_row = 1;
+  const today_row = 2;
+  const session_row = 6;
+  const claude_week_row = 7;
+  const caffeine_row = 8;
+  const rolling_days = 7;
 
   // How long each of the plan's windows runs. The server only says when one
   // RESETS, so where it began is counted back from that.
   const claude_windows = {
     five_hour: Time.hours(5),
     seven_day: Time.days(7),
-  }
+  };
 
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // How much of a session the reporter has to have watched before their ratio
   // is worth drawing a ‼ off. Both figures are whole percents, so a handful of
   // reports is mostly rounding; a fifth of a session is not.
-  const burn_sample_pct = 20
+  const burn_sample_pct = 20;
 
   function perceivedDate(date) {
-    const day = new Date(date.getTime())
-    if (day.getHours() < rollover_hour) { day.setDate(day.getDate() - 1) }
-    day.setHours(0, 0, 0, 0)
-    return day
+    const day = new Date(date.getTime());
+    if (day.getHours() < rollover_hour) {
+      day.setDate(day.getDate() - 1);
+    }
+    day.setHours(0, 0, 0, 0);
+    return day;
   }
 
   // An ISO date as local midnight. `new Date("2026-09-11")` is UTC midnight,
   // which in Denver is the evening before.
   function localDate(iso) {
-    const [year, month, day] = iso.split("-").map(Number)
-    return new Date(year, month - 1, day)
+    const [year, month, day] = iso.split("-").map(Number);
+    return new Date(year, month - 1, day);
   }
 
   function dateKey(date) {
@@ -98,57 +100,59 @@ import { dash_colors, clamp } from "../vars"
       date.getFullYear(),
       String(date.getMonth() + 1).padStart(2, "0"),
       String(date.getDate()).padStart(2, "0"),
-    ].join("-")
+    ].join("-");
   }
 
   // The perceived day `date` falls on, from its 3am to the next one.
   function dayStart(date) {
-    const day = new Date(date.getTime())
-    day.setHours(rollover_hour, 0, 0, 0)
-    return day
+    const day = new Date(date.getTime());
+    day.setHours(rollover_hour, 0, 0, 0);
+    return day;
   }
 
   function addDays(date, count) {
-    const day = new Date(date.getTime())
-    day.setDate(day.getDate() + count)
-    return day
+    const day = new Date(date.getTime());
+    day.setDate(day.getDate() + count);
+    return day;
   }
 
   // How much of [from, to) is still ahead of `now`, 0..1. Off the wall clock
   // rather than whole days, so a marker creeps across its bar as the range
   // passes instead of jumping a day at a time.
   function remainingOf(from, to, now) {
-    return clamp((to - now) / (to - from), 0, 1)
+    return clamp((to - now) / (to - from), 0, 1);
   }
 
   // "5pm", "4:10pm". The week's reset adds the day: it is days away, and a
   // bare time reads as today.
   function clock(date, with_day) {
-    const hours = date.getHours() % 12 || 12
-    const minutes = date.getMinutes()
-    const time = hours + (minutes ? ":" + String(minutes).padStart(2, "0") : "") +
-      (date.getHours() < 12 ? "am" : "pm")
+    const hours = date.getHours() % 12 || 12;
+    const minutes = date.getMinutes();
+    const time =
+      hours +
+      (minutes ? ":" + String(minutes).padStart(2, "0") : "") +
+      (date.getHours() < 12 ? "am" : "pm");
 
-    return with_day ? weekdays[date.getDay()] + " " + time : time
+    return with_day ? weekdays[date.getDay()] + " " + time : time;
   }
 
   // `count` perceived days starting at `from`. A day nobody spent on has no
   // bucket, and a missing bucket is zero — which is what it was.
   function spentOver(from, count, days) {
-    days = days || cell.data.days || {}
-    let total = 0
+    days = days || cell.data.days || {};
+    let total = 0;
     for (let idx = 0; idx < count; idx++) {
-      const day = new Date(from.getTime())
-      day.setDate(day.getDate() + idx)
-      total += days[dateKey(day)] || 0
+      const day = new Date(from.getTime());
+      day.setDate(day.getDate() + idx);
+      total += days[dateKey(day)] || 0;
     }
-    return total
+    return total;
   }
 
   function money(cents) {
-    const dollars = Math.round(cents / 100)
-    const sign = dollars < 0 ? "-" : ""
-    return sign + "$" + Math.abs(dollars).toLocaleString("en-US")
+    const dollars = Math.round(cents / 100);
+    const sign = dollars < 0 ? "-" : "";
+    return sign + "$" + Math.abs(dollars).toLocaleString("en-US");
   }
 
   // Which ink the label can be read in ON a given fill. Off the fill's own
@@ -158,20 +162,26 @@ import { dash_colors, clamp } from "../vars"
   // skipping that reads the greens as far brighter than the eye finds them,
   // and flips bars that were perfectly legible in white.
   function ink(hex) {
-    const channels = [1, 3, 5].map(function(at) {
-      const channel = parseInt(hex.slice(at, at + 2), 16) / 255
-      return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
-    })
+    const channels = [1, 3, 5].map(function (at) {
+      const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+      return channel <= 0.03928
+        ? channel / 12.92
+        : Math.pow((channel + 0.055) / 1.055, 2.4);
+    });
     const luminance =
-      0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+      0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 
-    return luminance > 0.5 ? dash_colors.black : dash_colors.white
+    return luminance > 0.5 ? dash_colors.black : dash_colors.white;
   }
 
   // Which cell a fraction marks: the one that would be the LAST filled if the
   // fill were exactly there, rounded the same way the fill is.
   function markAt(fraction) {
-    return clamp(Math.round(bar_width * clamp(fraction, 0, 1)) - 1, 0, bar_width - 1)
+    return clamp(
+      Math.round(bar_width * clamp(fraction, 0, 1)) - 1,
+      0,
+      bar_width - 1,
+    );
   }
 
   // `mark` is where on the bar its clock says the fill should end, as a
@@ -192,21 +202,30 @@ import { dash_colors, clamp } from "../vars"
   // caller has its own reason to `warn`. `gone` is red, and drawn FULL: an
   // empty red sliver reads as "nearly out" when it means the opposite.
   function bar(row, text, fraction, mark, gone, warn, wall) {
-    text = text.padEnd(bar_width, " ").slice(0, bar_width)
+    text = text.padEnd(bar_width, " ").slice(0, bar_width);
 
-    const filled = clamp(Math.round(bar_width * (gone ? 1 : fraction)), 0, bar_width)
-    const target = mark === undefined ? undefined : Math.round(bar_width * clamp(mark, 0, 1))
-    const on_pace = target === undefined || filled >= target
-    const color = (
-      gone
-        ? dash_colors.red
-        : (on_pace && !warn ? dash_colors.green : dash_colors.yellow)
-    )
+    const filled = clamp(
+      Math.round(bar_width * (gone ? 1 : fraction)),
+      0,
+      bar_width,
+    );
+    const target =
+      mark === undefined
+        ? undefined
+        : Math.round(bar_width * clamp(mark, 0, 1));
+    const on_pace = target === undefined || filled >= target;
+    const color = gone
+      ? dash_colors.red
+      : on_pace && !warn
+        ? dash_colors.green
+        : dash_colors.yellow;
 
     function paint(from, to) {
-      const fill_to = clamp(filled, from, to)
-      return Text.bgColor(color, Text.color(ink(color), text.slice(from, fill_to))) +
+      const fill_to = clamp(filled, from, to);
+      return (
+        Text.bgColor(color, Text.color(ink(color), text.slice(from, fill_to))) +
         Text.bgColor(dash_colors.darkgrey, text.slice(fill_to, to))
+      );
     }
 
     // Grey, never the label's ink: a mark is a different kind of thing from
@@ -214,34 +233,42 @@ import { dash_colors, clamp } from "../vars"
     // empty track that is the light grey; on a fill it is the track's own dark
     // grey, which the light one washes out against green, yellow and red alike.
     function markCell(at, glyph) {
-      const under = at < filled ? color : dash_colors.darkgrey
+      const under = at < filled ? color : dash_colors.darkgrey;
       // The clock is grey — dark on a fill, light on the empty track, whichever
       // reads. The wall is red wherever it lands.
-      const grey = at < filled ? dash_colors.darkgrey : dash_colors.grey
-      const marker_ink = glyph === "‼" ? dash_colors.red : grey
+      const grey = at < filled ? dash_colors.darkgrey : dash_colors.grey;
+      const marker_ink = glyph === "‼" ? dash_colors.red : grey;
 
-      return Text.bgColor(under, Text.color(marker_ink, glyph))
+      return Text.bgColor(under, Text.color(marker_ink, glyph));
     }
 
-    const marks = {}
-    if (mark !== undefined) { marks[markAt(mark)] = "☼" }
+    const marks = {};
+    if (mark !== undefined) {
+      marks[markAt(mark)] = "☼";
+    }
     // Second, so that a week ending exactly where the clock does says the
     // harder of the two things.
-    if (wall !== undefined) { marks[markAt(wall)] = "‼" }
-
-    const cells = Object.keys(marks).map(Number).sort(function(a, b) { return a - b })
-    if (cells.length === 0 || cell.data.hover === row) {
-      return " " + paint(0, bar_width) + " "
+    if (wall !== undefined) {
+      marks[markAt(wall)] = "‼";
     }
 
-    let drawn = ""
-    let from = 0
-    cells.forEach(function(at) {
-      drawn += paint(from, at) + markCell(at, marks[at])
-      from = at + 1
-    })
+    const cells = Object.keys(marks)
+      .map(Number)
+      .sort(function (a, b) {
+        return a - b;
+      });
+    if (cells.length === 0 || cell.data.hover === row) {
+      return " " + paint(0, bar_width) + " ";
+    }
 
-    return " " + drawn + paint(from, bar_width) + " "
+    let drawn = "";
+    let from = 0;
+    cells.forEach(function (at) {
+      drawn += paint(from, at) + markCell(at, marks[at]);
+      from = at + 1;
+    });
+
+    return " " + drawn + paint(from, bar_width) + " ";
   }
 
   // At rest it carries no figure: how full it is IS the answer, and a glance
@@ -253,15 +280,15 @@ import { dash_colors, clamp } from "../vars"
   // drains as the money goes, the figure says how much has gone. Do not
   // "fix" the number to match the fill.
   function spendBar(row, label, spent_cents, budget_cents, mark) {
-    const fraction = budget_cents > 0 ? (budget_cents - spent_cents) / budget_cents : 0
-    const spent = money(spent_cents) + " / " + money(budget_cents) + "  "
-    const text = (
+    const fraction =
+      budget_cents > 0 ? (budget_cents - spent_cents) / budget_cents : 0;
+    const spent = money(spent_cents) + " / " + money(budget_cents) + "  ";
+    const text =
       cell.data.hover === row
         ? Text.justify(bar_width, "  " + label, spent)
-        : "  " + label
-    )
+        : "  " + label;
 
-    return bar(row, text, fraction, mark, fraction <= 0)
+    return bar(row, text, fraction, mark, fraction <= 0);
   }
 
   // Everything there is — the home cell's figure — against the goal it is meant
@@ -276,28 +303,33 @@ import { dash_colors, clamp } from "../vars"
   // already says how much, and the ☼ is only readable knowing what it counts
   // down to.
   function balanceBar(row, now_ms) {
-    const cents = cell.data.balance_cents
-    const goal = cell.data.balance_goal || {}
-    if (typeof cents !== "number" || !(goal.cents > 0) || !goal.from || !goal.through) {
-      return blank
+    const cents = cell.data.balance_cents;
+    const goal = cell.data.balance_goal || {};
+    if (
+      typeof cents !== "number" ||
+      !(goal.cents > 0) ||
+      !goal.from ||
+      !goal.through
+    ) {
+      return blank;
     }
 
-    const fraction = cents / goal.cents
+    const fraction = cents / goal.cents;
     const through = localDate(goal.through).toLocaleDateString("en-US", {
-      month: "short", day: "numeric",
-    })
-    const text = (
+      month: "short",
+      day: "numeric",
+    });
+    const text =
       cell.data.hover === row
         ? Text.justify(bar_width, "  Balance", "thru " + through + "  ")
-        : "  Balance"
-    )
+        : "  Balance";
     const mark = remainingOf(
       dayStart(localDate(goal.from)).getTime(),
       dayStart(addDays(localDate(goal.through), 1)).getTime(),
       now_ms,
-    )
+    );
 
-    return bar(row, text, fraction, mark, fraction <= 0)
+    return bar(row, text, fraction, mark, fraction <= 0);
   }
 
   // Where the WEEK runs out, measured in session, as a fraction of the session
@@ -311,13 +343,16 @@ import { dash_colors, clamp } from "../vars"
   // start over with the week, both figures are whole percents, and a ratio off
   // two or three of them would move the mark around for no reason.
   function weeklyWall(now) {
-    const claude = cell.data.claude || {}
-    const burn = claude.burn || {}
-    const week = claude.seven_day || {}
-    const current = typeof week.used === "number" && week.resets_at * 1000 > now
-    if (!current || !(burn.session >= burn_sample_pct) || !(burn.week > 0)) { return undefined }
+    const claude = cell.data.claude || {};
+    const burn = claude.burn || {};
+    const week = claude.seven_day || {};
+    const current =
+      typeof week.used === "number" && week.resets_at * 1000 > now;
+    if (!current || !(burn.session >= burn_sample_pct) || !(burn.week > 0)) {
+      return undefined;
+    }
 
-    return ((100 - week.used) / (burn.week / burn.session)) / 100
+    return (100 - week.used) / (burn.week / burn.session) / 100;
   }
 
   // Drains like the money: the fill is what is LEFT of the window, and the ☼
@@ -336,25 +371,34 @@ import { dash_colors, clamp } from "../vars"
   // is not a wall, it is just the week outlasting this window, which is the
   // ordinary case and needs no mark.
   function claudeBar(row, label, key, now) {
-    const limit = (cell.data.claude || {})[key] || {}
-    const resets = limit.resets_at ? new Date(limit.resets_at * 1000) : undefined
-    const current = typeof limit.used === "number" && resets !== undefined && resets > now
-    const left = current ? 100 - limit.used : 100
-    const figure = (current ? left + "% · " + clock(resets, key === "seven_day") : "100% · ??") + "  "
-    const text = (
+    const limit = (cell.data.claude || {})[key] || {};
+    const resets = limit.resets_at
+      ? new Date(limit.resets_at * 1000)
+      : undefined;
+    const current =
+      typeof limit.used === "number" && resets !== undefined && resets > now;
+    const left = current ? 100 - limit.used : 100;
+    const figure =
+      (current
+        ? left + "% · " + clock(resets, key === "seven_day")
+        : "100% · ??") + "  ";
+    const text =
       cell.data.hover === row
         ? Text.justify(bar_width, "  " + label, figure)
-        : "  " + label
-    )
-    const mark = (
-      current
-        ? remainingOf(resets - claude_windows[key], resets.getTime(), now.getTime())
-        : undefined
-    )
-    const week_out = key === "five_hour" && current ? weeklyWall(now.getTime()) : undefined
-    const wall = week_out !== undefined && week_out < left / 100 ? week_out : undefined
+        : "  " + label;
+    const mark = current
+      ? remainingOf(
+          resets - claude_windows[key],
+          resets.getTime(),
+          now.getTime(),
+        )
+      : undefined;
+    const week_out =
+      key === "five_hour" && current ? weeklyWall(now.getTime()) : undefined;
+    const wall =
+      week_out !== undefined && week_out < left / 100 ? week_out : undefined;
 
-    return bar(row, text, left / 100, mark, left <= 0, false, wall)
+    return bar(row, text, left / 100, mark, left <= 0, false, wall);
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the bars above it
@@ -365,25 +409,36 @@ import { dash_colors, clamp } from "../vars"
   // Drawn blank until the server has said what the limit is — a bar measured
   // against nothing is a shape that means nothing.
   function caffeineBar(row, mg, limit_mg) {
-    if (!(limit_mg > 0)) { return blank }
+    if (!(limit_mg > 0)) {
+      return blank;
+    }
 
-    const remaining = (limit_mg - mg) / limit_mg
-    const amount = mg + "mg / " + limit_mg + "mg  "
-    const text = (
+    const remaining = (limit_mg - mg) / limit_mg;
+    const amount = mg + "mg / " + limit_mg + "mg  ";
+    const text =
       cell.data.hover === row
         ? Text.justify(bar_width, "  Caffeine", amount)
-        : "  Caffeine"
-    )
+        : "  Caffeine";
 
-    return bar(row, text, mg / limit_mg, undefined, remaining <= 0, remaining <= 0.25)
+    return bar(
+      row,
+      text,
+      mg / limit_mg,
+      undefined,
+      remaining <= 0,
+      remaining <= 0.25,
+    );
   }
 
   // A mark is three wide to sit under its day's name. Padded by hand rather
   // than with padStart: 𐄂 is outside the BMP, two UTF-16 units to `length`,
   // and would come out a column short.
   function verdict(spent, allowance) {
-    const over = spent > allowance
-    return Text.color(over ? dash_colors.red : dash_colors.green, over ? "𐄂" : "✓")
+    const over = spent > allowance;
+    return Text.color(
+      over ? dash_colors.red : dash_colors.green,
+      over ? "𐄂" : "✓",
+    );
   }
 
   // The last seven perceived days, today included and so far, each against
@@ -391,58 +446,76 @@ import { dash_colors, clamp } from "../vars"
   // month is judged by the same yardstick as the rest of the strip. The `7`
   // is their sum against seven of them.
   function weekStrip(today, day_budget) {
-    const days = []
-    for (let idx = 0; idx < rolling_days; idx++) { days.push(addDays(today, -idx)) }
+    const days = [];
+    for (let idx = 0; idx < rolling_days; idx++) {
+      days.push(addDays(today, -idx));
+    }
 
-    const names = days.map(function(day) { return weekdays[day.getDay()] }).join(" ")
-    const marks = days.map(function(day) {
-      return "  " + verdict(spentOver(day, 1), day_budget)
-    }).join(" ")
-    const total = spentOver(addDays(today, -(rolling_days - 1)), rolling_days)
+    const names = days
+      .map(function (day) {
+        return weekdays[day.getDay()];
+      })
+      .join(" ");
+    const marks = days
+      .map(function (day) {
+        return "  " + verdict(spentOver(day, 1), day_budget);
+      })
+      .join(" ");
+    const total = spentOver(addDays(today, -(rolling_days - 1)), rolling_days);
 
     return [
       "    " + names + " ",
       " 7" + verdict(total, day_budget * rolling_days) + " " + marks + " ",
-    ]
+    ];
   }
 
   // Which line the pointer is on. Redrawing replaces the line divs under the
   // cursor, so the next mousemove reports the same row and this exits early
   // rather than looping.
   function hover(row) {
-    if (cell.data.hover === row) { return }
+    if (cell.data.hover === row) {
+      return;
+    }
 
-    cell.data.hover = row
-    render()
+    cell.data.hover = row;
+    render();
   }
 
   function render() {
-    const now = new Date()
-    const today = perceivedDate(now)
-    cell.data.day_key = dateKey(today)
+    const now = new Date();
+    const today = perceivedDate(now);
+    cell.data.day_key = dateKey(today);
 
-    const day_of_month = today.getDate()
-    const month_start = new Date(today.getTime())
-    month_start.setDate(1)
-    const month_end = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-    const in_month = addDays(month_end, -1).getDate()
+    const day_of_month = today.getDate();
+    const month_start = new Date(today.getTime());
+    month_start.setDate(1);
+    const month_end = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const in_month = addDays(month_end, -1).getDate();
 
-    const month_budget = cell.data.budget_cents || 0
-    const day_budget = month_budget / in_month
+    const month_budget = cell.data.budget_cents || 0;
+    const day_budget = month_budget / in_month;
 
     // Every range ends at a 3am, the same rollover the buckets are dated by.
-    const now_ms = now.getTime()
-    const tomorrow = dayStart(addDays(today, 1)).getTime()
+    const now_ms = now.getTime();
+    const tomorrow = dayStart(addDays(today, 1)).getTime();
     const month_left = remainingOf(
-      dayStart(month_start).getTime(), dayStart(month_end).getTime(), now_ms,
-    )
-    const today_left = remainingOf(dayStart(today).getTime(), tomorrow, now_ms)
+      dayStart(month_start).getTime(),
+      dayStart(month_end).getTime(),
+      now_ms,
+    );
+    const today_left = remainingOf(dayStart(today).getTime(), tomorrow, now_ms);
 
     const lines = [
-      balanceBar(balance_row, now_ms),
-      spendBar(month_row, "Month", spentOver(month_start, day_of_month), month_budget, month_left),
-      spendBar(today_row, "Today", spentOver(today, 1), day_budget, today_left),
       ...weekStrip(today, day_budget),
+      balanceBar(balance_row, now_ms),
+      spendBar(
+        month_row,
+        "Month",
+        spentOver(month_start, day_of_month),
+        month_budget,
+        month_left,
+      ),
+      spendBar(today_row, "Today", spentOver(today, 1), day_budget, today_left),
       blank,
       claudeBar(session_row, "Claude session", "five_hour", now),
       claudeBar(claude_week_row, "Claude week", "seven_day", now),
@@ -451,61 +524,73 @@ import { dash_colors, clamp } from "../vars"
         (cell.data.caffeine || {})[cell.data.day_key] || 0,
         cell.data.caffeine_limit_mg || 0,
       ),
-    ]
+    ];
 
-    cell.lines(lines.slice(0, cell_height))
+    cell.lines(lines.slice(0, cell_height));
   }
 
   cell = Cell.register({
     title: "Spending",
     text: "Loading...",
     data: {
-      budget_cents: 0, balance_cents: undefined, balance_goal: {},
-      days: {}, caffeine_limit_mg: 0, caffeine: {}, claude: {},
-      day_key: undefined, hover: -1,
+      budget_cents: 0,
+      balance_cents: undefined,
+      balance_goal: {},
+      days: {},
+      caffeine_limit_mg: 0,
+      caffeine: {},
+      claude: {},
+      day_key: undefined,
+      hover: -1,
     },
     // Only the clock moves between pushes. Redrawing is free and walks every
     // ☼ along — a cell of the session bar is ten minutes — but a resync
     // runs a Jil task, so it waits for the day to actually have changed.
     refreshInterval: Time.minutes(1),
-    reloader: function() {
-      const rolled = cell.data.day_key && cell.data.day_key !== dateKey(perceivedDate(new Date()))
-      if (rolled) { cell.monitor?.resync() }
+    reloader: function () {
+      const rolled =
+        cell.data.day_key &&
+        cell.data.day_key !== dateKey(perceivedDate(new Date()));
+      if (rolled) {
+        cell.monitor?.resync();
+      }
 
-      render()
+      render();
     },
-    onload: function() {
+    onload: function () {
       // Bound on `.dash-content` rather than the lines themselves: every redraw
       // replaces those, and a handler on a node that is about to be thrown away
       // leaves the hover stuck on whichever row it died over.
-      const content = cell.ele.children(".dash-content")
-      content.on("mousemove", function(evt) {
-        hover($(evt.target).closest(".line").index())
-      })
-      content.on("mouseleave", function() { hover(-1) })
+      const content = cell.ele.children(".dash-content");
+      content.on("mousemove", function (evt) {
+        hover($(evt.target).closest(".line").index());
+      });
+      content.on("mouseleave", function () {
+        hover(-1);
+      });
 
       cell.monitor = Monitor.subscribe("spending", {
-        connected: function() {
-          cell.monitor?.resync()
+        connected: function () {
+          cell.monitor?.resync();
         },
-        disconnected: function() {},
-        received: function(json) {
-          const data = json.data || {}
+        disconnected: function () {},
+        received: function (json) {
+          const data = json.data || {};
           if (data.budget_cents === undefined) {
-            return console.log("Unknown data for Monitor.spending:", json)
+            return console.log("Unknown data for Monitor.spending:", json);
           }
 
-          cell.flash()
-          cell.data.budget_cents = data.budget_cents
-          cell.data.balance_cents = data.balance_cents
-          cell.data.balance_goal = data.balance_goal || {}
-          cell.data.days = data.days || {}
-          cell.data.caffeine_limit_mg = data.caffeine_limit_mg || 0
-          cell.data.caffeine = data.caffeine || {}
-          cell.data.claude = data.claude || {}
-          render()
+          cell.flash();
+          cell.data.budget_cents = data.budget_cents;
+          cell.data.balance_cents = data.balance_cents;
+          cell.data.balance_goal = data.balance_goal || {};
+          cell.data.days = data.days || {};
+          cell.data.caffeine_limit_mg = data.caffeine_limit_mg || 0;
+          cell.data.caffeine = data.caffeine || {};
+          cell.data.claude = data.claude || {};
+          render();
         },
-      })
+      });
     },
-  })
-})()
+  });
+})();

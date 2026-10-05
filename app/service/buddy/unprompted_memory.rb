@@ -32,6 +32,25 @@ module Buddy
   module UnpromptedMemory
     module_function
 
+    # Grammar is not a subject, and at the one-word bar a grammar word is a
+    # veto on any sentence containing it.
+    #
+    # `Flourish::FILLER` is tuned for a different question - whether a trailing
+    # clause carries a FACT - and it keeps "that", "there", "then", "when" and
+    # "will", all of which are four letters and survive the length test. Eve's
+    # fridge note reads "leftover food in my fridge THAT needs to be eaten", so
+    # `that` went into the pool, and over her last 20 briefings it convicted two
+    # sentences that have nothing to do with the note: "Check the front flower
+    # bed at 7pm today, that one's on deck" and "Rain is due on Tuesday, so
+    # that's the bit worth keeping one eye on!". With these out, the same corpus
+    # cuts one sentence and it is the one this module is for.
+    #
+    # `Restatement::FILLER` is the list already written for exactly this - "stop
+    # grammar from counting as agreement" - so it is reused rather than copied.
+    # It can only ever REMOVE a veto, so no sentence starts being cut because
+    # of it.
+    GRAMMAR = Buddy::Restatement::FILLER
+
     def trim(body, memories, facts)
       text = body.to_s
       return text if text.blank?
@@ -75,7 +94,7 @@ module Buddy
       said = Buddy::Flourish.significant(facts.to_s).to_set
       Array(memories).flat_map { |memory|
         Buddy::Flourish.significant(memory.content.to_s)
-      }.uniq.reject { |word| said.include?(word) || word.length < 4 }
+      }.uniq.reject { |word| said.include?(word) || word.length < 4 || GRAMMAR.include?(word) }
     end
 
     # Each preference's own words, ONE LIST PER NOTE rather than all of them

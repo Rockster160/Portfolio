@@ -127,11 +127,22 @@ RSpec.describe Buddy::PlungeAdvisor do
     end
 
     it "gives tomorrow's rain as hours, not as a day" do
-      expect(block(rain_at: { "2026-08-21" => [13, 14, 15] })).to include("tomorrow 1-4pm")
+      expect(block(rain_at: { "2026-08-21" => [13, 14, 15] })).to include("tomorrow, rain 1-4pm")
+    end
+
+    # Prod 6661 (09-21) "Alpine looks decent tomorrow morning 8-10am and again
+    # 1-8pm, then it turns wetter", and 7469 (10-05) "windows tomorrow from
+    # 12-1pm and 2-4pm, then rain chances on Wednesday". Both read the wet hours
+    # as the dry ones, off a seed line that named no weather at all - and the
+    # prompt has a plunge-window slot for a bare range to fall into.
+    it "says what the hours are hours OF, on every timed day" do
+      out = block(hours: 72, rain_at: { "2026-08-21" => [12], "2026-08-22" => [10, 11] })
+
+      expect(out.lines.map(&:strip)).to all(match(/rain/i))
     end
 
     it "names a further day by weekday" do
-      expect(block(hours: 72, rain_at: { "2026-08-22" => [10, 11] })).to include("Saturday 10am-12pm")
+      expect(block(hours: 72, rain_at: { "2026-08-22" => [10, 11] })).to include("Saturday, rain 10am-12pm")
     end
 
     # Today already has a block of its own directly above this one in the seed,
@@ -176,7 +187,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     # Buddy::TodayBriefing::WRITING_RULES now, where it reaches the model on
     # every Alpine day rather than only on the ones with a week list.
     it "hands over hours and nothing about how to use them" do
-      expect(block(rain_at: { "2026-08-21" => [13] })).to eq("tomorrow 1-2pm")
+      expect(block(rain_at: { "2026-08-21" => [13] })).to eq("tomorrow, rain 1-2pm")
     end
 
     # Same rule as the weather block above: a phrase written down so it can be

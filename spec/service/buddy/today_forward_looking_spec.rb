@@ -182,9 +182,11 @@ RSpec.describe "Buddy Today forward-looking" do
     # with two reminders due at 9:00 and one at 10:00, all of which rang. A
     # reminder is a thing that is going to happen to them at a time, so it sits
     # in the day like anything else.
+    # No weekday on it: the section is today, and prod 7410 read the "Sat" in
+    # "Sat 7pm" straight out on a Saturday morning. See BriefingFacts#due_time.
     it "gives a reminder the same shape as an event" do
       expect(seed).to include("ALSO DUE TODAY")
-      expect(seed).to include("- Fri 3:00 PM · Do the dishes.")
+      expect(seed).to include("- 3:00 PM · Do the dishes.")
     end
 
     # Rocco, 2026-09-04: "I still want Buddy to say 'It's trash day' instead of
@@ -618,6 +620,35 @@ RSpec.describe "Buddy Today forward-looking" do
         item = Buddy::Context.build(user, conversation)[:today_agenda].first
 
         expect(item[:drive_min]).to eq(32)
+        expect(item[:leave_by]).to eq("9:23am")
+      end
+    end
+
+    # Prod 7402 and 7411, 3 Oct. Fun Run ran 7:00am-2:30pm with a 6:22am
+    # leave-by, and both briefings told them to leave by 6:22 - one at 6:57am,
+    # one at 8:30am. The event is correctly not `passed` (an event with hours
+    # left on it hasn't broken yet), and the departure time was never asked the
+    # same question.
+    it "drops a departure time that has already gone, and the drive with it" do
+      travel_to(tz.parse("2026-07-28 10:30")) do
+        item_with_travel!(tz.parse("2026-07-28 09:23"))
+
+        item = Buddy::Context.build(user, conversation)[:today_agenda].first
+
+        expect(item[:title]).to eq("Rose Establishment")
+        expect(item).not_to have_key(:leave_by)
+        expect(Buddy::BriefingFacts.agenda_line(item)).not_to match(/leave by|drive/i)
+      end
+    end
+
+    # Twenty minutes of notice is the case this is FOR, so the test is the
+    # clock and not a margin around it.
+    it "keeps a departure time that is still minutes away" do
+      travel_to(tz.parse("2026-07-28 09:03")) do
+        item_with_travel!(tz.parse("2026-07-28 09:23"))
+
+        item = Buddy::Context.build(user, conversation)[:today_agenda].first
+
         expect(item[:leave_by]).to eq("9:23am")
       end
     end
@@ -1083,7 +1114,7 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     it "asks the same of the week's hours" do
-      lines = ["tomorrow 10am-3pm"]
+      lines = ["tomorrow, rain 10am-3pm"]
       body  = "Thursday has your iCapital interview at 10am."
 
       expect(Buddy::TodayBriefing.week_hours_missing(body, lines).map { |m| m[:window] }).to eq(["10am-3pm"])
@@ -1092,7 +1123,7 @@ RSpec.describe "Buddy Today forward-looking" do
     # A time range sitting next to a percentage with no weather word on it reads
     # as an appointment.
     it "says what the week's hours are hours OF" do
-      lines   = ["tomorrow 7-9am", "Tuesday, rain at 62% - no hours that far out"]
+      lines   = ["tomorrow, rain 7-9am", "Tuesday, rain at 62% - no hours that far out"]
       body    = "Morning!"
       hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
       missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
@@ -1102,7 +1133,7 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     it "names tomorrow's hours when the briefing left them out" do
-      lines   = ["tomorrow 1-7pm", "Friday, rain at 60% - the forecast has no hours that far out, so the day on its own is the whole of it"]
+      lines   = ["tomorrow, rain 1-7pm", "Friday, rain at 60% - the forecast has no hours that far out, so the day on its own is the whole of it"]
       body    = "Friday looks 60% wet in Alpine."
       hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
       missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
@@ -1113,7 +1144,7 @@ RSpec.describe "Buddy Today forward-looking" do
     it "leaves tomorrow alone when the briefing gave its hours" do
       body = "Tomorrow Alpine gets rain from 1 to 7pm."
 
-      expect(Buddy::TodayBriefing.week_hours_missing(body, ["tomorrow 1-7pm"])).to be_empty
+      expect(Buddy::TodayBriefing.week_hours_missing(body, ["tomorrow, rain 1-7pm"])).to be_empty
     end
 
     it "does not read a day-level line as timed" do

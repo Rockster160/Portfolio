@@ -1978,8 +1978,38 @@ module Buddy
       def prompt_memories
         @prompt_memories ||= (
           scope = BuddyMemory.where(user: @user)
-          (scope.carried.to_a + scope.always_loaded.to_a).uniq rescue []
+          (scope.carried.to_a + scope.always_loaded.to_a + withheld_stash).uniq rescue []
         )
+      end
+
+      # The stash rows the prompt deliberately DIDN'T carry.
+      #
+      # `BriefingFacts::STASH_SPACING` holds a thought back for three days after
+      # it was floated, and the seed is then silent about it - `stash: []`, no ON
+      # THEIR MIND section, no rule asking for one. The model said it anyway, off
+      # the previous briefing sitting in the scrollback as an assistant turn:
+      # Eve's fridge thought reached her on four consecutive mornings (7168,
+      # 7245/7329, 7410), the last three of them with the spacing working
+      # perfectly, and 7410's "Hope the fridge mission is feeling a bit more
+      # tamed now" is 7329's "Hope the fridge mission feels a bit lighter today"
+      # with the adjectives moved around.
+      #
+      # So it is the WITHHELD rows, not the live ones. Eve has 37 live stash
+      # rows, and pooling those at the one-word bar `heavy` uses cuts 38% of
+      # every sentence she has been sent - "food", "need", "water", "check" and
+      # "lunch" are all in there, and they are also just briefing vocabulary.
+      # The warm set is one row, and it is the one row that has something to
+      # hide. Measured over her last 20 briefings: 63 sentences, one cut, and
+      # the cut is 7410.
+      #
+      # Three days is `STASH_SPACING`'s window and this reads the same constant,
+      # so turning that one number still changes the whole behaviour.
+      def withheld_stash
+        return [] unless today_briefing?
+
+        BuddyMemory.kind_stash.live.where(user: @user).where(
+          surfaced_at: (Time.current - Buddy::BriefingFacts::STASH_SPACING)..,
+        ).to_a
       end
 
       def briefing_facts

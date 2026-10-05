@@ -45,6 +45,17 @@ Buddy::Tools.register(
     in, times to send back - and a `follow_up_at` on it puts "Send availability"
     on the agenda as a task. Use `scheduled` only once the mail names the slot.
 
+    **`interview` is the conversation HAPPENING, and nothing else.** It means
+    they sat down and talked to a person. Mail is NEVER an `interview` beat: a
+    mail can book one (`scheduled`), ask for their times (`availability`), call
+    one off (`cancelled`), or follow one up (`heard_back`) - it is not the thing
+    itself. The subject line is the trap. "Interview with Acme" is an INVITATION,
+    and Neighbor's technical video interview was filed as `interview` off exactly
+    that: it put a conversation on the timeline that had not happened, and
+    because `interview` books nothing, the interview that WAS being arranged
+    never reached the calendar. `recruiter_call` is the same rule for a call that
+    actually took place.
+
     **A booking called off is `cancelled`, and that is the whole of it.** It is
     `scheduled` undone: filing it takes the meeting off their calendar, which is
     the thing that stops being true. Do NOT reach for `scheduled` again - that
@@ -159,6 +170,24 @@ Buddy::Tools.register(
       raise "a scheduled interview needs its time - pass follow_up_at, or use a different tag"
     end
 
+    # The other half of the same mistake, and the more expensive one. An
+    # `interview` beat is the conversation having happened, so a time on it or a
+    # date ahead of now means the BOOKING is what is being described - and a
+    # booking filed as `interview` writes nothing to the calendar, because only
+    # `scheduled` syncs. Neighbor's technical video interview went on the board
+    # that way and onto no agenda at all.
+    if tag.to_s == "interview"
+      if at.present?
+        raise "an `interview` beat is the conversation happening, so it takes no " \
+              "follow_up_at - `scheduled` is what books one and puts it on the calendar"
+      end
+      when_it_happened = payload[:occurred_at]
+      if when_it_happened.present? && when_it_happened > Time.current
+        raise "that interview is still ahead, so it has not happened yet - use `scheduled` " \
+              "with the time, or `availability` if they are only asking for times"
+      end
+    end
+
     # Two Scheduled notes at the same minute are one interview announced twice -
     # the calendar invite and the confirmation email arrive as separate mail,
     # five seconds apart, and each one is its own turn so no merge_key can see
@@ -235,10 +264,36 @@ Buddy::Tools.register(
   # slot that renders markdown, and a click inside it opens rather than ticking
   # (see linkifyWithoutTicking) - which matters here more than anywhere, since
   # the row IS a label and a stray tick files a beat on somebody's history.
+  # NEVER NIL. A card that has nothing to open is a card that cannot be answered,
+  # and this returned nil for every beat with no email on it.
+  #
+  # Neighbor, 5 Oct: "Neighbor has a technical video interview scheduled for the
+  # Software Engineer role", then a row reading "💼 Interview — Neighbor" and the
+  # same sentence under it. The receipt is the other link-bearing slot and it
+  # only exists AFTER the tap, so a pending row leans entirely on this one - and
+  # the mail had arrived as a `.partial.emlx` the watcher's glob could not see,
+  # so there was no Email row and no `email_id`. His words: "no link to the
+  # email, Ardesian page, job page, or anything. Quite unhelpful. I can't confirm
+  # something that doesn't have any usable information."
+  #
+  # The ROW was never the missing part. `confirm:` resolves the application
+  # before the card is ever drawn and puts `job_id` in the payload, so the one
+  # thing a beat always has is the application it is about. The mail is the
+  # better link when there is one, because reading it is what decides the tag;
+  # the row is what there is otherwise, and it is the page the beat is going to
+  # land on either way.
   hint:        ->(payload, ctx) {
     email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
+    row   = ("#{Buddy::AppPages.url_for("/interviews")}/#{payload[:job_id]}" if payload[:job_id].present?)
+
     if email.nil?
-      nil
+      # No mail to read, so the question is only whether this beat belongs on
+      # that row - which means the row is the thing to open. `done` says nothing:
+      # the receipt beside it already names and links the row, and repeating it
+      # is the duplication REMOVAL_TOOLS exists to avoid.
+      next nil if row.nil?
+
+      { "tap" => "[#{payload[:company]} on the board](#{row}) - tapping files this beat on it" }
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {

@@ -107,9 +107,26 @@ module Buddy
       }
     end
 
+    # Every line here is WET - `rainy?` is the filter - and the line has to say
+    # so. A bare "tomorrow 12-1pm" is the one shape in this section that names
+    # no weather: `briefing_lines` writes "Rain in Alpine 12-1pm" for today and
+    # `loose_rain` writes "Wednesday, rain at 34%" for the far days, so the
+    # timed week days were the only ones arriving unlabelled - and a time range
+    # with no weather word on it reads as an appointment, or worse, as the DRY
+    # hours. Three briefings read them that way: 6661 ("Alpine looks decent
+    # tomorrow morning 8-10am and again 1-8pm, then it turns wetter"), 7006, and
+    # 7469 ("windows tomorrow from 12-1pm and 2-4pm, then rain chances on
+    # Wednesday"). The first and last are flatly inverted, on a prompt that also
+    # says "A plunge window is floated once and lightly" - so a bare range has
+    # a plunge-shaped slot waiting for it.
+    #
+    # `week_odds_line` was taught to label its hours after 7006 and the seed
+    # was not, which is why this kept happening with the repair already fixed.
     def timed_rain(hourly, tz, days, first)
       wet = hourly.select { |at, hour| days.include?(at.to_date) && DAY_HOURS.cover?(at.hour) && rainy?(hour) }
-      contiguous_windows(wet.map(&:last), tz).map { |win| "#{day_label(win[0], first)} #{format_window(win)}" }
+      contiguous_windows(wet.map(&:last), tz).map { |win|
+        "#{day_label(win[0], first)}, rain #{format_window(win)}"
+      }
     end
 
     def loose_rain(data, tz, days, first)

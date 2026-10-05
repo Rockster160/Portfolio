@@ -2547,6 +2547,51 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  describe "a briefing reaching back for a thought the spacing withheld" do
+    let!(:warm) {
+      user.buddy_memories.create!(
+        kind:        :stash,
+        category:    :home,
+        content:     "leftover food in my fridge that needs eating",
+        surfaced_at: 1.day.ago,
+      )
+    }
+
+    def briefed(text)
+      facts   = { "stash" => [], "weather" => { "low" => 52, "high" => 76 } }
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "Their day.",
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today", "briefing" => facts }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
+      reply.body
+    end
+
+    it "cuts the line that names it" do
+      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
+
+      expect(briefed(said)).to eq("Mooooorning!")
+    end
+
+    # A thought nobody has floated yet is not being withheld - there is nothing
+    # to have copied, and 36 of Eve's 37 live stash rows are in this state.
+    it "says nothing about a thought that has never been floated" do
+      warm.update!(surfaced_at: nil)
+      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
+
+      expect(briefed(said)).to eq(said)
+    end
+
+    # Three days is BriefingFacts::STASH_SPACING, and past it the prompt is
+    # free to float the thought again.
+    it "lets it back in once the spacing has run out" do
+      warm.update!(surfaced_at: 4.days.ago)
+      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
+
+      expect(briefed(said)).to eq(said)
+    end
+  end
+
   describe "a briefing written in the ordinary voice of somebody's day" do
     def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
       message = convo.byte_messages.create!(

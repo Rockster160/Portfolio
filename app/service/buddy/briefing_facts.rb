@@ -169,7 +169,7 @@ module Buddy
     def block(facts)
       sections = [
         ["ON TODAY",        facts[:today].map { |i| agenda_line(i) }],
-        ["ALSO DUE TODAY",  facts[:due].map { |r| "#{r[:fire_at]} · #{r[:body]}" }],
+        ["ALSO DUE TODAY",  facts[:due].map { |r| "#{due_time(r)} · #{r[:body]}" }],
         ["JOBS TODAY",      job_lines(facts[:jobs])],
         ["WEATHER",         weather_lines(facts[:weather])],
         ["ALPINE",          Array(facts.dig(:alpine, :today)) + Array(facts.dig(:alpine, :week))],
@@ -182,6 +182,23 @@ module Buddy
       sections.map { |title, lines|
         "#{title}\n#{lines.compact_blank.map { |line| "- #{line}" }.join("\n")}"
       }.join("\n\n")
+    end
+
+    # The clock time with no weekday on it, because this section is TODAY.
+    #
+    # `fire_at` is `Clock.day_at` - "Sat 7pm" - and that is right where it comes
+    # from: `Context#upcoming_reminders` runs a 48-hour window, so a row needs to
+    # say which day it is on. By the time it reaches here `without_other_days`
+    # has already dropped everything that isn't today, so the weekday is the one
+    # thing in the line that cannot tell them anything - and prod 7410 read it
+    # straight out, on a Saturday: "Sat 7pm, check the front flower bed."
+    #
+    # Seed shorthand published as prose, same family as "Rain Mon this week."
+    # The facts keep the full string: `DayClaim.covered_days` reads `fire_at` for
+    # its day words, and this is a rendering decision, not a change to what the
+    # day was.
+    def due_time(reminder)
+      reminder[:fire_at].to_s.sub(/\A(?:#{Date::ABBR_DAYNAMES.join("|")})\s+/o, "")
     end
 
     # Whose it is leads the title, because that is the order somebody says it in

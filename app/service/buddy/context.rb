@@ -359,7 +359,7 @@ module Buddy
               kind:           i.kind,
               cadence:        schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
               drive_min:      drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-              leave_by:       leave_by(i, user),    # the clock time to walk out, already worked out
+              leave_by:       leave_by(i, user, now: now), # the clock time to walk out, already worked out
               # The way back. Kept on a PARTNER's item where leave_by is not —
               # see tag_ownership.
               home_by:        home_by(i, user),
@@ -536,9 +536,23 @@ module Buddy
       # a blank one here falls through to the bare "(46 min drive)" that
       # briefing_facts already renders. See AgendaItem::MAX_TRAVEL_LEAD for the
       # morning this cost.
-      def leave_by(item, user)
+      # Only while it is still a time to WALK OUT. An event that is underway is
+      # correctly not `passed` - `past?` is kind-aware, and a run with hours
+      # left on it is not news that already broke - but its departure time is
+      # gone, and the two were decided independently.
+      #
+      # Prod 7402 and 7411, 3 Oct: Fun Run ran 7:00am-2:30pm, and both
+      # briefings carried "leave by 6:22am" - Rocco's at 6:57am, Chelsea's at
+      # 8:30am, two hours after the fact. Dropping it takes the drive minutes
+      # with it (`agenda_line` and `travel_line` both gate on `leave_by`) and
+      # stands the `:travel` writing rule down, so the item goes out as what it
+      # is: a thing on today, at its time, in its place.
+      #
+      # Strictly `>`, no margin. 6579's IT leave-by was 8:38am on a seed built
+      # at 8:18 - twenty minutes is the case this is FOR, not a rounding error.
+      def leave_by(item, user, now: Time.current)
         at = item.leave_at
-        return nil if at.blank?
+        return nil if at.blank? || at <= now
 
         Buddy::Clock.at(at, zone: user.timezone)
       end

@@ -322,8 +322,8 @@ module Buddy
         "#{log_hint(occurred_at, email)} - do not offer to, do not ask " \
         "first. Pick the `tag` that matches what actually happened rather than leaving it " \
         "a plain note; a rejection, an offer or a withdrawal also settles the application, " \
-        "which is correct when the mail says so.#{booking_hint}" \
-        "#{outgoing_tag_hint(outgoing)}#{note_hint(body)}",
+        "which is correct when the mail says so.#{JobMailRules.booking}" \
+        "#{JobMailRules.outgoing_tag(outgoing)}#{JobMailRules.note(body)}",
       ].join("\n")
     end
 
@@ -359,25 +359,8 @@ module Buddy
         "first. It is a level-3 tool, so the card writes nothing until they tap it. " \
         "Give it the `role` if the mail names one, the `tag` that matches what happened, " \
         "and#{log_hint(occurred_at, email).presence || " the time it arrived"}." \
-        "#{note_hint(body)}",
+        "#{JobMailRules.note(body)}",
       ].compact.join("\n")
-    end
-
-    # The one field a booked interview cannot do without. `follow_up_at` is the
-    # appointment itself on a `scheduled` note and is what puts it on the
-    # calendar; prod 56/57 were two Scheduled notes for one ApartmentIQ call,
-    # each carrying "Sep 17 at 2pm MDT" in its own summary line and neither
-    # carrying it in the field, so the day it was booked for stayed empty.
-    def booking_hint
-      " If the mail names a TIME, the beat is `scheduled` and that time goes in " \
-        "`follow_up_at` - it is the appointment, and it is what puts it on their " \
-        "calendar. Check WHICH ZONE it is written in before you pass it: a calendar " \
-        "invite states its own, and an organiser on the other side of the country " \
-        "writes theirs rather than his. Convert it. Pass " \
-        "`duration_minutes` too when the mail says how long (\"about 20 minutes\", " \
-        "an invite reading 2:00-2:20); without one it books an hour. If the booking is " \
-        "being CALLED OFF rather than made, the beat is `cancelled` and it takes no " \
-        "time at all - see the tag list."
     end
 
     # The company is on the board more than once and the mail does not say which
@@ -399,22 +382,12 @@ module Buddy
         "#{log_hint(occurred_at, email)} with `role` naming WHICH of those jobs it is - the " \
         "mail usually says, in the subject or the first line. If it genuinely does not, ask " \
         "them which one rather than picking: a note on the wrong job is permanent." \
-        "#{note_hint(body)}",
+        "#{JobMailRules.note(body)}",
         "",
         "This mail is not on the board yet and nothing else is going to put it there, so " \
         "the note exists only if that call is made. Reading the role off the mail and " \
         "filing it is the answer whenever the mail names one.",
       ].compact.join("\n")
-    end
-
-    # Their side of the thread. `responded` exists for exactly this and is the
-    # other half of `heard_back` — withdrawing is the one thing they can say
-    # that settles the row, and it is rare.
-    def outgoing_tag_hint(outgoing)
-      return "" unless outgoing
-
-      " This one is theirs, so `responded` is usually the tag - unless they " \
-        "withdrew, accepted an offer, or the words say something more specific."
     end
 
     # What the mail IS, the same way in all three seeds. The handle the note gets
@@ -473,30 +446,6 @@ module Buddy
       return nil if body.blank?
 
       ["", "--- the message, for the NOTE only ---", body, "--- end ---"].join("\n")
-    end
-
-    # The habit the board was built by hand with: the message's own words go in
-    # the note, VERBATIM, trimmed only the way a person would trim them. Said
-    # only when there IS a message to quote, so a headline-only offer doesn't
-    # promise one.
-    #
-    # "pass the part that carries the substance" read as permission to
-    # SUMMARISE, and a seed duly proposes "They said they can't provide
-    # feedback, but thanked you for your time and wished you well" in place of
-    # what the company wrote. A summary of a rejection is not a record of
-    # one: the words are the thing being kept, and a paraphrase can't be read
-    # back later to work out what was said.
-    def note_hint(body)
-      return "" if body.blank?
-
-      " Their habit is to keep the message itself as the note. Copy its words " \
-        "into `note` VERBATIM - do not summarise it, shorten it or put it in " \
-        "your own words. Trim only what a person would: the signature block, " \
-        "the address and phone lines, the unsubscribe footer and any quoted " \
-        "thread underneath, keeping the sender's name where they signed off. " \
-        "Put the gist in `summary` instead - one line, and the only short " \
-        "version there is room for, because that is what the card shows. " \
-        "That text belongs in the note only - never in what you say."
     end
 
     # Which handle the note should be pinned to. An email we hold gets its id,

@@ -72,6 +72,41 @@ RSpec.describe "add_job_note tool" do
     end
   end
 
+  # Prod 5 Oct, Neighbor. A mail from luke@neighbor.com arranging a technical
+  # video interview was filed `interview`. Two things were wrong and the second
+  # is the expensive one: it put a conversation on the timeline that had not
+  # happened, and because only `scheduled` reaches the calendar, the interview
+  # being arranged went on no agenda at all. The seed's rule covered "names a
+  # TIME" and "called off" and had nothing to say about either.
+  describe "an interview that has not happened yet" do
+    it "refuses a time on it, because that is the booking" do
+      expect { confirm(tag: :interview, follow_up_at: at, note: "Video interview.") }
+        .to raise_error(/takes no follow_up_at/)
+    end
+
+    it "refuses one dated ahead of now" do
+      expect { confirm(tag: :interview, occurred_at: 2.days.from_now, note: "Video interview.") }
+        .to raise_error(/still ahead/)
+    end
+
+    # The beat it should have been. Same mail, the tag that books.
+    it "takes the booking as scheduled" do
+      execute(tag: :scheduled, follow_up_at: at, duration_minutes: 45, note: "Video interview.")
+      note = job.notes.last
+
+      expect(note.tag).to eq("scheduled")
+      expect(note.follow_up_item.kind).to eq("event")
+    end
+
+    # An interview that really did happen is still ordinary: no time on it, and
+    # dated when it happened.
+    it "still logs one that actually took place" do
+      execute(tag: :interview, occurred_at: 1.day.ago, note: "Spoke to Luke for 45 minutes.")
+
+      expect(job.notes.last.tag).to eq("interview")
+    end
+  end
+
   # Prod 15 Sep: three Aledade PBC roles applied to in one day. The resolver
   # took a company and only a company and answered with the first row, so two of
   # those jobs were filed onto a third one's timeline — three separate outcomes
@@ -123,8 +158,13 @@ RSpec.describe "add_job_note tool" do
       )
     }
 
+    # Through `confirm`, because the payload a hint really gets is the RESOLVED
+    # one and `job_id` only exists there. Built from a hand-written hash, this
+    # helper was testing a payload nothing ships: every example here ran with no
+    # `job_id`, so "says nothing when there is no mail" passed for the wrong
+    # reason and went on passing when it had become wrong.
     def hint(**payload)
-      tool[:hint].call({ company: "ApartmentIQ" }.merge(payload), ctx)
+      tool[:hint].call(confirm(**payload)[:resolved], ctx)
     end
 
     it "offers the email to read before the tap" do
@@ -134,8 +174,23 @@ RSpec.describe "add_job_note tool" do
       expect(words["tap"]).to match(/Read the email/)
     end
 
-    it "says nothing on a beat that came from a conversation" do
-      expect(hint(tag: :heard_back)).to be_nil
+    # NEVER NOTHING. The receipt is the only other slot that can carry a link and
+    # it does not exist until the row is ticked, so a pending card with no hint
+    # has nowhere to go at all - which is what a beat with no email we kept was.
+    # Neighbor, 5 Oct: "💼 Interview — Neighbor" and one sentence, and his
+    # answer was that he could not confirm something carrying no usable
+    # information.
+    it "offers the row when there is no mail to read" do
+      words = hint(tag: :heard_back, note: "They wrote.")
+
+      expect(words["tap"]).to include("/interviews/#{job.id}")
+      expect(words["tap"]).to include("ApartmentIQ")
+    end
+
+    # The receipt already names and links the row once it has run, and saying it
+    # twice is the duplication REMOVAL_TOOLS exists to keep off a row.
+    it "leaves the ticked row to its receipt when there was no mail" do
+      expect(hint(tag: :heard_back, note: "They wrote.")["done"]).to be_nil
     end
 
     # Confirming IS reading it, and everything it said is on the board now.

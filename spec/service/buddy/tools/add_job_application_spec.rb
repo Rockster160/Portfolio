@@ -174,6 +174,22 @@ RSpec.describe "add_job_application tool" do
       expect(words["tap"]).to include("/emails/#{email.id}")
     end
 
+    # No mail kept, so the LISTING is the only thing there is to look at - and
+    # whether a company is worth a row is the question it answers. add_job_note
+    # falls back to the board row here; this tool has no row yet, which is the
+    # whole point of it.
+    it "offers the listing when there is no mail" do
+      words = tool[:hint].call(
+        { company: "Pellworth Dynamics", url: "https://jobs.lever.co/pellworth/42" }, ctx
+      )
+
+      expect(words["tap"]).to include("https://jobs.lever.co/pellworth/42")
+    end
+
+    it "says nothing when there is neither" do
+      expect(tool[:hint].call({ company: "Pellworth Dynamics" }, ctx)).to be_nil
+    end
+
     it "stamps the first beat with the mail's own clock and a link back" do
       execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
       note = user.job_applications.find_by(company: "Pellworth Dynamics").notes.first

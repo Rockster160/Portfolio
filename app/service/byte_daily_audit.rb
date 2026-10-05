@@ -174,6 +174,7 @@ module ByteDailyAudit
       These have been looked at and answered. A fresh session has no memory of that, so they are listed here; raising one again in any framing costs a section and tells me something I already know.
       - `syncevents` writing an ActionEvent whose name is the digit `1`. The lines arrive over the trigger that way and the app is logging exactly what it was handed. The sender is correct. Leave it alone.
       - `buddy_watches` id 10, the deploy announcement, sitting cancelled while deploys go out unannounced. I switched it off myself and I meant to. Deploys not being announced is the intended state until I turn it back on, so it is not a finding and neither is the quiet.
+      - **Bold** in a briefing. It is allowed and always was; what the prose rule is about is HEADINGS, sections and bullets, which turn a message about somebody's day into a document. A briefing with a few bolded words in it is fine. Worth raising only if the markup has taken over - every name and every time in turn, so the emphasis has stopped meaning anything - and then it is about that, not about bold appearing at all.
     TXT
   end
 

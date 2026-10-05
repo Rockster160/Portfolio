@@ -161,4 +161,53 @@ RSpec.describe Buddy::UnpromptedMemory do
 
     expect(Rails.logger).to have_received(:info) { |line| expect(line).not_to include("audit") }
   end
+
+  # Prod 7410, 3 Oct. `STASH_SPACING` had held Eve's fridge thought back for the
+  # third morning running - seed 7408 carried `stash: []` and no ON THEIR MIND
+  # section at all - and the briefing opened "Hope the fridge mission is feeling
+  # a bit more tamed now :)", which is 7329's line from the day before with the
+  # adjectives moved. It came off the previous briefing in the scrollback, so
+  # the spacing had nothing left to do; the words are the only place to catch
+  # it. Four consecutive mornings: 7168, 7245/7329, 7410.
+  describe "a stash thought the spacing withheld" do
+    let(:fridge) {
+      Struct.new(:content, :kind_preference?).new(
+        "leftover food in my fridge that needs to be eaten, starting with pizza for lunch, " \
+        "then steak, then Cafe Rio",
+        false,
+      )
+    }
+    let(:bare) { { due: [{ fire_at: "7pm", body: "Check the front flower bed." }], stash: [] } }
+
+    def withheld(body) = described_class.trim(body, [fridge], bare)
+
+    it "drops the line that reaches back for it" do
+      body = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
+
+      expect(withheld(body)).to eq("Mooooorning!")
+    end
+
+    # GRAMMAR. The note says "...fridge THAT needs to be eaten", and `that` is
+    # four letters, so without the stoplist it vetoes both of these - measured
+    # against Eve's last 20 briefings, where they are the only two false cuts.
+    it "is not a veto on every sentence containing the word that" do
+      body = "Mooooorning! Check the front flower bed at 7pm today, that one's on deck."
+
+      expect(withheld(body)).to eq(body)
+    end
+
+    it "leaves a sentence whose only crime is grammar" do
+      body = "Hi! Rain is due on Tuesday, so that's the bit worth keeping one eye on!"
+
+      expect(withheld(body)).to eq(body)
+    end
+
+    # The morning it IS floated, the seed decided it was the subject.
+    it "allows it on the morning the prompt actually floats it" do
+      body = "Morning! That fridge pile is still sitting there if you want a run at it."
+      floated = bare.merge(stash: [{ idea: "leftover food in my fridge", age: "3 weeks" }])
+
+      expect(described_class.trim(body, [fridge], floated)).to eq(body)
+    end
+  end
 end

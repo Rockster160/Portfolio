@@ -139,7 +139,17 @@ Buddy::Tools.register(
   hint:        ->(payload, ctx) {
     email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
     if email.nil?
-      nil
+      # Nothing of this exists yet - no row, and no mail we kept - so the LISTING
+      # is the only thing there is to look at, and whether this is worth tracking
+      # is exactly the question it answers. Absent more often than not, and then
+      # the card stands on its own: "Track <Company>" names the company and the
+      # role, which is the whole of what a new row would hold.
+      #
+      # add_job_note's hint has the row to fall back on and must never be nil;
+      # this one can be, because there is genuinely nowhere to go.
+      next nil if payload[:url].blank?
+
+      { "tap" => "[The listing](#{payload[:url]}) - tapping opens a row on the board for it" }
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {

@@ -361,4 +361,30 @@ RSpec.describe Buddy::BriefingFacts do
       expect(lines).to eq(["trash: Gather trash, Take trash cans out · 2x, Take out trash bags"])
     end
   end
+
+  # Prod 7410, 3 Oct: "Sat 7pm, check the front flower bed", said on a Saturday
+  # morning. `fire_at` is `Clock.day_at` because `upcoming_reminders` runs a
+  # 48-hour window, but `without_other_days` has already cut everything that
+  # isn't today by the time it reaches this section, so the weekday is the only
+  # part of the line that can't tell them anything.
+  describe "the ALSO DUE TODAY line" do
+    def line(fire_at)
+      described_class.block(
+        today: [], due: [{ fire_at: fire_at, body: "Check the front flower bed." }],
+        jobs: [], weather: nil, week: [], stash: []
+      )
+    end
+
+    it "gives the time without the day" do
+      expect(line("Sat 7pm")).to include("- 7pm · Check the front flower bed.")
+    end
+
+    it "keeps the minutes on a time that has them" do
+      expect(line("Mon 9:30am")).to include("- 9:30am · Check")
+    end
+
+    it "leaves a time that never carried a day alone" do
+      expect(line("7pm")).to include("- 7pm · Check")
+    end
+  end
 end

@@ -64,8 +64,14 @@ RSpec.describe AgendaItem do
       expect(item(good).leave_at).to eq(Time.zone.at(good["leave_at"]))
     end
 
+    # `now:` because this is about whether the epoch BELONGS to the event, and
+    # `leave_by` now also asks whether the departure is still ahead - the event
+    # itself is three weeks in the past, so without a clock to read it against
+    # the two questions can't be told apart.
     it "reads it out" do
-      expect(Buddy::Context.send(:leave_by, item(good), user)).to be_present
+      at = Buddy::Context.send(:leave_by, item(good), user, now: start_at - 1.hour)
+
+      expect(at).to be_present
     end
   end
 

@@ -3144,13 +3144,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Reconnected: drain anything held while the channel was down.
       scheduleDrain();
       refetchHistory();
+      // UNCONDITIONAL, exactly like `refetchHistory` above it, and that symmetry
+      // is the fix rather than a tidy-up.
+      //
+      // It sat behind `hasBeenConnected && wasDisconnected`, which needs
+      // `disconnected()` to have RUN. An iOS PWA coming back from the
+      // background doesn't give it that: the page is frozen, so no callback
+      // fires while the socket dies, and the monitor notices a stale connection
+      // on resume and goes straight to `connected()` with `wasDisconnected`
+      // still false. History refetched, the strip did not.
+      //
+      // Which is precisely what 5 Oct looked like. The laundry gate opened at
+      // 9:00:37am with the app backgrounded; resuming it brought the bubble
+      // back saying the gate was open and left the strip empty, and a force
+      // quit fixed it - because a cold load reads `bootstrap.alerts` and never
+      // touches this path at all.
+      //
+      // The `visibilitychange` call is not a second net for this. It fires at
+      // the worst moment for a request - the network stack may not be back, and
+      // `refetchAlerts` swallows a failure and never retries - so the reconnect
+      // is the one that happens with the socket proven up.
+      //
+      // Cost on a first connect: one GET immediately after bootstrap asked the
+      // same question. `refetchHistory` has always paid it.
+      refetchAlerts();
       convoManager.refresh().catch(() => {});
       if (hasBeenConnected && wasDisconnected) {
         requestShellRefresh();
         checkForServiceWorkerUpdate();
-        // The socket being down IS the gap the strip missed. Resume covers the
-        // common case a beat sooner; this covers a blip with the tab in front.
-        refetchAlerts();
       }
       hasBeenConnected = true;
       wasDisconnected = false;
