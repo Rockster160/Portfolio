@@ -94,7 +94,7 @@ Time.duration = function (ms) {
 };
 Time.durationFigs = function (left, sigFigs = 2) {
   left = Math.floor(left);
-  if (left < 1) return "<1s";
+  if (left < Time.second()) return "<1s";
 
   const timeLengths = {
     w: Time.week(),

@@ -124,7 +124,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     // Left: how long since Tesla said anything at all, condensed ("4m").
     // Right: when the car last moved or changed gear — a parked car keeps
     // streaming, so updated_at alone reads "just now" in the driveway all day.
-    let heard = data.updated_at ? Text.grey(Time.durationFigs(Date.now() - Time.at(data.updated_at).getTime(), 1)) : ""
+    let heard = Text.grey(data.updated_at ? Time.durationFigs(Date.now() - Time.at(data.updated_at).getTime(), 1) : "?")
     let left = [heard, notify].filter(Boolean).join(" ")
     let changed = Math.max(data.location?.moved_at || 0, data.drive?.shifted_at || 0)
     lines.push(Text.justify(left, Time.timeago(changed)))
