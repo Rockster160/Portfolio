@@ -251,6 +251,21 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
     end
 
+    it "stamps the countdown with when its chosen source said it" do
+      poll_ms = ms_ago(10.seconds)
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:           40.5,
+        active_route_longitude:          -111.5,
+        active_route_miles_to_arrival:   23.12,
+        active_route_minutes_to_arrival: 26.3,
+        timestamp:                       poll_ms,
+      })
+      expect(car_data.dig(:trip, :countdown_ts)).to eq(poll_ms)
+
+      described_class.record_telemetry(MilesToArrival: 2.68, MinutesToArrival: 5.24)
+      expect(car_data.dig(:trip, :countdown_ts)).to eq(telemetry_cache.dig(:field_ts, :MilesToArrival))
+    end
+
     it "does not resurrect a trip once both sources have gone quiet" do
       described_class.record_telemetry(
         RouteLine:           "abc",

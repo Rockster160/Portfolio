@@ -464,8 +464,8 @@ import { dash_colors, clamp } from "../vars";
     const total = spentOver(addDays(today, -(rolling_days - 1)), rolling_days);
 
     return [
-      "    " + names + " ",
-      " 7" + verdict(total, day_budget * rolling_days) + " " + marks + " ",
+      "  7 " + names + " ",
+      "  " + verdict(total, day_budget * rolling_days) + " " + marks + " ",
     ];
   }
 

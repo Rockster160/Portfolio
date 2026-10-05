@@ -413,11 +413,12 @@ class TeslaCacheStore
       confirmed_ts = max_ts(told_ts, (poll_ts if routing_ep))
       return nil unless trip_still_current?(confirmed_ts)
 
-      miles, minutes = trip_countdown(ep, tel, field_ts, poll_ts)
+      miles, minutes, countdown_ts = trip_countdown(ep, tel, field_ts, poll_ts)
       {
         destination:        destination,
         miles_to_arrival:   miles&.to_f&.round(2),
         minutes_to_arrival: minutes&.to_f&.round(2),
+        countdown_ts:       countdown_ts,
         ts:                 confirmed_ts,
       }.compact
     end
@@ -451,16 +452,17 @@ class TeslaCacheStore
 
     # Both sources carry the countdown; prefer whichever restated it last. The
     # endpoint's is only as new as the last poll, and telemetry's is only as new
-    # as the last push, so neither is reliably the fresher one.
+    # as the last push, so neither is reliably the fresher one. The third value
+    # is when the chosen source said it.
     def trip_countdown(ep, tel, field_ts, poll_ts)
       miles_ep     = ep.dig(:drive_state, :active_route_miles_to_arrival)
       minutes_ep   = ep.dig(:drive_state, :active_route_minutes_to_arrival)
       countdown_ts = max_ts(*field_ts.values_at(:MilesToArrival, :MinutesToArrival))
 
       if tel_fresher?(countdown_ts, poll_ts)
-        [tel[:MilesToArrival] || miles_ep, tel[:MinutesToArrival] || minutes_ep]
+        [tel[:MilesToArrival] || miles_ep, tel[:MinutesToArrival] || minutes_ep, countdown_ts]
       else
-        [miles_ep || tel[:MilesToArrival], minutes_ep || tel[:MinutesToArrival]]
+        [miles_ep || tel[:MilesToArrival], minutes_ep || tel[:MinutesToArrival], poll_ts]
       end
     end
 

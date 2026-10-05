@@ -31,7 +31,8 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     if (!label) { return "" }
     let suffix = ""
     if (trip.miles_to_arrival != null && trip.minutes_to_arrival != null) {
-      suffix = " " + Text.grey("(" + Math.round(trip.miles_to_arrival) + "mi/" + Math.round(trip.minutes_to_arrival) + "min)")
+      let synced = trip.countdown_ts ? "-" + Time.durationFigs(Date.now() - Time.at(trip.countdown_ts).getTime(), 1) + " ago" : ""
+      suffix = " " + Text.grey("(" + Math.round(trip.miles_to_arrival) + "mi/" + Math.round(trip.minutes_to_arrival) + "min" + synced + ")")
     }
     return "→ " + label + suffix
   }
