@@ -110,16 +110,41 @@ RSpec.describe ActionEvent do
   describe "feeding the pet" do
     before { allow(PetWorker).to receive(:tell) }
 
-    it "feeds 10 for a drink" do
-      User.me.action_events.create!(name: "Drink", notes: "Mtn Dew Zero")
+    it "feeds 10 for a drink, saying what it was and when" do
+      event = User.me.action_events.create!(name: "Drink", notes: "Mtn Dew Zero")
 
-      expect(PetWorker).to have_received(:tell).with(:feed, 10)
+      expect(PetWorker).to have_received(:tell).with(
+        :feed,
+        10,
+        :drink,
+        ["Mtn", "Dew", "Zero"],
+        "@#{event.timestamp.to_i}",
+      )
     end
 
     it "feeds 80 for food, whatever the case of the name" do
-      User.me.action_events.create!(name: "food")
+      event = User.me.action_events.create!(name: "food")
 
-      expect(PetWorker).to have_received(:tell).with(:feed, 80)
+      expect(PetWorker).to have_received(:tell).with(:feed, 80, :food, [], "@#{event.timestamp.to_i}")
+    end
+
+    it "sends a backdated event's own time, not when it was logged" do
+      at = 1.hour.ago.change(usec: 0)
+      User.me.action_events.create!(name: "Food", notes: "Pizza", timestamp: at)
+
+      expect(PetWorker).to have_received(:tell).with(:feed, 80, :food, ["Pizza"], "@#{at.to_i}")
+    end
+
+    it "keeps the notes to five words with no @ the Mac would read as a time" do
+      User.me.action_events.create!(name: "Food", notes: "@home chicken rice beans salsa cheese guac")
+
+      expect(PetWorker).to have_received(:tell).with(
+        :feed,
+        80,
+        :food,
+        ["home", "chicken", "rice", "beans", "salsa"],
+        anything,
+      )
     end
 
     it "says nothing for any other event" do

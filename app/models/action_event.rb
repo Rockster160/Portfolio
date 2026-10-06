@@ -64,10 +64,22 @@ class ActionEvent < ApplicationRecord
 
   private
 
+  # `feed 10 drink Mtn Dew Zero @1791300000`: the pet says what it was, and its
+  # hunger counts from when it was had - `timestamp`, which a backdated log sets -
+  # rather than from when the Mac got around to hearing about it.
   def feed_pet
     return unless user&.me?
 
-    amount = PET_FEEDS[name.to_s.downcase.to_sym]
-    PetWorker.tell(:feed, amount) if amount
+    kind = name.to_s.downcase.to_sym
+    amount = PET_FEEDS[kind]
+    return unless amount
+
+    PetWorker.tell(:feed, amount, kind, pet_item_words, "@#{timestamp.to_i}")
+  end
+
+  # The notes as the pet's words. The Mac takes 8 words at most and reads a
+  # leading `@` as a time, so: five words, no `@`s.
+  def pet_item_words
+    notes.to_s.split.map { |word| word.delete_prefix("@").first(40) }.compact_blank.first(5)
   end
 end
