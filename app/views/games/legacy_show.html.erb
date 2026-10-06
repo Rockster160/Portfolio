@@ -1,0 +1,48 @@
+<% content_for :title, @event.notes %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<% data = @event.data.to_h %>
+<% scores = (data["players"] || {}).reject { |name, v| name.blank? || v.nil? }.sort_by { |_, v| -v.to_f } %>
+<% template = GameTemplate.find_by_alias(current_user, @event.notes) %>
+
+<div class="games-app">
+  <div class="games-page">
+    <header class="games-topbar">
+      <a class="games-icon-btn" href="<%= games_path %>" aria-label="All games">‹</a>
+      <h1><%= @event.notes.presence || "Game" %></h1>
+    </header>
+
+    <section class="games-card games-hero">
+      <div class="games-hero-meta">
+        <span><%= @event.timestamp&.strftime("%A, %B %-d · %-l:%M%P") %></span>
+        <% if data["duration"].to_i.positive? %><span><%= games_minutes(data["duration"]) %></span><% end %>
+        <span class="games-tag">Logged by hand</span>
+      </div>
+      <% if scores.any? %>
+        <div class="games-standings">
+          <% scores.each_with_index do |(name, value), i| %>
+            <div class="games-standing">
+              <span class="games-standing-rank games-num"><%= i + 1 %></span>
+              <span class="games-standing-name"><%= name %></span>
+              <span class="games-standing-score games-num"><%= value %></span>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </section>
+
+    <p class="games-empty">Logged before the tracker, so there are no rolls to chart.</p>
+
+    <div class="games-actions">
+      <% if template %>
+        <a class="games-btn games-btn-primary games-btn-lg games-actions-wide" href="<%= new_game_path(template_id: template.id) %>">Play <%= template.name %></a>
+      <% end %>
+      <a class="games-btn games-actions-wide" href="<%= games_path %>">All games</a>
+    </div>
+  </div>
+</div>

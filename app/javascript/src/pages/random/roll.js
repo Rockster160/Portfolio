@@ -4,6 +4,13 @@ Array.prototype.sum = function() { if (this.length == 0) { return 0 } else { ret
 Array.prototype.includes = function(a) { return this.indexOf(a) >= 0 }
 Array.prototype.remove = function(a) { var all = this.slice(); if (all.includes(a)) { all.splice(all.indexOf(a), 1) }; return all }
 Array.prototype.subtract = function(arr) { var all = this.slice(); for(var i=0; i<arr.length; i++) { all = all.remove(arr[i]) }; return all }
+// crypto.getRandomValues rather than Math.random - a die roll is the one
+// place in this file actual randomness matters.
+function cryptoRandom() {
+  var buf = new Uint32Array(1)
+  crypto.getRandomValues(buf)
+  return buf[0] / 4294967296
+}
 String.prototype.repeatReplace = function(regex, replaceWith) {
   var newStr = this
   while (regex.test(newStr)) {
@@ -224,7 +231,7 @@ export class Dice {
       max += parseFloat(max_offset + "1")
     }
 
-    var rand = (Math.random() * (max - min)) + min
+    var rand = (cryptoRandom() * (max - min)) + min
     return Math.floor((rand + Number.EPSILON) * sig_fig_multiplier) / sig_fig_multiplier
   }
   toss() {

@@ -13,6 +13,7 @@
 #  url              :string
 #  created_at       :datetime         not null
 #  updated_at       :datetime         not null
+#  jobhunt_job_id   :integer
 #  user_id          :bigint           not null
 #
 class JobApplication < ApplicationRecord

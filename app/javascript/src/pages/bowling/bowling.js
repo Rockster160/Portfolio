@@ -21,15 +21,19 @@ window.onload = function () {
     // game.fillRandomUntil(9, "X")
 
     game.nextShot();
-  }
-};
 
-window.onbeforeunload = function (evt) {
-  if (!game || game.saved) {
-    return undefined;
-  }
+    // Scoped to the bowling page itself - this bundle loads on every page
+    // (src/**/*.js), and an unconditional window.onbeforeunload here used to
+    // throw "game is not defined" on any OTHER page, since `game` is only
+    // ever set by the `new Game(...)` call just above.
+    window.onbeforeunload = function (evt) {
+      if (!game || game.saved) {
+        return undefined;
+      }
 
-  return "onbeforeunload";
+      return "onbeforeunload";
+    };
+  }
 };
 
 // ===== NOTE:

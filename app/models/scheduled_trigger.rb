@@ -12,7 +12,7 @@
 #  name                 :text
 #  offset_seconds       :integer
 #  source_edge          :integer          default("start"), not null
-#  started_at          :datetime
+#  started_at           :datetime
 #  trigger              :text             not null
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null

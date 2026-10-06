@@ -39,11 +39,61 @@ RSpec.describe "add_job_application tool" do
   end
 
   # A second row for the SAME job splits its timeline, and nothing downstream
-  # would ever put them back together. The description says so; this enforces it.
-  it "refuses a company that is already on the board with nothing to tell them apart" do
-    user.job_applications.create!(company: "Pellworth Dynamics, Inc.")
+  # would ever put them back together. So the beat goes on the row that is there
+  # - which is what `execute` has always done when it finds one - rather than
+  # being thrown away for arriving a moment late.
+  describe "a company that turns out to be on the board already" do
+    let!(:row) { user.job_applications.create!(company: "Pellworth Dynamics, Inc.") }
 
-    expect { confirm(note: "They wrote again.") }.to raise_error(/already on the board/)
+    it "files the beat on it instead of opening a second row" do
+      execute(note: "They wrote again.", tag: :heard_back)
+
+      expect(user.job_applications.count).to eq(1)
+      expect(row.notes.pluck(:tag)).to eq(["heard_back"])
+    end
+
+    it "says on the card that it is logging, not tracking" do
+      expect(confirm(note: "They wrote again.")[:summary]).to include("Log")
+    end
+
+    # `Track <Company>` is a promise about the board, and the row is already on
+    # it. The title has to read like the beat it actually files.
+    it "titles the card like a beat on the row" do
+      payload = confirm(note: "They wrote again.", tag: :heard_back)[:resolved]
+
+      expect(tool[:label].call(payload, ctx)[:title]).to eq("💼 Heard back — Pellworth Dynamics")
+    end
+
+    it "offers the row to look at when there is no mail" do
+      payload = confirm(note: "They wrote again.", tag: :heard_back)[:resolved]
+
+      expect(tool[:hint].call(payload, ctx)["tap"]).to include("/interviews/#{row.id}")
+    end
+
+    it "says it logged rather than claiming a new row" do
+      result = execute(note: "They wrote again.", tag: :heard_back)
+
+      expect(tool[:receipt].call(result, ctx)).to start_with("Logged on")
+    end
+
+    # Undo takes back the beat and leaves the row, which was never this card's
+    # to remove.
+    it "undoes to the row as it was" do
+      result = execute(note: "They wrote again.", tag: :heard_back)
+      result[:reverts].each { |revert| Buddy::Reverter.call(revert) }
+
+      expect(user.job_applications.count).to eq(1)
+      expect(row.notes.count).to be_zero
+    end
+  end
+
+  # Two rows for one company and no role to pick between them is a coin toss,
+  # and a beat on the wrong one is worse than no beat.
+  it "refuses when the company is on the board several times and no role says which" do
+    user.job_applications.create!(company: "Pellworth Dynamics", role: "Staff Engineer")
+    user.job_applications.create!(company: "Pellworth Dynamics", role: "Principal Engineer")
+
+    expect { confirm(note: "They wrote again.") }.to raise_error(/already on the board 2 times/)
   end
 
   # Three jobs at one place is three rows with three separate outcomes. This is
@@ -60,9 +110,22 @@ RSpec.describe "add_job_application tool" do
       expect(roles).to contain_exactly("Principal Engineer", "Staff Frontend Engineer")
     end
 
-    it "still refuses the same job twice" do
-      expect { confirm(role: "Principal Engineer", note: "Applied again.") }
-        .to raise_error(/already on the board - use add_job_note/)
+    # The same job twice is the thing that must never make a second row. It lands
+    # on the one that is there.
+    it "never makes a second row for the same job" do
+      execute(role: "Principal Engineer", note: "Applied again.", tag: :applied)
+
+      expect(user.job_applications.count).to eq(1)
+      expect(first.notes.pluck(:tag)).to eq(["applied"])
+    end
+
+    # One row and nothing to tell anything apart: that row is the job, same
+    # answer `execute` reaches on its own.
+    it "lands on the one row there when this brings no role either" do
+      execute(note: "Applied.", tag: :applied)
+
+      expect(user.job_applications.count).to eq(1)
+      expect(first.notes.pluck(:tag)).to eq(["applied"])
     end
 
     # Half the board carries no role at all, so this is the ordinary shape
@@ -73,10 +136,6 @@ RSpec.describe "add_job_application tool" do
 
       expect { confirm(role: "Staff Frontend Engineer", note: "Applied.") }
         .to raise_error(/no role recorded/)
-    end
-
-    it "refuses when this one brings no role either" do
-      expect { confirm(note: "Applied.") }.to raise_error(/pass its `role`/)
     end
   end
 

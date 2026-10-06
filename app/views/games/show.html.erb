@@ -1,0 +1,129 @@
+<% content_for :title, @play.name %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<% standings = games_standings(@play) %>
+<% winners = Array(@play.winner_names) %>
+<% colors = Array(@play.players).to_h { |p| [p["name"], p["color"]] } %>
+<% dist = @stats[:distribution] || [] %>
+<% per_player = @stats[:per_player] || {} %>
+<% turn_times = @stats.dig(:turn_times, :per_player) || {} %>
+
+<div class="games-app">
+  <div class="games-page">
+    <header class="games-topbar">
+      <a class="games-icon-btn" href="<%= games_path %>" aria-label="All games">‹</a>
+      <h1><%= @play.name %></h1>
+    </header>
+
+    <section class="games-card games-hero">
+      <div class="games-hero-meta">
+        <span><%= @play.started_at&.strftime("%A, %B %-d · %-l:%M%P") %></span>
+        <% if @play.duration.to_i.positive? %><span><%= games_minutes(@play.duration) %></span><% end %>
+        <% if @play.abandoned? %><span class="games-tag">Abandoned</span><% end %>
+      </div>
+
+      <% if winners.any? %>
+        <div class="games-hero-winner">
+          <span>🏆</span>
+          <% winners.each do |name| %>
+            <% if colors[name] %><span class="games-swatch" style="background:<%= colors[name] %>"></span><% end %>
+          <% end %>
+          <span><%= winners.join(" & ") %></span>
+        </div>
+        <div class="games-hero-sub"><%= winners.size > 1 ? "Tied for the win" : "Won the game" %></div>
+      <% end %>
+
+      <% if standings.any? { |s| s["score"].is_a?(Numeric) } %>
+        <div class="games-standings">
+          <% standings.each_with_index do |s, i| %>
+            <div class="games-standing <%= "is-winner" if winners.include?(s["name"]) %>">
+              <span class="games-standing-rank games-num"><%= i + 1 %></span>
+              <% if s["color"] %><span class="games-dot" style="background:<%= s["color"] %>"></span><% end %>
+              <span class="games-standing-name"><%= s["name"] %></span>
+              <span class="games-standing-score games-num"><%= s["score"] || "–" %></span>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </section>
+
+    <% if @stats[:total_rolls].to_i.positive? %>
+      <h2 class="games-section-title">Dice</h2>
+      <div class="games-kpis">
+        <div class="games-card games-kpi"><span class="v games-num"><%= @stats[:total_rolls] %></span><span class="l">Rolls</span></div>
+        <% avg = dist.sum { |d| d[:value] * d[:count] }.fdiv(@stats[:total_rolls]) %>
+        <div class="games-card games-kpi"><span class="v games-num"><%= avg.round(1) %></span><span class="l">Average</span></div>
+        <% if (table_avg = @stats.dig(:turn_times, :table_avg)) %>
+          <div class="games-card games-kpi"><span class="v games-num"><%= table_avg >= 60 ? "#{(table_avg / 60).floor}m #{(table_avg % 60).round}s" : "#{table_avg.round}s" %></span><span class="l">Per turn</span></div>
+        <% else %>
+          <div class="games-card games-kpi"><span class="v games-num"><%= per_player.size %></span><span class="l">Players</span></div>
+        <% end %>
+      </div>
+
+      <% if @stats[:headlines].present? %>
+        <ul class="games-headlines" style="margin-top:8px">
+          <% @stats[:headlines].each do |h| %>
+            <li class="games-card games-headline"><%= h.to_s.sub(/\A\p{Ll}/, &:upcase) %></li>
+          <% end %>
+        </ul>
+      <% end %>
+
+      <div style="margin-top:8px">
+        <% max = [1, *dist.map { |d| [d[:count], d[:expected] || 0].max }].max %>
+        <%= render "games/distribution", dist: dist, max: max, title: "Every roll", small: false %>
+        <details class="games-table-toggle">
+          <summary>Show as a table</summary>
+          <table class="games-num">
+            <thead><tr><th>Value</th><th>Rolled</th><th>Expected</th></tr></thead>
+            <tbody>
+              <% dist.each do |d| %>
+                <tr><td><%= d[:value] %></td><td><%= d[:count] %></td><td><%= d[:expected]&.round(1) || "–" %></td></tr>
+              <% end %>
+            </tbody>
+          </table>
+        </details>
+      </div>
+
+      <% if per_player.size > 1 %>
+        <h2 class="games-section-title">By player</h2>
+        <% player_max = [1, *per_player.values.flat_map { |pd| pd.map { |d| [d[:count], d[:expected] || 0].max } }].max %>
+        <div class="games-multiples">
+          <% per_player.each do |name, pd| %>
+            <%= render "games/distribution", dist: pd, max: player_max, small: true, color: colors[name],
+              swatch: colors[name], title: "#{name} · #{pd.sum { |d| d[:count] }}" %>
+          <% end %>
+        </div>
+      <% end %>
+
+      <% if turn_times.size > 1 %>
+        <h2 class="games-section-title">Time per turn</h2>
+        <% slowest = turn_times.values.compact.max.to_f %>
+        <div class="games-card games-turn-times">
+          <% turn_times.sort_by { |_, secs| -secs.to_f }.each do |name, secs| %>
+            <div class="games-turn-time">
+              <span class="games-turn-time-name">
+                <% if colors[name] %><span class="games-dot" style="background:<%= colors[name] %>"></span><% end %>
+                <%= name %>
+              </span>
+              <span class="games-turn-time-track"><span class="games-turn-time-fill" style="display:block;width:<%= slowest.positive? ? (secs.to_f / slowest * 100).round : 0 %>%"></span></span>
+              <span class="games-turn-time-value games-num"><%= secs.to_f >= 60 ? "#{(secs / 60).floor}m #{(secs % 60).round}s" : "#{secs.round}s" %></span>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+
+    <div class="games-actions">
+      <%= form_with url: replay_game_play_path(@play.id), method: :post, local: true, class: "basic" do %>
+        <button type="submit" class="games-btn games-btn-primary games-btn-lg games-actions-wide">Play again</button>
+      <% end %>
+      <a class="games-btn" href="<%= edit_finish_game_play_path(@play.id) %>">Edit scores</a>
+      <a class="games-btn" href="<%= games_path %>">All games</a>
+    </div>
+  </div>
+</div>

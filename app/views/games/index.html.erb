@@ -1,0 +1,99 @@
+<% content_for :title, "Games" %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<% tile_limit = 6 %>
+
+<div class="games-app">
+  <div class="games-page">
+    <header class="games-topbar">
+      <h1>Games</h1>
+    </header>
+
+    <% if @active_play %>
+      <a class="games-resume" href="<%= game_play_path(@active_play.id) %>">
+        <span class="games-resume-text">
+          <span class="games-resume-kicker">In progress</span>
+          <span class="games-resume-name" style="display:block"><%= @active_play.name %></span>
+          <span class="games-resume-meta">
+            Started <%= @active_play.started_at&.strftime("%-l:%M%P, %b %-d") %>
+            <% if (turn = @active_play.current_player) %> · <%= turn["name"] %>'s turn<% end %>
+          </span>
+        </span>
+        <span class="games-resume-go">›</span>
+      </a>
+    <% end %>
+
+    <a class="games-btn games-btn-primary games-btn-block games-btn-lg" href="<%= new_game_path %>">New game</a>
+
+    <% if @tiles.any? %>
+      <h2 class="games-section-title">Play again</h2>
+      <div class="games-tiles">
+        <% @tiles.each_with_index do |tile, i| %>
+          <% t = tile[:template] %>
+          <a class="games-tile" href="<%= new_game_path(template_id: t.id) %>" <%= "data-games-extra-tile hidden" if i >= tile_limit %>>
+            <span class="games-tile-name"><%= t.name %></span>
+            <span class="games-tile-meta">
+              <% if t.dice.present? %><span><%= t.dice %></span><span>·</span><% end %>
+              <span><%= pluralize(tile[:plays], "play") %></span>
+              <% if tile[:last_played] %><span>·</span><span><%= Time.zone.parse(tile[:last_played]).strftime("%b %-d") %></span><% end %>
+            </span>
+          </a>
+        <% end %>
+      </div>
+      <% if @tiles.size > tile_limit %>
+        <button type="button" class="games-btn games-btn-block games-more" onclick="document.querySelectorAll('[data-games-extra-tile]').forEach((el) => { el.hidden = false }); this.remove()">
+          Show all <%= @tiles.size %> games
+        </button>
+      <% end %>
+    <% end %>
+
+    <h2 class="games-section-title">History</h2>
+    <% if @history.empty? %>
+      <div class="games-card games-empty">No games yet. Start one and it shows up here.</div>
+    <% end %>
+
+    <% @history.group_by { |row| Time.zone.parse(row[:date]).strftime("%B %Y") }.each do |month, rows| %>
+      <div class="games-month">
+        <div class="games-month-title"><%= month %></div>
+        <div class="games-history">
+          <% rows.each do |row| %>
+            <% date = Time.zone.parse(row[:date]) %>
+            <% scores = row[:final_scores].to_h.reject { |name, v| name.blank? || v.nil? } %>
+            <% scores = scores.sort_by { |_, v| -v.to_f } %>
+            <% winners = Array(row[:winner_names]) %>
+            <a class="games-history-row" href="<%= row[:source] == "play" ? game_play_path(row[:id]) : legacy_game_path(row[:id]) %>">
+              <span class="games-history-date">
+                <span class="d"><%= date.day %></span>
+                <span class="w"><%= date.strftime("%a") %></span>
+              </span>
+              <span class="games-history-body">
+                <span class="games-history-top">
+                  <span class="games-history-name"><%= row[:name].presence || "Game" %></span>
+                  <% if row[:abandoned] %><span class="games-tag">Abandoned</span><% end %>
+                  <% if row[:duration_minutes].to_i.positive? %>
+                    <span class="games-history-dur"><%= games_minutes(row[:duration_minutes]) %></span>
+                  <% end %>
+                </span>
+                <% if scores.any? %>
+                  <span class="games-history-scores">
+                    <% scores.each do |name, value| %>
+                      <span class="games-history-score <%= "is-winner" if winners.include?(name) %>">
+                        <% if (color = row[:colors][name]) %><span class="games-dot" style="background:<%= color %>"></span><% end %>
+                        <%= "🏆 " if winners.include?(name) %><%= name %> <span class="games-num"><%= value %></span>
+                      </span>
+                    <% end %>
+                  </span>
+                <% end %>
+              </span>
+            </a>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

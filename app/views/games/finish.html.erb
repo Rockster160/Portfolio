@@ -1,0 +1,126 @@
+<% content_for :title, "End #{@play.name}" %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<% scoring = @play.scoring %>
+<%# Only a genuinely ACTIVE play has a sensible "elapsed so far" - computing
+    that against Time.current for an already-finished play (editing scores
+    weeks later) produces nonsense: months of "elapsed" minutes. %>
+<% elapsed_minutes = (@play.active? && @play.started_at) ? ((Time.current - @play.started_at) / 60).round : nil %>
+<% duration_value = @play.duration_minutes || @play.duration || elapsed_minutes %>
+<%# Live score entries exist only for a play tracked through the app; a
+    backfilled play falls back to the final_scores already saved on it. %>
+<% rows = (
+  case scoring
+  when :table
+    [{ key: "table", label: "Table score", color: nil, value: @score_totals.values.sum.presence || @play.final_scores.values.compact.first }]
+  when :teams
+    Array(@play.players).group_by { |p| p["team"].presence || p["name"] }.map { |team, members|
+      { key: team, label: team, color: members.first["color"], value: @score_totals[team] || @play.final_scores[team] }
+    }
+  else
+    Array(@play.players).map { |p|
+      { key: p["name"], label: p["name"], color: p["color"], value: @score_totals[p["name"]] || @play.final_scores[p["name"]] }
+    }
+  end
+) %>
+
+<div class="games-app">
+  <%= form_with url: finish_game_play_path(@play.client_uuid), method: :post, local: true, class: "basic games-page games-page-with-bar", data: { games_finish: true, win: @play.win, scoring: scoring } do %>
+    <header class="games-topbar">
+      <a class="games-icon-btn" href="<%= game_play_path(@play.id) %>" aria-label="Back"><%= @play.active? ? "‹" : "✕" %></a>
+      <h1><%= @play.active? ? "End #{@play.name}" : "Edit #{@play.name}" %></h1>
+    </header>
+
+    <%# No winner control - the winner is computed from these scores and the
+        game's win direction when Save is pressed (GamePlay#compute_winner_names).
+        The line under the scores previews that same rule as you type. %>
+    <div class="games-field-label"><%= scoring == :table ? "Score" : "Final scores" %></div>
+    <div class="games-card games-score-inputs">
+      <% rows.each do |row| %>
+        <label class="games-score-input-row" data-score-row="<%= row[:key] %>">
+          <span class="games-score-input-name">
+            <% if row[:color] %><span class="games-swatch" style="background:<%= row[:color] %>"></span><% end %>
+            <%= row[:label] %>
+            <span class="games-trophy" aria-hidden="true">🏆</span>
+          </span>
+          <input type="number" inputmode="numeric" pattern="-?[0-9]*" name="final_scores[<%= row[:key] %>]" value="<%= row[:value] %>" placeholder="–">
+        </label>
+      <% end %>
+    </div>
+    <p class="games-winner-line" data-winner-line></p>
+
+    <div class="games-field-label" style="margin-top:22px">Time</div>
+    <div class="games-card games-time-card">
+      <div>
+        <div class="games-time-label">Started</div>
+        <input type="datetime-local" name="started_at" value="<%= @play.started_at&.in_time_zone(current_user.timezone)&.strftime("%Y-%m-%dT%H:%M") %>">
+      </div>
+      <div>
+        <div class="games-time-label">How long it took (minutes)</div>
+        <div class="games-duration">
+          <button type="button" class="games-btn" data-duration-step="-5">−5</button>
+          <input type="number" inputmode="numeric" name="duration_minutes" value="<%= duration_value %>" data-duration>
+          <button type="button" class="games-btn" data-duration-step="5">+5</button>
+        </div>
+        <div class="games-duration-hint" data-duration-hint></div>
+      </div>
+    </div>
+    <input type="hidden" name="ended_at" value="<%= (@play.ended_at || Time.current).iso8601 %>">
+
+    <div class="games-actionbar">
+      <div>
+        <button type="submit" class="games-btn games-btn-primary games-btn-block games-btn-lg"><%= @play.active? ? "Finish game" : "Save" %></button>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<script>
+  (function () {
+    var form = document.querySelector("[data-games-finish]");
+    if (!form) return;
+    var win = form.dataset.win;
+    var scoring = form.dataset.scoring;
+    var line = form.querySelector("[data-winner-line]");
+    var duration = form.querySelector("[data-duration]");
+    var hint = form.querySelector("[data-duration-hint]");
+
+    function winners() {
+      var rows = Array.prototype.slice.call(form.querySelectorAll("[data-score-row]"));
+      var scored = rows.map(function (row) {
+        var raw = row.querySelector("input").value.trim();
+        return { row: row, name: row.dataset.scoreRow, value: raw === "" ? null : parseInt(raw, 10) };
+      }).filter(function (r) { return r.value !== null && !isNaN(r.value); });
+      rows.forEach(function (row) { row.classList.remove("is-winner"); });
+      if (win === "none" || scoring === "table" || scored.length === 0) { line.textContent = ""; return; }
+      var best = scored.reduce(function (acc, r) { return win === "low" ? Math.min(acc, r.value) : Math.max(acc, r.value); }, scored[0].value);
+      var top = scored.filter(function (r) { return r.value === best; });
+      top.forEach(function (r) { r.row.classList.add("is-winner"); });
+      line.textContent = (top.length > 1 ? "Tie: " : "Winner: ") + top.map(function (r) { return r.name; }).join(" & ") +
+        (win === "low" ? " (lowest wins)" : "");
+    }
+
+    function showDuration() {
+      var n = parseInt(duration.value, 10);
+      if (isNaN(n) || n <= 0) { hint.textContent = ""; return; }
+      var h = Math.floor(n / 60), m = n % 60;
+      hint.textContent = h ? (h + "h " + (m ? m + "m" : "")) : (m + " minutes");
+    }
+
+    form.addEventListener("input", function () { winners(); showDuration(); });
+    form.querySelectorAll("[data-duration-step]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var n = parseInt(duration.value, 10) || 0;
+        duration.value = Math.max(0, n + parseInt(btn.dataset.durationStep, 10));
+        showDuration();
+      });
+    });
+    winners();
+    showDuration();
+  })();
+</script>

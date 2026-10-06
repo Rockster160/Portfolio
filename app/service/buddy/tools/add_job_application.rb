@@ -67,32 +67,45 @@ Buddy::Tools.register(
     # downstream would ever put the halves back together.
     existing = Buddy::JobHunt.applications_for(ctx.user, company)
     role     = payload[:role].to_s.strip
+    # THE ROW THIS IS REALLY ABOUT, set when the company turns out to be on the
+    # board after all. The board moves between a seed being built and a card
+    # being proposed - jobhunt writes the row for the same mail, seconds apart -
+    # and the beat belongs on that row either way.
+    #
+    # It is the same answer `execute` reaches on its own, and it must be: a
+    # refusal here discards the whole proposal, and the only thing the person
+    # sees for it is a reply that did not understand them. What the card SAYS
+    # changes with it, from `Track` to the beat it files.
+    onto = nil
 
     if existing.any?
-      # Nothing to tell them apart by. Refused rather than guessed: a row with
-      # no role is the ordinary shape on this board, and half of what is on it
-      # has none.
       if role.empty?
-        raise "#{existing.first.company} is already on the board - if this is a different " \
-              "job there, pass its `role`; if it is the same one, use add_job_note"
-      end
+        # Nothing to tell them apart by, and more than one to tell apart. A row
+        # with no role is the ordinary shape on this board, so a guess between
+        # several is a beat on the wrong timeline.
+        if existing.many?
+          raise "#{existing.first.company} is already on the board #{existing.size} times - " \
+                "pass the `role` this mail is about, or use add_job_note on the right row"
+        end
 
-      blank = existing.find { |job| job.role.blank? }
-      if blank
-        raise "#{blank.company} is on the board with no role recorded, so the two cannot be " \
-              "told apart - use add_job_note if this is that same job"
-      end
+        onto = existing.first
+      else
+        blank = existing.find { |job| job.role.blank? }
+        if blank
+          raise "#{blank.company} is on the board with no role recorded, so the two cannot be " \
+                "told apart - use add_job_note if this is that same job"
+        end
 
-      # WHOLE_ROLE, not the looser SAME_ROLE the mail-matching uses: asking "is
-      # this the same JOB" is the direction where a partial overlap lies.
-      # "Staff Frontend Engineer" and "Principal Engineer" share the word
-      # engineer, and at half a role that is enough to refuse a second job at a
-      # company they have applied to twice — which is the whole of what this is
-      # meant to allow.
-      twin = existing.find { |job|
-        Buddy::JobHunt.role_named_in?(job, role, ratio: Buddy::JobHunt::WHOLE_ROLE)
-      }
-      raise "#{twin.company} - #{twin.role} is already on the board - use add_job_note" if twin
+        # WHOLE_ROLE, not the looser SAME_ROLE the mail-matching uses: asking "is
+        # this the same JOB" is the direction where a partial overlap lies.
+        # "Staff Frontend Engineer" and "Principal Engineer" share the word
+        # engineer, and at half a role that is enough to refuse a second job at a
+        # company they have applied to twice — which is the whole of what this is
+        # meant to allow. No twin means a new row, which is what this tool is for.
+        onto = existing.find { |job|
+          Buddy::JobHunt.role_named_in?(job, role, ratio: Buddy::JobHunt::WHOLE_ROLE)
+        }
+      end
     end
 
     tag  = payload[:tag].presence || :note
@@ -107,9 +120,19 @@ Buddy::Tools.register(
     end
 
     {
-      summary:  "Start tracking **#{company}**?",
+      summary:  (
+        if onto
+          "Log **#{JobNote::TAG_LABELS[tag.to_s] || 'Note'}** on **#{onto.company}**?"
+        else
+          "Start tracking **#{company}**?"
+        end
+      ),
       resolved: {
         company:          company,
+        # Only set when the board already holds this job. `execute` finds the row
+        # again on its own - this is what lets the card, the hint and the receipt
+        # say which of the two things is about to happen.
+        job_id:           onto&.id,
         role:             payload[:role].presence,
         note:             body,
         summary:          payload[:summary].presence,
@@ -130,7 +153,16 @@ Buddy::Tools.register(
     label = JobNote::TAG_LABELS[payload[:tag].to_s] || "Note"
     gist  = payload[:summary].presence || payload[:note]
     sub   = [payload[:role].presence, "#{label} — #{gist.to_s.truncate(70)}"].compact
-    { title: "💼 Track #{payload[:company]}", sub: sub.join("\n").presence }
+    # `Track` is a promise about the BOARD, and with `job_id` set there is already
+    # a row - the beat is all that is new, so the card reads like add_job_note's.
+    title = (
+      if payload[:job_id].present?
+        "💼 #{label} — #{payload[:company]}"
+      else
+        "💼 Track #{payload[:company]}"
+      end
+    )
+    { title: title, sub: sub.join("\n").presence }
   },
   merge_key:   ->(payload) { "add_job_application:#{payload[:company].to_s.downcase.strip}" },
   # The mail this row is about, openable BEFORE the tap. Same reasoning as
@@ -138,7 +170,13 @@ Buddy::Tools.register(
   # asking a question only the email can answer.
   hint:        ->(payload, ctx) {
     email = (ctx.user.emails.find_by(id: payload[:email_id]) if payload[:email_id].present?)
+    row   = ("#{Buddy::AppPages.url_for("/interviews")}/#{payload[:job_id]}" if payload[:job_id].present?)
+
     if email.nil?
+      # The row is there to look at when this is landing on one, which is the
+      # same thing add_job_note offers and for the same reason: whether the beat
+      # belongs on that row is the only question left.
+      next { "tap" => "[#{payload[:company]} on the board](#{row}) - tapping files this beat on it" } if row
       # Nothing of this exists yet - no row, and no mail we kept - so the LISTING
       # is the only thing there is to look at, and whether this is worth tracking
       # is exactly the question it answers. Absent more often than not, and then
@@ -153,7 +191,8 @@ Buddy::Tools.register(
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
       {
-        "tap"  => "[Read the email](#{url}) - tapping opens the row and labels the mail",
+        "tap"  => "[Read the email](#{url}) - tapping #{row ? 'files it on the board' : 'opens the row'} " \
+                  "and labels the mail",
         # STILL A LINK AFTER THE TAP. This read "On the board, and the mail
         # tagged for you to clear", which repeated the receipt beside it and
         # offered nowhere to go - and a ticked row is exactly when there is
@@ -277,6 +316,8 @@ Buddy::Tools.register(
     }
   },
   receipt:     ->(result, _ctx) {
+    return "Logged on [#{result[:company]}](#{result[:url]}) ✓" if result[:joined]
+
     "Tracking [#{result[:company]}](#{result[:url]}) ✓"
   },
 )

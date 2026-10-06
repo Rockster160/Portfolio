@@ -274,6 +274,25 @@ Rails.application.routes.draw do
   post "/t/:token/:action_kind" => "timer_shares#act",
     constraints: { action_kind: /start|pause|resume|reset|confirm|increment|advance/ }
 
+  # ============================================================
+  # GAME TRACKER PWA
+  # /games — one phone, off to the side during a board game. Offline-first
+  # via SW + localStorage queue (Timers pattern); no ActionCable, since
+  # exactly one phone drives a given play. See
+  # _scripts/plans/game_tracker_plan.md.
+  # ============================================================
+  get  "/games"                            => "games#index",            as: :games
+  get  "/games/new"                        => "games#new",              as: :new_game
+  get  "/games/plays/:id"                  => "games#show",             as: :game_play
+  get  "/games/plays/:id/finish"           => "games#edit_finish",      as: :edit_finish_game_play
+  post "/games/plays/:id/replay"           => "games#replay",           as: :replay_game_play
+  post "/games/plays/:client_uuid/sync"    => "games/sync#create",      as: :game_play_sync
+  post "/games/plays/:client_uuid/finish"  => "games#finish",           as: :finish_game_play
+  post "/games/plays/:client_uuid/abandon" => "games#abandon",          as: :abandon_game_play
+  get  "/games/legacy/:id"                 => "games#legacy_show",      as: :legacy_game
+  get  "/games/player_colors"              => "games#player_colors",    as: :games_player_colors
+  post "/games/templates"                  => "games#upsert_template",  as: :game_templates
+
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"

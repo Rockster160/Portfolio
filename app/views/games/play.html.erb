@@ -1,0 +1,21 @@
+<% content_for :title, @play.name %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<div class="games-app">
+  <div
+    class="games-play"
+    data-play-root
+    data-index-url="<%= games_path %>"
+    data-finish-url="<%= edit_finish_game_play_path(@play.id) %>"
+    data-abandon-url="<%= abandon_game_play_path(@play.client_uuid) %>"
+  ></div>
+
+  <script type="application/json" id="play-bootstrap">
+    <%== @play_bootstrap.to_json %>
+  </script>
+</div>

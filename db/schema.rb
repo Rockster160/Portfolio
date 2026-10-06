@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_05_194708) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1141,6 +1141,78 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_194708) do
     t.datetime "updated_at", precision: nil, null: false
   end
 
+  create_table "game_plays", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "game_template_id"
+    t.bigint "action_event_id"
+    t.text "name", null: false
+    t.jsonb "settings", default: {}, null: false
+    t.jsonb "players", default: [], null: false
+    t.datetime "started_at"
+    t.datetime "ended_at"
+    t.integer "duration_minutes"
+    t.integer "dice_mode", default: 0, null: false
+    t.integer "current_player_index", default: 0, null: false
+    t.jsonb "final_scores", default: {}, null: false
+    t.jsonb "winner_names", default: [], null: false
+    t.integer "status", default: 0, null: false
+    t.uuid "client_uuid", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["action_event_id"], name: "index_game_plays_on_action_event_id"
+    t.index ["client_uuid"], name: "index_game_plays_on_client_uuid", unique: true
+    t.index ["game_template_id"], name: "index_game_plays_on_game_template_id"
+    t.index ["user_id", "status"], name: "index_game_plays_on_user_id_and_status"
+    t.index ["user_id"], name: "index_game_plays_on_user_id"
+  end
+
+  create_table "game_rolls", force: :cascade do |t|
+    t.bigint "game_play_id", null: false
+    t.text "player_name", null: false
+    t.integer "player_index", null: false
+    t.integer "value", null: false
+    t.text "dice", null: false
+    t.jsonb "faces"
+    t.integer "source", default: 0, null: false
+    t.datetime "rolled_at", null: false
+    t.uuid "client_uuid", null: false
+    t.datetime "voided_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["client_uuid"], name: "index_game_rolls_on_client_uuid", unique: true
+    t.index ["game_play_id", "rolled_at"], name: "index_game_rolls_on_game_play_id_and_rolled_at"
+    t.index ["game_play_id"], name: "index_game_rolls_on_game_play_id"
+  end
+
+  create_table "game_score_entries", force: :cascade do |t|
+    t.bigint "game_play_id", null: false
+    t.text "player_name", null: false
+    t.integer "delta", null: false
+    t.datetime "entered_at", null: false
+    t.uuid "client_uuid", null: false
+    t.datetime "voided_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["client_uuid"], name: "index_game_score_entries_on_client_uuid", unique: true
+    t.index ["game_play_id", "entered_at"], name: "index_game_score_entries_on_game_play_id_and_entered_at"
+    t.index ["game_play_id"], name: "index_game_score_entries_on_game_play_id"
+  end
+
+  create_table "game_templates", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "name", null: false
+    t.text "dice"
+    t.integer "scoring", default: 0, null: false
+    t.integer "win", default: 0, null: false
+    t.boolean "auto_advance", default: true, null: false
+    t.jsonb "score_presets", default: [], null: false
+    t.jsonb "aliases", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "name"], name: "index_game_templates_on_user_id_and_name", unique: true
+    t.index ["user_id"], name: "index_game_templates_on_user_id"
+  end
+
   create_table "google_accounts", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "email", null: false
@@ -1964,6 +2036,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_194708) do
   add_foreign_key "feature_requests", "byte_conversations"
   add_foreign_key "feature_requests", "byte_messages"
   add_foreign_key "feature_requests", "users"
+  add_foreign_key "game_plays", "action_events"
+  add_foreign_key "game_plays", "game_templates"
+  add_foreign_key "game_plays", "users"
+  add_foreign_key "game_rolls", "game_plays"
+  add_foreign_key "game_score_entries", "game_plays"
+  add_foreign_key "game_templates", "users"
   add_foreign_key "google_accounts", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"

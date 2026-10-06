@@ -1,0 +1,43 @@
+<% content_for :title, "New game" %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<div class="games-app">
+  <div class="games-page games-page-with-bar" data-new-game-root data-preselected-id="<%= params[:template_id] %>">
+    <header class="games-topbar">
+      <a class="games-icon-btn" href="<%= games_path %>" aria-label="All games">‹</a>
+      <h1>New game</h1>
+    </header>
+
+    <script type="application/json" data-games-templates-json>
+      <%== @templates.map { |t|
+        { id: t.id, name: t.name, dice: t.dice, scoring: t.scoring, win: t.win, auto_advance: t.auto_advance }
+      }.to_json %>
+    </script>
+
+    <section class="games-field-block">
+      <div class="games-field-label">Game</div>
+      <input type="search" data-games-template-input placeholder="Pick a game or type a new one" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done">
+      <div class="games-chips games-template-chips" data-games-template-chips></div>
+      <p class="games-new-name-hint" data-games-new-hint hidden></p>
+    </section>
+
+    <section class="games-field-block">
+      <div class="games-field-label">Players <span data-games-player-count></span></div>
+      <div data-games-player-editor></div>
+    </section>
+
+    <section class="games-field-block" data-games-settings></section>
+
+    <div class="games-actionbar">
+      <div>
+        <p class="games-error" data-games-setup-error hidden></p>
+        <button type="button" class="games-btn games-btn-primary games-btn-block games-btn-lg" data-games-start disabled>Start</button>
+      </div>
+    </div>
+  </div>
+</div>

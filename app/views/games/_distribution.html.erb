@@ -1,0 +1,42 @@
+<%# Roll distribution: one bar per value (actual count) with a thin tick at the
+    count the dice should produce. One series + a reference mark, so the
+    only colour is the bar's - a player's own colour in the small multiples.
+    Locals: dist (from GamePlay::Stats#distribution), max (shared y-scale),
+    color (nil = the series token), small, title, swatch. %>
+<% small = local_assigns.fetch(:small, false) %>
+<% color = local_assigns[:color] %>
+<% label_every = dist.size > 12 ? 2 : 1 %>
+<div class="games-card games-chart <%= "games-chart-sm" if small %>">
+  <div class="games-chart-head">
+    <div class="games-chart-title">
+      <% if local_assigns[:swatch] %><span class="games-dot" style="background:<%= local_assigns[:swatch] %>"></span><% end %>
+      <%= title %>
+    </div>
+    <% unless small %>
+      <div class="games-legend" aria-hidden="true">
+        <span class="games-legend-item"><span class="games-legend-bar"></span>Rolled</span>
+        <% if dist.any? { |d| d[:expected] } %>
+          <span class="games-legend-item"><span class="games-legend-tick"></span>Expected</span>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+  <div class="games-plot" role="img" aria-label="<%= title %>: <%= dist.map { |d| "#{d[:value]} rolled #{d[:count]} times" }.join(", ") %>">
+    <% dist.each do |d| %>
+      <% tip = "#{d[:value]}: #{pluralize(d[:count], "roll")}" %>
+      <% tip += " · expected #{d[:expected].round(1)}" if d[:expected] %>
+      <div class="games-col" tabindex="0" onclick="this.classList.toggle('is-tipped')" onblur="this.classList.remove('is-tipped')">
+        <div class="games-bar" style="height:<%= (d[:count].to_f / max * 100).round(1) %>%;<%= "--bar:#{color}" if color %>"></div>
+        <% if d[:expected] %>
+          <div class="games-ref" style="bottom:calc(<%= (d[:expected].to_f / max * 100).round(1) %>% - 1px)"></div>
+        <% end %>
+        <span class="games-tip"><%= tip %></span>
+      </div>
+    <% end %>
+  </div>
+  <div class="games-axis" aria-hidden="true">
+    <% dist.each_with_index do |d, i| %>
+      <span><%= d[:value] if (i % label_every).zero? %></span>
+    <% end %>
+  </div>
+</div>
