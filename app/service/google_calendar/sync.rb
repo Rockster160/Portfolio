@@ -405,7 +405,16 @@ class GoogleCalendar::Sync
     # forever blocked by a stale stamp.
     attrs[:locally_modified_at] = nil if item.persisted? && item.locally_modified_at.present?
     item.assign_attributes(attrs)
+    was_new = item.new_record?
     item.save!
+    # An interview typed up as a job note already wrote its own row for this
+    # appointment; the invite that lands here is the same thing with the meeting
+    # link on it. Only on arrival - a row that re-syncs every poll has long
+    # since been settled.
+    ::JobNote.adopt_synced_item(item) if was_new
+    # apply_event counts an applied row by what this RETURNS, and the adoption
+    # above answers nil whenever no note was waiting - which is almost always.
+    true
   end
 
   # A modified single instance of a recurring series. Google links it to

@@ -54,8 +54,29 @@ RSpec.describe "Buddy Today forward-looking" do
   # anywhere else loses to it. Tone guidance has to be where the model is
   # actually reading about the thing it's writing.
   describe "the greeting the briefing asks for" do
-    it "tells the briefing itself to land it lifted, not only the system prompt" do
-      expect(Buddy::TodayBriefing.seed(user)).to include("warm and lifted")
+    it "tells the briefing itself how the hello has to land, not only the system prompt" do
+      expect(Buddy::TodayBriefing.seed(user)).to include("warm rather than flat")
+    end
+
+    # Where it lands is the seed's business; what it sounds like is the
+    # persona's. Asking for a stretched vowel or an exclamation mark here sets
+    # one companion's punctuation for all of them, and it outranks the voice
+    # files because it is the last thing in the prompt.
+    it "leaves the punctuation of the hello to whoever is saying it" do
+      seed = Buddy::TodayBriefing.seed(user)
+
+      expect(seed).not_to include("stretched vowel")
+      expect(seed).to include("your own kind of warm")
+    end
+
+    # The register of the whole message, not just the opener. A dial set here
+    # ("warmer than bouncy") is a house voice, and rewriting a persona then
+    # changes nothing about the one message that goes out every morning.
+    it "sends the model to its persona for the register rather than setting one" do
+      seed = Buddy::TodayBriefing.seed(user)
+
+      expect(seed).to include("persona and your tone profile")
+      expect(seed).not_to include("more often than bouncy")
     end
 
     # The same reply closed with "Which, rude of the calendar, but at least
@@ -64,6 +85,33 @@ RSpec.describe "Buddy Today forward-looking" do
     # a line the model read, and it borrows it.
     it "does not hand the model a phrase to borrow inside a don't-do example" do
       expect(Buddy::TodayBriefing.seed(user)).not_to include("rude of the calendar")
+    end
+  end
+
+  # The one line in the whole seed that is a JUDGEMENT rather than a fact.
+  # Buddy::PlungeAdvisor decides whether the window is any good and writes
+  # nothing at all when it isn't, so a rule asking for one on every wet day
+  # hands that call back to the model - which answered it by putting the window
+  # inside the rain.
+  describe "the plunge window it asks about" do
+    def seed_for(alpine)
+      allow(Buddy::BriefingFacts).to receive(:build).and_return(
+        name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: alpine,
+      )
+      Buddy::TodayBriefing.seed(user)
+    end
+
+    it "asks for it when the advisor offered one" do
+      seed = seed_for(today: ["Rain in Alpine 1-4pm", "Good plunge window: clear from 4pm"], week: [])
+
+      expect(seed).to include("Float it once and lightly")
+    end
+
+    it "says nothing about a plunge on a wet day that got no window" do
+      seed = seed_for(today: ["Rain in Alpine 1-4pm"], week: [])
+
+      expect(seed).to include("Alpine only ever comes up when the canyon is wet")
+      expect(seed).not_to include("plunge")
     end
   end
 
@@ -88,7 +136,7 @@ RSpec.describe "Buddy Today forward-looking" do
     it "orders a greeting when the briefing arrives out of the blue" do
       person_said("night", at: 9.hours.ago)
 
-      expect(Buddy::TodayBriefing.seed(user)).to include("OPEN WITH A GREETING").and include("warm and lifted")
+      expect(Buddy::TodayBriefing.seed(user)).to include("OPEN WITH A GREETING").and include("warm rather than flat")
     end
 
     it "orders one on a thread that has never been spoken in" do

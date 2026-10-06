@@ -29,6 +29,35 @@ RSpec.describe GoogleCalendar::Sync do
       }.compact
     end
 
+    # The one place that knows a row arrived from a calendar rather than from
+    # inside the app, which is the half of the duplicate-interview problem a
+    # check at create time can't see.
+    describe "an invite for an interview that is already on the agenda" do
+      let(:job) { user.job_applications.create!(company: "Neighbor") }
+      let(:at) { Time.zone.parse("2026-05-22 11:00:00") }
+
+      it "hands the note's own row over to the invite" do
+        note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+        mine = note.reload.agenda_item_id
+
+        allow(api).to receive(:list_events).and_return(page([{
+          id:      "evt-interview",
+          status:  "confirmed",
+          summary: "Technical Interview Neighbor",
+          start:   { dateTime: at.iso8601 },
+          end:     { dateTime: (at + 1.hour).iso8601 },
+          etag:    %("etag-9"),
+          updated: "2026-05-22T08:00:00Z",
+        }]))
+
+        described_class.new(agenda).run!
+
+        invite = agenda.agenda_items.find_by(external_uid: "evt-interview")
+        expect(note.reload.agenda_item_id).to eq(invite.id)
+        expect(AgendaItem.find_by(id: mine)).to be_nil
+      end
+    end
+
     describe "#run! — initial full sync" do
       it "passes time_min (not syncToken) when no token is cached" do
         allow(api).to receive(:list_events).with(

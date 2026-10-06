@@ -781,6 +781,93 @@ RSpec.describe JobNote do
   # itself only at midnight — so an application that does not announce itself
   # leaves the day's count a day behind on a wall being read to decide whether
   # the day is done.
+  # The interview exists twice over: the note wrote a row the moment it was
+  # typed up, and the company's invite synced in ten minutes later onto the
+  # calendar it was sent to. Both rows are real, at the same minute, with the
+  # company in the title - and the briefing read out both.
+  describe "an interview that is also a calendar invite" do
+    let(:google) { user.agendas.create!(name: "rocco@example.com", source: :google) }
+    let(:at) { 3.days.from_now.change(hour: 11, min: 0, sec: 0) }
+
+    def invite(name, start_at: at, uid: "evt-1")
+      google.agenda_items.create!(
+        name: name, kind: :event, start_at: start_at, end_at: start_at + 1.hour,
+        status: :confirmed, external_uid: uid,
+      )
+    end
+
+    it "adopts the invite that is already there rather than writing a second row" do
+      item = invite("Technical Interview Acme")
+
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+
+      expect(note.reload.agenda_item_id).to eq(item.id)
+      expect(AgendaItem.count).to eq(1)
+    end
+
+    it "hands its own row over when the invite lands second" do
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      mine = note.reload.agenda_item_id
+
+      item = invite("Technical Interview Acme")
+      JobNote.adopt_synced_item(item)
+
+      expect(note.reload.agenda_item_id).to eq(item.id)
+      expect(AgendaItem.find_by(id: mine)).to be_nil
+    end
+
+    # The invite is the one with the meeting link and the calendar's own uid on
+    # it, so it is never the one that goes.
+    it "keeps the invite itself untouched" do
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      item = invite("Technical Interview Acme")
+      JobNote.adopt_synced_item(item)
+
+      expect(item.reload.external_uid).to eq("evt-1")
+      expect(item.name).to eq("Technical Interview Acme")
+    end
+
+    it "leaves an invite at a different time alone" do
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      mine = note.reload.agenda_item_id
+
+      JobNote.adopt_synced_item(invite("Technical Interview Acme", start_at: at + 1.hour))
+
+      expect(note.reload.agenda_item_id).to eq(mine)
+      expect(AgendaItem.count).to eq(2)
+    end
+
+    it "leaves an invite for somebody else's company alone" do
+      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      mine = note.reload.agenda_item_id
+
+      JobNote.adopt_synced_item(invite("Dentist"))
+
+      expect(note.reload.agenda_item_id).to eq(mine)
+      expect(AgendaItem.count).to eq(2)
+    end
+
+    # A chase that is owed is a task, and nobody else is going to put one of
+    # those on a calendar - so there is nothing out there for it to be.
+    it "does not look for a twin for an ordinary follow-up" do
+      invite("Interview Acme")
+
+      note = job.notes.create!(body: "Chase them", tag: :heard_back, follow_up_at: at)
+
+      expect(note.reload.agenda_item_id).not_to be_nil
+      expect(AgendaItem.count).to eq(2)
+    end
+
+    it "leaves a row another note already speaks for alone" do
+      first = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      theirs = first.reload.agenda_item_id
+
+      second = job.notes.create!(tag: :scheduled, follow_up_at: at)
+
+      expect(second.reload.agenda_item_id).not_to eq(theirs)
+    end
+  end
+
   describe "the dashboard count" do
     before { allow_any_instance_of(User).to receive(:me?).and_return(true) }
 

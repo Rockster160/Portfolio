@@ -274,6 +274,88 @@ class JobNote < ApplicationRecord
     mins.zero? ? "#{hours}h" : "#{hours}h #{mins}m"
   end
 
+  # The same appointment, already on a calendar under somebody else's doing.
+  #
+  # An interview can exist twice over: once because the note was typed up, and
+  # once because the company's invite synced in from the calendar it was sent
+  # to. Both are real rows at the same minute with the company in the title,
+  # neither knows about the other, and the briefing reads out both.
+  #
+  # Only a `scheduled` note can have a twin. Every other tag writes a TASK - a
+  # chase that is owed, which nobody else is going to put on a calendar - so
+  # there is nothing out there for it to collide with.
+  #
+  # Narrow on purpose, because a false match adopts a row that is a different
+  # appointment and then deletes a real one: the exact start to the minute, the
+  # company named in the title, this person's calendars only, and never a row
+  # another note already speaks for. A miss just leaves two rows, which is where
+  # this started.
+  def calendar_twin
+    return nil unless scheduled?
+    return nil if follow_up_at.blank? || job_application.company.blank?
+
+    spoken_for = JobNote.where.not(agenda_item_id: nil).where.not(id: id).select(:agenda_item_id)
+    scope = AgendaItem.joins(:agenda).where(
+      agendas:  { user_id: job_application.user_id },
+      start_at: follow_up_at,
+    ).where.not(
+      status: :cancelled,
+    ).where.not(
+      id: spoken_for,
+    )
+    scope.order(:id).find { |item| names_company?(item.name) }
+  end
+
+  # The invite is the row to keep: it carries the meeting link and the
+  # calendar's own uid, and this note's row was only ever standing in for it
+  # until it arrived. Whichever of the two showed up second is the one that
+  # calls this.
+  def adopt_calendar_item!(item)
+    mine = follow_up_item
+    update_columns(agenda_item_id: item.id, updated_at: Time.current)
+
+    if mine && mine.id != item.id && mine.external_uid.blank?
+      agenda = mine.agenda
+      mine.destroy
+      agenda&.broadcast!
+    end
+
+    item.agenda&.broadcast!
+  end
+
+  def names_company?(title)
+    company = job_application.company.to_s.downcase.strip
+    return false if company.blank?
+
+    title.to_s.downcase.include?(company)
+  end
+
+  # An invite that has just synced in, offered to whichever note was already
+  # standing in for it. Called from GoogleCalendar::Sync, which is the only
+  # place that knows a row arrived from a calendar rather than from here.
+  #
+  # The note's own row is created the moment somebody types the interview up,
+  # and the invite can land minutes later - so a check at create time alone
+  # catches only one of the two orders.
+  def self.adopt_synced_item(item)
+    return if item.nil? || item.start_at.blank? || item.name.blank?
+
+    user_id = item.agenda&.user_id
+    return if user_id.blank?
+
+    notes = JobNote.joins(:job_application).where(
+      job_applications: { user_id: user_id },
+      tag:              :scheduled,
+      follow_up_at:     item.start_at,
+    ).where.not(
+      agenda_item_id: [nil, item.id],
+    )
+    note = notes.order(:id).find { |n|
+      n.names_company?(item.name) && n.follow_up_item&.external_uid.blank?
+    }
+    note&.adopt_calendar_item!(item)
+  end
+
   # The calendar row this note's follow-up put on the agenda, if it's still
   # there. Someone deleting it from the agenda is allowed to — a stale id here
   # simply reads as "no follow-up on the calendar" and re-creates on next save.
@@ -416,6 +498,9 @@ class JobNote < ApplicationRecord
   end
 
   def write_follow_up_item
+    twin = calendar_twin
+    return adopt_calendar_item!(twin) if twin
+
     agenda = follow_up_agenda
     return if agenda.nil?
 

@@ -1064,6 +1064,13 @@ module Buddy
     # Prominent NOW line at the very top of the override so Buddy stops
     # defaulting to UTC / training-data time. Shortest possible
     # unambiguous statement of local time.
+    #
+    # The greeting rule carries no sample hellos, and that is deliberate on two
+    # counts. An example in a prompt comes back out verbatim - the same thing
+    # happens in Buddy::TodayBriefing, where it is written up at length - and
+    # these three were a stretched vowel and two exclamations, so every pet was
+    # handed one companion's opener in a block all of them read. A hello is the
+    # single most voice-bearing line in a message; it belongs to the persona.
     def time_preamble(user)
       now = Buddy::Day.now(user)
       <<~TXT.strip
@@ -1071,7 +1078,7 @@ module Buddy
 
         - **Local time:** #{now.strftime("%a %Y-%m-%d")} #{Buddy::Clock.at(now)} #{now.strftime("%Z")}
         - **Timezone:** #{Buddy::Day.zone(user).name}
-        - **Part of day:** #{part_of_day(now)}. This is CONTEXT for your opener, never the opener itself. When you greet, make it your own and mix it up - "Hey there!", "Mooooorning!", "Hey hey, #{user&.first_name}!", whatever fits the moment - never the same words two greetings running. **Land it warm and lifted, not on a flat period** - a greeting that trails off in a period reads deadpan and serious; give it a lift (a "!", a stretched vowel, real warmth) so it feels happy and encouraging. That's the whole job of a hello. The other rule: keep it consistent with the part of day above (don't wish them a morning in the evening), and at late night skip the time-of-day framing rather than forcing one.
+        - **Part of day:** #{part_of_day(now)}. This is CONTEXT for your opener, never the opener itself. When you greet, make it your own and mix it up - never the same words two greetings running. It has to land warm rather than flat; which words do that, and what your punctuation is doing, is settled in your persona and your tone profile and not here. Keep it consistent with the part of day above (don't wish them a morning in the evening), and at late night skip the time-of-day framing rather than forcing one.
         - When you mention the time in your reply, use this local time in 12-hour AM/PM format. Do NOT use UTC. Do NOT use your training-data default.
       TXT
     end

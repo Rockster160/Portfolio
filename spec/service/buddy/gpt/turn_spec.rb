@@ -435,6 +435,37 @@ RSpec.describe Buddy::GPT::Turn do
         end
       end
 
+      # The proposal lost a race with the job board's own POST and was dropped
+      # on the floor, so the turn ended on FALLBACK_BODY - a question, pushed to
+      # their phone, about a mail they never wrote. The retry then opens by
+      # telling the model they have already read an answer, and the answer they
+      # had read was the question.
+      describe "when the one call it had was discarded" do
+        before {
+          allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false)
+          allow(ByteNotifier).to receive(:notify)
+          job_seed([{
+            tool_calls: [
+              { name: :add_job_note, arguments: { "company" => "Koala Health", "note" => "they replied", "reply" => "Filed it." } },
+            ],
+          }])
+        }
+
+        it "goes quiet rather than asking about a mail they never wrote" do
+          expect(reply.body).to eq("")
+          expect(reply.metadata["hidden"]).to be(true)
+          expect(reply.metadata["silent"]).to be(true)
+        end
+
+        it "pushes nothing while the seed is going round again" do
+          expect(ByteNotifier).not_to have_received(:notify)
+        end
+
+        it "still sends the seed round again" do
+          expect(BuddyDeliverWorker).to have_received(:perform_in)
+        end
+      end
+
       # Once. The copy carries `retry_of`, and a copy never makes another.
       it "does not send a retry round again" do
         message = convo.byte_messages.create!(
@@ -2803,10 +2834,13 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
-  # `today_briefing.rb` says a hello has to land warm and lifted, never on a
-  # flat period, because "the line after it inherits that flatness for the whole
-  # briefing". Prod 4482 opened "Morning." Every line in Buddy::VoiceLines
-  # already passes that rule, so this only ever touches the model's own.
+  # The punctuation of a hello belongs to whoever is saying it.
+  #
+  # A repair here used to rewrite "Morning." into "Morning!" on every briefing,
+  # which is precisely the thing a calm companion and a bouncy one are meant to
+  # differ on - and while it stood, rewriting a persona changed nothing about
+  # the first line of the one message that goes out every morning. The seed
+  # asks for warm rather than flat and leaves the rest to the voice files.
   describe "a briefing that opens on a flat period" do
     def briefing(rounds)
       message = convo.byte_messages.create!(
@@ -2816,36 +2850,22 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
-    it "lifts it" do
+    it "leaves the period exactly where the model put it" do
       briefing([{ text: "Morning. Not much on your plate today." }])
 
-      expect(reply.body).to start_with("Morning! Not much on your plate today.")
+      expect(reply.body).to eq("Morning. Not much on your plate today.")
     end
 
-    it "lifts one that named them too" do
+    it "leaves one that named them on a period too" do
       briefing([{ text: "Good morning, Rocco. Quiet one." }])
 
-      expect(reply.body).to start_with("Good morning, Rocco! Quiet one.")
-    end
-
-    it "keeps a mood marker in front of it" do
-      briefing([{ text: "[[mood:happy]]Morning. Quiet one." }])
-
-      expect(reply.body).to include("Morning! Quiet one.")
+      expect(reply.body).to eq("Good morning, Rocco. Quiet one.")
     end
 
     it "leaves one that already landed warm alone" do
       briefing([{ text: "Hey hey! Quiet one today." }])
 
       expect(reply.body).to eq("Hey hey! Quiet one today.")
-    end
-
-    # The opener has to be a greeting BY ITSELF. A sentence that merely starts
-    # with the time of day is news, and news keeps its period.
-    it "leaves a first sentence that isn't an opener alone" do
-      briefing([{ text: "Morning meds are at 8. Then you're clear." }])
-
-      expect(reply.body).to start_with("Morning meds are at 8.")
     end
 
     it "leaves ordinary turns alone" do

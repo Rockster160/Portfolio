@@ -18,6 +18,16 @@ module Buddy
 
     # No sample sentences, no record names, no quoted phrasing to avoid.
     #
+    # And no REGISTER, either. This block is the last thing in the seed and it
+    # says so out loud, which puts it above the persona and the tone profile on
+    # the one question those two exist to answer. Every pet gets this prompt, so
+    # a dial set here ("warmer than bouncy", "go warmer") is one companion's
+    # calibration handed to all of them, and it outranks the file the voice
+    # actually lives in - rewrite a persona and the briefing comes out
+    # unchanged, because the briefing was never reading it. What belongs here is
+    # the SHAPE of a Today: what reaches them, how long it runs, prose not
+    # structure. How it sounds belongs to whoever is saying it.
+    #
     # Every concrete example that has ever been in here came back out in a
     # briefing. Two agenda items were named in this prompt purely as
     # what-not-to-say illustrations, and both were then read out by name on the
@@ -27,11 +37,11 @@ module Buddy
     TONE = <<~TONE.strip.freeze
       LAST AND MOST IMPORTANT: this is you talking. Everything above is WHAT to say; this is how it should sound, and a briefing with every fact right and no voice in it has still failed.
 
-      Write it the way you'd catch a friend up on their day, glad to be the one doing it. Open like a person, take the natural phrasing over the clinical one, and where something genuinely earns a reaction, give it one - real interest in a good day is what tells them a friend read this and not a script. Keep it in your register: glad and warm more often than bouncy, always about something specific.
+      Write it the way you'd catch a friend up on their day, glad to be the one doing it. Open like a person, take the natural phrasing over the clinical one, and where something genuinely earns a reaction, give it one - real interest in a good day is what tells them a friend read this and not a script. The register is yours, and it is the one in your persona and your tone profile - how warm you run, how loud, which words are yours, what your punctuation does. Nothing in this request moves any of that. A Today is you catching them up, not a house voice every companion writes in.
 
       Make every clause carry something. The test is subtraction, applied to each one you write: cut it, and if they still know everything they knew before, it was decoration. One good observation in a message is yours to keep; one attached to each item in turn is a tic, and it's the loudest way this stops sounding like you. The greeting is exempt - it carries no information by design, and a briefing that opens cold is the failure the rest of this is trying to avoid.
 
-      Put warmth at the FRONT of a line, as a reaction to the thing itself. Torn between flatter and warmer, go warmer: this should sound like someone who likes them.
+      Put warmth at the FRONT of a line, as a reaction to the thing itself. It has to be audible that you like them, in whatever way your own voice does that.
 
       Just say the thing, and let the message move from one beat to the next on its own. What joins two beats comes out of what the day is, so no two briefings ever join up the same way.
 
@@ -671,7 +681,14 @@ module Buddy
       # weather in them.
       weather:   "#{WEATHER_DIRECTIVE} Anything above an ordinary day goes in with its odds; an ordinary sunny day is the baseline and the figures already cover it.",
       week_sky:  "Any day this week worth a heads-up gets a short one.",
-      alpine:    "Alpine only ever comes up when the canyon is wet, so it's news by the time you're reading it. Give the hours wherever there are hours and the day on its own where there aren't. A plunge window is floated once and lightly, as something the day has room for.",
+      # The plunge sentence used to live on the end of this one, which asked
+      # for a window on every wet day - and Buddy::PlungeAdvisor only writes a
+      # plunge line when the window is genuinely good, so on the days it stayed
+      # quiet the model supplied one of its own and put it inside the rain.
+      # A rule can only ask for what the seed is carrying, so the ask moved to
+      # `:plunge`, which is pushed off the line itself.
+      alpine:    "Alpine only ever comes up when the canyon is wet, so it's news by the time you're reading it. Give the hours wherever there are hours and the day on its own where there aren't.",
+      plunge:    "One of the Alpine lines calls out a good window for a plunge. Float it once and lightly, as something the day has room for, in the hours it actually names.",
       waiting:   "Somebody in the house asked them something and it's still sitting there. Say who asked and what, so they can answer it.",
       # NOT a cap. `facts[:week]` is already `upcoming_notable` - the ordinary
       # week has been taken out by `notable?` before the model ever sees it -
@@ -707,6 +724,7 @@ module Buddy
       rules << :weather   if facts.dig(:weather, :high).present?
       rules << :week_sky  if facts.dig(:weather, :week).present?
       rules << :alpine    if facts[:alpine].present? && facts[:alpine].values.flatten.compact_blank.any?
+      rules << :plunge    if Buddy::PlungeAdvisor.plunge_offered?(facts.dig(:alpine, :today))
       rules << :week      if facts[:week].any?
       rules << :waiting   if Array(facts[:waiting]).any?
       rules << :stash     if Buddy::BriefingFacts.stash_lines(facts).any?
@@ -722,7 +740,7 @@ module Buddy
       prompt = <<~PROMPT.strip
         You're writing #{name}'s Today, and what you write IS the message. It goes to them exactly as you write it, and nothing follows it.
 
-        #{GREET_DIRECTIVE} It is the first thing in the message, before any news, and it holds even if you were talking a second ago and even if this is the second in a row - a Today opens with a hello the way a letter opens with a name. Take the half of the day from `Part of day` at the top of your prompt rather than from the shape of this request; these get asked for at all hours. The words are yours, different every time, and it has to land warm and lifted - on a `!`, a stretched vowel, or real warmth. Greet them by name, or with a plain hello.
+        #{GREET_DIRECTIVE} It is the first thing in the message, before any news, and it holds even if you were talking a second ago and even if this is the second in a row - a Today opens with a hello the way a letter opens with a name. Take the half of the day from `Part of day` at the top of your prompt rather than from the shape of this request; these get asked for at all hours. The words are yours, different every time, and it has to land warm rather than flat - your own kind of warm, in your own punctuation. Greet them by name, or with a plain hello.
 
         #{day.presence || "Nothing came back for today, so say so warmly, briefly, and stop."}
 

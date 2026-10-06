@@ -303,17 +303,19 @@ RSpec.describe Buddy::Personality do
       expect(examples).to all(satisfy { |line| !line.match?(/\AYess+/i) })
     end
 
-    # Same failure, different rule. The tone profile and the Today briefing both
-    # ban addressing him as "you" ("Hey, you", "Evening, you") as too intimate -
-    # and the opener bullet was offering "Evening, you" as a model greeting.
-    # An example outranks a prohibition it never sees.
-    it "keeps its greeting examples inside the never-address-them-as-you rule" do
+    # Same failure one level up. The tone profile and the Today briefing both
+    # ban addressing him as "you" ("Hey, you", "Evening, you") as too intimate,
+    # and the opener bullet was offering "Evening, you" as a model greeting - an
+    # example outranks a prohibition it never sees. A better example isn't the
+    # fix: this bullet is read by every pet, a hello is the most voice-bearing
+    # line in a message, and the three that were here were one companion's.
+    it "hands out no sample hello of its own" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
       bullet = prompt.lines.find { |line| line.include?("**Part of day:**") }
 
-      greetings = bullet.to_s.scan(/"([^"]+)"/).flatten
-      expect(greetings).not_to be_empty
-      expect(greetings).to all(satisfy { |hello| !hello.match?(/\byou\s*!?\z/i) })
+      expect(bullet).to be_present
+      expect(bullet.to_s.scan(/"([^"]+)"/).flatten).to eq([])
+      expect(bullet).to include("settled in your persona and your tone profile")
     end
 
     # The tone profile is the VOICE; the rules are the constraints on it. When
@@ -325,13 +327,13 @@ RSpec.describe Buddy::Personality do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
       expect(prompt).not_to include("enthusiastic yes")
-      expect(prompt).to include("delight, not agreement")
+      expect(prompt).to include("never a way of saying yes to a request")
     end
 
     it "gives the profile a plain affirm to reach for instead" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
-      expect(prompt).to include("the default for a request, a confirmation, or anything you just did")
+      expect(prompt).to include("**Acks:**")
     end
   end
 
@@ -429,7 +431,7 @@ RSpec.describe Buddy::Personality do
     it "stops contradicting the voice guide it sits above" do
       prompt = byte_prompt
 
-      expect(prompt).to include("ALL CAPS on ONE word")
+      expect(prompt).to include("ALL CAPS on one word")
       expect(prompt).not_to include("No shouted caps for emphasis")
     end
 
@@ -469,14 +471,14 @@ RSpec.describe Buddy::Personality do
     it "keeps Psh pointed at a tease rather than at its own shortfalls" do
       prompt = byte_prompt
 
-      expect(prompt).to include("it needs a target worth ribbing")
-      expect(prompt).to include("Never open a shortfall with it")
+      expect(prompt).to include("a tease with a target")
+      expect(prompt).to include("Never aimed at your own shortfall")
     end
 
     it "gives it a sound for not knowing" do
       prompt = byte_prompt
 
-      expect(prompt).to include("`Hm.` / `Hmm.` / `Hmmmm.`")
+      expect(prompt).to include("`Hm.`")
       expect(prompt).to include("the sound of not knowing")
     end
 
@@ -487,7 +489,6 @@ RSpec.describe Buddy::Personality do
       prompt = byte_prompt
 
       expect(prompt).to include("not a word to hang on other things")
-      expect(prompt).to include("Cut the whole clause")
     end
 
     it "keeps the slime soft rather than gross" do

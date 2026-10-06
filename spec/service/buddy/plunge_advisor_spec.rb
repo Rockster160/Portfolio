@@ -96,6 +96,26 @@ RSpec.describe Buddy::PlungeAdvisor do
     expect(lines.join(" ")).not_to match(/give these|float it/i)
   end
 
+  # The briefing can only ask for a plunge window on the days one was actually
+  # offered, and this is how it tells. The prefix is a constant for the same
+  # reason the briefing's own directives are: two files have to agree on one
+  # string, and a reworded copy fails silently.
+  describe ".plunge_offered?" do
+    it "finds the line the advisor writes when the window is good" do
+      lines = ["Rain in Alpine 1-4pm", "#{described_class::PLUNGE_PREFIX} clear from 4pm"]
+
+      expect(described_class.plunge_offered?(lines)).to be(true)
+    end
+
+    it "says no on a wet day that got no window" do
+      expect(described_class.plunge_offered?(["Rain in Alpine 1-4pm"])).to be(false)
+    end
+
+    it "says no when there is nothing to read at all" do
+      expect(described_class.plunge_offered?(nil)).to be(false)
+    end
+  end
+
   # The week ahead, which is a different question from today's plunge window and
   # answered at two different resolutions: real hours for as far as the hourly
   # forecast reaches, and odds alone past that.

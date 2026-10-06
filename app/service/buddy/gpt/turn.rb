@@ -2302,37 +2302,6 @@ module Buddy
         {}
       end
 
-      # A hello that stops on a period, lifted.
-      #
-      # `today_briefing.rb` says it outright - end it on a `!`, a stretched
-      # vowel, or real warmth, never on a flat period - because "the line after
-      # it inherits that flatness for the whole briefing". Briefings open
-      # "Morning." anyway. Every line in Buddy::VoiceLines passes that rule and a spec
-      # holds them to it, so the fallback hello has never had this problem; it
-      # is only the model's own that does.
-      #
-      # Deliberately tiny: the opener has to be a greeting BY ITSELF - the
-      # regex that decides whether one is missing, four words at the outside,
-      # nothing else in the sentence. "Good morning, Rocco." lifts. "Morning
-      # meds are at 8." is not an opener and never matches, because the
-      # greeting arms of GREETING_OPENER_RX refuse the noun reading.
-      FLAT_HELLO_RX = /\A(\s*(?:\[\[mood:[^\]\n]*\]\])?\s*)([^.!?\n]{1,28})\.(?=\s|\z)/
-
-      def with_lifted_greeting(body)
-        return body unless today_briefing?
-
-        match = body.match(FLAT_HELLO_RX)
-        return body if match.nil?
-
-        hello = match[2].to_s.strip
-        return body unless hello.split(/\s+/).length <= 4 && hello.match?(GREETING_OPENER_RX)
-
-        "#{match[1]}#{hello}!#{body[match.end(0)..]}"
-      rescue StandardError => e
-        Rails.logger.warn("[Buddy::GPT::Turn] greeting lift failed: #{e.class}: #{e.message}")
-        body
-      end
-
       # What this thread was told last time, so the same opener doesn't land two
       # mornings running.
       def previous_briefing_body
@@ -3043,7 +3012,7 @@ module Buddy
         body = repaired(:week_weather, body) { |b| with_week_weather(b) }
         body = repaired(:alpine_week_odds, body) { |b| with_alpine_week_odds(b) }
         body = repaired(:leave_times, body) { |b| with_leave_times(b) }
-        body = repaired(:greeting, body) { |b| with_lifted_greeting(with_greeting(b)) }
+        body = repaired(:greeting, body) { |b| with_greeting(b) }
         # Scrubbing can empty a reply outright - a leaked form marker can be the
         # whole body.
         #
@@ -3087,6 +3056,23 @@ module Buddy
         # turn finishing and is the only thing watching.
         return finalize_silence if !spoke && nothing && outcome[:text].present? && !today_briefing?
 
+        # A seed built around a call, answered in prose. `start_over?` has
+        # already spent its second attempt inside this turn by now.
+        #
+        # None of the guards below can see this one, because they all read the
+        # REPLY for a claim and the reply is honest - a job-mail seed asks for a
+        # sentence about what the MAIL said, which asserts nothing about Buddy.
+        # `seed_skipped_its_call?` is the only evidence there is.
+        #
+        # Decided HERE, ahead of the body, because a turn going round again
+        # wants no placeholder in front of it. FALLBACK_BODY is a question, and
+        # on a hidden seed it is a question about a message the person never
+        # wrote - pushed to their phone, over a mail they have never seen. The
+        # retry then opens by telling the model they have already read an
+        # answer, which they have: this one. When the retry declines, the
+        # placeholder is still right, because then nothing else is coming.
+        retrying = (retry_seed!(nil, prefix: SEED_CALL_RETRY) if nothing && seed_skipped_its_call?)
+
         # A tool call that gets discarded (a chore name that resolves to nothing,
         # an arg that fails validation) is silent by design — ProposalBuilder just
         # drops it. But the model has ALREADY written its line by then, and that
@@ -3102,26 +3088,21 @@ module Buddy
             "[Buddy::GPT::Turn] all #{proposals.length} proposal(s) discarded for " \
             "message=#{@reply.id} user=#{@user.id}: #{proposals.map { |p| p[:name] }.inspect}",
           )
-          @reply.update!(body: FALLBACK_BODY)
+          retrying ? hush_for_retry! : @reply.update!(body: FALLBACK_BODY)
         elsif @reply.body.to_s.strip.empty?
           # Never leave a blank bubble. Running the round budget out on tool
           # calls without ever speaking is the way this happens now, and a bare
           # checklist with no words above it reads as broken, so say the minimum
           # rather than nothing.
-          @reply.update!(body: nothing ? FALLBACK_BODY : "Here you go:")
+          if retrying
+            hush_for_retry!
+          else
+            @reply.update!(body: nothing ? FALLBACK_BODY : "Here you go:")
+          end
         else
           retract_false_claim!(result)
           correct_false_denial!(result)
         end
-
-        # A seed built around a call, answered in prose. `start_over?` has
-        # already spent its second attempt inside this turn by now.
-        #
-        # None of the guards above can see this one, because they all read the
-        # REPLY for a claim and the reply is honest — a job-mail seed asks for a
-        # sentence about what the MAIL said, which asserts nothing about Buddy.
-        # `seed_skipped_its_call?` is the only evidence there is.
-        retry_seed!(nil, prefix: SEED_CALL_RETRY) if nothing && seed_skipped_its_call?
 
         # A brain in the corner of the bubble. Writing to somebody's memory is
         # otherwise completely silent — that is the point of these being silent
@@ -3144,8 +3125,20 @@ module Buddy
         stamp_usage_rollup
         settle_expression(acted: executed_anything?(result), landed: landed?)
         broadcast(@reply.reload)
-        ByteNotifier.notify(@user, @reply)
+        ByteNotifier.notify(@user, @reply) unless retrying
         queue_daily_audit
+      end
+
+      # A reply that is standing aside for a retry. Quiet the way
+      # `finalize_silence` is quiet - the row stays, because it is what the turn
+      # COST, and `hidden` takes it out of the thread and the unread count -
+      # except that the turn carries on from here, so the broadcast and the
+      # stamps at the tail of finalize_success do the rest.
+      def hush_for_retry!
+        @reply.update!(
+          body:     "",
+          metadata: (@reply.metadata || {}).merge("hidden" => true, "silent" => true),
+        )
       end
 
       # The morning briefing is what the daily audit waits for: the report reads

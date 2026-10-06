@@ -39,6 +39,21 @@ module Buddy
     # nothing about whether the canyon is worth the drive.
     WET_KINDS = %w[rain snow storms].freeze
 
+    # The exact prefix on the plunge line, exported because the briefing has to
+    # be able to tell whether one was offered before it asks for one to be
+    # mentioned - the same arrangement as GREET_DIRECTIVE and
+    # WEATHER_DIRECTIVE, one constant read by the side that writes it and the
+    # side that looks for it.
+    #
+    # The alternative is a writing rule that floats a plunge window on every wet
+    # day, which is a rule asking the model to invent the one thing this module
+    # exists to judge - and what it invents lands inside the rain.
+    PLUNGE_PREFIX = "Good plunge window:".freeze
+
+    def plunge_offered?(lines)
+      Array(lines).any? { |line| line.to_s.start_with?(PLUNGE_PREFIX) }
+    end
+
     # Returns the seed block string, or "" when there's nothing to report.
     # Today's Alpine rain, as FACTS. One line each, no instructions in them -
     # what to do with them is the briefing's business (Buddy::BriefingFacts).
@@ -57,7 +72,7 @@ module Buddy
 
       lines = [a[:headline]]
       lines << "Rain in Alpine #{a[:rain_windows].join(", ")}" if a[:rain_windows].any?
-      lines << "Good plunge window: #{a[:plunge_reason]}" if a[:plunge]
+      lines << "#{PLUNGE_PREFIX} #{a[:plunge_reason]}" if a[:plunge]
       lines
     end
 
