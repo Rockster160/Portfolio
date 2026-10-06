@@ -37,6 +37,7 @@ class GamePlay::Stats
       per_player:   @rolls.group_by(&:player_name).transform_values { |rs| distribution(rs) },
       headlines:    headlines,
       turn_times:   turn_times,
+      summary:      summary,
       timeline:     @rolls.map { |r| { value: r.value, player: r.player_name, rolled_at: r.rolled_at.iso8601(3) } },
     }
   end
@@ -59,6 +60,71 @@ class GamePlay::Stats
   end
 
   private
+
+  # The numbers block on the end-game and stats pages: how many dice hit the
+  # table, then mean/median/mode/SD for the whole table and each player,
+  # next to what fair dice would give. One-off rolls of a different die (a
+  # d20 in a 2d6 game) count toward dice rolled but stay out of the
+  # averages, so every number compares against the same expectation.
+  def summary
+    main = @rolls.select { |r| r.dice.blank? || @dice.blank? || r.dice.to_s.casecmp?(@dice.to_s) }
+    {
+      rolls:       @rolls.size,
+      dice_rolled: @rolls.sum { |r| dice_in(r) },
+      table:       moments(main.map(&:value)),
+      expected:    expected_moments,
+      per_player:  main.group_by(&:player_name).transform_values { |rs| moments(rs.map(&:value)) },
+      range:       value_range,
+    }
+  end
+
+  # Physical dice on the table for one roll: the faces if the app rolled
+  # them, else the count in its spec ("2d6" -> 2), else one.
+  def dice_in(roll)
+    return roll.faces.size if roll.faces.present?
+
+    match = DICE_SPEC.match(roll.dice.to_s.strip)
+    match ? (match[1].presence || 1).to_i : 1
+  end
+
+  # SD is the sample SD (n - 1): this game's rolls estimate how the dice
+  # behave, and that's the figure to hold against the fair-dice SD.
+  def moments(values)
+    return { count: 0 } if values.empty?
+
+    sorted = values.sort
+    n = sorted.size
+    mean = sorted.sum.to_f / n
+    mid = n / 2
+    median = n.odd? ? sorted[mid].to_f : (sorted[mid - 1] + sorted[mid]) / 2.0
+    counts = sorted.tally
+    top = counts.values.max
+    {
+      count:  n,
+      mean:   mean.round(2),
+      median: median,
+      modes:  top > 1 ? counts.select { |_, c| c == top }.keys.sort : [],
+      sd:     n > 1 ? Math.sqrt(sorted.sum { |v| (v - mean)**2 } / (n - 1)).round(2) : nil,
+    }
+  end
+
+  def expected_moments
+    dist = expected_distribution
+    return nil if dist.blank?
+
+    mean = dist.sum { |v, p| v * p }
+    { mean: mean.round(2), sd: Math.sqrt(dist.sum { |v, p| ((v - mean)**2) * p }).round(2) }
+  end
+
+  # The axis every spread is drawn on: the dice's whole range when it's a
+  # spec we can read, else whatever was actually rolled.
+  def value_range
+    dist = expected_distribution
+    return dist.keys.minmax if dist.present?
+    return nil if @rolls.empty?
+
+    @rolls.map(&:value).minmax
+  end
 
   def distribution(rolls)
     counts = rolls.each_with_object(Hash.new(0)) { |r, h| h[r.value] += 1 }

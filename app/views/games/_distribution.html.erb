@@ -6,6 +6,13 @@
 <% small = local_assigns.fetch(:small, false) %>
 <% color = local_assigns[:color] %>
 <% label_every = dist.size > 12 ? 2 : 1 %>
+<%# Optional band: the mean and ±1 SD of these rolls, shaded behind the
+    bars. Only drawn when the values are one consecutive run (2..12), so a
+    value maps straight onto a column centre. %>
+<% band = local_assigns[:band] %>
+<% consecutive = dist.size > 1 && dist.last[:value] - dist.first[:value] == dist.size - 1 %>
+<% band = nil unless band && band[:sd] && consecutive %>
+<% col = ->(v) { (((v.to_f - dist.first[:value] + 0.5) / dist.size) * 100).clamp(0, 100).round(2) } %>
 <div class="games-card games-chart <%= "games-chart-sm" if small %>">
   <div class="games-chart-head">
     <div class="games-chart-title">
@@ -18,10 +25,17 @@
         <% if dist.any? { |d| d[:expected] } %>
           <span class="games-legend-item"><span class="games-legend-tick"></span>Expected</span>
         <% end %>
+        <% if band %>
+          <span class="games-legend-item"><span class="games-legend-band games-legend-band-mean"></span>Mean ±1 SD</span>
+        <% end %>
       </div>
     <% end %>
   </div>
-  <div class="games-plot" role="img" aria-label="<%= title %>: <%= dist.map { |d| "#{d[:value]} rolled #{d[:count]} times" }.join(", ") %>">
+  <div class="games-plot" role="img" aria-label="<%= title %>: <%= dist.map { |d| "#{d[:value]} rolled #{d[:count]} times" }.join(", ") %><%= ". Mean #{band[:mean]}, SD #{band[:sd]}" if band %>">
+    <% if band %>
+      <div class="games-sd-band" style="left:<%= col.(band[:mean] - band[:sd]) %>%;right:<%= 100 - col.(band[:mean] + band[:sd]) %>%"></div>
+      <div class="games-sd-mean" style="left:<%= col.(band[:mean]) %>%"><span><%= band[:mean] %></span></div>
+    <% end %>
     <% dist.each do |d| %>
       <% tip = "#{d[:value]}: #{pluralize(d[:count], "roll")}" %>
       <% tip += " · expected #{d[:expected].round(1)}" if d[:expected] %>

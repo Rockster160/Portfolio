@@ -35,14 +35,19 @@
       <div class="games-tiles">
         <% @tiles.each_with_index do |tile, i| %>
           <% t = tile[:template] %>
-          <a class="games-tile" href="<%= new_game_path(template_id: t.id) %>" <%= "data-games-extra-tile hidden" if i >= tile_limit %>>
-            <span class="games-tile-name"><%= t.name %></span>
-            <span class="games-tile-meta">
-              <% if t.dice.present? %><span><%= t.dice %></span><span>·</span><% end %>
-              <span><%= pluralize(tile[:plays], "play") %></span>
-              <% if tile[:last_played] %><span>·</span><span><%= Time.zone.parse(tile[:last_played]).strftime("%b %-d") %></span><% end %>
-            </span>
-          </a>
+          <%# The tile starts a game (the common case, one tap); the corner
+              button opens the game's own page - settings, stats, history. %>
+          <div class="games-tile" <%= "data-games-extra-tile hidden" if i >= tile_limit %>>
+            <a class="games-tile-play" href="<%= new_game_path(template_id: t.id) %>">
+              <span class="games-tile-name"><%= t.name %></span>
+              <span class="games-tile-meta">
+                <% if t.dice.present? %><span><%= t.dice %></span><span>·</span><% end %>
+                <span><%= pluralize(tile[:plays], "play") %></span>
+                <% if tile[:last_played] %><span>·</span><span><%= Time.zone.parse(tile[:last_played]).strftime("%b %-d") %></span><% end %>
+              </span>
+            </a>
+            <a class="games-tile-edit" href="<%= game_template_path(t) %>" aria-label="<%= t.name %> settings and stats">⋯</a>
+          </div>
         <% end %>
       </div>
       <% if @tiles.size > tile_limit %>
@@ -61,37 +66,7 @@
       <div class="games-month">
         <div class="games-month-title"><%= month %></div>
         <div class="games-history">
-          <% rows.each do |row| %>
-            <% date = Time.zone.parse(row[:date]) %>
-            <% scores = row[:final_scores].to_h.reject { |name, v| name.blank? || v.nil? } %>
-            <% scores = scores.sort_by { |_, v| -v.to_f } %>
-            <% winners = Array(row[:winner_names]) %>
-            <a class="games-history-row" href="<%= row[:source] == "play" ? game_play_path(row[:id]) : legacy_game_path(row[:id]) %>">
-              <span class="games-history-date">
-                <span class="d"><%= date.day %></span>
-                <span class="w"><%= date.strftime("%a") %></span>
-              </span>
-              <span class="games-history-body">
-                <span class="games-history-top">
-                  <span class="games-history-name"><%= row[:name].presence || "Game" %></span>
-                  <% if row[:abandoned] %><span class="games-tag">Abandoned</span><% end %>
-                  <% if row[:duration_minutes].to_i.positive? %>
-                    <span class="games-history-dur"><%= games_minutes(row[:duration_minutes]) %></span>
-                  <% end %>
-                </span>
-                <% if scores.any? %>
-                  <span class="games-history-scores">
-                    <% scores.each do |name, value| %>
-                      <span class="games-history-score <%= "is-winner" if winners.include?(name) %>">
-                        <% if (color = row[:colors][name]) %><span class="games-dot" style="background:<%= color %>"></span><% end %>
-                        <%= "🏆 " if winners.include?(name) %><%= name %> <span class="games-num"><%= value %></span>
-                      </span>
-                    <% end %>
-                  </span>
-                <% end %>
-              </span>
-            </a>
-          <% end %>
+          <%= render partial: "games/history_row", collection: rows, as: :row %>
         </div>
       </div>
     <% end %>

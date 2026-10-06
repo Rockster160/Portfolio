@@ -54,16 +54,7 @@
 
     <% if @stats[:total_rolls].to_i.positive? %>
       <h2 class="games-section-title">Dice</h2>
-      <div class="games-kpis">
-        <div class="games-card games-kpi"><span class="v games-num"><%= @stats[:total_rolls] %></span><span class="l">Rolls</span></div>
-        <% avg = dist.sum { |d| d[:value] * d[:count] }.fdiv(@stats[:total_rolls]) %>
-        <div class="games-card games-kpi"><span class="v games-num"><%= avg.round(1) %></span><span class="l">Average</span></div>
-        <% if (table_avg = @stats.dig(:turn_times, :table_avg)) %>
-          <div class="games-card games-kpi"><span class="v games-num"><%= table_avg >= 60 ? "#{(table_avg / 60).floor}m #{(table_avg % 60).round}s" : "#{table_avg.round}s" %></span><span class="l">Per turn</span></div>
-        <% else %>
-          <div class="games-card games-kpi"><span class="v games-num"><%= per_player.size %></span><span class="l">Players</span></div>
-        <% end %>
-      </div>
+      <%= render "games/roll_stats", stats: @stats, players: @play.players %>
 
       <% if @stats[:headlines].present? %>
         <ul class="games-headlines" style="margin-top:8px">
@@ -72,22 +63,6 @@
           <% end %>
         </ul>
       <% end %>
-
-      <div style="margin-top:8px">
-        <% max = [1, *dist.map { |d| [d[:count], d[:expected] || 0].max }].max %>
-        <%= render "games/distribution", dist: dist, max: max, title: "Every roll", small: false %>
-        <details class="games-table-toggle">
-          <summary>Show as a table</summary>
-          <table class="games-num">
-            <thead><tr><th>Value</th><th>Rolled</th><th>Expected</th></tr></thead>
-            <tbody>
-              <% dist.each do |d| %>
-                <tr><td><%= d[:value] %></td><td><%= d[:count] %></td><td><%= d[:expected]&.round(1) || "–" %></td></tr>
-              <% end %>
-            </tbody>
-          </table>
-        </details>
-      </div>
 
       <% if per_player.size > 1 %>
         <h2 class="games-section-title">By player</h2>
@@ -124,6 +99,9 @@
       <% end %>
       <a class="games-btn" href="<%= edit_finish_game_play_path(@play.id) %>">Edit scores</a>
       <a class="games-btn" href="<%= games_path %>">All games</a>
+      <% if @play.game_template %>
+        <a class="games-btn games-actions-wide" href="<%= game_template_path(@play.game_template) %>"><%= @play.game_template.name %> settings &amp; stats</a>
+      <% end %>
     </div>
   </div>
 </div>

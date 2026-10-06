@@ -1,0 +1,161 @@
+<% content_for :title, @template.name_was || @template.name %>
+<% content_for :favicon do %>
+  <%= render "games/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<% end %>
+
+<% t = @template %>
+<% title = t.name_was.presence || t.name %>
+<% standard_dice = ["", "1d6", "2d6", "1d20"] %>
+<% dice_choice = standard_dice.include?(t.dice.to_s) ? t.dice.to_s : "other" %>
+<% wins = games_win_counts(@history, t.win&.to_sym) %>
+<% dist = @all_time[:distribution] || [] %>
+
+<div class="games-app">
+  <%= form_with model: t, scope: :game_template, url: game_template_path(t), method: :patch, local: true,
+    class: "basic games-page", style: "padding-bottom:0", data: { games_template_form: true } do |f| %>
+    <header class="games-topbar">
+      <a class="games-icon-btn" href="<%= games_path %>" aria-label="All games">‹</a>
+      <h1><%= title %></h1>
+      <a class="games-chip" href="<%= new_game_path(template_id: t.id) %>">Play ›</a>
+    </header>
+
+    <% if params[:saved] && t.errors.empty? %>
+      <p class="games-saved" role="status">Saved. New games of <%= title %> start with these settings.</p>
+    <% end %>
+    <% if t.errors.any? %>
+      <div class="games-form-errors" role="alert"><%= t.errors.full_messages.to_sentence %></div>
+    <% end %>
+
+    <section class="games-field-block">
+      <div class="games-field-label">Name</div>
+      <%= f.text_field :name, autocomplete: "off", autocapitalize: "words", spellcheck: false %>
+    </section>
+
+    <section class="games-field-block">
+      <div class="games-field-label">Setup</div>
+      <div class="games-settings-panel">
+        <div>
+          <div class="games-setting-label">Dice rolled each turn</div>
+          <div class="games-segmented">
+            <% [["", "None"], ["1d6", "1d6"], ["2d6", "2d6"], ["1d20", "1d20"], ["other", "Other"]].each do |value, label| %>
+              <label><input type="radio" name="game_template[dice_choice]" value="<%= value %>" <%= "checked" if dice_choice == value %> data-dice-choice><span><%= label %></span></label>
+            <% end %>
+          </div>
+          <input type="text" name="game_template[dice_other]" value="<%= t.dice if dice_choice == "other" %>"
+            class="games-dice-other" placeholder="e.g. 3d6 or 1d8" autocomplete="off" autocapitalize="off" spellcheck="false"
+            data-dice-other <%= "hidden" unless dice_choice == "other" %>>
+        </div>
+
+        <label class="games-setting-inline">
+          <span class="games-setting-text">Next player after each roll<br><span class="games-setting-sub">Turn it off to score before passing the turn</span></span>
+          <input type="hidden" name="game_template[auto_advance]" value="0">
+          <input type="checkbox" class="games-switch-input" name="game_template[auto_advance]" value="1" <%= "checked" if t.auto_advance %>>
+        </label>
+
+        <div>
+          <div class="games-setting-label">Scoring</div>
+          <div class="games-segmented">
+            <% [["individual", "Each player"], ["teams", "Teams"], ["table", "One table score"]].each do |value, label| %>
+              <label><input type="radio" name="game_template[scoring]" value="<%= value %>" <%= "checked" if t.scoring.to_s == value %>><span><%= label %></span></label>
+            <% end %>
+          </div>
+        </div>
+
+        <div>
+          <div class="games-setting-label">Who wins</div>
+          <div class="games-segmented">
+            <% [["high", "Highest"], ["low", "Lowest"], ["none", "No winner"]].each do |value, label| %>
+              <label><input type="radio" name="game_template[win]" value="<%= value %>" <%= "checked" if t.win.to_s == value %>><span><%= label %></span></label>
+            <% end %>
+          </div>
+        </div>
+
+        <div>
+          <div class="games-setting-label">Quick point buttons</div>
+          <input type="text" name="game_template[score_presets]" value="<%= Array(t.score_presets).join(", ") %>"
+            placeholder="1, 2, 3, 5" inputmode="numeric" autocomplete="off">
+          <p class="games-hint">Up to four amounts on the + Score sheet. Blank uses 1, 2, 3, 5.</p>
+        </div>
+
+        <div>
+          <div class="games-setting-label">Also logged as</div>
+          <input type="text" name="game_template[aliases]" value="<%= Array(t.aliases).join(", ") %>"
+            placeholder="Other names, separated by commas" autocomplete="off" spellcheck="false">
+          <p class="games-hint">Games logged by hand under these exact names count as <%= title %>.</p>
+        </div>
+      </div>
+    </section>
+
+    <h2 class="games-section-title">How it's gone</h2>
+    <div class="games-kpis">
+      <div class="games-card games-kpi"><span class="v games-num"><%= @history.size %></span><span class="l">Played</span></div>
+      <% durations = @history.filter_map { |r| r[:duration_minutes] if r[:duration_minutes].to_i.positive? } %>
+      <div class="games-card games-kpi">
+        <span class="v games-num"><%= durations.any? ? games_minutes((durations.sum.to_f / durations.size).round) : "–" %></span><span class="l">Typical</span>
+      </div>
+      <div class="games-card games-kpi"><span class="v games-num"><%= @all_time[:rolls_tracked].to_i %></span><span class="l">Rolls</span></div>
+    </div>
+
+    <% if wins.any? %>
+      <div class="games-card games-turn-times" style="margin-top:8px">
+        <% top = wins.values.max.to_f %>
+        <% wins.each do |name, count| %>
+          <div class="games-turn-time">
+            <span class="games-turn-time-name"><%= name %></span>
+            <span class="games-turn-time-track"><span class="games-turn-time-fill" style="display:block;width:<%= (count / top * 100).round %>%"></span></span>
+            <span class="games-turn-time-value games-num"><%= pluralize(count, "win") %></span>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if @all_time[:rolls_tracked].to_i.positive? %>
+      <div style="margin-top:8px">
+        <% max = [1, *dist.map { |d| [d[:count], d[:expected] || 0].max }].max %>
+        <%= render "games/distribution", dist: dist, max: max, title: "Every roll, every game", small: false %>
+      </div>
+    <% end %>
+
+    <h2 class="games-section-title">History</h2>
+    <% if @history.empty? %>
+      <div class="games-card games-empty">Not played yet.</div>
+    <% end %>
+    <% @history.group_by { |row| Time.zone.parse(row[:date]).strftime("%B %Y") }.each do |month, rows| %>
+      <div class="games-month">
+        <div class="games-month-title"><%= month %></div>
+        <div class="games-history">
+          <%= render partial: "games/history_row", collection: rows, as: :row %>
+        </div>
+      </div>
+    <% end %>
+
+    <div class="games-actionbar">
+      <div>
+        <button type="submit" class="games-btn games-btn-primary games-btn-block games-btn-lg">Save settings</button>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="games-page games-page-with-bar games-danger-zone" style="padding-top:0">
+    <%= button_to "Delete #{title}", game_template_path(t), method: :delete,
+      class: "games-btn games-btn-danger games-btn-block",
+      form: { class: "basic", onsubmit: "return confirm('Delete #{j title}? Its plays stay in your history.')" } %>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var form = document.querySelector("[data-games-template-form]");
+    if (!form) return;
+    var other = form.querySelector("[data-dice-other]");
+    form.querySelectorAll("[data-dice-choice]").forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        other.hidden = radio.value !== "other";
+        if (!other.hidden) other.focus();
+      });
+    });
+  })();
+</script>

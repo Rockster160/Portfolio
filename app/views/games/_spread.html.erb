@@ -1,0 +1,47 @@
+<%# Each player's mean with a ±1 SD bar, on one shared axis, over the band
+    fair dice would give (their mean ±1 SD). A player whose bar sits off to
+    one side rolled high or low; a long bar means their rolls were all over
+    the place. Locals: per_player [[name, moments]], colors, expected
+    ({mean, sd} or nil), table (everyone's moments), range [lo, hi], fmt. %>
+<% lo, hi = range %>
+<% span = [hi - lo, 1].max.to_f %>
+<% pct = ->(v) { (((v.to_f - lo) / span) * 100).clamp(0, 100).round(2) } %>
+<% ticks = [lo, expected ? expected[:mean] : nil, hi].compact.uniq %>
+<div class="games-card games-chart games-spread">
+  <div class="games-chart-head">
+    <div class="games-chart-title">Each player's spread</div>
+    <div class="games-legend" aria-hidden="true">
+      <span class="games-legend-item"><span class="games-legend-range"></span>Mean ±1 SD</span>
+      <% if expected %><span class="games-legend-item"><span class="games-legend-band"></span>Fair dice</span><% end %>
+    </div>
+  </div>
+
+  <% rows = per_player + (per_player.size > 1 && table[:mean] ? [["Everyone", table]] : []) %>
+  <% rows.each do |name, m| %>
+    <% next unless m[:mean] %>
+    <% color = colors[name] %>
+    <div class="games-spread-row <%= "is-total" if name == "Everyone" %>"
+      role="img" aria-label="<%= name %>: mean <%= fmt.(m[:mean]) %><%= ", SD #{fmt.(m[:sd])}" if m[:sd] %> over <%= m[:count] %> rolls">
+      <span class="games-spread-name"><% if color %><span class="games-dot" style="background:<%= color %>"></span><% end %><%= name %></span>
+      <span class="games-spread-track">
+        <% if expected %>
+          <span class="games-spread-band" style="left:<%= pct.(expected[:mean] - expected[:sd]) %>%;right:<%= 100 - pct.(expected[:mean] + expected[:sd]) %>%"></span>
+          <span class="games-spread-fair" style="left:<%= pct.(expected[:mean]) %>%"></span>
+        <% end %>
+        <% if m[:sd] %>
+          <span class="games-spread-range" style="left:<%= pct.(m[:mean] - m[:sd]) %>%;right:<%= 100 - pct.(m[:mean] + m[:sd]) %>%;<%= "--bar:#{color}" if color %>"></span>
+        <% end %>
+        <span class="games-spread-mean" style="left:<%= pct.(m[:mean]) %>%;<%= "--bar:#{color}" if color %>"></span>
+      </span>
+      <span class="games-spread-value games-num"><%= fmt.(m[:mean]) %><% if m[:sd] %> <small>±<%= fmt.(m[:sd]) %></small><% end %></span>
+    </div>
+  <% end %>
+
+  <div class="games-spread-axis" aria-hidden="true">
+    <span class="games-spread-name"></span>
+    <span class="games-spread-ticks">
+      <% ticks.each do |t| %><span style="left:<%= pct.(t) %>%"><%= fmt.(t) %></span><% end %>
+    </span>
+    <span class="games-spread-value"></span>
+  </div>
+</div>

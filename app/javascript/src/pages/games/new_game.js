@@ -90,7 +90,9 @@ function boot() {
       <button type="button" class="games-chip" data-template="${t.id}" aria-pressed="${t.id === state.templateId}">
         ${esc(t.name)}${t.id === state.templateId ? " ✕" : ""}
       </button>
-    `).join("") + (more ? `<button type="button" class="games-chip" data-more>+${more} more</button>` : "");
+    `).join("")
+      + (more ? `<button type="button" class="games-chip" data-more>+${more} more</button>` : "")
+      + (selected ? `<a class="games-chip" href="/games/templates/${selected.id}">Settings &amp; stats ›</a>` : "");
     chipsEl.hidden = matches.length === 0 && !more;
     chipsEl.querySelectorAll("[data-template]").forEach((btn) => {
       btn.addEventListener("click", () => {

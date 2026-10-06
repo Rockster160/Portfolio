@@ -168,9 +168,11 @@ function boot() {
 
   function recentHtml(rolls) {
     const last = rolls.slice(-3).reverse();
-    if (last.length === 0) {
-      return `<div class="games-recent"><div class="games-recent-empty">No rolls yet</div></div>`;
-    }
+    // Always three rows - empty slots hold the space - so the pad below
+    // never shifts as the first rolls come in.
+    const placeholders = Array.from({ length: 3 - last.length }, (_, i) => `
+      <div class="games-recent-empty" aria-hidden="true">${last.length === 0 && i === 0 ? "No rolls yet" : ""}</div>
+    `).join("");
     return `
       <div class="games-recent">
         ${last.map((r) => {
@@ -186,6 +188,7 @@ function boot() {
             </button>
           `;
         }).join("")}
+        ${placeholders}
       </div>
     `;
   }
@@ -381,15 +384,19 @@ function boot() {
           <button type="button" class="games-amount games-num is-neg" data-amount="-5">−5</button>
           <button type="button" class="games-amount" data-keypad style="grid-column: span 2; font-size:17px">Other amount</button>
         </div>
+        <button type="button" class="games-btn games-btn-block" data-score-done>Done</button>
       `;
     }
 
+    // The sheet stays open so a round of scoring is several taps across
+    // several people; totals redraw in place and the changed one flashes.
+    // A typed amount drops back to the preset buttons once it's added.
     function add(delta) {
       actions.addScore({ playerName: target, delta });
       buzz();
-      closeSheet();
-      toast(`${delta > 0 ? "+" : ""}${delta} ${target} · ${totals()[target] || 0}`);
       render();
+      sheet.refresh(body("presets"));
+      sheet.panel.querySelector(`[data-target="${CSS.escape(target)}"] .games-score-total`)?.classList.add("is-bumped");
     }
 
     const sheet = openSheet({
@@ -406,6 +413,7 @@ function boot() {
           btn.addEventListener("click", () => add(parseInt(btn.dataset.amount, 10)));
         });
         panel.querySelector("[data-keypad]")?.addEventListener("click", () => sheet.refresh(body("keypad")));
+        panel.querySelector("[data-score-done]")?.addEventListener("click", closeSheet);
         if (panel.querySelector("[data-display]")) wireKeypad(panel, (n) => { if (n !== 0) add(n); });
       },
     });

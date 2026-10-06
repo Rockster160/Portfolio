@@ -1,0 +1,30 @@
+<%# One finished/abandoned/hand-logged game in a history list. Local: row (GamesController#history_rows). %>
+<% date = Time.zone.parse(row[:date]) %>
+<% scores = row[:final_scores].to_h.reject { |name, v| name.blank? || v.nil? } %>
+<% scores = scores.sort_by { |_, v| -v.to_f } %>
+<% winners = Array(row[:winner_names]) %>
+<a class="games-history-row" href="<%= row[:source] == "play" ? game_play_path(row[:id]) : legacy_game_path(row[:id]) %>">
+  <span class="games-history-date">
+    <span class="d"><%= date.day %></span>
+    <span class="w"><%= date.strftime("%a") %></span>
+  </span>
+  <span class="games-history-body">
+    <span class="games-history-top">
+      <span class="games-history-name"><%= row[:name].presence || "Game" %></span>
+      <% if row[:abandoned] %><span class="games-tag">Abandoned</span><% end %>
+      <% if row[:duration_minutes].to_i.positive? %>
+        <span class="games-history-dur"><%= games_minutes(row[:duration_minutes]) %></span>
+      <% end %>
+    </span>
+    <% if scores.any? %>
+      <span class="games-history-scores">
+        <% scores.each do |name, value| %>
+          <span class="games-history-score <%= "is-winner" if winners.include?(name) %>">
+            <% if (color = row[:colors][name]) %><span class="games-dot" style="background:<%= color %>"></span><% end %>
+            <%= "🏆 " if winners.include?(name) %><%= name %> <span class="games-num"><%= value %></span>
+          </span>
+        <% end %>
+      </span>
+    <% end %>
+  </span>
+</a>

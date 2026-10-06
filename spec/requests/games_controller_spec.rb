@@ -222,4 +222,96 @@ RSpec.describe GamesController do
       expect(response).not_to have_http_status(:success)
     end
   end
+
+  describe "the game settings page" do
+    let(:template) { user.game_templates.create!(name: "Catan", dice: "2d6", scoring: :individual, win: :high) }
+
+    def update!(overrides={})
+      patch game_template_path(template), params: {
+        game_template: {
+          name:          "Catan",
+          dice_choice:   "2d6",
+          scoring:       "individual",
+          win:           "high",
+          auto_advance:  "1",
+          score_presets: "",
+          aliases:       "",
+        }.merge(overrides),
+      }
+    end
+
+    it "renders the settings with the game's history, hand-logged games included by alias" do
+      template.update!(aliases: ["Settlers"])
+      user.action_events.create!(name: "Game", notes: "Settlers", timestamp: 2.days.ago, data: { players: { "Rocco" => 10 } })
+
+      get game_template_path(template)
+
+      expect(response).to have_http_status(:success)
+      expect(response.body).to include('value="Catan"')
+      expect(response.body).to include("Settlers")
+    end
+
+    it "counts wins from scores for plays that never stored a winner" do
+      build_play(game_template_id: template.id, status: :finished, final_scores: { "Rocco" => 9, "Chelsea" => 12 })
+      user.action_events.create!(name: "Game", notes: "Catan", timestamp: 3.days.ago, data: { players: { "Rocco" => 10, "Chelsea" => 4 } })
+
+      get game_template_path(template)
+
+      expect(response.body).to match(/Chelsea.*1 win/m)
+      expect(response.body).to match(/Rocco.*1 win/m)
+    end
+
+    it "saves an Other dice spec, quick point amounts and aliases typed as text" do
+      update!(dice_choice: "other", dice_other: "3D6", score_presets: "1, 2, 10, 0, 2", aliases: "Settlers,\n Catan ,Settlers of Catan")
+
+      template.reload
+      expect(response).to redirect_to(game_template_path(template, saved: 1))
+      expect(template.dice).to eq("3d6")
+      expect(template.score_presets).to eq([1, 2, 10])
+      expect(template.aliases).to eq(["Settlers", "Settlers of Catan"])
+    end
+
+    it "keeps the old name as an alias on rename, so hand-logged games still count" do
+      update!(name: "Catan Base", aliases: "Settlers")
+
+      expect(template.reload.name).to eq("Catan Base")
+      expect(template.aliases).to eq(["Settlers", "Catan"])
+    end
+
+    it "clears the dice and turns auto-advance off" do
+      update!(dice_choice: "", auto_advance: "0")
+
+      template.reload
+      expect(template.dice).to be_nil
+      expect(template.auto_advance).to be(false)
+    end
+
+    it "refuses a dice spec it couldn't build buttons for, and keeps the old one" do
+      update!(dice_choice: "other", dice_other: "two sixes")
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("should look like 2d6")
+      expect(template.reload.dice).to eq("2d6")
+    end
+
+    it "deletes the saved game but keeps its plays" do
+      play = build_play(game_template_id: template.id, status: :finished)
+
+      delete game_template_path(template)
+
+      expect(response).to redirect_to(games_path)
+      expect(GameTemplate.exists?(template.id)).to be(false)
+      expect(play.reload.game_template_id).to be_nil
+    end
+
+    it "does not show or change another user's game" do
+      other = create(:user).game_templates.create!(name: "Risk", dice: "2d6")
+
+      get game_template_path(other)
+      expect(response).not_to have_http_status(:success)
+
+      patch game_template_path(other), params: { game_template: { name: "Mine now", dice_choice: "" } }
+      expect(other.reload).to have_attributes(name: "Risk", dice: "2d6")
+    end
+  end
 end

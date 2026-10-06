@@ -1,0 +1,76 @@
+<%# Dice numbers for one play - on the end-game form and the stats page.
+    Locals: stats (GamePlay::Stats#play_stats), players (the play's ordered
+    players, for colours and row order). %>
+<% summary = stats[:summary] || {} %>
+<% table = summary[:table] || {} %>
+<% expected = summary[:expected] %>
+<% colors = Array(players).to_h { |p| [p["name"], p["color"]] } %>
+<% order = Array(players).map { |p| p["name"] } %>
+<% per_player = (summary[:per_player] || {}).sort_by { |name, _| order.index(name) || order.size } %>
+<% fmt = ->(v) { v.nil? ? "–" : (v.to_f % 1).zero? ? v.to_i.to_s : format("%.1f", v) } %>
+<% modes = ->(m) { Array(m[:modes]).first(2).join("/").presence || "–" } %>
+
+<% if summary[:rolls].to_i.positive? %>
+  <div class="games-kpis games-kpis-4">
+    <div class="games-card games-kpi"><span class="v games-num"><%= summary[:rolls] %></span><span class="l">Rolls</span></div>
+    <div class="games-card games-kpi"><span class="v games-num"><%= summary[:dice_rolled] %></span><span class="l">Dice</span></div>
+    <div class="games-card games-kpi"><span class="v games-num"><%= fmt.(table[:mean]) %></span><span class="l">Average</span></div>
+    <div class="games-card games-kpi"><span class="v games-num"><%= fmt.(table[:sd]) %></span><span class="l">Std dev</span></div>
+  </div>
+
+  <div class="games-card games-stat-table-card">
+    <table class="games-stat-table games-num">
+      <thead>
+        <tr><th>Player</th><th>Rolls</th><th>Mean</th><th>Median</th><th>Mode</th><th>SD</th></tr>
+      </thead>
+      <tbody>
+        <% per_player.each do |name, m| %>
+          <tr>
+            <td><span class="games-stat-name"><% if colors[name] %><span class="games-dot" style="background:<%= colors[name] %>"></span><% end %><%= name %></span></td>
+            <td><%= m[:count] %></td>
+            <td><%= fmt.(m[:mean]) %></td>
+            <td><%= fmt.(m[:median]) %></td>
+            <td><%= modes.(m) %></td>
+            <td><%= fmt.(m[:sd]) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+      <tfoot>
+        <% if per_player.size > 1 %>
+          <tr class="is-total">
+            <td>Everyone</td><td><%= table[:count] %></td><td><%= fmt.(table[:mean]) %></td>
+            <td><%= fmt.(table[:median]) %></td><td><%= modes.(table) %></td><td><%= fmt.(table[:sd]) %></td>
+          </tr>
+        <% end %>
+        <% if expected %>
+          <tr class="is-expected">
+            <td>Fair dice</td><td></td><td><%= fmt.(expected[:mean]) %></td><td></td><td></td><td><%= fmt.(expected[:sd]) %></td>
+          </tr>
+        <% end %>
+      </tfoot>
+    </table>
+  </div>
+
+  <% dist = stats[:distribution] || [] %>
+  <% if dist.any? %>
+    <% max = [1, *dist.map { |d| [d[:count], d[:expected] || 0].max }].max %>
+    <%= render "games/distribution", dist: dist, max: max, title: "Every roll", small: false,
+      band: (table[:sd] ? { mean: table[:mean], sd: table[:sd] } : nil) %>
+    <details class="games-table-toggle">
+      <summary>Show counts as a table</summary>
+      <table class="games-num">
+        <thead><tr><th>Value</th><th>Rolled</th><th>Expected</th></tr></thead>
+        <tbody>
+          <% dist.each do |d| %>
+            <tr><td><%= d[:value] %></td><td><%= d[:count] %></td><td><%= d[:expected]&.round(1) || "–" %></td></tr>
+          <% end %>
+        </tbody>
+      </table>
+    </details>
+  <% end %>
+
+  <% if summary[:range] && per_player.any? { |_, m| m[:mean] } %>
+    <%= render "games/spread", per_player: per_player, colors: colors, expected: expected,
+      table: table, range: summary[:range], fmt: fmt %>
+  <% end %>
+<% end %>

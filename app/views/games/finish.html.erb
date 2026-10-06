@@ -72,6 +72,11 @@
     </div>
     <input type="hidden" name="ended_at" value="<%= (@play.ended_at || Time.current).iso8601 %>">
 
+    <% if @stats[:total_rolls].to_i.positive? %>
+      <div class="games-field-label" style="margin-top:22px">Dice</div>
+      <%= render "games/roll_stats", stats: @stats, players: @play.players %>
+    <% end %>
+
     <div class="games-actionbar">
       <div>
         <button type="submit" class="games-btn games-btn-primary games-btn-block games-btn-lg"><%= @play.active? ? "Finish game" : "Save" %></button>

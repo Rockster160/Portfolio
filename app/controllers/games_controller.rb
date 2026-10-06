@@ -5,6 +5,7 @@ class GamesController < ApplicationController
   # outranks every games button rule and leaves a tapped key painted blue.
   before_action { @skip_dark_mode = true }
   before_action :set_play, only: [:show, :edit_finish, :finish, :abandon, :replay]
+  before_action :set_template, only: [:edit_template, :update_template, :destroy_template]
 
   # GET /games
   def index
@@ -56,6 +57,7 @@ class GamesController < ApplicationController
   # <form>, posts to #finish below and redirects back to #show on success.
   def edit_finish
     @score_totals = @play.game_score_entries.live.group(:player_name).sum(:delta)
+    @stats = GamePlay::Stats.for_play(@play)
     render :finish
   end
 
@@ -113,7 +115,65 @@ class GamesController < ApplicationController
     render json: serialize_template(template), status: (template.previously_new_record? ? :created : :ok)
   end
 
+  # GET /games/templates/:id - one game: its settings (editable), how it's
+  # gone over time, and every play of it including hand-logged ones.
+  def edit_template
+    load_template_page
+    render :edit_template
+  end
+
+  # PATCH /games/templates/:id
+  def update_template
+    if @template.update(template_form_params)
+      redirect_to game_template_path(@template, saved: 1)
+    else
+      load_template_page
+      render :edit_template, status: :unprocessable_entity
+    end
+  end
+
+  # DELETE /games/templates/:id - the plays stay (they carry their own name
+  # and settings snapshot); only the saved setup goes.
+  def destroy_template
+    @template.destroy!
+    redirect_to games_path
+  end
+
   private
+
+  def set_template
+    @template = current_user.game_templates.find(params[:id])
+  end
+
+  def load_template_page
+    @history = history_rows.select { |row| template_row?(@template, row) }
+    @all_time = GamePlay::Stats.for_template(@template)
+  end
+
+  def template_row?(template, row)
+    names = [template.name_was || template.name, *Array(template.aliases_was || template.aliases)]
+    names = names.map { |n| n.to_s.strip.downcase }
+    row[:template_id] == template.id || names.include?(row[:name].to_s.strip.downcase)
+  end
+
+  # The edit form sends dice as a choice plus an "other" box, and the list
+  # fields as typed text ("1, 2, 5"; one alias per line or comma).
+  def template_form_params
+    raw = params.require(:game_template).permit(
+      :name, :dice_choice, :dice_other, :scoring, :win, :auto_advance, :score_presets, :aliases
+    )
+    dice = raw[:dice_choice] == "other" ? raw[:dice_other] : raw[:dice_choice]
+    name = raw[:name].to_s.strip
+    {
+      name:          name,
+      dice:          dice.to_s.strip.downcase.presence,
+      scoring:       raw[:scoring],
+      win:           raw[:win],
+      auto_advance:  raw[:auto_advance] == "1",
+      score_presets: raw[:score_presets].to_s.scan(/\d+/).map(&:to_i).select(&:positive?).uniq.first(4),
+      aliases:       raw[:aliases].to_s.split(/[,\n]/).map(&:strip).compact_blank.uniq.reject { |a| a.casecmp?(name) },
+    }
+  end
 
   # One feed: finished/abandoned plays from this app, plus any legacy `Game`
   # ActionEvent that was never linked to a play (manual logging that happens
@@ -170,8 +230,7 @@ class GamesController < ApplicationController
   # played - counting manually logged events filed under its name or an alias.
   def template_tiles(history)
     current_user.game_templates.by_last_played.map { |t|
-      names = [t.name, *Array(t.aliases)].map { |n| n.to_s.strip.downcase }
-      rows = history.select { |r| r[:template_id] == t.id || names.include?(r[:name].to_s.strip.downcase) }
+      rows = history.select { |r| template_row?(t, r) }
       { template: t, plays: rows.size, last_played: rows.map { |r| r[:date] }.max }
     }.sort_by { |tile| tile[:last_played].to_s }.reverse
   end

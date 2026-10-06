@@ -24,7 +24,13 @@ class GameTemplate < ApplicationRecord
   belongs_to :user
   has_many :game_plays, dependent: :nullify
 
-  validates :name, presence: true, uniqueness: { scope: :user_id }
+  validates :name, presence: true, uniqueness: { scope: :user_id, case_sensitive: false }
+  validates :dice, format: { with: /\A\d*d\d+\z/i, message: "should look like 2d6 or d20" }, allow_blank: true
+
+  # Hand-logged Game events are matched to a game by NAME. Renaming it must
+  # not orphan the ones filed under the old name, so the old name becomes an
+  # alias.
+  before_save :keep_old_name_as_alias, if: -> { persisted? && will_save_change_to_name? }
 
   scope :by_last_played, -> {
     left_joins(:game_plays).group(:id).order(Arel.sql("MAX(game_plays.started_at) DESC NULLS LAST"))
@@ -38,5 +44,14 @@ class GameTemplate < ApplicationRecord
 
     user.game_templates.find_by(name: name) ||
       user.game_templates.detect { |t| Array(t.aliases).any? { |a| a.to_s.strip == name } }
+  end
+
+  private
+
+  def keep_old_name_as_alias
+    old = name_in_database.to_s.strip
+    return if old.blank? || old.casecmp?(name.to_s.strip)
+
+    self.aliases = (Array(aliases) + [old]).uniq { |a| a.to_s.downcase }
   end
 end

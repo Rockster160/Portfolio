@@ -292,6 +292,9 @@ Rails.application.routes.draw do
   get  "/games/legacy/:id"                 => "games#legacy_show",      as: :legacy_game
   get  "/games/player_colors"              => "games#player_colors",    as: :games_player_colors
   post "/games/templates"                  => "games#upsert_template",  as: :game_templates
+  get    "/games/templates/:id"            => "games#edit_template",    as: :game_template
+  patch  "/games/templates/:id"            => "games#update_template"
+  delete "/games/templates/:id"            => "games#destroy_template"
 
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"
