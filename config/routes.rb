@@ -41,6 +41,7 @@ Rails.application.routes.draw do
   post "/printer_control" => "printers#control"
   get "map" => "index#map"
   get "playground" => "index#playground"
+  get "playground/:id" => "playground#show", as: :playground_project
   resource :ping, only: :create
 
   get "/whisper", to: redirect(subdomain: "whisper", path: "/")
@@ -637,5 +638,8 @@ Rails.application.routes.draw do
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error
   end
+  # Everybody the constraint above turns away gets the About page instead of
+  # a 404.
+  get "/system(/*rest)", to: redirect("/playground/system")
   mount ::ActionCable.server => "/cable"
 end

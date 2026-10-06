@@ -1,0 +1,120 @@
+#!/usr/bin/env ruby
+# Prints the part of a failed deploy's GitHub Actions log that says what broke.
+# A failed `cap production deploy` is ~1000 lines — the same error repeated by
+# every layer that rethrows it, each with its backtrace — and the useful part is
+# the first `rake aborted!` / `cap aborted!` and the few lines under it.
+#
+# Usage:
+#   bin/deploy_failure [sha]       # the newest deploy run for that commit (default: HEAD)
+#   bin/deploy_failure --run ID    # a specific run
+
+require "json"
+require "open3"
+
+WORKFLOW = "deploy.yml".freeze
+FRAME = %r{\A\S*/\S+:\d+:in }
+APP_FRAME = %r{/releases/\d+/}
+NOISE = /\A\(Backtrace restricted|\A##\[error\]Process completed with exit code/
+RETHROWN = /\ACaused by:/
+TELLTALE = /error|fatal|failed|denied|could not|cannot|not found|exit status/i
+
+def gh(*args)
+  out, err, status = Open3.capture3("gh", *args)
+  abort("deploy_failure: gh #{args.first(2).join(" ")} failed — #{err.strip}") unless status.success?
+  out
+end
+
+def find_run(sha)
+  runs = JSON.parse(
+    gh("run", "list", "--workflow", WORKFLOW, "--commit", sha, "--limit", "1", "--json", "databaseId"),
+  )
+  abort("deploy_failure: no #{WORKFLOW} run for #{sha[0, 7]}") if runs.empty?
+  runs.first["databaseId"].to_s
+end
+
+# A log line is `job<TAB>step<TAB>timestamp text`, and cap prefixes the remote
+# command's output with its host number.
+def clean(line)
+  _job, step, rest = line.chomp.split("\t", 3)
+  text = rest.to_s.sub(/\A\S+ ?/, "")
+  text = text.gsub(/(?:\e|\^\[)\[[0-9;?]*[A-Za-z]/, "")
+  [step, text.sub(/\A\s+\d{2} /, "").rstrip]
+end
+
+# The first `aborted!` and what it says, down to the first stack frame — plus
+# the first frame in the app's own code, when the error came through one.
+def aborted_block(lines)
+  start = lines.index { |text| text.end_with?(" aborted!") }
+  return if start.nil?
+
+  block = [lines[start]]
+  frames = []
+  lines[(start + 1)..].each do |text|
+    next if text.empty? || text.match?(NOISE)
+
+    if text.match?(FRAME)
+      frames << text
+    elsif frames.any? || text.match?(RETHROWN)
+      break
+    elsif block.length < 10
+      block << text
+    end
+  end
+
+  block << frames.first if frames.any?
+  app_frame = frames.find { |frame| frame.match?(APP_FRAME) && !frame.match?(%r{/shared/bundle/}) }
+  block << app_frame if app_frame && app_frame != frames.first
+
+  tasks = lines[start..].find { |text| text.start_with?("Tasks: TOP => ") }
+  block << tasks if tasks
+  block
+end
+
+# No `aborted!` means the failure was outside cap — a bundle install, the ssh
+# setup. The lines that sound like an error, or failing that the tail.
+def fallback_block(lines)
+  meaningful = lines.reject { |text| text.empty? || text.match?(NOISE) }
+  telltale = meaningful.grep(TELLTALE).uniq.first(8)
+  telltale.any? ? telltale : meaningful.last(15)
+end
+
+run_id = (
+  if ARGV.first == "--run"
+    ARGV[1] || abort("deploy_failure: --run needs an id")
+  else
+    sha = ARGV.first || `git rev-parse HEAD`.strip
+    find_run(sha)
+  end
+)
+
+# The failure is reported from inside the run, a step before it finishes, and
+# GitHub only serves a job's log once the job is done.
+system("gh", "run", "watch", run_id, out: File::NULL, err: File::NULL)
+
+info = JSON.parse(gh("run", "view", run_id, "--json", "conclusion,url,jobs"))
+if info["conclusion"] != "failure"
+  puts("GitHub reports this deploy as #{info["conclusion"] || "unfinished"}: #{info["url"]}")
+  exit
+end
+
+red = $stdout.tty? ? "\e[31m" : ""
+grey = $stdout.tty? ? "\e[90m" : ""
+reset = $stdout.tty? ? "\e[0m" : ""
+
+parsed = gh("run", "view", run_id, "--log-failed").lines.map { |line| clean(line) }
+if parsed.empty?
+  jobs = info["jobs"].map { |job| "#{job["name"]} #{job["conclusion"]}" }.join(", ")
+  puts("#{red}Deploy failed with no log to show (#{jobs})#{reset}")
+  puts("#{grey}#{info["url"]}#{reset}")
+  exit
+end
+
+# Older logs name every step "UNKNOWN STEP".
+failed_step = parsed.map(&:first).find { |step|
+  step && !step.match?(/\AUNKNOWN STEP\z|\AHandle Deploy Failure/)
+}
+lines = parsed.map(&:last)
+
+puts("#{red}Deploy failed#{" in: #{failed_step}" if failed_step}#{reset}")
+(aborted_block(lines) || fallback_block(lines)).each { |text| puts("  #{text}") }
+puts("#{grey}#{info["url"]}#{reset}")

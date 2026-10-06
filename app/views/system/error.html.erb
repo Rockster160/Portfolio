@@ -25,8 +25,12 @@
 
     <div class="err-facts">
       <span>for <strong><%= @error.who %></strong></span>
+      <%# This OCCURRENCE. A repeat held back while the same failure was still %>
+      <%# going is not a failure nobody was told about - the first one was. %>
       <% if @error.channel.present? %>
         <span>announced in <%= @error.channel %></span>
+      <% elsif @announced_at %>
+        <span>held back; last announced <%= stamp.call(@announced_at) %></span>
       <% else %>
         <span class="err-badge">never announced</span>
       <% end %>

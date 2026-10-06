@@ -3,7 +3,8 @@
 // was unreadable at body size.
 $playground-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
 
-.act-playground {
+.act-playground,
+.ctr-playground {
   padding-bottom: 50px;
 
   .app-card-container {
@@ -22,6 +23,46 @@ $playground-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Robo
       grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
       gap: 10px;
       align-items: stretch;
+    }
+
+    .project-meta {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .project-year {
+      color: $grey-blue;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .project-tag {
+      border-radius: 4px;
+      background: rgba($grey-blue, 0.22);
+      padding: 2px 6px;
+      color: darken($grey-blue, 25%);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+
+      &.tag-wip {
+        background: rgba(#E8833A, 0.22);
+        color: darken(#E8833A, 25%);
+      }
+
+      &.tag-demo {
+        background: rgba($base-blue, 0.18);
+        color: $blue-d2;
+      }
+
+      &.tag-admin,
+      &.tag-private {
+        background: rgba(#C0392B, 0.18);
+        color: darken(#C0392B, 10%);
+      }
     }
 
     .project-wrapper {
@@ -62,78 +103,210 @@ $playground-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Robo
       .project-title {
         transition: color 0.18s ease;
         color: darken($grey-blue, 30%);
+        text-decoration: none;
         font-weight: 600;
         font-size: 16px;
         line-height: 1.25;
       }
 
-      .project-meta {
-        display: flex;
-        flex-shrink: 0;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .project-year {
-        color: $grey-blue;
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .project-tag {
-        border-radius: 4px;
-        background: rgba($grey-blue, 0.22);
-        padding: 2px 6px;
-        color: darken($grey-blue, 25%);
-        font-weight: 700;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-
-        &.tag-wip {
-          background: rgba(#E8833A, 0.22);
-          color: darken(#E8833A, 25%);
-        }
-
-        &.tag-demo {
-          background: rgba($base-blue, 0.18);
-          color: $blue-d2;
-        }
-
-        &.tag-admin {
-          background: rgba(#C0392B, 0.18);
-          color: darken(#C0392B, 10%);
-        }
-      }
-
-      .json-btn {
-        border-radius: 4px;
-        background: #ECD63F;
-        padding: 2px 6px;
-        color: #262724;
-        font-weight: 700;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        text-align: center;
-
-        &:hover {
-          background: darken(#ECD63F, 12%);
-          cursor: pointer;
-        }
-      }
-
       .project-description {
+        flex: 1;
         color: $text-color;
         font-size: 13px;
         line-height: 1.5;
+      }
+
+      .project-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+    }
+
+    // About, API, and Open. Open always sits at the right edge, so it lands
+    // in the same place on every card whether or not there's an API button.
+    .project-action {
+      display: inline-flex;
+      position: relative;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      margin: 0;
+      box-shadow: none;
+      border: 1px solid rgba($grey-blue, 0.55);
+      border-radius: 6px;
+      background: white;
+      padding: 0 14px;
+      height: 34px;
+      color: darken($grey-blue, 35%);
+      font-weight: 600;
+      font-size: 13px;
+      font-family: inherit;
+      text-decoration: none;
+      text-shadow: none;
+
+      &:hover {
+        border-color: $base-blue;
+        background: white;
+        color: $blue-d2;
+      }
+
+      &.is-open {
+        margin-left: auto;
+      }
+
+      &.is-primary {
+        border-color: $base-blue;
+        background: $base-blue;
+        color: white;
+
+        &:hover {
+          background: $blue-d1;
+          color: white;
+        }
+      }
+
+      &.is-locked {
+        cursor: not-allowed;
+        border-color: rgba($grey-blue, 0.35);
+        background: rgba($grey-blue, 0.12);
+        color: $grey-blue;
+
+        &:hover {
+          border-color: rgba($grey-blue, 0.35);
+          background: rgba($grey-blue, 0.12);
+          color: $grey-blue;
+        }
+      }
+
+      // Why it's locked, shown on hover (or tap, which focuses it).
+      &[data-tooltip]:hover::after,
+      &[data-tooltip]:focus::after {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 8px);
+        z-index: 5;
+        border-radius: 6px;
+        background: $blue-d4;
+        padding: 6px 10px;
+        pointer-events: none;
+        color: white;
+        font-weight: 500;
+        font-size: 12px;
+        white-space: nowrap;
+        content: attr(data-tooltip);
       }
     }
   }
 }
 
+// The About page, laid out like a Notes page: a button bar, breadcrumbs, a
+// centered title over its tags, then the rendered Markdown.
+.ctr-playground .playground-about {
+  .about-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .about-bar .is-open {
+    margin-left: auto;
+  }
+
+  .about-locked {
+    margin: 10px 0 4px;
+    color: $grey-blue;
+    font-size: 13px;
+  }
+
+  .tag-list {
+    margin-bottom: 4px;
+    text-align: center;
+
+    .project-tag,
+    .tag {
+      display: inline-block;
+      margin: 3px;
+    }
+
+    .tag {
+      border-radius: 100px;
+      background: white;
+      padding: 3px 8px;
+      color: $base-blue;
+      font-size: 12px;
+    }
+  }
+
+  .about-shots {
+    display: flex;
+    gap: 14px;
+    margin: 16px 0 8px;
+    padding-bottom: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .about-shot {
+    flex: 0 0 auto;
+    margin: 0;
+    // The caption wraps to the screenshot's width instead of widening it.
+    width: min-content;
+    scroll-snap-align: start;
+
+    img {
+      display: block;
+      border: 1px solid rgba($grey-blue, 0.35);
+      border-radius: 8px;
+      width: auto;
+      height: 360px;
+    }
+
+    figcaption {
+      margin-top: 6px;
+      color: $grey-blue;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .about-shot img {
+      height: 280px;
+    }
+  }
+}
+
 .dark-mode {
-  .act-playground {
+  .act-playground,
+  .ctr-playground {
     .app-card-container {
+      .project-year {
+        color: rgba($grey-light, 0.6);
+      }
+
+      .project-tag {
+        background: rgba($grey-light, 0.18);
+        color: $grey-light;
+
+        &.tag-wip {
+          background: rgba(#E8833A, 0.28);
+          color: lighten(#E8833A, 12%);
+        }
+
+        &.tag-demo {
+          background: rgba($blue-l4, 0.25);
+          color: $blue-l4;
+        }
+
+        &.tag-admin,
+        &.tag-private {
+          background: rgba(#C0392B, 0.3);
+          color: lighten(#C0392B, 20%);
+        }
+      }
+
       .project-wrapper {
         border-color: rgba($grey-light, 0.18);
         background: rgba($blue-d5, 0.35);
@@ -152,32 +325,32 @@ $playground-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Robo
           color: $grey-light;
         }
 
-        .project-year {
-          color: rgba($grey-light, 0.6);
-        }
-
-        .project-tag {
-          background: rgba($grey-light, 0.18);
-          color: $grey-light;
-
-          &.tag-wip {
-            background: rgba(#E8833A, 0.28);
-            color: lighten(#E8833A, 12%);
-          }
-
-          &.tag-demo {
-            background: rgba($blue-l4, 0.25);
-            color: $blue-l4;
-          }
-
-          &.tag-admin {
-            background: rgba(#C0392B, 0.3);
-            color: lighten(#C0392B, 20%);
-          }
-        }
-
         .project-description {
           color: rgba($grey-light, 0.85);
+        }
+      }
+
+      .project-action {
+        border-color: rgba($grey-light, 0.35);
+        background: rgba($grey-light, 0.08);
+        color: $grey-light;
+
+        &:hover {
+          border-color: $blue-l4;
+          background: rgba($grey-light, 0.14);
+          color: white;
+        }
+
+        &.is-primary {
+          border-color: $base-blue;
+          background: $base-blue;
+          color: white;
+        }
+
+        &.is-locked {
+          border-color: rgba($grey-light, 0.15);
+          background: transparent;
+          color: rgba($grey-light, 0.45);
         }
       }
     }

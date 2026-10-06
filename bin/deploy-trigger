@@ -5,8 +5,12 @@
 # generic `deploy` in ~/code/scripts/helpers/deploy.sh.
 #
 # Called as: bin/deploy-trigger <branch> <env>   ($DEPLOY_BRANCH / $DEPLOY_ENV)
+# $DEPLOY_PUSHED=0 means the push moved nothing (`deploy -f`), so no workflow
+# is coming on its own — it gets started by hand, which redeploys what is live.
 set -euo pipefail
 
+here="$(dirname "$0")"
+branch="${1:-${DEPLOY_BRANCH:-master}}"
 env="${2:-${DEPLOY_ENV:-production}}"
 
 if [[ "$env" != "production" ]]; then
@@ -14,4 +18,14 @@ if [[ "$env" != "production" ]]; then
   exit 1
 fi
 
-exec "$(dirname "$0")/wait_for_deploy" deploy
+if [[ "${DEPLOY_PUSHED:-1}" == 0 ]]; then
+  echo "deploy-trigger: nothing new pushed — starting the deploy workflow on $branch"
+  gh workflow run deploy.yml --ref "$branch"
+fi
+
+if "$here/wait_for_deploy" deploy; then
+  exit 0
+fi
+
+"$here/deploy_failure" "$(git rev-parse "origin/$branch")" || true
+exit 1

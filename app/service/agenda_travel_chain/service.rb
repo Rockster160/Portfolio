@@ -158,6 +158,16 @@ module AgendaTravelChain
 
     # ----- geocode resolution (sticky) ----------------------------------------
 
+    # Everything `ensure_resolved` owns, which is everything a failed resolve
+    # has to clear.
+    RESOLVED_KEYS = %w[
+      location_address
+      location_lat
+      location_lng
+      location_fingerprint
+    ].freeze
+    private_constant :RESOLVED_KEYS
+
     def ensure_resolved_all(candidates)
       candidates.each { |evt| ensure_resolved(evt) }
     end
@@ -167,13 +177,36 @@ module AgendaTravelChain
       return if evt.metadata.dig("travel", "location_fingerprint") == fp
 
       res = @resolver.resolve_location(nav_target(evt))
-      return unless res
+      return forget_resolution(evt) if res.nil?
 
       merge_travel_metadata(evt,
         "location_address" => res[:address],
         "location_lat"     => res[:lat],
         "location_lng"     => res[:lng],
         "location_fingerprint" => fp,
+      )
+    end
+
+    # A resolve that failed has to take the OLD answer with it. The fingerprint
+    # not matching means the location TEXT changed, so the address sitting here
+    # was resolved from somewhere this event no longer is - and `resolved_location`
+    # prefers it over the typed location for the Distance Matrix call, so leaving
+    # it reports a confident drive to the wrong place rather than no drive at
+    # all. With it gone the leg is measured against the location as typed, which
+    # Distance Matrix often places even where the geocoder wouldn't.
+    #
+    # The fingerprint goes too, so the next run tries the resolve again instead
+    # of treating the gap as settled.
+    def forget_resolution(evt)
+      travel = evt.metadata["travel"] || {}
+      return if RESOLVED_KEYS.none? { |key| travel[key].present? }
+
+      merge_travel_metadata(
+        evt,
+        location_address:     nil,
+        location_lat:         nil,
+        location_lng:         nil,
+        location_fingerprint: nil,
       )
     end
 

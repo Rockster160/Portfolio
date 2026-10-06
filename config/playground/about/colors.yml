@@ -1,0 +1,42 @@
+---
+tagline: A color-gradient tool that generates evenly spaced hex swatches and a public
+  JSON palette API.
+body: |
+  A color-gradient tool that generates evenly spaced colors between a chosen start and end color. It also serves the same output as a small public JSON API for palette requests.
+
+  ## What it solves
+  It helps create a stepped color fade without calculating each intermediate color by hand. The tool returns the full sequence as labeled hex swatches and can also return the palette as JSON for scripts.
+
+  It supports server-side rendering, AJAX updates, and query-string URLs for sharing a specific palette. The API can also return a mirrored fade-back sequence for looping palettes.
+
+  ## Features
+  - **Start and end colors**: Pick the endpoints with color inputs and a visual color picker.
+  - **Random color**: Generate a random hex color and refresh the fade immediately.
+  - **Step count**: Choose how many colors to generate, with a default of 10 and a maximum of 256.
+  - **Hex input support**: Accept 3-digit or 6-digit hex values with or without the `#` prefix.
+  - **Labeled swatches**: Show each generated color as a numbered swatch with its hex value.
+  - **Readable labels**: Switch swatch text between dark and light based on background contrast.
+  - **No page reload**: Update the palette with AJAX and show validation messages inline.
+  - **Shareable URLs**: Load the same palette from query parameters in the browser.
+  - **JSON output**: Return the palette as a JSON array for script use.
+  - **Fade-back option**: Append the reverse palette in API responses for looping color sets.
+
+  ## How to use it
+  1. Enter a start color.
+  2. Enter an end color.
+  3. Choose the number of steps.
+  4. Use the random button if a color should be generated for either endpoint.
+  5. Submit the form to generate the palette.
+  6. Copy the URL or request the JSON endpoint if the palette needs to be reused elsewhere.
+
+  ## How it works
+  - It normalizes input hex values before generating colors.
+  - It interpolates colors in linear RGB space and clamps rounded values.
+  - It can append a mirrored fade-back sequence when requested through the API.
+  - It uses a luminance check to choose readable text color on each swatch.
+  - One controller action returns HTML, an XHR partial, or JSON depending on the request format.
+
+screenshots:
+- file: gradient.jpg
+  viewport: phone
+  caption: Twelve evenly spaced steps between two colors.

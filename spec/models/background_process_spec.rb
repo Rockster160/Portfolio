@@ -62,13 +62,34 @@ RSpec.describe BackgroundProcess do
       expect(described_class.live_for(other).count).to eq(1)
     end
 
-    # A caller that says it has finished has finished, whichever route it said
-    # it on - the strip and the database must not disagree about that.
-    it "treats a report of finished as the end of it" do
+    # FINISHING IS NOT GOING AWAY. The outcome is the part worth seeing, so a
+    # reported `finished` settles the chip in place and leaves it on the strip.
+    it "settles a reported finish in place rather than taking it down" do
+      report(name: "Preparing")
+      done = report(state: :finished, detail: "sent - on the board")
+
+      expect(done).to be_finished
+      expect(done.finished_at).to be_nil
+      expect(described_class.live_for(user)).to contain_exactly(done)
+    end
+
+    # It is over, so it stops holding a place among the things that are not.
+    # `recent` keeps it for a day on its heartbeat, the same as any quiet row,
+    # and then it goes without anybody dismissing it.
+    it "lets a settled chip age out on its own" do
       report(name: "Preparing")
       done = report(state: :finished)
+      done.update!(heartbeat_at: (BackgroundProcess::FORGET_AFTER + 1.hour).ago)
 
-      expect(done.finished_at).to be_present
+      expect(described_class.live_for(user)).to be_empty
+    end
+
+    # The × is what takes it down, and that still works on a settled one.
+    it "still clears a settled chip when it is dismissed" do
+      report(name: "Preparing")
+      report(state: :finished)
+      described_class.clear!(user: user, key: "jobhunt:line")
+
       expect(described_class.live_for(user)).to be_empty
     end
 

@@ -56,6 +56,19 @@ RSpec.describe "GPT presets and secrets", type: :request do
     expect(user.secrets.count).to eq(0)
   end
 
+  it "keeps password managers off the secret form" do
+    get jil_secrets_path
+
+    page = Nokogiri::HTML(response.body)
+    [page.at_css("input[name=name]"), page.at_css("input[name=value]")].each { |input|
+      expect(input["data-1p-ignore"]).to eq("true")
+      expect(input["autocomplete"]).to eq("off")
+    }
+    expect(page.at_css("input[name=value]")["type"]).to eq("text")
+    expect(page.at_css("input[name=value]")["class"]).to eq("text-security")
+    expect(page.css("input[type=password]")).to be_empty
+  end
+
   it "only reaches the signed-in user's own records" do
     other = create(:user)
     preset = other.gpt_presets.create!(name: "Theirs", instructions: "x")

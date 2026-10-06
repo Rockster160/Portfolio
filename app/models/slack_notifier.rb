@@ -24,16 +24,36 @@ module SlackNotifier
     attachments: [],
     user: nil,
     exception: $ERROR_INFO)
-    # Recorded first, so the alert can end at a link to the whole row instead of
-    # at whatever fitted in a message - and `record!` answers nil rather than
-    # raising, so a row that can't be written costs the link and never the
-    # alert.
-    row = (record_failure(message, exception, user, channel) if exception)
-    message = "#{message}\n#{trailer(user, row)}" if exception
+    return deliver(message, channel, username, icon_emoji, attachments) if exception.nil?
 
-    return puts("\e[31mSlack: #{message}\e[0m") if Rails.env.test?
+    # Recorded first, so the alert can end at a link to the whole row instead of
+    # at whatever fitted in a message, and so the row's own history can say
+    # whether this one is worth announcing at all. `record!` answers nil rather
+    # than raising, so a row that can't be written costs the link and never the
+    # alert.
+    row = record_failure(message, exception, user)
+    # With no row there is no history to judge by, so it goes out. A failure
+    # that couldn't be written down must not also go unsaid.
+    repeat = (row ? row.announcement : { reason: :new })
+    return nil if repeat.nil?
+
+    body = [message, ErrorReport.repeat_note(repeat), trailer(user, row)].compact_blank.join("\n")
+    sent = deliver(body, channel, username, icon_emoji, attachments)
+    row&.announced!(sent) if sent
+    sent
+  end
+
+  # Where it actually goes. Answers the channel it was handed to, or nil when
+  # nothing left the process - which is what stops a row being stamped as
+  # announced in an environment that announces nothing.
+  def deliver(message, channel, username, icon_emoji, attachments)
+    if Rails.env.test?
+      puts("\e[31mSlack: #{message}\e[0m")
+      return nil
+    end
 
     SlackWorker.perform_async(message, channel, username, icon_emoji, attachments)
+    channel
   end
 
   def err(exception, message="Error: ", channel: "#portfolio", username: "Portfolio-Bot", icon_emoji: ":blackmage:", attachments: [], user: nil)
@@ -55,13 +75,9 @@ module SlackNotifier
     [ErrorReport.who(user), row&.slack_ref].compact.join(" · ").prepend("— ")
   end
 
-  def record_failure(message, exception, user, channel)
+  def record_failure(message, exception, user)
     ErrorReport.record!(
-      section:   caller_section,
-      exception: exception,
-      message:   message,
-      user:      user,
-      channel:   channel,
+      section: caller_section, exception: exception, message: message, user: user,
     )
   end
 

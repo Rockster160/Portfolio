@@ -887,6 +887,14 @@ html.html-ctr-byte body {
     --process-accent: var(--bs-danger, #f26b6b);
     background: rgba(242, 107, 107, 0.2);
   }
+  // Done, and saying what became of it. Quieter than the two above because it
+  // asks for nothing - it is there to be read and then dismissed, so it reads
+  // as settled rather than as one more thing on the pile.
+  &[data-state="finished"] {
+    --process-accent: var(--bs-success, #5fb97d);
+    background: rgba(95, 185, 125, 0.14);
+    opacity: 0.82;
+  }
   // Nothing heard for a quarter of an hour. Dimmed, because the count it is
   // showing is frozen and should not read as live.
   &[data-stale="true"] {

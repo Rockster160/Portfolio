@@ -121,7 +121,7 @@
     .summary-container {
       font-weight: 500; color: #4B5563;
     }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
+    .wrap { max-width: 1600px; margin: 0 auto; padding: 16px 20px 28px }
     .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 12px }
     input[type="text"] {
       flex: 1; padding: 10px 12px; border: 1px solid #CCC;
@@ -159,26 +159,6 @@
     }
     .meal-time.is-set button { background: #F59E0B }
 
-    .cmodal-backdrop {
-      position: fixed; inset: 0; background: #0008;
-      display: grid; place-items: center; z-index: 1000
-    }
-    .cmodal {
-      width: min(560px, 92vw); background: #00102B; color: #ECF0F1;
-      border: 1px solid #D5E5FF; border-radius: 12px; padding: 16px
-    }
-    .cmodal h3 { margin: 0 0 10px 0; font-size: 18px }
-    .cmodal .row + .row { margin-top: 8px }
-    .cmodal-actions {
-      display: flex; align-items: center; gap: 2px; margin-top: 12px
-    }
-    .cmodal .ok, .cmodal .danger, .cmodal button {
-      border: none; border-radius: 8px; cursor: pointer
-    }
-    .cmodal .ok { background: #2563EB; color: #FFF }
-    .cmodal .danger { background: #991B1B; color: #FFF }
-    .cmodal .spacer { flex: 1 }
-
     .hidden { display: none }
   </style>
 
@@ -186,7 +166,7 @@
     import { command } from "../../quick_actions/command.js";
     import { showFlash } from "../../quick_actions/flash.js";
     import {
-      fuzzyMatch, setText, setIcon, setDesc, setCount, reconcileRows, enableDragReorder,
+      fuzzyMatch, setText, setIcon, setBadges, setDesc, setCount, reconcileRows, enableDragReorder,
     } from "../../quick_actions/builder_rows.js";
 
     let ITEMS = JSON.parse(
@@ -581,7 +561,8 @@
       setIcon(row, it.img, it.oneoff ? "✍️" : "🍽️")
       setText(row.querySelector(".brow-title"), it.alias?.trim() || it.name)
       const detail = [it.description, `${it.cal} cal`].filter(Boolean).join(" · ")
-      setDesc(row, detail, it.oneoff ? [{ text: "One-off" }] : [])
+      setBadges(row, it.oneoff ? [{ text: "One-off" }] : [])
+      setDesc(row, detail)
       setCount(row, count)
     }
 

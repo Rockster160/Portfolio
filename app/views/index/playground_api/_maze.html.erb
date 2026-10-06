@@ -1,0 +1,5 @@
+<%= render_modal "code-example-maze", "Mazes" do %>
+    <p>Generates an ASCII maze.</p>
+    <%= raw pretty(:bash, "requests/maze/show.json") %>
+    <%= raw pretty(:js, "response/maze/show.json") %>
+<% end %>

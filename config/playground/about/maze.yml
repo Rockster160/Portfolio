@@ -1,0 +1,40 @@
+---
+tagline: A deterministic maze generator with a browser game and plain-text API.
+body: |
+  Maze generates a random maze from a numeric seed and shows it in the browser. The same seed always rebuilds the same maze, and the maze can also be requested as plain ASCII text or checked with a move string.
+
+  ## What it solves
+  Maze solves the need for a repeatable maze that can be shared, replayed, or tested from a URL. It also provides a simple API for getting maze output and verifying whether a sequence of moves reaches the exit.
+
+  The same maze can be shown as a browser game or fetched as text. A seed, size, and optional start and end characters control the output.
+
+  ## Features
+  - **Seeded mazes** Each maze is based on a numeric seed, so the same seed produces the same layout.
+  - **Browser play** The maze can be played with the arrow keys in the browser.
+  - **Victory state** Reaching the exit shows a victory message.
+  - **Seed display** Each page shows the current seed and provides a way to replay it or get a new random maze.
+  - **Custom setup** A form sets the seed, width, height, start character, and end character.
+  - **Plain text output** The maze can be returned as ASCII text for direct use in other tools.
+  - **Size limits** Maze dimensions are clamped to 3 to 50 cells per side.
+  - **Solver endpoint** A move string can be posted to test whether it solves the maze.
+  - **Result feedback** The solver returns the maze with the final position marked and uses status codes to show solved, incomplete, or invalid input.
+  - **Open web calls** The API supports browser requests with CORS and preflight handling.
+
+  ## How to use it
+  1. Open the maze page to get a generated maze and its seed.
+  2. Use the arrow keys to move through the maze in the browser.
+  3. Use the form to change the seed, size, or start and end characters.
+  4. Open the same maze again by using the same seed.
+  5. Request the text version if plain ASCII output is needed.
+  6. Post a move string to the solver endpoint to check a route through the maze.
+
+  ## How it works
+  - **Deterministic generation** It carves the maze by recursive backtracking over a grid of wall flags, and it seeds the random generator first so the result is reproducible.
+  - **Exit placement** The exit is placed on a random dead end found by scanning the rendered maze.
+  - **Shared rendering** The same maze rendering is used for the browser view, the text output, and solver checks.
+  - **Server-side solving** A move runner replays the submitted moves from the start cell and reports walls or invalid characters as errors.
+  - **Client-side movement** Browser play updates the maze state in the page DOM.
+screenshots:
+- file: maze.jpg
+  viewport: desktop
+  caption: A maze generated from a seed.

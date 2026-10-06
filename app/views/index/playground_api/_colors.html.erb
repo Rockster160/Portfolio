@@ -1,0 +1,5 @@
+<%= render_modal "code-example-colors", "Colors", "code-formatting" do %>
+    <p>The Colors endpoint allows you to request colors and an amount of steps between them to fade across.</p>
+    <%= raw pretty(:bash, "requests/colors/index.json") %>
+    <%= raw pretty(:js, "response/colors/index.json") %>
+<% end %>

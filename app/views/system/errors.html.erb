@@ -51,7 +51,7 @@
   <%# hundred times is one thing going wrong, and reading it as four hundred %>
   <%# lines buries everything else that happened that day. %>
   <% @groups.each do |group| %>
-    <div class="err-row<%= " quiet" if group[:channel].blank? %>">
+    <div class="err-row<%= " quiet" unless group[:announced] %>">
       <div class="err-head">
         <span class="err-count"><%= group[:count] %>×</span>
         <%= link_to group[:section], system_errors_path(hours: @hours, fingerprint: group[:fingerprint]),
@@ -81,10 +81,12 @@
         <% else %>
           <span class="err-who err-nobody">nobody</span>
         <% end %>
-        <% if group[:channel].blank? %>
-          <span class="err-badge">never announced</span>
+        <%# Of the whole group: the repeats are held back on purpose, so the %>
+        <%# newest occurrence of something long-running is normally unsent. %>
+        <% if group[:announced] %>
+          <span class="err-badge err-sent">announced</span>
         <% else %>
-          <span class="err-badge err-sent"><%= group[:channel] %></span>
+          <span class="err-badge">never announced</span>
         <% end %>
       </div>
     </div>

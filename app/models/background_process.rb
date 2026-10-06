@@ -159,19 +159,17 @@ class BackgroundProcess < ApplicationRecord
     process.assign_attributes(attrs.slice(*WRITABLE))
     process.heartbeat_at = Time.current
 
-    # A caller that says it has finished HAS finished, whichever route it said
-    # it on. Without this the row would sit in the live list wearing a state
-    # nothing renders, and the strip and the database would disagree about
-    # whether the work was still going.
-    if process.finished?
-      process.finished_at ||= Time.current
-      process.save!
-      process.broadcast(reason: :cleared)
-      return process
-    end
-
+    # FINISHING IS NOT GOING AWAY, and conflating the two meant the strip could
+    # only ever say that something still needed doing. A report of `finished`
+    # used to stamp `finished_at` and broadcast `cleared`, so the outcome - the
+    # part worth seeing - was the one thing it never showed.
+    #
+    # `finished_at` belongs to `finish!`: the × on the chip, and a caller asking
+    # for the row to be cleared. A REPORTED `finished` settles the chip in place
+    # instead, as the last thing it says, and it ages out with every other quiet
+    # row after FORGET_AFTER rather than being swept up on arrival.
     process.save!
-    process.broadcast(reason: :reported)
+    process.broadcast(reason: process.finished? ? :settled : :reported)
     process
   end
 

@@ -50,6 +50,69 @@ RSpec.describe ErrorReport do
     end
   end
 
+  # The question an alert has to answer before it is sent: is this news, or is
+  # it the same thing still going on?
+  describe "#announcement" do
+    def occurrence(message: "timed out", at: Time.current, announced: false)
+      row = travel_to(at) { described_class.record!(section: "sync", exception: boom(message)) }
+      row.update!(channel: "#portfolio") if announced
+      row
+    end
+
+    it "is news when nothing like it is on file" do
+      expect(occurrence.announcement).to include(reason: :new)
+    end
+
+    it "is news when nothing like it has ever been announced" do
+      occurrence(at: 5.minutes.ago)
+
+      expect(occurrence.announcement).to include(reason: :new)
+    end
+
+    it "stays quiet for a repeat while the same failure is still going" do
+      occurrence(at: 5.minutes.ago, announced: true)
+
+      expect(occurrence.announcement).to be_nil
+    end
+
+    # It had stopped and has started again, which is a different thing from
+    # never having stopped.
+    it "speaks again when it comes back after a break" do
+      occurrence(at: (described_class::QUIET_BREAK + 5.minutes).ago, announced: true)
+
+      expect(occurrence.announcement).to include(reason: :back)
+    end
+
+    # Suppressed must never mean swallowed.
+    it "speaks again when it has been running longer than the re-announce window" do
+      occurrence(at: 150.minutes.ago, announced: true)
+      [130, 110, 90, 70, 50, 30, 10].each { |ago| occurrence(at: ago.minutes.ago) }
+
+      said = occurrence.announcement
+
+      expect(said[:reason]).to eq(:ongoing)
+      expect(said[:count]).to be > 1
+    end
+
+    it "doesn't let one failure quiet a different one" do
+      occurrence(message: "timed out", at: 2.minutes.ago, announced: true)
+
+      expect(occurrence(message: "something else").announcement).to include(reason: :new)
+    end
+  end
+
+  describe ".never_announced" do
+    it "is about the failure, not about one occurrence of it" do
+      announced = described_class.record!(section: "sync", exception: boom("a"))
+      announced.update!(channel: "#portfolio")
+      held_back = described_class.record!(section: "sync", exception: boom("a"))
+      quiet = described_class.record!(section: "turn", exception: boom("b"))
+
+      expect(described_class.never_announced).to contain_exactly(quiet)
+      expect(described_class.never_announced).not_to include(held_back)
+    end
+  end
+
   describe ".fingerprint_for" do
     # Same failure, different record id in the message: one line in a report,
     # not forty.
@@ -90,6 +153,23 @@ RSpec.describe ErrorReport do
       described_class.record!(section: "turn", exception: boom("one off"))
 
       expect(described_class.digest(span).pluck(:section)).to eq(%w[sync turn])
+    end
+
+    # The repeats are held back on purpose, so the newest occurrence of a
+    # long-running failure is normally unsent while the failure was announced
+    # hours ago. Asking the group is the only way that reads correctly.
+    it "says whether the failure was announced, not whether the last one was" do
+      first = described_class.record!(section: "sync", exception: boom("a"))
+      first.update!(channel: "#portfolio")
+      described_class.record!(section: "sync", exception: boom("a"))
+
+      expect(described_class.digest(span).first[:announced]).to be(true)
+    end
+
+    it "says so when nothing of its kind was ever announced" do
+      described_class.record!(section: "sync", exception: boom("a"))
+
+      expect(described_class.digest(span).first[:announced]).to be(false)
     end
 
     it "carries a real row to read the detail off" do

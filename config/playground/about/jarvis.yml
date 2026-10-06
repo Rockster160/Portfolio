@@ -1,0 +1,38 @@
+---
+tagline: Jarvis is a multi-channel command processor for plain-English requests and
+  automations.
+body: |
+  Jarvis is a command processor that turns plain-English requests into actions across multiple input channels. It can parse time phrases, run automations, log events, edit lists, and send replies back through the same channel.
+
+  ## What it solves
+  Jarvis addresses the problem of handling the same command from different places without separate interfaces for each one. It accepts requests from Alexa, SMS, HTTP, chat, web sockets, and scheduled triggers, then routes them through one command pipeline.
+
+  It also handles natural-language details such as relative times and spoken numbers, so commands can be written in plain language. Built-in actions cover common household and personal workflows, while unknown commands can be handed to Jil automations.
+
+  ## Features
+  - **Multi-channel input** Jarvis accepts commands from Alexa, SMS, HTTP posts, ActionCable, Byte chat, dashboard commands, and scheduled triggers.
+  - **Plain-language parsing** It accepts short sentences and can interpret time phrases and spoken numbers.
+  - **Delayed commands** It can schedule commands for later when a request includes a future time.
+  - **Event logging** It can record timestamped events with structured data.
+  - **List editing** It can add and remove items from lists through sentence-style commands.
+  - **Automation handoff** It can pass commands to Jil listeners before built-in actions run.
+  - **House and vehicle actions** It includes commands for smart-home and vehicle-related tasks.
+  - **Live replies** It sends responses back on the originating channel and also broadcasts them over a websocket.
+  - **Byte support** It can run commands from Byte in the background and return task receipts.
+  - **Fallback replies** It returns simple conversational responses when it cannot match a command.
+
+  ## How to use it
+  1. Send a plain-English command through one of the supported channels.
+  2. Include a time phrase if the command should run later.
+  3. Use `log` to create a timestamped event with optional key-value data.
+  4. Use list-style phrasing to add or remove items from a list.
+  5. Send a command that matches a built-in action, or let it fall through to Jil automation.
+  6. Read the reply in the same channel or in the live dashboard feed.
+
+  ## How it works
+  - Jarvis uses one command function as the core entry point for all channels.
+  - It runs Jil `:tell` listeners before built-in actions, and a listener can claim the request first.
+  - It uses an ordered action chain, so the first action that accepts the sentence handles it.
+  - It parses natural-language time expressions and spoken numbers before dispatching commands.
+  - It broadcasts replies through web push, SMS, or ActionCable depending on the input and output path.
+

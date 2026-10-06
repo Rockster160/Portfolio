@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch: # `deploy -f` with nothing new to push redeploys what is live
 
 jobs:
   deploy:

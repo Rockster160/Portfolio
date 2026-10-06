@@ -152,7 +152,19 @@ RSpec.describe ByteDailyAudit do
       it "marks a failure that was never announced" do
         travel_to(now - 1.hour) { ErrorReport.record!(section: "sync", exception: StandardError.new("a")) }
 
-        expect(described_class.prompt(user, now: now)).to include("never announced")
+        expect(described_class.prompt(user, now: now)).to include("· never announced")
+      end
+
+      # A repeat held back while the same failure was still going is not a
+      # failure nobody was told about - the first one was announced.
+      it "doesn't call a held-back repeat unannounced" do
+        travel_to(now - 2.hours) {
+          ErrorReport.record!(section: "sync", exception: StandardError.new("a"))
+            .update!(channel: "#zygy-alerts")
+        }
+        travel_to(now - 1.hour) { ErrorReport.record!(section: "sync", exception: StandardError.new("a")) }
+
+        expect(described_class.prompt(user, now: now)).not_to include("· never announced")
       end
 
       it "leaves out failures from outside the window" do

@@ -1,0 +1,42 @@
+---
+tagline: A browser-based 52-card table for dealing, dragging, flipping, and grouping
+  cards.
+body: |
+  Cards is a browser-based virtual card table with a full 52-card deck. It lets cards be dealt, dragged, flipped, grouped, and arranged by hand on a green felt field.
+
+  ## What it solves
+  Cards provides a way to play or prototype card layouts without a rules engine. It focuses on direct manipulation, so cards can be moved and organized freely instead of being constrained by game logic.
+
+  It also supports a standard Solitaire layout for Klondike-style play. The deck, zones, and card movements are handled in the browser after the initial page load.
+
+  ## Features
+  - **Full deck** A server-shuffled 52-card deck starts stacked in a Deck zone.
+  - **Draw by drag** Drag a card off the deck to draw it into play.
+  - **Flip cards** Click a card to turn it face up or face down.
+  - **Keyboard dealing** Press D to deal the top card to the cursor, and Shift+D to deal it face up.
+  - **Selection tools** Rubber-band select cards facing the same way, or use shift, control, or command clicks.
+  - **Group moves** Drag a selection and the cards keep their relative positions.
+  - **Return to deck** Drop cards back onto the deck to put them away.
+  - **Zones** New Zone creates a draggable, resizable colored rectangle for piles or player areas.
+  - **Solitaire layout** Solitaire deals a seven-column tableau with four foundation zones and an animation.
+  - **Marker dot** Press T to place a marker dot at the cursor.
+
+  ## How to use it
+  1. Open the deck view.
+  2. Draw cards by dragging from the Deck zone or by pressing D.
+  3. Use Shift+D when a dealt card should start face up.
+  4. Click cards to flip them, or select several cards with a drag or modifier-clicks.
+  5. Drag a selected group to move the cards together.
+  6. Add a zone if a pile or play area is needed, or use Solitaire for a Klondike layout.
+
+  ## How it works
+  - The deck is built in Ruby as 52 rank-and-suit codes and shuffled on the server.
+  - Each card is rendered as HTML, with face and back sides shown through CSS 3D transforms.
+  - Card faces are drawn with inline SVG suit icons, row-based pip layouts, and glyphs for face cards.
+  - Dragging, selection, hit-testing, and z-order updates are handled with jQuery UI and client-side JavaScript.
+  - Dealing animations run through a small callback queue, and zones are created at runtime as draggable, resizable regions.
+
+screenshots:
+- file: solitaire.jpg
+  viewport: desktop
+  caption: A Solitaire deal on the free-form card table.

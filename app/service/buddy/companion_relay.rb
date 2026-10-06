@@ -239,8 +239,12 @@ module Buddy
       def bridge!(from_user:, to_user:, text:, from_conversation: nil, to_conversation: nil, relay: nil, from_message: nil)
         to_convo   = to_conversation || conversation_for(to_user)
         from_convo = from_message&.byte_conversation || from_conversation || conversation_for(from_user)
-        sender     = peer_identity(from_user)
-        recipient  = peer_identity(to_user)
+        # Attributed from the THREAD each side is using, not from the account's
+        # default pet. Someone with two companions sends from whichever one they
+        # were talking to, and naming the default instead puts another pet's
+        # name and color on their words.
+        sender     = peer_identity(from_user, from_convo)
+        recipient  = peer_identity(to_user, to_convo)
 
         to_meta = { "kind" => "buddy_relay", "source" => "relay", "relay_peer" => sender }
         # Which relay this bubble belongs to. Everything else about a bridged
@@ -301,8 +305,14 @@ module Buddy
 
       # The other household's Buddy identity for an attribution header: pet name,
       # theme (drives the bubble accent color), and pet icon asset path.
-      def peer_identity(user)
-        theme  = ByteConversation.default_theme_for(user).to_s
+      #
+      # The conversation is the answer wherever there is one: the pet lives on
+      # the THREAD (`buddy_theme`), while `default_theme_for` is a per-account
+      # map that cannot tell two of someone's threads apart. Falls back to it
+      # only for a caller with no thread in hand.
+      def peer_identity(user, conversation=nil)
+        chosen = (conversation.buddy_theme if conversation&.buddy?)
+        theme  = chosen.presence || ByteConversation.default_theme_for(user).to_s
         chrome = Buddy::Themes.for(theme)
         icon   = begin
           ActionController::Base.helpers.image_path(chrome[:avatar])

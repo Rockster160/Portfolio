@@ -11,23 +11,23 @@
 
   .brows {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(calc(min(100%, 360px)), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(min(100%, 340px)), 1fr));
     gap: 12px 16px;
   }
 
+  // The row is the container its own width is measured on; .brow-body
+  // carries the layout, since a container query can't restyle its container.
   .brow {
     display: flex;
     position: relative;
-    align-items: center;
-    gap: 14px;
+    flex-direction: column;
+    container-type: inline-size;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     cursor: pointer;
     border: 1px solid rgba($blue-l5, 0.25);
     border-radius: 12px;
     background: $blue-d5;
-    padding: 10px 0 10px 10px;
-    min-height: 80px;
     overflow: hidden;
     color: $grey-light;
     user-select: none;
@@ -41,10 +41,20 @@
       background: #0C3A30;
     }
 
-    &.dim > .brow-icon,
-    &.dim > .brow-text {
+    &.dim .brow-icon,
+    &.dim .brow-text {
       opacity: 0.45;
     }
+  }
+
+  // Fills the row when the grid stretches it to match a taller neighbor.
+  .brow-body {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0 10px 10px;
+    min-height: 80px;
   }
 
   .brow-icon {
@@ -107,6 +117,17 @@
     color: $grey-disabled;
     font-size: 13px;
     line-height: 1.3;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .brow-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 2px;
 
     &:empty {
       display: none;
@@ -181,11 +202,11 @@
     color: $brow-warn;
   }
 
+  // Edit mode keeps the row as it is, swapping the steppers for the pencil
+  // that opens the editor; the whole row is the target there.
   .brow-edit-hint {
     display: none;
-    flex: 0 0 auto;
-    padding: 0 16px;
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .editing {
@@ -193,12 +214,12 @@
       cursor: grab;
     }
 
-    .brow-stepper {
+    .brow-step[data-step] {
       display: none;
     }
 
     .brow-edit-hint {
-      display: block;
+      display: grid;
     }
   }
 
@@ -212,33 +233,176 @@
     min-height: 80px;
   }
 
-  @media (max-width: 420px) {
-    .brow {
-      gap: 10px;
-      padding-left: 8px;
+  // Toolbar links share the buttons' size, so their label centers the same way.
+  .topbar .btn.primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+  }
+
+  // The item editor and quick-edit modals.
+  .cmodal-backdrop {
+    display: grid;
+    position: fixed;
+    place-items: center;
+    z-index: 1000;
+    inset: 0;
+    background: rgba(black, 0.55);
+  }
+
+  .cmodal {
+    border: 1px solid $blue-l5;
+    border-radius: 12px;
+    background: $blue-d5;
+    padding: 20px;
+    width: calc(min(560px, 92vw));
+    color: $grey-light;
+
+    h3 {
+      margin: 0 0 14px;
+      font-size: 18px;
     }
 
-    .brow-stepper {
-      gap: 2px;
-      padding: 10px 8px;
-    }
+    .row {
+      gap: 12px;
 
-    .brow-icon {
-      flex-basis: 46px;
-      height: 46px;
-
-      i.emoji {
-        font-size: 30px;
+      + .row {
+        margin-top: 12px;
       }
     }
 
+    input {
+      margin: 0;
+      min-height: 44px;
+    }
+  }
+
+  .cmodal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+
+    button {
+      flex: 0 0 auto;
+      cursor: pointer;
+      margin: 0;
+      box-shadow: none;
+      border: none;
+      border-radius: 8px;
+      background: $blue-d2;
+      padding: 0 20px;
+      height: 44px;
+      min-height: 0;
+      color: white;
+      font-weight: 600;
+      font-size: 15px;
+      text-shadow: none;
+    }
+
+    .ok {
+      background: #2563EB;
+    }
+
+    .danger {
+      background: #991B1B;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+  }
+}
+
+// A narrow row in a multi-column grid stays a row, with a smaller icon and
+// buttons so the name keeps room.
+@container (max-width: 420px) {
+  .html-ctr-meal_builders,
+  .html-ctr-list_builders {
+    .brow-body {
+      gap: 10px;
+    }
+
+    .brow-icon {
+      flex-basis: 44px;
+      height: 44px;
+
+      i.emoji {
+        font-size: 28px;
+      }
+    }
+
+    .brow-title {
+      font-size: 15px;
+    }
+
+    .brow-stepper {
+      gap: 4px;
+      padding: 10px 8px;
+    }
+
     .brow-step {
-      width: 52px;
-      height: 52px;
+      width: 48px;
+      height: 48px;
+      font-size: 24px;
     }
 
     .brow-count {
-      min-width: 34px;
+      min-width: 32px;
+      font-size: 20px;
+    }
+  }
+}
+
+// On a phone the steppers move under the name, so the name keeps the full
+// width: a small icon inline with it, and − count + across the bottom.
+@media (max-width: 600px) {
+  .html-ctr-meal_builders,
+  .html-ctr-list_builders {
+    .brow-body {
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      padding: 10px 10px 0;
+      min-height: 0;
+    }
+
+    .brow-icon {
+      flex-basis: 40px;
+      height: 40px;
+
+      i.emoji {
+        font-size: 26px;
+      }
+    }
+
+    .brow-text {
+      flex: 1 1 0;
+    }
+
+    .brow-title {
+      font-size: 15px;
+    }
+
+    .brow-stepper {
+      flex: 0 0 calc(100% + 20px);
+      justify-content: space-between;
+      align-self: auto;
+      margin: 4px -10px 0;
+      border-top: 1px solid rgba($blue-l5, 0.15);
+      border-left: 0;
+      padding: 8px 10px;
+    }
+
+    .brow-step {
+      width: 64px;
+      height: 44px;
+      font-size: 24px;
+    }
+
+    .brow-count {
+      min-width: 0;
+      font-size: 20px;
     }
   }
 }

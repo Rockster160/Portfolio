@@ -711,7 +711,10 @@ class ByteController < ApplicationController
   end
 
   def authorize_owner
-    head :forbidden unless byte_accessible?
+    return if byte_accessible?
+    return if redirect_to_about_page
+
+    head :forbidden
   end
 
   # See User#byte_access?, which the hero's own controllers share.

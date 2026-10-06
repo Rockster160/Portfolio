@@ -63,6 +63,55 @@ RSpec.describe "Buddy companion relay" do
         expect(source(BuddyRelay.last.to_conversation, "relay").metadata).not_to have_key("relay_from")
       end
 
+      # Someone with two companions sends from whichever one they were talking
+      # to. The pet lives on the THREAD; the account's default pet cannot tell
+      # two of their threads apart, and naming it instead puts another pet's
+      # name, color and icon on their words.
+      context "when the sender has more than one companion" do
+        let!(:her_second) {
+          ByteConversation.create!(
+            user: chelsea, mode: :buddy, name: "Kumoko", buddy_theme: :kumoko, theme_chosen: true,
+          )
+        }
+
+        it "attributes the message to the companion she sent it from" do
+          run(
+            :message_partner, { to: rocco.first_name, message: "dinner at six" },
+            user: chelsea, conversation: her_second
+          )
+
+          to_msg = source(BuddyRelay.last.to_conversation, "relay")
+          expect(to_msg.metadata.dig("relay_peer", "name")).to eq("Kumoko")
+          expect(to_msg.metadata.dig("relay_peer", "theme")).to eq("kumoko")
+        end
+
+        it "pushes it under that companion's name too" do
+          run(
+            :message_partner, { to: rocco.first_name, message: "dinner at six" },
+            user: chelsea, conversation: her_second
+          )
+
+          expect(WebPushNotifications).to have_received(:send_to_byte)
+            .with(hash_including(title: a_string_including("Kumoko: dinner at six")))
+        end
+
+        # And his reply has to go back to the thread she was in, wearing her
+        # companion rather than her account's default one.
+        it "threads an answer back to the companion that asked" do
+          run(
+            :ask_partner, { to: rocco.first_name, question: "pizza or pasta?" },
+            user: chelsea, conversation: her_second
+          )
+          relay = BuddyRelay.last
+          Buddy::CompanionRelay.record_answer!(relay, "pizza")
+
+          expect(relay.reload.from_conversation).to eq(her_second)
+          answer = source(her_second, "relay")
+          expect(answer.body).to include("pizza")
+          expect(answer.metadata.dig("relay_peer", "name")).to eq("Byte")
+        end
+      end
+
       it "refuses a name that isn't in the household" do
         tool = Buddy::Tools[:message_partner]
         ctx  = Buddy::ToolContext.new(rocco, conversation: convo)

@@ -28,17 +28,20 @@ module Buddy
       begin
         log(section, exception, user, extra)
         # Recorded FIRST, so the alert can carry a link to the row rather than
-        # ending at a wall of text. `record!` answers nil instead of raising, so
-        # a row that can't be written costs the LINK and never the alert - the
-        # announcement is the part somebody is waiting on.
+        # ending at a wall of text, and so the row's own history can say whether
+        # this one is worth announcing at all. `record!` answers nil instead of
+        # raising, so a row that can't be written costs the LINK and never the
+        # alert - the announcement is the part somebody is waiting on.
         row = ErrorReport.record!(
-          section:   section,
-          exception: exception,
-          user:      user,
-          extra:     extra,
-          channel:   (SLACK_CHANNEL if announce?),
+          section: section, exception: exception, user: user, extra: extra,
         )
-        notify_slack(section, exception, user, extra, row) if announce?
+        # With no row there is no history to judge by, so it goes out. A failure
+        # that couldn't be written down must not also go unsaid.
+        repeat = (row ? row.announcement : { reason: :new })
+        if announce? && repeat
+          notify_slack(section, exception, user, extra, row, repeat)
+          row&.announced!(SLACK_CHANNEL)
+        end
       rescue
         nil
       end
@@ -70,7 +73,9 @@ module Buddy
 
       # The row, when there is one, is the last line: everything above it is as
       # much as fits in an alert, and the link is where the rest of it lives.
-      def notify_slack(section, exception, user, extra, row=nil)
+      # `repeat` is the note saying this isn't the first of its kind, which is
+      # the difference between an alert and the same alert again.
+      def notify_slack(section, exception, user, extra, row=nil, repeat=nil)
         first_frame = Array(exception.backtrace).first(3).join("\n")
         message = <<~MSG
           *Buddy #{section} failed* for #{ErrorReport.who(user)}
@@ -79,7 +84,7 @@ module Buddy
           #{first_frame}
           ```
           extra: `#{extra.inspect}`
-          #{row&.slack_ref}
+          #{[repeat && ErrorReport.repeat_note(repeat), row&.slack_ref].compact_blank.join(" · ")}
         MSG
         SlackWorker.perform_async(message.strip, SLACK_CHANNEL)
         SLACK_CHANNEL

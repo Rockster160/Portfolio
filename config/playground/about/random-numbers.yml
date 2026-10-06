@@ -1,0 +1,41 @@
+---
+tagline: A browser-based dice roller and random picker with presets, history, and
+  step-by-step results.
+body: |
+  Random Numbers is a browser-based dice roller and random picker. It accepts tabletop dice notation, numeric ranges, or custom option lists and shows the result with a short animation and a history of past rolls.
+
+  ## What it solves
+  Random selection tasks often need more than a single final result. This tool handles dice rolls, draws from a set, and simple random picks without storing anything server-side.
+
+  It also makes each result easier to review by showing the evaluation steps, including how dice expressions are reduced and how arithmetic is applied.
+
+  ## Features
+  - **Presets** One-tap presets cover a dice roll, coin flip, card draw, Magic 8-Ball, and dice sizes from d4 through d100.
+  - **Dice notation** It accepts standard dice expressions with arithmetic and parentheses, including exploding, keeping, and dropping modifiers.
+  - **Ranges** It can pick a value from a numeric range written with two dots, including negatives and decimals.
+  - **Custom sets** It can choose from options pasted as separate lines, pipe-separated values, or comma-separated values.
+  - **Roll mode** It picks with replacement.
+  - **Draw mode** It picks and removes the result from the set.
+  - **Graph mode** It runs 1,000 simulations and shows a bar chart of the outcome distribution with percentages.
+  - **Details panel** It shows each evaluation step, including individual die rolls and the math passes that follow.
+  - **History** It keeps a session table of previous rolls.
+  - **Query prefill** A query parameter can prefill the input.
+
+  ## How to use it
+  1. Enter a dice expression, numeric range, or list of options.
+  2. Or choose one of the preset buttons.
+  3. Select Roll to get a result.
+  4. Use Draw when the chosen item should be removed from the set.
+  5. Open Details to review each step of the calculation.
+  6. Use Graph to view the simulated outcome distribution.
+
+  ## How it works
+  - It runs entirely in the browser.
+  - Dice expressions are parsed by a hand-written interpreter that repeatedly resolves dice tokens and then evaluates arithmetic with parentheses and operator precedence.
+  - Dice modifiers are parsed for exploding, dropping, and keeping results, with protection against infinite explode loops.
+  - Random die values use cryptographic random number generation instead of `Math.random`.
+  - The rolling animation performs repeated re-rolls before recording the final result, and Graph mode builds its frequency table on the client.
+screenshots:
+- file: roll.jpg
+  viewport: phone
+  caption: Dice notation with the full breakdown of each roll.

@@ -1,0 +1,331 @@
+# The Playground's projects, in the order they're listed. See
+# PlaygroundProject for what each key means. About page content for a project
+# lives in config/playground/about/<slug>.yml.
+
+- slug: byte
+  title: "Byte & Buddy"
+  year: 2026
+  access: :owner
+  gate: :byte_access?
+  path: :byte_root
+  subdomain: :byte
+  showcase: true
+  description: "A household chat app with an AI assistant inside it. Buddy turns plain sentences into real tool calls: timers, reminders, routines, lists, check-ins, and things worth remembering."
+
+- slug: jarvis
+  title: "Jarvis"
+  year: 2022
+  access: :owner
+  showcase: true
+  description: "The command layer under everything here. One parser takes text or voice from Alexa, SMS, an iPhone Shortcut, a dashboard, or chat, and turns it into actions."
+
+- slug: system
+  title: "System Hub"
+  year: 2026
+  access: :owner
+  path: :system
+  showcase: true
+  description: "The control room for running this site in production: AI spend, error reports, live database and socket connections, and the queue of things the assistant was asked for and couldn't do yet."
+
+- slug: agenda
+  title: "Agenda"
+  year: 2026
+  access: :guest
+  path: :day
+  description: "An offline-first calendar PWA. Custom scheduling, day, week, and month views, travel-time chaining, fully connected to Jil for event starts, ends, and triggering pre-event scripts."
+
+- slug: chores
+  title: "Chores"
+  year: 2026
+  access: :guest
+  path: :chores
+  description: "Recurring chore tracker with fully custom recurring chores, reminders, and multiples. Includes point for streaks, goals, multipliers, and household sharing."
+
+- slug: interviews
+  title: "Interview Tracker"
+  year: 2026
+  access: :account
+  path: :interviews
+  description: "Track every interaction with each potential company and taking notes for each one."
+
+- slug: timers
+  title: "Timers"
+  year: 2026
+  access: :account
+  path: :timers
+  description: "Timers, counters, alarms, trackers. Multiple on one page and saved templates for re-use."
+
+- slug: board-games
+  title: "Board Games"
+  year: 2026
+  access: :account
+  path: :games
+  description: "Score keeper for game night that runs on one phone beside the table. Works offline, resumes a game in progress, and keeps play history and stats per game."
+
+- slug: list-builders
+  title: "List Builders"
+  year: 2026
+  access: :guest
+  path: :list_builders
+  description: "Touch panels for a shared list. Tap an item to put it on the list, and track how many are left at home, with low and out-of-stock flags. Syncs live across devices."
+
+- slug: meal-builder
+  title: "Meal Builder"
+  year: 2025
+  access: :guest
+  path: :meal_builders
+  description: "Tap together a meal from your usual foods, add one-off items, and log it with a running calorie total. You can backdate the meal to when you ate it."
+
+- slug: custom-charts
+  title: "Custom Charts"
+  year: 2026
+  access: :guest
+  path: :custom_charts
+  description: "Using ActionEvent data that has been logged, configure fully custom charts and graphs and dashboards for visualizing data."
+
+- slug: mtg-glossary
+  title: "MTG Glossary"
+  year: 2026
+  access: :public
+  path: :mtg_glossary
+  description: "Fuzzy search across every keyword action and ability in the Magic: The Gathering comprehensive rules."
+
+- slug: lorcana-glossary
+  title: "Lorcana Glossary"
+  year: 2026
+  access: :public
+  path: :lorcana_glossary
+  description: "The same search, over Disney Lorcana's keywords and rules terms."
+
+- slug: inventory
+  title: "Inventory"
+  year: 2025
+  access: :guest
+  path: :inventory
+  description: "Nested boxes for tracking what's packed where, with search that reaches all the way down. Connect QR labels to sticker onto boxes to quickly scan and see what's inside or find which room and box a specific item is located in."
+
+- slug: jil
+  title: "J.I.L."
+  year: 2024
+  access: :account
+  path: :jil
+  description: "A visual language for automations. \"No code\" style workflow builder that connects the rest of the app all together. Every event has triggers and is queryable and creatable within Jil."
+
+- slug: questions
+  title: "Questions"
+  year: 2024
+  access: :guest
+  path: :prompts
+  description: ""
+  hidden: true
+
+- slug: dashboards
+  title: "Dashboards"
+  year: 2023
+  access: :guest
+  path: :user_dashboard
+  description: "Lay out a grid of buttons and widgets that fire your automations on tap, connect your own websockets to trigger updates or receive broadcasts."
+
+- slug: notes-pages
+  title: "Notes & Pages"
+  year: 2023
+  access: :guest
+  path: :pages
+  description: "Markdown-style notes organized into folders, shareable with anyone else on the site."
+
+- slug: climbs
+  title: "Climbs Tracker"
+  year: 2023
+  access: :guest
+  path: :climbs
+  description: "Log bouldering sessions and track your all-time average, recents, and personal best by day. Quick integrations for tracking climbs by a single press on a smart watch."
+
+- slug: schedules
+  title: "Schedules"
+  year: 2023
+  access: :guest
+  path: :scheduled_tasks
+  description: "Everything queued to run, when it last fired, and what tripped it."
+  hidden: true
+
+- slug: icon-browser
+  title: "Icon Browser"
+  year: 2023
+  access: :public
+  path: :icons
+  description: "Every icon in the site's set, fuzzy-searchable by name or keyword. Click one to copy its class."
+  hidden: true
+
+- slug: surveys
+  title: "Surveys"
+  year: 2022
+  access: :guest
+  path: :surveys
+  description: "Take a survey and see where you land in each category, with results you can share by link."
+
+- slug: contacts
+  title: "Contacts"
+  year: 2022
+  access: :guest
+  path: :contacts
+  description: "Simply an address book for syncing and tracking your Contacts across devices and automations."
+
+- slug: blockly
+  title: "Blockly Sandbox"
+  year: 2022
+  access: :public
+  path: :blockly
+  description: "Google's Blockly wired up as a visual scripting scratchpad — the prototype that became Jil's editor."
+  hidden: true
+
+- slug: calculator
+  title: "Calculator"
+  year: 2021
+  access: :public
+  path: :calc
+  description: "A keypad calculator specifically built with measurements in mind. Convert units and compute fractions quickly and easily."
+
+- slug: bowling
+  title: "Bowling Tracker"
+  year: 2021
+  access: :guest
+  path: :bowling_games
+  description: "League, series, and frame-by-frame game scoring, with per-throw stats for every bowler."
+
+- slug: money-buckets
+  title: "Money Buckets"
+  year: 2021
+  access: :guest
+  path: :money_buckets
+  description: "Split income across spending categories and watch each bucket fill and drain."
+  hidden: true
+
+- slug: events
+  title: "Events"
+  year: 2021
+  access: :guest
+  path: :action_events
+  description: "Log meals, drinks, workouts, moods, or whatever else you want to track an event for. Then use charts to see progress over time or search for historical trends."
+
+- slug: gcode-splitter
+  title: "Gcode Splitter"
+  year: 2020
+  access: :public
+  path: :gcode_splitter_index
+  description: "Splice two Gcode files together with a pause command, so you can swap filament part-way through a print."
+
+- slug: rlcraft-map
+  title: "RLCraft Map"
+  year: 2020
+  access: :public
+  path: :rlcraft
+  description: "A shared, annotated coordinate map for an RLCraft world — drop a pin, name it, and everyone sees it."
+  hidden: true
+
+- slug: recipes
+  title: "Recipes"
+  year: 2019
+  access: :guest
+  path: :recipes
+  description: "Keep recipes online and push their ingredients straight onto a shopping list."
+
+- slug: nfc-relay
+  title: "NFC Relay"
+  year: 2019
+  access: :public
+  path: :nfc
+  description: "Scan an NFC tag and its payload is relayed straight into the site over a socket."
+  hidden: true
+
+- slug: svg-editor
+  title: "SVG Editor"
+  year: 2018
+  access: :public
+  path: :svg_editor
+  description: "Write SVG markup on one side and watch it render on the other, with buttons that stub out each element."
+  hidden: true
+
+- slug: random-numbers
+  title: "Random Numbers"
+  year: 2018
+  access: :public
+  path: :random
+  description: "Dice notation, custom sets of data, or presets. Use it to pick where to eat or draw a card or for complex dice notation rollers."
+
+- slug: emails
+  title: "Emails"
+  year: 2018
+  access: :admin
+  path: :emails
+  description: "Inbound mail, parsed and searchable, feeding the automation triggers that watch for it."
+  hidden: true
+
+- slug: lists
+  title: "Lists"
+  year: 2017
+  access: :guest
+  path: :lists
+  description: "To-do and grocery lists that sync live across every device and everyone you share them with."
+  api: "lists"
+
+- slug: colors
+  title: "Colors"
+  year: 2017
+  access: :public
+  path: :colors
+  description: "Pick two colors and fade between them to pull out a smooth gradient or a single mid-way shade."
+  api: "colors"
+
+- slug: anonicons
+  title: "Anonicon Generator"
+  year: 2017
+  access: :public
+  path: :anonicons
+  description: "Deterministic Anonicons generated by IP or any other value such as username or email. Can be used for assigning unique and identifiable icons to anonymous users."
+  api: "anonicons"
+
+- slug: summoners-war
+  title: "Summoner's War Calculator"
+  year: 2017
+  access: :public
+  path: :summoners_war
+  description: "Work out what a set of runes actually does to each of your monsters' abilities."
+
+- slug: little-world
+  title: "Little World"
+  year: 2017
+  access: :public
+  path: :little_world
+  tags: [wip]
+  description: "A small test project featuring only HTML divs for cells and players. No canvas or pre-made animations. Walk around a small world, see and chat with other players, customize your avatar."
+
+- slug: character-builder
+  title: "Character Builder"
+  year: 2017
+  access: :public
+  path: :character_builder_little_world
+  description: "Design a character for Little World. Kept in your browser, or saved to an account to use across devices."
+
+- slug: cards
+  title: "Cards"
+  year: 2017
+  access: :public
+  path: :deck_cards
+  tags: [wip]
+  description: "A free-form card table: drag, deal, and flip a deck to play any card game, with a Solitaire deal built in."
+
+- slug: maze
+  title: "Maze"
+  year: 2016
+  access: :public
+  path: :maze
+  description: "Random maze generation, addressable by seed and served as a page or plain ASCII text."
+  api: "maze"
+
+- slug: map
+  title: "Map"
+  year: 2016
+  access: :public
+  path: :map
+  description: "Look up an address or a coordinate pair, with clustered markers and custom infoboxes."
+  hidden: true

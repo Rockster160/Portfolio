@@ -1,0 +1,27 @@
+<% locked_reason = playground_locked_reason(project) %>
+<div class="project-wrapper <%= 'is-showcase' if project.showcase? %>">
+  <div class="project-head">
+    <%= link_to project.title, playground_project_path(project), class: "project-title" %>
+    <div class="project-meta">
+      <span class="project-year"><%= project.year %></span>
+      <% if project.tags.include?(:wip) %>
+        <span class="project-tag tag-wip">WIP</span>
+      <% end %>
+      <%= playground_access_tag(project) %>
+    </div>
+  </div>
+  <div class="project-description">
+    <%= project.description %>
+  </div>
+  <div class="project-actions">
+    <%= link_to "About", playground_project_path(project), class: "project-action" %>
+    <% if project.api %>
+      <button type="button" class="project-action" data-modal="#code-example-<%= project.api %>">API</button>
+    <% end %>
+    <% if locked_reason %>
+      <span class="project-action is-open is-locked" data-tooltip="<%= locked_reason %>" tabindex="0" aria-disabled="true">🔒 Open</span>
+    <% elsif project.openable? %>
+      <%= link_to "Open", playground_open_url(project), class: "project-action is-open is-primary" %>
+    <% end %>
+  </div>
+</div>

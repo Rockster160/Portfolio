@@ -1,0 +1,52 @@
+<% about = @project.about %>
+<% locked_reason = playground_locked_reason(@project) %>
+<%= meta_title @project.title %>
+<%= meta_description(about[:tagline].presence || @project.description) %>
+
+<div class="wide-container playground-about">
+  <div class="btn-container about-bar">
+    <%= link_to "Back", playground_path, class: :btn %>
+    <% if @project.openable? && !locked_reason %>
+      <%= link_to "Open #{@project.title}", playground_open_url(@project), class: "btn is-open" %>
+    <% end %>
+  </div>
+  <% if locked_reason %>
+    <div class="about-locked text-center">
+      🔒 <%= locked_reason %>
+      <% if @project.access == :account && current_user.nil? %>
+        · <%= link_to "Sign in", login_path %> · <%= link_to "Create an account", register_path %>
+      <% elsif @project.access == :account && current_user&.guest? %>
+        · <%= link_to "Finish signing up", account_path %>
+      <% end %>
+    </div>
+  <% end %>
+  <div class="breadcrumbs text-center">
+    <%= link_to "Playground", playground_path %> &gt; <%= @project.title %>
+  </div>
+  <h1 style="text-align: center;"><%= @project.title %></h1>
+  <div class="tag-list">
+    <span class="tag"><%= @project.year %></span>
+    <% if @project.tags.include?(:wip) %>
+      <span class="tag">WIP</span>
+    <% end %>
+    <% if @project.access.in?([:account, :admin, :owner]) %>
+      <span class="tag"><%= { account: "Account", admin: "Admin", owner: "Private" }[@project.access] %></span>
+    <% end %>
+  </div>
+  <hr>
+
+  <% if @project.screenshots.any? %>
+    <div class="about-shots">
+      <% @project.screenshots.each do |shot| %>
+        <figure class="about-shot">
+          <%= link_to "/playground/#{@project.slug}/#{shot[:file]}", target: :_blank, rel: :noopener do %>
+            <img src="/playground/<%= @project.slug %>/<%= shot[:file] %>" alt="<%= shot[:caption] %>" loading="lazy">
+          <% end %>
+          <figcaption><%= shot[:caption] %></figcaption>
+        </figure>
+      <% end %>
+    </div>
+  <% end %>
+
+  <%= Markdown.new(about[:body].presence || @project.description.to_s).to_html %>
+</div>

@@ -1,0 +1,40 @@
+---
+tagline: Anonicon Generator creates deterministic identicon avatars from any string.
+body: |
+  Anonicon Generator is a public identicon generator that turns any string into a symmetrical geometric avatar. It provides a page for trying icons and a PNG endpoint for using the image in other places.
+
+  ## What it solves
+  Many sites need a default avatar for anonymous or new users without storing custom images. Anonicon Generator creates the same picture from the same input, so a name, email, or other string can always map to a recognizable icon.
+
+  It also provides a direct image URL, so the generated avatar can be used anywhere an image source is accepted. The page and the image endpoint use the same generator, so the preview and the final image match.
+
+  ## Features
+  - **Deterministic icons** The same input always produces the same avatar.
+  - **Symmetrical design** Each icon uses a 4-way symmetrical grid layout.
+  - **String-based input** Any string can be turned into an icon.
+  - **Random seed** The page can generate a 32-character random seed.
+  - **In-place update** The preview updates on the page without a full reload.
+  - **PNG endpoint** The image can be requested directly from a public PNG URL.
+  - **File suffix handling** Common image suffixes are stripped from the request path.
+  - **Meta preview** Shared links use the generated icon in Open Graph and Twitter preview tags.
+  - **Empty image fallback** If the generator hits a missing value, it returns an empty PNG instead of an error page.
+
+  ## How to use it
+  1. Open the Anonicon Generator page.
+  2. Enter a string such as a username, email, or other identifier.
+  3. Submit the form to generate the icon.
+  4. Use the Random option to create a new seed when needed.
+  5. Copy the image URL if the icon is needed in another page or app.
+  6. Request the PNG endpoint directly to use the icon as an image source.
+
+  ## How it works
+  - The input is hashed with MD5, and parts of the digest choose the visual parts of the icon.
+  - The icon is drawn on a 3x3 grid on a 211 pixel canvas.
+  - A set of normalized polygons is rotated mathematically to form the shapes.
+  - Edge color is derived from the corner color with a hue shift using the chroma gem.
+  - The image is rendered in Ruby with ChunkyPNG and served as PNG data.
+
+screenshots:
+- file: anonicon.jpg
+  viewport: phone
+  caption: Any string becomes the same symmetric icon every time.

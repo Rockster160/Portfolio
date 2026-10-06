@@ -1,0 +1,50 @@
+---
+tagline: A phone-based score keeper for board game nights with offline play and stats.
+body: |
+  Board Games is a score keeper for game night that runs on one phone beside the table. It lets a game be set up once and then reused for play, scoring, and history across sessions.
+
+  ## What it solves
+  Game nights need a way to record rolls, score changes, turns, and winners without passing around paper or depending on a network connection. Board Games keeps that information in one place and supports repeated play with the same game setup.
+
+  It also preserves history and statistics for each game. That makes it possible to review past plays, compare scores, and check dice results after the game is finished.
+
+  ## Features
+  - **Saved setups** Templates store dice rules, scoring mode, win direction, auto-advance, quick score presets, and aliases for renamed games.
+  - **Resume play** The home screen shows a resume card for the current game in progress.
+  - **Play again** Past games appear as tiles sorted by last played, with play counts.
+  - **Live scoring** The play screen records dice totals and per-player score changes during turns.
+  - **Dice input** It supports a value grid, a custom keypad for larger totals, and an optional virtual dice roller.
+  - **Turn control** Undo stays visible, turns can auto-advance, and players can be edited during play.
+  - **Player colors** Player colors are remembered and reused for later plays with the same player name.
+  - **Finish handling** The finish form computes the winner from the saved scores and win rule.
+  - **Replay** A game can be started again with the same players, with the first player rotated.
+  - **Statistics** Each play and game has stats for dice distribution, central tendency, turn time, and a chi-square fairness check.
+
+  ## How to use it
+  1. Create or open a saved game setup.
+  2. Start a play session with the desired players and scoring rules.
+  3. During play, tap dice totals and enter score changes as turns go around.
+  4. Use Undo if a roll or score entry needs to be reversed.
+  5. Finish the game when play ends so the winner is computed from the saved rules.
+  6. Open the history or stats view to review past plays and dice results.
+  7. Use replay to start the same game again with the same players.
+
+  ## How it works
+  - It uses saved game templates to define dice, scoring, win rules, and presets.
+  - It keeps plays, rolls, and score entries tied to the current user's game records.
+  - It supports offline-first play by queuing client-generated UUID records and syncing them later.
+  - Undo is handled as a voided roll or score entry so the change can be synced cleanly.
+  - Stats are computed from exact dice probabilities and shown consistently across play and game views.
+
+screenshots:
+- file: home.jpg
+  viewport: phone
+  caption: Resume a game in progress, start one from a template, or browse past plays.
+- file: play.jpg
+  viewport: phone
+  caption: 'Live play: turn order, scores, and the roll log, on one phone beside the
+    table.'
+- file: stats.jpg
+  viewport: phone
+  caption: 'A finished game: final scores and how the dice actually fell against the
+    odds.'

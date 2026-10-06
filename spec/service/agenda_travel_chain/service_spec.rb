@@ -1086,6 +1086,66 @@ RSpec.describe AgendaTravelChain::Service do
       expect(evt.location).to eq("Far")
     end
 
+    # A geocode that answered for the OLD location text is not an answer about
+    # the new one. It is also what the Distance Matrix leg is measured against,
+    # so keeping it reports a confident drive to somewhere this event isn't.
+    describe "when the corrected location can't be placed" do
+      let(:evt) {
+        make_event(
+          name:     "Yappy Hour",
+          start_at: Time.zone.parse("2026-06-18 18:30"),
+          end_at:   Time.zone.parse("2026-06-18 21:00"),
+          location: "Yappy Hour",
+        )
+      }
+
+      # The bare event name: nothing geocodes it, and Places answers with
+      # whatever is nearest to where they already are.
+      before do
+        allow(address_book).to receive(:geocode).with("Yappy Hour").and_return(nil)
+        allow(address_book).to receive(:nearest_from_name) { |_name, extract:|
+          extract == :address ? "A House In Herriman" : [40.49, -112.02]
+        }
+        evt
+        described_class.new(user, Date.new(2026, 6, 18)).run
+        expect(evt.reload.metadata["travel"]["location_address"]).to eq("A House In Herriman")
+
+        allow(address_book).to receive(:geocode).and_return(nil)
+        allow(address_book).to receive(:nearest_from_name).and_return(nil)
+        evt.update!(location: "1060 S 900 W, Salt Lake City")
+        described_class.new(user, Date.new(2026, 6, 18)).run
+      end
+
+      it "forgets the address it had for the location before" do
+        expect(evt.reload.metadata["travel"]["location_address"]).to be_nil
+      end
+
+      it "measures the drive against the location as typed instead" do
+        expect(address_book).to have_received(:traveltime_seconds)
+          .with("1060 S 900 W, Salt Lake City", any_args).at_least(:once)
+      end
+
+      # Off, so the next run tries again rather than treating the gap as
+      # settled.
+      it "leaves the fingerprint off" do
+        expect(evt.reload.metadata["travel"]["location_fingerprint"]).to be_nil
+      end
+    end
+
+    it "writes nothing when a resolve fails and there was nothing there before" do
+      allow(address_book).to receive(:geocode).and_return(nil)
+      allow(address_book).to receive(:nearest_from_name).and_return(nil)
+      evt = make_event(
+        name:     "Yappy Hour",
+        start_at: Time.zone.parse("2026-06-18 18:30"),
+        end_at:   Time.zone.parse("2026-06-18 21:00"),
+        location: "Yappy Hour",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      expect(evt.reload.metadata["travel"]).not_to have_key("location_address")
+    end
+
     it "re-resolves when the nav address changes (fingerprint tracks it)" do
       evt = make_event(
         name:     "Eyebrow appointment",

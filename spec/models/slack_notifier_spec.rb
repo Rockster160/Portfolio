@@ -22,7 +22,9 @@ RSpec.describe SlackNotifier do
       expect(row.error_class).to eq("ArgumentError")
       expect(row.message).to include("printer refused")
       expect(row.message).to include("Failed to request from PrinterControl")
-      expect(row.channel).to eq("#portfolio")
+      # Nothing left the process in this environment, so nothing is stamped as
+      # announced - which is what keeps `channel` honest.
+      expect(row.channel).to be_nil
     end
 
     # Mail landing and an SMS arriving are the bulk of this channel and neither
@@ -111,6 +113,76 @@ RSpec.describe SlackNotifier do
       expect(SlackWorker).to have_received(:perform_async).with(
         include("push failed", "(##{user.id})"), any_args
       )
+    end
+  end
+
+  # A channel filling up with one incident is a channel nobody reads, so the
+  # repeats are held back - and the row is still written for every one of them.
+  describe "a failure that keeps happening" do
+    before do
+      allow(Rails.env).to receive(:test?).and_return(false)
+      allow(SlackWorker).to receive(:perform_async)
+    end
+
+    def ping(message="printer refused the job")
+      raise ArgumentError, "printer offline"
+    rescue StandardError
+      described_class.notify(message)
+    end
+
+    it "announces the first one and stamps it as announced" do
+      ping
+
+      expect(SlackWorker).to have_received(:perform_async).once
+      expect(ErrorReport.last.channel).to eq("#portfolio")
+    end
+
+    it "holds back the repeats while it is still going" do
+      4.times { ping }
+
+      expect(SlackWorker).to have_received(:perform_async).once
+      expect(ErrorReport.count).to eq(4)
+      expect(ErrorReport.where.not(channel: nil).count).to eq(1)
+    end
+
+    # Starting again after it had stopped is news, and says so.
+    it "speaks up again after a break" do
+      travel_to(2.hours.ago) { ping }
+
+      ping
+
+      expect(SlackWorker).to have_received(:perform_async).twice
+      expect(SlackWorker).to have_received(:perform_async).with(include("back after"), any_args)
+    end
+
+    # Suppressed is not swallowed: one that never stops still gets said again,
+    # carrying everything held back since. Every 20 minutes, so no gap is long
+    # enough to count as a break and it is the same incident throughout.
+    it "says so again when it has been going for hours, with the count" do
+      [150, 130, 110, 90, 70, 50].each { |ago| travel_to(ago.minutes.ago) { ping } }
+
+      travel_to(30.minutes.ago) { ping }
+
+      expect(SlackWorker).to have_received(:perform_async).twice
+      expect(SlackWorker).to have_received(:perform_async).with(
+        include("still going", "of these in the"), any_args
+      )
+    end
+
+    it "announces one that has happened before but was never announced" do
+      travel_to(5.minutes.ago) { ErrorReport.record!(section: "x", message: "printer refused the job") }
+
+      ping
+
+      expect(SlackWorker).to have_received(:perform_async).once
+    end
+
+    # Two failures that aren't the same one don't quiet each other.
+    it "keeps separate failures separate" do
+      ping("printer refused the job")
+      ping("the scanner refused the job")
+
+      expect(SlackWorker).to have_received(:perform_async).twice
     end
   end
 

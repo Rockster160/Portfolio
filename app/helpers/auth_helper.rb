@@ -120,8 +120,12 @@ module AuthHelper
   def authorize_user
     if current_user.nil?
       store_previous_url
+      return if redirect_to_about_page
+
       redirect_to login_path, notice: "Please sign in before continuing."
     elsif current_user.guest?
+      return if redirect_to_about_page
+
       redirect_to account_path, notice: "Please finish setting up your account before continuing."
     end
   end
@@ -129,10 +133,34 @@ module AuthHelper
   def authorize_admin
     if current_user.nil?
       store_previous_url
+      return if redirect_to_about_page
+
       redirect_to login_path, notice: "Please sign in before continuing."
     elsif !current_user.admin?
+      return if redirect_to_about_page
+
       redirect_to account_path, alert: "Sorry, you do not have access to this page."
     end
+  end
+
+  # A page visit turned away from a Playground project lands on that project's
+  # About page, which explains what it is and what opening it takes, rather
+  # than a login wall or a bare error. Returns whether it redirected; anything
+  # that isn't a page visit, or isn't a project, is left to the caller.
+  def redirect_to_about_page # rubocop:disable Naming/PredicateMethod
+    return false unless navigable_request?
+
+    project = PlaygroundProject.for_request(request)
+    return false if project.nil?
+
+    # About pages live on the main site, not on an app's own subdomain.
+    on_app_subdomain = request.subdomain.present? && request.subdomain != "www"
+    if on_app_subdomain
+      redirect_to playground_project_url(project, subdomain: false), allow_other_host: true
+    else
+      redirect_to playground_project_path(project)
+    end
+    true
   end
 
   def current_user

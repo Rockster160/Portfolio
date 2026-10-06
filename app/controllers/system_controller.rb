@@ -411,7 +411,7 @@ class SystemController < ApplicationController
     scope = scope.for_section(params[:section]) if params[:section].present?
     scope = scope.for_class(params[:error_class]) if params[:error_class].present?
     scope = scope.for_user(params[:user_id]) if params[:user_id].present?
-    scope = scope.unannounced if params[:unannounced].present?
+    scope = scope.never_announced if params[:unannounced].present?
     scope = scope.like(params[:fingerprint]) if params[:fingerprint].present?
 
     @total = scope.count
@@ -423,7 +423,11 @@ class SystemController < ApplicationController
 
   def error
     @error = ErrorReport.find(params[:id])
-    @others = ErrorReport.like(@error.fingerprint).where.not(id: @error.id).recent.limit(20)
+    siblings = ErrorReport.like(@error.fingerprint).where.not(id: @error.id)
+    @others = siblings.recent.limit(20)
+    # So a held-back repeat reads as held back rather than as something nobody
+    # was ever told about.
+    @announced_at = siblings.where.not(channel: nil).maximum(:created_at)
   end
 
   def connections

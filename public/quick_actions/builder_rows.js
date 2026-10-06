@@ -21,17 +21,20 @@ export const buildRow = () => {
   const row = document.createElement("div")
   row.className = "brow"
   row.innerHTML = `
-    <div class="brow-icon"></div>
-    <div class="brow-text">
-      <div class="brow-title"></div>
-      <div class="brow-desc"></div>
+    <div class="brow-body">
+      <div class="brow-icon"></div>
+      <div class="brow-text">
+        <div class="brow-badges"></div>
+        <div class="brow-title"></div>
+        <div class="brow-desc"></div>
+      </div>
+      <div class="brow-stepper">
+        <button type="button" class="brow-step" data-step="-1" aria-label="One less">−</button>
+        <span class="brow-count">0</span>
+        <button type="button" class="brow-step" data-step="1" aria-label="One more">+</button>
+        <span class="brow-step brow-edit-hint" aria-hidden="true">✏️</span>
+      </div>
     </div>
-    <div class="brow-stepper">
-      <button type="button" class="brow-step" data-step="-1" aria-label="One less">−</button>
-      <span class="brow-count">0</span>
-      <button type="button" class="brow-step" data-step="1" aria-label="One more">+</button>
-    </div>
-    <div class="brow-edit-hint">✏️</div>
   `
   return row
 }
@@ -65,25 +68,22 @@ export const setIcon = (row, img, fallback) => {
 }
 
 // `badges` is a list of { text, tone } where tone is ok, warn or bad.
-export const setDesc = (row, text, badges = []) => {
-  const desc = row.querySelector(".brow-desc")
-  const sig = JSON.stringify([text, badges])
-  if (desc.dataset.sig === sig) return
-  desc.dataset.sig = sig
+export const setBadges = (row, badges = []) => {
+  const box = row.querySelector(".brow-badges")
+  const sig = JSON.stringify(badges)
+  if (box.dataset.sig === sig) return
+  box.dataset.sig = sig
 
-  desc.replaceChildren()
-  badges.forEach(({ text: label, tone }) => {
+  box.replaceChildren()
+  badges.forEach(({ text, tone }) => {
     const badge = document.createElement("span")
     badge.className = `brow-badge ${tone || ""}`
-    badge.textContent = label
-    desc.appendChild(badge)
+    badge.textContent = text
+    box.appendChild(badge)
   })
-  if (text) {
-    const span = document.createElement("span")
-    span.textContent = text
-    desc.appendChild(span)
-  }
 }
+
+export const setDesc = (row, text) => setText(row.querySelector(".brow-desc"), text || "")
 
 export const setCount = (row, count) => {
   setText(row.querySelector(".brow-count"), String(count))

@@ -512,3 +512,10 @@ input[type="range"] {
     }
   }
 }
+
+// Dots without type="password", which is what password managers key on. Used
+// for secrets the app stores, so 1Password doesn't offer to fill or save them.
+input.text-security {
+  text-security: disc;
+  -webkit-text-security: disc;
+}

@@ -86,13 +86,21 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
 
   // ---- rendering ----------------------------------------------------------
 
+  // 0 is asking for a person, 1 is still going, 2 is over. A settled chip is
+  // worth seeing and worth seeing LAST — it is the only one on the strip that
+  // wants nothing, so it is the one to push off the end when the strip is full.
+  function rank(p) {
+    if (p.state === "finished") return 2;
+    return p.state === "running" ? 1 : 0;
+  }
+
   function ordered() {
     // Anything asking for a person first, then oldest — a long run keeps its
     // place while short ones come and go beneath it.
     return Array.from(processes.values()).sort((a, b) => {
-      const wa = a.state === "running" ? 1 : 0;
-      const wb = b.state === "running" ? 1 : 0;
-      if (wa !== wb) return wa - wb;
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
       return Date.parse(a.started_at || 0) - Date.parse(b.started_at || 0);
     });
   }
@@ -280,9 +288,18 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
 
   // ---- store mutations ----------------------------------------------------
 
+  // `finished_at` is the SERVER saying this is gone — the × , or a caller that
+  // cleared it. That is the only thing that takes a chip off the strip here.
+  //
+  // `state: "finished"` is a different statement: the work is over and the
+  // OUTCOME is the part worth seeing. Deleting on it meant the strip could only
+  // ever say that something still needed doing — an application reported itself
+  // filled-and-waiting, and then went silent whether it was sent, skipped or
+  // dropped. It settles in place instead, and leaves when it is dismissed or
+  // when the server stops listing it (a day after its last heartbeat).
   function upsert(p) {
     if (!p || !p.key) return;
-    if (p.state === "finished" || p.finished_at) processes.delete(p.key);
+    if (p.finished_at) processes.delete(p.key);
     else processes.set(p.key, p);
     render();
   }

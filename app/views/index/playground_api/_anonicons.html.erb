@@ -1,0 +1,7 @@
+<%= render_modal "code-example-anonicons", "Anonicons" do %>
+    <p>Pass any string to generate an Identicon. This is commonly an IP Address or an email, but can be any string or value.</p>
+    <p>The return is the binary for a PNG that is unique to the string passed.</p>
+    <p>This can be used as a default image for newly signed up users to a website.</p>
+    <%= raw pretty(:bash, "requests/anonicons/show.json") %>
+    <pre class="preformat text-center"><%= image_tag "/anonicons/#{Rails.env.development? ? "127.0.0.1" : request.ip}", width: 100 %></pre>
+<% end %>

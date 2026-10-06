@@ -1,0 +1,36 @@
+---
+tagline: Summoners War Calculator shows final stats and skill damage for a selected
+  monster.
+body: |
+  Summoners War Calculator is a stat calculator for the mobile game Summoners War. It shows final monster stats and damage values for each skill based on rune bonuses and skill formulas.
+
+  ## What it solves
+  It helps calculate what a monster’s actual stats and skill damage will be after rune bonuses are added. It also evaluates skill formulas into concrete damage numbers, including critical hits.
+
+  Instead of working from formula text alone, it turns base stats and skill multipliers into displayed results for a chosen monster.
+
+  ## Features
+  - **Monster search** Pick a monster from a searchable list with portrait, star rating, element icon, and archetype.
+  - **Base and bonus stats** Enter rune bonus values for HP, ATK, DEF, SPD, Crit Rate, Crit Dmg, RES, and ACC.
+  - **Live totals** See each stat’s base value, bonus input, and computed total update as values change.
+  - **Skill damage rows** View one row per skill with its description, multiplier formula, damage number, and crit-damage figure.
+  - **Multi-hit labels** Show hit counts in the skill row, such as x3.
+  - **Number formatting** Display thousands separators and percentage formatting for stat values.
+  - **On-demand monster data** Load monster details and nested skills as JSON when needed.
+  - **Formula evaluation** Calculate skill damage from text formulas after substituting the current stat totals.
+
+  ## How to use it
+  1. Open the calculator page.
+  2. Choose a monster from the searchable list.
+  3. Enter the rune bonus values for the stats you want to test.
+  4. Review the updated final stat totals in the table.
+  5. Check each skill row to see the evaluated damage and crit damage.
+  6. Adjust the bonus values to compare different builds.
+
+  ## How it works
+  - Monster data is loaded on demand as JSON, including the monster’s skills.
+  - Skill multiplier formulas are stored as text and evaluated client-side with a math-expression parser.
+  - Stat names in the formulas are replaced with computed totals before the expression is simplified.
+  - The monster list includes display data such as portrait, element, stars, and archetype.
+  - Stat names are normalized through helper methods and element and archetype values use Rails enums.
+

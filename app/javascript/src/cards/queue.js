@@ -40,3 +40,6 @@ Queue.prototype.process = function() {
   var q = this
   this.runningQueue = setInterval(function() { q.run() }, 1)
 }
+
+// Bundled as a module, so the deal in cardGame.js needs it exposed.
+window.Queue = Queue

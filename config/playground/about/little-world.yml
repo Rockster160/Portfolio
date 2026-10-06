@@ -1,0 +1,40 @@
+---
+tagline: Little World is a browser-based multiplayer tile world with chat, movement,
+  and avatar customization.
+body: |
+  Little World is a small multiplayer browser world built from plain HTML divs. It shows a tile map, animated player characters, and chat bubbles above each player.
+
+  ## What it solves
+  It gives visitors a shared space where they can walk around a map, see other connected players in real time, and chat. The page also keeps each avatar's position and appearance, so returning players continue from where they left off.
+
+  It avoids a canvas or game engine and uses the DOM, server-rendered partials, and WebSockets instead. That makes the world render as standard page content while still supporting movement, presence, and chat.
+
+  ## Features
+  - **Tile movement** Click or tap a walkable tile and the character pathfinds there with a walking animation.
+  - **Live players** Other connected players appear, move, and disappear in real time.
+  - **Chat bubbles** Messages appear in a chat log and as fading speech bubbles above the speaker.
+  - **Position memory** The character's last location is saved and restored later.
+  - **Character Builder look** The avatar's appearance comes from the Character Builder.
+  - **Debug overlay** A coordinate overlay shows the player's tile and the mouse's tile.
+  - **Keyboard shortcuts** Space recenters the view on the character, and J jumps to the hovered tile.
+  - **Welcome message** First-time visitors see a message that links to the Character Builder.
+  - **Touch support** Tap-to-move works on touch devices, with pinch-zoom suppression on iOS.
+
+  ## How to use it
+  1. Open Little World in a browser.
+  2. Click or tap a walkable tile to move the character there.
+  3. Press Enter or tap the chat button to send a message.
+  4. Use Space to recenter the view on the character.
+  5. Use J to jump to the tile under the pointer.
+  6. Change the avatar in the Character Builder, then return to see the updated look.
+
+  ## How it works
+  - The map is generated from ASCII layer files and rendered as one div per cell.
+  - Non-zero collision cells become obstacles, and the remaining cells are marked walkable.
+  - Grass tiles are auto-tiled from neighboring cells, with a fixed random seed so the layout stays the same on every load.
+  - Movement uses A* pathfinding on a four-direction grid over the walkable DOM tiles.
+  - Multiplayer uses ActionCable to broadcast login, logout, chat, and movement updates, with server-rendered HTML for player and message inserts.
+screenshots:
+- file: world.jpg
+  viewport: desktop
+  caption: Walking around the shared world.
