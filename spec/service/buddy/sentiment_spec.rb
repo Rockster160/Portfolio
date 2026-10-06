@@ -95,7 +95,7 @@ RSpec.describe Buddy::Sentiment do
     # Each theme has a different set and must answer from its OWN — a reading
     # is theme-independent, a face never is.
     it "answers out of the theme's own faces" do
-      %w[byte moss suki glimmer].each { |theme|
+      %w[byte moss suki glimmer kumoko].each { |theme|
         face = Buddy::Faces.nearest(theme, { warmth: 0.9, play: 0.5, weight: 0.2, strain: 0.05 })
         expect(Buddy::Faces.selectable?(theme, face)).to be(true), "#{theme} answered #{face.inspect}"
       }
@@ -104,7 +104,7 @@ RSpec.describe Buddy::Sentiment do
     # A face with no profile can never be picked, which is a silent way for a
     # newly-added one to be unreachable.
     it "has a profile for every face any theme can wear" do
-      %w[byte moss suki glimmer].each { |theme|
+      %w[byte moss suki glimmer kumoko].each { |theme|
         missing = Buddy::Faces.selectable(theme).reject { |face| Buddy::Faces.profile(face, theme) }
         expect(missing).to be_empty, "#{theme} has no profile for #{missing.inspect}"
       }
@@ -119,7 +119,7 @@ RSpec.describe Buddy::Sentiment do
         { warmth: w / 10.0, play: p / 10.0, weight: g / 10.0, strain: s / 10.0 }
       }
 
-      %w[byte moss suki glimmer].each { |theme|
+      %w[byte moss suki glimmer kumoko].each { |theme|
         reached = readings.map { |reading| Buddy::Faces.nearest(theme, reading, skip: []) }.uniq
         unreachable = Buddy::Faces.selectable(theme) - reached
         expect(unreachable).to be_empty, "#{theme} can never show #{unreachable.inspect}"

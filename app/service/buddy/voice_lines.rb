@@ -16,6 +16,8 @@ module Buddy
   # Faces are checked against what the theme can actually render (Buddy::Faces
   # reads the image files), so a face that gets removed from the art degrades
   # to "no expression change" rather than a blank pet.
+  # rubocop:disable Metrics/ModuleLength -- almost all of it is LINES, one
+  # block of hand-written lines per pet, and it grows by one with every pet.
   module VoiceLines
     module_function
 
@@ -211,6 +213,50 @@ module Buddy
           { say: "Hello!", mood: :grin },
         ],
       },
+      kumoko:  {
+        routine_run:         [
+          { say: "Leave it to me. **%<name>s**, going now.", mood: :happy },
+          { say: "**%<name>s**? Strung up and running. *skitters*", mood: :wink },
+          { say: "Okay, let's do this. **%<name>s**.", mood: :eager },
+          { say: "Thread's pulled. **%<name>s** is moving.", mood: :happy },
+          { say: "**%<name>s**, as laid out in my web. I'm a genius.", mood: :wink },
+          { say: "On it. **%<name>s**, coming right up.", mood: :cheering },
+          { say: "Trap sprung. **%<name>s** is go.", mood: :wink },
+          { say: "Running **%<name>s**. Eight legs, zero problems.", mood: :happy },
+          { say: "**%<name>s**! I'm fired up.", mood: :cheering },
+          { say: "Got it. **%<name>s** is off.", mood: :eager },
+        ],
+        routine_empty:       [
+          { say: "...Except nothing in it moved. Not good. Whatever it points at might be gone.", mood: :confused },
+          { say: "Huh? None of it went. Something it reaches for has wandered off.", mood: :surprised },
+          { say: "And then nothing happened. Seriously!? Every step came up empty.", mood: :sad },
+          { say: "Hm. Empty web. None of the steps found what they wanted.", mood: :confused },
+        ],
+        greeting_morning:    [
+          { say: "Morning!", mood: :happy },
+          { say: "Good morning! I survived the night, how about you?", mood: :cheering },
+          { say: "Hey! Morning already!?", mood: :surprised },
+          { say: "Hi! Webs are spun, coffee's your job!", mood: :wink },
+        ],
+        greeting_afternoon:  [
+          { say: "Afternoon!", mood: :happy },
+          { say: "Hey hey!", mood: :wink },
+          { say: "Hi! Still alive over here!", mood: :cheering },
+          { say: "Hello! Snack status?", mood: :munching },
+        ],
+        greeting_evening:    [
+          { say: "Evening!", mood: :happy },
+          { say: "Hey! Made it through the day!", mood: :cheering },
+          { say: "Hi! Dinner yet!?", mood: :munching },
+          { say: "Good evening!", mood: :loving },
+        ],
+        greeting_late_night: [
+          { say: "Hey! Still up!?", mood: :surprised },
+          { say: "Hi! Night shift, huh!", mood: :wink },
+          { say: "Hello! I was hanging upside down, it's fine!", mood: :happy },
+          { say: "Hey hey!", mood: :eager },
+        ],
+      },
     }.freeze
 
     # A line and the face that goes with it: `{ text:, mood: }`. `mood` is nil
@@ -271,4 +317,5 @@ module Buddy
       say
     end
   end
+  # rubocop:enable Metrics/ModuleLength
 end

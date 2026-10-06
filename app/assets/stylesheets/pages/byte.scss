@@ -125,6 +125,27 @@ html.html-ctr-byte body {
     --bs-pending: #B09A6E;
   }
 
+  // Kumoko theme — a dark burrow brown for the fuzzy spider, her copper fur as
+  // the accent. Same `:has` override as the others. The reader's own (outbound)
+  // messages keep Byte's blue, which sits well clear of the copper.
+  &:has(.byte-app[data-buddy-theme="kumoko"]) {
+    --bs-bg: #140C09;
+    --bs-panel: #22150F;
+    --bs-panel-soft: #301E15;
+    --bs-border: #4A2E20;
+    --bs-text: #F6EBE3;
+    --bs-text-buddy: #F2CDB4;  // 9.8:1 on --bs-them-bg
+    --bs-muted: #C49A82;
+    --bs-accent: #E8894A;
+    --bs-accent-strong: #FFAA6E;
+    --bs-me-bg: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);  // Rocco blue
+    --bs-accent-grad: linear-gradient(135deg, #C8662E 0%, #E8894A 100%);  // copper buttons
+    --bs-them-bg: #3A2418;
+    --bs-danger: #F07060;
+    --bs-attention: #F0B45C;
+    --bs-pending: #A88C78;
+  }
+
   .byte-app,
   .byte-app *,
   .byte-drawer,
@@ -1134,6 +1155,11 @@ html.html-ctr-byte body {
     background: rgba(178, 102, 242, 0.13);
     border-left: 3px solid #b266f2;
     color: #D9BAF3;
+  }
+  &[data-peer-theme="kumoko"] {
+    background: rgba(232, 137, 74, 0.13);
+    border-left: 3px solid #e8894a;
+    color: #F2CDB4;
   }
 
   // Attribution header atop the bubble. Incoming: the sending Buddy's icon +
@@ -4850,6 +4876,12 @@ dialog.byte-modal {
     --buddy-danger: #E8825C;
   }
 
+  &[data-buddy-theme="kumoko"] {
+    --buddy-primary: #3A2418;
+    --buddy-accent: #E8894A;
+    --buddy-danger: #F07060;
+  }
+
   &[hidden] {
     display: none;
   }
@@ -4973,7 +5005,8 @@ dialog.byte-modal {
 // it. (The compact layout overrides this padding back to 8px.)
 .byte-buddy-hero[data-buddy-theme="moss"],
 .byte-buddy-hero[data-buddy-theme="suki"],
-.byte-buddy-hero[data-buddy-theme="glimmer"] {
+.byte-buddy-hero[data-buddy-theme="glimmer"],
+.byte-buddy-hero[data-buddy-theme="kumoko"] {
   padding-top: 3vh;
 }
 .byte-buddy-body,
@@ -5155,6 +5188,35 @@ $suki_expr_aliases: (
   .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
     background-image: image-url("buddy/suki/face_#{$face}.png");
+  }
+}
+
+// Kumoko — spliced from two pose sheets drawn in one style. Each name here
+// must have a matching buddy/kumoko/face_#{name}.png or precompile fails.
+$kumoko_expressions: neutral happy loving wink surprised confused sad sleeping munching cheering angry nervous eager bashful star thinking hiding touched content peeking umbrella;
+@each $expr in $kumoko_expressions {
+  .byte-buddy-hero[data-buddy-theme="kumoko"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/kumoko/face_#{$expr}.png");
+  }
+}
+// Moods Kumoko has no art for, aliased to the closest pose she does have.
+$kumoko_expr_aliases: (
+  "crying": "sad",
+  "frustrated": "angry",
+  "annoyed": "angry",
+  "unamused": "confused",
+  "queasy": "nervous",
+  "dismayed": "nervous",
+  "dizzy": "confused",
+  "shocked": "surprised",
+  "celebrating": "cheering",
+  "encouraging": "happy",
+);
+@each $mood, $face in $kumoko_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="kumoko"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/kumoko/face_#{$face}.png");
   }
 }
 

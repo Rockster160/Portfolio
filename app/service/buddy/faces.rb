@@ -88,9 +88,9 @@ module Buddy
       # THREE drawings under one name, which is why INDEX is keyed by theme:
       # Moss's and Glimmer's are round and still, Byte's is squashed flat and
       # sparkling. The prose covers all of them; the numbers no longer have to.
-      content:       "eyes-closed smile — settled and satisfied on Moss and Glimmer; on Byte, squashed flat and sparkling, pleased and a bit melted about it",
+      content:       "eyes-closed smile — settled and satisfied on Moss, Glimmer and Kumoko; on Byte, squashed flat and sparkling, pleased and a bit melted about it",
       grin:          "big beaming grin — laughing, thrilled, delighted",
-      star:          "star-shaped eyes — starstruck, dazzled, over-the-moon excited",
+      star:          "star-shaped eyes (on Kumoko, sparkling eyes in a burst of sparkles) — starstruck, dazzled, over-the-moon excited",
       wink:          "one-eyed wink and a smirk — playful, cheeky, teasing",
       shocked:       "wide staring eyes — stunned, taken aback, alarmed",
       frustrated:    "scrunched >< eyes and a gritted grimace — fed up, exasperated, at wit's end",
@@ -104,6 +104,14 @@ module Buddy
       cheery:        "eyes-closed open-mouth beam, wing to a blushing cheek — warm, delighted, tickled, quietly pleased",
       offering:      "holding up a little tub of food — bringing you something, being helpful, the sugar-beak move",
       excited:       "wings thrown wide with sparkles — thrilled, over-the-moon, celebrating a win",
+      # Kumoko extras
+      munching:      "big eyes peering over a leaf she's clutching to her mouth — nibbling, peckish, quietly pleased with a snack",
+      umbrella:      "a leaf held over her head like an umbrella, open smile — weathering it, got it covered, cheerful under something rough",
+      nervous:       "worried brows, wobbly smile, a sweat drop — nervous, sheepish, uh-oh, not sure this is going to go well",
+      bashful:       "eyes closed, cheeks blushing, small smile — bashful, flattered, embarrassed by something sincere",
+      hiding:        "tucked under a leaf like a blanket, just the eyes out — hiding, wanting to disappear, overwhelmed in a cute way",
+      touched:       "glassy, teary eyes and a wobbly little smile — moved, touched, grateful, about to cry in a good way",
+      peeking:       "just her eyes and front legs over an edge — sneaking a look, checking in, shy curiosity",
     }.freeze
 
     # ---- the index: every face a pet HAS, with its own numbers -------------
@@ -225,6 +233,27 @@ module Buddy
         star:      { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
         surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
       },
+      kumoko:  {
+        angry:     { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        bashful:   { warmth: 0.75, play: 0.30, weight: 0.30, strain: 0.05, reach: 0.25 },
+        cheering:  { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:  { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:   { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        eager:     { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        happy:     { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hiding:    { warmth: 0.45, play: 0.60, weight: 0.30, strain: 0.60, reach: 0.18 },
+        loving:    { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        munching:  { warmth: 0.70, play: 0.65, weight: 0.05, strain: 0.10, reach: 0.18 },
+        nervous:   { warmth: 0.30, play: 0.25, weight: 0.60, strain: 0.60, reach: 0.18 },
+        neutral:   { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        peeking:   { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+        sad:       { warmth: 0.10, play: 0.05, weight: 0.80, strain: 0.25, reach: 0.20 },
+        star:      { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
+        surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
+        touched:   { warmth: 0.80, play: 0.10, weight: 0.85, strain: 0.10, reach: 0.15 },
+        umbrella:  { warmth: 0.65, play: 0.50, weight: 0.45, strain: 0.45, reach: 0.20 },
+        wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
+      },
     }.freeze
 
     # The faces that are the pet CROSS about something. Every one of them is a
@@ -262,12 +291,13 @@ module Buddy
     #
     # - `neutral_blush` is being flattered, and nobody was.
     # - `nerd` is having worked something out, which running a tool is not.
+    # - `bashful` is Kumoko's blush, the same reason as `neutral_blush`.
     #
     # A skip and not a number, for the reason TENDER above is one: the axes
     # measure how a moment FEELS and cannot say what it is ABOUT, and what IS
     # known is that the turn did something. Both stay reachable on every turn
     # that only talked, which is where each of them is right.
-    NOT_A_CONFIRMATION = %i[neutral_blush nerd].freeze
+    NOT_A_CONFIRMATION = %i[neutral_blush nerd bashful].freeze
 
     # `content` used to need naming here too, for Byte and only Byte: its art
     # reused the row written for Moss's - a round mossy ball with its eyes

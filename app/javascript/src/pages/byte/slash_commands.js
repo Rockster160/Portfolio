@@ -45,7 +45,7 @@ const COMMANDS = [
 
   // Buddy mode
   { name: "today",    modes: ["buddy"], description: "Send the Today briefing now" },
-  { name: "buddy",    modes: ["buddy"], description: "Switch this thread's pet",                         args: "<byte|moss|suki|glimmer>" },
+  { name: "buddy",    modes: ["buddy"], description: "Switch this thread's pet",                         args: "<byte|moss|suki|glimmer|kumoko>" },
   { name: "reset",    modes: ["buddy"], description: "Fresh start here — stop sending everything above as history" },
   { name: "compact",  modes: ["buddy"], alias: true, description: "Alias for /reset" },
 

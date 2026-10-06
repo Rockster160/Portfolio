@@ -27,7 +27,7 @@ module Buddy
     ALL = {
       byte: {
         name:           "Byte",
-        tone:           :byte,
+        tone:           :rimuru,
         color:          "#0E1930",
         avatar:         "byte_favicon/byte.png",
         touch_icon:     "byte_favicon/apple-touch-icon.png",
@@ -64,6 +64,16 @@ module Buddy
         favicon:        "glimmer_favicon/glimmer-favicon-96x96.png",
         manifest:       "/glimmer.webmanifest",
         kiosk_manifest: "/glimmer_kiosk.webmanifest",
+      },
+      kumoko: {
+        name:           "Kumoko",
+        tone:           :kumoko,
+        color:          "#22140F",
+        avatar:         "kumoko_favicon/kumoko.png",
+        touch_icon:     "kumoko_favicon/kumoko-apple-touch-icon.png",
+        favicon:        "kumoko_favicon/kumoko-favicon-96x96.png",
+        manifest:       "/kumoko.webmanifest",
+        kiosk_manifest: "/kumoko_kiosk.webmanifest",
       },
     }.freeze
 

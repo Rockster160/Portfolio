@@ -71,7 +71,7 @@ RSpec.describe Buddy::ExpressionState do
   describe "the SCSS lists and the art on disk" do
     scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
 
-    %w[byte moss glimmer suki].each do |theme|
+    %w[byte moss glimmer suki kumoko].each do |theme|
       listed = scss[/\$#{theme}_expressions:\s*([^;]+);/, 1].to_s.split.map(&:to_sym)
 
       it "#{theme} lists every face it has, and has every face it lists" do
@@ -101,7 +101,7 @@ RSpec.describe Buddy::ExpressionState do
     # missing, so a theme without one of these fails SILENTLY — Suki went
     # without `sad` for weeks and a tap on "rough" moved nothing.
     it "every theme can wear both check-in faces" do
-      %w[byte moss glimmer suki].each do |theme|
+      %w[byte moss glimmer suki kumoko].each do |theme|
         %i[happy sad].each do |face|
           expect(Buddy::Faces.valid?(theme, face)).to be(true), "#{theme} cannot render #{face}"
         end
