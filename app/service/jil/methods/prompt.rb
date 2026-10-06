@@ -20,6 +20,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   #   #checkbox(String:"Question Text" BR "Default" Boolean)
   #   #choices(String:"Question Text" content(String))
   #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
+  #   #hint(String)
 
   def find(id)
     prompts.find_by(id: id)
@@ -188,6 +189,15 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       type:     :hidden,
       question: key,
       default:  value,
+    }
+  end
+
+  # Small print under the question before it — what a default was based on, so
+  # it can be checked rather than trusted. No input, so it posts nothing.
+  def hint(text)
+    {
+      type:     :hint,
+      question: text,
     }
   end
 

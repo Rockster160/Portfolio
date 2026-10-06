@@ -6,7 +6,7 @@
   <% default = option[:default] %>
 
   <% base_key = "#{field_prefix}[#{question}]" %>
-  <% unless option[:type].to_sym == :hidden %>
+  <% unless option[:type].to_sym.in?([:hidden, :hint]) %>
     <% if question.split(" | ").length == 2 %>
       <p class="centered-options">
         <% left, right = question.split(" | ") %>
@@ -164,6 +164,8 @@
     %>
   <% when :hidden %>
     <%= hidden_field_tag base_key, default %>
+  <% when :hint %>
+    <%= simple_format(question, class: "prompt-hint") %>
   <% else %>
     Unknown: <%= option[:type] %> (<%= option %>)
   <% end %>

@@ -1,0 +1,24 @@
+<div class="skinny-container lists-index-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+    <a href="<%= new_jil_gpt_preset_path %>" class="btn pull-right">New Preset</a>
+  </div>
+  <div class="lists-title">GPT Presets</div>
+  <p class="text-center">
+    Requests are paid for by the OpenAI key you name in GPT.connection — save it under
+    <a href="<%= jil_secrets_path %>">Secrets</a>.
+  </p>
+
+  <div class="lists">
+    <% @presets.each do |preset| %>
+      <div class="list-item-container">
+        <a href="<%= edit_jil_gpt_preset_path(preset) %>" class="list-item">
+          <span class="item-name"><%= preset.name %></span>
+          <div class="list-item-brief">
+            <div class="right-brief"><%= preset.instructions.truncate(80) %></div>
+          </div>
+        </a>
+      </div>
+    <% end %>
+  </div>
+</div>

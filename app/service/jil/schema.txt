@@ -462,6 +462,7 @@
   #time(String:"Question Text" BR "Default" Date?)
   #color(String:"Question Text" BR "Default" String)
   #hidden(String:"Key" Any:"Value")
+  #hint(String) // Small print under the question before it. Posts nothing.
 [Task]
   #find(String|Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array
@@ -529,6 +530,12 @@
   #notifySelf(String:"Title" String?:"Body" String?:"Tag" String?:"Icon")
   #notifyAll(String:"Title" String?:"Body" String?:"Tag" String?:"Icon")
   #dismiss(String:"Tag")
+[GPT]
+  #connection("Secret" TAB String) // Name of an OpenAI key saved at /jil/secrets
+  .ask(Text)::String
+  .askJson(Text)::Hash // Text must say which keys the object should have
+  .preset(String:"Preset" BR Text)::String // Preset instructions from /jil/gpt + the text, as one request
+  .presetJson(String:"Preset" BR Text)::Hash
 [Sms]
   #deliver(Text)::Boolean
 [Buddy]

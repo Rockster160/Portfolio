@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_06_185210) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1228,6 +1228,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
     t.index ["user_id"], name: "index_google_accounts_on_user_id"
   end
 
+  create_table "gpt_presets", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "name", null: false
+    t.text "instructions", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "user_id, lower(name)", name: "index_gpt_presets_on_user_id_LOWER_name", unique: true
+    t.index ["user_id"], name: "index_gpt_presets_on_user_id"
+  end
+
   create_table "household_glossary_terms", force: :cascade do |t|
     t.bigint "chore_household_id"
     t.text "term", null: false
@@ -1914,6 +1924,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
     t.index ["user_id", "channel"], name: "index_user_push_subscriptions_on_user_id_and_channel"
   end
 
+  create_table "user_secrets", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "name", null: false
+    t.text "value", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "user_id, lower(name)", name: "index_user_secrets_on_user_id_LOWER_name", unique: true
+    t.index ["user_id"], name: "index_user_secrets_on_user_id"
+  end
+
   create_table "user_survey_responses", id: :serial, force: :cascade do |t|
     t.integer "user_id"
     t.integer "survey_id"
@@ -2043,6 +2063,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
   add_foreign_key "game_score_entries", "game_plays"
   add_foreign_key "game_templates", "users"
   add_foreign_key "google_accounts", "users"
+  add_foreign_key "gpt_presets", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"
   add_foreign_key "image_descriptions", "active_storage_blobs", column: "blob_id"
@@ -2079,5 +2100,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_05_204702) do
   add_foreign_key "timer_share_tokens", "users"
   add_foreign_key "timers", "timer_pages"
   add_foreign_key "timers", "users"
+  add_foreign_key "user_secrets", "users"
   add_foreign_key "users", "chore_households"
 end

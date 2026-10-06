@@ -88,6 +88,8 @@ class User < ApplicationRecord
   # def user_dashboard; super() || build_user_dashboard; end
   has_many :caches, class_name: "UserCache"
   has_many :google_accounts, dependent: :destroy
+  has_many :gpt_presets, class_name: "GPTPreset", dependent: :destroy
+  has_many :secrets, class_name: "UserSecret", dependent: :destroy
 
   has_many :chores, foreign_key: :created_by_user_id, dependent: :destroy
   has_many :chore_completions, dependent: :destroy

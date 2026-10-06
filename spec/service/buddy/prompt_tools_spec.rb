@@ -216,6 +216,20 @@ RSpec.describe "Buddy prompt tools" do
       expect(form.summary_lines(response)).to eq(["What sounds good?: tacos"])
     end
 
+    it "carries a hint as small print on the field above it, never as a question" do
+      prompt = make_prompt(question: "How many calories was Betos Burrito?", options: [
+        { "question" => "Calories", "type" => "text", "default" => "850" },
+        { "question" => "Full California burrito - 850", "type" => "hint" },
+        { "question" => "Caffeine", "type" => "text", "default" => "" },
+      ])
+      form = form_for(prompt)
+
+      expect(form.fields.pluck(:question)).to eq(["Calories", "Caffeine"])
+      expect(form.form_fields.first[:hint]).to eq("Full California burrito - 850")
+      expect(form.form_fields.last).not_to have_key(:hint)
+      expect(form.build_response({ "Caffeine" => "0" })).to eq("Calories" => "850", "Caffeine" => "0")
+    end
+
     it "reports a prompt whose options are not a question list as unanswerable" do
       prompt = make_prompt(question: "Legacy", options: { "some" => "hash" })
 

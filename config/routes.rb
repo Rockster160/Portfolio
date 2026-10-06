@@ -550,6 +550,8 @@ Rails.application.routes.draw do
       post :toggle_collapsed, on: :member
     end
     resources :user_cache, path: :cache
+    resources :gpt_presets, path: :gpt, except: :show
+    resources :secrets, only: [:index, :create, :destroy]
   end
   get "t/:id" => "jil/tasks#trigger"
   get "jil/p/:id" => "jil/pages#show", as: :jil_page

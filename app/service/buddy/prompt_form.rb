@@ -131,6 +131,7 @@ module Buddy
           choices:  field[:choices],
           min:      field[:min],
           max:      field[:max],
+          hint:     field[:hint],
           # Everything on a prompt has to end up with a value — that's what the
           # page enforces, and a half-submitted survey is worse than none.
           required: true,
@@ -155,7 +156,14 @@ module Buddy
     end
 
     def visible
-      @visible ||= options.reject { |o| type_of(o) == :hidden }
+      @visible ||= options.reject { |o| type_of(o).in?([:hidden, :hint]) }
+    end
+
+    # A hint is small print under the field before it on the page, so it rides
+    # along on that field rather than being a question of its own.
+    def hint_for(option)
+      after = options.drop(options.index { |o| o.equal?(option) } + 1)
+      after.take_while { |o| type_of(o) == :hint }.map { |o| question_of(o) }.join("\n").presence
     end
 
     def hidden
@@ -183,6 +191,7 @@ module Buddy
         choices:  Array(option[:choices]).presence,
         min:      option[:min],
         max:      option[:max],
+        hint:     hint_for(option),
       }.compact
     end
 

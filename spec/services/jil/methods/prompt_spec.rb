@@ -54,4 +54,20 @@ RSpec.describe Jil::Methods::Prompt do
       expect(ctx[:output]).to eq([])
     end
   end
+
+  describe "#hint" do
+    let(:code) {
+      <<-JIL
+        p = Prompt.create("How many calories was toast?", "", {
+          c = PromptQuestion.text("Calories", "170")::PromptQuestion
+          h = PromptQuestion.hint("Two slices white toast - 170")::PromptQuestion
+        }, false)::Prompt
+      JIL
+    }
+
+    it "sits in the question list as text with no default to post" do
+      expect_successful_jil
+      expect(Prompt.last.options.last).to eq({ "type" => "hint", "question" => "Two slices white toast - 170" })
+    end
+  end
 end

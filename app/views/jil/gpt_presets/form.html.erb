@@ -1,0 +1,29 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= jil_gpt_presets_path %>" class="btn">&larr; GPT Presets</a>
+    <% if @preset.persisted? %>
+      <%= link_to :Delete, jil_gpt_preset_path(@preset), method: :delete, class: "btn danger pull-right", data: { confirm: "Delete #{@preset.name}?" } %>
+    <% end %>
+  </div>
+  <%= form_for @preset, url: @preset.persisted? ? jil_gpt_preset_path(@preset) : jil_gpt_presets_path do |f| %>
+    <div class="form-title"><%= @preset.persisted? ? :Edit : :New %> GPT Preset</div>
+
+    <%= render partial: "layouts/error_container", locals: { resource: @preset } %>
+
+    <div class="form-fields">
+      <div class="form-field">
+        <%= f.label :name %>
+        <%= f.text_field :name, placeholder: "Calories" %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :instructions %>
+        <%= f.text_area :instructions, rows: 16 %>
+      </div>
+    </div>
+
+    <div class="form-submission">
+      <%= f.submit "Save" %>
+    </div>
+  <% end %>
+</div>
