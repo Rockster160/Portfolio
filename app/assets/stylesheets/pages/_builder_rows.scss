@@ -355,11 +355,17 @@
   }
 }
 
-// On a phone the steppers move under the name, so the name keeps the full
-// width: a small icon inline with it, and − count + across the bottom.
-@media (max-width: 600px) {
+// Too narrow for two columns of rows (a portrait tablet, a phone), the rows
+// become a grid of compact cards: a small icon inline with the name, and
+// − count + across the bottom. Several fit across where one row would.
+@media (max-width: 779px) {
   .html-ctr-meal_builders,
   .html-ctr-list_builders {
+    .brows {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
     .brow-body {
       flex-wrap: wrap;
       gap: 6px 10px;
@@ -368,11 +374,11 @@
     }
 
     .brow-icon {
-      flex-basis: 40px;
-      height: 40px;
+      flex-basis: 36px;
+      height: 36px;
 
       i.emoji {
-        font-size: 26px;
+        font-size: 24px;
       }
     }
 
@@ -395,7 +401,7 @@
     }
 
     .brow-step {
-      width: 64px;
+      width: 52px;
       height: 44px;
       font-size: 24px;
     }
