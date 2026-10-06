@@ -71,7 +71,14 @@ class ListBuilder < ApplicationRecord
   def broadcast!
     ActionCable.server.broadcast(
       "builder_#{id}_channel",
-      { builder_items: items }
+      { builder_items: items, timestamp: snapshot_stamp },
     )
+  end
+
+  # Milliseconds, taken after the read it describes. Broadcasts are delivered
+  # on separate worker threads, so the page orders snapshots by this rather
+  # than by arrival and drops one that an older write overtook.
+  def snapshot_stamp
+    (Time.current.to_f * 1000).round
   end
 end

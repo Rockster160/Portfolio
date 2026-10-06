@@ -91,6 +91,17 @@ RSpec.describe Buddy::JobMailOffer do
       expect(call.body).to include("`cancelled`")
     end
 
+    # Prod 7569 and 7275. A verification code and a candidate-account link were
+    # both proposed as `acknowledged`, and the instruction's own "rather than
+    # leaving it a plain note" is what ruled out the honest answer.
+    it "narrows the receipt tag and names the plain note as an answer" do
+      body = call.body
+
+      expect(body).to include("Coming from an ATS does not make a mail a receipt")
+      expect(body).to include("`note` is a correct answer")
+      expect(body).not_to include("rather than leaving it a plain note")
+    end
+
     describe "filing the mail on the row" do
       let(:email) {
         user.emails.create!(
@@ -453,6 +464,12 @@ RSpec.describe Buddy::JobMailOffer do
 
     it "carries the mail's own arrival time onto the new row" do
       expect(call.body).to include("occurred_at #{arrived.iso8601}")
+    end
+
+    # The first beat on a brand-new row is read off the same mail and gets the
+    # tag wrong the same way.
+    it "narrows the receipt tag on the first beat too" do
+      expect(call.body).to include("`note` is a correct answer")
     end
 
     # Nothing to propose: any row would be invented. The card is still worth

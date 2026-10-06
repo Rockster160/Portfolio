@@ -320,9 +320,9 @@ module Buddy
         "",
         "#{pre_logged ? filed_instruction : "Then CALL add_job_note"}" \
         "#{log_hint(occurred_at, email)} - do not offer to, do not ask " \
-        "first. Pick the `tag` that matches what actually happened rather than leaving it " \
-        "a plain note; a rejection, an offer or a withdrawal also settles the application, " \
-        "which is correct when the mail says so.#{JobMailRules.booking}" \
+        "first. Pick the `tag` that matches what actually happened; a rejection, an offer " \
+        "or a withdrawal also settles the application, which is correct when the mail says " \
+        "so.#{JobMailRules.booking}#{JobMailRules.plain}" \
         "#{JobMailRules.outgoing_tag(outgoing)}#{JobMailRules.note(body)}",
       ].join("\n")
     end
@@ -359,7 +359,7 @@ module Buddy
         "first. It is a level-3 tool, so the card writes nothing until they tap it. " \
         "Give it the `role` if the mail names one, the `tag` that matches what happened, " \
         "and#{log_hint(occurred_at, email).presence || " the time it arrived"}." \
-        "#{JobMailRules.note(body)}",
+        "#{JobMailRules.plain}#{JobMailRules.note(body)}",
       ].compact.join("\n")
     end
 

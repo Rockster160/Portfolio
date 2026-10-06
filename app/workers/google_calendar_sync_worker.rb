@@ -54,7 +54,7 @@ class GoogleCalendarSyncWorker
           "FAILED #{error.class}: #{error.message}#{" — #{hint}" if hint}"
     ::Rails.logger.error(msg)
     ::Rails.logger.error(error.backtrace.first(10).join("\n")) if error.backtrace
-    ::SlackNotifier.notify(msg) if ::Rails.env.production?
+    ::SlackNotifier.notify(msg, user: agenda.user) if ::Rails.env.production?
   rescue StandardError
     # Slack itself failing shouldn't shadow the original error.
   end

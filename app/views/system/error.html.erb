@@ -1,0 +1,110 @@
+<%= meta_title "Error ##{@error.id}", include_name: false %>
+<%= meta_description "One failure, in full." %>
+
+<%
+  stamp = ->(time) { time.in_time_zone(current_user.timezone).strftime("%b %-d, %Y at %-I:%M:%S %p") }
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small>
+      <%= link_to "System", system_path %> /
+      <%= link_to "Errors", system_errors_path %> /
+      <%= @error.id %>
+    </small>
+  </div>
+
+  <div class="err-card">
+    <div class="err-head">
+      <span class="err-section"><%= @error.section %></span>
+      <% if @error.error_class.present? %>
+        <span class="err-class"><%= @error.error_class %></span>
+      <% end %>
+      <span class="err-when"><%= stamp.call(@error.created_at) %></span>
+    </div>
+
+    <div class="err-facts">
+      <span>for <strong><%= @error.who %></strong></span>
+      <% if @error.channel.present? %>
+        <span>announced in <%= @error.channel %></span>
+      <% else %>
+        <span class="err-badge">never announced</span>
+      <% end %>
+      <%# The same failure elsewhere in the window is the thing worth knowing %>
+      <%# next, so the count is a link into the list rather than a number. %>
+      <%= link_to "others like this", system_errors_path(fingerprint: @error.fingerprint, hours: 24 * 30),
+            class: "err-link" %>
+    </div>
+
+    <% if @error.message.present? %>
+      <h3>Message</h3>
+      <pre class="err-pre"><%= @error.message %></pre>
+    <% end %>
+
+    <% if @error.extra.present? %>
+      <h3>Extra</h3>
+      <pre class="err-pre"><%= JSON.pretty_generate(@error.extra) %></pre>
+    <% end %>
+
+    <% if @error.backtrace.present? %>
+      <h3>Backtrace</h3>
+      <pre class="err-pre"><%= @error.backtrace %></pre>
+    <% end %>
+  </div>
+
+  <% if @others.any? %>
+    <h3>The same failure, before this one</h3>
+    <% @others.each do |other| %>
+      <div class="err-other">
+        <%= link_to stamp.call(other.created_at), system_error_path(id: other.id), class: "err-link" %>
+        <span class="err-who">for <%= other.who %></span>
+        <% if other.channel.blank? %>
+          <span class="err-badge">never announced</span>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page { max-width: 1100px; width: 95%; margin: 0 auto; padding: 20px; }
+    .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .system-page .lists-title a { color: #8B949E; text-decoration: none; }
+    .system-page h3 { font-size: 13px; color: #8B949E; margin: 18px 0 6px; text-transform: uppercase; }
+
+    .err-card {
+      background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px; padding: 16px 18px;
+    }
+
+    .err-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .err-section { font-size: 16px; font-weight: bold; color: #C9D1D9; }
+    .err-class { font-size: 13px; color: #F5B041; }
+    .err-when { font-size: 12px; color: #8B949E; margin-left: auto; }
+
+    .err-facts {
+      display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+      font-size: 12px; color: #8B949E; margin-top: 10px;
+    }
+    .err-facts strong { color: #C9D1D9; }
+
+    .err-pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+      color: #8B949E; background-color: #0D1117; border-radius: 6px; padding: 12px;
+      white-space: pre-wrap; word-break: break-word; margin: 0;
+    }
+
+    .err-other {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px;
+      padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .err-who { color: #8B949E; }
+    .err-link { color: #5DADE2; text-decoration: none; }
+
+    .err-badge {
+      padding: 1px 8px; border-radius: 10px; font-size: 11px;
+      background-color: rgba(245, 176, 65, 0.15); color: #F5B041;
+    }
+  </style>
+<% end %>

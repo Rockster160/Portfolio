@@ -63,11 +63,13 @@ class Jil::Methods::Oauth < Jil::Methods::Base
 
   private
 
+  # A blank client secret means the one already saved for this service, so a
+  # task only has to carry it until the first run stores it.
   def connect(data)
     constants = data.slice(:service, :oauth_url, :exchange_url, :api_url, :scopes).compact_blank
     ::Oauth::Base.new(@jil.user, constants).tap { |o|
       o.client_id = data[:client_id]
-      o.client_secret = data[:client_secret]
+      o.client_secret = data[:client_secret] if data[:client_secret].present?
     }
   end
 

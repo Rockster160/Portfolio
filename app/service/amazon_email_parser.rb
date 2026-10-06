@@ -74,7 +74,8 @@ class AmazonEmailParser
   rescue StandardError => e
     SlackNotifier.err(
       e,
-      "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: "Mail-Bot", icon_emoji: ":mailbox:"
+      "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>",
+      username: "Mail-Bot", icon_emoji: ":mailbox:", user: @email.user,
     )
     false
   end
@@ -362,7 +363,7 @@ class AmazonEmailParser
     #   )
     # }
   rescue StandardError => e
-    SlackNotifier.err(e, "Amazon batch name lookup failed for email ##{@email.id} - falling back to listed_name")
+    SlackNotifier.err(e, "Amazon batch name lookup failed for email ##{@email.id} - falling back to listed_name", user: @email.user)
   end
 
   def full_name(item)

@@ -67,18 +67,21 @@ class Jarvis::Log < Jarvis::Action
     evt_words << "(#{@event.notes})" if @evt_data[:notes].present?
 
     if @evt_data[:timestamp].present?
-      day = (
-        if @evt_data[:timestamp].today?
-          "Today"
-        elsif @evt_data[:timestamp].tomorrow?
-          "Tomorrow"
-        elsif @evt_data[:timestamp].yesterday?
-          "Yesterday"
-        else
-          @evt_data[:timestamp].to_fs(:short)
-        end
-      )
-      evt_words << "[#{day} #{@event.timestamp.to_fs(:short_time)}]"
+      @user.timezone {
+        at = @event.timestamp.in_time_zone
+        day = (
+          if at.today?
+            "Today"
+          elsif at.tomorrow?
+            "Tomorrow"
+          elsif at.yesterday?
+            "Yesterday"
+          else
+            at.to_fs(:short)
+          end
+        )
+        evt_words << "[#{day} #{at.to_fs(:short_time)}]"
+      }
     end
 
     evt_words.join(" ")

@@ -604,7 +604,7 @@
   #trigger(String)
   #data(content(Hash|Keyval))
 [Oauth]
-  #connection("Service Name" TAB String BR "Authorization Endpoint" TAB String:"URL" BR "Exchange Endpoint" TAB String:"URL" BR "Base URI" TAB String:"URL" BR "Scopes" TAB Any:"Array|String" BR "Client ID" TAB String BR "Client Secret" TAB Password)
+  #connection("Service Name" TAB String BR "Authorization Endpoint" TAB String:"URL" BR "Exchange Endpoint" TAB String:"URL" BR "Base URI" TAB String:"URL" BR "Scopes" TAB Any:"Array|String" BR "Client ID" TAB String BR "Client Secret" TAB Password) // Blank secret = the one already saved in Secrets
   .auth_url::String
   .get("Path" TAB String)::Hash
   .getFull("Path" TAB String BR "Params" TAB Hash BR "Headers" TAB Hash)::Hash

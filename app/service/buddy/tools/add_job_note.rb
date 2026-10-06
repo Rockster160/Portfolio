@@ -72,6 +72,22 @@ Buddy::Tools.register(
     beat actually being waited on, and a robot wearing it makes a live
     application look answered.
 
+    **Coming from an ATS does not make a mail a receipt.** `acknowledged` is the
+    application ARRIVING and nothing else, and logging it also moves the
+    `applied` beat to sit just before the earliest one - so a mail that is only
+    the robot doing paperwork rewrites when they applied. A code to verify an
+    email address, a link to finish setting up a candidate account, a sign-in
+    prompt, a password reset, a job-alert digest, a survey, a reminder about
+    something already booked: same sender, no beat on the application. Those are
+    `note`.
+
+    **`note` is a correct answer, not a failure to classify.** It means "this
+    happened", which is the honest record of mail that is none of the beats
+    above. Picking the nearest-looking tag instead puts something on the
+    timeline that is not true of the application, and the tags that look nearest
+    are the ones that do the most: `acknowledged` moves the clock, `scheduled`
+    books, and three of them close the application outright.
+
     `email_id` is the piece that makes this worth doing from a message rather
     than the page: pass the number from `recent_mail` and the note is stamped
     with that email's date, its sender, and a link straight back to it. Leave
@@ -115,7 +131,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat. An ATS receipt is `acknowledged`; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again. offer/rejected/withdrew also settle the application",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

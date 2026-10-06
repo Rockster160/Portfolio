@@ -7,7 +7,10 @@ module Buddy
   #   2. Pings Slack asynchronously via SlackWorker (prod only), so Buddy
   #      failures surface the moment they happen rather than needing production
   #      logs grepped after the fact.
-  #   3. Re-raises in development so the failure is impossible to miss
+  #   3. Writes an ErrorReport row, which is the same failure in a form that
+  #      can be counted and read back a day later. The ping interrupts; the row
+  #      is what the Daily Audit reads.
+  #   4. Re-raises in development so the failure is impossible to miss
   #      during local iteration.
   #
   # Reporting itself never raises - a hiccup in Slack delivery cannot
@@ -24,7 +27,18 @@ module Buddy
       # the visibility.
       begin
         log(section, exception, user, extra)
-        notify_slack(section, exception, user, extra) if Rails.env.production?
+        # Recorded FIRST, so the alert can carry a link to the row rather than
+        # ending at a wall of text. `record!` answers nil instead of raising, so
+        # a row that can't be written costs the LINK and never the alert - the
+        # announcement is the part somebody is waiting on.
+        row = ErrorReport.record!(
+          section:   section,
+          exception: exception,
+          user:      user,
+          extra:     extra,
+          channel:   (SLACK_CHANNEL if announce?),
+        )
+        notify_slack(section, exception, user, extra, row) if announce?
       rescue
         nil
       end
@@ -38,6 +52,13 @@ module Buddy
     class << self
       private
 
+      # Production with somewhere to send it. Asked before the row is written as
+      # well as before the alert, so `channel` on the row says where this was
+      # addressed rather than guessing.
+      def announce?
+        Rails.env.production? && defined?(SlackWorker) && SlackWorker::WEBHOOK_URL.present?
+      end
+
       def log(section, exception, user, extra)
         lines = [
           "[Buddy::Errors] #{section} FAILED user=#{user&.id || 'nil'} #{extra.inspect}",
@@ -47,19 +68,21 @@ module Buddy
         Rails.logger.error(lines.join("\n"))
       end
 
-      def notify_slack(section, exception, user, extra)
-        return unless defined?(SlackWorker) && SlackWorker::WEBHOOK_URL.present?
-
+      # The row, when there is one, is the last line: everything above it is as
+      # much as fits in an alert, and the link is where the rest of it lives.
+      def notify_slack(section, exception, user, extra, row=nil)
         first_frame = Array(exception.backtrace).first(3).join("\n")
         message = <<~MSG
-          *Buddy #{section} failed* (user=#{user&.id || 'nil'})
+          *Buddy #{section} failed* for #{ErrorReport.who(user)}
           `#{exception.class}: #{exception.message}`
           ```
           #{first_frame}
           ```
           extra: `#{extra.inspect}`
+          #{row&.slack_ref}
         MSG
-        SlackWorker.perform_async(message, SLACK_CHANNEL)
+        SlackWorker.perform_async(message.strip, SLACK_CHANNEL)
+        SLACK_CHANNEL
       end
     end
   end

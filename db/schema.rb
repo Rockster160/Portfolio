@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_06_185210) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_06_194935) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1041,6 +1041,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_06_185210) do
     t.index ["mail_id", "timestamp"], name: "index_emails_on_mail_id_and_timestamp"
     t.index ["user_id", "timestamp"], name: "index_emails_on_job_mail", where: "((job_triage ->> 'job'::text) = 'true'::text)"
     t.index ["user_id"], name: "index_emails_on_user_id"
+  end
+
+  create_table "error_reports", force: :cascade do |t|
+    t.text "section", null: false
+    t.text "error_class"
+    t.text "message"
+    t.text "backtrace"
+    t.text "fingerprint", null: false
+    t.text "channel"
+    t.bigint "user_id"
+    t.jsonb "extra", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_error_reports_on_created_at"
+    t.index ["fingerprint", "created_at"], name: "index_error_reports_on_fingerprint_and_created_at"
+    t.index ["user_id"], name: "index_error_reports_on_user_id"
   end
 
   create_table "execution_archives", id: :bigint, default: nil, force: :cascade do |t|

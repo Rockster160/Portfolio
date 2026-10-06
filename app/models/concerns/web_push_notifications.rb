@@ -123,14 +123,14 @@ module WebPushNotifications
   rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription => e
     # Subscription is no longer valid (410 Gone or 404 Not Found)
     # Mark it as unregistered so we don't keep trying
-    SlackNotifier.notify("[WEBPUSH] Subscription expired for #{user.username} (#{channel}): #{e.class}")
+    SlackNotifier.notify("[WEBPUSH] Subscription expired for #{user.username} (#{channel}): #{e.class}", user: user)
     push_sub.update(registered_at: nil)
     "Failed to push - subscription expired"
   rescue WebPush::Unauthorized => e
-    SlackNotifier.notify("[WEBPUSH] Unauthorized for #{user.username} (#{channel}): #{e.message}")
+    SlackNotifier.notify("[WEBPUSH] Unauthorized for #{user.username} (#{channel}): #{e.message}", user: user)
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   rescue WebPush::ResponseError => e
-    SlackNotifier.notify("[WEBPUSH] Error for #{user.username} (#{channel}): [#{e.class}] #{e.message}")
+    SlackNotifier.notify("[WEBPUSH] Error for #{user.username} (#{channel}): [#{e.class}] #{e.message}", user: user)
     "Failed to push - (WebPush Error) [#{e.class}] #{e}"
   end
 

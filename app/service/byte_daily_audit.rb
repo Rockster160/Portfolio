@@ -142,6 +142,7 @@ module ByteDailyAudit
       - `metadata->'usage'->>'calls'` is how many model calls a turn took. A turn that claims something happened with no `buddy_activity` chip after it, and no proposal in `buttons`, is a turn where nothing ran.
       - `bank_transactions` is the whole ledger, both feeds in one table. An alert-sourced row (`simplefin_id` null) names the merchant in **`payee` and leaves `description` empty** - searching `description` for a merchant is how the 23 Aug report concluded a duplicate charge had no ledger impact when two countable rows were sitting there. What the dashboard projects is `available_balance_cents` plus every `countable` row at or after that account's `balance_date`, so whether a row is inside that window is the whole question.
       - **A record is what it is NOW, not what it was when a message was written, and almost nothing here keeps its own history.** There is no versions table, and `updated_at` is routinely overwritten by an unrelated later write - an agenda item's is stamped again when its notification fires that evening, which buries any edit made that morning. So before you write up a companion for naming a thing that "doesn't exist", check whether it was RENAMED after it spoke: `log_trackers` holds every write as `http_method` + `url` + `params`, and a `PATCH /agenda_items/<id>` carries the new name and the minute it landed. The 26 Aug report called an invented dinner across two briefings; both had read the name correctly and it was renamed at 08:32, two minutes after the second one. Compare a sibling row's `updated_at` too - one row in a series stamped hours after the rest is an edit.
+      - `error_reports` is every failure the app reported in its own right, one row per occurrence: `section` (where it was reported from), `error_class`, `message`, `backtrace`, `extra`, `user_id`, and `channel` - which is null when nothing was ever announced. Each row has a page of its own at `/system/errors/<id>`, which is what its Slack alert links to. `fingerprint` is the same for repeats of the same failure, so `GROUP BY fingerprint` is how you count one.
       - Deploys are in the thread already: messages with `metadata->>'source' = 'watch'` whose body starts with a deploy marker carry the commit sha, the title and the time, and a failed deploy says so. `git log` and `git show --stat` in this repo fill in what each one actually contained - read those rather than guessing from the commit title, which is usually too terse to tell you whether a specific bug was addressed.
 
       WHAT TO PRODUCE
@@ -163,6 +164,11 @@ module ByteDailyAudit
       5. **What to do about it lives WITH the problem**, in that problem's own section, right under the evidence: the file, the mechanism, and whether this is a one-off or something that has now failed more than once. Not gathered into a list at the end - the whole point of one-section-per-problem is that I can read a problem and reply to it in place.
 
          Close with a bare **priority order** if it's worth one: the open items by name, worst first, one line. A ranking, not a second telling.
+      6. **Errors reported in production.** Its own section, under its own heading, after the findings and the priority order, and separate from all of it - this is what the app itself raised, not what a companion got wrong, and the two are only sometimes the same story. The window's are already grouped here, so none of it depends on going to look:
+
+      #{errors_block(user, span)}
+
+      Say which of them matter: what is new, what is repeating, and for anything that ran up a real count, where it is coming from. `error_reports` holds every occurrence, so one query opens any row up and the `backtrace` says who called it. A failure with a null `channel` was recorded and never announced, which makes it the kind nobody has seen. Where one of these IS a problem from the sections above, say so there and don't write it up twice. If it's a short list, a short section is the right answer.
 
       HARD RULES
       - **Never suggest compacting, debouncing, batching, deduping or collapsing messages or notifications. Ever.** Each notification is a real event and the person wants all of them. This is not a tradeoff to re-litigate; do not raise it in any form.
@@ -176,6 +182,33 @@ module ByteDailyAudit
       - `buddy_watches` id 10, the deploy announcement, sitting cancelled while deploys go out unannounced. I switched it off myself and I meant to. Deploys not being announced is the intended state until I turn it back on, so it is not a finding and neither is the quiet.
       - **Bold** in a briefing. It is allowed and always was; what the prose rule is about is HEADINGS, sections and bullets, which turn a message about somebody's day into a document. A briefing with a few bolded words in it is fine. Worth raising only if the markup has taken over - every name and every time in turn, so the emphasis has stopped meaning anything - and then it is about that, not about bold appearing at all.
     TXT
+  end
+
+  # The window's failures, grouped, most repeated first. Rendered into the
+  # prompt rather than left for the session to go and find, so the errors are in
+  # the report on the run where they happened whatever else the session decides
+  # to spend its reads on.
+  def errors_block(user, span)
+    rows = ErrorReport.digest(span)
+    return "Nothing was reported in this window." if rows.empty?
+
+    rows.map { |row|
+      [
+        "- **#{row[:count]}x** `#{row[:section]}`",
+        [row[:error_class], row[:message].to_s.squish.truncate(200)].compact_blank.join(": "),
+        "· #{spoken_span(row, user.timezone)} · row #{row[:sample_id]}",
+        ("· never announced" if row[:channel].blank?),
+      ].compact.join(" ")
+    }.join("\n")
+  end
+
+  # One occurrence is a time; a run of them is a stretch, and the stretch is
+  # most of what says whether it is still going on.
+  def spoken_span(row, zone)
+    last = row[:last_at].in_time_zone(zone).strftime("%-I:%M %p")
+    return last if row[:count].to_i < 2
+
+    "#{row[:first_at].in_time_zone(zone).strftime("%-I:%M %p")} to #{last}"
   end
 
   # Day and clock time both: the window's edges land wherever the run did, so a

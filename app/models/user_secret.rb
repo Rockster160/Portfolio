@@ -3,16 +3,12 @@
 # Table name: user_secrets
 #
 #  id         :bigint           not null, primary key
-#  user_id    :bigint           not null
 #  name       :text             not null
 #  value      :text             not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  user_id    :bigint           not null
 #
-# A sensitive value the user hands the app once — an API key, a token — kept
-# encrypted and looked up by name by whatever needs it (GPT.connection("OpenAI")).
-# Write-only from the outside: pages show the last few characters, and Jil
-# connections carry the NAME, so the value never lands in task code or logs.
 class UserSecret < ApplicationRecord
   belongs_to :user
 

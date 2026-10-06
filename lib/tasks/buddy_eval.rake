@@ -388,6 +388,13 @@ BUDDY_TOOL_PROBES = {
   skip_prompt:            { say: "skip that check-in for now", needs: :pending_prompt },
   set_font_size:          "this text is too small, bump it up",
   check_weather:          "how's the weather right now? I may take the bike",
+  # A link, and a question only the page can answer. The pull is towards
+  # answering off the URL - which reads as an answer and is a guess - or
+  # towards filing the whole thing as something Buddy can't do.
+  read_web_page:          {
+    say:   "https://www.slc.gov/events/2026/04/02/yappy-hour/ what time does this one start?",
+    avoid: %i[request_feature search_agenda],
+  },
   # `avoid: check_weather` because the two are the only "look something up
   # about where I am" tools and the weather one has had the place argument for
   # months - "am I home" reaching it would answer with a forecast.
@@ -475,6 +482,19 @@ BUDDY_EVAL_READERS = %i[
 #               both fine; setting a watch on the wrong person is not, and
 #               that's still what `avoid:` is for.
 BUDDY_EDGE_PROBES = [
+  # --- a link, and something to do about it --------------------------------
+  # The URL names the event and carries a date, and both are guesses about the
+  # page: it listed three dates under that title and an address the link never
+  # mentions. The page has to be read BEFORE the calendar is written, because
+  # the date and the place are what the writing is made of.
+  {
+    case:  "a link pasted with what to do about it",
+    say:   "https://www.slc.gov/events/2026/04/02/yappy-hour/ we're going to this, " \
+           "we want to arrive at 6:30 on Thursday",
+    tool:  :read_web_page,
+    order: %i[read_web_page add_agenda_item],
+    note:  "booked straight off the link, so the name came off the slug and the place came from nowhere",
+  },
   # --- a beat on a row that already exists ---------------------------------
   # Two rows for one company splits its timeline in half, and nothing puts them
   # back together. `add_job_application` refuses in `confirm` when the name
@@ -535,6 +555,52 @@ BUDDY_EDGE_PROBES = [
     args:  { add_job_note: { tag: "acknowledged" } },
     needs: :halloway_application,
     note:  "an ATS receipt is neither applying again nor hearing back",
+  },
+  # --- the other side of that: an ATS is not always sending a receipt --------
+  # Prod 7569, 6 Oct, and 7275 five days before it. A six-digit code to verify
+  # an email address and a link to finish setting up a candidate account were
+  # both proposed as `acknowledged` - the tag read off the SENDER rather than
+  # the message, because machine mail about an application looks like the
+  # machine tag. Neither is a beat: nothing happened to the application, and
+  # `acknowledged` is what the submission's clock is corrected against, so a
+  # verification mail wearing it also moves when they applied.
+  {
+    case:       "prod 7569",
+    say:        "Halloway Systems emailed me a code to verify my email address for the " \
+                "application - log that",
+    tool:       :add_job_note,
+    avoid:      %i[add_job_application],
+    args:       { add_job_note: { tag: "note" } },
+    never_args: { add_job_note: { tag: /\A(?:acknowledged|applied|heard_back)\z/ } },
+    needs:      :halloway_application,
+    note:       "housekeeping from the robot; the application has not been received again",
+  },
+  {
+    case:       "prod 7275",
+    say:        "Halloway Systems sent a link to finish setting up my candidate account - " \
+                "put that on their timeline",
+    tool:       :add_job_note,
+    avoid:      %i[add_job_application],
+    args:       { add_job_note: { tag: "note" } },
+    never_args: { add_job_note: { tag: /\A(?:acknowledged|applied|heard_back)\z/ } },
+    needs:      :halloway_application,
+    note:       "an account to set up is a chore, not a beat on the application",
+  },
+  # --- work to do is a take-home, whoever sent it ----------------------------
+  # Prod 7362, 2 Oct. "Thank you for signing up - complete the assessment to
+  # proceed" was filed `acknowledged` off the thanks in its first line. The
+  # assessment is the beat, and it is one of the four waiting on HIM, so the
+  # wrong tag loses it off the top of the board as well as mislabelling it.
+  {
+    case:       "prod 7362",
+    say:        "Halloway Systems wants me to complete an assessment before my application " \
+                "goes any further - log it",
+    tool:       :add_job_note,
+    avoid:      %i[add_agenda_item set_reminder],
+    args:       { add_job_note: { tag: "take_home" } },
+    never_args: { add_job_note: { tag: /\A(?:acknowledged|scheduled|interview)\z/ } },
+    needs:      :halloway_application,
+    note:       "a thank-you in the first line does not make it a receipt",
   },
   # --- an ask for times is not a booking ------------------------------------
   # Prod 6253, 15 Sep. "Please fill out your availability for the next week"

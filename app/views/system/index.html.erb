@@ -12,6 +12,9 @@
   # Same idea as the requests blip: a number that means "go and do something",
   # not a count of how much is stored.
   due_follow_ups  = JobNote.follow_ups_for(current_user).due_now(current_user).count
+  # Failures since midnight. A number worth seeing from the top of the page: a
+  # quiet day reads as nothing at all, and a bad one says so before it's opened.
+  todays_errors   = ErrorReport.since(Time.current.in_time_zone(current_user.timezone).beginning_of_day).count
 
   links = [
     {
@@ -21,6 +24,13 @@
       icon:  :"paper-plane",
       blip:  open_requests,
       unread: unseen_requests.positive?,
+    },
+    {
+      title: "Errors",
+      path:  system_errors_path,
+      desc:  "Every failure the app reported, grouped, with who it happened for",
+      icon:  :"exclamation-triangle",
+      blip:  todays_errors,
     },
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },

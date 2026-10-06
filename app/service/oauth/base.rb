@@ -19,6 +19,13 @@ class Oauth::Base
 
   USER_AGENT = "Jarvis-1.0".freeze
 
+  # Kept encrypted in the user's secrets rather than the plain-JSON oauth cache,
+  # which is readable on /jil/cache. Everything else (client_id, a service's own
+  # bookkeeping like Venmo's contact_ids) stays in the cache.
+  SECRET_FIELDS = [:client_secret, :access_token, :refresh_token, :id_token].freeze
+
+  def self.secret_name(storage_key, field) = "oauth:#{storage_key}:#{field}"
+
   def self.default_service_name = name.split("::").last.underscore
 
   def self.defaults(service=nil)
@@ -87,8 +94,10 @@ class Oauth::Base
     end
   end
 
+  # Carried around by Jil as the connection, so it holds no secret; the secret
+  # is read back from storage on each request.
   def to_h
-    @_overrides.merge(client_id: client_id, client_secret: client_secret)
+    @_overrides.merge(client_id: client_id)
   end
 
   def auth_url
@@ -125,12 +134,9 @@ class Oauth::Base
     ).tap { |json|
       next if json.nil?
 
-      cache.skip_save_set = true
       [:access_token, :refresh_token, :id_token].each do |token_name|
-        cache.dig_set(storage_key, token_name, json[token_name]) if json[token_name].present?
+        cache_set(token_name, json[token_name]) if json[token_name].present?
       end
-      cache.skip_save_set = false
-      cache.save
     }
   end
 
@@ -178,8 +184,39 @@ class Oauth::Base
     JWT.encode(payload, Rails.application.secret_key_base, "HS256")
   end
 
-  def cache_set(key, val) = cache.dig_set(@storage_key, key, val) && val
-  def cache_get(key) = cache.dig(@storage_key, key)
+  def cache_set(key, val)
+    return secret_set(key, val) if SECRET_FIELDS.include?(key.to_sym)
+
+    cache.dig_set(@storage_key, key, val) && val
+  end
+
+  def cache_get(key)
+    return secret_get(key) if SECRET_FIELDS.include?(key.to_sym)
+
+    cache.dig(@storage_key, key)
+  end
+
+  # `initialize` reads every preset key before it has reached storage_key, and
+  # a secret only exists under one.
+  def secret_get(field)
+    return nil if @storage_key.blank?
+
+    @user.secrets.named(self.class.secret_name(@storage_key, field))&.value
+  end
+
+  def secret_set(field, val)
+    name = self.class.secret_name(@storage_key, field)
+    secret = @user.secrets.named(name)
+
+    if val.blank?
+      secret&.destroy!
+    elsif secret.nil?
+      @user.secrets.create!(name: name, value: val)
+    elsif secret.value != val
+      secret.update!(value: val)
+    end
+    val
+  end
 
   def access_token=(new_token)
     cache_set(:access_token, new_token)

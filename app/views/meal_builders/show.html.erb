@@ -38,6 +38,24 @@
       </div>
     </div>
   </div>
+
+  <div id="omodal-backdrop" class="cmodal-backdrop hidden">
+    <div class="cmodal">
+      <h3>One-off item</h3>
+      <div class="row">
+        <input id="o-name" placeholder="What was it?">
+      </div>
+      <div class="row">
+        <input id="o-cat" class="sm" placeholder="Category" value="Food">
+        <input id="o-cal" class="sm basic" type="number" inputmode="numeric" min="0" placeholder="Calories">
+      </div>
+      <div class="cmodal-actions">
+        <div class="spacer"></div>
+        <button id="o-cancel" class="primary" type="button">Cancel</button>
+        <button id="o-save" class="ok primary" type="button">Add</button>
+      </div>
+    </div>
+  </div>
 <% end %>
 
 <div class="wrap" data-save-url="<%= meal_builder_path(@meal_builder) %>">
@@ -79,9 +97,18 @@
 
       <button id="submit" class="primary" data-editing=false disabled>Submit</button>
     </div>
+
+    <div class="row meal-extras" data-editing=false>
+      <button id="add-oneoff" class="primary" type="button">➕ One-off</button>
+      <div class="meal-time">
+        <button id="meal-time-label" class="primary" type="button" tabindex="-1">🕒 Now</button>
+        <input id="meal-time" class="basic" type="datetime-local" aria-label="When was this meal?">
+      </div>
+      <button id="meal-time-reset" class="primary hidden" type="button" aria-label="Back to now">✕</button>
+    </div>
   </div>
 
-  <div id="grid" class="grid"></div>
+  <div id="grid" class="brows"></div>
 </div>
 
 <% content_for :after_body do %>
@@ -95,7 +122,7 @@
       font-weight: 500; color: #4B5563;
     }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
-    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 10px }
+    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 12px }
     input[type="text"] {
       flex: 1; padding: 10px 12px; border: 1px solid #CCC;
       border-radius: 8px; outline: none
@@ -103,114 +130,34 @@
     button {
       padding: inherit;
     }
-    button.primary {
-      padding: 6px 10px; border: none; border-radius: 8px;
+    button.primary, .btn.primary {
+      min-height: 48px; min-width: 48px; padding: 6px 12px; border: none; border-radius: 8px;
       background: #2563EB; color: black; cursor: pointer
     }
     button.primary:disabled { opacity: .5; cursor: default }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 12px
-    }
-    .card-styles {
-      color: #ECF0F1;
-      border-width: 1px;
-      border-style: solid;
-      border-color: #D5E5FF;
-      border-image: initial;
-      background: #00102B;
-    }
-    .card {
-      position: relative; border: 1px solid #E5E7EB; border-radius: 12px;
-      padding: 6px; display: flex; flex-direction: column; gap: 4px;
-      align-items: center; justify-content: space-between; background: #00102B;
-      transition: transform .08s ease, box-shadow .08s ease
-    }
-    .card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px #0001 }
-    .card.selected { outline: 2px solid #22C55E; background: #0C3A30 }
-    .imgbox {
-      display: grid;
-      place-items: center;
-      position: relative;
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 10px; background: #D5E5FF;
-      overflow: hidden;
-    }
-
-    .imgbox i.emoji {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      font-style: normal;
-      font-size: 64px;
-      line-height: 1;
-      white-space: pre;
-      pointer-events: none;
-    }
-
-    .imgbox i.emoji span {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      line-height: 1;
-      pointer-events: none;
-    }
-    .imgbox img { width: 100%; height: 100%; object-fit: cover }
-    .title { text-align: center; font-size: 14px; line-height: 1.2 }
-    .cal, .desc { font-size: 12px; color: #6B7280 }
-    .controls {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%;
-    }
-    .pill {
-      min-width: 20px; height: 20px; border-radius: 999px; border: 1px solid #D1D5DB;
-      background: #FFF; cursor: pointer; display: grid; place-items: center;
-      font-weight: 600
-    }
-    .count { min-width: 24px; text-align: center }
-    .sticky-note {
-      position: absolute; top: 8px; left: 8px; font-size: 12px;
-      background: #22C55E; color: #FFF; padding: 2px 6px; border-radius: 999px
-    }
-
-    .editing .card { cursor: grab }
-    .editing .card:active { cursor: grabbing }
-
-    .card-overlay {
-      position: absolute; inset: 0;
-      background: #0008; border-radius: 12px;
-      display: grid; place-items: center; text-align: center;
-      color: #ECF0F1; font-weight: 600; font-size: 14px;
-      pointer-events: auto
-    }
-    .card-overlay .hint {
-      padding: 6px 10px; border-radius: 999px;
-      background: #2563EB; color: #FFF
-    }
-
-    .drag-placeholder {
-      border: 2px dashed #93C5FD;
-      background: #EFF6FF;
-      border-radius: 12px;
-      height: 100%;
-      min-height: 160px;
-    }
-
-    .dragging { opacity: .3 }
 
     .text-right { text-align: right; }
-    .row { display: flex; gap: 8px; width: 100% }
+    .row { display: flex; gap: 10px; width: 100% }
     .row.right { justify-content: flex-end; }
     .row input {
       flex: 1; padding: 8px 10px; border: 1px solid #CCC; border-radius: 6px
     }
+    .topbar .row input[type="search"] { min-height: 48px; margin: 0 }
     .flex-between {
       display: flex; justify-content: space-between; align-items: center
     }
     .row .sm { max-width: 130px }
+    @media (max-width: 600px) { .wrap { padding: 8px 0 20px } }
+
+    /* The native picker sits invisibly over its label, so a tap anywhere on
+       the label opens it on every platform without showPicker(). */
+    .meal-time { position: relative; flex: 1 }
+    .meal-time button { width: 100% }
+    .meal-time input {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer
+    }
+    .meal-time.is-set button { background: #F59E0B }
 
     .cmodal-backdrop {
       position: fixed; inset: 0; background: #0008;
@@ -221,6 +168,7 @@
       border: 1px solid #D5E5FF; border-radius: 12px; padding: 16px
     }
     .cmodal h3 { margin: 0 0 10px 0; font-size: 18px }
+    .cmodal .row + .row { margin-top: 8px }
     .cmodal-actions {
       display: flex; align-items: center; gap: 2px; margin-top: 12px
     }
@@ -231,20 +179,22 @@
     .cmodal .danger { background: #991B1B; color: #FFF }
     .cmodal .spacer { flex: 1 }
 
-    @media (max-width: 600px) {
-      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
-    }
-
     .hidden { display: none }
   </style>
 
   <script type="module">
     import { command } from "../../quick_actions/command.js";
     import { showFlash } from "../../quick_actions/flash.js";
+    import {
+      fuzzyMatch, setText, setIcon, setDesc, setCount, reconcileRows, enableDragReorder,
+    } from "../../quick_actions/builder_rows.js";
 
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
     )
+    // Items for this meal only: never saved to the builder, gone on submit.
+    let ONEOFFS = []
+    let oneoffSeq = 0
 
     const picked = new Map()
     let query = ""
@@ -260,7 +210,6 @@
     const elAddItem = document.getElementById("add-item")
     const elSaveItems = document.getElementById("save-items")
     const elQuickEdit = document.getElementById("quick-edit")
-    const elPageEdit = document.getElementById("page-edit")
     const SAVE_ENDPOINT = document.querySelector(".wrap")?.dataset.saveUrl
 
     const elcModal = document.getElementById("cmodal-backdrop")
@@ -282,6 +231,19 @@
     const elQText = document.getElementById("q-text")
     const elQApply = document.getElementById("q-apply")
     const elQCancel = document.getElementById("q-cancel")
+
+    const elOModal = document.getElementById("omodal-backdrop")
+    const oName = document.getElementById("o-name")
+    const oCat = document.getElementById("o-cat")
+    const oCal = document.getElementById("o-cal")
+    const oSave = document.getElementById("o-save")
+    const oCancel = document.getElementById("o-cancel")
+    const elAddOneoff = document.getElementById("add-oneoff")
+
+    const elMealTimeWrap = document.querySelector(".meal-time")
+    const elMealTime = document.getElementById("meal-time")
+    const elMealTimeLabel = document.getElementById("meal-time-label")
+    const elMealTimeReset = document.getElementById("meal-time-reset")
 
     const caloriesMonitor = Monitor.find("calories")
     let calories_synced = false
@@ -324,74 +286,19 @@
       return m ? m.content : ""
     }
 
-    const fuzzyMatch = (needle, hay) => {
-      if (!needle) return true
-      let i = 0, j = 0
-      const n = needle.toLowerCase(), h = hay.toLowerCase()
-      while (i < n.length && j < h.length) { if (n[i] === h[j]) i++; j++ }
-      return i === n.length
-    }
-
-    const splitGraphemes = s => {
-      if (window.Intl && Intl.Segmenter) {
-        const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" })
-        return Array.from(seg.segment(s), x => x.segment)
-      }
-      return Array.from(s)
-    }
-
-    const computeView = () => {
-      return ITEMS.filter(it =>
-        fuzzyMatch(query, `${it.category} ${it.name} ${it.tag || ""}`)
-      )
-    }
-    const keyOf = it => `${it.category}|${it.name}`
+    const keyOf = it => it.oneoff ? it.key : `${it.category}|${it.name}`
+    const itemByKey = key => (
+      ONEOFFS.find(it => it.key === key) || ITEMS.find(it => keyOf(it) === key)
+    )
     const updateSubmit = () => { elSubmit.disabled = picked.size === 0 }
 
-    const upsertItem = (name, attrs) => {
-      const idx = ITEMS.findIndex(x => x.name === name)
-      if (idx === -1) return
-      ITEMS[idx] = { ...ITEMS[idx], ...attrs }
-    }
-
-    const deleteItem = name => {
-      ITEMS = ITEMS.filter(x => x.name !== name)
-      picked.delete(name)
-    }
-
-    // ---------- Drag & drop with placeholder (name-based) ----------
-    let dragFromIdx = null
-    let placeholder = null
-
-    const startDrag = (fromIdx, card) => {
-      dragFromIdx = fromIdx
-      card.classList.add("dragging")
-      placeholder = document.createElement("div")
-      placeholder.className = "card drag-placeholder"
-      placeholder.style.height = `${card.offsetHeight}px`
-      elGrid.insertBefore(placeholder, card.nextSibling)
-    }
-
-    const finishDrag = draggedCard => {
-      if (dragFromIdx == null || !placeholder) return
-      const cards = Array.from(elGrid.querySelectorAll(".card"))
-      const toIdx = cards.indexOf(placeholder)
-      const moved = ITEMS.splice(dragFromIdx, 1)[0]
-      const insertAt = Math.max(0, Math.min(toIdx, ITEMS.length))
-      ITEMS.splice(insertAt, 0, moved)
-      draggedCard.classList.remove("dragging")
-      placeholder.remove()
-      placeholder = null
-      dragFromIdx = null
-      render()
-    }
-
-    const movePlaceholder = (targetCard, clientY) => {
-      if (!placeholder || !targetCard || targetCard === placeholder) return
-      const rect = targetCard.getBoundingClientRect()
-      const before = (clientY - rect.top) < rect.height / 2
-      if (before) elGrid.insertBefore(placeholder, targetCard)
-      else elGrid.insertBefore(placeholder, targetCard.nextSibling)
+    // Drops picks whose item no longer exists after the item list was
+    // replaced wholesale. One-offs aren't part of that list and stay.
+    const prunePicked = () => {
+      const keys = new Set(ITEMS.map(keyOf))
+      for (const k of Array.from(picked.keys())) {
+        if (!keys.has(k) && !ONEOFFS.some(it => it.key === k)) picked.delete(k)
+      }
     }
 
     // ---------- Edit Modal ----------
@@ -449,18 +356,115 @@
 
     mDelete.addEventListener("click", () => {
       if (!currentEditingName) return
-      deleteItem(currentEditingName)
+      const category = mCat.dataset.prevCategory
+      ITEMS = ITEMS.filter(x => !(x.name === currentEditingName && x.category === category))
+      picked.delete(`${category}|${currentEditingName}`)
       closecModal()
       render()
-
-      const category = mCat.value.trim() || "Food"
-      const idx = ITEMS.findIndex(x => x.name === currentEditingName && x.category === category)
-      if (idx >= 0) ITEMS.splice(idx, 1)
-      picked.delete(`${category}|${currentEditingName}`)
     })
 
     elcModal.addEventListener("click", e => {
       if (e.target === elcModal) closecModal()
+    })
+
+    // ---------- One-off items ----------
+    const openOneoff = () => {
+      oName.value = ""
+      oCal.value = ""
+      oCat.value = "Food"
+      elOModal.classList.remove("hidden")
+      setTimeout(() => oName.focus(), 0)
+    }
+    const closeOneoff = () => elOModal.classList.add("hidden")
+
+    elAddOneoff.addEventListener("click", openOneoff)
+    oCancel.addEventListener("click", closeOneoff)
+    elOModal.addEventListener("click", e => {
+      if (e.target === elOModal) closeOneoff()
+    })
+
+    // The log line is "<Category> name, name x2 (cal)": the category must be
+    // one word, and a name can't carry the separators that line is built from.
+    oSave.addEventListener("click", () => {
+      const name = oName.value.replace(/[(){}\[\]|,]/g, " ").replace(/\s+/g, " ").trim()
+      if (!name) {
+        oName.focus()
+        return
+      }
+      const category = (oCat.value.trim() || "Food").replace(/\s+/g, "")
+      const cal = Math.max(0, parseInt(oCal.value || "0", 10) || 0)
+      const key = `oneoff:${++oneoffSeq}`
+      ONEOFFS.push({ key, oneoff: true, category, name, cal, img: "" })
+      picked.set(key, 1)
+      closeOneoff()
+      updateSubmit()
+      render()
+    })
+
+    // ---------- Meal time ----------
+    // Empty means "now" and the log carries no time. A set time is spelled
+    // out in full ("on October 5, 2026 at 7:05pm") so the log parser can't
+    // read it as a different day.
+    const MONTHS = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ]
+    let prefilledTime = ""
+
+    const mealTime = () => {
+      if (!elMealTime.value) return null
+      const d = new Date(elMealTime.value)
+      return Number.isNaN(d.getTime()) ? null : d
+    }
+
+    const clockText = d => {
+      const hour = d.getHours() % 12 || 12
+      const minutes = String(d.getMinutes()).padStart(2, "0")
+      return `${hour}:${minutes}${d.getHours() < 12 ? "am" : "pm"}`
+    }
+
+    const mealTimePhrase = () => {
+      const d = mealTime()
+      if (!d) return ""
+      return ` on ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${clockText(d)}`
+    }
+
+    const localInputValue = d => {
+      const pad = n => String(n).padStart(2, "0")
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    }
+
+    const updateMealTime = () => {
+      const d = mealTime()
+      const isToday = d && d.toDateString() === new Date().toDateString()
+      let label = "🕒 Now"
+      if (d) label = `🕒 ${isToday ? "Today" : `${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`} ${clockText(d)}`
+      setText(elMealTimeLabel, label)
+      elMealTimeWrap.classList.toggle("is-set", !!d)
+      elMealTimeReset.classList.toggle("hidden", !d)
+    }
+
+    // An empty picker opens on a blank date; seed it with now so adjusting
+    // the time is one change, and forget the seed if it was left untouched.
+    elMealTime.addEventListener("focus", () => {
+      if (elMealTime.value) return
+      prefilledTime = localInputValue(new Date())
+      elMealTime.value = prefilledTime
+    })
+    elMealTime.addEventListener("blur", () => {
+      if (prefilledTime && elMealTime.value === prefilledTime) elMealTime.value = ""
+      prefilledTime = ""
+      updateMealTime()
+    })
+    elMealTime.addEventListener("change", () => {
+      prefilledTime = ""
+      updateMealTime()
+      updateSummary()
+    })
+    elMealTimeReset.addEventListener("click", () => {
+      elMealTime.value = ""
+      updateMealTime()
+      updateSummary()
     })
 
     // ---------- Quick Edit ----------
@@ -468,7 +472,7 @@
       return items.map(it => {
         const base = `${it.category} ${it.name} (${
           Math.max(0, parseInt(it.cal ?? 0, 10) || 0)
-        }) ${it.img.trim()}`
+        }) ${(it.img || "").trim()}`
 
         const tagPart = (it.tag?.trim()) ? ` | ${it.tag.trim()}` : ""
         const aliasPart = (it.alias?.trim()) ? ` [${it.alias.trim()}]` : ""
@@ -503,7 +507,7 @@
           img: (img || "").trim(),
           tag: (tag || "").trim(),
           alias: (alias || "").trim(),
-          desc: (desc || "").trim()
+          description: (desc || "").trim()
         }
       }).filter(Boolean)
     }
@@ -520,12 +524,8 @@
     elQuickEdit?.addEventListener("click", openQuickEdit)
     elQCancel?.addEventListener("click", closeQuickEdit)
     elQApply?.addEventListener("click", () => {
-      const next = textToItems(elQText.value)
-      const nextNames = new Set(next.map(i => i.name.toLowerCase()))
-      for (const k of Array.from(picked.keys())) {
-        if (!nextNames.has(k.toLowerCase())) picked.delete(k)
-      }
-      ITEMS = next
+      ITEMS = textToItems(elQText.value)
+      prunePicked()
       closeQuickEdit()
       render()
     })
@@ -533,7 +533,58 @@
       if (e.target === elQModal) closeQuickEdit()
     })
 
+    // ---------- Picks ----------
+    // "Food Apple, Banana x2 (300)" per category, plus the meal time if set.
+    const pickedLines = () => {
+      const byCat = new Map()
+      for (const [key, count] of picked.entries()) {
+        const it = itemByKey(key)
+        if (!it) continue
+        const entry = byCat.get(it.category) || { parts: [], total: 0 }
+        entry.parts.push(count > 1 ? `${it.name} x${count}` : it.name)
+        entry.total += it.cal * count
+        byCat.set(it.category, entry)
+      }
+      return Array.from(byCat.entries())
+    }
+
+    const updateSummary = () => {
+      const groups = pickedLines()
+      const total = groups.reduce((sum, [, { total }]) => sum + total, 0)
+      setText(document.getElementById("cal-total"), String(total))
+      const foods = groups.map(([category, { parts }]) => `${category} ${parts.join(", ")}`)
+      const d = mealTime()
+      if (d && foods.length) foods.push(`at ${clockText(d)}`)
+      setText(document.getElementById("selected-summary"), foods.join(" | "))
+    }
+
+    const adjustPick = (key, delta) => {
+      const next = (picked.get(key) || 0) + delta
+      if (next > 0) {
+        picked.set(key, next)
+      } else {
+        picked.delete(key)
+        ONEOFFS = ONEOFFS.filter(it => it.key !== key)
+      }
+      updateSubmit()
+      render()
+    }
+
     // ---------- Render ----------
+    const rowEls = new Map()
+
+    const updateRow = (row, it) => {
+      const count = picked.get(keyOf(it)) || 0
+      row.classList.toggle("selected", count > 0)
+      row.draggable = editMode && !it.oneoff
+
+      setIcon(row, it.img, it.oneoff ? "✍️" : "🍽️")
+      setText(row.querySelector(".brow-title"), it.alias?.trim() || it.name)
+      const detail = [it.description, `${it.cal} cal`].filter(Boolean).join(" · ")
+      setDesc(row, detail, it.oneoff ? [{ text: "One-off" }] : [])
+      setCount(row, count)
+    }
+
     const render = () => {
       document.body.classList.toggle("editing", editMode)
       document.querySelectorAll("[data-editing=true]").forEach(el => el.classList.toggle("hidden", !editMode))
@@ -543,168 +594,46 @@
       elSaveItems.classList.toggle("hidden", !editMode)
       elQuickEdit?.classList.toggle("hidden", !editMode)
 
-      elGrid.innerHTML = ""
-      const view = computeView()
-
-      view.forEach((it, index) => {
-        const k = keyOf(it)
-        const isSel = picked.has(k)
-        const count = picked.get(k) || 0
-
-        const card = document.createElement("div")
-        card.className = `card${isSel ? " selected" : ""}`
-        card.dataset.name = it.name
-
-        card.dataset.index = String(index)
-        if (editMode) {
-          card.setAttribute("draggable", "true")
-          card.addEventListener("dragstart", e => startDrag(index, card))
-          card.addEventListener("dragend", e => finishDrag(card))
-          card.addEventListener("dragover", e => e.preventDefault())
-          card.addEventListener("dragenter", e => {
-            e.preventDefault()
-            const rect = card.getBoundingClientRect()
-            const before = (e.clientY - rect.top) < rect.height / 2
-            if (!placeholder) return
-            if (before) elGrid.insertBefore(placeholder, card)
-            else elGrid.insertBefore(placeholder, card.nextSibling)
-          })
-        }
-
-        const imgbox = document.createElement("div")
-        imgbox.className = "imgbox"
-        if (it.img && /^(https?:|\/)/.test(it.img)) {
-          const img = document.createElement("img")
-          img.src = it.img
-          img.alt = it.name
-          imgbox.appendChild(img)
-        } else {
-          const emoji = document.createElement("i")
-          emoji.className = "emoji"
-          const raw = it.img && it.img.trim() ? it.img : "🍽️"
-          splitGraphemes(raw).forEach(g => {
-            const span = document.createElement("span")
-            span.textContent = g
-            emoji.appendChild(span)
-          })
-          imgbox.appendChild(emoji)
-        }
-
-        const title = document.createElement("div")
-        title.className = "title"
-        title.textContent = it.alias?.trim() || it.name
-
-        const cal = document.createElement("div")
-        cal.className = "cal"
-        cal.textContent = `${it.cal} cal`
-
-        const cat = document.createElement("div")
-        cat.className = "cal"
-        cat.textContent = it.category
-
-        const desc = document.createElement("div")
-        desc.className = "desc"
-        desc.textContent = it.description || ""
-
-        const controls = document.createElement("div")
-        controls.className = "controls"
-
-        const minus = document.createElement("button")
-        minus.className = "pill"
-        minus.type = "button"
-        minus.textContent = "-"
-        minus.addEventListener("click", e => {
-          e.preventDefault()
-          e.stopPropagation()
-          const cur = picked.get(k) || 0
-          if (cur > 1) picked.set(k, cur - 1)
-          else picked.delete(k)
-          updateSubmit()
-          render()
-        })
-
-        const cnt = document.createElement("div")
-        cnt.className = "count"
-        cnt.textContent = String(count)
-
-        const plus = document.createElement("button")
-        plus.className = "pill"
-        plus.type = "button"
-        plus.textContent = "+"
-        plus.addEventListener("click", e => {
-          e.preventDefault()
-          e.stopPropagation()
-          const cur = picked.get(k) || 0
-          picked.set(k, cur + 1)
-          updateSubmit()
-          render()
-        })
-
-        controls.appendChild(minus)
-        controls.appendChild(cnt)
-        controls.appendChild(plus)
-
-        if (!editMode) {
-          card.addEventListener("click", (e) => {
-            e.preventDefault()
-            const cur = picked.get(k) || 0
-            picked.set(k, cur + 1)
-            updateSubmit()
-            render()
-          })
-        }
-
-        card.appendChild(imgbox)
-        card.appendChild(title)
-        // card.appendChild(cat)
-        if (it.description) card.appendChild(desc)
-        card.appendChild(cal)
-        card.appendChild(controls)
-
-        if (editMode) {
-          const overlay = document.createElement("div")
-          overlay.className = "card-overlay"
-          const hint = document.createElement("div")
-          hint.className = "hint"
-          hint.textContent = "✏️"
-          overlay.appendChild(hint)
-          overlay.addEventListener("click", e => {
-            e.preventDefault()
-            opencModal(it)
-          })
-          card.appendChild(overlay)
-        } else if (isSel) {
-          const badge = document.createElement("div")
-          badge.className = "sticky-note"
-          badge.textContent = "Added"
-          card.appendChild(badge)
-        }
-
-        elGrid.appendChild(card)
-      })
-
-      const elCalTotal = document.getElementById("cal-total")
-      const elSelectedSummary = document.getElementById("selected-summary")
-      if (elCalTotal) {
-        let totalCal = 0
-        const byCat = new Map()
-        for (const [key, count] of picked.entries()) {
-          const [category, name] = key.split("|")
-          const item = ITEMS.find(x => x.category === category && x.name === name)
-          if (!item) continue
-
-          totalCal += item.cal * count
-          const entry = byCat.get(category) || { parts: [], total: 0 }
-          entry.parts.push(count > 1 ? `${name} x${count}` : name)
-          byCat.set(category, entry)
-        }
-        elCalTotal.textContent = totalCal
-        const foods = Array.from(byCat.entries()).map(([category, { parts, total }]) => {
-          return `${category} ${parts.join(", ")}`
-        })
-        elSelectedSummary.textContent = foods.join(" | ")
-      }
+      const entries = [
+        ...ONEOFFS.map(it => ({ key: it.key, item: it, hidden: editMode })),
+        ...ITEMS.map(it => ({
+          key: keyOf(it),
+          item: it,
+          hidden: !fuzzyMatch(query, `${it.category} ${it.name} ${it.tag || ""}`),
+        })),
+      ]
+      reconcileRows(elGrid, rowEls, entries, updateRow)
+      updateSummary()
     }
+
+    elGrid.addEventListener("click", e => {
+      const row = e.target.closest(".brow")
+      if (!row) return
+      const it = itemByKey(row.dataset.key)
+      if (!it) return
+      e.preventDefault()
+
+      if (editMode) {
+        if (!it.oneoff) opencModal(it)
+        return
+      }
+      const step = e.target.closest(".brow-step")
+      if (step) {
+        adjustPick(row.dataset.key, Number(step.dataset.step))
+        return
+      }
+      if (e.target.closest(".brow-stepper")) return
+      adjustPick(row.dataset.key, 1)
+    })
+
+    enableDragReorder(elGrid, {
+      isActive: () => editMode,
+      onDrop: keys => {
+        const order = new Map(keys.map((k, i) => [k, i]))
+        ITEMS.sort((a, b) => order.get(keyOf(a)) - order.get(keyOf(b)))
+        render()
+      },
+    })
 
     // ---------- Search / Submit / Edit toggle / Add / Save ----------
     elSearch.addEventListener("input", e => {
@@ -713,20 +642,9 @@
     })
 
     elSubmit.addEventListener("click", () => {
-      const byCat = new Map()
-
-      for (const [key, count] of picked.entries()) {
-        const [category, name] = key.split("|")
-        const it = ITEMS.find(x => x.category === category && x.name === name)
-        if (!it) continue
-        const entry = byCat.get(category) || { parts: [], total: 0 }
-        entry.parts.push(count > 1 ? `${name} x${count}` : name)
-        entry.total += it.cal * count
-        byCat.set(category, entry)
-      }
-
-      const lines = Array.from(byCat.entries()).map(([category, { parts, total }]) => {
-        return `${category} ${parts.join(", ")} (${total})`
+      const when = mealTimePhrase()
+      const lines = pickedLines().map(([category, { parts, total }]) => {
+        return `${category} ${parts.join(", ")} (${total})${when}`
       })
 
       showFlash("Submitting...")
@@ -734,6 +652,10 @@
         command.socket.send({ action: "command", words: `log ${item}` })
       })
       picked.clear()
+      ONEOFFS = []
+      elMealTime.value = ""
+      updateMealTime()
+      updateSubmit()
       render()
     })
 
@@ -746,13 +668,8 @@
     })
 
     elCancelEdit.addEventListener("click", () => {
-      const next = textToItems(preEdit)
-      const nextNames = new Set(next.map(i => i.name.toLowerCase()))
-      for (const k of Array.from(picked.keys())) {
-        if (!nextNames.has(k.toLowerCase())) picked.delete(k)
-      }
-      ITEMS = next
-
+      ITEMS = textToItems(preEdit)
+      prunePicked()
       editMode = false
       render()
     })
@@ -807,6 +724,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       render()
       updateSubmit()
+      updateMealTime()
     })
 
     window.addEventListener("beforeunload", e => {

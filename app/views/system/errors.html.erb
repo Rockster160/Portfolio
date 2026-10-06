@@ -1,0 +1,145 @@
+<%= meta_title "Errors", include_name: false %>
+<%= meta_description "Every failure the app reported." %>
+
+<%
+  # A filter chip's link: the same page with that term added, or taken back out
+  # when it's already on. Same shape the banking and memories pages use.
+  chip = ->(key, value) {
+    picked = params[key].to_s == value.to_s
+    [picked, system_errors_path(request.query_parameters.merge(key => (picked ? nil : value)).compact)]
+  }
+  # Their clock. The day boundary is what makes a stretch readable, so a time
+  # outside today carries its date.
+  stamp = ->(time) {
+    local = time.in_time_zone(current_user.timezone)
+    local.to_date == Date.current ? local.strftime("%-I:%M %p") : local.strftime("%b %-d, %-I:%M %p")
+  }
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small><%= link_to "System", system_path %> / Errors</small>
+  </div>
+
+  <div class="err-windows">
+    <% @windows.each do |hours| %>
+      <% label = (hours < 48 ? "#{hours}h" : "#{hours / 24}d") %>
+      <%= link_to label,
+            system_errors_path(request.query_parameters.merge(hours: hours)),
+            class: "err-chip#{" on" if @hours == hours}" %>
+    <% end %>
+    <span class="err-total"><%= @total %> in the last <%= @hours < 48 ? "#{@hours} hours" : "#{@hours / 24} days" %>, <%= @groups.length %> distinct</span>
+  </div>
+
+  <div class="err-filters">
+    <% picked, path = chip.call(:unannounced, 1) %>
+    <%= link_to "never announced", path, class: "err-chip#{" on" if picked}" %>
+    <% @sections.first(24).each do |section| %>
+      <% picked, path = chip.call(:section, section) %>
+      <%= link_to section, path, class: "err-chip#{" on" if picked}" %>
+    <% end %>
+    <% if params[:fingerprint].present? || params[:user_id].present? || params[:error_class].present? %>
+      <%= link_to "clear", system_errors_path(hours: @hours), class: "err-chip err-clear" %>
+    <% end %>
+  </div>
+
+  <% if @groups.none? %>
+    <p class="err-empty">Nothing reported in this window. Quiet is the right answer.</p>
+  <% end %>
+
+  <%# One row per distinct failure, not per occurrence: a loop that ran four %>
+  <%# hundred times is one thing going wrong, and reading it as four hundred %>
+  <%# lines buries everything else that happened that day. %>
+  <% @groups.each do |group| %>
+    <div class="err-row<%= " quiet" if group[:channel].blank? %>">
+      <div class="err-head">
+        <span class="err-count"><%= group[:count] %>×</span>
+        <%= link_to group[:section], system_errors_path(hours: @hours, fingerprint: group[:fingerprint]),
+              class: "err-section" %>
+        <% if group[:error_class].present? %>
+          <span class="err-class"><%= group[:error_class] %></span>
+        <% end %>
+        <span class="err-when">
+          <% if group[:count] > 1 %>
+            <%= stamp.call(group[:first_at]) %> &rarr; <%= stamp.call(group[:last_at]) %>
+          <% else %>
+            <%= stamp.call(group[:last_at]) %>
+          <% end %>
+        </span>
+      </div>
+
+      <div class="err-message"><%= group[:message].to_s.truncate(400) %></div>
+
+      <div class="err-foot">
+        <%= link_to "open", system_error_path(id: group[:sample_id]), class: "err-open" %>
+        <%# A row outliving the account it was reported for still knows whose %>
+        <%# it was, so the id stands in rather than reading as nobody's. %>
+        <% if group[:user_id].present? %>
+          <% _picked, path = chip.call(:user_id, group[:user_id]) %>
+          <% found = @users[group[:user_id]] %>
+          <%= link_to (found ? ErrorReport.who(found) : "user ##{group[:user_id]}"), path, class: "err-who" %>
+        <% else %>
+          <span class="err-who err-nobody">nobody</span>
+        <% end %>
+        <% if group[:channel].blank? %>
+          <span class="err-badge">never announced</span>
+        <% else %>
+          <span class="err-badge err-sent"><%= group[:channel] %></span>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page { max-width: 1100px; width: 95%; margin: 0 auto; padding: 20px; }
+    .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .system-page .lists-title a { color: #8B949E; text-decoration: none; }
+
+    .err-windows, .err-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .err-windows { margin-bottom: 10px; }
+    .err-filters { margin-bottom: 18px; }
+    .err-total { font-size: 12px; color: #8B949E; margin-left: 6px; }
+
+    .err-chip {
+      font-size: 12px; color: #8B949E; background-color: #161B22; text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 3px 10px;
+    }
+    .err-chip:hover { border-color: #5DADE2; color: #C9D1D9; }
+    .err-chip.on { background-color: #5DADE2; border-color: #5DADE2; color: #0D1117; font-weight: bold; }
+    .err-clear { border-color: rgba(236, 112, 99, 0.5); }
+
+    .err-empty { color: #8B949E; }
+
+    .err-row {
+      background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+    }
+    .err-row.quiet { border-color: rgba(245, 176, 65, 0.35); }
+
+    .err-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .err-count { font-size: 15px; font-weight: bold; color: #EC7063; min-width: 42px; }
+    .err-section { font-size: 14px; font-weight: bold; color: #C9D1D9; text-decoration: none; }
+    .err-section:hover { color: #5DADE2; }
+    .err-class { font-size: 12px; color: #F5B041; }
+    .err-when { font-size: 12px; color: #8B949E; margin-left: auto; }
+
+    .err-message {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+      color: #8B949E; margin: 8px 0; white-space: pre-wrap; word-break: break-word;
+    }
+
+    .err-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+    .err-open { color: #5DADE2; text-decoration: none; }
+    .err-who { color: #8B949E; text-decoration: none; }
+    .err-who:hover { color: #C9D1D9; }
+    .err-nobody { opacity: 0.6; }
+
+    .err-badge {
+      padding: 1px 8px; border-radius: 10px; font-size: 11px;
+      background-color: rgba(245, 176, 65, 0.15); color: #F5B041;
+    }
+    .err-badge.err-sent { background-color: rgba(255, 255, 255, 0.06); color: #8B949E; }
+  </style>
+<% end %>

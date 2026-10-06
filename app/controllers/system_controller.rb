@@ -394,6 +394,38 @@ class SystemController < ApplicationController
     render json: { id: request.id, status: request.status, open: FeatureRequest.status_open.count }
   end
 
+  # Every failure the app reported, grouped so a loop reads as one line, with
+  # the occurrences one tap away.
+  #
+  # Grouped is the default because the question is almost never "what happened
+  # at 3:04" - it is "what is going wrong, how often, and since when". The
+  # filters are the three ways that question narrows: a section, a person, and
+  # whether anything ever announced it.
+  def errors
+    @hours = params[:hours].to_i
+    @hours = ErrorReport::DEFAULT_WINDOW unless ErrorReport::WINDOWS.include?(@hours)
+    @windows = ErrorReport::WINDOWS
+    @span = (@hours.hours.ago..Time.current)
+
+    scope = ErrorReport.where(created_at: @span)
+    scope = scope.for_section(params[:section]) if params[:section].present?
+    scope = scope.for_class(params[:error_class]) if params[:error_class].present?
+    scope = scope.for_user(params[:user_id]) if params[:user_id].present?
+    scope = scope.unannounced if params[:unannounced].present?
+    scope = scope.like(params[:fingerprint]) if params[:fingerprint].present?
+
+    @total = scope.count
+    @groups = ErrorReport.digest(@span, limit: ErrorReport::PAGE, scope: scope)
+    @users = User.where(id: @groups.filter_map { |row| row[:user_id] }).index_by(&:id)
+    # One occurrence of each, so a group opens straight onto the newest row.
+    @sections = ErrorReport.where(created_at: @span).distinct.pluck(:section).sort
+  end
+
+  def error
+    @error = ErrorReport.find(params[:id])
+    @others = ErrorReport.like(@error.fingerprint).where.not(id: @error.id).recent.limit(20)
+  end
+
   def connections
     @pool_stat = load_pool_stat
     @db_connections = load_db_connections

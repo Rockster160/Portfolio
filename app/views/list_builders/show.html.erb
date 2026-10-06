@@ -80,7 +80,7 @@
     </div>
   </div>
 
-  <div id="grid" class="grid"></div>
+  <div id="grid" class="brows"></div>
 </div>
 
 <% content_for :after_body do %>
@@ -90,6 +90,9 @@
   <script id="list-items-data" type="application/json">
     <%= raw(@list_builder.list.list_items.pluck(:name).to_json) %>
   </script>
+  <script id="snapshot-stamp" type="application/json">
+    <%= @list_builder.snapshot_stamp %>
+  </script>
 
   <style>
     html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
@@ -97,7 +100,7 @@
       font-weight: 500; color: #ECF0F1;
     }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 28px }
-    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 10px }
+    .topbar { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 12px }
     input[type="text"] {
       flex: 1; padding: 10px 12px; border: 1px solid #CCC;
       border-radius: 8px; outline: none
@@ -105,121 +108,28 @@
     button {
       padding: inherit;
     }
-    button.primary {
-      padding: 6px 10px; border: none; border-radius: 8px;
+    button.primary, .btn.primary {
+      min-height: 48px; min-width: 48px; padding: 6px 12px; border: none; border-radius: 8px;
       background: #2563EB; color: black; cursor: pointer
     }
     button.primary:disabled { opacity: .5; cursor: default }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 12px
-    }
-    .card {
-      position: relative; border: 1px solid #E5E7EB; border-radius: 12px;
-      padding: 6px; display: flex; flex-direction: column; gap: 4px;
-      align-items: center; justify-content: space-between; background: #00102B;
-      transition: transform .08s ease, box-shadow .08s ease;
-      cursor: pointer;
-    }
-    .card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px #0001 }
-    .card.selected { }
-    .imgbox {
-      display: grid;
-      place-items: center;
-      position: relative;
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 10px; background: #D5E5FF;
-      overflow: hidden;
-    }
-
-    .imgbox i.emoji {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      font-style: normal;
-      font-size: 64px;
-      line-height: 1;
-      white-space: pre;
-      pointer-events: none;
-    }
-
-    .imgbox i.emoji span {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      line-height: 1;
-      pointer-events: none;
-    }
-    .imgbox img { width: 100%; height: 100%; object-fit: cover }
-    .title { text-align: center; font-size: 14px; line-height: 1.2; color: #ECF0F1; }
-
-    .editing .card { cursor: grab }
-    .editing .card:active { cursor: grabbing }
-
-    .card-overlay {
-      position: absolute; inset: 0;
-      background: #0008; border-radius: 12px;
-      display: grid; place-items: center; text-align: center;
-      color: #ECF0F1; font-weight: 600; font-size: 14px;
-      pointer-events: auto
-    }
-    .card-overlay .hint {
-      padding: 6px 10px; border-radius: 999px;
-      background: #2563EB; color: #FFF
-    }
-
-    .drag-placeholder {
-      border: 2px dashed #93C5FD;
-      background: #EFF6FF;
-      border-radius: 12px;
-      height: 100%;
-      min-height: 160px;
-    }
-
-    .dragging { opacity: .3 }
 
     .ws-disconnected {
       background: #991B1B; color: #FFF; padding: 4px 12px;
       border-radius: 6px; font-size: 13px; font-weight: 500;
     }
 
-    .on-list-badge {
-      position: absolute; top: 8px; left: 8px; font-size: 12px;
-      background: #2D973E; color: #FFF; padding: 2px 6px; border-radius: 999px;
-    }
-    .out-badge, .low-badge {
-      position: absolute; top: 8px; right: 8px; font-size: 12px;
-      color: #FFF; padding: 2px 6px; border-radius: 999px;
-    }
-    .out-badge { background: #DC2626; }
-    .low-badge { background: #F59E0B; }
-    .out-of-stock > :not(.on-list-badge) { opacity: 0.4 }
-    .low-stock > :not(.on-list-badge) { opacity: 0.7 }
-
-    .controls {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%;
-    }
-    .pill {
-      min-width: 20px; height: 20px; border-radius: 999px; border: 1px solid #D1D5DB;
-      background: #FFF; cursor: pointer; display: grid; place-items: center;
-      font-weight: 600
-    }
-    .count { min-width: 24px; text-align: center; color: #ECF0F1 }
-
-
     .text-right { text-align: right; }
-    .row { display: flex; gap: 8px; width: 100% }
+    .row { display: flex; gap: 10px; width: 100% }
     .row.right { justify-content: flex-end; }
     .row input {
       flex: 1; padding: 8px 10px; border: 1px solid #CCC; border-radius: 6px
     }
+    .topbar .row input[type="search"] { min-height: 48px; margin: 0 }
     .flex-between {
       display: flex; justify-content: space-between; align-items: center
     }
+    @media (max-width: 600px) { .wrap { padding: 8px 0 20px } }
 
     .cmodal-backdrop {
       position: fixed; inset: 0; background: #0008;
@@ -240,16 +150,15 @@
     .cmodal .danger { background: #991B1B; color: #FFF }
     .cmodal .spacer { flex: 1 }
 
-    @media (max-width: 600px) {
-      .grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) }
-    }
-
     .hidden { display: none }
   </style>
 
   <script type="module">
     import { showFlash } from "../../quick_actions/flash.js";
     import { AuthWS } from "../../quick_actions/auth_ws.js";
+    import {
+      fuzzyMatch, setText, setIcon, setDesc, setCount, reconcileRows, enableDragReorder,
+    } from "../../quick_actions/builder_rows.js";
 
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
@@ -257,6 +166,7 @@
     let LIST_ITEMS = new Set(JSON.parse(
       document.getElementById("list-items-data").textContent || "[]"
     ).map(name => name.toLowerCase()))
+    const BOOT_STAMP = Number(document.getElementById("snapshot-stamp").textContent)
 
     let query = ""
     let editMode = false
@@ -269,7 +179,6 @@
     const elAddItem = document.getElementById("add-item")
     const elSaveItems = document.getElementById("save-items")
     const elQuickEdit = document.getElementById("quick-edit")
-    const elPageEdit = document.getElementById("page-edit")
     const elWsStatus = document.getElementById("ws-status")
     const wrapEl = document.querySelector(".wrap")
     const SAVE_ENDPOINT = wrapEl?.dataset.saveUrl
@@ -300,65 +209,8 @@
       return m ? m.content : ""
     }
 
-    const fuzzyMatch = (needle, hay) => {
-      if (!needle) return true
-      let i = 0, j = 0
-      const n = needle.toLowerCase(), h = hay.toLowerCase()
-      while (i < n.length && j < h.length) { if (n[i] === h[j]) i++; j++ }
-      return i === n.length
-    }
-
-    const splitGraphemes = s => {
-      if (window.Intl && Intl.Segmenter) {
-        const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" })
-        return Array.from(seg.segment(s), x => x.segment)
-      }
-      return Array.from(s)
-    }
-
-    const computeView = () => {
-      return ITEMS.filter(it =>
-        fuzzyMatch(query, it.display || it.name)
-      )
-    }
-
-    const isSelected = (name) => LIST_ITEMS.has(name.toLowerCase())
-
-    const upsertItem = (name, attrs) => {
-      const idx = ITEMS.findIndex(x => x.name === name)
-      if (idx === -1) return
-      ITEMS[idx] = { ...ITEMS[idx], ...attrs }
-    }
-
     const deleteItem = name => {
       ITEMS = ITEMS.filter(x => x.name !== name)
-    }
-
-    // ---------- Drag & drop with placeholder (name-based) ----------
-    let dragFromIdx = null
-    let placeholder = null
-
-    const startDrag = (fromIdx, card) => {
-      dragFromIdx = fromIdx
-      card.classList.add("dragging")
-      placeholder = document.createElement("div")
-      placeholder.className = "card drag-placeholder"
-      placeholder.style.height = `${card.offsetHeight}px`
-      elGrid.insertBefore(placeholder, card.nextSibling)
-    }
-
-    const finishDrag = draggedCard => {
-      if (dragFromIdx == null || !placeholder) return
-      const cards = Array.from(elGrid.querySelectorAll(".card"))
-      const toIdx = cards.indexOf(placeholder)
-      const moved = ITEMS.splice(dragFromIdx, 1)[0]
-      const insertAt = Math.max(0, Math.min(toIdx, ITEMS.length))
-      ITEMS.splice(insertAt, 0, moved)
-      draggedCard.classList.remove("dragging")
-      placeholder.remove()
-      placeholder = null
-      dragFromIdx = null
-      render()
     }
 
     // ---------- Edit Modal ----------
@@ -476,31 +328,84 @@
       if (e.target === elQModal) closeQuickEdit()
     })
 
+    // ---------- Snapshot ordering ----------
+    // Builder and list snapshots come from broadcasts, PATCH replies and
+    // resync reads, and on a slow link they arrive in any order. Each carries
+    // a server stamp taken after its read; anything older than what's already
+    // drawn is dropped rather than redrawing the past.
+    const stampGuard = (start) => {
+      let drawnAt = start
+      return stamp => {
+        const ts = Number(stamp)
+        if (!Number.isFinite(ts)) return true
+        if (ts < drawnAt) return false
+        drawnAt = ts
+        return true
+      }
+    }
+    const freshBuilder = stampGuard(Number.isFinite(BOOT_STAMP) ? BOOT_STAMP : -Infinity)
+    const freshList = stampGuard(Number.isFinite(BOOT_STAMP) ? BOOT_STAMP : -Infinity)
+
     // ---------- Stock counters ----------
+    // A tap shows its count at once as an override in `localStock`, marked
+    // pending until the server agrees. Taps debounce into one PATCH of
+    // absolute counts, so a retry after a lost reply can't apply twice.
+    // While a row is being tapped nothing from the server touches its count:
+    // the reply to the first tap would otherwise drag a burst of taps back.
+    // When the taps stop, the page re-reads the server and settles.
+    const DEBOUNCE_MS = 700
+    const PROTECT_MS = 3000
+    const REQUEST_TIMEOUT_MS = 20000
+    const MAX_RETRY_MS = 15000
+
+    const localStock = new Map()
     let pendingStock = {}
+    let inFlightStock = {}
     let inFlight = false
     let debounceTimer = null
-    const DEBOUNCE_MS = 500
+    let retryMs = 1000
+
+    const shownStock = it => (
+      localStock.has(it.name) ? localStock.get(it.name).value : (it.stock || 0)
+    )
+    const isTapping = name => {
+      const local = localStock.get(name)
+      return !!local && Date.now() - local.at < PROTECT_MS
+    }
+    const isUnsent = name => name in pendingStock || name in inFlightStock
+
+    // Drops every override the server has caught up with. One still being
+    // tapped or not yet written stays; any other is settled by the server's
+    // value, whether it matches or someone else changed it since.
+    const settleStock = () => {
+      for (const name of Array.from(localStock.keys())) {
+        if (isTapping(name) || isUnsent(name)) continue
+        localStock.delete(name)
+      }
+    }
 
     const adjustStock = (name, delta) => {
       const item = ITEMS.find(i => i.name === name)
       if (!item) return
-      item.stock = Math.max(0, (item.stock || 0) + delta)
-      pendingStock[name] = item.stock
-      scheduleStockSave()
-      render()
-    }
-
-    const scheduleStockSave = () => {
+      const value = Math.max(0, shownStock(item) + delta)
+      localStock.set(name, { value, at: Date.now() })
+      pendingStock[name] = value
       clearTimeout(debounceTimer)
       debounceTimer = setTimeout(flushStock, DEBOUNCE_MS)
+      scheduleResync()
+      renderRow(name)
     }
 
     const flushStock = async (keepalive = false) => {
       if (inFlight || Object.keys(pendingStock).length === 0) return
-      const batch = { ...pendingStock }
+      const batch = pendingStock
       pendingStock = {}
+      inFlightStock = batch
       inFlight = true
+
+      const ctrl = new AbortController()
+      const timeout = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
+      let data = null
       try {
         const res = await fetch(STOCK_ENDPOINT, {
           method: "PATCH",
@@ -511,36 +416,185 @@
           },
           body: JSON.stringify({ stock: batch }),
           credentials: "same-origin",
+          signal: keepalive ? undefined : ctrl.signal,
           keepalive,
         })
-        if (!res.ok) {
-          Object.assign(pendingStock, batch)
-        }
+        if (res.ok) data = await res.json().catch(() => ({}))
       } catch {
-        Object.assign(pendingStock, batch)
+        // Offline or timed out; the batch is requeued below.
       } finally {
+        clearTimeout(timeout)
         inFlight = false
-        if (Object.keys(pendingStock).length > 0) scheduleStockSave()
+        inFlightStock = {}
+      }
+
+      if (data) {
+        retryMs = 1000
+        if (data.items) applyBuilderSnapshot(data.items, data.timestamp)
+        if (Object.keys(pendingStock).length > 0) {
+          clearTimeout(debounceTimer)
+          debounceTimer = setTimeout(flushStock, DEBOUNCE_MS)
+        }
+        return
+      }
+
+      // Taps made while this was out are newer than the batch; keep those.
+      for (const [name, value] of Object.entries(batch)) {
+        if (!(name in pendingStock)) pendingStock[name] = value
+      }
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(flushStock, retryMs)
+      retryMs = Math.min(retryMs * 2, MAX_RETRY_MS)
+    }
+
+    // ---------- List membership ----------
+    // A tap records what the person wants in `listIntent`, and the row shows
+    // it as pending. The socket gets the settled wish once taps stop, and
+    // only if it differs from the list: a double tap that lands where it
+    // started sends nothing, and add/remove repeat safely where a toggle
+    // would flip twice. A list that agrees settles the wish; one still
+    // disagreeing after LIST_PROTECT_MS means the write was lost, so the
+    // list wins.
+    const LIST_DEBOUNCE_MS = 400
+    const LIST_PROTECT_MS = 8000
+
+    const listIntent = new Map()
+    let listTimer = null
+    let listSocket = null
+
+    const onServerList = name => LIST_ITEMS.has(name.toLowerCase())
+    const isSelected = name => {
+      const intent = listIntent.get(name.toLowerCase())
+      return intent ? intent.on : onServerList(name)
+    }
+
+    const settleList = () => {
+      for (const [key, intent] of Array.from(listIntent.entries())) {
+        const server = onServerList(intent.name)
+        const written = intent.sent === undefined || intent.sent === intent.on
+        if (server === intent.on && written) listIntent.delete(key)
+        else if (server !== intent.on && Date.now() - intent.at >= LIST_PROTECT_MS) {
+          listIntent.delete(key)
+        }
       }
     }
 
-    // ---------- Toggle item on list via websocket ----------
-    let listSocket = null
-
-    const toggleItem = (itemName) => {
+    const flushList = () => {
       if (!listSocket?.open) {
-        showFlash("Not connected")
+        listTimer = setTimeout(flushList, 1000)
         return
       }
-      const currentlySelected = isSelected(itemName)
-      if (currentlySelected) {
-        listSocket.send({ remove: itemName })
-      } else {
-        listSocket.send({ add: itemName })
+      for (const [key, intent] of Array.from(listIntent.entries())) {
+        if (intent.sent === intent.on) continue
+        if (intent.sent === undefined && intent.on === onServerList(intent.name)) {
+          listIntent.delete(key)
+          renderRow(intent.name)
+          continue
+        }
+        listSocket.send(intent.on ? { add: intent.name } : { remove: intent.name })
+        intent.sent = intent.on
+      }
+    }
+
+    const toggleItem = (item) => {
+      const name = item.name
+      const key = name.toLowerCase()
+      const prior = listIntent.get(key)
+      listIntent.set(key, { name, on: !isSelected(name), sent: prior?.sent, at: Date.now() })
+      clearTimeout(listTimer)
+      listTimer = setTimeout(flushList, LIST_DEBOUNCE_MS)
+      scheduleResync(LIST_PROTECT_MS)
+      renderRow(name)
+    }
+
+    // ---------- Server snapshots ----------
+    const applyBuilderSnapshot = (items, stamp) => {
+      if (!freshBuilder(stamp)) return
+      if (!editMode) ITEMS = items
+      settleStock()
+      render()
+    }
+
+    const applyListSnapshot = (names, stamp) => {
+      if (!freshList(stamp)) return
+      LIST_ITEMS = new Set(names.map(name => name.toLowerCase()))
+      settleList()
+      render()
+    }
+
+    // Re-reads both snapshots once the taps have stopped long enough for
+    // every override to be out of its protection window, so a broadcast
+    // dropped mid-burst can't leave a stale count on screen.
+    let resyncTimer = null
+    let resyncAt = 0
+    const scheduleResync = (after = PROTECT_MS) => {
+      const at = Date.now() + after + 250
+      if (resyncTimer && at <= resyncAt) return
+      clearTimeout(resyncTimer)
+      resyncAt = at
+      resyncTimer = setTimeout(resync, at - Date.now())
+    }
+
+    const resync = async () => {
+      resyncTimer = null
+      if (inFlight || Object.keys(pendingStock).length > 0) {
+        scheduleResync(DEBOUNCE_MS)
+        return
+      }
+      try {
+        const res = await fetch(SAVE_ENDPOINT, {
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin",
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        applyBuilderSnapshot(data.items, data.timestamp)
+        applyListSnapshot(data.list_items, data.timestamp)
+      } catch {
+        // Next tap, reconnect or wake resyncs again.
       }
     }
 
     // ---------- Render ----------
+    const rowEls = new Map()
+
+    const updateRow = (row, it) => {
+      const stockVal = shownStock(it)
+      const lowThreshold = it.low != null ? it.low : 1
+      const isOut = stockVal === 0
+      const isLow = !isOut && lowThreshold > 0 && stockVal <= lowThreshold
+      const intent = listIntent.get(it.name.toLowerCase())
+      const selected = isSelected(it.name)
+
+      row.classList.toggle("selected", selected)
+      row.classList.toggle("dim", !editMode && isOut)
+      row.classList.toggle("count-pending", localStock.has(it.name))
+      row.draggable = editMode
+
+      setIcon(row, it.img, "📦")
+      setText(row.querySelector(".brow-title"), it.display || it.name)
+      setCount(row, stockVal)
+
+      const badges = []
+      if (intent) badges.push({ text: intent.on ? "Adding…" : "Removing…", tone: "warn" })
+      else if (selected) badges.push({ text: "On List", tone: "ok" })
+      if (isOut) badges.push({ text: "Out", tone: "bad" })
+      else if (isLow) badges.push({ text: "Low", tone: "warn" })
+      setDesc(row, "", editMode ? [] : badges)
+    }
+
+    const renderRow = name => {
+      const row = rowEls.get(name)
+      const it = ITEMS.find(i => i.name === name)
+      if (row && it) updateRow(row, it)
+      updateSelectedCount()
+    }
+
+    const updateSelectedCount = () => {
+      const count = ITEMS.filter(it => isSelected(it.name)).length
+      setText(document.getElementById("selected-count"), String(count))
+    }
+
     const render = () => {
       document.body.classList.toggle("editing", editMode)
       document.querySelectorAll("[data-editing=true]").forEach(el => el.classList.toggle("hidden", !editMode))
@@ -550,127 +604,43 @@
       elSaveItems.classList.toggle("hidden", !editMode)
       elQuickEdit?.classList.toggle("hidden", !editMode)
 
-      elGrid.innerHTML = ""
-      const view = computeView()
-
-      let selectedCount = 0
-
-      view.forEach((it, index) => {
-        const isSel = isSelected(it.name)
-        if (isSel) selectedCount++
-
-        const card = document.createElement("div")
-        const stockVal = it.stock || 0
-        const lowThreshold = it.low != null ? it.low : 1
-        let cls = "card"
-        if (isSel) cls += " selected"
-        if (!editMode && stockVal === 0) cls += " out-of-stock"
-        else if (!editMode && lowThreshold > 0 && stockVal <= lowThreshold) cls += " low-stock"
-        card.className = cls
-        card.dataset.name = it.name
-        card.dataset.index = String(index)
-
-        if (editMode) {
-          card.setAttribute("draggable", "true")
-          card.addEventListener("dragstart", e => startDrag(index, card))
-          card.addEventListener("dragend", e => finishDrag(card))
-          card.addEventListener("dragover", e => e.preventDefault())
-          card.addEventListener("dragenter", e => {
-            e.preventDefault()
-            const rect = card.getBoundingClientRect()
-            const before = (e.clientY - rect.top) < rect.height / 2
-            if (!placeholder) return
-            if (before) elGrid.insertBefore(placeholder, card)
-            else elGrid.insertBefore(placeholder, card.nextSibling)
-          })
-        }
-
-        const imgbox = document.createElement("div")
-        imgbox.className = "imgbox"
-        if (it.img && /^(https?:|\/)/.test(it.img)) {
-          const img = document.createElement("img")
-          img.src = it.img
-          img.alt = it.name
-          imgbox.appendChild(img)
-        } else {
-          const emoji = document.createElement("i")
-          emoji.className = "emoji"
-          const raw = it.img && it.img.trim() ? it.img : "📦"
-          splitGraphemes(raw).forEach(g => {
-            const span = document.createElement("span")
-            span.textContent = g
-            emoji.appendChild(span)
-          })
-          imgbox.appendChild(emoji)
-        }
-
-        const title = document.createElement("div")
-        title.className = "title"
-        title.textContent = it.display || it.name
-
-        if (!editMode) {
-          card.addEventListener("click", (e) => {
-            e.preventDefault()
-            toggleItem(it.name)
-          })
-        }
-
-        card.appendChild(imgbox)
-        card.appendChild(title)
-
-        if (editMode) {
-          const overlay = document.createElement("div")
-          overlay.className = "card-overlay"
-          const hint = document.createElement("div")
-          hint.className = "hint"
-          hint.textContent = "✏️"
-          overlay.appendChild(hint)
-          overlay.addEventListener("click", e => {
-            e.preventDefault()
-            opencModal(it)
-          })
-          card.appendChild(overlay)
-        } else {
-          if (isSel) {
-            const badge = document.createElement("div")
-            badge.className = "on-list-badge"
-            badge.textContent = "On List"
-            card.appendChild(badge)
-          }
-          if (stockVal === 0) {
-            const badge = document.createElement("div")
-            badge.className = "out-badge"
-            badge.textContent = "Out"
-            card.appendChild(badge)
-          } else if (lowThreshold > 0 && stockVal <= lowThreshold) {
-            const badge = document.createElement("div")
-            badge.className = "low-badge"
-            badge.textContent = "Low"
-            card.appendChild(badge)
-          }
-
-          const controls = document.createElement("div")
-          controls.className = "controls"
-          const minus = document.createElement("button")
-          minus.className = "pill"
-          minus.textContent = "−"
-          minus.addEventListener("click", e => { e.stopPropagation(); adjustStock(it.name, -1) })
-          const countEl = document.createElement("span")
-          countEl.className = "count"
-          countEl.textContent = stockVal
-          const plus = document.createElement("button")
-          plus.className = "pill"
-          plus.textContent = "+"
-          plus.addEventListener("click", e => { e.stopPropagation(); adjustStock(it.name, 1) })
-          controls.append(minus, countEl, plus)
-          card.appendChild(controls)
-        }
-
-        elGrid.appendChild(card)
-      })
-
-      document.getElementById("selected-count").textContent = selectedCount
+      const entries = ITEMS.map(it => ({
+        key: it.name,
+        item: it,
+        hidden: !fuzzyMatch(query, it.display || it.name),
+      }))
+      reconcileRows(elGrid, rowEls, entries, updateRow)
+      updateSelectedCount()
     }
+
+    elGrid.addEventListener("click", e => {
+      const row = e.target.closest(".brow")
+      if (!row) return
+      const item = ITEMS.find(i => i.name === row.dataset.key)
+      if (!item) return
+      e.preventDefault()
+
+      if (editMode) {
+        opencModal(item)
+        return
+      }
+      const step = e.target.closest(".brow-step")
+      if (step) {
+        adjustStock(item.name, Number(step.dataset.step))
+        return
+      }
+      if (e.target.closest(".brow-stepper")) return
+      toggleItem(item)
+    })
+
+    enableDragReorder(elGrid, {
+      isActive: () => editMode,
+      onDrop: keys => {
+        const order = new Map(keys.map((k, i) => [k, i]))
+        ITEMS.sort((a, b) => order.get(a.name) - order.get(b.name))
+        render()
+      },
+    })
 
     // ---------- Search / Edit toggle / Add / Save ----------
     elSearch.addEventListener("input", e => {
@@ -729,10 +699,10 @@
 
       if (res.ok) {
         const data = await res.json().catch(() => null)
-        if (data?.items) ITEMS = data.items
         showFlash("Saved!")
         editMode = false
-        render()
+        if (data?.items) applyBuilderSnapshot(data.items, data.timestamp)
+        else render()
         return
       }
 
@@ -742,20 +712,6 @@
     })
 
     // ---------- WebSocket setup ----------
-    // A list broadcast carries the whole list and ActionCable dispatches each
-    // one on its own worker thread, so snapshots published milliseconds apart
-    // can arrive in either order. `timestamp` is milliseconds, stamped after
-    // the read, so an older snapshot overtaking a newer one gets dropped
-    // instead of redrawing the list as it was two items ago.
-    let drawnAt = -Infinity
-    const fresh = (stamp) => {
-      const ts = Number(stamp)
-      if (!Number.isFinite(ts)) { return true }
-      if (ts < drawnAt) { return false }
-      drawnAt = ts
-      return true
-    }
-
     listSocket = new AuthWS(
       { channel: "ListJsonChannel", channel_id: `list_${LIST_ID}` },
       {
@@ -764,23 +720,17 @@
           listSocket.send({
             subscribe: { channel: "ListBuilderChannel", channel_id: `builder_${BUILDER_ID}` }
           })
+          resync()
         },
         onclose() {
           elWsStatus.classList.remove("hidden")
         },
         onmessage(msg) {
-          if (msg.list_data && msg.list_data.items && fresh(msg.timestamp)) {
-            LIST_ITEMS = new Set(
-              msg.list_data.items
-                .filter(item => !item.deleted_at)
-                .map(item => item.name.toLowerCase())
-            )
-            render()
+          if (msg.list_data?.items) {
+            const names = msg.list_data.items.filter(item => !item.deleted_at).map(item => item.name)
+            applyListSnapshot(names, msg.timestamp)
           }
-          if (!editMode && msg.builder_items) {
-            ITEMS = msg.builder_items
-            render()
-          }
+          if (msg.builder_items) applyBuilderSnapshot(msg.builder_items, msg.timestamp)
         }
       }
     )
@@ -788,6 +738,16 @@
     // ---------- Boot ----------
     document.addEventListener("DOMContentLoaded", () => {
       render()
+    })
+
+    // A tablet that slept or dropped off wifi missed broadcasts; catch up.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") resync()
+      else if (Object.keys(pendingStock).length > 0) flushStock(true)
+    })
+    window.addEventListener("online", () => {
+      flushStock()
+      resync()
     })
 
     window.addEventListener("beforeunload", e => {

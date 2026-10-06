@@ -35,6 +35,27 @@ module Buddy
         "interview."
     end
 
+    # The tag for mail that matches none of the beats, and why `acknowledged` is
+    # not it.
+    #
+    # `acknowledged` is what JobNote#settle_applied_before_receipt anchors the
+    # submission's clock against, so it has to mean a receipt and nothing else.
+    # The failure it invites is reading the SENDER rather than the message: mail
+    # from an ATS is machine mail, `acknowledged` is the machine tag, and the
+    # housekeeping an ATS sends wears it on that resemblance alone.
+    def plain
+      " `acknowledged` means the machine said the APPLICATION ARRIVED - " \
+        "\"thanks for applying, a real person will review this\" - and that is the " \
+        "whole of it. Coming from an ATS does not make a mail a receipt: a code " \
+        "to verify an email address, a link to finish setting up a candidate " \
+        "account, a sign-in prompt, a password reset, a job-alert digest, a " \
+        "survey, a reminder about something already booked. None of those is a " \
+        "beat on the application and all of them are `note`. **`note` is a " \
+        "correct answer, not a failure to classify it.** Reach for it whenever " \
+        "the mail is not plainly one of the others, rather than for the tag that " \
+        "looks nearest."
+    end
+
     # Mail he SENT. The tag is about what he did, not what arrived.
     def outgoing_tag(outgoing)
       return "" unless outgoing

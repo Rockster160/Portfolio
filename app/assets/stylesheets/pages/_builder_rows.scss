@@ -1,0 +1,244 @@
+// Row layout shared by the meal and list builders: icon, title over a
+// description line, and a stepper on the right. These run on wall-mounted
+// and handheld touch screens, so every target is finger-sized and the
+// stepper is fenced off from the row behind it.
+.html-ctr-meal_builders,
+.html-ctr-list_builders {
+  $brow-ok: #22C55E;
+  $brow-warn: #F59E0B;
+  $brow-bad: #DC2626;
+  $brow-step: 56px;
+
+  .brows {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(#{"min(100%, 360px)"}, 1fr));
+    gap: 12px 16px;
+  }
+
+  .brow {
+    display: flex;
+    position: relative;
+    align-items: center;
+    gap: 14px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    cursor: pointer;
+    border: 1px solid rgba($blue-l5, 0.25);
+    border-radius: 12px;
+    background: $blue-d5;
+    padding: 10px 0 10px 10px;
+    min-height: 80px;
+    overflow: hidden;
+    color: $grey-light;
+    user-select: none;
+
+    &:active:not(:has(.brow-stepper:active)) {
+      background: lighten($blue-d5, 4%);
+    }
+
+    &.selected {
+      border-color: $brow-ok;
+      background: #0C3A30;
+    }
+
+    &.dim > .brow-icon,
+    &.dim > .brow-text {
+      opacity: 0.45;
+    }
+  }
+
+  .brow-icon {
+    display: grid;
+    position: relative;
+    flex: 0 0 56px;
+    place-items: center;
+    border-radius: 10px;
+    background: $blue-l5;
+    height: 56px;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    // Several emoji in one icon are stacked on the same spot to compose a
+    // single picture, so each grapheme is centered absolutely.
+    i.emoji {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      font-style: normal;
+      font-size: 38px;
+      line-height: 1;
+      white-space: pre;
+      pointer-events: none;
+
+      span {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        line-height: 1;
+      }
+    }
+  }
+
+  .brow-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .brow-title {
+    font-size: 17px;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+  }
+
+  .brow-desc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: $grey-disabled;
+    font-size: 13px;
+    line-height: 1.3;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .brow-badge {
+    border-radius: 999px;
+    background: $grey-dark;
+    padding: 1px 8px;
+    color: #FFF;
+    font-size: 11px;
+    white-space: nowrap;
+
+    &.ok { background: $brow-ok; }
+    &.warn { background: $brow-warn; }
+    &.bad { background: $brow-bad; }
+  }
+
+  // The padded strip around the buttons is deliberately dead: a tap that
+  // misses a button lands here instead of on the row's own action.
+  .brow-stepper {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    align-self: stretch;
+    gap: 4px;
+    cursor: default;
+    margin: -10px 0;
+    border-left: 1px solid rgba($blue-l5, 0.15);
+    background: rgba($blue-d4, 0.6);
+    padding: 10px 10px 10px 12px;
+  }
+
+  .brow-step {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    margin: 0;
+    box-shadow: none;
+    border: 1px solid rgba($blue-l5, 0.35);
+    border-radius: 12px;
+    background: $blue-d3;
+    padding: 0;
+    width: $brow-step;
+    height: $brow-step;
+    color: $grey-light;
+    font-weight: 600;
+    font-size: 28px;
+    line-height: 1;
+
+    &:active:not(:disabled) {
+      background: $blue-d1;
+    }
+
+    &:disabled {
+      opacity: 0.3;
+    }
+  }
+
+  .brow-count {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
+    font-size: 22px;
+    text-align: center;
+  }
+
+  // Shown, not yet confirmed by the server.
+  .brow.count-pending .brow-count {
+    color: $brow-warn;
+  }
+
+  .brow-edit-hint {
+    display: none;
+    flex: 0 0 auto;
+    padding: 0 16px;
+    font-size: 22px;
+  }
+
+  .editing {
+    .brow {
+      cursor: grab;
+    }
+
+    .brow-stepper {
+      display: none;
+    }
+
+    .brow-edit-hint {
+      display: block;
+    }
+  }
+
+  .brow.dragging {
+    opacity: 0.3;
+  }
+
+  .brow-placeholder {
+    border: 2px dashed $blue-l3;
+    border-radius: 12px;
+    min-height: 80px;
+  }
+
+  @media (max-width: 420px) {
+    .brow {
+      gap: 10px;
+      padding-left: 8px;
+    }
+
+    .brow-stepper {
+      gap: 2px;
+      padding: 10px 8px;
+    }
+
+    .brow-icon {
+      flex-basis: 46px;
+      height: 46px;
+
+      i.emoji {
+        font-size: 30px;
+      }
+    }
+
+    .brow-step {
+      width: 52px;
+      height: 52px;
+    }
+
+    .brow-count {
+      min-width: 34px;
+    }
+  }
+}

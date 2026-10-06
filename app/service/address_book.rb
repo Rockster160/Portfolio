@@ -160,7 +160,7 @@ class AddressBook
       element&.dig(:duration_in_traffic, :value) || element&.dig(:duration, :value)
     }
   rescue StandardError => e
-    SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")
+    SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")", user: @user)
     nil
   end
 
@@ -328,7 +328,7 @@ class AddressBook
       end
     }
   rescue StandardError => e
-    ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}")
+    ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}", user: @user)
     nil
   end
 end

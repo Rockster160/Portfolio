@@ -122,6 +122,50 @@ RSpec.describe ByteDailyAudit do
       end
     end
 
+    # The app's own failures, in the same report and in a section of their own:
+    # a companion getting something wrong and the app raising are only
+    # sometimes the same story.
+    describe "the errors it carries" do
+      let(:now) { Time.zone.parse("2026-08-12 14:32:00") }
+
+      it "renders the window's failures into the prompt" do
+        travel_to(now - 3.hours) {
+          2.times { ErrorReport.record!(section: "google_calendar.sync", exception: StandardError.new("timed out")) }
+        }
+
+        body = described_class.prompt(user, now: now)
+
+        expect(body).to include("**2x** `google_calendar.sync`")
+        expect(body).to include("StandardError: timed out")
+      end
+
+      # Written in their own clock, which is the one the window's edges are
+      # already stated in.
+      it "names the stretch a repeat ran over, in their timezone" do
+        travel_to(now - 5.hours) { ErrorReport.record!(section: "sync", exception: StandardError.new("a")) }
+        travel_to(now - 1.hour)  { ErrorReport.record!(section: "sync", exception: StandardError.new("a")) }
+
+        expect(described_class.prompt(user, now: now)).to include("3:32 AM to 7:32 AM")
+      end
+
+      # Worth knowing about precisely because nobody has seen it.
+      it "marks a failure that was never announced" do
+        travel_to(now - 1.hour) { ErrorReport.record!(section: "sync", exception: StandardError.new("a")) }
+
+        expect(described_class.prompt(user, now: now)).to include("never announced")
+      end
+
+      it "leaves out failures from outside the window" do
+        travel_to(now - 3.days) { ErrorReport.record!(section: "ancient", exception: StandardError.new("a")) }
+
+        expect(described_class.prompt(user, now: now)).not_to include("ancient")
+      end
+
+      it "says so plainly when nothing was reported" do
+        expect(described_class.prompt(user, now: now)).to include("Nothing was reported in this window")
+      end
+    end
+
     describe ".span_length" do
       let(:tz) { ActiveSupport::TimeZone["America/Denver"] }
 

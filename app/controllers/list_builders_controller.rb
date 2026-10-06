@@ -10,6 +10,17 @@ class ListBuildersController < ApplicationController
   end
 
   def show
+    respond_to do |format|
+      format.html
+      format.json {
+        list_items = @list_builder.list.list_items.pluck(:name)
+        render json: {
+          items:      @list_builder.items,
+          list_items: list_items,
+          timestamp:  @list_builder.snapshot_stamp,
+        }
+      }
+    end
   end
 
   def manifest
@@ -70,7 +81,9 @@ class ListBuildersController < ApplicationController
         @list_builder.broadcast!
         respond_to do |format|
           format.html { redirect_to @list_builder }
-          format.json { render json: { items: @list_builder.items }, status: :ok }
+          format.json {
+            render json: { items: @list_builder.items, timestamp: @list_builder.snapshot_stamp }
+          }
         end
       else
         @lists = current_user.ordered_lists
@@ -103,16 +116,19 @@ class ListBuildersController < ApplicationController
   def update_stock
     incoming = params.require(:stock).permit!.to_h.transform_values(&:to_i)
 
-    ListBuilder.with_advisory_lock("list_builder_items_#{@list_builder.id}") {
+    stamp = ListBuilder.with_advisory_lock("list_builder_items_#{@list_builder.id}") {
       @list_builder.reload
       @list_builder.items.each do |item|
         item[:stock] = incoming[item[:name]] if incoming.key?(item[:name])
       end
       @list_builder.save!
       @list_builder.broadcast!
+      # Inside the lock: a stamp taken after release could outrank a write
+      # that landed in between, and the page would keep this older snapshot.
+      @list_builder.snapshot_stamp
     }
 
-    render json: { stock: @list_builder.items.to_h { |i| [i[:name], i[:stock].to_i] } }
+    render json: { items: @list_builder.items, timestamp: stamp }
   end
 
   private

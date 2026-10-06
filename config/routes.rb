@@ -632,6 +632,10 @@ Rails.application.routes.draw do
     delete "/system/memories/:id" => "system#destroy_memory", as: :system_memory_destroy
     get "/system/feature_requests" => "system#feature_requests", as: :system_feature_requests
     patch "/system/feature_requests/:id" => "system#update_feature_request", as: :system_feature_request
+    get "/system/errors" => "system#errors", as: :system_errors
+    # What an alert links to, so a Slack line ends at the whole row rather than
+    # at as much of it as fitted in a message.
+    get "/system/errors/:id" => "system#error", as: :system_error
   end
   mount ::ActionCable.server => "/cable"
 end

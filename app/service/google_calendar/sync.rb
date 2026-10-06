@@ -647,6 +647,7 @@ class GoogleCalendar::Sync
     ::SlackNotifier.notify(
       "GoogleCalendar::Sync skipped event for agenda=#{@agenda.id} " \
       "event=#{event[:id]} reason=#{reason}",
+      user: @agenda.user,
     ) rescue nil
     nil
   end
