@@ -805,15 +805,18 @@
       </div>
       <%# The hero band is as tall as the pet, so this is also how much of the %>
       <%# screen the thread gets. %>
+      <%# "Buddy" and not the pet on this thread: the scale is one number on %>
+      <%# the account and every one of them is drawn at it, so naming one of %>
+      <%# them here would promise a setting per pet that does not exist. %>
       <div class="byte-setting">
         <div class="byte-setting-label">
-          <span class="byte-setting-name"><%= buddy_page_chrome[:name] %> size</span>
+          <span class="byte-setting-name">Buddy size</span>
           <span class="byte-setting-hint">Smaller leaves more room for messages.</span>
         </div>
         <div class="byte-setting-control">
-          <button type="button" class="byte-drawer-step" data-byte-pet-smaller aria-label="Smaller buddy">−</button>
+          <button type="button" class="byte-drawer-step" data-byte-pet-smaller aria-label="Smaller Buddy">−</button>
           <span class="byte-setting-value" data-byte-pet-value><%= current_user.byte_pet_scale %>%</span>
-          <button type="button" class="byte-drawer-step" data-byte-pet-bigger aria-label="Bigger buddy">+</button>
+          <button type="button" class="byte-drawer-step" data-byte-pet-bigger aria-label="Bigger Buddy">+</button>
         </div>
       </div>
       <div class="byte-modal-actions">
