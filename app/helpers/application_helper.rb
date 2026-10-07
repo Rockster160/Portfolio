@@ -146,4 +146,12 @@ module ApplicationHelper
       time
     end
   end
+
+  # A file under public/ with a digest of its contents in the query string, so
+  # a browser holding an older copy fetches the new one instead of pairing it
+  # with a page that expects something it doesn't have.
+  def versioned_public_path(path)
+    digest = Digest::MD5.file(Rails.public_path.join(path.delete_prefix("/"))).hexdigest.first(10)
+    "#{path}?v=#{digest}"
+  end
 end

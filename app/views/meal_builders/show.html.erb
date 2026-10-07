@@ -166,8 +166,8 @@
     import { command } from "../../quick_actions/command.js";
     import { showFlash } from "../../quick_actions/flash.js";
     import {
-      fuzzyMatch, setText, setIcon, setBadges, setDesc, setCount, reconcileRows, enableDragReorder,
-    } from "../../quick_actions/builder_rows.js";
+      fuzzyMatch, setText, setIcon, setBadges, setDesc, setSub, setCount, reconcileRows, enableDragReorder,
+    } from "<%= versioned_public_path("/quick_actions/builder_rows.js") %>";
 
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
@@ -560,9 +560,9 @@
 
       setIcon(row, it.img, it.oneoff ? "✍️" : "🍽️")
       setText(row.querySelector(".brow-title"), it.alias?.trim() || it.name)
-      const detail = [it.description, `${it.cal} cal`].filter(Boolean).join(" · ")
       setBadges(row, it.oneoff ? [{ text: "One-off" }] : [])
-      setDesc(row, detail)
+      setDesc(row, it.description)
+      setSub(row, `${it.cal} cal`)
       setCount(row, count)
     }
 

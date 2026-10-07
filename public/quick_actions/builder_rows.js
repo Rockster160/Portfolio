@@ -22,7 +22,10 @@ export const buildRow = () => {
   row.className = "brow"
   row.innerHTML = `
     <div class="brow-body">
-      <div class="brow-icon"></div>
+      <div class="brow-lead">
+        <div class="brow-icon"></div>
+        <div class="brow-sub"></div>
+      </div>
       <div class="brow-text">
         <div class="brow-badges"></div>
         <div class="brow-title"></div>
@@ -84,6 +87,9 @@ export const setBadges = (row, badges = []) => {
 }
 
 export const setDesc = (row, text) => setText(row.querySelector(".brow-desc"), text || "")
+
+// A short line under the icon, such as a meal item's calories.
+export const setSub = (row, text) => setText(row.querySelector(".brow-sub"), text || "")
 
 export const setCount = (row, count) => {
   setText(row.querySelector(".brow-count"), String(count))

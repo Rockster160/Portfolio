@@ -41,7 +41,7 @@
       background: #0C3A30;
     }
 
-    &.dim .brow-icon,
+    &.dim .brow-lead,
     &.dim .brow-text {
       opacity: 0.45;
     }
@@ -57,13 +57,38 @@
     min-height: 80px;
   }
 
+  // The icon, with an optional short line under it.
+  .brow-lead {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .brow-lead:has(.brow-sub:not(:empty)) .brow-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .brow-sub {
+    color: $grey-disabled;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+
+    &:empty {
+      display: none;
+    }
+  }
+
   .brow-icon {
     display: grid;
     position: relative;
-    flex: 0 0 56px;
     place-items: center;
     border-radius: 10px;
     background: $blue-l5;
+    width: 56px;
     height: 56px;
     overflow: hidden;
 
@@ -324,8 +349,9 @@
       gap: 10px;
     }
 
-    .brow-icon {
-      flex-basis: 44px;
+    .brow-icon,
+    .brow-lead:has(.brow-sub:not(:empty)) .brow-icon {
+      width: 44px;
       height: 44px;
 
       i.emoji {
@@ -366,18 +392,19 @@
       gap: 10px;
     }
 
-    // The icon sits above the name, so the name gets the card's full width.
+    // The icon stays pinned to the top-left of every card, with the tags,
+    // name, and description in a column beside it.
     .brow-body {
       flex-wrap: wrap;
-      justify-content: center;
-      gap: 6px;
-      padding: 10px 10px 0;
+      align-items: flex-start;
+      gap: 0 8px;
+      padding: 8px 8px 0;
       min-height: 0;
-      text-align: center;
     }
 
-    .brow-icon {
-      flex-basis: 40px;
+    .brow-icon,
+    .brow-lead:has(.brow-sub:not(:empty)) .brow-icon {
+      width: 40px;
       height: 40px;
 
       i.emoji {
@@ -386,27 +413,28 @@
     }
 
     .brow-text {
-      flex: 0 0 100%;
-      align-items: center;
-    }
-
-    .brow-badges,
-    .brow-desc {
-      justify-content: center;
+      flex: 1 1 0;
+      gap: 2px;
+      align-self: center;
     }
 
     .brow-title {
-      font-size: 15px;
+      font-size: 14px;
+      line-height: 1.15;
+    }
+
+    .brow-desc {
+      font-size: 12px;
     }
 
     .brow-stepper {
-      flex: 0 0 calc(100% + 20px);
+      flex: 0 0 calc(100% + 16px);
       justify-content: space-between;
       align-self: auto;
-      margin: 2px -10px 0;
+      margin: 8px -8px 0;
       border-top: 1px solid rgba($blue-l5, 0.15);
       border-left: 0;
-      padding: 6px 8px;
+      padding: 4px 8px;
     }
 
     .brow-step {

@@ -139,7 +139,7 @@
     import { AuthWS } from "../../quick_actions/auth_ws.js";
     import {
       fuzzyMatch, setText, setIcon, setBadges, setDesc, setCount, reconcileRows, enableDragReorder,
-    } from "../../quick_actions/builder_rows.js";
+    } from "<%= versioned_public_path("/quick_actions/builder_rows.js") %>";
 
     let ITEMS = JSON.parse(
       document.getElementById("items-data").textContent || "[]"
