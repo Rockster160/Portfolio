@@ -38,6 +38,72 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  # The same thing, for seeds nobody tapped.
+  #
+  # A job-mail notification posts ~3.6KB of mail and board state as the person's
+  # turn, hidden, carrying no `buddy_action` - so none of the quick-action
+  # machinery reached it and every one was replayed in full forever. One prod
+  # thread's history held 22 of them against 13 things the person had actually
+  # said, each followed by a flat one-line notification: ~22k tokens of
+  # boilerplate, and a two-to-one majority of worked examples saying "answer in
+  # one flat sentence", underneath a prompt asking for a voice.
+  describe "seeds that fired on their own" do
+    def fired(body, source: "job_mail_watcher")
+      meta = { "kind" => "buddy_trigger", "hidden" => true, "source" => source }
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: body, metadata: meta,
+      )
+    end
+
+    let(:mail) { "[nothing was said to you - this fired on its own]\n#{"Company: Bluestaq\n" * 200}" }
+
+    it "stands a bulky one in once it is history" do
+      fired(mail)
+      said("Bluestaq has a phone screening set for Oct 8 at 1pm.", direction: :inbound, kind: "buddy_reply")
+      later = said("thanks")
+
+      expect(build(upto: later).first[:content]).to eq(
+        "[a notification fired on its own - the reply under this is what went out]",
+      )
+    end
+
+    # The notification itself is on screen and gets referred back to ("what did
+    # that Bluestaq one say?"), and a notification is SUPPOSED to be flat. What
+    # goes is the block of facts above it, which was never visible.
+    it "leaves the reply it produced alone" do
+      fired(mail)
+      said("Bluestaq has a phone screening set for Oct 8 at 1pm.", direction: :inbound, kind: "buddy_reply")
+      later = said("thanks")
+
+      expect(build(upto: later)[1][:content]).to eq("Bluestaq has a phone screening set for Oct 8 at 1pm.")
+    end
+
+    # Same exemption the tapped seeds get, and for the same reason: the facts
+    # are IN the seed, so standing in for the one being answered leaves the turn
+    # with nothing to answer from.
+    it "never stands in for the one being answered right now" do
+      seed = fired(mail)
+
+      expect(build(upto: seed).last[:content]).to include("Bluestaq")
+    end
+
+    # A watch firing is ~100 characters and its words are the whole exchange.
+    it "leaves a short fired seed alone" do
+      fired("[nothing was said to you] the doggy door just opened", source: "watch")
+      later = said("thanks")
+
+      expect(build(upto: later).first[:content]).to include("doggy door")
+    end
+
+    it "counts what is actually sent, not what is stored" do
+      seed = fired(mail)
+
+      expect(Buddy::TokenEstimator.sent_body(seed.body, seed.metadata)).to eq(
+        "[a notification fired on its own - the reply under this is what went out]",
+      )
+    end
+  end
+
   # Tapping a quick action posts a wall of instructions as the person's turn.
   # It's hidden in the UI but replayed in full forever, and it's IDENTICAL every
   # time - one prod thread carried NINE Today seeds in a single day, ~40k

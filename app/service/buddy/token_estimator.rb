@@ -59,13 +59,14 @@ module Buddy
     end
 
     # What actually goes over the wire for a row, which is not always what's
-    # stored. A quick-action seed is replayed as a short stand-in rather than
-    # its ~4.5KB of instructions (see Buddy::GPT::History), so counting the
-    # stored body would have a thread with a week of briefings in it looking
-    # ~10k tokens heavier than the turn it's describing - and compacting that
-    # much sooner than it needs to.
+    # stored. A seed - tapped or fired - is replayed as a short stand-in rather
+    # than its several KB of instructions (see Buddy::GPT::History), so counting
+    # the stored body would have a thread with a week of briefings and a day of
+    # job mail in it looking tens of thousands of tokens heavier than the turn
+    # it's describing - and compacting that much sooner than it needs to. The
+    # body goes in because the fired ones are stood in by SIZE.
     def sent_body(body, metadata)
-      Buddy::GPT::History.seed_standin(metadata) || body
+      Buddy::GPT::History.seed_standin(metadata, body) || body
     end
 
     def image_cost(scope)

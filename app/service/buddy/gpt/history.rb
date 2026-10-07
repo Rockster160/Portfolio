@@ -66,6 +66,13 @@ module Buddy
       # happened, which is why this is the only one.
       FAST_PATH_SOURCE = "fast_path".freeze
 
+      # Seeds that fired rather than being tapped, and the size past which one
+      # stops being an exchange and starts being a template. A job-mail
+      # notification is ~3.6KB; a watch firing is ~100 bytes. See
+      # #fired_seed_standin.
+      TRIGGER_KIND = "buddy_trigger".freeze
+      BULKY_SEED = 1_000
+
       # A form card is not something Buddy SAID.
       #
       # Buddy::FormAction posts one as `kind: "buddy_reply"`, so it replays as
@@ -247,7 +254,7 @@ module Buddy
       end
 
       def item_for(message, replay_images: false, described: {}, current: false)
-        body = (seed_standin(message.metadata) unless current) || message.body.to_s.strip
+        body = (seed_standin(message.metadata, message.body) unless current) || message.body.to_s.strip
 
         if message.direction == "outbound"
           return user_item(message, outbound_body(message, body), replay_images, described)
@@ -306,15 +313,43 @@ module Buddy
       # Takes the metadata hash rather than the message so Buddy::TokenEstimator
       # can ask the same question off a `pluck` - "how big is what we send" has
       # to be answered by the thing that decides what we send.
-      def seed_standin(metadata)
+      def seed_standin(metadata, body=nil)
         return nil unless metadata.is_a?(Hash)
 
         action = metadata["buddy_action"].to_s
-        return nil if action.blank?
+        return fired_seed_standin(metadata, body) if action.blank?
 
         stand_in = ACTION_STANDINS[action] || "[tapped #{action}]"
         mood     = metadata["buddy_mood"].to_s.presence
         mood ? "#{stand_in.delete_suffix("]")}, feeling #{mood}]" : stand_in
+      end
+
+      # The same treatment for a seed nobody tapped.
+      #
+      # A job-mail notification posts ~3.6KB of mail and board state as the
+      # person's turn, hidden from the thread, and ninety of them land in a
+      # fortnight. None carries a `buddy_action`, so none of the machinery above
+      # reaches them, and every one is replayed in full on every later turn.
+      #
+      # They are also all the SAME SHAPE - a block of facts, then the one flat
+      # line that went out - which is the quick-action problem again, and bigger.
+      # One thread's history held twenty-two of them against thirteen things the
+      # person had actually said: a hundred-odd turns of "answer in one flat
+      # sentence", sitting underneath instructions asking for a voice. That is
+      # the shape the voice loses to, and it is why a tone rewrite reads as
+      # having not taken.
+      #
+      # The REPLY is left alone - it is on screen and gets referred back to, and
+      # a notification is supposed to be flat. What goes is the facts above it,
+      # which were never visible and whose outcome is in the line itself.
+      #
+      # Only the bulky ones. A watch firing is a hundred characters and its
+      # words are the whole point of the exchange.
+      def fired_seed_standin(metadata, body)
+        return nil unless metadata["kind"].to_s == TRIGGER_KIND
+        return nil if body.to_s.length < BULKY_SEED
+
+        "[a notification fired on its own - the reply under this is what went out]"
       end
 
       # What the person's turn is ANSWERING, when it isn't just the last thing

@@ -70,6 +70,39 @@ RSpec.describe Buddy::Themes do
     it "gives a Moss thread Chelsea's voice no matter whose account it's on" do
       expect(prompt_for("moss", user: User.me)).to include("Voice for Moss")
     end
+
+    # The profile is ~3,400 tokens sitting in front of ~29,000 of rules and
+    # context guide, which is how a voice rewrite can land in the prompt and not
+    # reach the output: what came back had taken the quotable strings off it and
+    # none of the moves. So each profile ends with a short Floor, and it is
+    # repeated last - the position nearest the person's message.
+    describe "the voice floor" do
+      it "ends every pet's profile, so a new companion is still one file" do
+        described_class::ALL.each_key { |theme|
+          path = Buddy::Personality::TONE_PROFILE_ROOT.join("#{described_class.tone_for(theme)}.md")
+
+          expect(path.read).to include(Buddy::Personality::FLOOR_HEADING), "#{theme} has no floor"
+        }
+      end
+
+      it "is the last thing in the prompt, after the rules and after the clock" do
+        prompt = prompt_for("byte", user: User.me)
+        floor  = prompt.rindex(Buddy::Personality::FLOOR_HEADING)
+
+        expect(floor).to be_present
+        expect(prompt[floor..]).to include("aside in parentheses")
+        # Nothing after it, which is the whole point of adding it there.
+        expect(prompt.rindex("## Rules of the House")).to be < floor
+        expect(prompt.rindex("Right now")).to be < floor
+      end
+
+      # It appears twice on purpose - once in the profile at the top, once at
+      # the end - so a profile without one must not pick up somebody else's.
+      it "carries the pet's own moves, not the default pet's" do
+        expect(prompt_for("kumoko", user: User.me)).to include("Self-tsukkomi")
+        expect(prompt_for("kumoko", user: User.me)).not_to include("aside in parentheses")
+      end
+    end
   end
 
   # The client has no theme table of its own — the resolved name rides on the

@@ -511,10 +511,11 @@ module Buddy
     def for(user, conversation:, at_glance: nil, recap: nil, briefing: false)
       theme = conversation.buddy_theme.presence || Buddy::Themes::DEFAULT
       persona = load_persona(theme)
+      profile = tone_profile(user, theme)
 
       parts = []
       parts << persona.strip
-      parts << tone_profile(user, theme)
+      parts << profile
       rules = RULES_APPENDIX.strip
       rules = rules.sub("{{GLOSSARY_BLOCK}}", glossary_block(user).to_s)
       parts << rules.sub("{{ICONS_BLOCK}}", icons_block(user).to_s).rstrip
@@ -530,7 +531,35 @@ module Buddy
       parts << Buddy::TopicState.block_for(conversation)
       parts << at_glance_block(at_glance) if at_glance.present?
       parts << time_preamble(user)
+      parts << tone_floor(profile)
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
+    end
+
+    # The voice once more, last.
+    #
+    # The profile is ~3,400 tokens and it sits in front of ~22,000 tokens of
+    # RULES_APPENDIX and ~6,500 of context guide, nearly all of which argues for
+    # shorter, plainer and more careful. On a measured turn the voice is about 5%
+    # of what the model reads, and what came back took the quotable strings off
+    # it (`Right,`, `Got it.`) and none of the moves that need a decision - no
+    # aside, no double-take, no straight-man line. So the profile ends with a
+    # short Floor naming those moves, and it is repeated here.
+    #
+    # Last for two reasons. It is the closest position to the person's own
+    # message, which is the most attended part of the prompt - the same reason
+    # given for the clock, which this now follows. And it is free: the cached
+    # prefix has already broken by `at_glance_block`, so everything from there
+    # on is billed in full whatever its order, and a couple of hundred tokens
+    # behind the clock costs nothing a reordering could win back.
+    #
+    # Per-pet, and it lives in the pet's own tone profile rather than here, so
+    # adding a companion is still one file plus one row in Buddy::Themes. A
+    # profile with no Floor section simply doesn't get one.
+    FLOOR_HEADING = "## Floor".freeze
+
+    def tone_floor(profile)
+      at = profile.to_s.index(FLOOR_HEADING)
+      at.nil? ? nil : profile[at..].strip
     end
 
     # Parts of the app this person doesn't have. The tools and context sections
