@@ -2366,21 +2366,22 @@ html.html-ctr-byte body {
 // carrying.
 //
 // It OVERLAYS the hero rather than sitting in its flow, exactly as the timer
-// chips do at the top-left and for the same reason: in flow it took its height
-// off `.byte-buddy-char`, which is `flex: 1` in a capped hero, so every open
-// alert made the character smaller.
+// chips do at the top-left and for the same reason: **the pet does not move
+// because something came open.** An alert arriving is already a small jolt -
+// a row appearing under him is the message; him hopping up two centimetres to
+// make way for it is noise on top of it, and it happens again in reverse when
+// it is let go.
+//
+// So the room below him is CONSTANT (see the hero's padding-bottom), sized for
+// the one row that is nearly always what this is, and the second row and the
+// overflow count ride up over his lower half instead of pushing him. He is
+// drawn to the bottom of a square frame he does not fill, so what they ride
+// over is mostly the empty foot of it.
 //
 // Two rows at most, and the rest are a count. The first version scrolled inside
 // a fixed height, which put a full-height native scrollbar down the side of the
 // pet - worse than the thing it was solving, and over a list nobody wants to
 // scroll anyway.
-// The hero is as tall as the pet now, so an absolutely-positioned bar along
-// its bottom edge would sit over them. It only exists while something is
-// actually open, so the room is asked for then and not reserved always.
-.byte-buddy-hero:has(.byte-alert-bar:not([hidden])) {
-  padding-bottom: 84px;
-}
-
 .byte-alert-bar {
   position: absolute;
   left: 12px;
@@ -4817,26 +4818,39 @@ dialog.byte-modal {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 12px 8px;
-  // **The band is as tall as the pet, and nothing else decides.** It used to
-  // reserve 34-42vh while the character was capped at 260px, so on anything
-  // taller than about a 760px window the difference was dead air — and because
-  // the reserve was in vh and the cap in px, the pet appeared to change size at
-  // the breakpoints while the empty space either side of him did the moving.
+  // The 28px foot is where the alert bar goes, and it is there whether one is
+  // open or not: a reserve that came and went would move the pet every time
+  // something opened or was let go. One row plus its 8px clearance is 34px,
+  // and the trimmed frame already hangs a few pixels of empty canvas past the
+  // pet's feet, so the usual single alert clears him without this being any
+  // bigger than it is.
+  padding: 12px 12px 28px;
+  // **The band is as tall as what it holds, and nothing else decides** -
+  // including this box, which is why it has no `max-height` of its own. The
+  // 46vh it used to carry was a ceiling in name only: a flex item's automatic
+  // minimum is its content, and that outranks `max-height`, so the band was
+  // already free to grow past it and did. Having two ceilings that disagreed
+  // was the thing to lose, not the number. The one that bites is on the char.
   //
-  // The char now carries a definite height (see .byte-buddy-char) and
-  // everything else in here is absolutely positioned, so this box hugs it.
-  // `max-height` stays as a ceiling only: at a large --byte-pet-scale on a
-  // mid-height window the thread still has to be the bigger half.
-  max-height: 46vh;
-  // Safety net: without this, if content ever exceeds max-height (as it
-  // did on the shrunk-focus state before we hid the quick actions), the
-  // overflow paints upward into the header's visual space and clips
-  // through the status bar.
+  // `overflow: hidden` stays, and it has a job: the char hangs its own dead
+  // art below the band (see --buddy-art-trim) and this is what crops it when
+  // nothing follows the pet.
   overflow: hidden;
-  transition:
-    max-height 220ms ease,
-    padding 220ms ease;
+  transition: padding 220ms ease;
+
+  // How much of the bottom of this pet's art is transparent, as a fraction of
+  // the square frame. The frames are square because the drawings are, not
+  // because the pet is: Byte's lowest drawn pixel sits at 78% of every one of
+  // his 23 frames, so a band that hugged the FRAME was guaranteed a fifth of
+  // itself in dead air. The char pulls this much back up with a negative
+  // margin, which costs the pet nothing - it is drawn at the same size, the
+  // band just stops at his feet instead of at the edge of his canvas.
+  //
+  // Measured per theme as the SMALLEST bottom margin across all of that
+  // theme's frames, then shaded down a little, so no expression can be
+  // cropped and the drop shadow keeps its room. Glimmer's art fills its frame
+  // and gets nothing.
+  --buddy-art-trim: 0.19;
 
   --buddy-primary: #0F2C5C;
   --buddy-accent: #3FA0FF;
@@ -4877,24 +4891,28 @@ dialog.byte-modal {
     --buddy-primary: #1A3A2A;
     --buddy-accent: #4FCF7C;
     --buddy-danger: #E88A5C;
+    --buddy-art-trim: 0.11;
   }
 
   &[data-buddy-theme="suki"] {
     --buddy-primary: #3A1F52;
     --buddy-accent: #B266F2;
     --buddy-danger: #F4756B;
+    --buddy-art-trim: 0.03;
   }
 
   &[data-buddy-theme="glimmer"] {
     --buddy-primary: #3A2A0E;
     --buddy-accent: #F2B84B;
     --buddy-danger: #E8825C;
+    --buddy-art-trim: 0;
   }
 
   &[data-buddy-theme="kumoko"] {
     --buddy-primary: #3A2418;
     --buddy-accent: #E8894A;
     --buddy-danger: #F07060;
+    --buddy-art-trim: 0.11;
   }
 
   &[hidden] {
@@ -4952,10 +4970,14 @@ dialog.byte-modal {
     // reads as a character beside the chips rather than a tiny dot. The cap
     // takes the person's own scale so the setting means something on a phone
     // too, where the tall layout never applies.
+    //
+    // No art trim here: this row is sized by `max-height` and centres what it
+    // holds, so cropping the frame would only move the pet down the bar.
+    --buddy-art-trim: 0;
+    --byte-pet-size: calc(min(150px * var(--byte-pet-scale, 1), 20vh));
     flex: 0 0 auto;
     width: auto;
-    height: 20vh;
-    max-height: calc(150px * var(--byte-pet-scale, 1));
+    height: var(--byte-pet-size);
     min-height: 0;
     aspect-ratio: 1;
     margin: 0;
@@ -5006,18 +5028,29 @@ dialog.byte-modal {
 //
 // `--byte-pet-scale` is the person's own setting (User#byte_pet_scale), 1 by
 // default and rendered inline on .byte-app so the first paint is already
-// right. `max-height` is the only thing left that answers to the viewport,
-// and it is a ceiling: a big pet on a short window still must not take the
-// thread. `min-height: 0` lets it shrink below the intrinsic image size.
+// right. The vh arm of `--byte-pet-size` is the only thing left answering to
+// the viewport, and it is a ceiling: a big pet on a short window still must
+// not take the thread. `min-height: 0` lets it shrink below the intrinsic
+// image size.
 .byte-buddy-char {
   position: relative;
   flex: 0 0 auto;
   min-height: 0;
   width: auto;
   aspect-ratio: 1;
-  height: calc(260px * var(--byte-pet-scale, 1));
+  // The ceiling is folded into the height rather than left as a separate
+  // `max-height`, so the used height is always a value the negative margin
+  // below can be worked out from - a cap that bit would have had the trim
+  // computed off a size the box never had.
+  //
+  // `min()` inside `calc()` deliberately: prod's compressor re-reads compiled
+  // CSS as Sass and takes a bare mixed-unit `min()` for Sass's own.
+  --byte-pet-size: calc(min(260px * var(--byte-pet-scale, 1), 40vh));
+  height: var(--byte-pet-size);
+  // The transparent foot of the frame, hung below the band and cropped by the
+  // hero's `overflow: hidden`. Nothing drawn is inside it.
+  margin-bottom: calc(var(--byte-pet-size) * var(--buddy-art-trim, 0) * -1);
   max-width: 88vw;
-  max-height: 40vh;
   align-self: center;
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
@@ -5313,9 +5346,12 @@ $kumoko_expr_aliases: (
 // aspect-ratio pulls the height back down to match when it bites.
 .byte-app[data-kiosk="true"] .byte-buddy-char {
   // The wall is the one place the pet is supposed to fill the room, so it goes
-  // back to taking whatever the half gives it rather than a stated height.
+  // back to taking whatever the half gives it rather than a stated height -
+  // and with no stated height there is nothing for the art trim to measure.
+  --buddy-art-trim: 0;
   flex: 1 1 0;
   height: auto;
+  margin-bottom: 0;
   max-width: 88vw;
   max-height: none;
 }
