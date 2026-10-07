@@ -100,6 +100,40 @@ RSpec.describe Buddy::Personality do
     end
   end
 
+  # Prod 7634, 6 Oct at 6:30pm: "How are you doing?" came back opening on a
+  # stretched MORNING. Suki did the same at 1:49pm on 12 Sep.
+  #
+  # The old wording hung the constraint off the clock bullet - "don't wish them
+  # a morning in the evening" - which answers which WORDS to use and never
+  # whether a greeting belongs in the message at all. Two kinds of turn open
+  # with one; everything else answers the thing it was asked.
+  describe ".for when a greeting belongs at all" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    it "names the three that open with one, and rules out the rest" do
+      expect(prompt).to include("Three messages open with a time-of-day greeting, and no others")
+      expect(prompt).to include("on an ordinary turn it does not")
+    end
+
+    it "sends the half of the day to the clock rather than to habit" do
+      expect(prompt).to include("off `Part of day` and off nothing else")
+    end
+
+    # Naming the failure hands over the failure. "Don't wish them a morning in
+    # the evening" is a worked example of wishing them a morning in the
+    # evening, and it is the wording that lost twice.
+    it "says where the half of the day comes from without demonstrating the mistake" do
+      expect(prompt).not_to match(/morning in the evening/i)
+      expect(prompt).not_to match(/wrong half of the day/i)
+    end
+
+    # The clock line is CONTEXT. Read as an instruction to greet, it is the
+    # thing that put a greeting on turns nobody greeted on.
+    it "stops the clock line reading as an order to greet" do
+      expect(prompt).to include("CONTEXT, never an instruction to greet")
+    end
+  end
+
   describe ".for tone floor" do
     it "warns against reply-as-receipt and templated warmth" do
       convo = buddy_convo(User.me, "byte")

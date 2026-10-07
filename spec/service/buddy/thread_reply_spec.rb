@@ -58,6 +58,33 @@ RSpec.describe "Buddy thread replies" do
       expect(landed.metadata.dig("relay_peer", "name")).to eq("Byte")
     end
 
+    # Chelsea sent one from her SECOND companion and the reply came back from
+    # the first. `pass_along!` was handed no destination, so it fell through to
+    # `conversation_for`, and with nothing pinned `primary_among` answers the
+    # LOWEST id - a thread she had not been talking in, wearing the wrong pet.
+    # The twin of the message being answered knows the right one.
+    it "goes back to the thread she wrote from, not the first one she owns" do
+      first  = ByteConversation.create!(user: chelsea, mode: :buddy, name: "Moss")
+      second = ByteConversation.create!(user: chelsea, mode: :buddy, name: "Kumoko")
+      relay  = BuddyRelay.create!(
+        from_user:         chelsea,
+        to_user:           rocco,
+        from_conversation: second,
+        kind:              :notify,
+        body:              "Tell Rocco I say hi!",
+        status:            :pending,
+      )
+      Buddy::CompanionRelay.deliver!(relay)
+      incoming = convo.byte_messages.where("metadata->>'source' = 'relay'").order(:created_at).last
+
+      reply!("Hello there!", to: incoming)
+
+      back = BuddyRelay.where(from_user: rocco, to_user: chelsea).last
+      expect(back.to_conversation).to eq(second)
+      expect(second.byte_messages.where(body: "Hello there!")).to be_present
+      expect(first.byte_messages).to be_empty
+    end
+
     it "leaves their own words on screen ONCE, wearing where they went" do
       _relay, incoming = relayed
 

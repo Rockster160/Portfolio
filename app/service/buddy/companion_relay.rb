@@ -43,7 +43,13 @@ module Buddy
       # a row in their thread - they long-pressed a relayed message and typed a
       # reply (Buddy::ThreadReply). Handed over, bridge! adopts that row as the
       # outgoing record instead of writing a second bubble saying the same thing.
-      def pass_along!(from:, to:, text:, from_conversation: nil, from_message: nil)
+      # `to_conversation` is the thread it has to land in, and it matters
+      # whenever the person has more than one companion: left out, #bridge!
+      # falls back to #conversation_for, which picks the lowest id when nothing
+      # is pinned. A reply typed at a message from one companion was delivered
+      # by another. The caller that knows is Buddy::ThreadReply, which has the
+      # twin of the message being answered.
+      def pass_along!(from:, to:, text:, from_conversation: nil, from_message: nil, to_conversation: nil)
         relay = BuddyRelay.create!(
           from_user:         from,
           to_user:           to,
@@ -52,7 +58,7 @@ module Buddy
           body:              text.to_s,
           status:            :pending,
         )
-        deliver!(relay, from_message: from_message)
+        deliver!(relay, from_message: from_message, to_conversation: to_conversation)
         # The row we made, not whatever delivery handed back. The record exists
         # either way, and a caller that wants its id shouldn't depend on how the
         # send went.
@@ -89,9 +95,9 @@ module Buddy
       end
 
       # Dispatch by kind. Returns the relay.
-      def deliver!(relay, from_message: nil)
+      def deliver!(relay, from_message: nil, to_conversation: nil)
         case relay.kind.to_sym
-        when :notify   then send_notify(relay, from_message: from_message)
+        when :notify   then send_notify(relay, from_message: from_message, to_conversation: to_conversation)
         when :ask_open then send_open_question(relay)
         else                send_choice_question(relay)
         end
@@ -103,11 +109,11 @@ module Buddy
       # attributed to the RECIPIENT's Buddy (see #bridge!). Open questions get
       # answered later when the recipient replies (their Buddy sees the still-open
       # relay in context and emits [[relay_answer]]).
-      def send_notify(relay, from_message: nil)
+      def send_notify(relay, from_message: nil, to_conversation: nil)
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
           from_conversation: relay.from_conversation, text: relay.body,
-          relay: relay, from_message: from_message
+          to_conversation: to_conversation, relay: relay, from_message: from_message
         )
         relay.update!(to_conversation: res[:to_conversation], status: :delivered, delivered_at: Time.current)
       end

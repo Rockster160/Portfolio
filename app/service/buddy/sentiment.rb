@@ -41,6 +41,19 @@ module Buddy
     # cheapest call in the app one of the more expensive ones.
     MAX_CHARS = 320
 
+    # ...and what ends an exchange, because WINDOW is a count with no clock on
+    # it. `strain` is friction in THIS exchange, and the 7 Oct morning briefing
+    # was read over a window whose four oldest lines were the night before at
+    # 11:37pm, where he had twice told Byte its voice still wasn't landing.
+    # Three one-line notifications overnight is all it takes to hold an argument
+    # in frame six hours later, and the pet woke up wearing it.
+    #
+    # So the transcript stops at the first silence longer than this, counting
+    # back from the newest. Longer than any pause inside one conversation -
+    # a meeting, lunch, an afternoon out - and shorter than the shortest gap
+    # that means they went and lived their day and came back to a new one.
+    EXCHANGE_GAP = 3.hours
+
     # What the ACTION does to the reading. A tool call is its own small event
     # with its own place on these axes, and the answer is the room BLENDED
     # toward it - not the room plus a constant.
@@ -144,7 +157,8 @@ module Buddy
       record_usage(result, conversation)
       return nil unless result[:ok]
 
-      parse(result[:text])
+      reading = parse(result[:text])
+      unprompted ? unexchanged(reading) : reading
     rescue StandardError => e
       Rails.logger.warn("[Buddy::Sentiment] read failed: #{e.class}: #{e.message}")
       nil
@@ -246,11 +260,28 @@ module Buddy
         "byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'",
       ).recent.limit(WINDOW).to_a.reverse
 
-      lines = rows.filter_map { |message| line_for(message) }
+      lines = within_one_exchange(rows).filter_map { |message| line_for(message) }
       return "" if lines.empty?
 
       lines.push(UNPROMPTED_NOTE) if unprompted
       lines.join("\n")
+    end
+
+    # Everything since the last long silence. Counts back from the newest and
+    # stops at the first gap, so what is left is one stretch of talking rather
+    # than however many rows WINDOW happened to reach - see EXCHANGE_GAP.
+    #
+    # The newest row is always kept, so this can never empty the transcript:
+    # the question is what that row belongs WITH, and the answer is allowed to
+    # be nothing.
+    def within_one_exchange(rows)
+      kept = []
+      rows.reverse_each { |row|
+        break if kept.last && (kept.last.created_at - row.created_at) > EXCHANGE_GAP
+
+        kept << row
+      }
+      kept.reverse
     end
 
     def line_for(message)
@@ -307,6 +338,17 @@ module Buddy
 
     def theirs_to_carry?(reading)
       reading[:warmth].to_f <= CARRYING[:warmth] && reading[:weight].to_f >= CARRYING[:weight]
+    end
+
+    # strain is friction in THIS exchange, and on a turn nobody started there is
+    # no exchange to have any in. The PROMPT says exactly that and the reading
+    # came back with strain in it anyway, which is the shape of every rule here
+    # that lost as prose. A definition the caller can enforce is not left to the
+    # model: byte's `annoyed` sits at strain 0.80 and nothing else in its set is
+    # within reach of it, so this is the whole difference between a briefing
+    # that looks cross and one that doesn't.
+    def unexchanged(reading)
+      reading.nil? ? nil : reading.merge(strain: 0.0)
     end
 
     def blended(reading, landed)

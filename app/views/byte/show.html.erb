@@ -52,9 +52,11 @@
     first frame. Reading it from JS after boot means every reload flashes the
     default size and then reflows. %>
 <div class="byte-app"
-     style="--byte-font-scale: <%= current_user.byte_font_scale / 100.0 %>"
+     style="--byte-font-scale: <%= current_user.byte_font_scale / 100.0 %>; --byte-pet-scale: <%= current_user.byte_pet_scale / 100.0 %>"
      data-font-scale="<%= current_user.byte_font_scale %>"
      data-font-scale-url="<%= byte_font_scale_path %>"
+     data-pet-scale="<%= current_user.byte_pet_scale %>"
+     data-pet-scale-url="<%= byte_pet_scale_path %>"
      data-affirmation-url="<%= byte_affirmation_action_path %>"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
@@ -799,6 +801,19 @@
           <button type="button" class="byte-drawer-step" data-byte-font-smaller aria-label="Smaller text">−</button>
           <span class="byte-setting-value" data-byte-font-value><%= current_user.byte_font_scale %>%</span>
           <button type="button" class="byte-drawer-step" data-byte-font-bigger aria-label="Bigger text">+</button>
+        </div>
+      </div>
+      <%# The hero band is as tall as the pet, so this is also how much of the %>
+      <%# screen the thread gets. %>
+      <div class="byte-setting">
+        <div class="byte-setting-label">
+          <span class="byte-setting-name"><%= buddy_page_chrome[:name] %> size</span>
+          <span class="byte-setting-hint">Smaller leaves more room for messages.</span>
+        </div>
+        <div class="byte-setting-control">
+          <button type="button" class="byte-drawer-step" data-byte-pet-smaller aria-label="Smaller buddy">−</button>
+          <span class="byte-setting-value" data-byte-pet-value><%= current_user.byte_pet_scale %>%</span>
+          <button type="button" class="byte-drawer-step" data-byte-pet-bigger aria-label="Bigger buddy">+</button>
         </div>
       </div>
       <div class="byte-modal-actions">

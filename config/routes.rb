@@ -63,6 +63,7 @@ Rails.application.routes.draw do
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
   post "/byte/font_scale" => "byte#font_scale",   as: :byte_font_scale
+  post "/byte/pet_scale" => "byte#pet_scale",     as: :byte_pet_scale
   post "/byte/affirmation_action" => "byte#affirmation_action", as: :byte_affirmation_action
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
   post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
@@ -347,7 +348,10 @@ Rails.application.routes.draw do
 
   resource :nfc, only: [:show]
 
-  resources :emails, except: [:destroy, :edit]
+  resources :emails, except: [:destroy, :edit] do
+    # Served by position rather than filename: see Email#attachment_at.
+    get "attachments/:index", to: "emails#attachment", as: :attachment, on: :member
+  end
   resources :log_trackers, only: [:index, :show]
   post "/ips/ban" => "log_trackers#ban", as: :ban_ip
 

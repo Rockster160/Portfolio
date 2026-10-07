@@ -560,4 +560,74 @@ RSpec.describe Jil::Methods::Buddy do
       end
     end
   end
+
+  # The hero's OTHER notice - a chip pinned top-right, not the alert bar. A
+  # standing marker on the hero itself while a condition is true, gone the
+  # moment it isn't. Backed by BackgroundProcess, same rows the process chips
+  # ride on.
+  describe "#miniAlert / #clearMiniAlert" do
+    let(:owner) { User.me }
+
+    before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+    def run(code, auth: nil, auth_id: nil)
+      Jil::Executor.call(owner, code, {}, auth: auth, auth_id: auth_id)
+    end
+
+    it "validates" do
+      code = <<~'JIL'
+        a1 = Buddy.miniAlert("laundry-gate", "Laundry gate open")::Boolean
+        a2 = Buddy.clearMiniAlert("laundry-gate")::Boolean
+      JIL
+
+      expect { Jil::Validator.validate!(code) }.not_to raise_error
+    end
+
+    it "puts up one waiting chip, holds it to a single row, and clears it" do
+      ctx = run(<<~'JIL')
+        up = Buddy.miniAlert("laundry-gate", "Laundry gate open", "dog is loose")::Boolean
+        again = Buddy.miniAlert("laundry-gate", "Laundry gate open", "dog is loose")::Boolean
+        gone = Buddy.clearMiniAlert("laundry-gate")::Boolean
+        nothing = Buddy.clearMiniAlert("laundry-gate")::Boolean
+      JIL
+
+      expect(ctx.ctx[:vars][:up][:value]).to be(true)
+      expect(ctx.ctx[:vars][:again][:value]).to be(true)
+      expect(ctx.ctx[:vars][:gone][:value]).to be(true)
+      # Nothing was live by then - the way a scheduled re-check tells "I just
+      # cleared one" from "already fine".
+      expect(ctx.ctx[:vars][:nothing][:value]).to be(false)
+
+      # One row, settled rather than deleted, carrying its last words.
+      expect(BackgroundProcess.where(user: owner, key: "laundry-gate").count).to eq(1)
+      expect(BackgroundProcess.live_find(owner, "laundry-gate")).to be_nil
+      chip = BackgroundProcess.where(user: owner, key: "laundry-gate").last
+      expect(chip.name).to eq("Laundry gate open")
+      expect(chip.detail).to eq("dog is loose")
+      expect(chip.source).to eq("jil")
+    end
+
+    # waiting/failed are exempt from the stale + age-out sweeps, so a standing
+    # condition stays on the strip until something clears it.
+    it "raises the chip as waiting, not running" do
+      run(<<~'JIL')
+        up = Buddy.miniAlert("laundry-gate", "Laundry gate open")::Boolean
+      JIL
+
+      expect(BackgroundProcess.live_find(owner, "laundry-gate")).to be_waiting
+    end
+
+    # Same recipient rule as alert: a shared task runs as its owner, but a chip
+    # raised on somebody else's behalf belongs on THEIR hero.
+    it "puts the chip on whoever asked, not whoever owns the task" do
+      asker = create(:user)
+
+      run(<<~'JIL', auth: :buddy, auth_id: asker.id)
+        up = Buddy.miniAlert("laundry-gate", "Laundry gate open")::Boolean
+      JIL
+
+      expect(BackgroundProcess.live_find(asker, "laundry-gate")).to be_present
+      expect(BackgroundProcess.live_find(owner, "laundry-gate")).to be_nil
+    end
+  end
 end

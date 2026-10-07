@@ -8,6 +8,17 @@ class EmailsController < ApplicationController
   # two ends to keep in sync.
   DIGEST_MAX = 25
 
+  # What opens in the tab rather than landing in Downloads.
+  INLINE_TYPES = [
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    "text/plain",
+  ].freeze
+
   def index
     @emails = current_user.emails.ordered
     @emails = @emails.query(params[:q])
@@ -26,6 +37,31 @@ class EmailsController < ApplicationController
   def show
     @email = current_user.emails.find(params[:id])
     @email.read!
+    @attachments = attachments_for(@email)
+  end
+
+  # One file out of the message. The body is rendered in an iframe from
+  # `to_html`, which carries the words and nothing else - so a file the mail
+  # arrived with was reachable from nowhere at all, with the list view already
+  # painting a paperclip to say it was in there.
+  #
+  # The bytes are read off S3 and handed straight over rather than copied into
+  # storage of their own: the mail IS the copy, and a second one would then have
+  # a lifetime to manage.
+  def attachment
+    email = current_user.emails.find(params[:id])
+    part = email.attachment_at(params[:index])
+    return redirect_to(email_path(email), alert: "That file isn't on this message.") if part.nil?
+
+    send_data(
+      part.body.decoded,
+      filename:    part.filename.presence || "attachment",
+      type:        part.mime_type.presence || "application/octet-stream",
+      # Anything the browser can draw opens where it was asked for. Everything
+      # else downloads - a calendar invite in particular, which is only any use
+      # once it reaches the calendar.
+      disposition: INLINE_TYPES.include?(part.mime_type) ? :inline : :attachment,
+    )
   end
 
   def new
@@ -56,6 +92,18 @@ class EmailsController < ApplicationController
   end
 
   private
+
+  # A blob that cannot be fetched is a page with no file list, never a 500 - the
+  # same rule `body_for` keeps for the body itself.
+  def attachments_for(email)
+    # Off the message rather than off `has_attachments`. The flag is stamped at
+    # ingest and the page downloads the mail for its body regardless, so reading
+    # the parts costs nothing and a flag that disagrees cannot hide a file.
+    email.attachments
+  rescue StandardError => e
+    Rails.logger.warn("[emails#show] attachments unavailable for #{email.id}: #{e.class}: #{e.message}")
+    []
+  end
 
   def digest_json
     scope = filter_by_sender(@emails)

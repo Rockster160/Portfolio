@@ -400,10 +400,25 @@ module Buddy
           scope = scope.where(start_at: from...(from + 1.day))
         end
       end
-      found = scope.order(start_at: :asc).to_a
+      found = scope.to_a.sort_by { |item| soonest_first(item.start_at) }
       ambiguous_agenda_item!(found, title) if found.length > 1
 
       found.first || unmaterialized_occurrence(agendas, needle, hint_date)
+    end
+
+    # The soonest one, which is what #ambiguous_agenda_item! below is built on:
+    # it only raises when the names DIFFER, so same-name rows are settled by
+    # this order alone. `start_at: :asc` settled them with the OLDEST, and a
+    # Shower from four months ago was rewritten three times in four minutes
+    # while the Shower two hours away sat untouched.
+    #
+    # Upcoming first, nearest to now, and a past one only when nothing is
+    # coming. Absolute distance would read yesterday's occurrence as nearer
+    # than tomorrow's, and a thing that already happened is not the one they
+    # are asking to move.
+    def soonest_first(at)
+      seconds = at.to_i - Time.current.to_i
+      [seconds.negative? ? 1 : 0, seconds.abs]
     end
 
     # Two DIFFERENT things whose names both carry what they said, which is a

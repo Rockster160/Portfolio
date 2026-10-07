@@ -139,6 +139,24 @@ RSpec.describe AddressBook do
     end
   end
 
+  describe "#nearest_from_name" do
+    let(:book) { described_class.new(User.me) }
+
+    before do
+      allow(Rails.env).to receive(:production?).and_return(true)
+      allow(book).to receive(:current_loc).and_return([40.5, -111.9])
+    end
+
+    it "returns nil and notifies Slack when the Places request raises" do
+      allow(RestClient).to receive(:get).and_raise(RestClient::TooManyRequests.new)
+      expect(::SlackNotifier).to receive(:err)
+
+      expect {
+        expect(book.nearest_from_name("Delton Lanes Riverton")).to be_nil
+      }.not_to raise_error
+    end
+  end
+
   describe "#match_contact" do
     let(:book)  { described_class.new(User.me) }
     let(:sarah) { instance_double("Contact", present?: true) }

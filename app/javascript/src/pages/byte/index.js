@@ -2987,6 +2987,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     .querySelector("[data-byte-font-bigger]")
     ?.addEventListener("click", () => nudgeFontScale(FONT_STEP));
 
+  // How big the pet is drawn. Same shape as the text size above, and the same
+  // reason for living on the server rather than in localStorage — but this one
+  // also decides how tall the hero band is, because the band is sized to the
+  // character (see .byte-buddy-char). Shrinking the pet is how you get more
+  // thread, which is the point of offering it.
+  const PET_MIN = 60;
+  const PET_MAX = 160;
+  const PET_STEP = 10;
+
+  function applyPetScale(scale) {
+    const pct = Math.min(PET_MAX, Math.max(PET_MIN, Number(scale) || 100));
+    app.style.setProperty("--byte-pet-scale", String(pct / 100));
+    app.dataset.petScale = String(pct);
+    const out = document.querySelector("[data-byte-pet-value]");
+    if (out) out.textContent = `${pct}%`;
+    // The thread just got taller or shorter under them.
+    if (atBottom) scrollToBottom("auto");
+    return pct;
+  }
+
+  async function nudgePetScale(delta) {
+    const url = app.dataset.petScaleUrl;
+    if (!url) return;
+
+    const next = applyPetScale(Number(app.dataset.petScale || 100) + delta);
+    try {
+      await fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token":
+            document
+              .querySelector('meta[name="csrf-token"]')
+              ?.getAttribute("content") || "",
+        },
+        body: JSON.stringify({ scale: next }),
+      });
+    } catch (_e) {
+      // Optimistic, as above: it already moved on screen, and a failed save
+      // costs one tap next time rather than snapping back under them.
+    }
+  }
+
+  applyPetScale(app.dataset.petScale || 100);
+  document
+    .querySelector("[data-byte-pet-smaller]")
+    ?.addEventListener("click", () => nudgePetScale(-PET_STEP));
+  document
+    .querySelector("[data-byte-pet-bigger]")
+    ?.addEventListener("click", () => nudgePetScale(PET_STEP));
+
   // Any focused editable, not just the composer — a form field inside a
   // message opens the keyboard too, and treating that as "no keyboard" would
   // fight the real one.

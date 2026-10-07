@@ -175,6 +175,24 @@ class User < ApplicationRecord
     self.byte_prefs = byte_prefs.to_h.merge("font_scale" => scale)
   end
 
+  # How big the pet is drawn, as a percentage of its design size. The hero band
+  # is as tall as the pet (see .byte-buddy-char), so this is also how much of
+  # the screen the thread gets - which is the half of it he actually asked for.
+  # Same shape as FONT_SCALE_RANGE and clamped for the same reason: it is set
+  # from a stepper and there is nowhere to show an error.
+  PET_SCALE_RANGE = (60..160)
+  PET_SCALE_STEP  = 10
+
+  def byte_pet_scale
+    raw = byte_prefs.to_h["pet_scale"]
+    raw.presence ? raw.to_i.clamp(PET_SCALE_RANGE.min, PET_SCALE_RANGE.max) : 100
+  end
+
+  def byte_pet_scale=(value)
+    scale = value.to_i.clamp(PET_SCALE_RANGE.min, PET_SCALE_RANGE.max)
+    self.byte_prefs = byte_prefs.to_h.merge("pet_scale" => scale)
+  end
+
   # Whether Affirmation sits in the actions list. It is the one built-in there
   # that fires straight off rather than opening its own options, and the one
   # that cannot be a saved routine instead: a routine runs deterministically

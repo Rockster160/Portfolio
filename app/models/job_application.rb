@@ -125,6 +125,14 @@ class JobApplication < ApplicationRecord
     "#{JOBHUNT_HOST}/jobs/#{jobhunt_job_id}"
   end
 
+  # This application's own page. Written into the notes of every agenda row a
+  # beat here puts on the calendar, which is where the appointment is read from
+  # on the day - the timeline, the brief and the recruiter's name are one tap
+  # away rather than a search of the board.
+  def interview_url
+    Rails.application.routes.url_helpers.interview_url(self)
+  end
+
   # What the card shows when there's no logo: the company's first letter over
   # its colour. Two words give two letters, which is enough to tell "Stripe"
   # from "Square" at a glance.

@@ -29,14 +29,13 @@ RSpec.describe GoogleCalendar::Sync do
       }.compact
     end
 
-    # The one place that knows a row arrived from a calendar rather than from
-    # inside the app, which is the half of the duplicate-interview problem a
-    # check at create time can't see.
+    # Both rows are kept on purpose. The invite goes back out to the organizer
+    # when it is edited, so the note keeps one of its own to write on.
     describe "an invite for an interview that is already on the agenda" do
       let(:job) { user.job_applications.create!(company: "Neighbor") }
       let(:at) { Time.zone.parse("2026-05-22 11:00:00") }
 
-      it "hands the note's own row over to the invite" do
+      it "leaves the note's own row where it is" do
         note = job.notes.create!(tag: :scheduled, follow_up_at: at)
         mine = note.reload.agenda_item_id
 
@@ -53,8 +52,9 @@ RSpec.describe GoogleCalendar::Sync do
         described_class.new(agenda).run!
 
         invite = agenda.agenda_items.find_by(external_uid: "evt-interview")
-        expect(note.reload.agenda_item_id).to eq(invite.id)
-        expect(AgendaItem.find_by(id: mine)).to be_nil
+        expect(invite).to be_present
+        expect(note.reload.agenda_item_id).to eq(mine)
+        expect(AgendaItem.find_by(id: mine)).to be_present
       end
     end
 

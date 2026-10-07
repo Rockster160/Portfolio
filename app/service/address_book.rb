@@ -231,6 +231,16 @@ class AddressBook
       when :loc then candidate&.dig(:geometry, :location)&.slice(:lat, :lng)&.values
       end
     }
+  # Degrade to nil on a Places failure, exactly as #geocode and
+  # #traveltime_seconds do for their calls. Without this, a thrown
+  # findplacefromtext request (quota/billing/429/5xx/timeout) propagates out
+  # of the AgendaTravelChain worker's `ensure_resolved_all` and aborts the
+  # whole day's run before `persist_event` — so every event needing a Places
+  # lookup silently loses its return-home leg and chaining. A nil here is the
+  # Resolver's "couldn't resolve" path, which falls back to the typed location.
+  rescue StandardError => e
+    ::SlackNotifier.err(e, "nearest_from_name failed: (#{name}): [#{e.class}]:#{e.message}", user: @user)
+    nil
   end
 
   # Find address at [lat,lng]

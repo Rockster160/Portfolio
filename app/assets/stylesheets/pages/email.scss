@@ -6,6 +6,35 @@
     padding-left: 30px;
   }
 }
+.email-attachments {
+  margin-top: 10px;
+
+  h4 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    border: 1px solid #DDD;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    padding: 6px 8px;
+  }
+  .meta {
+    font-size: 12px;
+    opacity: 0.6;
+  }
+}
 .display-email-container {
   margin: 0 auto;
   margin-top: 10px;

@@ -2374,6 +2374,13 @@ html.html-ctr-byte body {
 // a fixed height, which put a full-height native scrollbar down the side of the
 // pet - worse than the thing it was solving, and over a list nobody wants to
 // scroll anyway.
+// The hero is as tall as the pet now, so an absolutely-positioned bar along
+// its bottom edge would sit over them. It only exists while something is
+// actually open, so the room is asked for then and not reserved always.
+.byte-buddy-hero:has(.byte-alert-bar:not([hidden])) {
+  padding-bottom: 84px;
+}
+
 .byte-alert-bar {
   position: absolute;
   left: 12px;
@@ -4811,23 +4818,23 @@ dialog.byte-modal {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 12px 8px;
-  // Buddy (the flex-fill char below) takes whatever height is left after the
-  // quick-action row, so this range sets how prominent he is. He's pinned at
-  // his 260px char cap on any normal screen, so this range does NOT make him
-  // bigger there — it only governs how much of the thread the hero reserves.
-  // Held to ~40% so the thread stays clearly primary; on short windows the
-  // compact layout kicks in instead. min matches his content height (~316px ≈
-  // 34vh on a ~930px window) so tall screens hug him instead of opening dead
-  // air above him; max caps the reserve on mid-height windows.
-  min-height: 34vh;
-  max-height: 42vh;
+  // **The band is as tall as the pet, and nothing else decides.** It used to
+  // reserve 34-42vh while the character was capped at 260px, so on anything
+  // taller than about a 760px window the difference was dead air — and because
+  // the reserve was in vh and the cap in px, the pet appeared to change size at
+  // the breakpoints while the empty space either side of him did the moving.
+  //
+  // The char now carries a definite height (see .byte-buddy-char) and
+  // everything else in here is absolutely positioned, so this box hugs it.
+  // `max-height` stays as a ceiling only: at a large --byte-pet-scale on a
+  // mid-height window the thread still has to be the bigger half.
+  max-height: 46vh;
   // Safety net: without this, if content ever exceeds max-height (as it
   // did on the shrunk-focus state before we hid the quick actions), the
   // overflow paints upward into the header's visual space and clips
   // through the status bar.
   overflow: hidden;
   transition:
-    min-height 220ms ease,
     max-height 220ms ease,
     padding 220ms ease;
 
@@ -4922,7 +4929,6 @@ dialog.byte-modal {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 16vh;
   max-height: 26vh;
   padding: 8px 14px;
   // Buddy sits right on top of the message thread — give him his own zone:
@@ -4943,11 +4949,13 @@ dialog.byte-modal {
 
   .byte-buddy-char {
     // Fill the compact bar's height (height-driven, capped) so Buddy still
-    // reads as a character beside the chips rather than a tiny dot.
+    // reads as a character beside the chips rather than a tiny dot. The cap
+    // takes the person's own scale so the setting means something on a phone
+    // too, where the tall layout never applies.
     flex: 0 0 auto;
     width: auto;
     height: 20vh;
-    max-height: 150px;
+    max-height: calc(150px * var(--byte-pet-scale, 1));
     min-height: 0;
     aspect-ratio: 1;
     margin: 0;
@@ -4987,21 +4995,29 @@ dialog.byte-modal {
   }
 }
 
-// Character is layered images (shared body + per-expression face). Auto-sized
-// to the hero's available HEIGHT: `flex: 1` makes it fill whatever vertical
-// space is left after the quick-action row, and `aspect-ratio` derives the
-// width to keep it square. So Buddy shrinks to fit on short windows instead of
-// overflowing the hero and getting clipped — responsive by construction, no
-// per-breakpoint tuning. max-width/height cap the absolute size on large
-// displays; `min-height: 0` lets it shrink below the intrinsic image size.
+// Character is layered images (shared body + per-expression face), square by
+// `aspect-ratio`, and the ONE thing that decides how tall the hero is.
+//
+// It used to be `flex: 1 1 0` against a 260px cap inside a band reserved in
+// vh, which made the pet a passenger: the band grew and shrank with the
+// window, the pet sat pinned at its cap in the middle of it, and at each
+// breakpoint the two disagreed differently. Now the size is stated here and
+// the band follows, so there is no gap for the window to open up.
+//
+// `--byte-pet-scale` is the person's own setting (User#byte_pet_scale), 1 by
+// default and rendered inline on .byte-app so the first paint is already
+// right. `max-height` is the only thing left that answers to the viewport,
+// and it is a ceiling: a big pet on a short window still must not take the
+// thread. `min-height: 0` lets it shrink below the intrinsic image size.
 .byte-buddy-char {
   position: relative;
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-height: 0;
   width: auto;
   aspect-ratio: 1;
-  max-width: 260px;
-  max-height: 260px;
+  height: calc(260px * var(--byte-pet-scale, 1));
+  max-width: 88vw;
+  max-height: 40vh;
   align-self: center;
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
@@ -5296,6 +5312,10 @@ $kumoko_expr_aliases: (
 // max-width keeps a portrait tablet from growing him wider than the screen;
 // aspect-ratio pulls the height back down to match when it bites.
 .byte-app[data-kiosk="true"] .byte-buddy-char {
+  // The wall is the one place the pet is supposed to fill the room, so it goes
+  // back to taking whatever the half gives it rather than a stated height.
+  flex: 1 1 0;
+  height: auto;
   max-width: 88vw;
   max-height: none;
 }

@@ -2488,6 +2488,35 @@
       if (node) node.textContent = val || "";
     };
 
+    // Notes is the one field with a URL in it — the job tracker writes the
+    // application's own page at the top of every row an interview puts on the
+    // calendar — and textContent leaves it as a string nobody can tap. Built
+    // node by node rather than through innerHTML, so typed text can never
+    // become markup.
+    const setLinked = (sel, val) => {
+      const node = modal.querySelector(sel);
+      if (!node) return;
+      node.textContent = "";
+      const text = val || "";
+      const pattern = /https?:\/\/[^\s<>"']+/g;
+      let at = 0;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        // Sentence punctuation that happens to sit against the end of a URL
+        // belongs to the sentence, not to the address.
+        const url = match[0].replace(/[.,;:!?)\]]+$/, "");
+        if (match.index > at) node.append(text.slice(at, match.index));
+        const link = document.createElement("a");
+        link.href = url;
+        link.textContent = url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        node.append(link);
+        at = match.index + url.length;
+      }
+      if (at < text.length) node.append(text.slice(at));
+    };
+
     const dot = modal.querySelector("[data-agenda-color-target]");
     if (dot) {
       dot.style.background = d.agendaColor || "";
@@ -2613,7 +2642,7 @@
     if (notesRow) {
       const hasNotes = !!(d.notes && d.notes.length);
       notesRow.classList.toggle("hidden", !hasNotes);
-      set("[data-notes-target]", d.notes);
+      setLinked("[data-notes-target]", d.notes);
     }
 
     hydrateRsvp(modal, dataEl);

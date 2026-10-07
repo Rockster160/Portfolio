@@ -324,6 +324,11 @@ class ByteController < ApplicationController
       **requested_theme(mode),
     )
     broadcast_convo_change(convo, :created)
+    # An empty thread with a name on it says nothing about what to ask for, so
+    # the pet opens by saying who it is and what this person can hand over.
+    # No-ops on every other mode and on any thread that already has a message
+    # in it - see Buddy::Intro.
+    Buddy::Intro.start!(convo)
     render json: convo.as_wire, status: :created
   end
 
@@ -643,6 +648,17 @@ class ByteController < ApplicationController
     render json: { scale: current_user.byte_font_scale }
   end
 
+  # How big the pet is drawn. Same shape and the same reasoning as font_scale:
+  # the setting follows the person to whatever they open Byte on, and it is
+  # reachable from a tool rather than buried in one browser's storage.
+  def pet_scale
+    return head(:forbidden) unless current_user&.byte_access?
+
+    current_user.byte_pet_scale = params[:scale]
+    current_user.save!
+    render json: { scale: current_user.byte_pet_scale }
+  end
+
   # Whether Affirmation is one of the rows in the actions list. Same shape as
   # font_scale and for the same reason: a preference about what Buddy offers
   # belongs to the person rather than to one browser.
@@ -766,7 +782,14 @@ class ByteController < ApplicationController
   # normal claude default; buddy-only members and the kiosk get a Buddy thread,
   # since neither has any use for another kind.
   def default_conversation(only_buddy=buddy_only?)
-    return current_user.byte_conversations.create!(mode: :buddy) if only_buddy
+    # Landing with nothing to open IS starting a new thread, and for somebody
+    # who only has Buddy it is their first one - the place an introduction is
+    # worth the most.
+    if only_buddy
+      convo = current_user.byte_conversations.create!(mode: :buddy)
+      Buddy::Intro.start!(convo)
+      return convo
+    end
 
     ByteConversation.default_for(current_user)
   end

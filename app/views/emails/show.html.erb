@@ -57,6 +57,28 @@
   <% end %>
 </div>
 
+<%# The body is rendered from `to_html`, which is the words only, so a file the
+   mail arrived with had nowhere to be reached from - while the list view was
+   already painting a paperclip to say it was in there. %>
+<% if @attachments.any? %>
+  <div class="skinny-container email-attachments">
+    <h4><%= pluralize(@attachments.size, "attachment") %></h4>
+    <ul>
+      <% @attachments.each_with_index do |part, index| %>
+        <li>
+          <%= link_to attachment_email_path(@email, index) do %>
+            <i class="ti ti-mdi-paperclip"></i>
+            <%= part.filename.presence || "Untitled file" %>
+          <% end %>
+          <span class="meta">
+            <%= part.mime_type %> &middot; <%= number_to_human_size(part.body.decoded.bytesize) %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
 <div class="skinny-container">
   <%= render_iframe(@email.to_html) %>
 </div>

@@ -118,6 +118,20 @@ class Email < ApplicationRecord
   💾(:to) { inbound? ? inbound_mailboxes : outbound_mailboxes }
   💾(:text_body) { parser.text_part }
   💾(:html_body) { parser.html_part }
+  # The files the message came with, off the copy on S3. `has_attachments` is
+  # the flag the list view paints a paperclip from; this is the thing itself,
+  # and nothing but this can reach it - an attachment has no URL anywhere, it
+  # only exists inside the mail.
+  💾(:attachments) { parser.attachments.to_a }
+
+  # One attachment by its position in that list. The POSITION is the handle
+  # because a filename is neither unique within a message nor safe in a path -
+  # two parts called `image001.png` is the ordinary shape of a signature.
+  def attachment_at(index)
+    return nil if index.to_i.negative?
+
+    attachments[index.to_i]
+  end
 
   def to_html
     html_body

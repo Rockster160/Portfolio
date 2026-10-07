@@ -11,6 +11,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #checklist("List" String BR "Message" Text)::Numeric
   #   #alert("Key" String BR "Message" Text BR "Who" String)::Boolean
   #   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
+  #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
+  #   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
   # Byte/Moss says the text verbatim — a fixed inbound message dropped into the
@@ -130,6 +132,49 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   def resolve(key, message, who=nil)
     cleared = recipients_for(who).count { |user|
       ::Buddy::Alerts.resolve!(user: user, key: key, body: message).present?
+    }
+    cleared.positive?
+  end
+
+  # The hero's other notice: a chip pinned top-right, not the alert bar along
+  # the bottom. Where `alert` is a standing CONDITION held open in the thread,
+  # this is a small persistent marker on the hero itself - "the gate is open and
+  # the dog is loose" sitting in the corner while it's true, gone the moment it
+  # isn't.
+  #
+  # `key` is the chip's identity, the only coupling between what sets it and what
+  # clears it. It travels in a URL path, so it must be lowercase with no dots or
+  # slashes (colons are fine) - see `BackgroundProcess::KEY_RX`.
+  #
+  # `label` is the whole chip and gets about 20 characters; `detail` is its hover
+  # title and can say more. `who` works exactly like `alert`'s - blank is the
+  # task owner, a name reaches that person's hero, "house" reaches everyone -
+  # but each hero is a window onto its own owner's machinery, so a shared
+  # condition is usually set for one person.
+  #
+  # Raised as `waiting`: the stale and age-out sweeps leave `waiting`/`failed`
+  # chips alone (`BackgroundProcess::PARKED`), which is what a standing condition
+  # wants - it stays until something clears it rather than quietly ageing off the
+  # strip while it's still true.
+  #
+  # Returns false when it reached nobody with a Buddy hero to show it.
+  def miniAlert(key, label, detail=nil, who=nil)
+    posted = recipients_for(who).count { |user|
+      ::BackgroundProcess.note(
+        user: user, key: key.to_s, name: label.to_s,
+        detail: detail.presence, state: :waiting, source: :jil
+      ).present?
+    }
+    posted.positive?
+  end
+
+  # The condition passed - take the chip off the hero. Idempotent, and the same
+  # key/who the chip went up with. Returns false when there was nothing open
+  # under that key, the way `resolve` does, so a scheduled re-check can tell "I
+  # just cleared one" from "already fine".
+  def clearMiniAlert(key, who=nil)
+    cleared = recipients_for(who).count { |user|
+      ::BackgroundProcess.clear(user: user, key: key.to_s).present?
     }
     cleared.positive?
   end

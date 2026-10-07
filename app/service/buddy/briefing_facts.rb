@@ -243,7 +243,10 @@ module Buddy
     # Both trash-day briefings on 30 Sep named the three trash chores and
     # neither could say that one of them paid double.
     def job_name(row)
-      [row[:name], row[:hot]].compact_blank.join(" · ")
+      # `points`, because `2x` on its own was read as a count: three of four
+      # briefings in one window turned a double-POINT mail run into a mail run
+      # that happens twice, and a trash day into gathering the trash twice.
+      [row[:name], row[:hot].presence && "#{row[:hot]} points"].compact_blank.join(" · ")
     end
 
     def weather_lines(weather)

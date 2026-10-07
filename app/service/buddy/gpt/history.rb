@@ -308,6 +308,12 @@ module Buddy
         "checkin"     => "[tapped Check-in]",
         "affirmation" => "[tapped Affirmation - asked for one]",
         "suggest"     => "[tapped What now? - asked what to pick up]",
+        # Nobody tapped this one - the thread opening is what fired it. It is
+        # here rather than in #fired_seed_standin because it carries an action
+        # and that branch only sees seeds with none, and because "a
+        # notification fired" is the wrong thing to tell a later turn about the
+        # message it opened with.
+        "intro"       => "[opened a new thread - this is you introducing yourself]",
       }.freeze
 
       # Takes the metadata hash rather than the message so Buddy::TokenEstimator

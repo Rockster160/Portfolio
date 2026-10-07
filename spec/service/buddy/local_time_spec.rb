@@ -28,13 +28,15 @@ RSpec.describe "Buddy and local time" do
     # The band is derived from the clock (a 9am briefing kept opening "Good
     # afternoon"), so it's handed over rather than worked out. But the band is
     # CONTEXT - the exact greeting words are the model's, varied per reply, not
-    # a prescribed string.
+    # a prescribed string, and the line does not ask for a greeting at all.
+    # Said as "CONTEXT for your opener" it read as one: whether a message opens
+    # with a hello is settled under Greetings, and only two kinds of turn do.
     it "says morning while UTC would read afternoon, and hands the band as context not a script" do
       text = preamble_at(9)
 
       expect(text).to include("**Part of day:** morning")
       expect(text).to include("9am MDT")
-      expect(text).to include("CONTEXT for your opener")
+      expect(text).to include("CONTEXT, never an instruction to greet")
       expect(text).not_to include("Good morning")
     end
 

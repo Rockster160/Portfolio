@@ -88,7 +88,7 @@ Buddy::Tools.register(
     at:           { type: :iso_time,     required: false, description: "Local wall-clock START, 24-hour. Something happening today goes AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
     leave_at:     { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local, INSTEAD of `at`. The start is worked back from the drive and the arrive-early minutes. Needs a `location` to drive to. Never pass this together with `at`" },
     duration:     { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
-    location:     { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
+    location:     { type: :string,       required: false, description: "Only a place THEY named, or one a page or record you read gave you. Omit it otherwise - a guess, or the event's own title used as a venue, is worse than leaving it empty" },
     arrive_early: {
       type:        :duration_min,
       required:    false,

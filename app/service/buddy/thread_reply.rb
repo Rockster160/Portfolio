@@ -58,10 +58,16 @@ module Buddy
       return nil unless metadata(message)["kind"].to_s == "buddy_relay"
 
       relay = relay_for(user, message)
-      peer  = (peer_for(relay, user) if relay) || twin_owner(user, message)
+      twin  = twin_for(user, message)
+      peer  = (peer_for(relay, user) if relay) || twin&.user
       return nil if peer.nil? || peer.id == user.id
 
-      { peer: peer, relay: relay }
+      # `thread` is the one they wrote FROM, which is the twin's own. Without it
+      # the reply is handed to CompanionRelay with no destination, and that
+      # falls back to whichever thread #conversation_for picks - the lowest id
+      # when nothing is pinned. A message sent from one companion was answered
+      # by a different one, in a thread she hadn't been talking in.
+      { peer: peer, relay: relay, thread: twin&.byte_conversation }
     end
 
     def relay_for(user, message)
@@ -71,14 +77,15 @@ module Buddy
       relay
     end
 
-    # The person on the other end, read off the twin rather than inferred. A
-    # twin owned by this same user is one of the pre-bridge singletons whose
-    # partner was never written; it names nobody, so it routes nowhere.
-    def twin_owner(user, message)
+    # The peer's own copy of the same message, which names both the person on
+    # the other end and the thread it is sitting in - neither inferred. A twin
+    # owned by this same user is one of the pre-bridge singletons whose partner
+    # was never written; it names nobody, so it routes nowhere.
+    def twin_for(user, message)
       twin = ByteMessage.find_by(id: metadata(message)["relay_twin"])
       return nil if twin.nil? || twin.user_id == user.id
 
-      twin.user
+      twin
     end
 
     def peer_for(relay, user)
@@ -101,10 +108,11 @@ module Buddy
       end
 
       Buddy::CompanionRelay.pass_along!(
-        from:         user,
-        to:           route[:peer],
-        text:         text,
-        from_message: message,
+        from:            user,
+        to:              route[:peer],
+        text:            text,
+        to_conversation: route[:thread],
+        from_message:    message,
       )
     end
 

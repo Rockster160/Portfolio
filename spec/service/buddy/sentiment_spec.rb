@@ -286,6 +286,80 @@ RSpec.describe Buddy::Sentiment do
     end
   end
 
+  # Rocco, 7 Oct 2026: "His expression came back as annoyed for some reason?"
+  #
+  # The morning briefing landed at 6:45am and the pet wore `annoyed`, byte's
+  # strain-0.80 face, on a turn where nothing had gone wrong. The window WINDOW
+  # reached back over still held 11:37pm the night before, where he had twice
+  # told Byte its voice wasn't landing - three one-line notifications overnight
+  # was all it took to keep that in frame. The reading was of the right thread
+  # and the wrong exchange.
+  describe "an exchange that ended hours ago" do
+    def at(when_at, body, **rest)
+      say(body, **rest).tap { |m| m.update_columns(created_at: when_at, updated_at: when_at) }
+    end
+
+    before do
+      at(4.hours.ago, "You're still sounding the same as you did before.", direction: :outbound)
+      at(4.hours.ago, "Fair hit. Let me swing it a little more my way then.")
+      at(2.minutes.ago, "Laundry gate is shut")
+      at(1.minute.ago, "Morning. You've got a loaded one.")
+    end
+
+    it "reads what is on this side of the silence and nothing older" do
+      transcript = described_class.transcript_for(convo)
+
+      expect(transcript).to include("loaded one")
+      expect(transcript).not_to include("sounding the same")
+    end
+
+    it "keeps a conversation with ordinary pauses in it whole" do
+      at(20.minutes.ago, "What's the plan for today?", direction: :outbound)
+
+      expect(described_class.transcript_for(convo)).to include("What's the plan for today?")
+    end
+
+    # The question is what the newest line belongs WITH, and "nothing" is an
+    # allowed answer - but an empty transcript means no reading at all, which
+    # would leave whatever face happened to be on.
+    it "never answers nothing, however long ago the newest line was" do
+      convo.byte_messages.destroy_all
+      at(3.days.ago, "Reminder: Focus")
+
+      expect(described_class.transcript_for(convo)).to include("Reminder: Focus")
+    end
+  end
+
+  # ...and the other half of the same morning. strain is friction in THIS
+  # exchange, so on a turn nobody started there is nothing for it to measure.
+  # The PROMPT says exactly that and the reading came back with strain in it
+  # anyway, which is where every other rule here stopped being prose.
+  describe "strain on a turn nobody started" do
+    before { say("Morning. You've got a loaded one.") }
+
+    it "is zero whatever came back" do
+      answering('{"warmth":0.3,"play":0.2,"weight":0.5,"strain":0.8}')
+
+      expect(described_class.read(convo, unprompted: true)[:strain]).to eq(0.0)
+    end
+
+    it "is left exactly as read when they did say something" do
+      answering('{"warmth":0.3,"play":0.2,"weight":0.5,"strain":0.8}')
+
+      expect(described_class.read(convo)[:strain]).to eq(0.8)
+    end
+
+    # The whole point of the zero: nothing else in byte's set is within reach
+    # of strain 0.8, so a briefing either looks cross or it doesn't.
+    it "keeps a cross face off a briefing" do
+      answering('{"warmth":0.45,"play":0.2,"weight":0.5,"strain":0.8}')
+
+      described_class.settle!(convo, unprompted: true)
+
+      expect(Buddy::Faces::IRRITATED.map(&:to_s)).not_to include(convo.reload.buddy_expression)
+    end
+  end
+
   # Rocco, 21 Sep 2026: "I preferred the thumbs one instead."
   #
   # `thumbs_up` is the one face that means "that's sorted", and it sits within a

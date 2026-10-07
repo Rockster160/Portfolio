@@ -943,6 +943,22 @@ BUDDY_EDGE_PROBES = [
                 "number for the other case",
   },
 
+  # --- a venue nobody named ------------------------------------------------
+  {
+    case:       "prod 7557",
+    say:        "Add Pick Up Pizza next Wednesday at 5.",
+    tool:       :add_agenda_item,
+    once:       true,
+    never_args: { add_agenda_item: { location: /./ } },
+    note:       "it invented \"Pizza place\" as the venue. Nobody said where, no " \
+                "page was read, and the description only asked for one \"if one was " \
+                "mentioned\" - which reads as permission to supply what is missing. " \
+                "The same afternoon it put `location: \"Yappy Hour\"` on an event " \
+                "whose place came in a link, and that one was corrected by hand two " \
+                "minutes later. A place nobody named is an OMISSION; the description " \
+                "now says a guess, or the event's own title, is worse than empty",
+  },
+
   # --- a leave time given when the thing is first added ---------------------
   {
     case:       "prod 5935",

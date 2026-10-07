@@ -81,7 +81,39 @@ RSpec.describe "Buddy agenda tools" do
         expect(tool[:receipt].call(result, ctx)).to eq("Moved Costco Run to Ours 💕 ✓")
       end
 
-      it "still edits an item on a calendar shared to the person for editing" do
+      # Three turns in four minutes each said they had moved Shower to the
+      # calendar, and the receipt drew `Rockster160 → Rockster160`. Writing the
+      # same id back is still an executed edit, so there was nothing to stop
+      # the next turn claiming it again.
+      it "refuses a move to the calendar it is already on" do
+        costco_on(ours)
+
+        expect {
+          run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours" })
+        }.to raise_error(/already on Ours/)
+      end
+
+      # ...and only when the move was the whole request. A redundant clause
+      # beside a real change is not a reason to refuse the change.
+      it "still makes the other edit when the calendar clause changes nothing" do
+        item = costco_on(ours)
+
+        run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", title: "Costco Trip" })
+
+        expect(item.reload).to have_attributes(name: "Costco Trip", agenda_id: ours.id)
+      end
+
+      # The confirm row is what the next turn reads back, so a move that did
+      # not happen must not appear on it.
+      it "leaves a no-op move off the confirm row" do
+        costco_on(ours)
+        tool    = Buddy::Tools[:edit_agenda_item]
+        confirm = tool[:confirm].call({ item: "Costco Run", calendar: "Ours", title: "Costco Trip" }, ctx)
+
+        expect(confirm[:resolved]).not_to include(:agenda_id, :agenda_from)
+      end
+
+            it "still edits an item on a calendar shared to the person for editing" do
         partner = create(:user)
         shared  = create(:agenda, user: partner, name: "Theirs")
         shared.agenda_shares.create!(user: user, permission: :editor)
@@ -90,6 +122,42 @@ RSpec.describe "Buddy agenda tools" do
         run(:edit_agenda_item, { item: "Costco Run", title: "Costco Trip" })
 
         expect(item.reload.name).to eq("Costco Trip")
+      end
+    end
+
+    # Prod, 6 Oct: "add Shower to my agenda at 3 today" went on correctly, and
+    # then three turns in a row said they had moved it - all three editing a
+    # Shower from four months earlier that nobody had asked about. `start_at:
+    # :asc` answers the OLDEST, while the same-name rule it feeds has always
+    # said the intent is the soonest.
+    describe "two of the same name on different dates" do
+      def shower_at(when_at)
+        personal.agenda_items.create!(
+          name: "Shower", start_at: when_at, end_at: when_at + 30.minutes,
+          kind: :event, status: :confirmed,
+        )
+      end
+
+      it "edits the soonest one rather than the oldest row" do
+        old  = shower_at(4.months.ago)
+        soon = shower_at(2.hours.from_now)
+
+        run(:edit_agenda_item, { item: "Shower", title: "Shower and stretch" })
+
+        expect(soon.reload.name).to eq("Shower and stretch")
+        expect(old.reload.name).to eq("Shower")
+      end
+
+      # One that already happened is still reachable when it is all there is -
+      # and then it is the most recent of them, not the first ever.
+      it "falls back to the most recent past one when nothing is coming" do
+        long_ago = shower_at(4.months.ago)
+        recent   = shower_at(2.days.ago)
+
+        run(:edit_agenda_item, { item: "Shower", title: "Shower and stretch" })
+
+        expect(recent.reload.name).to eq("Shower and stretch")
+        expect(long_ago.reload.name).to eq("Shower")
       end
     end
 

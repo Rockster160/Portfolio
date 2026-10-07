@@ -1,5 +1,7 @@
 module Buddy
-  # A trailing "..., which is <something charming>" that says nothing.
+  # A trailing "..., which is <something charming>" that says nothing, and the
+  # trailing "..., if you <feel some way about it>" it turns into once the first
+  # one stops working.
   #
   # `{statement}, which is {unnecessary description}` - the shape, on briefings:
   #
@@ -27,7 +29,18 @@ module Buddy
     # sentence's own grammar ("the one which fits"), and the padding shape is
     # always the non-restrictive one. Bounded to the end of its sentence, so it
     # can never eat the clause after it.
-    TRAILING_RX = /,\s+which\b[^,.!?;:]{0,120}(?=[.!?]|\z)/i
+    #
+    # `if` because the shape relocated AGAIN, which this module's own history
+    # should have predicted: with the `which` form caught here, the same empty
+    # clause came back as a trailing conditional addressed to the reader -
+    # "..., if you enjoy being lightly bullied by bins" hung off the trash
+    # chores. Same function, same subtraction test, one more conjunction.
+    #
+    # Sibling shapes deliberately left alone: a trailing `, so ...` and
+    # `, and ...` carry the CONSEQUENCE far more often than they carry nothing,
+    # and the word overlap below cannot tell the two apart when the consequence
+    # is about something the day already named.
+    TRAILING_RX = /,\s+(?:which|if)\b[^,.!?;:]{0,120}(?=[.!?]|\z)/i
 
     # Longer than this and it is carrying something, whatever the word overlap
     # says. All three of the real ones ran to seven words or fewer.

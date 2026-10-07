@@ -37,6 +37,44 @@ RSpec.describe Buddy::Flourish do
     end
   end
 
+  # Rocco, 7 Oct 2026: "He's started doing the extra bits again. 'if you enjoy
+  # being bullied by bins'".
+  #
+  # With the `which` form caught, the same empty clause came back as a trailing
+  # conditional aimed at the reader. One briefing carried three of them, hung
+  # off the chores, the evening and the forecast in turn - which is the tic TONE
+  # names, one observation per item rather than one per message.
+  describe "the shape it moved to" do
+    it "drops the one he quoted" do
+      expect(trim("Nice little double-point kind of day, if you enjoy being bullied by bins."))
+        .to eq("Nice little double-point kind of day.")
+    end
+
+    it "drops one that only says how to feel about the day" do
+      expect(trim("The afternoon is wide open, if you like that sort of thing."))
+        .to eq("The afternoon is wide open.")
+    end
+
+    it "keeps a condition that names something from the day" do
+      body = "Dinner's late, if the meatballs hold out."
+
+      expect(trim(body)).to eq(body)
+    end
+
+    it "keeps one carrying a figure" do
+      body = "You could take the run early, if 6:15 suits you."
+
+      expect(trim(body)).to eq(body)
+    end
+
+    # A restrictive one is the sentence's own grammar, the same as `which`.
+    it "keeps one with no comma in front of it" do
+      body = "Take the bag if you're heading out."
+
+      expect(trim(body)).to eq(body)
+    end
+  end
+
   # The expensive direction. A clause carrying something is a clause somebody
   # wanted, and losing one is worse than leaving a flourish in.
   describe "the ones that stay" do

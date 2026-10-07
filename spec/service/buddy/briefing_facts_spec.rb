@@ -342,7 +342,7 @@ RSpec.describe Buddy::BriefingFacts do
       ]
 
       expect(described_class.job_lines(rows))
-        .to eq(["trash: Gather trash, Take out trash bags", "Replace Air Filter · 5x"])
+        .to eq(["trash: Gather trash, Take out trash bags", "Replace Air Filter · 5x points"])
     end
 
     # Which rules reach the prompt is decided on the facts, so a multiplier the
@@ -358,7 +358,22 @@ RSpec.describe Buddy::BriefingFacts do
 
       lines = described_class.job_lines(rows)
 
-      expect(lines).to eq(["trash: Gather trash, Take trash cans out · 2x, Take out trash bags"])
+      expect(lines).to eq(["trash: Gather trash, Take trash cans out · 2x points, Take out trash bags"])
+    end
+
+    # Rocco, 7 Oct: the briefings were reading `2x` as a COUNT. Three of four in
+    # one window said a double-point mail run happens twice, and one turned a
+    # trash day into gathering the trash twice, taking the cans out twice and
+    # gathering the recycling twice. The multiplier is written `2x` because that
+    # is how the chores page writes it; what the line was missing is what the
+    # number is OF.
+    it "says what the multiplier is a multiplier of" do
+      expect(described_class.job_lines([{ id: 1, name: "Go get mail", hot: "2x" }]))
+        .to eq(["Go get mail · 2x points"])
+    end
+
+    it "says nothing extra about a job with no multiplier on it" do
+      expect(described_class.job_lines([{ id: 1, name: "Go get mail" }])).to eq(["Go get mail"])
     end
   end
 

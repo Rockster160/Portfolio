@@ -187,9 +187,24 @@ Buddy::Tools.register(
       target = ctx.resolve_writable_agenda(payload[:calendar], strict: true)
       raise "no calendar named #{payload[:calendar].inspect} that you can write to" if target.nil?
 
-      resolved[:agenda_id]   = target.id
-      resolved[:agenda_name] = target.name
-      resolved[:agenda_from] = item.agenda.name
+      # Everything that would still be an edit if the move came to nothing.
+      rest = %i[title at leave_at duration location arrive_early kind cancelled]
+
+      if target.id != item.agenda_id
+        resolved[:agenda_id]   = target.id
+        resolved[:agenda_name] = target.name
+        resolved[:agenda_from] = item.agenda.name
+      elsif rest.none? { |key| payload[key].present? }
+        # Already there. Writing the same id back is still an executed edit and
+        # the receipt draws `Ours -> Ours`, so the next turn reports a move that
+        # never happened - which is how one Shower was moved to the calendar it
+        # was already on three times in four minutes.
+        #
+        # Refused only when the move WAS the request. "Put it at 3 and on Ours"
+        # while it is already on Ours is a time change with a redundant clause,
+        # and raising on that dead-ends the turn the way `series` used to.
+        raise "#{item.name} is already on #{target.name}"
+      end
     end
 
     { summary: "Edit #{item.name}?", resolved: resolved }
