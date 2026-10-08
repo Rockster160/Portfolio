@@ -91,6 +91,17 @@ RSpec.describe Buddy::JobMailOffer do
       expect(call.body).to include("`cancelled`")
     end
 
+    # Prod 7719. "Thank you for providing us with your interview availability",
+    # with the windows he had picked listed under it, was proposed `availability`
+    # - the tag for the ask, 40 minutes after the ask. The booking rule names "a
+    # list of windows" as the ask's own shape, and a confirmation echoes his back.
+    it "separates an ask for times from the receipt for times already sent" do
+      body = call.body
+
+      expect(body).to include("CONFIRMING times")
+      expect(body).to include("the next move is theirs")
+    end
+
     # Prod 7569 and 7275. A verification code and a candidate-account link were
     # both proposed as `acknowledged`, and the instruction's own "rather than
     # leaving it a plain note" is what ruled out the honest answer.

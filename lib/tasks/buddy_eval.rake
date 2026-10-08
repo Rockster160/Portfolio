@@ -617,6 +617,25 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "no time is agreed yet; `scheduled` would invent the interview",
   },
+  # --- the receipt for times already sent is not another ask ----------------
+  # Prod 7719, 7 Oct. "Thank you for providing us with your interview
+  # availability! We will follow up with a final scheduled interview time soon",
+  # with the windows he had picked listed underneath, was proposed `availability`
+  # 40 minutes after the mail that really did ask for them. The rule names "a
+  # list of windows" as the ask's own shape, and the confirmation echoes his
+  # back. `availability` is one of the four beats the board prints as waiting on
+  # him, so the receipt for a finished job reappears at the top as outstanding.
+  {
+    case:       "prod 7719",
+    say:        "Halloway Systems confirmed they got the availability I sent and said " \
+                "they will follow up with a final time - log that",
+    tool:       :add_job_note,
+    avoid:      %i[add_agenda_item set_reminder],
+    args:       { add_job_note: { tag: "note" } },
+    never_args: { add_job_note: { tag: /\A(?:availability|scheduled)\z/ } },
+    needs:      :halloway_application,
+    note:       "he has done his part; the next move is theirs",
+  },
   # --- an invitation to an interview is not an interview ---------------------
   # Prod 5 Oct, Neighbor. A mail from the hiring manager arranging a technical
   # video interview was filed `interview` - the word in its own subject line. It

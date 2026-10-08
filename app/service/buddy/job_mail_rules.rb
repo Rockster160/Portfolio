@@ -28,7 +28,15 @@ module Buddy
         "being CALLED OFF rather than made, the beat is `cancelled` and it takes no " \
         "time at all - see the tag list. If it is TRYING to arrange one and names NO " \
         "time - a link to pick a slot, a list of windows, a request for his - the beat " \
-        "is `availability`, which is the one waiting on HIM. **Never `interview`.** " \
+        "is `availability`, which is the one waiting on HIM. A mail CONFIRMING times " \
+        "ALREADY GIVEN is the opposite of that and is NOT that beat: thanking him for " \
+        "his availability, listing the windows he picked back at him, or promising a " \
+        "final time later all say he has done his part and the next move is theirs. " \
+        "Those are `note`. Reading the echoed windows as an ask is the specific " \
+        "mistake - `availability` is one of the four beats printed at the TOP of his " \
+        "board as waiting on him, so wearing it puts a job he has finished back in " \
+        "front of him and leaves it there until something else arrives. " \
+        "**Never `interview`.** " \
         "That tag means he was IN the conversation, and no mail is that; it also books " \
         "nothing, so using it for an invitation loses the appointment entirely. " \
         "\"Interview with <company>\" in a subject line is an invitation, not an " \

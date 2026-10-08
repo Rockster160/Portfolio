@@ -45,6 +45,13 @@ Buddy::Tools.register(
     in, times to send back - and a `follow_up_at` on it puts "Send availability"
     on the agenda as a task. Use `scheduled` only once the mail names the slot.
 
+    **Times already SENT are not an ask.** An availability confirmation - thanks
+    for your availability, here are the windows you picked, we will follow up
+    with a final time - is the receipt for a job they have finished, and the next
+    move is the company's. That is `note`. `availability` on it reprints a
+    completed task at the top of their board and leaves it there, which is worse
+    than no beat at all: the strip exists to say what is outstanding.
+
     **`interview` is the conversation HAPPENING, and nothing else.** It means
     they sat down and talked to a person. Mail is NEVER an `interview` beat: a
     mail can book one (`scheduled`), ask for their times (`availability`), call
