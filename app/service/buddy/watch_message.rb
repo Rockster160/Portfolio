@@ -47,6 +47,7 @@ module Buddy
       # there is nothing left for it to add.
       detail = payload_detail(payload)
       detail = nil if detail && rendered.downcase.include?(detail_name(payload).downcase)
+      detail = nil if detail && restates_match?(watch, payload)
       # Terminal punctuation is dropped to make room for the detail, so with no
       # detail to make room for it stays. A sentence nothing is being added to
       # goes out as it was written - and "🐶 Whisper's up" is a colder line than
@@ -96,6 +97,25 @@ module Buddy
       # these are compacted; a `false` the trigger genuinely sent is its own
       # answer and stays.
       data.to_h.except("sha").merge(derived.compact_blank)
+    end
+
+    # A detail that only repeats a value the watch is MATCHING ON hasn't
+    # changed and never will: being that value is why this fired at all, so it
+    # is the same word on every firing. The condition restated, not news.
+    #
+    # An `event` watch is always in that shape - the payload's name IS the
+    # event name in `match`, so there was nothing the append could ever add,
+    # and a watch pointed at another person sent them the internal name of the
+    # event as though it were part of the message.
+    #
+    # Checked against the match rather than the scope, because the same watch
+    # on a free-form key is carrying real news: a shared-agenda watch matches
+    # only on the action, and what landed on the calendar is the whole point.
+    def restates_match?(watch, payload)
+      name = detail_name(payload).to_s.downcase.strip
+      return false if name.blank?
+
+      (watch.match || {}).any? { |_key, want| want.to_s.downcase.strip == name }
     end
 
     # What actually changed, when the trigger carries it.

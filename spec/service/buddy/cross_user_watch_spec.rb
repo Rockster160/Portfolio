@@ -58,6 +58,23 @@ RSpec.describe "Buddy cross-user watches" do
       expect(copy).to be_present
       expect(copy.body).to include("something landed on the shared agenda")
     end
+
+    # ...but only the detail that is actually news. An `event` watch matches on
+    # the event NAME, so the name the payload carries is the one in `match` on
+    # every firing - a constant, and the internal one at that. "I'm on my way
+    # home" reached a partner with the name of the charge that tripped it
+    # stapled to the end.
+    it "doesn't staple on a detail that only restates what the watch matched" do
+      watch = BuddyWatch.create!(
+        user: rocco, notify_user: chelsea, byte_conversation: rocco_convo,
+        kind: "prompt", body: "I'm on my way home.",
+        trigger_scope: "event", match: { "name" => "Transaction", "action" => "added" },
+        one_shot: true
+      )
+      Buddy::WatchMatcher.fire!(watch, { "name" => "Transaction", "action" => "added" })
+
+      expect(BuddyRelay.last.body).to eq("I'm on my way home.")
+    end
   end
 
   describe "remind_when agenda trigger" do

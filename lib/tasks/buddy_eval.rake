@@ -1331,6 +1331,19 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[call_jil_function],
     note:  "the same nouns pointed forward are a watch, not a look",
   },
+  # --- a question asked beside the call that already answered it ------------
+  # Prod 7711, 7 Oct. The watch was set, correctly, and the words beside it
+  # said a detail was still needed before it could be - so the receipt read
+  # done and the reply read blocked, and the only way to find out which was
+  # true was to go and read the row.
+  {
+    case:        "prod 7711",
+    say:         "Next transaction that comes in, send a message to Chelsea that I'm on my way home",
+    tool:        :remind_when,
+    args:        { remind_when: { trigger: "event", target: /transaction/i, notify: /chelsea/i } },
+    never_reply: /need (?:the|an?|to know)\b[^.?!]{0,40}(?:name|kind|which)|which transaction|what kind of transaction/i,
+    note:        "set the watch and asked which transaction they meant in the same breath",
+  },
   {
     case:  "prod 4721",
     say:   "what's going on in the backyard?",
