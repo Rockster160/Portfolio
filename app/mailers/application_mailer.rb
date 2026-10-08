@@ -2,20 +2,24 @@ class ApplicationMailer < ActionMailer::Base
   default from: "contact@ardesian.com"
   layout "mailer"
 
-  def deliver_email(email_id, attaches=[])
-    email = ::Email.find(email_id).to_mail
-    attaches&.each do |attachment|
-      next if attachment.blank?
+  # Build and return the outbound message. Going through ActionMailer rather
+  # than a bare `Mail.new` is what applies the SMTP settings configured in the
+  # production environment — a raw Mail message would try to deliver through
+  # nothing. The HTML is passed as the body directly, so no template or layout
+  # is rendered: the words were already composed in the editor.
+  def compose(from:, to:, subject:, html_body:, attachments: [])
+    attachments.each do |file|
+      next if file.blank?
 
-      attachments[attachment.original_filename] = attachment.read
+      self.attachments[file.original_filename] = file.read
     end
 
     mail(
-      to:           email.to,
-      from:         email.from,
-      subject:      email.subject,
+      from:         from,
+      to:           to,
+      subject:      subject,
       content_type: "text/html",
-      body:         email.body.raw_source,
+      body:         html_body,
     )
   end
 end

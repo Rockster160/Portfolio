@@ -137,6 +137,45 @@ class Email < ApplicationRecord
     html_body
   end
 
+  # "Name <address>" for the two parties, direction-aware through the `from`/`to`
+  # readers — a row of raw mailbox hashes is not something to show a person.
+  def from_display = ::Emails::Normalizer.addresses_from_meta(from).join(", ")
+  def to_display = ::Emails::Normalizer.addresses_from_meta(to).join(", ")
+
+  # The form params that prefill a reply: the sender becomes the recipient, the
+  # subject carries one `RE:`, and the From is the box this mail reached us at.
+  def reply_defaults
+    local, domain = reply_from.split("@", 2)
+    {
+      to:          from.filter_map { |mailbox| mailbox[:address] }.join(", "),
+      subject:     "RE: #{::Emails::Normalizer.subject(subject)}",
+      from_user:   local,
+      from_domain: domain,
+    }
+  end
+
+  # A forward keeps the body and leaves the recipient blank for the sender to
+  # fill, so the original message travels on under an `FWD:`.
+  def forward_defaults
+    local, domain = reply_from.split("@", 2)
+    {
+      subject:     "FWD: #{::Emails::Normalizer.subject(subject)}",
+      from_user:   local,
+      from_domain: domain,
+      html_body:   to_html,
+    }
+  end
+
+  # The registered-domain address this message is ours on, so a reply leaves
+  # from the same box. `inbound_mailboxes` is always our side regardless of
+  # direction; mail that reached a personal Gmail falls back to the house
+  # address, since a reply can only leave from a domain we control.
+  def reply_from
+    inbound_mailboxes.filter_map { |mailbox| mailbox[:address] }.find { |address|
+      address.split("@", 2).last.in?(self.class.registered_domains)
+    } || "contact@ardesian.com"
+  end
+
   def show_mailboxes(type=:inbound)
     ::Emails::Normalizer.addresses_from_meta(send("#{type}_mailboxes")).then { |addresses|
       addresses.size == 1 ? addresses.first : "[#{addresses.join(" | ")}]"
@@ -167,8 +206,4 @@ class Email < ApplicationRecord
       self.archived_at = nil
     end
   end
-
-  # # def deliver!
-  # #   ApplicationMailer.deliver_email(id, tempfiles).deliver_now
-  # # end
 end

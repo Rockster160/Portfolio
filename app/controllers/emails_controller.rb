@@ -65,19 +65,19 @@ class EmailsController < ApplicationController
   end
 
   def new
-    @email = current_user.sent_emails.new(email_params)
-    @email.from_user ||= current_user.email.in?(::Email.registered_domains) ? current_user.email : "#{(current_user.username.presence || "contact")}@ardesian.com"
+    @compose = ::Emails::Compose.new(compose_params)
+    @compose.from_domain = ::Email.registered_domains.first if @compose.from_domain.blank?
+    @compose.from_user = current_user.username.presence || "contact" if @compose.from_user.blank?
   end
 
   def create
-    @email = current_user.sent_emails.new(email_params)
-    @email.set_send_values
+    @compose = ::Emails::Compose.new(compose_params)
+    @compose.user = current_user
 
-    if @email.errors.none? && @email.save
-      @email.deliver!
-      redirect_to emails_path
+    if @compose.deliver!
+      redirect_to emails_path, notice: "Email sent."
     else
-      render :new
+      render :new, status: :unprocessable_entity
     end
   end
 
@@ -158,10 +158,10 @@ class EmailsController < ApplicationController
     )
   end
 
-  def email_params
+  def compose_params
     params.fetch(:email, {}).permit(
       :html_body, :from_user, :from_domain, :to, :subject,
       tempfiles: []
-    )
+    ).to_h
   end
 end

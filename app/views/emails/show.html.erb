@@ -19,11 +19,11 @@
     </tr>
     <tr class="from">
       <td>From</td>
-      <td><%= @email.from.join %></td>
+      <td><%= @email.from_display %></td>
     </tr>
     <tr class="to">
       <td>To</td>
-      <td><%= @email.to.join %></td>
+      <td><%= @email.to_display %></td>
     </tr>
     <tr class="subject">
       <td>Subject</td>
@@ -32,24 +32,8 @@
   </table>
 </div>
 <div class="skinny-container">
-  <%
-    reply_details = {
-      email: {
-        from_user: @email.from,
-        to: @email.to,
-        subject: "RE: #{@email.subject}"
-      }
-    }
-    forward_details = {
-      email: {
-        from_user: @email.from,
-        subject: "FWD: #{@email.subject}",
-        to_html: @email.to_html
-      }
-    }
-  %>
-  <a href="<%= new_email_path(reply_details) %>" class="btn">Reply</a>
-  <a href="<%= new_email_path(forward_details) %>" class="btn">Forward</a>
+  <a href="<%= new_email_path(email: @email.reply_defaults) %>" class="btn">Reply</a>
+  <a href="<%= new_email_path(email: @email.forward_defaults) %>" class="btn">Forward</a>
   <% if @email.archived? %>
     <%= link_to "Unarchive", email_path(@email, email: {archived: false}), method: :patch, class: "btn" %>
   <% else %>

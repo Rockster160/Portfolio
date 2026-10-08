@@ -1,13 +1,13 @@
 <div class="skinny-container">
   <a href="<%= emails_path %>" class="btn">&larr; All Emails</a>
 </div>
-<% if @email.errors.any? %>
+<% if @compose.errors.any? %>
   <div style="background: pink;">
-    <%= @email.errors.full_messages %>
+    <%= @compose.errors.full_messages.to_sentence %>
   </div>
 <% end %>
 <div class="email-form-wrapper">
-  <%= form_for @email, html: { class: "basic" } do |f| %>
+  <%= form_with model: @compose, scope: :email, url: emails_path, method: :post, html: { class: "basic" } do |f| %>
     <%= f.hidden_field :html_body, class: "html-output" %>
     <div class="from">
       <%= f.text_field :from_user, placeholder: "From" %>
@@ -17,13 +17,13 @@
     <%= f.hidden_field :to, id: "csv-emails" %>
     <div class="entered-emails">
       <span class="label">To:</span>
-      <% @email.to.to_s.split(",").map(&:squish).each do |email| %>
+      <% @compose.to.to_s.split(",").map(&:squish).each do |email| %>
         <span class="email"><%= email.to_s.downcase %><span class="remove-tag">X</span></span>
       <% end %>
     </div>
     <input type="text" id="temp-emails">
     <%= f.text_field :subject, placeholder: "Subject" %>
-    <div id="pell" data-prefilled-mail="<%= @email.html_body %>"></div>
+    <div id="pell" data-prefilled-mail="<%= @compose.html_body %>"></div>
     <%= f.file_field :tempfiles, multiple: true %>
     <%= f.submit "Send", style: "float: right" %>
   <% end %>
