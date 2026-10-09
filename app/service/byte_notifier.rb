@@ -140,6 +140,11 @@ module ByteNotifier
     text = ::IconPool.refs_to_text(raw, user: user)                  # [hicon:24] -> its name
     text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")            # fenced code delimiters
     text = text.gsub(/`([^`]+)`/, '\1')                              # inline code
+    # A LINK IS ITS WORDS HERE. Nothing stripped these, so every linked reply
+    # reached the lock screen as `[Reserv](https://ardesian.com/interviews/123)`
+    # - a URL spending most of the 160-character preview on something a
+    # notification cannot open anyway. The tap goes to Byte, where the link is.
+    text = text.gsub(/!?\[([^\]]+)\]\([^)]*\)/, '\1')                # markdown links
     text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                        # bold
     text = text.gsub(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/, '\1')  # italic
     text = text.gsub(/<[^>]+>/, "")                                  # HTML tags (from shell)

@@ -50,6 +50,21 @@ RSpec.describe ByteNotifier do
     expect(WebPushNotifications).to have_received(:send_to_byte)
   end
 
+  # The preview IS the lock screen, and a lock screen cannot open a link - the
+  # tap goes to Byte, which has the real one. Nothing stripped these, so 137 of
+  # the last 993 replies arrived as a URL spending most of the 160 characters.
+  it "keeps a link's words in the preview and drops its URL" do
+    sent = nil
+    allow(WebPushNotifications).to receive(:send_to_byte) { |**args| sent = args }
+
+    deliver(
+      { "kind" => "buddy" },
+      body: "[Reserv](https://ardesian.com/interviews/123) set the interview for **Friday**.",
+    )
+
+    expect(sent[:title]).to eq("Reserv set the interview for Friday.")
+  end
+
   # `byte_worker.js` has always read `data.count` and called `setAppBadge`;
   # nothing ever sent it, so the number on the iOS home-screen icon was
   # permanently absent. The push is the only thing that runs while the app is

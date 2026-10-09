@@ -319,8 +319,14 @@ Buddy::Tools.register(
       { "tap" => "[#{payload[:company]} on the board](#{row}) - tapping files this beat on it" }
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
+      # BOTH LINKS, because they answer different questions. The mail is what
+      # decides the tag, so it leads; the row is what the beat lands on, and a
+      # booking is the case where the mail has already settled the tag and the
+      # only thing left to look at is the application it belongs to. A
+      # `scheduled` card carried a time, a company and nowhere to go.
+      board = (" or [#{payload[:company]} on the board](#{row})" if row.present?)
       {
-        "tap"  => "[Read the email](#{url}) - tapping files it and labels the mail",
+        "tap"  => "[Read the email](#{url})#{board} - tapping files this beat and labels the mail",
         # The receipt beside this one names the board row and links it, so this
         # keeps the MAIL reachable. See add_job_application's for why both.
         "done" => "[The mail](#{url}) is tagged for you to clear - untick to take the note back",

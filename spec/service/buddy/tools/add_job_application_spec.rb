@@ -233,6 +233,19 @@ RSpec.describe "add_job_application tool" do
       expect(words["tap"]).to include("/emails/#{email.id}")
     end
 
+    # Landing a beat on a row that already exists is the same question
+    # add_job_note's card asks, so it gets the same two links - the mail that
+    # decides the tag, and the application it is going onto.
+    it "offers the row alongside the mail when there is one" do
+      row = user.job_applications.create!(company: "Pellworth Dynamics")
+      words = tool[:hint].call(
+        { company: "Pellworth Dynamics", email_id: email.id, job_id: row.id }, ctx
+      )
+
+      expect(words["tap"]).to include("/emails/#{email.id}")
+      expect(words["tap"]).to include("/interviews/#{row.id}")
+    end
+
     # No mail kept, so the LISTING is the only thing there is to look at - and
     # whether a company is worth a row is the question it answers. add_job_note
     # falls back to the board row here; this tool has no row yet, which is the

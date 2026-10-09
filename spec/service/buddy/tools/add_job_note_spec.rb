@@ -174,6 +174,18 @@ RSpec.describe "add_job_note tool" do
       expect(words["tap"]).to match(/Read the email/)
     end
 
+    # A booking arrives BY MAIL, so a `scheduled` card always takes the mail
+    # branch - which named the company and linked only the message. Reserv and
+    # Neighbor, 8 Oct: four cards reading "Scheduled - <company>" with a time
+    # on them and no way through to the application.
+    it "offers the row alongside the mail" do
+      words = hint(email_id: email.id, tag: :scheduled, follow_up_at: at)
+
+      expect(words["tap"]).to include("/emails/#{email.id}")
+      expect(words["tap"]).to include("/interviews/#{job.id}")
+      expect(words["tap"]).to include("ApartmentIQ")
+    end
+
     # NEVER NOTHING. The receipt is the only other slot that can carry a link and
     # it does not exist until the row is ticked, so a pending card with no hint
     # has nowhere to go at all - which is what a beat with no email we kept was.

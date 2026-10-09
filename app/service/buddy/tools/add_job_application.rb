@@ -190,9 +190,13 @@ Buddy::Tools.register(
       { "tap" => "[The listing](#{payload[:url]}) - tapping opens a row on the board for it" }
     else
       url = Rails.application.routes.url_helpers.email_url(id: email.id)
+      # Same two links as add_job_note's hint, for the same reason - and here
+      # the row is only sometimes there, because mail from a company with
+      # nothing on the board yet is most of what this tool runs on.
+      board = (" or [#{payload[:company]} on the board](#{row})" if row.present?)
       {
-        "tap"  => "[Read the email](#{url}) - tapping #{row ? 'files it on the board' : 'opens the row'} " \
-                  "and labels the mail",
+        "tap"  => "[Read the email](#{url})#{board} - tapping " \
+                  "#{row ? "files this beat on it" : "opens the row"} and labels the mail",
         # STILL A LINK AFTER THE TAP. This read "On the board, and the mail
         # tagged for you to clear", which repeated the receipt beside it and
         # offered nowhere to go - and a ticked row is exactly when there is
