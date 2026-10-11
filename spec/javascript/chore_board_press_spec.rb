@@ -1,0 +1,114 @@
+require "rails_helper"
+
+# What a press on the chore board looks like before the server has answered.
+#
+# The bargain is /chores/today's: the tap is painted IMMEDIATELY from a locally
+# predicted state and nothing spins. That page's offline queue is explicit
+# about why — its items are "silent by default so a momentarily slow happy-path
+# drain doesn't flash a 'pending' badge in the user's face" — and a board is
+# pressed several times in a row while walking past, so a flicker on each one
+# is worse than no feedback at all. What says the touch landed is the ring
+# moving under the finger; the dim says it is still in the air; the amber dot
+# says it genuinely hasn't gone through.
+RSpec.describe "Chore board presses" do
+  let(:result) { JsRunner.output("spec/javascript/chore_board_press_runner.js") }
+
+  describe "an untouched chore" do
+    it "offers both skips and no way back" do
+      expect(result["controls_open"]).to eq(
+        "skip" => false, "cycle" => false, "undo" => true,
+      )
+    end
+  end
+
+  describe "while a press is in the air" do
+    # The whole point. 1 of 3 means a dashoffset of 66.67 on a pathLength of
+    # 100, and it is there before the request has come back.
+    it "has already moved the ring" do
+      expect(result.dig("mid_flight", "ringOffset").to_f).to be_within(0.01).of(66.67)
+      expect(result.dig("mid_flight", "count")).to eq("1/3")
+    end
+
+    it "marks the cell as sending" do
+      expect(result.dig("mid_flight", "sending")).to eq("true")
+      expect(result.dig("mid_flight", "syncPending")).to eq("false")
+    end
+
+    it "stops marking it once the answer lands, keeping what it predicted" do
+      expect(result.dig("after_answer", "sending")).to eq("false")
+      expect(result.dig("after_answer", "count")).to eq("1/3")
+    end
+  end
+
+  # A chore with a target of three gets pressed three times faster than any of
+  # them come back. Two failures were possible here and both are checked: the
+  # disc refusing a press while one was in flight, and the first answer back
+  # clearing the in-flight mark that still belonged to the second.
+  describe "presses faster than answers" do
+    it "sends every one of them" do
+      expect(result["burst_requests"]).to eq(2)
+    end
+
+    it "keeps the mark up until the last one is answered" do
+      expect(result.dig("burst_mid", "sending")).to eq("true")
+      expect(result.dig("burst_after", "sending")).to eq("false")
+    end
+
+    it "fills the ring tap by tap to the target" do
+      expect(result.dig("burst_mid", "count")).to eq("3/3")
+      expect(result.dig("burst_after", "ringOffset")).to eq("0")
+      expect(result.dig("burst_after", "state")).to eq("done")
+    end
+
+    it "takes the skips away once there is nothing left to skip" do
+      expect(result["controls_done"]).to eq("skip" => true, "undo" => true)
+    end
+  end
+
+  describe "a press that fails" do
+    # Rolling the circle back would say the press was ignored, which is the one
+    # thing that isn't true — it happened, and it is being retried.
+    it "keeps what it predicted on screen" do
+      expect(result.dig("failed", "state")).to eq("dismissed")
+      expect(result["server_never_got_it"]).to be(false)
+    end
+
+    it "says so with the dot rather than with the dim" do
+      expect(result.dig("failed", "syncPending")).to eq("true")
+      expect(result.dig("failed", "sending")).to eq("false")
+    end
+
+    it "goes again when the socket comes back, and clears the dot" do
+      expect(result["retry_requests"]).to eq(["POST /chores/items/2/dismiss"])
+      expect(result["server_has_it_now"]).to be(true)
+      expect(result.dig("after_retry", "syncPending")).to eq("false")
+    end
+
+    # The retry has to finish BEFORE the resync, or the server's old state is
+    # painted over the prediction the retry was in the middle of confirming.
+    it "is still shown as away after the resync that follows the retry" do
+      expect(result.dig("after_retry", "state")).to eq("dismissed")
+    end
+
+    # `findIndex` answers -1 for a press that never failed, and an unguarded
+    # `splice(-1, 1)` drops the LAST remembered press instead of none of them.
+    it "survives a successful press on another chore" do
+      expect(result["failure_before"]).to eq("true")
+      expect(result["failure_survived_other_press"]).to eq("true")
+    end
+  end
+
+  describe "a chore already put away" do
+    it "ignores a press on its circle" do
+      expect(result["press_while_away"]).to eq(0)
+    end
+
+    it "offers Undo in place of the skips" do
+      expect(result["controls_away"]).to eq("skip" => true, "undo" => false)
+    end
+
+    it "comes back on Undo" do
+      expect(result.dig("after_undo", "state")).to eq("open")
+    end
+  end
+end

@@ -133,6 +133,27 @@ class ByteConversation < ApplicationRecord
     primary_at.present?
   end
 
+  # Which group of chores this thread's board is responsible for, by tag.
+  #
+  # On the thread rather than on the URL so that a board opened on a phone and
+  # on the tablet is the SAME board - change what it watches in one place and
+  # both follow. In the metadata bag like the kiosk pin, and for the same
+  # reason: it is a preference about one thread, not an invariant across them,
+  # so an ordinary PATCH setting it is the front door rather than a way round
+  # one.
+  def chore_tag
+    return nil unless metadata.is_a?(Hash)
+
+    metadata["chore_tag"].to_s.presence
+  end
+
+  def chore_tag=(value)
+    tag = value.to_s.strip
+    self.metadata = (
+      tag.present? ? metadata.to_h.merge("chore_tag" => tag) : metadata.to_h.except("chore_tag")
+    )
+  end
+
   # Move the wall to this thread. Exclusive by construction: "which one is out
   # there" is a single fact, and leaving two pinned would make what the tablet
   # opens on depend on row order.

@@ -30,6 +30,71 @@ class ByteController < ApplicationController
     render :show
   end
 
+  # The chore board: the kiosk's surface with one group of chores on it as big
+  # circles, instead of the routine pad.
+  #
+  # Same page, same socket, same hero, same everything the kiosk shares with
+  # the chat - `@board` only decides what sits below the pet. Which chores is
+  # the THREAD's business (ByteConversation#chore_tag), so a board opened on a
+  # phone and on the tablet by the same URL is the same board, and the pet
+  # looking after them is whichever one that thread wears.
+  #
+  # Buddy-only for the kiosk's reason: there is no composer here.
+  def board
+    @kiosk = true
+    @board = true
+    asked = params[:conversation_id].presence&.to_i
+    load_thread(only_buddy: true, prefer: asked || current_user.byte_conversations.kiosk.pick(:id))
+    load_board_chores
+    render :show
+  end
+
+  # PATCH /byte/board/tag — which group of chores this thread's board watches.
+  # Its own action rather than a key in #update_conversation's merged bag so
+  # that a tag is checked against what the household actually files things
+  # under before it is stored: a typo'd tag is a board that is permanently
+  # empty, and nothing on the screen would say why.
+  def set_board_tag
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    tag = params[:tag].to_s.strip
+    known = current_user.accessible_chores.tag_names
+    if tag.present? && known.none? { |t| t.casecmp?(tag) }
+      return render(json: { error: "unknown_tag", tags: known }, status: :unprocessable_entity)
+    end
+
+    convo.chore_tag = tag
+    convo.save!
+    render json: { ok: true, chore_tag: convo.chore_tag }
+  end
+
+  # POST /byte/chore_cheer — the small encouraging line over a chore just
+  # ticked off on a board, and the face that goes with it.
+  #
+  # Its own call rather than something the completion returns, so the chores
+  # controller stays ignorant of Buddy and a cheer that fails cannot cost a
+  # completion. No model turn: this is a canned line in the pet's own register
+  # (Buddy::VoiceLines), which is what "nothing big or fancy" asks for, and the
+  # face moves FIRST so the expression is there as the words land - the same
+  # ordering Buddy::Routines#run! uses.
+  def chore_cheer
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    kind = params[:kind].to_s == "wake" ? :wake_yawn : :chore_done
+    chore = current_user.accessible_chores.find_by(id: params[:chore_id])
+    # The SHORT name when it has one: these land on a wall in one line, and
+    # the short name is what the circle the person just pressed says.
+    said = chore && (chore.short_name.presence || chore.name)
+    line = Buddy::VoiceLines.pick(
+      convo.buddy_theme, kind,
+      avoid: convo.buddy_expression, name: said.to_s
+    )
+    Buddy::ExpressionState.wear(convo, line[:mood]) if line[:mood]
+    render json: { say: line[:text], mood: line[:mood] }
+  end
+
   # Point the wall at a thread. Its own action rather than a metadata write
   # through #update_conversation, because setting one is also unsetting
   # whichever was pinned before — one write, one fact.
@@ -704,6 +769,27 @@ class ByteController < ApplicationController
   # Which thread the page opens on, and the list beside it. `only_buddy`
   # narrows the whole page to Buddy threads; a non-owner is already pinned
   # there, and the kiosk pins itself there too.
+  # The board's own chores: one group, in the household's order, serialized the
+  # same way /chores/today's are so the circles out here and the circles there
+  # are reading the same fields.
+  #
+  # An unset tag loads NOTHING rather than everything. A board nobody has
+  # pointed at a group yet is empty and says so; filling it with every chore in
+  # the house would look deliberate and be wrong.
+  def load_board_chores
+    @board_tag = @conversation&.chore_tag
+    @board_day = ChoreDay.current(current_user)
+    if @board_tag.blank?
+      @board_chores_json = []
+      return
+    end
+
+    chores = current_user.accessible_chores.tagged(@board_tag)
+    chores = chores.order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
+    ctx = ChoreSerializerContext.for_user(current_user, day: @board_day)
+    @board_chores_json = ctx.serialize_all(chores)
+  end
+
   def load_thread(only_buddy: false, prefer: nil)
     buddy = only_buddy || buddy_only?
     scope = current_user.byte_conversations.active.ordered

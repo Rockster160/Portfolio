@@ -25,6 +25,13 @@
     <div data-kiosk-ask-body></div>
   </div>
 
+  <%# What sits under the pet: either the routine pad or, on a board, one
+      group of chores as circles. One or the other and never both — a wall
+      screen is for walking up to and pressing the thing you came for, and two
+      grids of big targets is the state where you have to read first. %>
+  <% if @board %>
+    <%= render "byte/chore_board" %>
+  <% else %>
   <%# Server-rendered so a cold boot off the cached shell has its buttons
       immediately. kiosk.js rebuilds this from /buddy/routines on load and
       whenever the tablet comes back to the foreground, in the same shape —
@@ -47,6 +54,7 @@
         <p class="byte-kiosk-empty">Nothing pinned yet — star a routine to put it on this screen.</p>
     <% end %>
   </div>
+  <% end %>
 
   <%# Which companion is on this screen. The thread IS the answer — its theme
       decides the character, the name, the palette and the voice — so choosing

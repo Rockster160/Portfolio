@@ -4378,6 +4378,7 @@
     setField("name", "");
     setField("short_name", "");
     setField("aliases_csv", "");
+    setField("tag", "");
     setField("notes_template", "");
     setField("notes", "");
     setField("assigned_to_user_id", "");
@@ -4513,6 +4514,7 @@
     // serialized before `icon_ref` was added.
     setIconField(c.icon_ref || c.icon || "");
     setField("aliases_csv", (c.aliases || []).join(", "));
+    setField("tag", c.tag || "");
     setField("notes_template", c.notes_template || "");
     setField("notes", c.notes || "");
     const reward = c.reward_pebbles || 0;
@@ -4742,6 +4744,7 @@
       chore: {
         name: getField("name"),
         short_name: getField("short_name"),
+        tag: getField("tag"),
         icon: getField("icon"),
         reward_pebbles: reward,
         target_count: targetCount,

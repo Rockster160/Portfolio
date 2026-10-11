@@ -88,7 +88,7 @@ module Buddy
       # THREE drawings under one name, which is why INDEX is keyed by theme:
       # Moss's and Glimmer's are round and still, Byte's is squashed flat and
       # sparkling. The prose covers all of them; the numbers no longer have to.
-      content:       "eyes-closed smile — settled and satisfied on Moss, Glimmer and Kumoko; on Byte, squashed flat and sparkling, pleased and a bit melted about it",
+      content:       "eyes-closed smile — settled and satisfied on Moss, Glimmer, Kumoko, Mocha (sipping a warm cup) and Ghosty (cosy, cup in hand); on Byte, squashed flat and sparkling, pleased and a bit melted about it",
       grin:          "big beaming grin — laughing, thrilled, delighted",
       star:          "star-shaped eyes (on Kumoko, sparkling eyes in a burst of sparkles) — starstruck, dazzled, over-the-moon excited",
       wink:          "one-eyed wink and a smirk — playful, cheeky, teasing",
@@ -100,6 +100,8 @@ module Buddy
       unamused:      "a dead-straight line for a mouth — deadpan, skeptical, distinctly unimpressed",
       # Moss + Glimmer
       dismayed:      "worried brows, mouth open, hands up — caught out, put out, 'ah, that didn't work' (about the thing, never about them)",
+      # Mocha extra
+      cool:          "sunglasses on, a little peace sign — cool, confident, unbothered, got it handled; a pleased, playful swagger about the WIN rather than the person",
       # Suki extras
       cheery:        "eyes-closed open-mouth beam, wing to a blushing cheek — warm, delighted, tickled, quietly pleased",
       offering:      "holding up a little tub of food — bringing you something, being helpful, the sugar-beak move",
@@ -252,6 +254,54 @@ module Buddy
         surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
         touched:   { warmth: 0.80, play: 0.10, weight: 0.85, strain: 0.10, reach: 0.15 },
         umbrella:  { warmth: 0.65, play: 0.50, weight: 0.45, strain: 0.45, reach: 0.20 },
+        wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
+      },
+      # Mocha — the little coffee cup. A Moss-shaped face set with a work /
+      # motivated lean: it keeps `cool` (shades + a peace sign) for the small
+      # swagger of a thing handled, and `queasy` for the end-of-a-long-one sigh.
+      mocha:   {
+        angry:     { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        caring:    { warmth: 0.85, play: 0.15, weight: 0.35, strain: 0.05, reach: 0.18 },
+        cheering:  { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:  { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:   { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        cool:      { warmth: 0.70, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.18 },
+        crying:    { warmth: 0.05, play: 0.00, weight: 0.95, strain: 0.30, reach: 0.08 },
+        dizzy:     { warmth: 0.40, play: 0.55, weight: 0.40, strain: 0.60, reach: 0.15 },
+        eager:     { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        grin:      { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:     { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hugging:   { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:    { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        neutral:   { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        offering:  { warmth: 0.80, play: 0.30, weight: 0.25, strain: 0.10, reach: 0.25 },
+        queasy:    { warmth: 0.20, play: 0.10, weight: 0.60, strain: 0.60, reach: 0.25 },
+        sad:       { warmth: 0.10, play: 0.05, weight: 0.80, strain: 0.25, reach: 0.20 },
+        surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
+        wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
+      },
+      # Ghosty — the little ghost. Moss-shaped, home / cosy lean: `peeking` for a
+      # soft check-in, `playful` (witch hat) and `star`/`excited` for the
+      # sparkly wonder it leans into when something delights it.
+      ghosty:     {
+        angry:     { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        cheering:  { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:  { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:   { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        dizzy:     { warmth: 0.40, play: 0.55, weight: 0.40, strain: 0.60, reach: 0.15 },
+        eager:     { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        excited:   { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.15 },
+        grin:      { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:     { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hugging:   { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:    { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        neutral:   { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        offering:  { warmth: 0.80, play: 0.30, weight: 0.25, strain: 0.10, reach: 0.25 },
+        peeking:   { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+        playful:   { warmth: 0.80, play: 0.95, weight: 0.10, strain: 0.10, reach: 0.18 },
+        sad:       { warmth: 0.10, play: 0.05, weight: 0.80, strain: 0.25, reach: 0.20 },
+        star:      { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
+        surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
         wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
       },
     }.freeze

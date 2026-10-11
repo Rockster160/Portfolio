@@ -88,6 +88,20 @@
      <%# what hides it. Keeping one page means the socket, the expression %>
      <%# state and the routine runner have exactly one implementation. %>
      data-kiosk="<%= @kiosk ? "true" : "false" %>"
+     <%# The chore board: the kiosk's surface with one group of chores on it %>
+     <%# instead of the routine pad. A second attribute rather than a third %>
+     <%# value on `data-kiosk`, because everything the kiosk hides this hides %>
+     <%# too - the board IS a kiosk, with a different pad. %>
+     data-board="<%= @board ? "true" : "false" %>"
+     data-board-tag="<%= @board_tag %>"
+     data-chore-day="<%= @board_day&.iso8601 %>"
+     <%# The board's own set, serialized exactly as /chores/today's is, so a %>
+     <%# cold boot off the cached shell paints before the first fetch lands. %>
+     data-board-chores="<%= Array(@board_chores_json).to_json %>"
+     data-chores-sync-url="<%= chores_sync_path %>"
+     data-chore-cheer-url="<%= byte_chore_cheer_path %>"
+     data-board-tag-url="<%= byte_board_tag_path %>"
+     data-chores-tags-url="<%= chores_tags_path %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
@@ -573,6 +587,11 @@
             there is no unset, so on the primary thread this row would be a
             button that does nothing. %>
         <button type="button" class="byte-menu-btn" data-byte-menu-primary>Make primary</button>
+        <%# The way IN to a thread's chore board. The board is addressed by %>
+        <%# conversation, so without a row here the only way to reach one is %>
+        <%# to know its id - which nobody does. Buddy threads only, like the %>
+        <%# row above it. %>
+        <button type="button" class="byte-menu-btn" data-byte-menu-board>Open chore board</button>
         <button type="button" class="byte-menu-btn" data-byte-menu-adopt>Adopt Claude session…</button>
         <button type="button" class="byte-menu-btn byte-menu-btn-danger" data-byte-menu-archive>Archive</button>
       </div>

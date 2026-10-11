@@ -78,6 +78,7 @@ import { initBuddyProcesses } from "./buddy/processes";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
+import { initChoreBoard } from "./buddy/chore_board";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import {
   UnreadTracker,
@@ -2488,6 +2489,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderMarkdown,
   });
   buddyKiosk?.sync(messages);
+
+  // The chore board. Lives inside the kiosk surface and only mounts when the
+  // page rendered its pad, so this is null on the chat and on the routine
+  // kiosk, and every call below is a no-op there.
+  //
+  // It borrows the kiosk's bubble rather than growing one of its own: a board
+  // has no thread either, so "what the pet just said" has exactly one home on
+  // this screen whichever pad is under it.
+  const choreBoard = initChoreBoard({
+    root: app.querySelector("[data-byte-board]"),
+    app,
+    conversationIdFn: () => currentConversationId,
+    sayText: (text) => buddyKiosk?.sayText(text),
+  });
+
+  // Chore broadcasts carry `id: :chores` and the Monitor dispatcher routes by
+  // id, so they arrive on their own subscription rather than the byte one -
+  // the same way the timers app takes its own. Resync on connect: a tablet
+  // that has been asleep has no idea what the household did while it was out.
+  if (choreBoard) {
+    Monitor.subscribe("chores", {
+      connected() {
+        choreBoard.onReconnect();
+      },
+      received() {
+        choreBoard.onChoresChanged();
+      },
+    });
+  }
 
   // Timer broadcasts carry `id: :timers`, and the Monitor dispatcher routes
   // envelopes by their id — so they arrive on a DEDICATED subscription, not the

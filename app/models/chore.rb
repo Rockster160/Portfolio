@@ -23,6 +23,8 @@
 #  target_count        :integer          default(1), not null
 #  threshold_seconds   :integer
 #  created_at          :datetime         not null
+#  dismissed_until     :date
+#  tag                 :text
 #  updated_at          :datetime         not null
 #  assigned_to_user_id :bigint
 #  chore_household_id  :bigint           not null
@@ -221,6 +223,13 @@ class Chore < ApplicationRecord
   scope :persistent, -> { where(one_off: false) }
   scope :sub_chores, -> { where.not(parent_chore_id: nil) }
   scope :top_level, -> { where(parent_chore_id: nil) }
+  # The chores one board is responsible for. Compared case-insensitively
+  # because the tag is typed, and "Home" and "home" are the same group to
+  # everyone except the database.
+  scope :tagged, ->(tag) { where("LOWER(chores.tag) = ?", tag.to_s.downcase.strip) }
+  # Every tag the household has filed something under, for the form's datalist
+  # and the board picker. Sorted by how it reads, not by case.
+  scope :tag_names, -> { where.not(tag: [nil, ""]).distinct.pluck(:tag).sort_by(&:downcase) }
   # `:after_chore` followers anchored to any of `anchor_ids`. The anchor
   # lives in the recurrence jsonb rather than a column, so this is a `->>`
   # text compare — a numeric and a stringified id both normalize to text.
@@ -245,6 +254,27 @@ class Chore < ApplicationRecord
   # Convenience predicate — keep callers from sprinkling
   # `parent_chore_id.present?` everywhere.
   def sub_chore? = parent_chore_id.present?
+
+  # How far out each of the three waves-off reaches. `day` is the chore-day
+  # itself, so the 4am rollover is what brings it back; the other two are the
+  # same gesture held longer, which is the whole difference between them.
+  DISMISS_SPANS = { day: 0, week: 7, month: nil }.freeze
+
+  # Waved off right now. `dismissed_until` is INCLUSIVE - a chore skipped for
+  # the day carries today's chore-day, and today is the day it isn't being
+  # asked about.
+  def dismissed?(user=nil, at: Time.current)
+    dismissed_until.present? && ::ChoreDay.current(user, at: at) <= dismissed_until
+  end
+
+  # The date a wave-off of this length lands on, from the chore-day it is made
+  # in. A month is calendar arithmetic rather than 30 days, so "not this month"
+  # said on the 31st doesn't quietly become five weeks.
+  def self.dismissed_until_for(span, user=nil, at: Time.current)
+    day  = ::ChoreDay.current(user, at: at)
+    days = DISMISS_SPANS.fetch(span.to_s.to_sym) { raise ArgumentError, "unknown dismiss span #{span}" }
+    days.nil? ? day + 1.month : day + days
+  end
 
   # The chore THIS PERSON actually does, when this one has been split into
   # per-person sub-chores.

@@ -201,6 +201,7 @@ export class ConversationManager {
     this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
     document.querySelector("[data-byte-menu-rename]")?.addEventListener("click", () => this.handleRename());
     document.querySelector("[data-byte-menu-primary]")?.addEventListener("click", () => this.handleMakePrimary());
+    document.querySelector("[data-byte-menu-board]")?.addEventListener("click", () => this.handleOpenBoard());
     document.querySelector("[data-byte-menu-archive]")?.addEventListener("click", () => this.handleArchive());
     document.querySelector("[data-byte-menu-adopt]")?.addEventListener("click", () => this.handleAdoptOpen());
     document.querySelector("[data-byte-adopt-close]")?.addEventListener("click", () => this.adoptModal?.close());
@@ -630,6 +631,13 @@ export class ConversationManager {
       const offer = convo.mode === "buddy" && convo.id !== this.primaryId;
       primaryBtn.style.display = offer ? "" : "none";
     }
+    // Buddy threads only, for the same reason: a claude or bash thread has no
+    // pet to put at the top of a board. Offered on every one of them even
+    // before a group has been picked - the board's own control is where you
+    // pick one, and hiding the way in until it is set would mean there was no
+    // way to get to the thing that sets it.
+    const boardBtn = document.querySelector("[data-byte-menu-board]");
+    if (boardBtn) boardBtn.style.display = convo.mode === "buddy" ? "" : "none";
     if (typeof this.menuModal.showModal === "function") this.menuModal.showModal();
     else this.menuModal.setAttribute("open", "");
   }
@@ -648,6 +656,22 @@ export class ConversationManager {
     this.closeDrawer();
     this.switchTo(target.id);
     this.prefillComposer("/rename ", { focus: true });
+  }
+
+  // Go to this thread's chore board.
+  //
+  // A real navigation rather than a mode this page switches into: the board is
+  // its own URL so that it can be installed to a home screen and cached as its
+  // own shell, and so that the tablet on the wall and the phone in your pocket
+  // can be pointed at the same one. Switching in place would leave the address
+  // bar on the chat and there would be nothing to bookmark.
+  handleOpenBoard() {
+    if (this.menuTargetId == null) return;
+
+    const id = this.menuTargetId;
+    this.menuModal?.close();
+    this.closeDrawer();
+    window.location.assign(`/board/${id}`);
   }
 
   // Move everything self-initiated here — the morning briefing, a reminder

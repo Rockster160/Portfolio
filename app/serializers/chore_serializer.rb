@@ -74,6 +74,9 @@ class ChoreSerializer
       icon_ref:             chore.icon.to_s,
       icon_kind:            icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
       aliases:              chore.aliases_array,
+      # Which group it is filed under, and so which board is responsible for
+      # it. Blank for a chore no board shows.
+      tag:                  chore.tag.to_s,
       notes_template:       chore.notes_template.to_s,
       notes:                chore.notes.to_s,
       reward_pebbles:       chore.reward_pebbles,
@@ -91,6 +94,12 @@ class ChoreSerializer
       # Was this occurrence let go? Drives the edit modal's Skip /
       # Unskip button and the full-progress clamp above.
       skipped_today:        skipped_today?,
+      # Waved off without settling the occurrence: the chore greys out but its
+      # cycle is untouched, nothing is credited and nothing is paid, so there
+      # is no ChoreCompletion behind this at all. `skipped_today` is the other
+      # gesture - that one lets the occurrence GO, and comes back next due.
+      dismissed:            dismissed?,
+      dismissed_until:      chore.dismissed_until&.iso8601,
       # Sharing-mode belongs to the parent for sub-chores — sub-chore
       # taps credit the parent, so the client must show the parent's
       # semantics to stay coherent. The cooldown VALUE is a sub-chore
@@ -124,6 +133,13 @@ class ChoreSerializer
       on_dailies:           on_dailies?,
       scheduled_due_on:     scheduled_due_on&.iso8601,
     }
+  end
+
+  # Read against the serializer's own `day` rather than the clock, so every
+  # chore in one page render answers for the same chore-day - the same reason
+  # `day` is preloaded on the context at all.
+  def dismissed?
+    chore.dismissed_until.present? && day <= chore.dismissed_until
   end
 
   # Effective "due date" for sorting in Today's Scheduled section.

@@ -315,6 +315,11 @@ export function initBuddyKiosk({
   // shell has its buttons immediately), and this is what keeps it honest —
   // pinning something on a phone shows up here without anyone reloading.
   async function refresh() {
+    // A board renders the chore pad in this slot instead, so there is no
+    // routine pad to paint into. Without this the fetch still fired on every
+    // return to the foreground and threw the answer away.
+    if (!padEl) return;
+
     try {
       const data = await apiCall(ROUTINES_URL, "GET");
       paintPad(kioskOrder(data?.routines));
@@ -501,6 +506,17 @@ export function initBuddyKiosk({
         if (liveAsk(list[i]) === "form") return showAsk(list[i], "form");
       }
       clearAsk();
+    },
+
+    // A line nobody put in a thread. The chore board's affirmations have no
+    // message behind them at all - they are composed for the tap and never
+    // stored - so they come in here rather than through `onLive`, which reads
+    // a message envelope.
+    sayText(text) {
+      const body = String(text || "").trim();
+      if (!body) return;
+
+      say({ direction: "inbound", body });
     },
 
     refresh,

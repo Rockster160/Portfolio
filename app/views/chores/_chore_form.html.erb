@@ -21,6 +21,18 @@
     <input type="text" name="chore[aliases_csv]" value="<%= chore.aliases_array.join(", ") %>" placeholder="floss, toothpaste">
   </div>
 
+  <%# Which group this belongs to, and so which Buddy board shows it. See the
+      same field in the edit modal for why it is free text with suggestions. %>
+  <div>
+    <label>Group</label>
+    <input type="text" name="chore[tag]" value="<%= chore.tag %>" list="chore-form-tag-options" placeholder="Home">
+    <datalist id="chore-form-tag-options">
+      <% Chore.where(chore_household_id: chore.chore_household_id).tag_names.each do |name| %>
+        <option value="<%= name %>"></option>
+      <% end %>
+    </datalist>
+  </div>
+
   <div>
     <label>Reward (Pebbles)</label>
     <div class="reward-quicks" data-reward-quicks>

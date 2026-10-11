@@ -25,6 +25,16 @@ Rails.application.routes.draw do
     # can be installed to a home screen as a separate app, and so the service
     # worker caches it as a shell in its own right.
     get "/kiosk" => "byte#kiosk", as: :byte_kiosk
+    # The chore board: the same chrome-less surface as the kiosk, with one
+    # category of chores as big circles instead of the routine pad.
+    #
+    # Addressed by CONVERSATION rather than by category, because the thread is
+    # already what decides the pet, the name, the palette and the voice - and
+    # so that the same board opens on a phone and on the tablet by opening the
+    # same URL. The bare path is for a home-screen icon installed before there
+    # was an id to put in it, and opens whichever thread is flagged as the one.
+    get "/board" => "byte#board", as: :byte_board
+    get "/board/:conversation_id" => "byte#board", as: :byte_board_thread
   end
 
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
@@ -51,6 +61,9 @@ Rails.application.routes.draw do
 
   get "/byte", to: redirect(subdomain: "byte", path: "/")
   get  "/byte/kiosk", to: redirect(subdomain: "byte", path: "/kiosk")
+  get  "/byte/board", to: redirect(subdomain: "byte", path: "/board")
+  patch "/byte/board/tag" => "byte#set_board_tag", as: :byte_board_tag
+  post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation
   get    "/byte/messages"     => "byte#messages",       as: :byte_message_history
@@ -189,6 +202,7 @@ Rails.application.routes.draw do
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync" => "chores#sync", as: :chores_sync
+  get  "/chores/tags" => "chores#tags", as: :chores_tags
   get  "/chores/icons.json"      => "household_icons#index",     as: :chores_icons_index
   get  "/chores/icons/signature" => "household_icons#signature", as: :chores_icons_signature
   get  "/chores/icons"           => "household_icons#manage",    as: :chores_icons_manage
@@ -212,6 +226,8 @@ Rails.application.routes.draw do
     post   "/items/:chore_id/anonymous_completion" => "chore_completions#anonymous_completion", as: :anonymous_complete_item
     post   "/items/:chore_id/skip"       => "chore_completions#skip", as: :skip_item
     delete "/items/:chore_id/skip"       => "chore_completions#unskip"
+    post   "/items/:chore_id/dismiss"    => "chores#dismiss", as: :dismiss_item
+    delete "/items/:chore_id/dismiss"    => "chores#undismiss"
     get    "/items/:id/state"            => "chores#state",              as: :item_state
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder

@@ -84,6 +84,45 @@ class ChoresController < ApplicationController
     render json: chore_response_payload(chore)
   end
 
+  # POST /chores/items/:id/dismiss — wave the chore off without settling the
+  # occurrence. `span` is day / week / month.
+  #
+  # Deliberately NOT a ChoreCompletion. A skip writes a row saying the work
+  # didn't happen, which settles the occurrence and sends the chore away until
+  # it is next due; this says only "not now", leaves the cycle exactly where it
+  # was, and so has nothing to record. Nobody is credited because nobody did
+  # anything, and nothing is docked for the same reason.
+  #
+  # No broadcast here: `dismissed_until` is a column, so Chore's own
+  # after_commit fans the change out to the household (see
+  # Chore#broadcast_chore_change) and every open board repaints off that.
+  def dismiss
+    chore = current_user.accessible_chores.find(params[:chore_id])
+    span  = (params[:span].presence || :day).to_s.to_sym
+    unless Chore::DISMISS_SPANS.key?(span)
+      return render(json: { error: "unknown_span" }, status: :unprocessable_entity)
+    end
+
+    chore.update!(dismissed_until: Chore.dismissed_until_for(span, current_user))
+    render json: chore_response_payload(chore)
+  end
+
+  # DELETE /chores/items/:id/dismiss — bring it back now rather than waiting
+  # for the wave-off to run out. Any member may clear one: nothing was
+  # credited, so it is nobody's record to protect.
+  def undismiss
+    chore = current_user.accessible_chores.find(params[:chore_id])
+    chore.update!(dismissed_until: nil) if chore.dismissed_until.present?
+    render json: chore_response_payload(chore)
+  end
+
+  # GET /chores/tags — every tag the household has filed something under. What
+  # the chore form's datalist offers and what a board picks from, so the set is
+  # the household's own vocabulary rather than a list shipped in code.
+  def tags
+    render json: { tags: current_user.accessible_chores.tag_names }
+  end
+
   # POST /chores/items/:id/dailies — pin a chore to the viewer's
   # personal Dailies section on Today. Idempotent; if already pinned,
   # the existing row is returned. New pins land at the end.
@@ -522,6 +561,9 @@ class ChoresController < ApplicationController
     @ctx = ChoreSerializerContext.for_user(current_user, day: @day)
     @chores_json = @ctx.serialize_all(@chores)
     @daily_ids = ChoreDaily.for_user(current_user).pluck(:chore_id)
+    # Off the set already loaded rather than through Chore.tag_names, which
+    # would be a second trip to answer a question the rows in hand can.
+    @chore_tags = @chores.map(&:tag).compact_blank.uniq.sort_by(&:downcase)
     @lookahead_json = build_lookahead_json
     @cutoff_hour = ChoreDay::CUTOFF_HOURS
     @can_manage_chores = current_user.can_manage_chores?
@@ -829,7 +871,7 @@ class ChoresController < ApplicationController
       :name, :short_name, :icon, :reward_pebbles, :target_count, :threshold_seconds,
       :one_off, :starts_on, :show_on_today_view, :hot_eligibility, :priority,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
-      :marked_due_at, :parent_chore_id,
+      :marked_due_at, :parent_chore_id, :tag,
       aliases:    [],
       recurrence: {}
     )

@@ -36,8 +36,13 @@ RSpec.describe Buddy::VoiceLines do
       # their face directly rather than going through Buddy::Sentiment — so
       # the rule that keeps a blush and a pair of glasses off a finished
       # errand has to be said here too. See Buddy::Faces::NOT_A_CONFIRMATION.
-      it "#{theme} does not blush or put its glasses on over a routine it was asked to run" do
-        moods = Array(kinds[:routine_run]).pluck(:mood)
+      #
+      # `chore_done` is the same shape: it lands on something the person just
+      # did, so it answers for a finished thing however warmly it is worded.
+      # `wake_yawn` is NOT — nobody asked for it and nothing finished, which
+      # is exactly where a sleepy blush belongs.
+      it "#{theme} does not blush or put its glasses on over something finished" do
+        moods = Array(kinds[:routine_run]).pluck(:mood) + Array(kinds[:chore_done]).pluck(:mood)
 
         expect(moods & Buddy::Faces::NOT_A_CONFIRMATION).to eq([])
       end
@@ -86,9 +91,27 @@ RSpec.describe Buddy::VoiceLines do
     # week on a tablet somebody walks past all day, and a line you can predict
     # is one nobody reads - at which point it may as well have stayed "Running
     # X". So a new companion can't ship with two.
+    # The bubble is read a beat after the press, sometimes after walking away
+    # from the board, and a board can have two people on it - so a well done
+    # that doesn't say WHICH chore is a well done nobody can place. Unlike a
+    # greeting, there is no version of this line that works unnamed.
+    it "names the chore in every chore_done line" do
+      Buddy::VoiceLines::LINES.each { |theme, kinds|
+        unnamed = kinds[:chore_done].reject { |line| line[:say].include?("%<name>s") }
+
+        expect(unnamed).to eq([]), "#{theme} has a chore_done line that doesn't say which chore"
+      }
+    end
+
     it "gives every pet enough to say that it doesn't get predictable" do
       Buddy::VoiceLines::LINES.each { |theme, kinds|
         expect(kinds[:routine_run].length).to be >= 8, "#{theme} needs more routine_run lines"
+        # Read against the pet's OWN set rather than `lines_for`, which falls
+        # back to Byte's — a pet that was never given these would otherwise
+        # pass by borrowing them, and a slime's *squish* out of a firefly is
+        # the failure this file exists to prevent.
+        expect(kinds[:chore_done].length).to be >= 8, "#{theme} needs more chore_done lines"
+        expect(kinds[:wake_yawn]).to be_present, "#{theme} has nothing to say when it wakes up"
       }
     end
   end

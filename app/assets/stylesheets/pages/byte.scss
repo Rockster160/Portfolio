@@ -146,6 +146,49 @@ html.html-ctr-byte body {
     --bs-pending: #A88C78;
   }
 
+  // Mocha theme — a warm espresso surface for the little coffee cup. Same `:has`
+  // override as the others. Mocha's replies/buttons are her caramel; the
+  // reader's own (outbound) messages stay Chelsea purple (as with Moss), so the
+  // two never blur together against the brown.
+  &:has(.byte-app[data-buddy-theme="mocha"]) {
+    --bs-bg: #130C06;
+    --bs-panel: #211609;
+    --bs-panel-soft: #2E2012;
+    --bs-border: #46331E;
+    --bs-text: #F3E9DD;
+    --bs-text-buddy: #F0D2A6;  // warm cream on --bs-them-bg
+    --bs-muted: #B39B82;
+    --bs-accent: #CE904B;
+    --bs-accent-strong: #E8AE6A;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #B0702F 0%, #CE904B 100%);  // caramel buttons
+    --bs-them-bg: #3A2614;
+    --bs-danger: #E8825C;
+    --bs-attention: #E8C063;
+    --bs-pending: #A8927A;
+  }
+
+  // Ghosty theme — a cosy plum-mauve surface for the little ghost, a soft rose as
+  // the accent. Same `:has` override as the others. The reader's own (outbound)
+  // messages stay Chelsea purple; Ghosty's rose replies sit clear of it.
+  &:has(.byte-app[data-buddy-theme="ghosty"]) {
+    --bs-bg: #150D14;
+    --bs-panel: #241825;
+    --bs-panel-soft: #332436;
+    --bs-border: #48324C;
+    --bs-text: #F4EAF1;
+    --bs-text-buddy: #F0C4DC;  // soft rose on --bs-them-bg
+    --bs-muted: #BA9AB2;
+    --bs-accent: #E088B2;
+    --bs-accent-strong: #FFA8CE;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #C96A9A 0%, #E088B2 100%);  // rose buttons
+    --bs-them-bg: #352138;
+    --bs-danger: #F0756B;
+    --bs-attention: #F0B45C;
+    --bs-pending: #B094AC;
+  }
+
   .byte-app,
   .byte-app *,
   .byte-drawer,
@@ -1168,6 +1211,16 @@ html.html-ctr-byte body {
     background: rgba(232, 137, 74, 0.13);
     border-left: 3px solid #e8894a;
     color: #F2CDB4;
+  }
+  &[data-peer-theme="mocha"] {
+    background: rgba(206, 144, 75, 0.13);
+    border-left: 3px solid #ce904b;
+    color: #F0D2A6;
+  }
+  &[data-peer-theme="ghosty"] {
+    background: rgba(224, 136, 178, 0.13);
+    border-left: 3px solid #e088b2;
+    color: #F0C4DC;
   }
 
   // Attribution header atop the bubble. Incoming: the sending Buddy's icon +
@@ -4915,6 +4968,20 @@ dialog.byte-modal {
     --buddy-art-trim: 0.11;
   }
 
+  &[data-buddy-theme="mocha"] {
+    --buddy-primary: #3A2614;
+    --buddy-accent: #CE904B;
+    --buddy-danger: #E8825C;
+    --buddy-art-trim: 0.05;
+  }
+
+  &[data-buddy-theme="ghosty"] {
+    --buddy-primary: #352138;
+    --buddy-accent: #E088B2;
+    --buddy-danger: #F0756B;
+    --buddy-art-trim: 0.05;
+  }
+
   &[hidden] {
     display: none;
   }
@@ -5063,7 +5130,9 @@ dialog.byte-modal {
 .byte-buddy-hero[data-buddy-theme="moss"],
 .byte-buddy-hero[data-buddy-theme="suki"],
 .byte-buddy-hero[data-buddy-theme="glimmer"],
-.byte-buddy-hero[data-buddy-theme="kumoko"] {
+.byte-buddy-hero[data-buddy-theme="kumoko"],
+.byte-buddy-hero[data-buddy-theme="mocha"],
+.byte-buddy-hero[data-buddy-theme="ghosty"] {
   padding-top: 3vh;
 }
 .byte-buddy-body,
@@ -5274,6 +5343,62 @@ $kumoko_expr_aliases: (
   .byte-buddy-hero[data-buddy-theme="kumoko"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
     background-image: image-url("buddy/kumoko/face_#{$face}.png");
+  }
+}
+
+// Mocha — the little coffee cup, a Moss-shaped set with a work/motivated lean.
+// Each name here must have a matching buddy/mocha/face_#{name}.png or precompile
+// fails (and Buddy::Faces reads the same folder, so the two must agree).
+$mocha_expressions: neutral happy grin cheering wink hugging caring loving content cool eager offering surprised confused thinking sleeping sad crying angry dizzy queasy;
+@each $expr in $mocha_expressions {
+  .byte-buddy-hero[data-buddy-theme="mocha"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/mocha/face_#{$expr}.png");
+  }
+}
+// Moods Mocha has no identically-named art for, aliased to the closest cup face.
+$mocha_expr_aliases: (
+  "celebrating": "cheering",
+  "encouraging": "caring",
+  "overwhelmed": "queasy",
+  "frustrated": "angry",
+  "annoyed": "angry",
+  "unamused": "confused",
+  "shocked": "surprised",
+);
+@each $mood, $face in $mocha_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="mocha"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/mocha/face_#{$face}.png");
+  }
+}
+
+// Ghosty — the little ghost, a Moss-shaped set with a home/cosy lean. Each name
+// here must have a matching buddy/ghosty/face_#{name}.png or precompile fails.
+$ghosty_expressions: neutral happy grin cheering wink hugging loving content eager offering surprised confused sad sleeping angry dizzy star excited playful peeking;
+@each $expr in $ghosty_expressions {
+  .byte-buddy-hero[data-buddy-theme="ghosty"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/ghosty/face_#{$expr}.png");
+  }
+}
+// Ghosty has no `thinking` art, so the mid-turn overlay (always broadcast as
+// `thinking`) must alias to a real face or it renders blank. The rest are moods
+// she has no identically-named pose for, aliased to the closest ghost face.
+$ghosty_expr_aliases: (
+  "thinking": "neutral",
+  "crying": "sad",
+  "celebrating": "cheering",
+  "encouraging": "loving",
+  "overwhelmed": "dizzy",
+  "frustrated": "angry",
+  "annoyed": "angry",
+  "unamused": "confused",
+);
+@each $mood, $face in $ghosty_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="ghosty"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/ghosty/face_#{$face}.png");
   }
 }
 
@@ -5690,6 +5815,462 @@ $kumoko_expr_aliases: (
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// -------- Chore board (byte/_chore_board) -------------------------------
+//
+// The kiosk's lower half with one group of chores in it instead of routine
+// buttons. Everything structural is shared with the pad next door - same
+// section, same bubble over the pet, same safe-area padding.
+//
+// The CIRCLE is deliberately the chores page's circle, not a new one. Same
+// flat navy disc, same transparent 3px border, same `--actor-color` ring
+// driven by `stroke-dashoffset`, same 56% icon box sized by container query,
+// same `color-mix` tint when it's done. A chore has to look like the same
+// object in both places or the board reads as a different app that happens to
+// know about your chores - and the numbers below are copied from
+// `pages/chores.scss` rather than eyeballed, so the two can be compared.
+//
+// What differs is SIZE. These get pressed on the way past, often with a full
+// hand, and the icon has to be identifiable from across the room - which is
+// the whole reason the board exists rather than just opening /chores/today on
+// a tablet.
+.byte-board {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// Today runs a fixed `repeat(5, 1fr)`; this fits what the screen allows, since
+// a board is anything from a phone to a landscape tablet. The gap is the
+// chores page's own 8px/16px feel - more horizontal than vertical, because
+// circles read as cramped side to side long before they do stacked.
+.byte-board-pad {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 10px 16px;
+  padding:
+    16px
+    calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 12px)
+    calc(env(safe-area-inset-left) + 16px);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+// A CEILING, not a size. `auto-fit` divides the row between however many
+// chores there are, so without this a board with two things on it hands each
+// one half a landscape tablet and draws a pair of dinner plates.
+//
+// 200px sits comfortably above the 147px a circle tops out at on the chores
+// page - these are pressed on the way past rather than aimed at - while still
+// leaving a cell that fits the pad's own height on a landscape board, which a
+// disc much bigger than this does not: it is square, so its width is also how
+// much of the half-screen it eats.
+//
+// The cap is on the CELL rather than the disc so the label narrows with it; a
+// title left on the full column width sprawls away from the circle it belongs
+// to.
+$board-cell-max: 200px;
+
+.byte-board-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  // `width` is NOT optional next to the auto margins. A grid item stretches
+  // its track by default, but auto margins turn off that stretch and leave it
+  // shrink-to-fit - which measured 47px at every viewport, the width of the
+  // word under the circle, with the disc's `width: 100%` resolving against
+  // that. Stating the width makes the track the basis again, the cap trims it,
+  // and the margins centre what is left.
+  width: 100%;
+  max-width: $board-cell-max;
+  margin-inline: auto;
+  // The per-actor accent the chores page keys its done state off, defaulting
+  // to the same green (`--chores-done`). Written out rather than referenced:
+  // the chores stylesheet isn't loaded on this page, and a var() pointing at
+  // nothing would leave every finished chore with no ring at all.
+  --actor-color: #16A34A;
+}
+
+// The disc and its corner controls, in a square of their own. The pills
+// anchor to THIS rather than to the cell, which is as tall as the disc plus
+// two lines of label - against the cell they would sit beside the title.
+.byte-board-disc {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+// (0,3,0), matching the kiosk button's shape, because `.ctr-byte .byte-app
+// button` is (0,2,1) and would otherwise take back every field here.
+.ctr-byte .byte-app .byte-board-circle {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 50%;
+  // The chores page's own disc. Flat and dark, so the ICON is what carries the
+  // chore and the ring is what carries its state - an accent-filled disc made
+  // every chore shout and left the ring with nothing to say.
+  background: #0F1B33;
+  display: grid;
+  place-items: center;
+  border: 3px solid transparent;
+  color: var(--bs-text) !important;
+  box-shadow: none;
+  touch-action: manipulation;
+  transition:
+    transform 0.08s ease,
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.byte-board-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  // Under the disc's contents. Stated on each child that needs it rather than
+  // through a `> *` rule on the button: that selector is (0,3,0) and takes
+  // back both this and the count's `position`, which flattens the count into
+  // the centre of the grid on top of the icon.
+  z-index: 1;
+  fill: none;
+  // r=48 plus a 4-wide stroke puts half the stroke outside the radius; without
+  // this it is clipped to a flat edge on all four sides.
+  overflow: visible;
+
+  circle {
+    stroke: var(--actor-color);
+    stroke-width: 4;
+    stroke-linecap: round;
+    // The offset is what carries progress - see paintCell, which matches the
+    // chores page's applyProgressRing. Both are set inline from there, so
+    // these are the starting state: a full offset is an empty ring.
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    opacity: 0;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition:
+      stroke-dashoffset 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.2s ease;
+  }
+}
+
+// Sized by container query rather than a fixed font-size, so an emoji and an
+// uploaded PNG come out the same visual size at every column width - a fixed
+// size overflows the box as the columns shrink. The ceiling is well above the
+// chores page's 32px because these discs are roughly twice the size.
+//
+// `clamp()` inside `calc()` deliberately: prod's compressor re-reads the
+// compiled CSS as Sass and takes a bare mixed-unit clamp() for Sass's own.
+.byte-board-icon {
+  position: relative;
+  z-index: 2;
+  width: 56%;
+  aspect-ratio: 1 / 1;
+  container-type: inline-size;
+  font-size: calc(clamp(24px, 95cqw, 56px));
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// An image or SVG icon fills the box, so a photo-ish icon and an emoji take
+// the same room. `svg` isn't listed: both the image and svg icon kinds arrive
+// as an <img> from the serializer's resolved data URL - see iconNode.
+.byte-board-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+// Only on a chore asked for more than once a day - see paintCell. Low on the
+// disc so it never lands under the icon.
+.byte-board-count {
+  position: absolute;
+  z-index: 2;
+  bottom: 11%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--bs-muted);
+}
+
+// The chores page reserves two lines so labels line up across a row, and the
+// same applies here with more force: a board is scanned, and titles that
+// start at different heights make the grid look broken.
+.byte-board-title {
+  max-width: 100%;
+  margin-top: 6px;
+  min-height: 26px;
+  font-size: 12px;
+  line-height: 1.15;
+  font-weight: 600;
+  word-break: break-word;
+  color: var(--bs-text);
+  pointer-events: none;
+}
+
+// ---- the two skips, one press each ----
+//
+// In the disc's bottom corners, visible rather than behind a long-press or a
+// menu. A board gets walked up to with one hand full and the only two things
+// anybody wants are "not today" and "done with this one"; behind a sheet each
+// of those cost four presses and a read.
+//
+// Deliberately quiet - small, muted, no fill - because the disc is the control
+// and these are the escape hatches. They come up to full opacity on press.
+.ctr-byte .byte-app .byte-board-disc .byte-board-skip,
+.ctr-byte .byte-app .byte-board-disc .byte-board-cycle,
+.ctr-byte .byte-app .byte-board-disc .byte-board-undo {
+  position: absolute;
+  bottom: -2px;
+  z-index: 4;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-them-bg);
+  color: var(--bs-muted) !important;
+  opacity: 0.8;
+  transition:
+    opacity 120ms ease,
+    transform 90ms ease;
+
+  &:active {
+    opacity: 1;
+    transform: scale(0.94);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.ctr-byte .byte-app .byte-board-disc .byte-board-skip {
+  left: -2px;
+}
+
+// Styled exactly like its opposite number. The two are a pair - the words on
+// them are what say which is which, and colouring one of them made it read as
+// a warning rather than as the other half of a choice.
+.ctr-byte .byte-app .byte-board-disc .byte-board-cycle {
+  right: -2px;
+}
+
+// Takes the whole bottom edge, since it replaces the pair rather than sitting
+// beside them - there is nothing to skip on a chore already put away.
+.ctr-byte .byte-app .byte-board-disc .byte-board-undo {
+  left: 50%;
+  transform: translateX(-50%);
+
+  &:active {
+    transform: translateX(-50%) scale(0.94);
+  }
+}
+
+// ---- states ----
+
+// The chores page's own done treatment: the disc takes 18% of the actor colour
+// and the ring is already full, drawn by paintCell.
+.byte-board-cell[data-state="done"] {
+  .byte-board-circle {
+    background: color-mix(in srgb, var(--actor-color) 18%, #0F1B33);
+  }
+
+  .byte-board-title {
+    color: var(--bs-muted);
+  }
+}
+
+// Both ways of putting a chore away read the same from across the room, which
+// is right - the difference is how it got there and when it comes back, and
+// the corner that is left says that in a word.
+//
+// The grey is the chores page's neutral `[data-actor-anonymous]` colour, which
+// already means "the state moved but nobody is being credited" - exactly what
+// a skip is.
+.byte-board-cell[data-state="skipped"],
+.byte-board-cell[data-state="dismissed"] {
+  --actor-color: #94A3B8;
+
+  .byte-board-circle {
+    border-style: dashed;
+    border-color: var(--bs-border);
+    opacity: 0.5;
+  }
+
+  .byte-board-icon {
+    filter: grayscale(0.7);
+  }
+
+  .byte-board-title {
+    color: var(--bs-muted);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+}
+
+// ---- a press the server hasn't answered yet ----
+//
+// The ring has ALREADY moved by the time this paints - the press is predicted
+// and repainted before the request goes out, which is what tells you the touch
+// was taken. This only says it is still in the air, and it is the chores
+// page's own `.chore-circle.pending` treatment: a dim, nothing that moves.
+//
+// No spinner and no pulse on purpose. These get pressed several times in a row
+// on the way past, and an animation on each one turns a working board into a
+// flickering one - the same reason that page keeps a slow happy-path drain
+// silent rather than flashing a badge.
+.byte-board-cell[data-sending="true"] .byte-board-circle {
+  opacity: 0.55;
+  // Not `pointer-events: none`: a chore with a target of three gets pressed
+  // three times in a row faster than any of them come back, and a disc that
+  // stopped taking presses while one was in flight would drop two of them.
+  cursor: progress;
+}
+
+// A press that came back a FAILURE and is waiting to be tried again, on the
+// next foreground or socket reconnect.
+//
+// The same amber dot the chores page paints, in the same corner, for the same
+// reason its comment gives: ambient, not alarming. The predicted state stays
+// on screen underneath it - the tap did happen, and flipping the circle back
+// would claim it had been ignored.
+.byte-board-cell[data-sync-pending="true"] .byte-board-disc::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 5;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #D97706;
+  box-shadow: 0 0 0 2px var(--bs-them-bg);
+  pointer-events: none;
+}
+
+.byte-board-empty {
+  margin: 0;
+  padding: 0 24px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--bs-muted);
+}
+
+// Which group this screen looks after. Mirrors the companion picker across the
+// top-right from it, and sits at the same low opacity for the same reason: it
+// is a setting changed once and then never again, and it must not compete with
+// the circles.
+.ctr-byte .byte-app .byte-board .byte-board-tag {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  z-index: 6;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bs-muted) !important;
+  opacity: 0.35;
+  transition: opacity 140ms ease;
+
+  &:hover,
+  &:active,
+  &[aria-expanded="true"] {
+    opacity: 1;
+  }
+}
+
+.byte-board-tag-picker {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 48px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  z-index: 6;
+  max-width: 76vw;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-them-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.byte-board-tag-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
+}
+
+.byte-board-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ctr-byte .byte-app .byte-board-tag-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: transparent;
+  color: var(--bs-text) !important;
+
+  &[data-current="true"] {
+    border-color: transparent;
+    background: var(--bs-accent-grad);
+    color: #FFFFFF !important;
+  }
+}
+
+.byte-board-tag-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bs-muted);
+}
+
+.byte-board-leave {
+  display: block;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-border);
+  font-size: 12px;
+  color: var(--bs-muted);
+  text-decoration: none;
 }
 
 // -------- Editable form inside a bubble (Buddy::FormAction) --------------

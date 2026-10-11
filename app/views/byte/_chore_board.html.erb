@@ -1,0 +1,43 @@
+<%# The chore board's pad: one group of chores as circles big enough to hit
+    without looking, in place of the kiosk's routine buttons.
+
+    Unlike the routine pad next door, the cells are built ONLY by
+    buddy/chore_board.js — not server-rendered here as well. The set changes
+    under this screen all day (a tap from a phone, somebody else in the
+    household, the 4am reset bringing a new day's chores in), so the client has
+    to be able to build a cell from scratch anyway; rendering them twice would
+    mean two implementations of the same circle that have to agree, which is
+    the trap the routine pad's own comment warns about.
+
+    Nothing is waited on for the first paint: `data-board-chores` on .byte-app
+    carries the serialized set, so the script paints from the page it arrived
+    in and only then goes and asks whether anything changed. %>
+<section class="byte-board" data-byte-board>
+  <div class="byte-board-pad" data-board-pad role="list"></div>
+
+  <%# Two different kinds of nothing, and they want different sentences. No TAG
+      means nobody has told this screen what it looks after, which is a setting
+      to go and change; an empty tag means everything due is done, which is the
+      good one and the whole point of the board. %>
+  <p class="byte-board-empty" data-board-empty hidden></p>
+
+  <%# Which group this screen looks after. The control is the tag itself rather
+      than a gear, for the same reason the companion picker is the pet's own
+      face: what it changes is legible without a label. %>
+  <button type="button" class="byte-board-tag" data-board-tag-toggle
+          aria-label="Choose which chores this screen looks after"
+          title="Choose which chores this screen looks after"><%= @board_tag.presence || "Pick a group" %></button>
+  <div class="byte-board-tag-picker" data-board-tag-picker hidden>
+    <span class="byte-board-tag-label">This screen looks after</span>
+    <%# Rebuilt by chore_board.js on every open, so nothing that has to survive
+        goes inside it. %>
+    <div class="byte-board-tag-list" data-board-tag-list></div>
+
+    <%# The way back. A board has no header and no composer - that is the point
+        on a wall - but it is reached from the conversation drawer on a phone
+        too, and a screen you can walk into with no way out is a screen people
+        close the tab on. Hung off the one control that is already here rather
+        than adding a second piece of chrome over the circles. %>
+    <a class="byte-board-leave" href="<%= byte_root_path %>">← Back to the chat</a>
+  </div>
+</section>

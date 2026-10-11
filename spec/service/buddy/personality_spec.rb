@@ -287,7 +287,7 @@ RSpec.describe Buddy::Personality do
     # shape it used to take: a vocative ("Sorry, love.") or a backticked entry
     # in a list of things not to say.
     it "never writes an intimate endearment into the prompt as a name" do
-      prompts = %w[byte moss suki glimmer kumoko].map { |theme|
+      prompts = %w[byte moss suki glimmer kumoko mocha ghosty].map { |theme|
         u = theme == "byte" ? User.me : create(:user)
         described_class.for(u, conversation: buddy_convo(u, theme))
       }

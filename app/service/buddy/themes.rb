@@ -75,6 +75,26 @@ module Buddy
         manifest:       "/kumoko.webmanifest",
         kiosk_manifest: "/kumoko_kiosk.webmanifest",
       },
+      mocha: {
+        name:           "Mocha",
+        tone:           :chelsea,
+        color:          "#241610",
+        avatar:         "mocha_favicon/mocha.png",
+        touch_icon:     "mocha_favicon/mocha-apple-touch-icon.png",
+        favicon:        "mocha_favicon/mocha-favicon-96x96.png",
+        manifest:       "/mocha.webmanifest",
+        kiosk_manifest: "/mocha_kiosk.webmanifest",
+      },
+      ghosty: {
+        name:           "Ghosty",
+        tone:           :chelsea,
+        color:          "#2A1A24",
+        avatar:         "ghosty_favicon/ghosty.png",
+        touch_icon:     "ghosty_favicon/ghosty-apple-touch-icon.png",
+        favicon:        "ghosty_favicon/ghosty-favicon-96x96.png",
+        manifest:       "/ghosty.webmanifest",
+        kiosk_manifest: "/ghosty_kiosk.webmanifest",
+      },
     }.freeze
 
     # Anything unrecognised reads as the default rather than raising — a theme

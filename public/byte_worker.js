@@ -13,13 +13,24 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v20";
+const CACHE = "byte-v21";
 
 // Every page that is a Byte shell in its own right. `/kiosk` is the wall
 // tablet: the same controller and the same markup, so it carries the shell
 // marker too, but a distinct URL — which is what lets it be installed to a
 // home screen separately and cached so it boots through a dropped connection.
-const SHELL_PATHS = ["/", "/kiosk"];
+// `/board` is the chore board on the same terms.
+//
+// These are the ones PREWARMED, so they have to be literal paths. A board is
+// also reachable as `/board/<conversation id>`, which is a family rather than
+// a path and can't be fetched ahead of time — see isShellRequest, which
+// recognises one so it caches itself the first time it is opened. That is when
+// a tablet is being set up, which is exactly when it is online.
+const SHELL_PATHS = ["/", "/kiosk", "/board"];
+
+// A board addressed by thread. Anchored at both ends: `/boardroom` is not a
+// board, and neither is `/board/4/anything`.
+const BOARD_THREAD_RE = /^\/board\/\d+$/;
 
 // Cheap structural validation: the real byte shell always carries
 // `<meta name="byte-shell" content="ok">` (rendered from show.html.erb).
@@ -370,7 +381,9 @@ const SHELL_PASSTHROUGH_PARAMS = new Set([
 ]);
 
 function isShellRequest(url) {
-  if (!SHELL_PATHS.includes(url.pathname)) return false;
+  const isShellPath =
+    SHELL_PATHS.includes(url.pathname) || BOARD_THREAD_RE.test(url.pathname);
+  if (!isShellPath) return false;
   for (const k of url.searchParams.keys()) {
     if (!SHELL_PASSTHROUGH_PARAMS.has(k)) return false;
   }
