@@ -30,11 +30,27 @@ const SKIP_URL = (id) => `/chores/items/${id}/skip`;
 // what the same button does on the wall tablet next to it.
 const RUN_URL = (id) => `/buddy/routines/${id}/run`;
 
-// A board item is either a CHORE (tick to complete, has state) or a TRIGGER (a
-// routine, tapped to fire, with no occurrence to settle). The `kind` field the
-// server stamps is what everything here branches on.
+// A credit button's press: completes its chore crediting its chosen member.
+const PRESS_URL = (id) => `/byte/board/buttons/${id}/press`;
+
+// Managing credit buttons: list/create at the collection, update/delete at one.
+const BUTTONS_URL = "/byte/board/buttons";
+const BUTTON_URL = (id) => `/byte/board/buttons/${id}`;
+
+// A board item is one of three kinds, stamped by the server in `kind`:
+//   * CHORE   — tick to complete, has state (ring, count, skips).
+//   * TRIGGER — a routine, tapped to fire, no occurrence to settle.
+//   * CREDIT  — a custom button that completes a chore crediting a chosen person.
+// Triggers and credit buttons are both stateless ACTION circles: one press, a
+// flash, nothing to undo. Chores are the only stateful kind.
 function isTrigger(item) {
   return item && item.kind === "trigger";
+}
+function isCredit(item) {
+  return item && item.kind === "credit";
+}
+function isAction(item) {
+  return isTrigger(item) || isCredit(item);
 }
 
 // What a press looks like before the server has answered, and it is the same
@@ -84,10 +100,10 @@ async function apiCall(url, method, body) {
 // a chore can be both done and waved off (somebody did it after skipping it),
 // and what it should read as is done.
 function cellState(item) {
-  // A trigger has no occurrence to be done, skipped or waved off - it is only
-  // ever "there to press", so it gets its own settled state and none of the
-  // ring/corner machinery the four chore states drive.
-  if (isTrigger(item)) return "trigger";
+  // An action (trigger or credit button) has no occurrence to be done, skipped
+  // or waved off - it is only ever "there to press", so it gets its own settled
+  // state and none of the ring/corner machinery the four chore states drive.
+  if (isAction(item)) return item.kind;
   if (item.progress_count >= item.target_count) return "done";
   if (item.skipped_today) return "skipped";
   if (item.dismissed) return "dismissed";
@@ -103,7 +119,7 @@ function cellState(item) {
 // the grey circle is also the only way back to it.
 function onBoard(items) {
   return items.filter((item) =>
-    isTrigger(item) ? true : item.today_visible && !item.archived,
+    isAction(item) ? true : item.today_visible && !item.archived,
   );
 }
 
@@ -148,6 +164,19 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const tagToggleEl = root.querySelector("[data-board-tag-toggle]");
   const tagPickerEl = root.querySelector("[data-board-tag-picker]");
   const tagListEl = root.querySelector("[data-board-tag-list]");
+
+  // The credit-button manager, inside the group picker.
+  const bbSectionEl = root.querySelector("[data-board-buttons-section]");
+  const bbListEl = root.querySelector("[data-board-buttons-list]");
+  const bbFormEl = root.querySelector("[data-board-button-form]");
+  const bbLabelEl = root.querySelector("[data-bb-label]");
+  const bbChoreEl = root.querySelector("[data-bb-chore]");
+  const bbCreditEl = root.querySelector("[data-bb-credit]");
+  const bbColorEl = root.querySelector("[data-bb-color]");
+  const bbIdEl = root.querySelector("[data-bb-id]");
+  const bbCancelEl = root.querySelector("[data-bb-cancel]");
+  const bbSaveEl = root.querySelector("[data-bb-save]");
+  const bbErrorEl = root.querySelector("[data-bb-error]");
 
   const cheerUrl = app.dataset.choreCheerUrl;
   // The board's own set endpoint, not /chores/sync: it answers with chores AND
@@ -210,9 +239,10 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     cell.dataset.state = cellState(chore);
     cell.dataset.boardCell = String(chore.id);
 
-    // A trigger is stateless: no ring, no count, no skip/undo corners to show
-    // or hide. All a repaint does for one is keep its sending/failed dot honest.
-    if (isTrigger(chore)) {
+    // An action (trigger / credit button) is stateless: no ring, no count, no
+    // skip/undo corners to show or hide. All a repaint does for one is keep its
+    // sending/failed dot honest.
+    if (isAction(chore)) {
       markPending(cell, chore.id);
       return;
     }
@@ -264,19 +294,23 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   }
 
   function buildCell(item) {
-    return isTrigger(item) ? buildTriggerCell(item) : buildChoreCell(item);
+    return isAction(item) ? buildActionCell(item) : buildChoreCell(item);
   }
 
-  // A trigger's circle: the icon to aim at and a title, and nothing else. No
-  // ring (no progress), no count (nothing to count), no skip/cycle/undo corners
-  // (no occurrence to let go of). A press fires it once; what says the tap
-  // landed is a brief "Done!" over the disc, the same receipt the Jil trigger
-  // buttons flash — because, unlike a chore, there is no state change to see.
-  function buildTriggerCell(item) {
+  // An action circle (trigger or credit button): the icon to aim at and a title,
+  // and nothing else. No ring (no progress), no count (nothing to count), no
+  // skip/cycle/undo corners (no occurrence to let go of). A press fires it once;
+  // what says the tap landed is a brief flash over the disc — because, unlike a
+  // chore, there is no state change to see. A credit button carries its own
+  // colour; a trigger falls back to the stylesheet's default.
+  function buildActionCell(item) {
     const cell = document.createElement("div");
     cell.className = "byte-board-cell";
-    cell.dataset.kind = "trigger";
+    cell.dataset.kind = item.kind;
     cell.setAttribute("role", "listitem");
+    // A custom colour overrides the per-kind default, and drives both the disc
+    // tint and the flash (both read --actor-color).
+    if (item.color) cell.style.setProperty("--actor-color", item.color);
 
     const disc = document.createElement("div");
     disc.className = "byte-board-disc";
@@ -284,12 +318,15 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     const press = document.createElement("button");
     press.type = "button";
     press.className = "byte-board-circle";
-    // The same hook a chore circle carries, so the one pad listener finds both;
-    // the kind rides on the button so the handler branches fire vs complete
+    // The same hook a chore circle carries, so the one pad listener finds all
+    // three; the kind rides on the button so the handler routes the press
     // without having to walk up to the cell.
     press.dataset.boardComplete = String(item.id);
-    press.dataset.boardKind = "trigger";
-    press.setAttribute("aria-label", `Start: ${item.short_name}`);
+    press.dataset.boardKind = item.kind;
+    press.setAttribute(
+      "aria-label",
+      `${isCredit(item) ? "Mark done" : "Start"}: ${item.short_name}`,
+    );
     press.appendChild(iconNode(item));
 
     const flash = document.createElement("span");
@@ -408,10 +445,10 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   function paint() {
     if (!padEl) return;
 
-    // A chore and a trigger can share an id (different tables), so the cell key
-    // carries the kind too — otherwise a 1-chore, 1-trigger board with matching
-    // ids would read as "same set" and paint a trigger into a chore's cell.
-    const key = (item) => `${isTrigger(item) ? "t" : "c"}:${item.id}`;
+    // The three kinds come from different tables and can share an id, so the cell
+    // key carries the kind too — otherwise two items with matching ids would read
+    // as "same set" and paint one into the other's cell.
+    const key = (item) => `${item.kind || "chore"}:${item.id}`;
     const wanted = items.map(key);
     const present = Array.from(padEl.children).map((el) => el.dataset.boardKey);
     const sameSet =
@@ -431,13 +468,14 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     paintEmpty();
   }
 
-  // By id AND kind: a chore and a trigger can collide on id, and a bare id
-  // lookup would hand a press on one to the other.
-  function find(id, { trigger } = {}) {
+  // By id AND kind: the three kinds come from different tables and can collide
+  // on id, so a bare id lookup would hand a press on one to another. `kind` is
+  // "chore" | "trigger" | "credit" (chores are stamped "chore" server-side).
+  function find(id, kind) {
     return items.find(
       (item) =>
         String(item.id) === String(id) &&
-        (trigger === undefined || isTrigger(item) === trigger),
+        (kind === undefined || (item.kind || "chore") === kind),
     );
   }
 
@@ -451,9 +489,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     if (!fresh || fresh.id == null) return;
 
     // A completion endpoint only ever answers with a chore, so fold it back into
-    // the chore sharing its id - never a trigger that happens to collide on one.
+    // the chore sharing its id - never an action that happens to collide on one.
     const at = items.findIndex(
-      (item) => !isTrigger(item) && item.id === fresh.id,
+      (item) => (item.kind || "chore") === "chore" && item.id === fresh.id,
     );
     if (at >= 0) items[at] = { ...fresh, kind: "chore" };
     paint();
@@ -502,7 +540,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   function predict(id, change) {
     // Only chores predict - a trigger has no state to move under a finger - so
     // the lookup is chore-scoped even where an id collides with a trigger's.
-    const chore = find(id, { trigger: false });
+    const chore = find(id, "chore");
     if (!chore) return;
 
     const at = items.indexOf(chore);
@@ -577,7 +615,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   }
 
   function complete(id) {
-    const chore = find(id, { trigger: false });
+    const chore = find(id, "chore");
     if (!chore) return;
 
     return press(id, {
@@ -591,7 +629,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
           client_completed_at: new Date().toISOString(),
         });
         absorb(payload);
-        cheer(find(id, { trigger: false }) || chore, "chore_done");
+        cheer(find(id, "chore") || chore, "chore_done");
       },
     });
   }
@@ -602,7 +640,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   // failure is remembered and retried on the next foreground/reconnect, same as
   // a chore press; the sending dot is what says it is on its way meanwhile.
   function fire(id) {
-    if (!find(id, { trigger: true })) return;
+    if (!find(id, "trigger")) return;
 
     hold(id, 1);
     paint();
@@ -614,7 +652,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
         });
         const at = failed.findIndex((f) => f.key === String(id));
         if (at >= 0) failed.splice(at, 1);
-        flashCell(id);
+        flashCell(id, "trigger");
       } catch (e) {
         remember(id, () => fire(id));
       } finally {
@@ -624,10 +662,36 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     })();
   }
 
-  // The "Done!" receipt over a trigger's disc. Scoped by board-key so it lands
-  // on the trigger cell and not a chore sharing its id.
-  function flashCell(id) {
-    const cell = padEl?.querySelector(`[data-board-key="t:${CSS.escape(String(id))}"]`);
+  // Credit a chore on someone's behalf: complete it crediting the button's
+  // chosen member, then flash and fold the fresh chore back in so its own circle
+  // (if it's on this board too) flips to done. Same predict-less, retry-on-fail
+  // shape as a trigger fire.
+  function creditPress(id) {
+    if (!find(id, "credit")) return;
+
+    hold(id, 1);
+    paint();
+
+    return (async () => {
+      try {
+        const payload = await apiCall(PRESS_URL(id), "POST", {});
+        const at = failed.findIndex((f) => f.key === String(id));
+        if (at >= 0) failed.splice(at, 1);
+        absorb(payload);
+        flashCell(id, "credit");
+      } catch (e) {
+        remember(id, () => creditPress(id));
+      } finally {
+        hold(id, -1);
+        paint();
+      }
+    })();
+  }
+
+  // The "Done!" receipt over an action disc. Scoped by board-key so it lands on
+  // the right cell and not another kind's item sharing its id.
+  function flashCell(id, kind) {
+    const cell = padEl?.querySelector(`[data-board-key="${kind}:${CSS.escape(String(id))}"]`);
     const el = cell?.querySelector("[data-board-flash]");
     if (!el) return;
 
@@ -670,7 +734,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   }
 
   function bringBack(id) {
-    const chore = find(id, { trigger: false });
+    const chore = find(id, "chore");
     if (!chore) return;
 
     const wasDismissed = chore.dismissed;
@@ -735,13 +799,166 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       });
       tag = data?.chore_tag || "";
       if (tagToggleEl) tagToggleEl.textContent = tag || "Pick a group";
-      if (tagPickerEl) tagPickerEl.hidden = true;
       tagToggleEl?.setAttribute("aria-expanded", "false");
       items = [];
       paint();
       resync();
+      // The group just changed under the manager, so its buttons and the chore
+      // it files them against have too - repaint them rather than leaving the
+      // previous group's showing.
+      resetButtonForm();
+      paintButtons();
     } catch (e) {
       // The screen keeps looking after whatever it was looking after.
+    }
+  }
+
+  // ---- managing credit buttons ----
+  //
+  // A credit button marks one chore done and credits a chosen person. The whole
+  // manager lives inside the group picker: a board on a wall doesn't want a
+  // settings gear over the circles, and buttons belong to the group the picker
+  // is already about.
+
+  function fillOptions(select, options, selectedId) {
+    if (!select) return;
+    select.innerHTML = "";
+    (options || []).forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = String(opt.id);
+      o.textContent = opt.name;
+      if (selectedId != null && String(opt.id) === String(selectedId))
+        o.selected = true;
+      select.appendChild(o);
+    });
+  }
+
+  function resetButtonForm() {
+    if (!bbFormEl) return;
+    if (bbIdEl) bbIdEl.value = "";
+    if (bbLabelEl) bbLabelEl.value = "";
+    if (bbColorEl) bbColorEl.value = "#16A34A";
+    if (bbChoreEl) bbChoreEl.selectedIndex = 0;
+    if (bbCreditEl) bbCreditEl.selectedIndex = 0;
+    if (bbCancelEl) bbCancelEl.hidden = true;
+    if (bbSaveEl) bbSaveEl.textContent = "Add button";
+    if (bbErrorEl) {
+      bbErrorEl.hidden = true;
+      bbErrorEl.textContent = "";
+    }
+  }
+
+  // Load an existing button into the form to edit it; the hidden id is what
+  // flips the submit from create to update.
+  function editButton(button) {
+    if (bbIdEl) bbIdEl.value = String(button.id);
+    if (bbLabelEl) bbLabelEl.value = button.label || "";
+    if (bbColorEl) bbColorEl.value = button.color || "#16A34A";
+    if (bbChoreEl) bbChoreEl.value = String(button.chore_id);
+    if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id);
+    if (bbCancelEl) bbCancelEl.hidden = false;
+    if (bbSaveEl) bbSaveEl.textContent = "Save";
+  }
+
+  async function paintButtons() {
+    if (!bbSectionEl) return;
+
+    // A button has to belong to a group, so the manager only appears once one is
+    // picked.
+    bbSectionEl.hidden = !tag;
+    if (!tag) return;
+
+    try {
+      const data = await apiCall(`${BUTTONS_URL}?tag=${encodeURIComponent(tag)}`, "GET");
+      fillOptions(bbChoreEl, data?.chores, bbChoreEl?.value);
+      fillOptions(bbCreditEl, data?.members, bbCreditEl?.value);
+
+      if (!bbListEl) return;
+      bbListEl.innerHTML = "";
+      const buttons = Array.isArray(data?.buttons) ? data.buttons : [];
+      if (buttons.length === 0) {
+        const none = document.createElement("p");
+        none.className = "byte-board-tag-empty";
+        none.textContent = "No credit buttons on this board yet.";
+        bbListEl.appendChild(none);
+        return;
+      }
+
+      buttons.forEach((button) => {
+        const row = document.createElement("div");
+        row.className = "byte-board-button-row";
+
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "byte-board-button-edit";
+        edit.dataset.bbEdit = String(button.id);
+        // The row doubles as the edit control; the swatch and who-it-credits read
+        // at a glance so the list isn't a wall of identical pills.
+        edit.innerHTML = "";
+        const swatch = document.createElement("span");
+        swatch.className = "byte-board-button-swatch";
+        if (button.color) swatch.style.background = button.color;
+        const text = document.createElement("span");
+        text.className = "byte-board-button-label";
+        text.textContent = button.label;
+        const who = document.createElement("span");
+        who.className = "byte-board-button-who";
+        who.textContent = `${button.chore_name} → ${button.credit_user_name}`;
+        edit.append(swatch, text, who);
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "byte-board-button-del";
+        del.dataset.bbDelete = String(button.id);
+        del.setAttribute("aria-label", `Delete ${button.label}`);
+        del.textContent = "×";
+
+        // Stash the row so a tap can load it into the form without a refetch.
+        edit._button = button;
+        row.append(edit, del);
+        bbListEl.appendChild(row);
+      });
+    } catch (e) {
+      // Leave the manager as it was; the board itself still works.
+    }
+  }
+
+  async function submitButton(e) {
+    e.preventDefault();
+    if (!bbFormEl) return;
+
+    const payload = {
+      tag,
+      label: bbLabelEl?.value.trim(),
+      color: bbColorEl?.value,
+      chore_id: bbChoreEl?.value,
+      credit_user_id: bbCreditEl?.value,
+    };
+    const id = bbIdEl?.value;
+
+    try {
+      if (id) await apiCall(BUTTON_URL(id), "PATCH", { button: payload });
+      else await apiCall(BUTTONS_URL, "POST", { button: payload });
+
+      resetButtonForm();
+      await paintButtons();
+      resync();
+    } catch (err) {
+      if (bbErrorEl) {
+        bbErrorEl.hidden = false;
+        bbErrorEl.textContent = "Couldn't save that button — check the fields.";
+      }
+    }
+  }
+
+  async function deleteButton(id) {
+    try {
+      await apiCall(BUTTON_URL(id), "DELETE");
+      if (bbIdEl?.value === String(id)) resetButtonForm();
+      await paintButtons();
+      resync();
+    } catch (e) {
+      // Leave it; a failed delete just means the row is still there to try again.
     }
   }
 
@@ -797,15 +1014,16 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       if (!press) return;
 
       // The kind rides on the button, so a press resolves to the right item even
-      // where a chore and a trigger share an id.
-      const trigger = press.dataset.boardKind === "trigger";
-      const item = find(press.dataset.boardComplete, { trigger });
+      // where items of different kinds share an id.
+      const kind = press.dataset.boardKind;
+      const item = find(press.dataset.boardComplete, kind);
       if (!item) return;
 
-      // A trigger fires; a chore completes. A chore already put away is not
-      // completable by a stray press on its grey circle - its own corner
-      // carries Undo, which is the only thing a press on it could sensibly mean.
+      // A trigger fires, a credit button credits, a chore completes. A chore
+      // already put away is not completable by a stray press on its grey circle -
+      // its own corner carries Undo, the only thing a press on it could mean.
       if (isTrigger(item)) return fire(item.id);
+      if (isCredit(item)) return creditPress(item.id);
       if (item.dismissed || item.skipped_today) return;
 
       return complete(item.id);
@@ -822,7 +1040,11 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       // circles, and a setting half faded out while you are using it reads as
       // disabled.
       tagToggleEl.setAttribute("aria-expanded", open ? "true" : "false");
-      if (open) paintTagPicker();
+      if (open) {
+        paintTagPicker();
+        resetButtonForm();
+        paintButtons();
+      }
     });
   }
 
@@ -830,6 +1052,18 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     tagListEl.addEventListener("click", (e) => {
       const pick = e.target.closest("[data-board-pick-tag]");
       if (pick) pickTag(pick.dataset.boardPickTag);
+    });
+  }
+
+  if (bbFormEl) bbFormEl.addEventListener("submit", submitButton);
+  if (bbCancelEl) bbCancelEl.addEventListener("click", resetButtonForm);
+  if (bbListEl) {
+    bbListEl.addEventListener("click", (e) => {
+      const del = e.target.closest("[data-bb-delete]");
+      if (del) return deleteButton(del.dataset.bbDelete);
+
+      const edit = e.target.closest("[data-bb-edit]");
+      if (edit?._button) editButton(edit._button);
     });
   }
 

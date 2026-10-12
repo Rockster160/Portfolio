@@ -66,6 +66,13 @@ Rails.application.routes.draw do
   patch "/byte/board/tag" => "byte#set_board_tag", as: :byte_board_tag
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
   get   "/byte/board/tags"  => "byte#board_tags",  as: :byte_board_tags
+  # Credit buttons: custom board buttons that complete a chore crediting a chosen
+  # household member. Managed from the board's settings; pressed from the board.
+  get    "/byte/board/buttons"           => "byte#board_buttons",        as: :byte_board_buttons
+  post   "/byte/board/buttons"           => "byte#create_board_button",  as: :byte_create_board_button
+  patch  "/byte/board/buttons/:id"       => "byte#update_board_button",  as: :byte_board_button
+  delete "/byte/board/buttons/:id"       => "byte#delete_board_button"
+  post   "/byte/board/buttons/:id/press" => "byte#press_board_button",   as: :byte_press_board_button
   post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation

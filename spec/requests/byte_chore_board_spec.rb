@@ -155,6 +155,110 @@ RSpec.describe "Byte chore board", type: :request do
     end
   end
 
+  # Credit buttons: custom board buttons that complete a chore crediting a chosen
+  # household member — the "Dishes, by X" button beside "Dishes, by me".
+  describe "credit buttons" do
+    let!(:housemate) { create(:user, chore_household_id: user.chore_household_id) }
+    let!(:chore) {
+      create(
+        :chore, created_by_user: user, name: "Dishes",
+        chore_household_id: user.chore_household_id, show_on_today_view: :always
+      )
+    }
+
+    def credit_button!(**attrs)
+      ChoreCreditButton.create!({
+        chore_household_id: user.chore_household_id,
+        created_by_user:    user,
+        chore:              chore,
+        credit_user:        housemate,
+        tag:                "Shared",
+        label:              "Dishes, by mate",
+        color:              "#6366F1",
+      }.merge(attrs))
+    end
+
+    it "carries a group's credit buttons on the board set, tagged as credit" do
+      thread.update!(metadata: thread.metadata.merge("chore_tag" => "Shared"))
+      credit_button!
+
+      get "/board/#{thread.id}"
+
+      item = board_items.find { |i| i["kind"] == "credit" }
+      expect(item).to be_present
+      expect(item["short_name"]).to eq("Dishes, by mate")
+      expect(item["color"]).to eq("#6366F1")
+    end
+
+    it "presses a button: credits the chosen member, recorded by the presser" do
+      btn = credit_button!
+
+      expect {
+        post "/byte/board/buttons/#{btn.id}/press"
+      }.to change { ChoreCompletion.where(chore: chore, user: housemate).count }.by(1)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["credited"]).to eq(housemate.username)
+      completion = ChoreCompletion.where(chore: chore, user: housemate).order(:id).last
+      expect(completion.recorded_by_user_id).to eq(user.id)
+    end
+
+    # The whole constraint: a board is only ever a board. Pressing a credit
+    # button on one thread must not touch which Buddy is the person's primary.
+    it "a press leaves the primary Buddy untouched" do
+      ByteConversation.pin_primary!(thread)
+      before = ByteConversation.primary_for(user).id
+      btn = credit_button!
+
+      post "/byte/board/buttons/#{btn.id}/press"
+
+      expect(ByteConversation.primary_for(user).id).to eq(before)
+    end
+
+    it "lists its buttons for a group with the chore and member options" do
+      credit_button!
+
+      get "/byte/board/buttons", params: { tag: "Shared" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["buttons"].pluck("label")).to eq(["Dishes, by mate"])
+      expect(response.parsed_body["chores"].pluck("name")).to include("Dishes")
+      expect(response.parsed_body["members"].pluck("id")).to include(housemate.id)
+    end
+
+    it "creates, updates and deletes a button" do
+      post "/byte/board/buttons", params: {
+        button: {
+          tag:            "Shared",
+          label:          "Dishes, by me",
+          color:          "#16A34A",
+          chore_id:       chore.id,
+          credit_user_id: user.id,
+        },
+      }
+      expect(response).to have_http_status(:created)
+      id = response.parsed_body["id"]
+
+      patch "/byte/board/buttons/#{id}", params: { button: { label: "Dishes — me" } }
+      expect(response.parsed_body["label"]).to eq("Dishes — me")
+
+      expect {
+        delete "/byte/board/buttons/#{id}"
+      }.to change(ChoreCreditButton, :count).by(-1)
+    end
+
+    it "refuses a chore from another household" do
+      stranger = create(:user)
+      theirs = create(:chore, created_by_user: stranger, name: "Not ours")
+
+      post "/byte/board/buttons", params: {
+        button: { tag: "Shared", label: "nope", chore_id: theirs.id, credit_user_id: user.id },
+      }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
+
   describe "GET /byte/board/tags" do
     it "unions the household's chore groups with the viewer's routine groups" do
       create(:chore, created_by_user: user, name: "Vacuum", tag: "Home")

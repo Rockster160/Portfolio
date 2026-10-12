@@ -127,4 +127,19 @@ RSpec.describe "Chore board presses" do
       expect(result["fire_hit_no_chore_endpoint"]).to be(true)
     end
   end
+
+  # A credit button is stateless like a trigger, but a press completes a chore on
+  # someone's behalf through its own endpoint.
+  describe "a credit button on the board" do
+    it "draws no ring and no skip corner" do
+      expect(result["credit_controls"]).to eq(
+        "ring" => true, "skip" => true, "state" => "credit",
+      )
+    end
+
+    it "presses its own credit endpoint and touches no chore endpoint" do
+      expect(result["credit_requests"]).to include("POST /byte/board/buttons/7/press")
+      expect(result["credit_hit_no_chore_endpoint"]).to be(true)
+    end
+  end
 end

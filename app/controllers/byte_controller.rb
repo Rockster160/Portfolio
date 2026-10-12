@@ -2,6 +2,16 @@ class ByteController < ApplicationController
   before_action :authorize_user, except: [:csrf]
   before_action :authorize_owner, except: [:csrf]
 
+  # The presence heartbeat is pure telemetry (a 30s "looking at Byte" cache key),
+  # fired on a 15s interval from a long-lived PWA. CSRF is skipped for a
+  # perma-safe current_user, but when the PWA's session hasn't resolved on a
+  # given beat the user reads as `nobody`, so protection kicks back in and a stale
+  # token raises InvalidAuthenticityToken — which gets REPORTED, once every few
+  # seconds. A heartbeat guards nothing worth a token (the action still requires a
+  # signed-in owner), so take it off the forgery check: an unauthenticated beat
+  # now falls through to a quiet auth rejection instead of a reported exception.
+  skip_before_action :verify_authenticity_token, only: :presence, raise: false
+
   MONITOR_CHANNEL = :byte
   # Page size for both the initial render and paginated back-scroll.
   # Matches the client's localStorage cap so a cold-open fetch fills it
@@ -68,6 +78,86 @@ class ByteController < ApplicationController
   # holds only triggers is offered just the same as one that holds only chores.
   def board_tags
     render json: { tags: board_tag_names }
+  end
+
+  # GET /byte/board/buttons?tag= — the credit buttons for a group, plus the
+  # options the settings form needs (household chores and members). Household
+  # scope: a shared board's buttons belong to the house, not to one person.
+  def board_buttons
+    tag = params[:tag].to_s.strip
+    buttons = tag.present? ? board_credit_buttons.for_board(tag) : board_credit_buttons.none
+
+    render json: {
+      buttons: buttons.map { |b| credit_button_wire(b) },
+      chores:  household_chore_options,
+      members: household_member_options,
+    }
+  end
+
+  # POST /byte/board/buttons — make a credit button.
+  def create_board_button
+    return head(:unprocessable_entity) if current_user.chore_household_id.nil?
+
+    button = ChoreCreditButton.new(
+      credit_button_params.merge(
+        chore_household_id: current_user.chore_household_id,
+        created_by_user:    current_user,
+      ),
+    )
+
+    if button.save
+      render json: credit_button_wire(button), status: :created
+    else
+      render json: { errors: button.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  # PATCH /byte/board/buttons/:id
+  def update_board_button
+    button = board_credit_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    button.assign_attributes(credit_button_params)
+
+    if button.save
+      render json: credit_button_wire(button)
+    else
+      render json: { errors: button.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  # DELETE /byte/board/buttons/:id
+  def delete_board_button
+    button = board_credit_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    button.destroy!
+    head :no_content
+  end
+
+  # POST /byte/board/buttons/:id/press — the press. Marks the button's chore done
+  # and CREDITS its chosen member (pebbles, streak and that person's automations
+  # land on them), recorded_by whoever actually tapped. Answers with the fresh
+  # chore so a board can update that chore's own circle if it's also on screen.
+  #
+  # Deliberately touches nothing about the thread it came from — no pin, no
+  # primary, no theme — so pressing a button on one Buddy's board never disturbs
+  # which Buddy is anyone's main one.
+  def press_board_button
+    button = board_credit_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    chore = button.chore
+    credited = button.credit_user
+    return head(:unprocessable_entity) if chore.nil? || credited.nil? || chore.archived?
+
+    ChoreCompleter.new(chore, credited, recorded_by: current_user).call
+
+    ctx = ChoreSerializerContext.for_user(current_user, day: ChoreDay.current(current_user))
+    render json: {
+      chore:    ChoreSerializer.new(chore, viewer: current_user, ctx: ctx).as_json,
+      credited: credited.username,
+    }
   end
 
   # PATCH /byte/board/tag — which group of chores this thread's board watches.
@@ -809,16 +899,63 @@ class ByteController < ApplicationController
     chore_items = ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
 
     trigger_items = current_user.buddy_routines.for_board(tag).map(&:board_item)
+    credit_items  = board_credit_buttons.for_board(tag).map(&:board_item)
 
-    chore_items + trigger_items
+    chore_items + trigger_items + credit_items
   end
 
-  # The groups a board can watch: chore tags are household-wide, routine tags
-  # are the viewer's own, unioned and de-duped case-insensitively so "Work" is
-  # offered once however it was typed on either side.
+  # The groups a board can watch: chore and credit-button tags are household-wide,
+  # routine tags are the viewer's own, unioned and de-duped case-insensitively so
+  # "Work" is offered once however it was typed on any of them.
   def board_tag_names
-    names = current_user.accessible_chores.tag_names + current_user.buddy_routines.tag_names
+    names = current_user.accessible_chores.tag_names +
+      current_user.buddy_routines.tag_names +
+      board_credit_buttons.tag_names
     names.uniq(&:downcase).sort_by(&:downcase)
+  end
+
+  # Credit buttons the viewer can see — their whole household's, since a shared
+  # board shows the same buttons to everyone in the house. Empty when the viewer
+  # has no household rather than raising, so a board still loads.
+  def board_credit_buttons
+    return ChoreCreditButton.none if current_user.chore_household_id.nil?
+
+    ChoreCreditButton.where(chore_household_id: current_user.chore_household_id)
+  end
+
+  def credit_button_params
+    params.require(:button).permit(:label, :color, :tag, :chore_id, :credit_user_id)
+  end
+
+  # The chores a button can complete: every chore this person can see, by name.
+  def household_chore_options
+    current_user.accessible_chores
+      .order(Arel.sql("LOWER(name) ASC"))
+      .pluck(:id, :name)
+      .map { |id, name| { id: id, name: name } }
+  end
+
+  # Who a button can credit: the members of this person's household.
+  def household_member_options
+    return [] if current_user.chore_household_id.nil?
+
+    User.where(chore_household_id: current_user.chore_household_id)
+      .order(Arel.sql("LOWER(username) ASC"))
+      .pluck(:id, :username)
+      .map { |id, name| { id: id, name: name } }
+  end
+
+  def credit_button_wire(button)
+    {
+      id:               button.id,
+      label:            button.label,
+      color:            button.color,
+      tag:              button.tag,
+      chore_id:         button.chore_id,
+      chore_name:       button.chore&.name,
+      credit_user_id:   button.credit_user_id,
+      credit_user_name: button.credit_user&.username,
+    }
   end
 
   # Which thread the page opens on, and the list beside it. `only_buddy`
@@ -1046,7 +1183,7 @@ class ByteController < ApplicationController
   end
 
   def current_cwd(conversation)
-    "`#{conversation.metadata.to_h['cwd'].presence || ByteWorkspaces::DEFAULT}`"
+    "`#{conversation.metadata.to_h["cwd"].presence || ByteWorkspaces::DEFAULT}`"
   end
 
   # Slash commands whose scope is the Byte conversation record itself.
@@ -1072,6 +1209,7 @@ class ByteController < ApplicationController
       ack(conversation, "Archived **#{conversation.display_name}**")
     when "cd"
       return ack(conversation, "Buddy threads have no working directory.") if buddy_only?
+
       return ack(conversation, handle_cd(conversation, arg))
     when "mode"
       return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?

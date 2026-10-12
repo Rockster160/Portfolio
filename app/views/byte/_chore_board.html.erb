@@ -34,6 +34,40 @@
         goes inside it. %>
     <div class="byte-board-tag-list" data-board-tag-list></div>
 
+    <%# Credit buttons for THIS group: custom circles that mark a chore done and
+        credit a chosen person. Managed here, in the one control the board already
+        has, rather than behind new chrome over the circles. The whole section
+        hides until a group is picked, since a button has to belong to one. %>
+    <div class="byte-board-buttons" data-board-buttons-section hidden>
+      <span class="byte-board-tag-label">Credit buttons on this board</span>
+      <div class="byte-board-buttons-list" data-board-buttons-list></div>
+
+      <form class="byte-board-button-form" data-board-button-form>
+        <input type="text" class="byte-board-bb-label" data-bb-label
+               placeholder="Button label" maxlength="60" required>
+        <label class="byte-board-bb-row">
+          <span>Completes</span>
+          <select class="byte-board-bb-select" data-bb-chore required></select>
+        </label>
+        <label class="byte-board-bb-row">
+          <span>Credits</span>
+          <select class="byte-board-bb-select" data-bb-credit required></select>
+        </label>
+        <label class="byte-board-bb-row">
+          <span>Colour</span>
+          <input type="color" class="byte-board-bb-color" data-bb-color value="#16A34A">
+        </label>
+        <%# Carries the id being edited, empty for a new one. The form is reused
+            for both so there is one set of fields to get right. %>
+        <input type="hidden" data-bb-id value="">
+        <div class="byte-board-button-form-actions">
+          <button type="button" class="byte-board-bb-cancel" data-bb-cancel hidden>Cancel</button>
+          <button type="submit" class="byte-board-bb-save" data-bb-save>Add button</button>
+        </div>
+        <p class="byte-board-bb-error" data-bb-error hidden></p>
+      </form>
+    </div>
+
     <%# The way back. A board has no header and no composer - that is the point
         on a wall - but it is reached from the conversation drawer on a phone
         too, and a screen you can walk into with no way out is a screen people

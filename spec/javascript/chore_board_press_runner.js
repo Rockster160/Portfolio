@@ -49,7 +49,7 @@ function fakeEl(tag) {
     tag,
     attributes: {},
     dataset: {},
-    style: {},
+    style: { setProperty() {}, removeProperty() {} },
     children: [],
     listeners: {},
     textContent: "",
@@ -144,6 +144,19 @@ app.dataset.boardItems = JSON.stringify([
     icon: null,
     icon_kind: "empty",
   },
+  // A credit button: a press completes chore 1 crediting someone, and answers
+  // with the fresh chore so that chore's own circle flips to done.
+  {
+    id: 7,
+    kind: "credit",
+    name: "Vacuum, by mate",
+    short_name: "Vacuum, by mate",
+    color: "#16A34A",
+    icon: null,
+    icon_kind: "empty",
+    chore_id: 1,
+    credit_user_id: 99,
+  },
 ]);
 
 globalThis.document = {
@@ -213,6 +226,12 @@ globalThis.fetch = async (url, opts = {}) => {
     // Firing a trigger (routine). Nothing to fold back - the flash is the
     // receipt.
     body = {};
+  } else if (url.endsWith("/press") && method === "POST") {
+    // A credit button press completes its chore (1 here) crediting someone, and
+    // answers with the fresh chore so its circle updates.
+    const c = entry(1);
+    c.progress_count = Math.min(c.progress_count + 1, c.target_count);
+    body = { chore: c, credited: "mate" };
   } else if (url.endsWith("/completion") && method === "POST") {
     chore.progress_count = Math.min(
       chore.progress_count + 1,
@@ -361,7 +380,23 @@ out.trigger_controls = {
 
 requests.length = 0;
 await click('[data-board-complete="3"]');
-out.fire_requests = requests;
+out.fire_requests = [...requests];
 out.fire_hit_no_chore_endpoint = requests.every((r) => !r.includes("/chores/"));
+
+// ---- a credit button: completes a chore crediting someone ----
+//
+// Stateless like a trigger (no ring/skip), but a press hits the credit endpoint
+// and nothing on /chores/, and it folds the fresh chore back in.
+const creditCell = cellFor(7);
+out.credit_controls = {
+  ring: creditCell.querySelector("[data-board-ring]") === null,
+  skip: creditCell.querySelector("[data-board-skip-day]") === null,
+  state: creditCell.dataset.state,
+};
+
+requests.length = 0;
+await click('[data-board-complete="7"]');
+out.credit_requests = requests;
+out.credit_hit_no_chore_endpoint = requests.every((r) => !r.includes("/chores/"));
 
 process.stdout.write(JSON.stringify(out, null, 2));

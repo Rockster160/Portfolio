@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_12_173655) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_12_195137) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -792,6 +792,24 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_12_173655) do
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
     t.index ["user_id"], name: "index_chore_completions_on_user_id"
+  end
+
+  create_table "chore_credit_buttons", force: :cascade do |t|
+    t.bigint "chore_household_id", null: false
+    t.bigint "created_by_user_id", null: false
+    t.bigint "chore_id", null: false
+    t.bigint "credit_user_id", null: false
+    t.text "tag"
+    t.text "label", null: false
+    t.text "color"
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_household_id", "tag"], name: "index_chore_credit_buttons_on_chore_household_id_and_tag"
+    t.index ["chore_household_id"], name: "index_chore_credit_buttons_on_chore_household_id"
+    t.index ["chore_id"], name: "index_chore_credit_buttons_on_chore_id"
+    t.index ["created_by_user_id"], name: "index_chore_credit_buttons_on_created_by_user_id"
+    t.index ["credit_user_id"], name: "index_chore_credit_buttons_on_credit_user_id"
   end
 
   create_table "chore_dailies", force: :cascade do |t|
@@ -2050,6 +2068,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_12_173655) do
   add_foreign_key "chore_completions", "chores", column: "parent_chore_id"
   add_foreign_key "chore_completions", "users"
   add_foreign_key "chore_completions", "users", column: "recorded_by_user_id"
+  add_foreign_key "chore_credit_buttons", "chore_households"
+  add_foreign_key "chore_credit_buttons", "chores"
+  add_foreign_key "chore_credit_buttons", "users", column: "created_by_user_id"
+  add_foreign_key "chore_credit_buttons", "users", column: "credit_user_id"
   add_foreign_key "chore_dailies", "chores", on_delete: :cascade
   add_foreign_key "chore_dailies", "users", on_delete: :cascade
   add_foreign_key "chore_goals", "chores"

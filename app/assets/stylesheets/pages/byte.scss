@@ -6157,23 +6157,29 @@ $board-cell-max: 200px;
   }
 }
 
-// ---- a trigger: tap to fire, not tick to finish ----
+// ---- actions: tap to fire / tap to credit, not tick to finish ----
 //
-// A routine on the board has no occurrence to settle, so its circle carries no
-// ring, no count and no corners - just the icon. It reads as a different KIND of
-// thing from the chore circles beside it: a filled accent face rather than the
-// chores' flat dark disc waiting on a ring, so "set this off" and "check this
-// off" don't look identical from across the room.
-.byte-board-cell[data-kind="trigger"] {
-  --actor-color: #6366F1;
+// A trigger (routine) or a credit button has no occurrence to settle, so its
+// circle carries no ring, no count and no corners - just the icon. It reads as a
+// different KIND of thing from the chore circles beside it: a filled accent face
+// rather than the chores' flat dark disc waiting on a ring, so "set this off" /
+// "credit this" and "check this off" don't look identical from across the room.
+//
+// A trigger gets the indigo default; a credit button defaults to the done-green
+// but usually carries its own colour inline (set from the button's config), which
+// overrides the default here and drives both the disc tint and the flash.
+.byte-board-cell[data-kind="trigger"] { --actor-color: #6366F1; }
+.byte-board-cell[data-kind="credit"]  { --actor-color: #16A34A; }
 
+.byte-board-cell[data-kind="trigger"],
+.byte-board-cell[data-kind="credit"] {
   .byte-board-circle {
     background: color-mix(in srgb, var(--actor-color) 16%, #0F1B33);
     border-color: color-mix(in srgb, var(--actor-color) 55%, transparent);
   }
 }
 
-// The receipt over a just-fired trigger. A trigger has no state change to see,
+// The receipt over a just-pressed action. An action has no state change to see,
 // so a brief "Done!" is what says the tap landed - the same acknowledgement the
 // Jil trigger buttons flash. Fades on opacity rather than appearing and
 // vanishing between two frames.
@@ -6278,6 +6284,10 @@ $board-cell-max: 200px;
   left: calc(env(safe-area-inset-left) + 12px);
   z-index: 6;
   max-width: 76vw;
+  // Room for the credit-button manager without the popover running off a phone;
+  // it scrolls inside its own box rather than pushing past the screen edge.
+  max-height: calc(100dvh - env(safe-area-inset-top) - 96px);
+  overflow-y: auto;
   padding: 10px;
   border-radius: 14px;
   border: 1px solid var(--bs-border);
@@ -6324,6 +6334,163 @@ $board-cell-max: 200px;
   margin: 0;
   font-size: 12px;
   color: var(--bs-muted);
+}
+
+// ---- the credit-button manager, inside the group picker ----
+
+.byte-board-buttons {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-border);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.byte-board-buttons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.byte-board-button-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+// The row is the edit control: a swatch, the label, and who it credits, so the
+// list reads at a glance instead of being identical pills.
+.ctr-byte .byte-app .byte-board-button-edit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: transparent;
+  color: var(--bs-text) !important;
+  text-align: left;
+}
+
+.byte-board-button-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #16A34A;
+}
+
+.byte-board-button-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.byte-board-button-who {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--bs-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctr-byte .byte-app .byte-board-button-del {
+  flex: none;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: transparent;
+  color: var(--bs-muted) !important;
+  font-size: 18px;
+  line-height: 1;
+
+  &:hover {
+    color: var(--bs-danger, #e5484d) !important;
+  }
+}
+
+.byte-board-button-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctr-byte .byte-app .byte-board-bb-label {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-input-bg, transparent);
+  color: var(--bs-text);
+  font-size: 13px;
+}
+
+.byte-board-bb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--bs-muted);
+}
+
+.ctr-byte .byte-app .byte-board-bb-select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-input-bg, transparent);
+  color: var(--bs-text);
+  font-size: 13px;
+}
+
+.ctr-byte .byte-app .byte-board-bb-color {
+  width: 44px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--bs-border);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.byte-board-button-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ctr-byte .byte-app .byte-board-bb-save {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--bs-accent-grad);
+  color: #FFFFFF !important;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ctr-byte .byte-app .byte-board-bb-cancel {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: transparent;
+  color: var(--bs-text) !important;
+  font-size: 13px;
+}
+
+.byte-board-bb-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bs-danger, #e5484d);
 }
 
 .byte-board-leave {
