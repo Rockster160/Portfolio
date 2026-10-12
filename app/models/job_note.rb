@@ -249,6 +249,7 @@ class JobNote < ApplicationRecord
 
   after_commit :sync_follow_up, on: [:create, :update]
   after_commit :retire_follow_up, on: :destroy
+  after_commit :sync_waiting_alert
   after_commit :settle_application
   after_commit :refresh_fitness, on: :create
 
@@ -509,6 +510,13 @@ class JobNote < ApplicationRecord
     return if job_application.status.to_s == implied.to_s
 
     job_application.update(status: implied)
+  end
+
+  # Whether this application is waiting on HIM is a property of its LAST beat,
+  # so the only things that can change it are a beat landing, being retagged and
+  # being deleted - which is this callback, on all three.
+  def sync_waiting_alert
+    ::Buddy::JobWaiting.sync!(job_application_id)
   end
 
   # The dashboard's daily rows are PUSHED. The Fitness cell refreshes itself

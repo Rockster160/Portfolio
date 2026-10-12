@@ -78,6 +78,17 @@ module Buddy
       alert
     end
 
+    # A body may carry a markdown link - the bubble is where one is useful, and
+    # the application page a job alert points at is most of the reason to raise
+    # it in Byte. A LOCK SCREEN is not a document, so the push title gets the
+    # link's words and not its address. The strip's row label does the same,
+    # client side.
+    LINK = /\[([^\]]+)\]\([^)\s]+\)/
+
+    def plain_body(body)
+      body.to_s.gsub(LINK, '\1')
+    end
+
     # ---- what is still standing ----------------------------------------------
 
     # Every open alert, oldest first. The bubble is where the words are, but a
@@ -118,7 +129,7 @@ module Buddy
         conversation: conversation,
         text:         body,
         metadata:     { kind: KIND, alert: alert.wire },
-        push_title:   body,
+        push_title:   plain_body(body),
       )
       alert.update!(byte_message_id: message.id, metadata: alert.metadata.merge("notified_at" => now.iso8601))
       broadcast_outstanding!(user)
@@ -142,7 +153,9 @@ module Buddy
       # minutes ago. A repeat a day later has outlived their memory of it, and
       # staying silent then is exactly how one ignored alert goes on to eat
       # every occurrence after it.
-      ::Buddy::CompanionDelivery.notify(alert.user, message, push_title: body) if buzz && message
+      if buzz && message
+        ::Buddy::CompanionDelivery.notify(alert.user, message, push_title: plain_body(body))
+      end
       alert
     end
 

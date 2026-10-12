@@ -7,7 +7,7 @@ import { alertStatusLabel } from "../../app/javascript/src/pages/byte/alert_stat
 // "" for a missing one — which is the case that decides half the branches here.
 const fmt = (iso) => (iso ? "5:04 PM" : "");
 
-const { alertRowLabel, overflowLabel, MAX_ROWS } = await import(
+const { alertRowLabel, alertRowText, overflowLabel, MAX_ROWS } = await import(
   "../../app/javascript/src/pages/byte/alert_strip.js"
 );
 
@@ -46,6 +46,18 @@ out.row = {
   no_count: alertRowLabel({ body: "The gate is open" }),
   blank: alertRowLabel({}),
   nothing: alertRowLabel(undefined),
+  // A job alert links the application it is about: the bubble is where that is
+  // useful, and a row is a label rather than a document.
+  linked: alertRowLabel({
+    body: "Send availability: [Reserv](https://ardesian.com/interviews/109)",
+  }),
+  linked_counted: alertRowLabel({
+    body: "Take-home to do: [Acme](https://ardesian.com/interviews/3)",
+    count: 2,
+  }),
+  two_links: alertRowText("[one](http://a.test) then [two](http://b.test)"),
+  // Brackets that are not a link are somebody's words and stay as they are.
+  not_a_link: alertRowText("The gate [north] is open"),
 };
 
 // Two drawn, the rest a count. Scrolling a strip pinned over the pet put a

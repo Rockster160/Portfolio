@@ -33,6 +33,22 @@ RSpec.describe Buddy::Alerts do
       expect(WebPushNotifications).to have_received(:send_to_byte).once
     end
 
+    # A job alert links the application it stands for, and the bubble is where
+    # that is useful. A lock screen is not a document.
+    it "puts a link's words on the lock screen and not its address" do
+      described_class.raise!(
+        user: user,
+        key:  "job:waiting:9",
+        body: "Send availability: [Reserv](https://ardesian.com/interviews/9)",
+      )
+
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(
+        hash_including(title: "Send availability: Reserv"),
+      )
+      # The bubble keeps the link itself - that is the half that works.
+      expect(BuddyAlert.last.byte_message.body).to include("(https://ardesian.com/interviews/9)")
+    end
+
     it "refuses without a key, without words, or without a thread to say it in" do
       expect(described_class.raise!(user: user, key: "  ", body: "words")).to be_nil
       expect(described_class.raise!(user: user, key: "gate", body: "  ")).to be_nil

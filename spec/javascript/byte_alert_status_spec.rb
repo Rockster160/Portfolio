@@ -73,6 +73,20 @@ RSpec.describe "Byte alert status line" do
       expect(row["nothing"]).to eq("")
     end
 
+    # A job alert links the application it stands for, because the point of
+    # having it in Byte is getting to the timeline from it. The BUBBLE is where
+    # that link works; a row is a label, and printing the address in it spends
+    # the whole width on something nothing can be done with.
+    it "prints a link's words and not its address" do
+      expect(row["linked"]).to eq("Send availability: Reserv")
+      expect(row["linked_counted"]).to eq("Take-home to do: Acme (×2)")
+      expect(row["two_links"]).to eq("one then two")
+    end
+
+    it "leaves brackets that are not a link alone" do
+      expect(row["not_a_link"]).to eq("The gate [north] is open")
+    end
+
     # Scrolling a strip pinned over the pet put a full-height native scrollbar
     # down his side — worse than the problem, and over a list nobody wants to
     # scroll. Two are drawn and the rest are a count.

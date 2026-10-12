@@ -54,8 +54,18 @@ export function overflowLabel(total, max = MAX_ROWS) {
   return hidden > 0 ? `+${hidden} more outstanding` : null;
 }
 
+// A body may carry a markdown link - the bubble is where one is useful, and the
+// application page a job alert points at is most of the reason to raise it here.
+// A row is a LABEL, not a document, so it gets the link's words and not its
+// address; the bubble the row jumps to is where the link itself still works.
+const LINK = /\[([^\]]+)\]\([^)\s]+\)/g;
+
+export function alertRowText(body) {
+  return (body || "").toString().replace(LINK, "$1").trim();
+}
+
 export function alertRowLabel(alert) {
-  const body = (alert?.body || "").toString().trim();
+  const body = alertRowText(alert?.body);
   const count = Number(alert?.count || 0);
   return count > 1 ? `${body} (×${count})` : body;
 }
@@ -84,7 +94,7 @@ export function initAlertStrip({ root, onJump }) {
       go.textContent = alertRowLabel(alert);
       // The words are the caller's and can be long; the full sentence is the
       // tooltip so a truncated row is never the only version of it.
-      go.title = alert.body || "";
+      go.title = alertRowText(alert.body);
       go.addEventListener("click", () => onJump?.(alert));
 
       const drop = document.createElement("button");
