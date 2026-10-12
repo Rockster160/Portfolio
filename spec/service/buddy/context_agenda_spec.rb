@@ -432,6 +432,29 @@ RSpec.describe Buddy::Context, ".build agenda" do
       expect(row("My Drive")).to include(:leave_by, :drive_min)
     end
 
+    # Prod 7921, 12 Oct: "Breakfast with Lopez's is at home at 10am, so leave by
+    # 10am." The item is at their own house - `travel_minutes` 0, and a stamped
+    # `leave_at` equal to the start - and `unsaid_departures` then required the
+    # briefing to say the number.
+    it "drops it on an item with no drive at all" do
+      create(
+        :agenda_item,
+        agenda:   user.agendas.first || create(:agenda, user: user),
+        name:     "Breakfast At Home",
+        start_at: 3.hours.from_now,
+        metadata: {
+          "travel" => {
+            "travel_minutes"   => 0,
+            "travel_from_kind" => "home",
+            "leave_at"         => 3.hours.from_now.to_i,
+          },
+        },
+      )
+
+      expect(row("Breakfast At Home")).not_to include(:leave_by)
+      expect(row("Breakfast At Home")).not_to include(:drive_min)
+    end
+
     it "strips it off a calendar shared in as a viewer" do
       partner = create(:user)
       hers = create(:agenda, user: partner)

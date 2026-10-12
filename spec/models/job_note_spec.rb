@@ -667,6 +667,49 @@ RSpec.describe JobNote do
 
       expect(past.reload.follow_up_at).to be_present
     end
+
+    # iCapital again, a fortnight on: they moved the interview UP, Friday the
+    # 16th to Wednesday the 14th, and the note holding Friday was two days old
+    # so the window didn't reach it. The board showed two iCapital interviews
+    # and the briefings read both out three mornings running.
+    describe "a booking that moves EARLIER than one already standing" do
+      # Absolute, because the fixture is filed from two days ago and a relative
+      # `from_now` inside the travel block would move with it.
+      let(:friday)    { 6.days.from_now }
+      let(:wednesday) { 4.days.from_now }
+
+      def filed_two_days_ago(at)
+        travel_to((described_class::BOOKING_CORRECTION_WINDOW + 1.day).ago) {
+          job.notes.create!(tag: :scheduled, follow_up_at: at)
+        }
+      end
+
+      it "withdraws the later one however long ago it was filed" do
+        old = filed_two_days_ago(friday)
+
+        job.notes.create!(tag: :scheduled, follow_up_at: wednesday)
+
+        expect(old.reload.follow_up_at).to be_nil
+      end
+
+      it "leaves the board naming the one that is actually next" do
+        filed_two_days_ago(friday)
+
+        job.notes.create!(tag: :scheduled, follow_up_at: wednesday)
+
+        expect(job.reload.next_interview_at).to be_within(1.minute).of(wednesday)
+      end
+
+      # The other direction is still a second round, so the window is still
+      # what decides it.
+      it "leaves an older booking that comes BEFORE the new one" do
+        old = filed_two_days_ago(wednesday)
+
+        job.notes.create!(tag: :scheduled, follow_up_at: friday)
+
+        expect(old.reload.follow_up_at).to be_present
+      end
+    end
   end
 
   describe "follow-ups" do

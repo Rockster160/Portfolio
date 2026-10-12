@@ -170,6 +170,42 @@ RSpec.describe Buddy::ReminderFirer do
     end
   end
 
+  # The morning routine ran its whole scene twice on two mornings in three. The
+  # HASS call inside it hangs for a 60s timeout, which is longer than the gap
+  # between sweeps, and for that whole minute `fire_at` still read as due.
+  describe "while the dispatch is still running" do
+    let!(:task) {
+      Task.create!(user: user, name: "Good Morning", listener: "good-morning",
+                   code: "", enabled: true, buddy_enabled: true)
+    }
+
+    it "has already rolled forward, so the next sweep finds nothing due" do
+      reminder = remind!("run Good Morning", recurrence: { "kind" => "daily", "at" => "05:45" })
+      due_mid_dispatch = nil
+      allow(::Jil).to receive(:trigger) {
+        due_mid_dispatch = BuddyReminder.find(reminder.id).fire_at <= Time.current
+        true
+      }
+
+      described_class.fire!(reminder)
+
+      expect(due_mid_dispatch).to be(false)
+    end
+
+    # The cost of rolling first, stated so it stays deliberate: a dispatch that
+    # blows up has already moved the row. It is reported rather than retried.
+    it "reports a dispatch that raises instead of leaving the row due" do
+      reminder = remind!("run Good Morning", recurrence: { "kind" => "daily", "at" => "05:45" })
+      allow(::Jil).to receive(:trigger).and_raise(Net::ReadTimeout)
+      allow(Buddy::Errors).to receive(:report)
+
+      described_class.fire!(reminder)
+
+      expect(Buddy::Errors).to have_received(:report).with(hash_including(section: "reminder_firer.fire"))
+      expect(reminder.reload.fire_at).to be > Time.current
+    end
+  end
+
   describe "the recurring kind" do
     it "rolls forward instead of going terminal" do
       reminder = remind!("feed the fish", recurrence: { "kind" => "daily", "at" => "09:00" })

@@ -168,6 +168,14 @@ module Buddy
     # knows are exactly the ones `strftime("%a")` produces.
     DAY_NAMES   = ::Date::ABBR_DAYNAMES.zip(::Date::DAYNAMES).to_h.freeze
     DAY_ABBREVS = DAY_NAMES.keys.freeze
+    DAY_WORDS   = (::Date::DAYNAMES + DAY_ABBREVS).freeze
+
+    # "Sunday through Thursday", "Mon-Fri", "Tue to Thu". Wrapping past Saturday
+    # is handled by the caller, so "Friday through Tuesday" is five days and not
+    # a mistake.
+    DAY_RANGE_RX = /
+      \b(#{DAY_WORDS.join("|")})\b \s* (?:through|thru|to|until|till|[-\u2013\u2014]) \s* \b(#{DAY_WORDS.join("|")})\b
+    /xi
 
     # `week_outlook` writes days as `%a` because it is compact SEED input, and
     # this is the one place that string becomes prose. "Rain Mon this week." is
@@ -252,6 +260,7 @@ module Buddy
       return true if body.blank? || days.empty?
 
       said = home_sentences(body).select { |sentence| sentence.match?(WEATHER_WORDS_RX) }
+      said = said.map { |sentence| with_day_ranges_filled(sentence) }
       return false if said.empty?
 
       day_word_groups(days, today).all? { |names|
@@ -385,6 +394,30 @@ module Buddy
     end
 
     def day_words(days, today) = day_word_groups(days, today).flatten.uniq
+
+    # A range NAMES its two ends and MEANS every day between them. The per-day
+    # check only reads names, so "the week stays soaked: rain Sunday through
+    # Thursday" counted as two days out of five and the week line got stapled on
+    # underneath a sentence that had already said it - three mornings running,
+    # on two different companions. `week_dropped?` reads the same check, so the
+    # draft also burned a corrective round being told the week was missing.
+    #
+    # The run is APPENDED rather than substituted in. Every reader of these
+    # sentences matches whole words, so the names only have to be present; and
+    # leaving the range where it was keeps the sentence the model actually wrote
+    # legible to anything that logs it.
+    def with_day_ranges_filled(sentence)
+      sentence.gsub(DAY_RANGE_RX) { |range|
+        from = day_index(::Regexp.last_match(1))
+        to   = day_index(::Regexp.last_match(2))
+        next range if from.nil? || to.nil?
+
+        span = (0..((to - from) % 7)).map { |step| ::Date::DAYNAMES[(from + step) % 7] }
+        "#{range} #{span.join(" ")}"
+      }
+    end
+
+    def day_index(word) = ::Date::DAYNAMES.index(DAY_NAMES[word.capitalize] || word.capitalize)
 
     # One group per flagged day: every way that day could have been named.
     # `week_said?` needs them kept apart, and everything else wants them flat.

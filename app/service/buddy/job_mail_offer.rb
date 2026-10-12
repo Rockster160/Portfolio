@@ -88,19 +88,33 @@ module Buddy
       if job.nil?
         return deliver_card(user, conversation, card, metadata, verdict) if verdict[:company].blank?
 
+        ambiguous = rows.any?
         seed = (
-          if rows.any?
+          if ambiguous
             ambiguous_seed(verdict, rows, metadata, occurred_at, email, body, outgoing)
           else
             new_company_seed(verdict, metadata, occurred_at, email, body, outgoing)
           end
         )
 
+        # The one seed that is TOLD to ask rather than act, so the one seed that
+        # must not carry `seed_call`. With it, asking which role is read as a
+        # dropped call: the turn is sent "What did not happen is the CALL - make
+        # it now", and the person gets a second notification retracting a claim
+        # nobody made. Worse on the round it works - a retry on the Pura mail
+        # pushed the model into picking a role, which is exactly what the seed
+        # forbids.
+        #
+        # `seed_tools` stays. They are still the only tools this turn's business,
+        # and the answer to the question it asks is a call on the next turn.
+        meta = prompt_metadata(metadata, nil, verdict, outgoing)
+        meta = meta.except(:seed_call) if ambiguous
+
         return CompanionDelivery.deliver_prompt(
           user:         user,
           conversation: conversation,
           seed:         seed,
-          metadata:     prompt_metadata(metadata, nil, verdict, outgoing),
+          metadata:     meta,
         )
       end
 
@@ -249,7 +263,7 @@ module Buddy
       [
         (
           if outgoing && same_role
-            "They just SENT this, and it belongs to an application already on their board."
+            "#{sent_opener(job.company)} It belongs to an application already on their board."
           elsif same_role
             "Job mail just arrived, and it belongs to an application already on their board."
           else
@@ -274,7 +288,7 @@ module Buddy
             # The old wording called that a SEPARATE application and ordered one,
             # so row 107 was opened and closed as rejected for a job nobody ever
             # applied to twice - leaving the row that WAS rejected reading active.
-            "#{outgoing ? "They just SENT this" : "Job mail just arrived"}, and their board " \
+            "#{outgoing ? sent_opener(job.company) : "Job mail just arrived."} Their board " \
               "has this COMPANY on it ONCE, for the role below - but nothing in this mail " \
               "says whether it is about that job. Add the note to the row below. A title " \
               "that reads differently is not a second application: the board's title comes " \
@@ -311,7 +325,8 @@ module Buddy
               "it: this sentence is the notification, and it lands on a lock screen with none " \
               "of the card beside it, so a beat with no company attached could be any of the " \
               "applications they have open. Do not quote it back " \
-              "at them and do not paste any of it into your reply; the card carries it. " \
+              "at them and do not paste any of it into your reply; the card carries it." \
+              "#{JobMailRules.times} " \
               "You can link the row as #{job_url(job)} if it reads naturally" \
               "#{", or the mail itself as #{mail_url(email)}" if email.present?}. One link, " \
               "not both."
@@ -343,7 +358,7 @@ module Buddy
       [
         (
           if outgoing
-            "They just SENT job mail to a company that is NOT on their board yet."
+            "#{sent_opener(verdict[:company])} That company is NOT on their board yet."
           else
             "Job mail just arrived from a company that is NOT on their board yet."
           end
@@ -353,7 +368,8 @@ module Buddy
         *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
         "",
         "Say in ONE short sentence what this mail actually says - they have not read it. " \
-        "Do not quote it back at them and do not paste any of it into your reply.",
+        "Do not quote it back at them and do not paste any of it into your reply." \
+        "#{JobMailRules.times}",
         "",
         "Then CALL add_job_application with that company - do not offer to, do not ask " \
         "first. It is a level-3 tool, so the card writes nothing until they tap it. " \
@@ -370,15 +386,23 @@ module Buddy
       listed = rows.map { |row| "  - #{row.role.presence || "(no role recorded)"} - #{job_url(row)}" }
 
       [
-        "#{outgoing ? "They just SENT job mail" : "Job mail just arrived"} for a company that " \
-        "is on their board #{rows.size} times, for different jobs.",
+        (
+          if outgoing
+            "#{sent_opener(verdict[:company])} That company is on their board " \
+              "#{rows.size} times, for different jobs."
+          else
+            "Job mail just arrived for a company that is on their board " \
+              "#{rows.size} times, for different jobs."
+          end
+        ),
         "",
         "Company: #{verdict[:company]}",
         "On the board:",
         *listed,
         *mail_facts(verdict, metadata, occurred_at, email, body, outgoing),
         "",
-        "Say in ONE short sentence what this says. Then CALL add_job_note" \
+        "Say in ONE short sentence what this says.#{JobMailRules.times} " \
+        "Then CALL add_job_note" \
         "#{log_hint(occurred_at, email)} with `role` naming WHICH of those jobs it is - the " \
         "mail usually says, in the subject or the first line. If it genuinely does not, ask " \
         "them which one rather than picking: a note on the wrong job is permanent." \
@@ -407,6 +431,21 @@ module Buddy
         ("Mail: #{mail_url(email)}" if email.present?),
         message_block(body),
       ]
+    end
+
+    # Who WROTE the mail, where the answer is "they did".
+    #
+    # "They just SENT this" was the whole of it, and `they` in that sentence can
+    # mean either party. His own reply to Reserv - "I'm so sorry... can we
+    # reschedule" - came back to him as "Reserv asked to reschedule because of a
+    # funeral conflict", and was tagged as a thing waiting on him. Naming the
+    # RECIPIENT is what takes the choice away: with the company on the receiving
+    # end of the sentence there is nobody else left to have written it.
+    def sent_opener(company)
+      to = company.to_s.strip.presence
+
+      "They just SENT this#{" TO #{to}" if to} - the words below are THEIRS, " \
+        "not the company's."
     end
 
     # The row on the board, so a reply and a receipt can both point at it.

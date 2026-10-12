@@ -396,8 +396,30 @@ class JobNote < ApplicationRecord
 
     booked = job_application.notes.where(tag: :scheduled).where(follow_up_at: Time.current..)
     booked = booked.where.not(id: id).where(occurred_at: ..occurred_at)
-    booked = booked.where(created_at: BOOKING_CORRECTION_WINDOW.ago..) if scheduled?
+    booked = superseded_bookings(booked) if scheduled?
     booked.find_each { |note| note.update(follow_up_at: nil) }
+  end
+
+  # Which of the other future bookings this one REPLACES, as opposed to joins.
+  #
+  # Two ways to be a replacement, and the window was only ever the first of
+  # them. The second is the shape iCapital arrived in: they moved the interview
+  # UP, from Friday the 16th to Wednesday the 14th, and a booking that lands
+  # earlier than one already standing cannot be the round after it. The window
+  # missed it because the note it replaced was two days old, so the board and
+  # three mornings of briefings carried both as separate interviews.
+  #
+  # The trade this makes, stated because it is the one the window exists to
+  # avoid: an application that genuinely books a later round first and an
+  # earlier one second loses the later row's follow-up. The note and its body
+  # stay; it is the calendar item that goes. Against a stale interview being
+  # read out as the next one, which has now happened, that is the cheaper way
+  # to be wrong - and an interview process books one round at a time.
+  def superseded_bookings(booked)
+    fresh = booked.where(created_at: BOOKING_CORRECTION_WINDOW.ago..)
+    return fresh if follow_up_at.blank?
+
+    fresh.or(booked.where(follow_up_at: follow_up_at..))
   end
 
   # Blank lines off the top and bottom, and nothing else. `strip` was doing this

@@ -1175,6 +1175,49 @@ RSpec.describe Buddy::GPT::Turn do
         expect(reply.body).not_to eq(described_class::UNDONE_BODY)
       end
 
+      # Prod 7842, 10 Oct. The push for "Canceled event: Interview with Reserv"
+      # was retracted to PENDING_BODY, which names nothing - and on a turn
+      # Buddy started, that sentence IS the notification. On a lock screen it
+      # could have been any of the applications he had open.
+      describe "on a turn Buddy started itself" do
+        let(:action) {
+          instance_double(
+            ByteAction,
+            buttons: [{ "status" => "pending", "label" => "💼 Cancelled — Reserv", "sublabel" => "We're sorry" }],
+          )
+        }
+
+        def seeded(rounds)
+          message = convo.byte_messages.create!(
+            user: user, direction: :outbound, state: :sent, body: "Job mail just arrived.",
+            metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "job_mail" }
+          )
+          described_class.run!(message, client: FakeBuddyClient.new(rounds))
+        end
+
+        it "keeps what the card is about in front of the sentence" do
+          seeded([
+            { tool_calls: [{ name: :add_job_note, arguments: { "company" => "Reserv", "tag" => "cancelled" } }] },
+            { text: "Logged that for you." },
+          ])
+
+          expect(reply.body).to eq("💼 Cancelled — Reserv. Ready below, it just needs your tap.")
+        end
+
+        it "falls back to the bare sentence when the row names nothing" do
+          allow(Buddy::ProposalBuilder).to receive(:create).and_return(
+            action: instance_double(ByteAction, buttons: [{ "status" => "pending" }]), auto_ran: false,
+          )
+
+          seeded([
+            { tool_calls: [{ name: :add_job_note, arguments: { "company" => "Reserv", "tag" => "cancelled" } }] },
+            { text: "Logged that for you." },
+          ])
+
+          expect(reply.body).to eq(described_class::PENDING_BODY)
+        end
+      end
+
       # The :commanded arm infers the failure from the REQUEST being an
       # imperative. A proposal waiting on screen IS an answer to one, so an
       # honest reply offering it must survive untouched.
@@ -1470,6 +1513,22 @@ RSpec.describe Buddy::GPT::Turn do
       expect(client.calls.length).to eq(3)
       expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
       expect(reply.body).to eq("Yep, fan's on high.")
+    end
+
+    # Prod 7761: "Send me a reminder at 12:50" came back "Mooooorning" and then
+    # "Done. Your 12:50 reminder will read..." off one call with no tool use.
+    # The claim was anchored to the start of the MESSAGE, so a paragraph of
+    # greeting in front of it was the whole of how it got past the check, and
+    # the person covered it himself with a 40m timer nineteen seconds later.
+    it "catches the bare claim behind a paragraph of something else" do
+      client = run([
+        { text: "Mooooorning!\n\nDone. Your 12:50 reminder will read: Bluestaq interview at 1pm." },
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Fan high" } }] },
+        { text: "Set for 12:50." },
+      ])
+
+      expect(client.calls.length).to eq(3)
+      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
     end
 
     # `input` IS the model's whole context - `store: false`, no

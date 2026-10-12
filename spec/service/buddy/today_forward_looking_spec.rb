@@ -972,6 +972,44 @@ RSpec.describe "Buddy Today forward-looking" do
           end
         end
 
+        # Prod 7744 (Moss, Oct 8), 7825 (Byte, Oct 9) and 7883 (Oct 10): three
+        # mornings in a row, on two companions. A range names its two ends, the
+        # check only reads names, and so a sentence that had already given the
+        # whole week got the week line stapled on underneath it.
+        describe "when the week is written as a range" do
+          let(:sunday) { Date.new(2026, 10, 11) }
+
+          def ranged?(body, flags)
+            Buddy::TodayBriefing.week_said?(body, Buddy::TodayBriefing.flagged_days(flags), today: sunday)
+          end
+
+          it "counts every day between the two ends" do
+            said = "The week stays soaked: rain Sunday through Thursday."
+
+            expect(ranged?(said, "rain Sun, Mon, Tue, Wed & Thu")).to be(true)
+          end
+
+          it "wraps past Saturday" do
+            expect(ranged?("Rain Friday through Tuesday.", "rain Fri, Sat, Sun, Mon & Tue")).to be(true)
+          end
+
+          it "takes a hyphen and the abbreviations" do
+            expect(ranged?("Rain Mon-Wed this week.", "rain Mon, Tue & Wed")).to be(true)
+          end
+
+          # The range is filled in, not trusted: a flagged day outside it is
+          # still missing.
+          it "is not satisfied by a range that stops short" do
+            expect(ranged?("Rain Sunday through Tuesday.", "rain Sun, Mon, Tue & Thu")).to be(false)
+          end
+
+          # Same rule as every other arm here - the sentence has to be doing
+          # weather work. A range of dates on the calendar is not a forecast.
+          it "does not read a range of appointments as the week's weather" do
+            expect(ranged?("Board meeting Monday through Thursday.", "rain Mon, Tue, Wed & Thu")).to be(false)
+          end
+        end
+
         # The day and the forecast have to be the same claim. Split across two
         # sentences, neither one is a heads-up for that day.
         it "does not count a day and a forecast in separate sentences" do

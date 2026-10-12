@@ -312,6 +312,20 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).to include("VERBATIM")
     end
 
+    # Prod 7811, and 6557 / 6718 / 6873 before it: the turn asked which role,
+    # which is what this seed says to do, and was then sent "What did not happen
+    # is the CALL - make it now" and pushed a retraction of a claim nobody made
+    # onto his phone. On the Pura mail the retry got the model to pick a role,
+    # which is the one thing this seed forbids. `seed_call` is what read the
+    # question as a dropped call.
+    it "is not told to expect a call, because it may ask instead" do
+      expect(call.metadata).not_to have_key("seed_call")
+    end
+
+    it "still keeps the seed to its own two tools" do
+      expect(call.metadata["seed_tools"]).to eq(%w[add_job_note add_job_application])
+    end
+
     # The mail naming one of them is the ordinary case, and it must go straight
     # through to that row rather than asking.
     it "goes straight to the row the mail names" do
@@ -460,6 +474,28 @@ RSpec.describe Buddy::JobMailOffer do
     it "doesn't explain his own words back to him" do
       expect(sent.body).to include("they wrote it, so don't explain it back")
     end
+
+    # Prod 7837, 10 Oct. His own mail to Reserv - "I'm so sorry... can we
+    # reschedule" - was read back to him as "Reserv asked to reschedule because
+    # of a funeral conflict". "They just SENT this" was the whole opener, and
+    # `they` in it can mean either party.
+    it "names the company as the RECIPIENT, so the sender can't be misread" do
+      body = sent.body
+
+      expect(body).to include("SENT this TO iCapital")
+      expect(body).to include("the words below are THEIRS")
+    end
+
+    # Prod 7776 (Neighbor) and 7837 (Reserv), both retagged by hand. His own
+    # windows sent back read as "more specific" than `responded`, and
+    # `availability` is the tag that puts "send availability" back at the top of
+    # his board for a thing he has just done.
+    it "keeps his own times out of the availability tag" do
+      body = sent.body
+
+      expect(body).to include("Times they have SENT")
+      expect(body).to include("never `availability`")
+    end
   end
 
   context "when nothing on the board matches" do
@@ -475,6 +511,20 @@ RSpec.describe Buddy::JobMailOffer do
 
     it "carries the mail's own arrival time onto the new row" do
       expect(call.body).to include("occurred_at #{arrived.iso8601}")
+    end
+
+    # Prod 7787 and 7791, 9 Oct. One line said "Tuesday, October 15" for a
+    # Thursday, repeating the recruiter's own slip; another said "Friday at 11am
+    # PT / 10am AKDT" for a Pacific invite, with his own 12pm MDT nowhere in it.
+    # Both lines are the lock-screen notification.
+    it "pins the zone to his and the weekday to the date" do
+      body = described_class.call(
+        user: user, verdict: verdict, card: "📥 the card", metadata: metadata,
+        occurred_at: arrived,
+      ).body
+
+      expect(body).to include("in THEIR zone")
+      expect(body).to include("read the weekday off the DATE")
     end
 
     # The first beat on a brand-new row is read off the same mail and gets the

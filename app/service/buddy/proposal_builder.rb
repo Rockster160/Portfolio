@@ -1123,6 +1123,10 @@ module Buddy
       # says WHAT ran. It stays on the message metadata, where debugging can
       # reach it without putting snake_case in front of a person. Argument keys
       # get their underscores turned back into spaces for the same reason.
+      # A label is words and underscores and nothing else: no digits, so a clock
+      # time can't be mistaken for one.
+      BARE_LABEL_RX = /\A\s*[a-z_ ]+\s*\z/i
+
       def activity_detail(tool, payload, ctx)
         raw = safely { tool[:label].call(payload, ctx) }
         sub = raw.is_a?(Hash) ? (raw[:sub] || raw["sub"]).to_s.presence : nil
@@ -1130,7 +1134,15 @@ module Buddy
 
         sub.split("\n").map { |line|
           key, value = line.split(":", 2)
-          value ? "#{key.to_s.strip.tr("_", " ")}: #{value.strip}" : line.strip
+          # Only where the part in front of the colon is a bare LABEL. Every
+          # line was being read as `key: value`, and a clock time has a colon in
+          # it - so "Thu 12:30pm" came apart at it and was put back together as
+          # "Thu 12: 30pm" on every timed reminder chip for a fortnight.
+          if value && key.match?(BARE_LABEL_RX)
+            "#{key.to_s.strip.tr("_", " ")}: #{value.strip}"
+          else
+            line.strip
+          end
         }.join(" · ")
       end
 

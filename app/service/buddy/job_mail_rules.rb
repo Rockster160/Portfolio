@@ -64,12 +64,30 @@ module Buddy
         "looks nearest."
     end
 
+    # Every seed's first sentence is the lock-screen notification, so a time in
+    # it is read with none of the mail beside it.
+    #
+    # Two ways that went wrong on one morning. A recruiter wrote "Tuesday the
+    # 15th" for a Thursday and the line repeated the weekday rather than
+    # checking it against the date - the booking itself was right, so only the
+    # sentence was wrong. And a Pacific invite came out as "Friday at 11am PT /
+    # 10am AKDT": a zone neither party is in, with their own nowhere in it.
+    def times
+      " Any time you name is in THEIR zone, and read the weekday off the DATE " \
+        "rather than off the mail - a mail naming the wrong one is ordinary, " \
+        "and repeating it puts the wrong day on their lock screen. Do not name " \
+        "a second zone."
+    end
+
     # Mail he SENT. The tag is about what he did, not what arrived.
     def outgoing_tag(outgoing)
       return "" unless outgoing
 
       " This one is theirs, so `responded` is usually the tag - unless they " \
-        "withdrew, accepted an offer, or the words say something more specific."
+        "withdrew, accepted an offer, or the words say something more specific. " \
+        "Times they have SENT - windows they can do - are `responded`, never " \
+        "`availability`: that tag is the ask waiting on THEM, and this mail is " \
+        "them answering it."
     end
 
     # VERBATIM, because the note is the message. "Pass the part that carries the

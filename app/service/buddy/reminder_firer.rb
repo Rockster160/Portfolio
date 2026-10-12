@@ -24,6 +24,25 @@ module Buddy
 
       return skip!(reminder) unless condition_met?(reminder)
 
+      # BEFORE the dispatch, not after it. `fire_at` is what the sweep reads to
+      # decide a reminder is due, so for as long as a dispatch is still running
+      # the row still says "due" and the next sweep a minute later fires it
+      # again. The guard at the top of this method doesn't help: a recurring
+      # reminder never sets `fired_at`, so there is nothing for a second pass to
+      # trip over.
+      #
+      # It is a real minute of exposure and not a theoretical one - an action
+      # that reaches a device waits on the device, and a 60s HTTP timeout is
+      # longer than the gap between sweeps. A morning routine then runs its
+      # whole scene twice.
+      #
+      # Rolling first costs the opposite case: a dispatch that raises has
+      # already moved the row, so the nudge is lost rather than retried. That is
+      # the cheaper of the two, because the `rescue` below reports it and a
+      # recurring reminder is due again tomorrow - where running the scene twice
+      # is visible, unasked, and lands on the house.
+      roll_forward!(reminder)
+
       if calls.any?
         run_action(reminder, calls)
       elsif command
@@ -35,8 +54,6 @@ module Buddy
       else
         deliver_plain_reminder(user, conversation, reminder)
       end
-
-      roll_forward!(reminder)
     rescue StandardError => e
       # Firing a reminder failing is a data-integrity event: the user
       # asked to be reminded of something at a specific time and the

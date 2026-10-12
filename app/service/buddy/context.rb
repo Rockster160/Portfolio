@@ -550,9 +550,18 @@ module Buddy
       #
       # Strictly `>`, no margin. 6579's IT leave-by was 8:38am on a seed built
       # at 8:18 - twenty minutes is the case this is FOR, not a rounding error.
+      #
+      # And only where there is a DRIVE. A zero-minute trip has no departure:
+      # its stamped `leave_at` is the start time, so a breakfast at their own
+      # house came through as "is at home at 10am, so leave by 10am", which
+      # `unsaid_departures` then required the briefing to say. Dropping it takes
+      # the drive minutes with it and stands the `:travel` rule down for that
+      # item, same as the passed case above - which is right, because what that
+      # rule exists to get said is a cost that isn't there.
       def leave_by(item, user, now: Time.current)
         at = item.leave_at
         return nil if at.blank? || at <= now
+        return nil if item.travel_seconds.nil?
 
         Buddy::Clock.at(at, zone: user.timezone)
       end

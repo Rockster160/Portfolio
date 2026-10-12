@@ -396,6 +396,37 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::JobHunt.applications_for(user, "Netflx").map(&:company)).to eq(["Netflix"])
     end
 
+    # Prod 7810, 9 Oct. The seed said GitHub was on the board 2 times: the
+    # GitHub row, and a GitLab one. Two edits apart is inside the allowance for
+    # a six-letter name, so the fuzzy weight kept it at 40 next to GitHub's 100.
+    # The seed lists rows without their company names, so nothing after this
+    # could see the second was a different company, and a GitHub rejection went
+    # unfiled rather than onto the row sitting right there.
+    describe "when the typo allowance reaches a DIFFERENT company" do
+      let!(:github) { user.job_applications.create!(company: "GitHub") }
+      let!(:gitlab) {
+        user.job_applications.create!(company: "GitLab", role: "Staff Backend Engineer (Ruby)")
+      }
+
+      it "takes the exact name over the near miss" do
+        expect(Buddy::JobHunt.applications_for(user, "GitHub")).to eq([github])
+      end
+
+      it "resolves to it, so the mail gets filed" do
+        expect(Buddy::JobHunt.resolve_application(user, "GitHub")).to eq(github)
+      end
+
+      it "answers for the other one the same way" do
+        expect(Buddy::JobHunt.applications_for(user, "GitLab")).to eq([gitlab])
+      end
+
+      # No exact name and two companies answering is the coin toss the
+      # head-word fallback already refuses, so this refuses it too.
+      it "refuses when a near miss reaches two companies and nothing is exact" do
+        expect(Buddy::JobHunt.applications_for(user, "Gitlob")).to be_empty
+      end
+    end
+
     # A role is still how two rows at ONE company are told apart - that is
     # `resolve_application`'s own step, and it is downstream of this.
     it "leaves the role doing its own job of picking between rows" do

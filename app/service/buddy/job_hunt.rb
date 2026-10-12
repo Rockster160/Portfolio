@@ -80,7 +80,21 @@ module Buddy
 
       board = JobApplication.where(user: user)
       hits  = JobSearch.by_company(board, normalize(name)).to_a
-      return hits if hits.any?
+      # `by_company` is FUZZY - it keeps every row that scores at all - so a
+      # near-miss comes back beside the exact match rather than behind it.
+      # "github" and "gitlab" are two edits apart, which is inside the
+      # allowance for a six-letter name, so a GitHub mail came back with the
+      # GitHub row at 100 and a GitLab row at 40 and the seed said the company
+      # was on the board twice. The seed lists rows without their company names,
+      # so nothing downstream could see the second one was a different company.
+      #
+      # An exact name settles it. Otherwise the same rule the head-word fallback
+      # below already carries: several rows for ONE company is the thing this
+      # exists to return, and several companies is a coin toss.
+      exact = hits.select { |job| normalize(job.company) == normalize(name) }
+      return exact if exact.any?
+      return hits if hits.any? && hits.map { |job| normalize(job.company) }.uniq.one?
+      return [] if hits.any?
 
       # Still nothing: try the leading word on its own, for the "Netflix Talent
       # Acquisition" shape where the extra words are a department rather than

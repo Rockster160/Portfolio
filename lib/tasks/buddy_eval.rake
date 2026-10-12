@@ -636,6 +636,36 @@ BUDDY_EDGE_PROBES = [
     needs:      :halloway_application,
     note:       "he has done his part; the next move is theirs",
   },
+  # --- times HE sent are an answer, not an ask ------------------------------
+  # Prod 7776 (Neighbor, 8 Oct) and 7837 (Reserv, 10 Oct), both retagged by
+  # hand within the minute. His own reply listing windows he could do was
+  # proposed `availability` - the tag the board prints as waiting on HIM - and
+  # the rule only said `responded` was the tag "unless the words say something
+  # more specific", which a list of windows reads as.
+  {
+    case:       "prod 7776",
+    say:        "I emailed Halloway Systems back with the times I'm free - Tuesday and " \
+                "Thursday early afternoon - log that",
+    tool:       :add_job_note,
+    avoid:      %i[add_agenda_item set_reminder],
+    args:       { add_job_note: { tag: "responded" } },
+    never_args: { add_job_note: { tag: /\Aavailability\z/ } },
+    needs:      :halloway_application,
+    note:       "the windows are his answer; `availability` puts the ask back on his own board",
+  },
+  # Prod 7837, 10 Oct. The seed opened "They just SENT this" and `they` can mean
+  # either party, so his own apology to Reserv came back to him as the company
+  # asking HIM to reschedule, and the beat was filed as waiting on him.
+  {
+    case:        "prod 7837",
+    say:         "I just emailed Halloway Systems to apologise and ask if we can move the " \
+                 "interview - log that",
+    tool:        :add_job_note,
+    args:        { add_job_note: { tag: "responded" } },
+    never_reply: /halloway[^.?!]{0,30}\b(?:asked|wants|requested|needs)\b|asked (?:you |him )?to reschedule/i,
+    needs:       :halloway_application,
+    note:        "read his own mail as the company's and said they had asked to reschedule",
+  },
   # --- an invitation to an interview is not an interview ---------------------
   # Prod 5 Oct, Neighbor. A mail from the hiring manager arranging a technical
   # video interview was filed `interview` - the word in its own subject line. It
@@ -1362,6 +1392,37 @@ BUDDY_EDGE_PROBES = [
     args:        { remind_when: { trigger: "event", target: /transaction/i, notify: /chelsea/i } },
     never_reply: /need (?:the|an?|to know)\b[^.?!]{0,40}(?:name|kind|which)|which transaction|what kind of transaction/i,
     note:        "set the watch and asked which transaction they meant in the same breath",
+  },
+  # --- a reading function answered a request to ACT ------------------------
+  # Prod 7861 and 7866, 9 Oct. Both of her two asks went this way, and both
+  # times she had to say it a second time before the door moved.
+  {
+    case:  "prod 7861",
+    say:   "Open garage",
+    tool:  :call_jil_function,
+    args:  { call_jil_function: { name: /toggle garage/i } },
+    needs: :garage_fns,
+    note:  "ran Garage State and answered \"the garage is currently closed\", leaving the door shut",
+  },
+  {
+    case:  "prod 7866",
+    say:   "Close garage",
+    tool:  :call_jil_function,
+    args:  { call_jil_function: { name: /toggle garage/i } },
+    needs: :garage_fns,
+    note:  "same miss in the other direction - reported the state and left the door open",
+  },
+  # --- a claim with a greeting in front of it ------------------------------
+  # Prod 7761, 8 Oct. "Done. Your 12:50 reminder will read..." with no reminder
+  # row anywhere, and he covered it himself with a 40m timer nineteen seconds
+  # later. The greeting is the part that matters: the claim catcher was anchored
+  # to the start of the MESSAGE.
+  {
+    case:  "prod 7761",
+    say:   "Send me a reminder at 12:50 with the basics for the Bluestaq interview",
+    tool:  :schedule_reminder,
+    args:  { schedule_reminder: { at: /12:50/ } },
+    note:  "answered \"Mooooorning\" and then \"Done.\" with nothing scheduled",
   },
   {
     case:  "prod 4721",

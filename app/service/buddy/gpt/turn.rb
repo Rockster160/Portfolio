@@ -527,6 +527,9 @@ module Buddy
       # thing is built and sitting on screen waiting to be tapped, so throwing
       # the reply away would be as wrong as leaving the claim standing.
       PENDING_BODY = "Almost - I've got that ready right below, it just needs your tap.".freeze
+      # The same sentence with its subject in front, for a turn whose only
+      # record is the notification. See `pending_retraction`.
+      PENDING_ABOUT_BODY = "%<about>s. Ready below, it just needs your tap.".freeze
 
       # What to say when NOTHING ran and the reply spoke as though something had.
       #
@@ -2688,23 +2691,38 @@ module Buddy
         # the person asked for done inside the same turn instead of over three
         # messages.
         return LEAKED_CALL_NUDGE if spoken.to_s.match?(TOOL_CALL_LEAK_RX)
-        return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
-        # The broad arm, on the same footing as the narrow one above it and for
-        # the same purpose: get the call MADE, rather than only stopping the
-        # sentence about it. `proposals` is already empty by the guard at the
-        # top of this method, so `@acted` is the whole of "did anything happen".
-        return RETRY_NUDGE if !@acted && self.class.silent_turn_claim?(spoken.to_s, asked: asked_about_state?)
-        # They asked for a thing to happen and nothing was called. Worth the
-        # corrective round on its own — this is the half that gets the TV
-        # actually turned off, rather than only stopping the lie about it.
+        # The three arms below are about Buddy having ACTED, and a briefing is
+        # offered no tools, so it has no such claim to make. `start_over?` draws
+        # this exact line for these exact three arms and says why: briefing prose
+        # like "it's on your list" is a sentence about THEIR day, and the arms
+        # read it as Buddy claiming to have put it there.
         #
-        # `!@acted` for the same reason the arm above it carries one, and it
-        # matters more here: this arm reads the REQUEST rather than the reply,
-        # so without it a turn that silently wrote a memory gets sent a nudge
-        # opening "you called no tool, so nothing happened" - which is simply
-        # untrue, and the model's job is then to reconcile a correct reply with
-        # being told it was wrong, which costs the turn two rounds.
-        return RETRY_NUDGE if !@acted && commanded_action_unanswered?(spoken.to_s)
+        # It was missing here, and the cost is worse on this side. RETRY_NUDGE
+        # ends "say so plainly and say what you'd need" - so a briefing that
+        # tripped an arm spent its round and went out as a refusal asking for
+        # the day's details back, with ten real items sitting in the seed. The
+        # arms below this block read the briefing's own prose and still apply.
+        unless today_briefing?
+          return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+          # The broad arm, on the same footing as the narrow one above it and
+          # for the same purpose: get the call MADE, rather than only stopping
+          # the sentence about it. `proposals` is already empty by the guard at
+          # the top of this method, so `@acted` is the whole of "did anything
+          # happen".
+          return RETRY_NUDGE if !@acted && self.class.silent_turn_claim?(spoken.to_s, asked: asked_about_state?)
+          # They asked for a thing to happen and nothing was called. Worth the
+          # corrective round on its own — this is the half that gets the TV
+          # actually turned off, rather than only stopping the lie about it.
+          #
+          # `!@acted` for the same reason the arm above it carries one, and it
+          # matters more here: this arm reads the REQUEST rather than the reply,
+          # so without it a turn that silently wrote a memory gets sent a nudge
+          # opening "you called no tool, so nothing happened" - which is simply
+          # untrue, and the model's job is then to reconcile a correct reply with
+          # being told it was wrong, which costs the turn two rounds.
+          return RETRY_NUDGE if !@acted && commanded_action_unanswered?(spoken.to_s)
+        end
+
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
         # The mirror of the unbacked claim, and the quieter failure of the two:
         # that one says a thing happened when it didn't, this one says a thing
@@ -2985,6 +3003,11 @@ module Buddy
         # been talking about is available to check against. See Buddy::Flourish
         # for why this is mechanism rather than a fourth wording of the rule.
         body = repaired(:flourish, body) { |b| today_briefing? ? Buddy::Flourish.trim(b, briefing_facts) : b }
+        # Bold on every name and every figure, which is a briefing with no
+        # emphasis wearing a lot of asterisks. Briefing only, because that is
+        # the turn whose own history teaches it the habit. See Buddy::Emphasis -
+        # mechanism, for the same reason as the line above.
+        body = repaired(:emphasis, body) { |b| today_briefing? ? Buddy::Emphasis.thin(b) : b }
         # A sentence about tomorrow, the weekend or a named weekday that the
         # facts never mentioned. Briefing only, and for the same reason as the
         # line above: it is the one turn whose whole content was handed over in
@@ -3325,8 +3348,15 @@ module Buddy
       # low" answered "Done. Fan's on low now." off a single API call with no
       # tool use anywhere and no execution to show for it. A bare "Done."
       # and a device reported in its new state are the whole tell, and neither
-      # was covered. The two anchored to \A are anchored on purpose - unanchored,
+      # was covered.
+      #
+      # The two anchored to a LINE start are anchored on purpose - unanchored,
       # "I can set that to low if you want" reads as a claim when it's an offer.
+      # What they want is the start of a line, which is not the same thing as
+      # the start of the MESSAGE: "Send me a reminder at 12:50" was answered
+      # "Mooooorning" and then "Done. Your 12:50 reminder will read..." with no
+      # reminder row anywhere, and a paragraph of greeting in front of the claim
+      # was the whole of how it got past this.
       COMPLETION_CLAIM_RX = /
         \b(?:check(?:ing|ed)?\s+(?:that|it|those|them|this)\s+off)\b
         | \b(?:checked\s+off|marked\s+(?:it|that|those)?\s*(?:off|done)|crossed\s+off)\b
@@ -3357,10 +3387,10 @@ module Buddy
             (?:the\s+)?(?:\w+\s+){0,2}(?:items?|things?|entries|lines)\s+to\b
         | \b(?:it(?:'|’)?s\s+(?:on\s+the\s+list|done|logged|set))\b
         | \b(?:that(?:'|’)?s\s+(?:done|logged|counted))\b
-        | \A\s*(?:done|all\s+set|got\s+it\s+done)\b[.!,]
+        | (?:\A|\n)[ \t]*(?:done|all\s+set|got\s+it\s+done)\b[.!,]
         | \b(?:turned|switched|flipped)\s+(?:it|that|the)\b
         | (?:\bis|\bare|(?:'|’)s)\s+(?:on|off)\s+(?:now|high|low|mid|medium)\b
-        | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
+        | (?:\A|\n)[ \t]*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
         # The EDIT shape. Everything above is a thing being added, set, logged,
         # run or taken away; none of it covers a thing being CHANGED, which is
@@ -3938,7 +3968,7 @@ module Buddy
           "on message=#{@reply.id} user=#{@user.id}: #{body.truncate(160).inspect}",
         )
         @reply.update!(
-          body:     retraction_body(kind, pending),
+          body:     retraction_body(kind, pending, result),
           metadata: (@reply.metadata || {}).merge("retracted_claim" => true),
         )
       end
@@ -3950,13 +3980,35 @@ module Buddy
       # didn't happen, and asking them to rephrase puts the failure on them.
       # It stays the fallback for an EMPTY reply, which is what it was written
       # for.
-      def retraction_body(kind, pending)
-        return PENDING_BODY if pending
+      def retraction_body(kind, pending, result=nil)
+        return pending_retraction(result) if pending
         return EMPTY_WAIT_BODY if kind == :empty_wait
         return NO_CALL_BODY if kind == :call
         return UNDONE_BODY if kind == :commanded
 
         SILENT_BODY
+      end
+
+      # A retraction on a turn BUDDY started still has to say what it is about.
+      #
+      # PENDING_BODY names nothing, which is fine on a turn they started: their
+      # own message is right above it and the card is right below. On a
+      # self-initiated one it is the whole of the notification. The push for
+      # "Canceled event: Interview with Reserv" came out as "Almost - I've got
+      # that ready right below, it just needs your tap", which on a lock screen
+      # could be any of the applications he has open.
+      #
+      # The row's LABEL rather than its sublabel: a label is built to name the
+      # record and the beat ("Cancelled - Reserv"), where a sublabel carries the
+      # sender's own words truncated and can be anything at all.
+      def pending_retraction(result)
+        return PENDING_BODY unless self_initiated?
+
+        row   = buttons(result).detect { |b| b["status"].to_s == "pending" }
+        about = row && (row["label"].presence || row["sublabel"].presence)
+        return PENDING_BODY if about.blank?
+
+        format(PENDING_ABOUT_BODY, about: about.to_s.strip.delete_suffix("."))
       end
 
       # A turn that DID the work and then said it hadn't. The mirror of

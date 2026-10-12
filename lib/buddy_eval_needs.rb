@@ -167,6 +167,9 @@ module BuddyEvalNeeds
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
     blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
     car_fn:               { label: "the car function",             check: ->(u) { jil(u, /tesla/i) } },
+    # BOTH, because the probe is about choosing between them. With only one
+    # reachable there is no wrong answer to give.
+    garage_fns:           { label: "the toggle AND state garage functions", check: ->(u) { jil(u, /toggle garage/i) && jil(u, /garage state/i) } },
     jil_trigger:          { label: "a matching jil trigger",       check: ->(u) { jil(u, /chill/i, kind: :trigger) } },
     # The point of the probe is that the wiring EXISTS and didn't fire. With no
     # trigger hung off a list, filing a feature request is the correct answer

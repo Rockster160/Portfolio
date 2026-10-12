@@ -26,6 +26,22 @@ RSpec.describe "schedule_reminder auto-run" do
     expect(chip.body).to match(/\A(Byte|Moss) will send you a reminder /)
   end
 
+  # Prod 7693, 7669, 7640 and five more back to 2 Oct: the hover detail read
+  # "Thu 12: 30pm". The detail line was read as `key: value` and split on the
+  # first colon it found, which on a clock time is the one in the middle of it.
+  it "leaves the clock time in the chip's detail alone" do
+    at = Time.current.in_time_zone(user.timezone).change(hour: 12, min: 30).advance(days: 1)
+    markers = [
+      { tool_name: :schedule_reminder, payload: { text: "the interview", at: at.iso8601 }, span: [0, 0] },
+    ]
+
+    Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
+
+    chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+    expect(chip.metadata["detail"]).to include("12:30")
+    expect(chip.metadata["detail"]).not_to include("12: 30")
+  end
+
   # Eve asked twice on 17 Aug for the noon plant reminder to be gone, and it was
   # rebuilt on the 18th. Nothing could see that it had ever been switched off:
   # `clashing` only looks at pending rows at the same minute.
