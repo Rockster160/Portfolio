@@ -14,6 +14,7 @@
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  position    :integer
+#  tag         :string
 #
 require "rails_helper"
 
@@ -172,6 +173,53 @@ RSpec.describe BuddyRoutine do
         routine.metadata = { "monitor" => blank }
         expect(routine.monitor).to be_nil
       end
+    end
+  end
+
+  # A routine tagged with a group sits on that group's chore board as a
+  # tap-to-fire circle beside the chores.
+  describe "board grouping" do
+    def tagged!(name, tag, **attrs)
+      described_class.create!(user: user, name: name, tag: tag, steps: [tell(name)], **attrs)
+    end
+
+    it "matches a group case-insensitively, like a chore tag" do
+      r = tagged!("Focus mode", "Work")
+
+      expect(described_class.tagged("work")).to include(r)
+      expect(described_class.tagged("WORK")).to include(r)
+    end
+
+    it "lists its distinct groups, sorted by how they read" do
+      tagged!("Focus mode", "Work")
+      tagged!("Break mode", "Work")
+      tagged!("Wind down", "home")
+
+      expect(described_class.tag_names).to eq(["home", "Work"])
+    end
+
+    # The board's own set: enabled routines of the group, pinned ones first.
+    it "for_board takes the enabled routines of the group, pinned first" do
+      pinned   = tagged!("Focus mode", "Work", position: 0)
+      unpinned = tagged!("Break mode", "Work")
+      tagged!("Deep work", "Work", enabled: false)
+      tagged!("Wind down", "Home")
+
+      expect(described_class.for_board("Work")).to eq([pinned, unpinned])
+    end
+
+    it "draws as a stateless trigger item - name, no occurrence fields" do
+      item = tagged!("Focus mode", "Work").board_item
+
+      expect(item[:kind]).to eq(:trigger)
+      expect(item[:name]).to eq("Focus mode")
+      expect(item[:short_name]).to eq("Focus mode")
+      expect(item).not_to have_key(:progress_count)
+      expect(item).not_to have_key(:target_count)
+    end
+
+    it "carries its group in the client payload" do
+      expect(tagged!("Focus mode", "Work").serialize_for_client[:tag]).to eq("Work")
     end
   end
 

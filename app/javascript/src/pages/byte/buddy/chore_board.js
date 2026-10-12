@@ -25,6 +25,18 @@ const COMPLETE_URL = (id) => `/chores/items/${id}/completion`;
 const DISMISS_URL = (id) => `/chores/items/${id}/dismiss`;
 const SKIP_URL = (id) => `/chores/items/${id}/skip`;
 
+// A trigger cell fires a routine. Same endpoint and same no-model-turn replay
+// the kiosk's routine pad uses, so a trigger pressed on a board does exactly
+// what the same button does on the wall tablet next to it.
+const RUN_URL = (id) => `/buddy/routines/${id}/run`;
+
+// A board item is either a CHORE (tick to complete, has state) or a TRIGGER (a
+// routine, tapped to fire, with no occurrence to settle). The `kind` field the
+// server stamps is what everything here branches on.
+function isTrigger(item) {
+  return item && item.kind === "trigger";
+}
+
 // What a press looks like before the server has answered, and it is the same
 // bargain /chores/today strikes: the tap is painted IMMEDIATELY from a locally
 // predicted state, and nothing spins.
@@ -71,10 +83,14 @@ async function apiCall(url, method, body) {
 // Which of the four states a cell is in, most settled first. Order matters:
 // a chore can be both done and waved off (somebody did it after skipping it),
 // and what it should read as is done.
-function cellState(chore) {
-  if (chore.progress_count >= chore.target_count) return "done";
-  if (chore.skipped_today) return "skipped";
-  if (chore.dismissed) return "dismissed";
+function cellState(item) {
+  // A trigger has no occurrence to be done, skipped or waved off - it is only
+  // ever "there to press", so it gets its own settled state and none of the
+  // ring/corner machinery the four chore states drive.
+  if (isTrigger(item)) return "trigger";
+  if (item.progress_count >= item.target_count) return "done";
+  if (item.skipped_today) return "skipped";
+  if (item.dismissed) return "dismissed";
   return "open";
 }
 
@@ -85,8 +101,10 @@ function cellState(chore) {
 // A dismissed or skipped chore is KEPT and greyed rather than dropped: it was
 // on the board a moment ago and vanishing on a press reads as a mis-tap, and
 // the grey circle is also the only way back to it.
-function onBoard(chores) {
-  return chores.filter((chore) => chore.today_visible && !chore.archived);
+function onBoard(items) {
+  return items.filter((item) =>
+    isTrigger(item) ? true : item.today_visible && !item.archived,
+  );
 }
 
 // The icon, in whatever shape it arrived. Mirrors the four kinds the chore
@@ -132,16 +150,22 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const tagListEl = root.querySelector("[data-board-tag-list]");
 
   const cheerUrl = app.dataset.choreCheerUrl;
-  const syncUrl = app.dataset.choresSyncUrl;
+  // The board's own set endpoint, not /chores/sync: it answers with chores AND
+  // triggers for the group, so a resync keeps the triggers on screen instead of
+  // dropping them (the chores endpoint has never heard of them).
+  const itemsUrl = app.dataset.boardItemsUrl;
   const tagUrl = app.dataset.boardTagUrl;
-  const tagsUrl = app.dataset.choresTagsUrl;
+  const tagsUrl = app.dataset.boardTagsUrl;
 
   let tag = app.dataset.boardTag || "";
-  let chores = [];
-  // Presses the server hasn't confirmed, by chore id. A count rather than a
+  let items = [];
+  // Presses the server hasn't confirmed, by item id. A count rather than a
   // flag: a chore with a target of three gets pressed three times in a row and
   // the first answer back must not clear the other two.
   const inFlight = new Map();
+  // Running flash timers for trigger cells, by id, so a second press restarts
+  // the "Done!" rather than letting the first one's timeout clear it early.
+  const flashTimers = new Map();
   // Presses that came back as a failure, kept so they can be tried again. In
   // memory only - the chores page writes its queue to localStorage before
   // touching the network, and matching that is a bigger piece of machinery
@@ -150,9 +174,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const failed = [];
 
   try {
-    chores = onBoard(JSON.parse(app.dataset.boardChores || "[]"));
+    items = onBoard(JSON.parse(app.dataset.boardItems || "[]"));
   } catch (e) {
-    chores = [];
+    items = [];
   }
 
   // ---- painting ----
@@ -166,15 +190,32 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     if (!tag) {
       emptyEl.textContent =
         "This screen isn't looking after anything yet — pick a group below.";
-    } else if (chores.length === 0) {
+    } else if (items.length === 0) {
       emptyEl.textContent = `Nothing left in ${tag} today.`;
     }
-    emptyEl.hidden = Boolean(tag) && chores.length > 0;
+    emptyEl.hidden = Boolean(tag) && items.length > 0;
+  }
+
+  // Whether a press on this id is still in flight / came back failed. Shared by
+  // both kinds, so a trigger's dim-while-sending reads the same as a chore's.
+  function markPending(cell, id) {
+    const waiting = (inFlight.get(String(id)) || 0) > 0;
+    cell.dataset.sending = waiting ? "true" : "false";
+    cell.dataset.syncPending = failed.some((f) => String(f.id) === String(id))
+      ? "true"
+      : "false";
   }
 
   function paintCell(cell, chore) {
     cell.dataset.state = cellState(chore);
     cell.dataset.boardCell = String(chore.id);
+
+    // A trigger is stateless: no ring, no count, no skip/undo corners to show
+    // or hide. All a repaint does for one is keep its sending/failed dot honest.
+    if (isTrigger(chore)) {
+      markPending(cell, chore.id);
+      return;
+    }
 
     // Same arithmetic the chores page's applyProgressRing uses: a fixed
     // dasharray of 100 with the OFFSET carrying the progress, rather than a
@@ -219,16 +260,56 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     // Derived here rather than left on the node, because `paint` replaces
     // every cell whenever the set changes and a flag written at press time
     // would be thrown away by the next household tap.
-    const waiting = (inFlight.get(String(chore.id)) || 0) > 0;
-    cell.dataset.sending = waiting ? "true" : "false";
-    cell.dataset.syncPending = failed.some(
-      (f) => String(f.id) === String(chore.id),
-    )
-      ? "true"
-      : "false";
+    markPending(cell, chore.id);
   }
 
-  function buildCell(chore) {
+  function buildCell(item) {
+    return isTrigger(item) ? buildTriggerCell(item) : buildChoreCell(item);
+  }
+
+  // A trigger's circle: the icon to aim at and a title, and nothing else. No
+  // ring (no progress), no count (nothing to count), no skip/cycle/undo corners
+  // (no occurrence to let go of). A press fires it once; what says the tap
+  // landed is a brief "Done!" over the disc, the same receipt the Jil trigger
+  // buttons flash — because, unlike a chore, there is no state change to see.
+  function buildTriggerCell(item) {
+    const cell = document.createElement("div");
+    cell.className = "byte-board-cell";
+    cell.dataset.kind = "trigger";
+    cell.setAttribute("role", "listitem");
+
+    const disc = document.createElement("div");
+    disc.className = "byte-board-disc";
+
+    const press = document.createElement("button");
+    press.type = "button";
+    press.className = "byte-board-circle";
+    // The same hook a chore circle carries, so the one pad listener finds both;
+    // the kind rides on the button so the handler branches fire vs complete
+    // without having to walk up to the cell.
+    press.dataset.boardComplete = String(item.id);
+    press.dataset.boardKind = "trigger";
+    press.setAttribute("aria-label", `Start: ${item.short_name}`);
+    press.appendChild(iconNode(item));
+
+    const flash = document.createElement("span");
+    flash.className = "byte-board-flash";
+    flash.dataset.boardFlash = "";
+    flash.textContent = "Done!";
+    flash.hidden = true;
+
+    disc.append(press, flash);
+
+    const title = document.createElement("span");
+    title.className = "byte-board-title";
+    title.textContent = item.short_name;
+
+    cell.append(disc, title);
+    paintCell(cell, item);
+    return cell;
+  }
+
+  function buildChoreCell(chore) {
     const cell = document.createElement("div");
     cell.className = "byte-board-cell";
     cell.setAttribute("role", "listitem");
@@ -244,6 +325,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     press.type = "button";
     press.className = "byte-board-circle";
     press.dataset.boardComplete = String(chore.id);
+    press.dataset.boardKind = "chore";
     press.setAttribute("aria-label", `Done: ${chore.short_name}`);
 
     const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -326,25 +408,37 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   function paint() {
     if (!padEl) return;
 
-    const wanted = chores.map((chore) => String(chore.id));
-    const present = Array.from(padEl.children).map(
-      (el) => el.dataset.boardCell,
-    );
+    // A chore and a trigger can share an id (different tables), so the cell key
+    // carries the kind too — otherwise a 1-chore, 1-trigger board with matching
+    // ids would read as "same set" and paint a trigger into a chore's cell.
+    const key = (item) => `${isTrigger(item) ? "t" : "c"}:${item.id}`;
+    const wanted = items.map(key);
+    const present = Array.from(padEl.children).map((el) => el.dataset.boardKey);
     const sameSet =
       wanted.length === present.length &&
       wanted.every((id, i) => id === present[i]);
 
     if (sameSet) {
-      chores.forEach((chore, i) => paintCell(padEl.children[i], chore));
+      items.forEach((item, i) => paintCell(padEl.children[i], item));
     } else {
       padEl.innerHTML = "";
-      chores.forEach((chore) => padEl.appendChild(buildCell(chore)));
+      items.forEach((item) => {
+        const cell = buildCell(item);
+        cell.dataset.boardKey = key(item);
+        padEl.appendChild(cell);
+      });
     }
     paintEmpty();
   }
 
-  function find(id) {
-    return chores.find((chore) => String(chore.id) === String(id));
+  // By id AND kind: a chore and a trigger can collide on id, and a bare id
+  // lookup would hand a press on one to the other.
+  function find(id, { trigger } = {}) {
+    return items.find(
+      (item) =>
+        String(item.id) === String(id) &&
+        (trigger === undefined || isTrigger(item) === trigger),
+    );
   }
 
   // ---- the server's answer ----
@@ -356,8 +450,12 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     const fresh = payload?.chore || payload;
     if (!fresh || fresh.id == null) return;
 
-    const at = chores.findIndex((chore) => chore.id === fresh.id);
-    if (at >= 0) chores[at] = fresh;
+    // A completion endpoint only ever answers with a chore, so fold it back into
+    // the chore sharing its id - never a trigger that happens to collide on one.
+    const at = items.findIndex(
+      (item) => !isTrigger(item) && item.id === fresh.id,
+    );
+    if (at >= 0) items[at] = { ...fresh, kind: "chore" };
     paint();
 
     // An `after_chore` follower coming due is a chore ARRIVING on the board,
@@ -365,21 +463,22 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     if (Array.isArray(payload?.chores) && payload.chores.length > 0) resync();
   }
 
+  // Re-pull the whole board - chores AND triggers of the group - from the
+  // board's own endpoint. It already filters to the thread's tag server-side
+  // and stays correct across the 4am rollover (it leans on /chores/today's own
+  // serializer), so there is nothing to filter here and triggers come back on
+  // the set instead of being dropped.
   async function resync() {
-    if (!syncUrl || !tag) return;
+    if (!itemsUrl || !tag) return;
+
+    const conversationId = conversationIdFn ? conversationIdFn() : null;
+    const url = conversationId
+      ? `${itemsUrl}?conversation_id=${encodeURIComponent(conversationId)}`
+      : itemsUrl;
 
     try {
-      const data = await apiCall(syncUrl, "GET");
-      const all = Array.isArray(data?.chores) ? data.chores : [];
-      // Filtered here rather than asked for by tag, because /chores/sync is
-      // the endpoint the chores page already keeps correct across the 4am
-      // rollover — a board-only endpoint would be a second place for that to
-      // be got right.
-      chores = onBoard(
-        all.filter(
-          (chore) => (chore.tag || "").toLowerCase() === tag.toLowerCase(),
-        ),
-      );
+      const data = await apiCall(url, "GET");
+      items = onBoard(Array.isArray(data?.items) ? data.items : []);
       paint();
     } catch (e) {
       // Leave what's on screen. The circles already there still work, and a
@@ -401,11 +500,13 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   // a prediction and not a second source of truth - but it is what makes the
   // ring move under a finger instead of a few hundred milliseconds later.
   function predict(id, change) {
-    const chore = find(id);
+    // Only chores predict - a trigger has no state to move under a finger - so
+    // the lookup is chore-scoped even where an id collides with a trigger's.
+    const chore = find(id, { trigger: false });
     if (!chore) return;
 
-    const at = chores.indexOf(chore);
-    chores[at] = { ...chore, ...change(chore) };
+    const at = items.indexOf(chore);
+    items[at] = { ...chore, ...change(chore) };
     paint();
   }
 
@@ -476,7 +577,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   }
 
   function complete(id) {
-    const chore = find(id);
+    const chore = find(id, { trigger: false });
     if (!chore) return;
 
     return press(id, {
@@ -490,9 +591,56 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
           client_completed_at: new Date().toISOString(),
         });
         absorb(payload);
-        cheer(find(id) || chore, "chore_done");
+        cheer(find(id, { trigger: false }) || chore, "chore_done");
       },
     });
+  }
+
+  // Fire a trigger: run its routine, then flash the "Done!" over the disc. No
+  // predict (nothing to move), and no `cheer` - the flash is the receipt, and a
+  // "nice work" over a thing you set off rather than finished reads wrong. A
+  // failure is remembered and retried on the next foreground/reconnect, same as
+  // a chore press; the sending dot is what says it is on its way meanwhile.
+  function fire(id) {
+    if (!find(id, { trigger: true })) return;
+
+    hold(id, 1);
+    paint();
+
+    return (async () => {
+      try {
+        await apiCall(RUN_URL(id), "POST", {
+          conversation_id: conversationIdFn ? conversationIdFn() : null,
+        });
+        const at = failed.findIndex((f) => f.key === String(id));
+        if (at >= 0) failed.splice(at, 1);
+        flashCell(id);
+      } catch (e) {
+        remember(id, () => fire(id));
+      } finally {
+        hold(id, -1);
+        paint();
+      }
+    })();
+  }
+
+  // The "Done!" receipt over a trigger's disc. Scoped by board-key so it lands
+  // on the trigger cell and not a chore sharing its id.
+  function flashCell(id) {
+    const cell = padEl?.querySelector(`[data-board-key="t:${CSS.escape(String(id))}"]`);
+    const el = cell?.querySelector("[data-board-flash]");
+    if (!el) return;
+
+    el.hidden = false;
+    el.dataset.on = "true";
+    window.clearTimeout(flashTimers.get(String(id)));
+    flashTimers.set(
+      String(id),
+      window.setTimeout(() => {
+        el.dataset.on = "false";
+        el.hidden = true;
+      }, 1600),
+    );
   }
 
   function dismiss(id, span) {
@@ -522,7 +670,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   }
 
   function bringBack(id) {
-    const chore = find(id);
+    const chore = find(id, { trigger: false });
     if (!chore) return;
 
     const wasDismissed = chore.dismissed;
@@ -568,7 +716,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
         const none = document.createElement("p");
         none.className = "byte-board-tag-empty";
         none.textContent =
-          "No chores are grouped yet — add a tag to one on the chores page.";
+          "Nothing's grouped yet — tag a chore on the chores page, or a routine in the Routines panel.";
         tagListEl.appendChild(none);
       }
     } catch (e) {
@@ -589,7 +737,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       if (tagToggleEl) tagToggleEl.textContent = tag || "Pick a group";
       if (tagPickerEl) tagPickerEl.hidden = true;
       tagToggleEl?.setAttribute("aria-expanded", "false");
-      chores = [];
+      items = [];
       paint();
       resync();
     } catch (e) {
@@ -648,13 +796,19 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       const press = e.target.closest("[data-board-complete]");
       if (!press) return;
 
-      // A chore already put away is not completable by a stray press on a
-      // grey circle. Its own corner carries Undo, which is the only thing a
-      // press on it could sensibly mean.
-      const chore = find(press.dataset.boardComplete);
-      if (chore && (chore.dismissed || chore.skipped_today)) return;
+      // The kind rides on the button, so a press resolves to the right item even
+      // where a chore and a trigger share an id.
+      const trigger = press.dataset.boardKind === "trigger";
+      const item = find(press.dataset.boardComplete, { trigger });
+      if (!item) return;
 
-      return complete(press.dataset.boardComplete);
+      // A trigger fires; a chore completes. A chore already put away is not
+      // completable by a stray press on its grey circle - its own corner
+      // carries Undo, which is the only thing a press on it could sensibly mean.
+      if (isTrigger(item)) return fire(item.id);
+      if (item.dismissed || item.skipped_today) return;
+
+      return complete(item.id);
     });
   }
 

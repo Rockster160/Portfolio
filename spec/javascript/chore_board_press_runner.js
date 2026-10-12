@@ -104,9 +104,9 @@ root.append(pad, empty);
 
 const app = fakeEl("div");
 app.dataset.boardTag = "Home";
-app.dataset.choresSyncUrl = "/chores/sync";
+app.dataset.boardItemsUrl = "/byte/board/items";
 app.dataset.choreCheerUrl = "/byte/chore_cheer";
-app.dataset.boardChores = JSON.stringify([
+app.dataset.boardItems = JSON.stringify([
   {
     id: 1,
     name: "Vacuum",
@@ -135,6 +135,15 @@ app.dataset.boardChores = JSON.stringify([
     today_visible: true,
     archived: false,
   },
+  // A trigger (routine) in the same group: tap to fire, no occurrence to settle.
+  {
+    id: 3,
+    kind: "trigger",
+    name: "Focus mode",
+    short_name: "Focus mode",
+    icon: null,
+    icon_kind: "empty",
+  },
 ]);
 
 globalThis.document = {
@@ -155,13 +164,16 @@ globalThis.window = {
     },
   },
   setTimeout: (fn) => fn(),
+  clearTimeout: () => {},
 };
+// Only the trigger flash reaches for it, and only to scope a selector.
+globalThis.CSS = { escape: (s) => s };
 
 // ---- the network, standing in for the server ----
 //
 // `world` is what the server believes, and every endpoint moves it the way the
 // real one does. It has to be modelled rather than stubbed flat, because
-// `/chores/sync` answers the board's own resync - a stub returning nothing
+// `/byte/board/items` answers the board's own resync - a stub returning nothing
 // empties the board on the first skip, which is not a thing the server does.
 
 const requests = [];
@@ -191,10 +203,16 @@ globalThis.fetch = async (url, opts = {}) => {
   const chore = id ? entry(id) : null;
   let body = {};
 
-  if (url === "/chores/sync") {
-    body = { chores: world, server_ts: "now" };
+  if (url.startsWith("/byte/board/items")) {
+    // The board's own resync endpoint - chores AND triggers of the group. This
+    // suite drives only chores, so world is the whole answer.
+    body = { items: world };
   } else if (url === "/byte/chore_cheer") {
     body = { say: "Nice one.", mood: "happy" };
+  } else if (url.endsWith("/run") && method === "POST") {
+    // Firing a trigger (routine). Nothing to fold back - the flash is the
+    // receipt.
+    body = {};
   } else if (url.endsWith("/completion") && method === "POST") {
     chore.progress_count = Math.min(
       chore.progress_count + 1,
@@ -224,7 +242,7 @@ globalThis.fetch = async (url, opts = {}) => {
 
 // ---- drive it ----
 
-world = JSON.parse(app.dataset.boardChores).map((c) => ({ ...c }));
+world = JSON.parse(app.dataset.boardItems).map((c) => ({ ...c }));
 
 const board = initChoreBoard({
   root,
@@ -326,5 +344,24 @@ out.failure_before = cellFor(2).dataset.syncPending;
 failing = new Set();
 await click('[data-board-complete="1"]');
 out.failure_survived_other_press = cellFor(2).dataset.syncPending;
+
+// ---- a trigger: tap to fire, not tick to finish ----
+//
+// A trigger circle has no ring, no count and no skip/undo corners - nothing to
+// settle - so none of them render. A press fires the routine and nothing else:
+// the run endpoint, and no chore endpoint.
+const triggerCell = cellFor(3);
+out.trigger_controls = {
+  ring: triggerCell.querySelector("[data-board-ring]") === null,
+  count: triggerCell.querySelector("[data-board-count]") === null,
+  skip: triggerCell.querySelector("[data-board-skip-day]") === null,
+  undo: triggerCell.querySelector("[data-board-undo]") === null,
+  state: triggerCell.dataset.state,
+};
+
+requests.length = 0;
+await click('[data-board-complete="3"]');
+out.fire_requests = requests;
+out.fire_hit_no_chore_endpoint = requests.every((r) => !r.includes("/chores/"));
 
 process.stdout.write(JSON.stringify(out, null, 2));

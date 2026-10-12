@@ -227,6 +227,72 @@ RSpec.describe "Interview tracker", type: :request do
     end
   end
 
+  # Most of the board is rows nobody ever answered. This is the handful where a
+  # person on their side has moved, and how far each one got.
+  describe "the where-you-stand strip" do
+    let!(:job) { user.job_applications.create!(company: "Reserv", role: "Senior Engineer") }
+
+    # One whole row of the strip - pips and all - by the rung it reports.
+    def standing_row(reached)
+      rows = response.body.scan(/<li style="--job-color[^>]*>(.*?)<\/li>/m).flatten
+      rows.find { |row| row.include?(%(<span class="standing-reached">#{reached}</span>)) }
+    end
+
+    it "says nothing about a board nobody has answered" do
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(response.body).not_to include("Where you stand")
+    end
+
+    it "prints the rung, the company and how long it has been quiet" do
+      job.notes.create!(tag: :take_home, occurred_at: 3.days.ago)
+
+      get interviews_path
+
+      expect(response.body).to include("Where you stand")
+      row = standing_row("got a take-home")
+      expect(row).to include("Reserv — Senior Engineer")
+      expect(row).to include(interview_path(job))
+      expect(row).to include("quiet 3 days")
+    end
+
+    # The dots are the progress at a glance, and they are filled to the rung.
+    it "fills a pip per rung reached and leaves the rest empty" do
+      job.notes.create!(tag: :interview, occurred_at: 1.day.ago)
+
+      get interviews_path
+
+      row = standing_row("interviewed")
+      expect(row.scan(/standing-pip is-on/).length).to eq(5)
+      expect(row.scan(/class="standing-pip "/).length).to eq(1)
+    end
+
+    it "marks the ones that are his move" do
+      job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
+      other = user.job_applications.create!(company: "Bluestaq")
+      other.notes.create!(tag: :scheduled, occurred_at: 1.day.ago, follow_up_at: 2.days.from_now)
+
+      get interviews_path
+
+      expect(standing_row("got to a booking")).to include("your move")
+      # Both are at the same rung, so the second row is the booked one.
+      expect(response.body.scan(/standing-yours/).length).to eq(1)
+    end
+
+    # The filter and the search narrow the WALL. Where things stand is a fact
+    # about the whole board, the same way the strips above it are.
+    it "ignores the status chip and the search box" do
+      job.notes.create!(tag: :offer, occurred_at: 1.day.ago)
+
+      get interviews_path(status: :rejected, q: "nothing matches this")
+
+      expect(standing_row("got an offer")).to include("Reserv")
+    end
+  end
+
   describe "GET /interviews?q=" do
     let!(:netflix) { user.job_applications.create!(company: "Netflix") }
     let!(:anrok) { user.job_applications.create!(company: "Anrok") }

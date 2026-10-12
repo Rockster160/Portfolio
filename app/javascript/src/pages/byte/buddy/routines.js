@@ -96,6 +96,7 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
             ${grip}
             <button type="button" class="byte-routine-pin" data-routine-pin aria-pressed="${isPin}" title="${pinTip}" aria-label="${pinTip}">${isPin ? "★" : "☆"}</button>
             <button type="button" class="byte-routine-name" data-routine-rename title="Rename">${escapeHtml(r.name)}</button>
+            <button type="button" class="byte-routine-group${r.tag ? " byte-routine-group-set" : ""}" data-routine-group title="Board group — which chore board this routine appears on">${r.tag ? escapeHtml(r.tag) : "group"}</button>
             <button type="button" class="byte-routine-toggle" data-routine-toggle aria-label="${r.enabled ? "Turn off" : "Turn on"}">${r.enabled ? "on" : "off"}</button>
             <button type="button" class="byte-routine-remove" data-routine-remove aria-label="Delete">×</button>
           </div>
@@ -374,6 +375,20 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
     if (e.target.closest("[data-routine-rename]")) {
       const name = window.prompt("Rename routine", routine.name);
       if (name && name.trim() && name.trim() !== routine.name) patch(routine, { name: name.trim() });
+      return;
+    }
+    if (e.target.closest("[data-routine-group]")) {
+      // Which chore board this routine shows on, as a tap-to-fire circle.
+      // Blank removes it. A group named the same as a chore tag puts the two
+      // on one board; a name nothing else uses makes a trigger-only one.
+      const current = routine.tag || "";
+      const next = window.prompt(
+        "Board group — the chore board this routine appears on (blank to remove):",
+        current,
+      );
+      if (next === null) return;
+      const tag = next.trim();
+      if (tag !== current) patch(routine, { tag });
       return;
     }
     if (e.target.closest("[data-routine-remove]")) {

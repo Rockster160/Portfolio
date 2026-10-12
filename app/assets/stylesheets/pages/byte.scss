@@ -4170,6 +4170,28 @@ dialog.byte-modal {
   padding: 2px 6px !important;
 }
 
+// Which chore board this routine shows on. A quiet bordered chip like the
+// on/off toggle beside it when unset ("group"); lit in the board-trigger accent
+// once a group is on it, so a glance down the drawer says which routines are on
+// a board and which group each is in.
+.byte-routine-group {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--bs-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--bs-border) !important;
+  border-radius: 6px;
+  padding: 2px 6px !important;
+
+  &.byte-routine-group-set {
+    color: #A5B4FC;
+    border-color: color-mix(in srgb, #6366F1 55%, transparent) !important;
+  }
+}
+
 .byte-routine-remove {
   color: var(--bs-muted);
   font-size: 16px;
@@ -6132,6 +6154,47 @@ $board-cell-max: 200px;
     color: var(--bs-muted);
     text-decoration: line-through;
     text-decoration-thickness: 1px;
+  }
+}
+
+// ---- a trigger: tap to fire, not tick to finish ----
+//
+// A routine on the board has no occurrence to settle, so its circle carries no
+// ring, no count and no corners - just the icon. It reads as a different KIND of
+// thing from the chore circles beside it: a filled accent face rather than the
+// chores' flat dark disc waiting on a ring, so "set this off" and "check this
+// off" don't look identical from across the room.
+.byte-board-cell[data-kind="trigger"] {
+  --actor-color: #6366F1;
+
+  .byte-board-circle {
+    background: color-mix(in srgb, var(--actor-color) 16%, #0F1B33);
+    border-color: color-mix(in srgb, var(--actor-color) 55%, transparent);
+  }
+}
+
+// The receipt over a just-fired trigger. A trigger has no state change to see,
+// so a brief "Done!" is what says the tap landed - the same acknowledgement the
+// Jil trigger buttons flash. Fades on opacity rather than appearing and
+// vanishing between two frames.
+.byte-board-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--actor-color, #6366F1) 85%, #0F1B33);
+  color: #FFF;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+
+  &[data-on="true"] {
+    opacity: 1;
   }
 }
 

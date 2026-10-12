@@ -92,6 +92,44 @@
           </div>
         <% end %>
 
+        <%# Where you STAND, which is the one question the rest of the page
+           cannot answer. The three strips above are obligations and the wall
+           below sorts by what was touched most recently - and most of what
+           touches a row is a machine, so an application nobody has ever
+           answered sits at the top of the wall on the strength of a job-alert
+           digest. These are only the ones a person on their side has moved,
+           deepest first, with how long since anything happened: an offer at
+           the top, and a promising company going quiet at the bottom where it
+           reads as the one to chase. %>
+        <% if @in_play.any? %>
+          <div class="interview-standing">
+            <h3>Where you stand</h3>
+            <ul>
+              <% @in_play.each do |job| %>
+                <% owed = job.owed_now %>
+                <li style="--job-color: <%= job.color %>;">
+                  <%# Decoration: the rung is said in words beside it, so the
+                     pips are never the only version of the fact. %>
+                  <span class="standing-pips" aria-hidden="true">
+                    <% 1.upto(JobNote::DEEPEST) do |rung| %>
+                      <span class="standing-pip <%= "is-on" if rung <= job.engagement_depth %>"></span>
+                    <% end %>
+                  </span>
+                  <span class="standing-reached"><%= job.engagement_label %></span>
+                  <%= link_to job.label, interview_path(job) %>
+                  <%# "your move" rather than what is owed: the strip at the top
+                     already names that, and printing it twice reads as two
+                     obligations. Here it is a column, not a task. %>
+                  <% if owed.present? %>
+                    <span class="standing-yours">your move</span>
+                  <% end %>
+                  <span class="field-hint"><%= standing_age(job.engaged_at) %></span>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
         <%# One form for both halves of "pick a job, or name a new one, then
            write the note". The controller decides which happened, so this
            still works if the fieldset toggle never runs. %>

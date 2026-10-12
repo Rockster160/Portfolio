@@ -23,9 +23,11 @@ RSpec.describe "Byte chore board", type: :request do
 
   before { sign_in }
 
-  def board_chores
-    JSON.parse(response.body[/data-board-chores="([^"]*)"/, 1].to_s.gsub("&quot;", '"'))
+  def board_items
+    JSON.parse(response.body[/data-board-items="([^"]*)"/, 1].to_s.gsub("&quot;", '"'))
   end
+  # Back-compat alias for the chore-only assertions below.
+  alias_method :board_chores, :board_items
 
   describe "GET /board/:conversation_id" do
     it "renders the board surface rather than the routine pad" do
@@ -96,6 +98,74 @@ RSpec.describe "Byte chore board", type: :request do
     end
   end
 
+  # A board shows one GROUP, and a group can hold chores (tick to complete) and
+  # triggers (routines, tapped to fire) side by side. A trigger is stateless -
+  # it has no occurrence to settle - so it carries only what a circle paints
+  # from, tagged `kind: "trigger"` so the client knows not to draw a ring.
+  def routine!(name:, tag:, enabled: true, position: nil)
+    user.buddy_routines.create!(
+      name:     name,
+      tag:      tag,
+      enabled:  enabled,
+      position: position,
+      steps:    [BuddyRoutine.step(:log_event, { name: "ping" })],
+    )
+  end
+
+  describe "triggers on the board" do
+    before { thread.update!(metadata: thread.metadata.merge("chore_tag" => "Work")) }
+
+    it "carries the group's triggers as stateless items, after its chores" do
+      create(:chore, created_by_user: user, name: "Daily task", tag: "Work", marked_due_at: Time.current)
+      routine!(name: "Focus mode", tag: "Work")
+      # Neither of these belongs on this board: one is another group, the other
+      # is switched off.
+      routine!(name: "Away mode", tag: "Home")
+      routine!(name: "Break mode", tag: "Work", enabled: false)
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.pluck("kind")).to eq(["chore", "trigger"])
+      trigger = board_items.last
+      expect(trigger["name"]).to eq("Focus mode")
+      expect(trigger["short_name"]).to eq("Focus mode")
+      # No occurrence, so none of the chore state fields - the client reads the
+      # kind and never looks for a ring to fill.
+      expect(trigger).not_to have_key("progress_count")
+      expect(trigger).not_to have_key("target_count")
+    end
+
+    it "serves the merged live set from GET /byte/board/items for resync" do
+      create(:chore, created_by_user: user, name: "Daily task", tag: "Work", marked_due_at: Time.current)
+      routine!(name: "Focus mode", tag: "Work")
+
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      expect(response).to have_http_status(:ok)
+      kinds = response.parsed_body["items"].pluck("kind")
+      expect(kinds).to eq(["chore", "trigger"])
+    end
+
+    it "404s the items endpoint on somebody else's thread" do
+      theirs = create(:user).byte_conversations.create!(mode: :buddy, last_message_at: Time.current)
+
+      get "/byte/board/items", params: { conversation_id: theirs.id }
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "GET /byte/board/tags" do
+    it "unions the household's chore groups with the viewer's routine groups" do
+      create(:chore, created_by_user: user, name: "Vacuum", tag: "Home")
+      routine!(name: "Focus mode", tag: "Work")
+
+      get "/byte/board/tags"
+
+      expect(response.parsed_body["tags"]).to eq(["Home", "Work"])
+    end
+  end
+
   describe "PATCH /byte/board/tag" do
     before { create(:chore, created_by_user: user, name: "Vacuum", tag: "Home") }
 
@@ -114,6 +184,17 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.parsed_body["tags"]).to eq(["Home"])
       expect(thread.reload.chore_tag).to be_nil
+    end
+
+    # A group that holds only triggers is a real board, so it has to be settable
+    # even though no chore wears the tag.
+    it "accepts a group that only has triggers" do
+      routine!(name: "Focus mode", tag: "Focus")
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Focus" }
+
+      expect(response).to have_http_status(:ok)
+      expect(thread.reload.chore_tag).to eq("Focus")
     end
 
     it "clears it on a blank, which is how a board is unpointed" do

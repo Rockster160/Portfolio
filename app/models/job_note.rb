@@ -109,6 +109,49 @@ class JobNote < ApplicationRecord
     "heard_back"   => "Reply to them",
   }.freeze
 
+  # HOW FAR a process actually got, for the handful of applications where one
+  # started. Only beats a person on THEIR side can cause are on this ladder:
+  # `applied` is his own move and `acknowledged` is a machine's receipt, and
+  # between them they are nine tenths of every row on the board - most
+  # applications are never answered by anybody. `responded` is his move too,
+  # and a nudge into silence is not interest. `rejected` and `withdrew` settle
+  # the row, so an application carrying one has already stopped being live.
+  #
+  # `cancelled` keeps its booking's rung. A round falling through does not
+  # un-reach the rung it fell from, and they rebook from exactly there.
+  #
+  # The one judgment call is a take-home under an interview, on the grounds
+  # that it is usually the gate BEFORE the people. A company that uses one as
+  # its first filter leaves that row reading a rung shallow, which is cheaper
+  # than the reverse - an application that has only been set homework should
+  # not outrank one that has been in the room.
+  ENGAGEMENT_DEPTH = {
+    "heard_back"     => 1,
+    "availability"   => 2,
+    "scheduled"      => 2,
+    "cancelled"      => 2,
+    "recruiter_call" => 3,
+    "take_home"      => 4,
+    "interview"      => 5,
+    "offer"          => 6,
+  }.freeze
+
+  # What a rung is called, in the PAST TENSE, because the rung is history and a
+  # label in the present tense contradicts the board as soon as something falls
+  # through. An application that reached a booking, had it cancelled by the
+  # organiser and is now rescheduling is "got to a booking" the whole way
+  # through; a column reading "Scheduled" is a lie for most of that.
+  DEPTH_LABELS = {
+    1 => "heard back",
+    2 => "got to a booking",
+    3 => "had the screen",
+    4 => "got a take-home",
+    5 => "interviewed",
+    6 => "got an offer",
+  }.freeze
+
+  DEEPEST = DEPTH_LABELS.keys.max
+
   # A tag that settles the whole application, not just this moment in it.
   # Logging the rejection IS marking the job rejected — having to then go and
   # change a dropdown saying the same thing is how a tracker goes stale.
@@ -229,6 +272,10 @@ class JobNote < ApplicationRecord
     scope = scope.merge(JobApplication.live).where(tag: BALL_IN_COURT.keys)
     scope.latest_per_application.reorder(occurred_at: :asc, id: :asc)
   }
+
+  # Any beat that says a person on their side moved. Used to pick the few
+  # applications actually in play out of the wall.
+  scope :engaged, -> { where(tag: ENGAGEMENT_DEPTH.keys) }
 
   # Owed now: due today in THEIR day, or already missed.
   #

@@ -38,6 +38,7 @@ class JobApplication < ApplicationRecord
 
   scope :live,    -> { where(status: LIVE_STATUSES) }
   scope :ordered, -> { order(Arel.sql("COALESCE(last_activity_at, created_at) DESC")) }
+  scope :engaged, -> { where(id: JobNote.engaged.select(:job_application_id)) }
 
   # The site's autogen palette. A colour is assigned at creation rather than
   # derived at render, because it also rides along onto the calendar and a
@@ -142,6 +143,52 @@ class JobApplication < ApplicationRecord
 
   def dead?
     rejected? || closed?
+  end
+
+  # The applications actually IN PLAY: still live, and with at least one beat
+  # that only a person on their side could have caused. Most of a job search is
+  # rows that were applied to, acknowledged by a machine and never answered,
+  # and nothing on this page separated those from the few where something is
+  # genuinely happening - the wall sorts by what was touched most recently,
+  # which a job-alert digest is as good at as an offer.
+  #
+  # Deepest first, and within a rung whatever moved most recently. A board is
+  # read top down, so the offer belongs at the top of it and the one that has
+  # gone quiet at the bottom.
+  def self.in_play_for(user)
+    jobs = user.job_applications.live.engaged.includes(:notes).to_a
+    jobs.sort_by { |job| [-job.engagement_depth, -job.engaged_at.to_i] }
+  end
+
+  # How far this one got, as a rung on JobNote::ENGAGEMENT_DEPTH, or nil when
+  # nobody has ever answered. The FURTHEST rung rather than the latest beat:
+  # the question is how deep this went, and a plain note written afterwards
+  # does not undo an interview.
+  def engagement_depth
+    notes.filter_map { |note| JobNote::ENGAGEMENT_DEPTH[note.tag] }.max
+  end
+
+  def engagement_label
+    JobNote::DEPTH_LABELS[engagement_depth]
+  end
+
+  # When anything last happened here, for sorting and for saying how long it
+  # has been quiet.
+  #
+  # Off the notes rather than off `last_activity_at`, which is the same answer
+  # but only while every write path remembers to call `touch_activity!`. The
+  # notes are loaded for the depth anyway, so this costs nothing and cannot
+  # report a row quiet for nine days with yesterday's beat sitting on it.
+  def engaged_at
+    notes.map(&:occurred_at).max || last_activity_at || created_at
+  end
+
+  # What the newest beat is asking HIM for, or nil when the next move is
+  # theirs. Read off the LAST beat whatever its tag, which is the reading
+  # `JobNote.waiting_on_you_for` takes - the two say whose move it is on the
+  # same page and must never disagree about it.
+  def owed_now
+    notes.max_by { |note| [note.occurred_at, note.id] }&.owed
   end
 
   # The soonest interview still ahead of us, off a `scheduled` note. This is the

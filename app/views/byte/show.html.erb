@@ -95,13 +95,14 @@
      data-board="<%= @board ? "true" : "false" %>"
      data-board-tag="<%= @board_tag %>"
      data-chore-day="<%= @board_day&.iso8601 %>"
-     <%# The board's own set, serialized exactly as /chores/today's is, so a %>
-     <%# cold boot off the cached shell paints before the first fetch lands. %>
-     data-board-chores="<%= Array(@board_chores_json).to_json %>"
-     data-chores-sync-url="<%= chores_sync_path %>"
+     <%# The board's own set — chores AND triggers of one group, each tagged %>
+     <%# with its `kind` — serialized for the first paint so a cold boot off %>
+     <%# the cached shell paints before the first fetch lands. %>
+     data-board-items="<%= Array(@board_items_json).to_json %>"
+     data-board-items-url="<%= byte_board_items_path %>"
      data-chore-cheer-url="<%= byte_chore_cheer_path %>"
      data-board-tag-url="<%= byte_board_tag_path %>"
-     data-chores-tags-url="<%= chores_tags_path %>"
+     data-board-tags-url="<%= byte_board_tags_path %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>

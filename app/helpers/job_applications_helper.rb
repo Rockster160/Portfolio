@@ -26,6 +26,23 @@ module JobApplicationsHelper
     end
   end
 
+  # How long an application has been sitting still, for the standings strip.
+  #
+  # Going quiet is the one thing that happens to a promising application
+  # without anybody writing it down, so it is the fact worth printing beside
+  # how far it got. Phrased as a move rather than an age because the row is
+  # read as a standing and not as a chase: "quiet 9 days" is the one to chase.
+  def standing_age(time, now: Time.current)
+    return nil if time.blank?
+
+    days = (now.to_date - time.to_date).to_i
+    case days
+    when ..0 then "moved today"
+    when 1   then "moved yesterday"
+    else          "quiet #{days} days"
+    end
+  end
+
   # A note body, verbatim, with its links clickable.
   #
   # The body is printed as typed rather than through `simple_format` — the

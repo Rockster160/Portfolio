@@ -41,6 +41,7 @@ class JobApplicationsController < ApplicationController
     @live_jobs = current_user.job_applications.live.order(:company).to_a
     @new_job = current_user.job_applications.new
     load_upcoming
+    @in_play = JobApplication.in_play_for(current_user)
   end
 
   # Newest first. The page is read to answer "where is this now", and the answer

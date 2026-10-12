@@ -45,8 +45,29 @@ class ByteController < ApplicationController
     @board = true
     asked = params[:conversation_id].presence&.to_i
     load_thread(only_buddy: true, prefer: asked || current_user.byte_conversations.kiosk.pick(:id))
-    load_board_chores
+    @board_tag = @conversation&.chore_tag
+    @board_day = ChoreDay.current(current_user)
+    @board_items_json = board_items_for(@conversation)
     render :show
+  end
+
+  # GET /byte/board/items — the board's live set for a thread: the chores of its
+  # group AND the triggers (routines) of its group, merged and ordered. The
+  # client's resync hits this rather than /chores/sync, because /chores/sync
+  # knows nothing about triggers and would drop them from the board every time.
+  def board_items
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    @board_day = ChoreDay.current(current_user)
+    render json: { items: board_items_for(convo) }
+  end
+
+  # GET /byte/board/tags — every group a board can be pointed at. The union of
+  # the household's chore tags and the viewer's routine tags, so a group that
+  # holds only triggers is offered just the same as one that holds only chores.
+  def board_tags
+    render json: { tags: board_tag_names }
   end
 
   # PATCH /byte/board/tag — which group of chores this thread's board watches.
@@ -59,7 +80,7 @@ class ByteController < ApplicationController
     return head(:not_found) if convo.nil?
 
     tag = params[:tag].to_s.strip
-    known = current_user.accessible_chores.tag_names
+    known = board_tag_names
     if tag.present? && known.none? { |t| t.casecmp?(tag) }
       return render(json: { error: "unknown_tag", tags: known }, status: :unprocessable_entity)
     end
@@ -766,29 +787,43 @@ class ByteController < ApplicationController
 
   private
 
-  # Which thread the page opens on, and the list beside it. `only_buddy`
-  # narrows the whole page to Buddy threads; a non-owner is already pinned
-  # there, and the kiosk pins itself there too.
-  # The board's own chores: one group, in the household's order, serialized the
-  # same way /chores/today's are so the circles out here and the circles there
-  # are reading the same fields.
+  # The board's own set for one thread: the CHORES of its group, then the
+  # TRIGGERS (routines) of its group. One group, serialized the same way
+  # /chores/today's chores are so the circles out here read the same fields,
+  # with a `kind` tag telling the two apart. Chores come first, then triggers,
+  # because they sort in separate spaces (a chore's `sort_order`, a routine's
+  # `position`) and there is no shared order to interleave them by — and
+  # "things to do, then things to set off" is the order the group reads in.
   #
   # An unset tag loads NOTHING rather than everything. A board nobody has
   # pointed at a group yet is empty and says so; filling it with every chore in
   # the house would look deliberate and be wrong.
-  def load_board_chores
-    @board_tag = @conversation&.chore_tag
-    @board_day = ChoreDay.current(current_user)
-    if @board_tag.blank?
-      @board_chores_json = []
-      return
-    end
+  def board_items_for(convo)
+    tag = convo&.chore_tag
+    return [] if tag.blank?
 
-    chores = current_user.accessible_chores.tagged(@board_tag)
-    chores = chores.order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
-    ctx = ChoreSerializerContext.for_user(current_user, day: @board_day)
-    @board_chores_json = ctx.serialize_all(chores)
+    day = @board_day || ChoreDay.current(current_user)
+    chores = current_user.accessible_chores.tagged(tag)
+      .order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
+    ctx = ChoreSerializerContext.for_user(current_user, day: day)
+    chore_items = ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
+
+    trigger_items = current_user.buddy_routines.for_board(tag).map(&:board_item)
+
+    chore_items + trigger_items
   end
+
+  # The groups a board can watch: chore tags are household-wide, routine tags
+  # are the viewer's own, unioned and de-duped case-insensitively so "Work" is
+  # offered once however it was typed on either side.
+  def board_tag_names
+    names = current_user.accessible_chores.tag_names + current_user.buddy_routines.tag_names
+    names.uniq(&:downcase).sort_by(&:downcase)
+  end
+
+  # Which thread the page opens on, and the list beside it. `only_buddy`
+  # narrows the whole page to Buddy threads; a non-owner is already pinned
+  # there, and the kiosk pins itself there too.
 
   def load_thread(only_buddy: false, prefer: nil)
     buddy = only_buddy || buddy_only?

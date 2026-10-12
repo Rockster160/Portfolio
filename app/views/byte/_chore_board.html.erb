@@ -9,9 +9,10 @@
     mean two implementations of the same circle that have to agree, which is
     the trap the routine pad's own comment warns about.
 
-    Nothing is waited on for the first paint: `data-board-chores` on .byte-app
-    carries the serialized set, so the script paints from the page it arrived
-    in and only then goes and asks whether anything changed. %>
+    Nothing is waited on for the first paint: `data-board-items` on .byte-app
+    carries the serialized set — chores and triggers alike — so the script
+    paints from the page it arrived in and only then goes and asks whether
+    anything changed. %>
 <section class="byte-board" data-byte-board>
   <div class="byte-board-pad" data-board-pad role="list"></div>
 

@@ -111,4 +111,20 @@ RSpec.describe "Chore board presses" do
       expect(result.dig("after_undo", "state")).to eq("open")
     end
   end
+
+  # A trigger (routine) sits on the same board as a tap-to-fire circle. It has
+  # no occurrence to settle, so it wears none of the chore machinery.
+  describe "a trigger on the board" do
+    it "draws no ring, no count and no skip/undo - just the circle" do
+      expect(result["trigger_controls"]).to eq(
+        "ring" => true, "count" => true, "skip" => true, "undo" => true,
+        "state" => "trigger",
+      )
+    end
+
+    it "fires the routine's run endpoint and touches no chore endpoint" do
+      expect(result["fire_requests"]).to include("POST /buddy/routines/3/run")
+      expect(result["fire_hit_no_chore_endpoint"]).to be(true)
+    end
+  end
 end

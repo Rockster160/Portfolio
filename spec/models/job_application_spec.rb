@@ -218,4 +218,101 @@ RSpec.describe JobApplication do
       expect(JobApplication.exists?(stranger.id)).to be(true)
     end
   end
+
+  # The few applications where something is genuinely happening, picked out of a
+  # board that is mostly rows nobody ever answered.
+  describe "where you stand" do
+    let(:job) { user.job_applications.create!(company: "Reserv") }
+
+    it "has no rung until a person on their side moves" do
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 2.days.ago)
+      job.notes.create!(tag: :note, body: "job alert digest", occurred_at: 1.day.ago)
+
+      expect(job.engagement_depth).to be_nil
+      expect(job.engagement_label).to be_nil
+      expect(JobApplication.in_play_for(user)).to be_empty
+    end
+
+    it "counts his own moves as nothing - interest is a thing THEY do" do
+      job.notes.create!(tag: :responded, body: "Nudged them", occurred_at: 1.day.ago)
+
+      expect(JobApplication.in_play_for(user)).to be_empty
+    end
+
+    it "takes the FURTHEST rung, not the latest beat" do
+      job.notes.create!(tag: :take_home, occurred_at: 5.days.ago)
+      job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
+
+      expect(job.reload.engagement_depth).to eq(4)
+      expect(job.engagement_label).to eq("got a take-home")
+    end
+
+    # A round falling through does not un-reach the rung it fell from, and the
+    # label stays true while they rebook.
+    it "keeps a cancelled booking at its booking's rung" do
+      job.notes.create!(tag: :scheduled, occurred_at: 4.days.ago, follow_up_at: 3.days.ago)
+      job.notes.create!(tag: :cancelled, occurred_at: 2.days.ago)
+
+      expect(job.reload.engagement_depth).to eq(2)
+      expect(job.engagement_label).to eq("got to a booking")
+    end
+
+    it "leaves out one that has stopped being live" do
+      job.notes.create!(tag: :interview, occurred_at: 2.days.ago)
+      job.update!(status: :rejected)
+
+      expect(JobApplication.in_play_for(user)).to be_empty
+    end
+
+    it "keeps an offer, which is live and the top of the ladder" do
+      job.notes.create!(tag: :offer, occurred_at: 1.day.ago)
+
+      expect(job.reload.status).to eq("offer")
+      expect(JobApplication.in_play_for(user).map(&:engagement_label)).to eq(["got an offer"])
+    end
+
+    it "reaches nobody else's board" do
+      job.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+
+      expect(JobApplication.in_play_for(create(:user))).to be_empty
+    end
+
+    it "puts the deepest first, and the stalest last within a rung" do
+      deep = user.job_applications.create!(company: "iCapital")
+      deep.notes.create!(tag: :interview, occurred_at: 9.days.ago)
+      # Created oldest-first on purpose: the order has to come off the beats,
+      # and a row's own age would put these two the other way round.
+      stale = user.job_applications.create!(company: "Neighbor")
+      stale.notes.create!(tag: :scheduled, occurred_at: 8.days.ago, follow_up_at: 2.days.from_now)
+      fresh = user.job_applications.create!(company: "Bluestaq")
+      fresh.notes.create!(tag: :availability, occurred_at: 1.day.ago)
+
+      standing = JobApplication.in_play_for(user)
+
+      expect(standing.map(&:company)).to eq(%w[iCapital Bluestaq Neighbor])
+    end
+
+    # `last_activity_at` is the same answer only while every write path
+    # remembers to touch it, and the strip says how long a thing has been
+    # quiet - a stale column there is a sentence that is simply false.
+    it "measures quiet from the beats, not from a column somebody has to maintain" do
+      job.notes.create!(tag: :heard_back, occurred_at: 2.days.ago)
+      job.update!(last_activity_at: 30.days.ago)
+
+      expect(job.reload.engaged_at.to_date).to eq(2.days.ago.to_date)
+    end
+
+    # The same reading `JobNote.waiting_on_you_for` takes, off the last beat
+    # whatever its tag - the two say whose move it is on one page.
+    it "says whose move it is off the LAST beat" do
+      job.notes.create!(tag: :availability, occurred_at: 2.days.ago)
+
+      expect(job.reload.owed_now).to eq("Send availability")
+
+      job.notes.create!(tag: :note, body: "Submitted my times", occurred_at: 1.day.ago)
+
+      expect(job.reload.owed_now).to be_nil
+    end
+  end
 end

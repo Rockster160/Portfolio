@@ -63,6 +63,8 @@ Rails.application.routes.draw do
   get  "/byte/kiosk", to: redirect(subdomain: "byte", path: "/kiosk")
   get  "/byte/board", to: redirect(subdomain: "byte", path: "/board")
   patch "/byte/board/tag" => "byte#set_board_tag", as: :byte_board_tag
+  get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
+  get   "/byte/board/tags"  => "byte#board_tags",  as: :byte_board_tags
   post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation

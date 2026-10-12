@@ -207,7 +207,7 @@ module Buddy
     # it outright. Pinning is that list plus one, unpinning is it minus one.
     # No `steps` either - #steps owns those, and on tighter terms.
     def routine_params
-      params.require(:routine).permit(:name, :description, :enabled)
+      params.require(:routine).permit(:name, :description, :enabled, :tag)
     end
   end
 end
