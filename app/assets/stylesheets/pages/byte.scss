@@ -6417,49 +6417,65 @@ $board-cell-max: 200px;
   }
 }
 
-.byte-board-button-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+// The form is a `.byte-msg-form`, so it already lays its rows out and styles its
+// inputs/selects; it only needs its own top border dropped, since it already sits
+// under the section's divider. Both classes in the selector so it out-specifies
+// the `.byte-msg-form` base that sets the border and comes later in the file.
+.ctr-byte .byte-app .byte-msg-form.byte-board-button-form {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
-.ctr-byte .byte-app .byte-board-bb-label {
+// Completes is a type-to-find field: the dropdown of matches hangs under the
+// input, so the field is the positioning context.
+.byte-board-chore-field {
+  position: relative;
+}
+
+.byte-board-chore-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-them-bg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.ctr-byte .byte-app .byte-board-chore-result {
+  display: block;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-input-bg, transparent);
-  color: var(--bs-text);
-  font-size: 13px;
-}
-
-.byte-board-bb-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--bs-muted);
-}
-
-.ctr-byte .byte-app .byte-board-bb-select {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-input-bg, transparent);
-  color: var(--bs-text);
-  font-size: 13px;
-}
-
-.ctr-byte .byte-app .byte-board-bb-color {
-  width: 44px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--bs-border);
-  border-radius: 8px;
+  padding: 9px 12px;
+  border: 0;
   background: transparent;
+  color: var(--bs-text) !important;
+  font-size: 14px;
+  text-align: left;
+
+  & + .byte-board-chore-result {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+// The native colour well, kept small and tidy rather than the big default box.
+.ctr-byte .byte-app input.byte-msg-form-input[type="color"] {
+  width: 56px;
+  min-height: 40px;
+  padding: 3px;
 }
 
 .byte-board-button-form-actions {

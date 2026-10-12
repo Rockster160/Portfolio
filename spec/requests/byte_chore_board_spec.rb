@@ -224,6 +224,8 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.parsed_body["buttons"].pluck("label")).to eq(["Dishes, by mate"])
       expect(response.parsed_body["chores"].pluck("name")).to include("Dishes")
       expect(response.parsed_body["members"].pluck("id")).to include(housemate.id)
+      # A new button credits the current user by default.
+      expect(response.parsed_body["me"]).to eq(user.id)
     end
 
     it "creates, updates and deletes a button" do

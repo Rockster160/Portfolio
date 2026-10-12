@@ -91,6 +91,9 @@ class ByteController < ApplicationController
       buttons: buttons.map { |b| credit_button_wire(b) },
       chores:  household_chore_options,
       members: household_member_options,
+      # A new button credits YOU by default - the common case is marking your own
+      # work, and crediting someone else is the deliberate exception.
+      me:      current_user.id,
     }
   end
 

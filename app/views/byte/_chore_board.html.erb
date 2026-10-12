@@ -42,21 +42,40 @@
       <span class="byte-board-tag-label">Credit buttons on this board</span>
       <div class="byte-board-buttons-list" data-board-buttons-list></div>
 
-      <form class="byte-board-button-form" data-board-button-form>
-        <input type="text" class="byte-board-bb-label" data-bb-label
-               placeholder="Button label" maxlength="60" required>
-        <label class="byte-board-bb-row">
-          <span>Completes</span>
-          <select class="byte-board-bb-select" data-bb-chore required></select>
-        </label>
-        <label class="byte-board-bb-row">
-          <span>Credits</span>
-          <select class="byte-board-bb-select" data-bb-credit required></select>
-        </label>
-        <label class="byte-board-bb-row">
-          <span>Colour</span>
-          <input type="color" class="byte-board-bb-color" data-bb-color value="#16A34A">
-        </label>
+      <%# Built on the same `.byte-msg-form` the companion forms use, so it reads
+          like the rest of Byte rather than a bolted-on panel. %>
+      <form class="byte-msg-form byte-board-button-form" data-board-button-form>
+        <div class="byte-msg-form-row">
+          <label class="byte-msg-form-label" for="bb-label">Label</label>
+          <input type="text" id="bb-label" class="byte-msg-form-input" data-bb-label
+                 placeholder="e.g. Dishes, by me" maxlength="60" required>
+        </div>
+
+        <%# Completes: a type-to-find chore picker rather than a select of every
+            chore in the house - the same "search to narrow it" the chores page
+            leans on, so a chore can actually be found. The hidden input carries
+            the chosen id; the text field is only for searching. %>
+        <div class="byte-msg-form-row byte-board-chore-field">
+          <label class="byte-msg-form-label" for="bb-chore-search">Completes</label>
+          <input type="text" id="bb-chore-search" class="byte-msg-form-input"
+                 data-bb-chore-search placeholder="Search chores…"
+                 autocomplete="off" role="combobox" aria-expanded="false"
+                 aria-controls="bb-chore-results">
+          <div class="byte-board-chore-results" id="bb-chore-results"
+               data-bb-chore-results role="listbox" hidden></div>
+          <input type="hidden" data-bb-chore>
+        </div>
+
+        <div class="byte-msg-form-row">
+          <label class="byte-msg-form-label" for="bb-credit">Credits</label>
+          <select id="bb-credit" class="byte-msg-form-input" data-bb-credit required></select>
+        </div>
+
+        <div class="byte-msg-form-row">
+          <label class="byte-msg-form-label" for="bb-color">Color</label>
+          <input type="color" id="bb-color" class="byte-msg-form-input" data-bb-color value="#16A34A">
+        </div>
+
         <%# Carries the id being edited, empty for a new one. The form is reused
             for both so there is one set of fields to get right. %>
         <input type="hidden" data-bb-id value="">

@@ -170,7 +170,11 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const bbListEl = root.querySelector("[data-board-buttons-list]");
   const bbFormEl = root.querySelector("[data-board-button-form]");
   const bbLabelEl = root.querySelector("[data-bb-label]");
-  const bbChoreEl = root.querySelector("[data-bb-chore]");
+  // Completes: a type-to-find picker. The text field searches; the hidden input
+  // holds the chosen chore id; the results box is the dropdown.
+  const bbChoreSearchEl = root.querySelector("[data-bb-chore-search]");
+  const bbChoreIdEl = root.querySelector("[data-bb-chore]");
+  const bbChoreResultsEl = root.querySelector("[data-bb-chore-results]");
   const bbCreditEl = root.querySelector("[data-bb-credit]");
   const bbColorEl = root.querySelector("[data-bb-color]");
   const bbIdEl = root.querySelector("[data-bb-id]");
@@ -820,6 +824,12 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   // settings gear over the circles, and buttons belong to the group the picker
   // is already about.
 
+  // Every chore the household can see, for the Completes picker to search. Filled
+  // on each manager open; filtered client-side as they type.
+  let choreOptions = [];
+  // The current user's id, so a new button credits them by default.
+  let meId = null;
+
   function fillOptions(select, options, selectedId) {
     if (!select) return;
     select.innerHTML = "";
@@ -833,13 +843,67 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     });
   }
 
+  function hideChoreResults() {
+    if (!bbChoreResultsEl) return;
+    bbChoreResultsEl.hidden = true;
+    bbChoreResultsEl.innerHTML = "";
+    bbChoreSearchEl?.setAttribute("aria-expanded", "false");
+  }
+
+  // Pick a chore from the dropdown: the id goes to the hidden input (what the
+  // form submits), the name fills the search field so it reads as chosen.
+  function chooseChore(opt) {
+    if (bbChoreIdEl) bbChoreIdEl.value = String(opt.id);
+    if (bbChoreSearchEl) bbChoreSearchEl.value = opt.name;
+    hideChoreResults();
+  }
+
+  // Substring match, capped so the dropdown stays a glanceable short list rather
+  // than the giant select it replaced. A blank query shows the first few.
+  function paintChoreResults(query) {
+    if (!bbChoreResultsEl) return;
+
+    const q = query.trim().toLowerCase();
+    const matches = (q ? choreOptions.filter((c) => c.name.toLowerCase().includes(q)) : choreOptions).slice(0, 10);
+
+    bbChoreResultsEl.innerHTML = "";
+    if (matches.length === 0) {
+      hideChoreResults();
+      return;
+    }
+
+    matches.forEach((opt) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "byte-board-chore-result";
+      row.dataset.bbChoreOption = String(opt.id);
+      row.textContent = opt.name;
+      row._option = opt;
+      bbChoreResultsEl.appendChild(row);
+    });
+    bbChoreResultsEl.hidden = false;
+    bbChoreSearchEl?.setAttribute("aria-expanded", "true");
+  }
+
+  // Typing clears any previous pick: the hidden id only means something while the
+  // field still reads as the chore they chose. Re-choosing from the dropdown sets
+  // it again.
+  function onChoreInput() {
+    if (bbChoreIdEl) bbChoreIdEl.value = "";
+    paintChoreResults(bbChoreSearchEl?.value || "");
+  }
+
   function resetButtonForm() {
     if (!bbFormEl) return;
     if (bbIdEl) bbIdEl.value = "";
     if (bbLabelEl) bbLabelEl.value = "";
     if (bbColorEl) bbColorEl.value = "#16A34A";
-    if (bbChoreEl) bbChoreEl.selectedIndex = 0;
-    if (bbCreditEl) bbCreditEl.selectedIndex = 0;
+    if (bbChoreSearchEl) bbChoreSearchEl.value = "";
+    if (bbChoreIdEl) bbChoreIdEl.value = "";
+    hideChoreResults();
+    // Cleared so the next paint re-applies the "credit me" default; editing sets
+    // an explicit value after this and isn't repainted, so it keeps its own.
+    if (bbCreditEl) bbCreditEl.value = "";
     if (bbCancelEl) bbCancelEl.hidden = true;
     if (bbSaveEl) bbSaveEl.textContent = "Add button";
     if (bbErrorEl) {
@@ -854,7 +918,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     if (bbIdEl) bbIdEl.value = String(button.id);
     if (bbLabelEl) bbLabelEl.value = button.label || "";
     if (bbColorEl) bbColorEl.value = button.color || "#16A34A";
-    if (bbChoreEl) bbChoreEl.value = String(button.chore_id);
+    if (bbChoreSearchEl) bbChoreSearchEl.value = button.chore_name || "";
+    if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
+    hideChoreResults();
     if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id);
     if (bbCancelEl) bbCancelEl.hidden = false;
     if (bbSaveEl) bbSaveEl.textContent = "Save";
@@ -870,8 +936,10 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
 
     try {
       const data = await apiCall(`${BUTTONS_URL}?tag=${encodeURIComponent(tag)}`, "GET");
-      fillOptions(bbChoreEl, data?.chores, bbChoreEl?.value);
-      fillOptions(bbCreditEl, data?.members, bbCreditEl?.value);
+      choreOptions = Array.isArray(data?.chores) ? data.chores : [];
+      if (data?.me != null) meId = data.me;
+      // Keep an editing selection; otherwise default a fresh form to crediting me.
+      fillOptions(bbCreditEl, data?.members, bbCreditEl?.value || meId);
 
       if (!bbListEl) return;
       bbListEl.innerHTML = "";
@@ -927,11 +995,21 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     e.preventDefault();
     if (!bbFormEl) return;
 
+    // The hidden id, set only by choosing from the dropdown — so a half-typed
+    // search that matches nothing can't submit as a chore.
+    if (!bbChoreIdEl?.value) {
+      if (bbErrorEl) {
+        bbErrorEl.hidden = false;
+        bbErrorEl.textContent = "Pick a chore from the search list.";
+      }
+      return;
+    }
+
     const payload = {
       tag,
       label: bbLabelEl?.value.trim(),
       color: bbColorEl?.value,
-      chore_id: bbChoreEl?.value,
+      chore_id: bbChoreIdEl.value,
       credit_user_id: bbCreditEl?.value,
     };
     const id = bbIdEl?.value;
@@ -1057,6 +1135,30 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
 
   if (bbFormEl) bbFormEl.addEventListener("submit", submitButton);
   if (bbCancelEl) bbCancelEl.addEventListener("click", resetButtonForm);
+
+  if (bbChoreSearchEl) {
+    bbChoreSearchEl.addEventListener("input", onChoreInput);
+    bbChoreSearchEl.addEventListener("focus", () =>
+      paintChoreResults(bbChoreSearchEl.value || ""),
+    );
+    // A click on a result lands before this blur (mousedown fires first and the
+    // handler picks it), so the short delay only matters for a real blur away.
+    bbChoreSearchEl.addEventListener("blur", () =>
+      window.setTimeout(hideChoreResults, 150),
+    );
+  }
+  if (bbChoreResultsEl) {
+    // mousedown, not click: it fires before the input's blur, so the pick lands
+    // instead of the dropdown closing out from under the tap.
+    bbChoreResultsEl.addEventListener("mousedown", (e) => {
+      const opt = e.target.closest("[data-bb-chore-option]");
+      if (opt?._option) {
+        e.preventDefault();
+        chooseChore(opt._option);
+      }
+    });
+  }
+
   if (bbListEl) {
     bbListEl.addEventListener("click", (e) => {
       const del = e.target.closest("[data-bb-delete]");
