@@ -69,6 +69,13 @@
   path: :list_builders
   description: "Touch panels for a shared list. Tap an item to put it on the list, and track how many are left at home, with low and out-of-stock flags. Syncs live across devices."
 
+- slug: json-lens
+  title: "JSON Lens"
+  year: 2026
+  access: :public
+  path: :json_lens
+  description: "A JSON viewer and editor built for files too big for most tools — millions of records, thousands of keys, multi-megabyte values. Only what's on screen is rendered, with live search, lazy expansion, and inline editing."
+
 - slug: meal-builder
   title: "Meal Builder"
   year: 2025

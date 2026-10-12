@@ -155,9 +155,14 @@ class JobApplication < ApplicationRecord
   # Deepest first, and within a rung whatever moved most recently. A board is
   # read top down, so the offer belongs at the top of it and the one that has
   # gone quiet at the bottom.
+  #
+  # The id is the last word because `sort_by` is NOT stable: two rows at the
+  # same rung whose newest beats land in the same second - which is what two
+  # mails read by the same watcher pass looks like - would otherwise swap
+  # places between one load and the next.
   def self.in_play_for(user)
     jobs = user.job_applications.live.engaged.includes(:notes).to_a
-    jobs.sort_by { |job| [-job.engagement_depth, -job.engaged_at.to_i] }
+    jobs.sort_by { |job| [-job.engagement_depth, -job.engaged_at.to_i, -job.id] }
   end
 
   # How far this one got, as a rung on JobNote::ENGAGEMENT_DEPTH, or nil when

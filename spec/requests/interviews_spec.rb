@@ -270,16 +270,20 @@ RSpec.describe "Interview tracker", type: :request do
       expect(row.scan(/class="standing-pip "/).length).to eq(1)
     end
 
-    it "marks the ones that are his move" do
+    it "marks the ones that are his move and leaves the rest alone" do
       job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
       other = user.job_applications.create!(company: "Bluestaq")
-      other.notes.create!(tag: :scheduled, occurred_at: 1.day.ago, follow_up_at: 2.days.from_now)
+      other.notes.create!(tag: :scheduled, occurred_at: 3.days.ago, follow_up_at: 2.days.from_now)
 
       get interviews_path
 
-      expect(standing_row("got to a booking")).to include("your move")
-      # Both are at the same rung, so the second row is the booked one.
-      expect(response.body.scan(/standing-yours/).length).to eq(1)
+      rows = response.body.scan(/<li style="--job-color[^>]*>(.*?)<\/li>/m).flatten
+      owed = rows.map { |row| row.include?("your move") }
+
+      # Both sit at the same rung; the one owing availability moved later, so it
+      # leads, and the booked one says nothing about whose move it is.
+      expect(rows.length).to eq(2)
+      expect(owed).to eq([true, false])
     end
 
     # The filter and the search narrow the WALL. Where things stand is a fact

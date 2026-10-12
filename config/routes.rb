@@ -50,6 +50,7 @@ Rails.application.routes.draw do
   post "proxy" => "proxy#proxy"
   post "/printer_control" => "printers#control"
   get "map" => "index#map"
+  get "json-lens" => "index#json_lens", as: :json_lens
   get "playground" => "index#playground"
   get "playground/:id" => "playground#show", as: :playground_project
   resource :ping, only: :create

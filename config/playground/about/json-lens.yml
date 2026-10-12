@@ -1,0 +1,29 @@
+---
+tagline: A JSON viewer and editor that stays fast on files other tools choke on.
+body: |
+  JSON Lens opens a JSON file and lets you explore, search, and edit it in a collapsible tree. It is built for files that are too big for most viewers: millions of records, thousands of keys, or multi-megabyte values. Only the rows currently on screen are ever rendered, so scrolling stays smooth no matter how large the file is.
+
+  ## What it solves
+  Most JSON viewers try to render the whole document at once and fall over on anything large. JSON Lens virtualizes the tree, expands branches lazily, and previews huge values instead of inlining them, so it stays responsive where other tools lock up the tab.
+
+  ## Features
+  - **Virtualized tree** Scroll through millions of rows with no lag; only visible rows are in the DOM.
+  - **Lazy expansion** A node's children are materialized only when you open it.
+  - **Live search** Type to search keys and values across the whole document, time-sliced so the page never freezes, with jump-to-match.
+  - **Huge values** Long strings are previewed truncated and opened in full in an inspector.
+  - **Inline editing** Double-click any value or key to edit it; add and remove entries; edit large strings or whole subtrees as raw JSON.
+  - **Open anything** Load a file, paste JSON, drag-and-drop, or start empty. Newline-delimited JSON (NDJSON) is detected and loaded as an array.
+  - **Export** Copy the current JSON or download it as a file.
+  - **Light and dark** Follows the system theme, with a manual toggle.
+
+  ## How to use it
+  1. Open a file, paste JSON, or drag a file onto the page.
+  2. Click a node to inspect its path and type; use the arrows or keyboard to move through the tree.
+  3. Search for any key or value and jump straight to a match.
+  4. Double-click a value or key to edit it, or hover a row to add and remove entries.
+  5. Copy or download the result when you're done.
+
+  ## How it works
+  - **Windowed rendering** The tree is flattened to the currently expanded rows, and only the slice inside the viewport is rendered on each scroll frame.
+  - **Reference-keyed state** Expansion and selection are keyed to the underlying objects, so edits mutate the real data and the view rebuilds from it.
+  - **Reusable component** The same viewer powers the standalone tool and the site's internal JSON cache editor, seeded with data and auto-saving changes back.
