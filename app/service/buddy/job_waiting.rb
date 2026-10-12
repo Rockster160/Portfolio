@@ -1,23 +1,28 @@
 module Buddy
-  # The mini-alert in Byte for an application whose next move is HIS.
+  # The chip on Buddy's strip for an application whose next move is HIS.
   #
   # The board paints this at the top of the interviews page, and that page was
-  # the only place it was ever visible. Byte is where the day is actually read,
-  # so an availability request or a take-home could sit for days and only be
-  # found by somebody going to look for it.
+  # the only place it was ever visible. Byte is where the day is read, so an
+  # availability request or a take-home could sit for days and only be found by
+  # somebody going to look for it.
   #
-  # An alert rather than a message because this is a CONDITION: it is true until
-  # he does the thing, and a second message tomorrow saying the same thing helps
-  # nobody. One bubble carries it, the pinned strip keeps it from being scrolled
-  # past, and it rewrites itself into the record that it was handled.
+  # A CHIP rather than an alert, and the difference is how much of the screen it
+  # is allowed: an alert owns a bubble in the thread and a bar across the foot of
+  # the hero, which is the right weight for a house-level condition and far too
+  # much for one of a dozen applications. A chip is one line over Buddy's
+  # shoulder, `state: :waiting` is the state the strip already colours as
+  # "asking for a person" and sorts to the front, and a waiting chip is exempt
+  # from ageing out - so it sits there until the thing is done.
   #
-  # ONE ALERT PER APPLICATION, because they clear separately - answering an
-  # offer at one company says nothing about the availability another is waiting
-  # on. The key is therefore stable per row, so a second beat of his to answer
-  # rewrites the bubble that row already owns instead of stacking a second.
+  # ONE CHIP PER APPLICATION, keyed `job:waiting:<id>`, because they clear
+  # separately: answering an offer at one company says nothing about the
+  # availability another is waiting on. A stable key also means a second beat of
+  # his rewrites that row's chip rather than adding one.
   module JobWaiting
     module_function
 
+    # Lowercase with colons for nesting, which is what BackgroundProcess::KEY_RX
+    # allows - the key travels in a URL path.
     def key_for(job_application_id)
       "job:waiting:#{job_application_id}"
     end
@@ -33,23 +38,33 @@ module Buddy
       return nil if job.nil?
 
       note = waiting_note(job)
-      # No body on the resolve: the bubble keeps the words it opened with and
-      # simply stops reading as outstanding, which is the honest record - what
-      # was owed is still what was owed.
-      return ::Buddy::Alerts.resolve!(user: job.user, key: key_for(job.id)) if note.nil?
+      # Cleared, not settled. A chip reporting `finished` stays on the strip
+      # saying what became of it, and there is no outcome to show here - the
+      # beat that moved the ball is on the timeline where history goes.
+      return ::BackgroundProcess.clear(user: job.user, key: key_for(job.id)) if note.nil?
 
-      ::Buddy::Alerts.raise!(user: job.user, key: key_for(job.id), body: body_for(job, note))
+      chip!(job, note)
+    end
+
+    # The name is the WHOLE chip and gets 20 characters, so it carries what is
+    # owed - all four of `JobNote::BALL_IN_COURT` fit - and the company rides on
+    # the link pill underneath, which is also where a tap goes. Two companies
+    # owing availability are then two chips reading the same thing and labelled
+    # apart, which is the right way round: the verb is what he is scanning for.
+    def chip!(job, note)
+      ::BackgroundProcess.note(
+        user:   job.user,
+        key:    key_for(job.id),
+        name:   note.owed,
+        state:  :waiting,
+        detail: job.label,
+        links:  [{ label: job.company, url: job.interview_url }],
+        source: :interviews,
+      )
     end
 
     def waiting_note(job)
       ::JobNote.waiting_on_you_for(job.user).find_by(job_application_id: job.id)
-    end
-
-    # The same shape as the row this beat puts on the calendar - what is owed,
-    # then which job. The link is most of the reason to have it in Byte at all:
-    # the strip prints a link's text and the bubble is one tap from the timeline.
-    def body_for(job, note)
-      "#{note.owed}: [#{job.label}](#{job.interview_url})"
     end
   end
 end
