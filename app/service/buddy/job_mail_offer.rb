@@ -86,7 +86,9 @@ module Buddy
       # is not a new company and it must not propose one — it is a question, and
       # the rows are what it has to ask with.
       if job.nil?
-        return deliver_card(user, conversation, card, metadata, verdict) if verdict[:company].blank?
+        if verdict[:company].blank?
+          return deliver_card(user, conversation, card, metadata, verdict, email: email, body: body)
+        end
 
         ambiguous = rows.any?
         seed = (
@@ -215,14 +217,54 @@ module Buddy
       JobHunt.applications_for(user, verdict[:company])
     end
 
-    def deliver_card(user, conversation, card, metadata, verdict)
+    # A CARD WITH NOTHING TO DO ON IT STILL HAS TO BE WORTH READING.
+    #
+    # This posted the caller's card alone, and on the branch it serves - mail
+    # the classifier could name no company for - that card is the subject line
+    # wearing three hats: a heading, a bold repeat and an italic kind. A
+    # recruiter's first contact came through as `Backend Engineer` three times
+    # over and a sender address, with no link and nothing to press.
+    #
+    # The two things it was missing were already in this method's reach. The
+    # mail has a page, because `Emails::StoreRaw` kept a copy before any of this
+    # ran; and `body` is the mail's own words, read for the seed and then thrown
+    # away on this branch. Neither is a new capability - they are what the
+    # matched branch has had all along.
+    def deliver_card(user, conversation, card, metadata, verdict, email: nil, body: nil)
+      text = [card, opening_line(body), read_link(email)].compact_blank.join("\n\n")
+
       CompanionDelivery.deliver_plain(
         user:         user,
         conversation: conversation,
-        text:         card,
+        text:         text,
         metadata:     metadata,
         push_title:   verdict[:headline].presence || metadata[:subject],
       )
+    end
+
+    # The first line of the mail that says something.
+    #
+    # A greeting is the first line about as often as not, and `Hi Rocco,` is no
+    # more use than the subject echoed back - so the quote starts below it. Long
+    # enough to carry the ask, short enough that the push preview still shows
+    # most of it.
+    GREETING = /\A(hi|hey|hello|dear|greetings|good (morning|afternoon|evening))\b[^\n]{0,40}\z/i
+    QUOTED = 220
+
+    def opening_line(body)
+      lines = body.to_s.split("\n").map(&:strip).reject(&:empty?)
+      said = lines.find { |line| !line.match?(GREETING) }
+      return nil if said.blank?
+
+      "> #{said.truncate(QUOTED)}"
+    end
+
+    # Nil when nothing kept a copy - see `mail_url`. A link that 404s is worse
+    # than the card without one.
+    def read_link(email)
+      return nil if email.nil?
+
+      "[Read the mail](#{mail_url(email)})"
     end
 
     # Is this mail about THAT row's job, as far as anything here can tell?

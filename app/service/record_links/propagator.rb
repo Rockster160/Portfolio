@@ -5,20 +5,27 @@ module RecordLinks
   #
   # This is the Rails half of what Jil tasks 362, 365, 366, 370, 374, 382, 383
   # and 416 used to do. Both of the old uphill rules were dropped when this
-  # replaced them: completing a chore no longer writes an ActionEvent, and
-  # adding a list item no longer marked a chore due. The cron and button tasks
-  # that relied on the second one were converted to mark the chore due
-  # themselves, which pushes the item back down the cascade and arrives in the
-  # same place with the arrow pointing one way.
+  # replaced them, then brought back per pairing through `reverse`: by default
+  # completing a chore writes no ActionEvent and adding a list item marks no chore
+  # due, but a row flagged `reverse` opens the uphill reading too, so the pairing
+  # reads as a two-way SYNC. The cron and button tasks that relied on the old
+  # list->chore rule were converted to mark the chore due themselves, which pushes
+  # the item back down the cascade and arrives in the same place.
   #
-  # What that conversion missed was the SPOKEN path. "Add Pickup RX to Chores"
-  # is a sentence a person says, not a task anybody could rewrite, and for a
-  # chore that is unscheduled and `when_scheduled` the mark is the only thing
-  # that can put it on Today — so it went on the list, stayed off the Chores
-  # app, and reported no error anywhere, because `item` was in SCOPES with no
-  # branch to land in. `on_item` is that branch. It runs for a pairing
-  # explicitly marked `reverse` and for nothing else, so the cascade is still
-  # one-way everywhere it was not deliberately opened.
+  # The two uphill rungs:
+  #   * list_item -> chore (`on_item`): putting the item back marks the chore due.
+  #     This also catches the SPOKEN path — "Add Pickup RX to Chores" is a
+  #     sentence, not a task anybody could rewrite, and for an unscheduled
+  #     `when_scheduled` chore the mark is the only thing that puts it on Today.
+  #   * chore -> event (`sync_completion_event`): marking the chore done directly
+  #     logs the event that would have completed it, so a board / chores-page /
+  #     Buddy completion reads the same as logging the event. One event per
+  #     completion, and only for an event that maps to exactly one chore — a
+  #     shared event can't run up without ticking its other chores.
+  #
+  # Each runs only for a pairing explicitly marked `reverse`, so the cascade stays
+  # one-way everywhere it was not deliberately opened. The Guard's revisit rule
+  # and the +/-1s partner joins keep a two-way pairing from chasing its own tail.
   #
   # The behaviour that survived is deliberately identical to Jil's, including
   # the awkward parts, because these pairings run a real household and "slightly
@@ -106,11 +113,23 @@ module RecordLinks
     end
 
     def run_event_chore(user, link, event, action, changes, matched)
-      return ask_who(user, link, event) if action == :added && matched && link.ask_who?
-      return nil if link.ask_who?
-
       chore = find_chore(user, link.target_name)
       return nil if chore.nil?
+
+      if link.ask_who?
+        return nil unless action == :added && matched
+
+        # Don't ask when the doing is already attributed. A completion sitting in
+        # this event's window means the chore was marked done DIRECTLY and this
+        # event is the uphill record of that completion (see
+        # `sync_completion_event`) - the completer is known, so there is nothing
+        # to ask. An event logged on its own, with no completion yet, still
+        # prompts.
+        leaf = chore.completion_leaf_for(user)
+        return nil if completion_partner(user, leaf, parse_time(event.timestamp))
+
+        return ask_who(user, link, event)
+      end
 
       case action
       when :added   then (upsert_completion(user, chore, event) if matched)
@@ -148,11 +167,16 @@ module RecordLinks
     end
 
     def on_completion(user, completion, action)
-      name = completion&.chore&.name
+      chore = completion&.chore
+      name = chore&.name
       return if name.blank?
 
       each_link(user, :chore, [name]) { |link|
         next unless link.matches?(name)
+        # The uphill event of a reverse pairing is handled ONCE below, not per
+        # link, so a chore reached by several event names isn't logged under all
+        # of them on a single completion.
+        next if link.target_event?
 
         case action.to_sym
         when :completed
@@ -164,6 +188,90 @@ module RecordLinks
           link.target_agenda? ? uncomplete_agenda(user, link) : add_item(user, link)
         end
       }
+
+      sync_completion_event(user, completion, action.to_sym)
+    end
+
+    # ---- chore -> event (the uphill half of a reverse event<->chore pairing) ----
+    #
+    # Logging an event completes the chore (downhill); this is the other way, so
+    # the pairing reads as a real two-way sync: marking the chore done DIRECTLY
+    # (a board, the chores page, Buddy, a credit button) logs the event that would
+    # have completed it, and undoing the completion takes that event back.
+    #
+    # Two deliberate limits keep it honest:
+    #   * ONE event per completion - the lowest-id pairing - so a chore several
+    #     events can complete isn't logged under all of them at once.
+    #   * only an event that maps to exactly ONE chore. A shared event ("Chore"
+    #     completes several chores) can't round-trip: logging it here would tick
+    #     the others too. Those stay one-way, whatever their reverse flag says.
+    def sync_completion_event(user, completion, action)
+      chore = completion.chore
+      return if chore.nil?
+      # The chore_completion trigger fans out to every household member so each
+      # one's own automations fire, but the event belongs to whoever actually did
+      # it - log it once, on the completer's account, through the completer's own
+      # pairings. A housemate's board press is still their doing here.
+      return unless user.id == completion.user_id
+
+      names = [chore.name, chore.parent_chore&.name].compact.map(&:to_s)
+      all_up = RecordLink.live.source_event.target_chore.where(user_id: user.id).to_a
+      link = all_up
+        .select { |l| l.reverse? && names.any? { |n| l.target_name.to_s.casecmp?(n) } }
+        .min_by(&:id)
+      return if link.nil?
+
+      # Skip an event shared across chores - it can't round-trip without ticking
+      # the others.
+      fan_out = all_up.count { |l|
+        l.source_name.to_s.casecmp?(link.source_name.to_s) &&
+          l.source_scope.to_s.casecmp?(link.source_scope.to_s)
+      }
+      return if fan_out > 1
+
+      case action
+      when :completed   then log_completion_event(user, link, completion)
+      when :uncompleted then remove_completion_event(user, link, completion)
+      end
+    end
+
+    def log_completion_event(user, link, completion)
+      at = parse_time(completion.completed_at) || Time.current
+      # Idempotent: the completion may itself have been MADE by logging this event
+      # (the downhill direction), in which case the event is already in the window
+      # and logging a second one would be a phantom duplicate.
+      return false unless event_partner(user, link.source_name, link.source_scope, at).nil?
+
+      event = user.action_events.create!(
+        name:      link.source_name,
+        notes:     link.source_scope.to_s,
+        timestamp: at,
+      )
+      ::ActionEventNotifier.notify(user, event, :added, auth: :link)
+      true
+    end
+
+    def remove_completion_event(user, link, completion)
+      at = parse_time(completion.completed_at)
+      event = event_partner(user, link.source_name, link.source_scope, at)
+      return false if event.nil?
+
+      event.destroy!
+      ::ActionEventNotifier.notify(user, event, :removed, auth: :link)
+      true
+    end
+
+    # The event that partners a completion: same name and scope, within the same
+    # +/-1s window the completion side joins on. `scope` lands in the event's
+    # notes, which is what `matches?` reads a logged event's scope from.
+    def event_partner(user, name, scope, at)
+      return nil if at.blank?
+
+      scoped = user.action_events
+        .where(name: name, timestamp: (at - WINDOW)..(at + WINDOW))
+        .order(:timestamp).to_a
+      wanted = scope.to_s
+      scoped.find { |e| e.notes.to_s.strip.casecmp?(wanted.strip) } || (scoped.first if wanted.empty?)
     end
 
     # ---- list_item -> chore (reverse pairings only) ----

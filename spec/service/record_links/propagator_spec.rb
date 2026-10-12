@@ -8,12 +8,12 @@ require "timeout"
 # matching, a renamed event taking its completion with it, and every write being
 # a no-op when the partner already agrees.
 #
-# Completing a chore no longer writes an ActionEvent (363) and never will — the
-# cascade validation forbids it outright.
-#
-# Adding a list item marking a chore due (382) is gone as a GENERAL rule and
-# available per pairing, through `reverse`. Both halves are pinned below: a
-# plain link still refuses to run up, and a reverse one runs up and stops.
+# The two old uphill rules — completing a chore writing an ActionEvent (363) and
+# adding a list item marking a chore due (382) — are gone as GENERAL rules and
+# available per pairing, through `reverse`. Both are pinned below: a plain link
+# still refuses to run up, and a reverse one runs up and stops. A stored
+# chore->event row is still forbidden outright; the uphill event logging reads
+# off a reverse event->chore row rather than inverting the cascade's validation.
 RSpec.describe RecordLinks::Propagator do
   let(:user)      { User.me }
   let(:household) { user.chore_household }
@@ -375,6 +375,107 @@ RSpec.describe RecordLinks::Propagator do
       expect(reversed.summary).to eq("chore:Pickup RX ↔ list_item:Pickup RX (Chores)")
       expect(reversed.sentence).to include("chore where name is exactly \"Pickup RX\" takes off the list list item \"Pickup RX\" on Chores")
       expect(reversed.sentence).to include("and back: list item where name is exactly \"Pickup RX\" and list is exactly \"Chores\" marks due chore \"Pickup RX\"")
+    end
+  end
+
+  # The uphill half of an event<->chore pairing: `reverse` makes the sync read
+  # BOTH ways, so marking the chore done directly logs the event, just as logging
+  # the event completes the chore. The downhill half is unchanged.
+  describe "a reverse event<->chore pairing running uphill" do
+    def complete!(chore, at: Time.current)
+      ChoreCompleter.new(chore.reload, user, at: at).call.completion
+    end
+
+    describe "a plain 1-to-1 sync" do
+      let!(:teeth) { chore!("Teeth") }
+
+      before { link!(:event, "Teeth", :chore, "Teeth", reverse: true) }
+
+      it "logs the event when the chore is completed directly" do
+        expect { complete!(teeth) }.to change {
+          user.action_events.where(name: "Teeth").count
+        }.by(1)
+      end
+
+      it "completes the chore from the event with no second event logged" do
+        log_event!("Teeth")
+
+        expect(user.chore_completions.where(chore_id: teeth.id).count).to eq(1)
+        # The uphill half must recognise the event that made the completion and
+        # not log a phantom twin of it.
+        expect(user.action_events.where(name: "Teeth").count).to eq(1)
+      end
+
+      it "takes the event back when the completion is undone" do
+        completion = complete!(teeth)
+        expect(user.action_events.where(name: "Teeth").count).to eq(1)
+
+        completion.destroy!
+
+        expect(user.action_events.where(name: "Teeth").count).to eq(0)
+      end
+
+      it "terminates, logging exactly one event for one completion" do
+        Timeout.timeout(20) { complete!(teeth) }
+
+        expect(user.chore_completions.where(chore_id: teeth.id).count).to eq(1)
+        expect(user.action_events.where(name: "Teeth").count).to eq(1)
+      end
+
+      it "stays one-way while the flag is off" do
+        RecordLink.where(reverse: true).find_each { |l| l.update!(reverse: false) }
+
+        expect { complete!(teeth) }.not_to(change {
+          user.action_events.where(name: "Teeth").count
+        })
+      end
+    end
+
+    # Several events reach one chore (Whisper: Nap/Sleep/Down -> Puppy Down).
+    # Completing it once must log ONE event, not one per pairing.
+    it "logs a single event for a chore several events can complete" do
+      chore!("Puppy Down")
+      link!(:event, "Nap", :chore, "Puppy Down", reverse: true)
+      link!(:event, "Sleep", :chore, "Puppy Down", reverse: true)
+
+      complete!(Chore.find_by(name: "Puppy Down"))
+
+      expect(user.action_events.where(name: %w[Nap Sleep]).count).to eq(1)
+    end
+
+    # One event name completes several chores ("Chore" -> mail AND trash), so it
+    # can't round-trip: logging it on one completion would tick the others.
+    it "leaves a shared, fan-out event one-way" do
+      mail = chore!("Go get mail")
+      chore!("Take trash cans out")
+      link!(:event, "Chore", :chore, "Go get mail", reverse: true)
+      link!(:event, "Chore", :chore, "Take trash cans out", reverse: true)
+
+      expect { complete!(mail) }.not_to(change {
+        user.action_events.where(name: "Chore").count
+      })
+    end
+
+    # The ambiguous ones: the event is always logged on completion (we know who
+    # did it), and the "who did it?" prompt only fires when the event is logged on
+    # its own.
+    describe "an ask_who pairing" do
+      let!(:litter) { chore!("Kitty Litter") }
+
+      before {
+        link!(:event, "Fae", :chore, "Kitty Litter", reverse: true, ask_who: true)
+      }
+
+      it "logs the event on a direct completion without asking who" do
+        expect { complete!(litter) }.to change {
+          user.action_events.where(name: "Fae").count
+        }.by(1)
+        expect(user.prompts.count).to eq(0)
+      end
+
+      it "still asks who when the event is logged on its own" do
+        expect { log_event!("Fae") }.to change { user.prompts.count }.by(1)
+      end
     end
   end
 

@@ -498,6 +498,45 @@ RSpec.describe Buddy::JobMailOffer do
     end
   end
 
+  # The branch for mail the classifier could name no company for - a recruiter's
+  # first approach, usually, where there is no row to attach it to and so
+  # nothing to offer. All it posts is the card, so the card has to carry its own
+  # weight.
+  context "when the mail names no company at all" do
+    let(:verdict) { { kind: "recruiter outreach", company: nil, headline: "Backend Engineer" } }
+    let(:email) {
+      user.emails.create!(
+        direction: :inbound,
+        mail_id:   "m-inmail",
+        subject:   "Backend Engineer",
+        blurb:     "Backend Engineer",
+        timestamp: arrived,
+      )
+    }
+
+    it "links the mail it was announced from" do
+      message = call(email: email, body: "Hi Rocco,\n\nI am hiring for a Ruby team in Denver.")
+
+      expect(message.body).to include("📬 the card")
+      expect(message.body).to include("/emails/#{email.id}")
+      expect(message.body).to include("Read the mail")
+    end
+
+    it "quotes the first line of the mail that says something" do
+      message = call(email: email, body: "Hi Rocco,\n\nI am hiring for a Ruby team in Denver.")
+
+      expect(message.body).to include("> I am hiring for a Ruby team in Denver.")
+      expect(message.body).not_to include("> Hi Rocco,")
+    end
+
+    # Nothing kept a copy, so there is no page to point at. The card still goes.
+    it "posts the card alone when there is no mail on file" do
+      message = call(email: nil, body: nil)
+
+      expect(message.body).to eq("📬 the card")
+    end
+  end
+
   context "when nothing on the board matches" do
     # A company with no row is a suggestion to START one, not a dead end. This
     # is a recruiter's first approach, or an application made without saying so.

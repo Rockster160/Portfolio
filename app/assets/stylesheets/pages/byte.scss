@@ -6117,6 +6117,16 @@ $board-cell-max: 200px;
 
 // ---- states ----
 
+// Per-actor accent on a finished chore, the same hues the chores page keys its
+// done state off (chores.scss). Written out here rather than referenced: that
+// stylesheet isn't loaded on this page, so a chore I finished would read in the
+// board's flat default green instead of my own colour. data-actor is set by
+// paintCell from the serialized chore's last completer; anonymous completions
+// take the neutral grey, crediting nobody.
+.byte-board-cell[data-actor="Rockster160"]   { --actor-color: #0160FF; }
+.byte-board-cell[data-actor="Alchemibluum"]  { --actor-color: #A082D9; }
+.byte-board-cell[data-actor-anonymous="true"] { --actor-color: #94A3B8; }
+
 // The chores page's own done treatment: the disc takes 18% of the actor colour
 // and the ring is already full, drawn by paintCell.
 .byte-board-cell[data-state="done"] {

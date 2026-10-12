@@ -251,6 +251,22 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       return;
     }
 
+    // Who the done disc belongs to. Same `--actor-color` the chores page keys
+    // its finished state off, carried here on data-actor so a chore I finished
+    // reads in my colour rather than the board's flat default green. Anonymous
+    // completions stay colourless (the grey the chores page uses); an unfinished
+    // or never-completed chore clears both so it falls back to the default.
+    if (chore.last_actor_anonymous) {
+      cell.dataset.actorAnonymous = "true";
+      delete cell.dataset.actor;
+    } else if (chore.last_actor_username) {
+      cell.dataset.actor = chore.last_actor_username;
+      delete cell.dataset.actorAnonymous;
+    } else {
+      delete cell.dataset.actor;
+      delete cell.dataset.actorAnonymous;
+    }
+
     // Same arithmetic the chores page's applyProgressRing uses: a fixed
     // dasharray of 100 with the OFFSET carrying the progress, rather than a
     // two-value dasharray. It has to match, because `pathLength=100` plus
@@ -737,6 +753,30 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     });
   }
 
+  // Take the last completion back off - the hold gesture's undo for a chore
+  // that's done (or part-done). The same DELETE the chores page's long-press
+  // sends; the server removes this user's most recent completion today and
+  // answers with the fresh chore, which folds straight back in. A 404 means
+  // there was nothing left to undo (a race with a household tap, say), which is
+  // the state the hold was reaching for anyway - resync rather than remembering
+  // it as a failure to retry forever.
+  function undoComplete(id) {
+    const chore = find(id, "chore");
+    if (!chore) return;
+
+    return press(id, {
+      change: (c) => ({ progress_count: Math.max(c.progress_count - 1, 0) }),
+      send: async () => {
+        try {
+          absorb(await apiCall(COMPLETE_URL(id), "DELETE"));
+        } catch (err) {
+          if (String(err.message) === "http_404") return resync();
+          throw err;
+        }
+      },
+    });
+  }
+
   function bringBack(id) {
     const chore = find(id, "chore");
     if (!chore) return;
@@ -1091,6 +1131,14 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
       const press = e.target.closest("[data-board-complete]");
       if (!press) return;
 
+      // A long-press already ran the undo and set this flag; swallow the click
+      // the browser fires at the end of the same press so it doesn't complete
+      // the chore straight back after it was just taken off.
+      if (press.dataset.suppressClick === "1") {
+        delete press.dataset.suppressClick;
+        return;
+      }
+
       // The kind rides on the button, so a press resolves to the right item even
       // where items of different kinds share an id.
       const kind = press.dataset.boardKind;
@@ -1106,6 +1154,84 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
 
       return complete(item.id);
     });
+
+    // Hold a chore to undo it - the same long-press the chores page carries, so
+    // a mis-tap costs one gesture rather than a hunt for a corner. It only arms
+    // on a chore with something to take back (a trigger fires, a credit button
+    // credits - neither has an occurrence to undo), and a drag past a few pixels
+    // cancels it so a scroll on a touch tablet doesn't read as a hold. A fired
+    // hold flags the circle so the trailing click doesn't complete it again.
+    const LONG_MS = 550;
+    const MOVE_THRESHOLD = 8;
+    const hold = {
+      pointerId: null, pressEl: null, startX: 0, startY: 0, moved: false,
+      fired: false, timer: null,
+    };
+    const resetHold = () => {
+      if (hold.timer) window.clearTimeout(hold.timer);
+      hold.pointerId = null; hold.pressEl = null; hold.startX = 0; hold.startY = 0;
+      hold.moved = false; hold.fired = false; hold.timer = null;
+    };
+
+    padEl.addEventListener("pointerdown", (e) => {
+      if (hold.pointerId !== null) return;
+
+      const pressEl = e.target.closest("[data-board-complete]");
+      if (!pressEl || pressEl.dataset.boardKind !== "chore") return;
+
+      const chore = find(pressEl.dataset.boardComplete, "chore");
+      if (!chore) return;
+
+      // Nothing to take back on a fresh, untouched chore - don't arm a DELETE
+      // that would only 404.
+      const undoable =
+        chore.progress_count > 0 || chore.dismissed || chore.skipped_today;
+      if (!undoable) return;
+
+      hold.pointerId = e.pointerId;
+      hold.pressEl = pressEl;
+      hold.startX = e.clientX;
+      hold.startY = e.clientY;
+      hold.moved = false;
+      hold.fired = false;
+      hold.timer = window.setTimeout(() => {
+        if (!hold.pressEl || hold.moved) return;
+        hold.fired = true;
+        const id = pressEl.dataset.boardComplete;
+        // Whichever way it was put away: a skipped/dismissed chore comes back
+        // on the board, a done one has its last completion removed.
+        if (chore.dismissed || chore.skipped_today) bringBack(id);
+        else undoComplete(id);
+      }, LONG_MS);
+    });
+
+    padEl.addEventListener("pointermove", (e) => {
+      if (hold.pointerId !== e.pointerId) return;
+      if (
+        Math.hypot(e.clientX - hold.startX, e.clientY - hold.startY) >
+        MOVE_THRESHOLD
+      ) {
+        hold.moved = true;
+        if (hold.timer) {
+          window.clearTimeout(hold.timer);
+          hold.timer = null;
+        }
+      }
+    });
+
+    padEl.addEventListener("pointerup", (e) => {
+      if (hold.pointerId !== e.pointerId) return;
+      const pressEl = hold.pressEl;
+      const fired = hold.fired;
+      resetHold();
+      if (fired && pressEl) pressEl.dataset.suppressClick = "1";
+    });
+
+    ["pointercancel", "pointerleave"].forEach((evt) =>
+      padEl.addEventListener(evt, (e) => {
+        if (hold.pointerId === e.pointerId) resetHold();
+      }),
+    );
   }
 
   if (tagToggleEl && tagPickerEl) {
