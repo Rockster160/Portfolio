@@ -313,7 +313,8 @@
       <div class="prow">
         <span class="pkeyrow" id="pkeyrow" hidden><span class="lbl">key</span><input id="pkey" spellcheck="false" placeholder="key name"></span>
         <span class="seg" id="pmodes" hidden><button type="button" data-mode="add" class="on">Add</button><button type="button" data-mode="merge">Merge</button></span>
-        <span class="seg" id="pfmt"><button type="button" data-fmt="text">Text</button><button type="button" data-fmt="json" class="on">JSON</button></span>
+        <span class="seg" id="ptype"><button type="button" data-type="string">String</button><button type="button" data-type="number">Number</button><button type="button" data-type="boolean">Bool</button><button type="button" data-type="null">Null</button><button type="button" data-type="json" class="on">JSON</button></span>
+        <span class="seg" id="pbool" hidden><button type="button" data-bool="true" class="on">true</button><button type="button" data-bool="false">false</button></span>
         <span class="grow"></span>
         <span class="mnote" id="mnote"></span>
       </div>
@@ -384,6 +385,79 @@
     return out.length ? out : null;
   }
 
+  // ---- lenient parsing: strict JSON, then Ruby-hash / unquoted-key / JSONL ----
+  // Transpile a relaxed object literal into strict JSON without touching string
+  // contents: hashrockets (=>), Ruby symbols (:sym), unquoted keys, single
+  // quotes, nil, # and // comments, trailing commas, and 1_000 numbers.
+  function relaxedToJson(src){
+    var out = "", i = 0, n = src.length;
+    function prevSig(){ for (var j=out.length-1;j>=0;j--){ var c=out[j]; if(c!==" "&&c!=="\n"&&c!=="\t"&&c!=="\r") return c; } return ""; }
+    while (i < n){
+      var ch = src[i];
+      if (ch===" "||ch==="\t"||ch==="\n"||ch==="\r"){ out+=ch; i++; continue; }
+      if (ch==="#"){ while(i<n && src[i]!=="\n") i++; continue; }
+      if (ch==="/" && src[i+1]==="/"){ while(i<n && src[i]!=="\n") i++; continue; }
+      if (ch==="/" && src[i+1]==="*"){ i+=2; while(i<n && !(src[i]==="*"&&src[i+1]==="/")) i++; i+=2; continue; }
+      if (ch==='"' || ch==="'"){
+        var quote=ch; i++; var body="";
+        while(i<n){ var c=src[i];
+          if(c==="\\"){ body+=c+(src[i+1]||""); i+=2; continue; }
+          if(c===quote){ i++; break; }
+          body+=c; i++;
+        }
+        var val;
+        if (quote==='"'){ try { val = JSON.parse('"'+body+'"'); } catch(e){ val = body; } }
+        else { val = body.replace(/\\\\/g,"\u0000").replace(/\\'/g,"'").replace(/\u0000/g,"\\"); }
+        out += JSON.stringify(val);
+        continue;
+      }
+      if (ch==="=" && src[i+1]===">"){ out+=":"; i+=2; continue; }
+      if (ch===":"){
+        var p = prevSig();
+        if ((p===""||p==="{"||p==="["||p===","||p===":") && /[A-Za-z_]/.test(src[i+1]||"")){
+          i++; var id=""; while(i<n && /[A-Za-z0-9_]/.test(src[i])){ id+=src[i]; i++; }
+          out += JSON.stringify(id); continue;
+        }
+        out+=":"; i++; continue;
+      }
+      if (/[A-Za-z_$]/.test(ch)){
+        var word=""; while(i<n && /[A-Za-z0-9_$]/.test(src[i])){ word+=src[i]; i++; }
+        if (word==="true"||word==="false") out+=word;
+        else if (word==="null"||word==="nil") out+="null";
+        else out += JSON.stringify(word);
+        continue;
+      }
+      if (/[0-9.+\-]/.test(ch)){
+        var num=""; while(i<n && /[0-9eExXa-fA-F.+\-_]/.test(src[i])){ num+=src[i]; i++; }
+        out += num.replace(/_/g,""); continue;
+      }
+      if (ch==="}" || ch==="]"){
+        var k=out.length-1; while(k>=0 && /\s/.test(out[k])) k--;
+        if (out[k]===",") out = out.slice(0,k)+out.slice(k+1);
+        out+=ch; i++; continue;
+      }
+      out += ch; i++;
+    }
+    return out;
+  }
+
+  // Parse JSON, or Ruby-hash/unquoted-key syntax, or JSONL (one value per line).
+  function relaxedParse(text){
+    try { return JSON.parse(text); } catch(e){}
+    try { return JSON.parse(relaxedToJson(text)); } catch(e){}
+    var lines = text.split("\n"), out = [], any = false;
+    for (var i=0;i<lines.length;i++){
+      var ln = lines[i].trim();
+      if (!ln) continue;
+      var v;
+      try { v = JSON.parse(ln); }
+      catch(e1){ try { v = JSON.parse(relaxedToJson(ln)); } catch(e2){ throw new SyntaxError("Not valid JSON, JSONL, or Ruby hash syntax"); } }
+      out.push(v); any = true;
+    }
+    if (any) return out;
+    throw new SyntaxError("Empty or unparseable input");
+  }
+
   function loadText(text, name){
     showOverlay("Parsing "+fmtBytes(text.length)+"…");
     setTimeout(function(){
@@ -394,7 +468,10 @@
       } catch(e){
         var nd = tryNDJSON(text);
         if (nd){ data = nd; mode = "ndjson"; }
-        else { hideOverlay(); showError("Couldn't parse this as JSON — "+e.message); return; }
+        else {
+          try { data = relaxedParse(text); } // Ruby hash / unquoted keys / relaxed JSONL
+          catch(e2){ hideOverlay(); showError("Couldn't parse this as JSON, JSONL, or a Ruby hash — "+e.message); return; }
+        }
       }
       var dt = performance.now() - t0;
       try {
@@ -740,51 +817,76 @@
 
   // ---- docked editor panel (edit a node, or add to a container) ----
   var panelCtx = null;  // { action:"edit"|"add"|"paste", ref, i }
-  var panelFmt = "json"; // "text" | "json"
-  var panelMode = "add"; // "add" | "merge"
+  var panelType = "json"; // string | number | boolean | null | json
+  var panelMode = "add";  // add | merge
+  var panelBool = true;
 
-  function setFmt(f){
-    panelFmt = f;
-    var seg = $("pfmt");
-    Array.prototype.forEach.call(seg.querySelectorAll("button"), function(b){ b.classList.toggle("on", b.dataset.fmt === f); });
+  function setType(t){
+    panelType = t;
+    Array.prototype.forEach.call($("ptype").querySelectorAll("button"), function(b){ b.classList.toggle("on", b.dataset.type === t); });
+    $("pbool").hidden = (t !== "boolean");
+    $("mtext").hidden = (t === "boolean" || t === "null"); // these carry no typed-in text
+  }
+  function setBool(v){
+    panelBool = !!v;
+    Array.prototype.forEach.call($("pbool").querySelectorAll("button"), function(b){ b.classList.toggle("on", (b.dataset.bool === "true") === panelBool); });
   }
   function setMode(m){
     panelMode = m;
-    var seg = $("pmodes");
-    Array.prototype.forEach.call(seg.querySelectorAll("button"), function(b){ b.classList.toggle("on", b.dataset.mode === m); });
-    // Merge takes a JSON object/array and ignores the key field
+    Array.prototype.forEach.call($("pmodes").querySelectorAll("button"), function(b){ b.classList.toggle("on", b.dataset.mode === m); });
+    // Merge takes a JSON object/array and ignores the key field + type picker
     $("pkeyrow").hidden = (m === "merge") || panelCtx == null || panelCtx.target !== "object";
-    if (m === "merge") setFmt("json");
+    $("ptype").hidden = (m === "merge");
+    if (m === "merge") setType("json");
   }
   function panelNote(msg, isErr){ var n = $("mnote"); n.className = "mnote" + (isErr ? " err" : ""); n.textContent = msg || ""; }
 
+  // read the editor value according to the selected type
+  function readPanelValue(){
+    var raw = $("mtext").value;
+    switch (panelType){
+      case "string": return { ok: true, value: raw };
+      case "number": {
+        if (raw.trim() === "") return { ok: false, error: "enter a number" };
+        var n = Number(raw);
+        return isNaN(n) ? { ok: false, error: "not a number: " + raw } : { ok: true, value: n };
+      }
+      case "boolean": return { ok: true, value: panelBool };
+      case "null": return { ok: true, value: null };
+      default: // json — accepts strict JSON, Ruby hashes, unquoted keys, JSONL
+        try { return { ok: true, value: relaxedParse(raw) }; }
+        catch (e){ return { ok: false, error: e.message }; }
+    }
+  }
+
   function openEdit(i){
-    var r = flat[i];
+    var r = flat[i], t = r.type;
     panelCtx = { action: "edit", ref: r, i: i, keyed: (r.parent != null && !Array.isArray(r.parent) && r.key !== null) };
     $("mtitle").textContent = pathStr(pathKeysOf(i));
-    $("mtype").textContent = r.type + (r.type === "string" ? " · " + fmtNum(r.value.length) + " chars" : "");
+    $("mtype").textContent = t + (t === "string" ? " · " + fmtNum(r.value.length) + " chars" : "");
     $("pmodes").hidden = true;
-    $("pfmt").hidden = false;
+    $("ptype").hidden = false;
     $("pkeyrow").hidden = !panelCtx.keyed;
     $("pkey").value = panelCtx.keyed ? String(r.key) : "";
-    var isStr = r.type === "string";
-    setFmt(isStr ? "text" : "json");
-    var text, tooBig = false;
-    if (isStr) text = r.value;
-    else if (r.type === "object" || r.type === "array"){
-      var cnt = r.type === "array" ? r.value.length : keyCount(r.value);
+    var text = "", tooBig = false;
+    if (t === "string"){ setType("string"); text = r.value; }
+    else if (t === "number"){ setType("number"); text = String(r.value); }
+    else if (t === "boolean"){ setBool(r.value); setType("boolean"); }
+    else if (t === "null"){ setType("null"); }
+    else { // object / array
+      setType("json");
+      var cnt = t === "array" ? r.value.length : keyCount(r.value);
       if (cnt > 50000){ tooBig = true; text = "(" + fmtNum(cnt) + " entries — too large to edit as raw JSON; edit its children instead)"; }
       else { try { text = JSON.stringify(r.value, null, 2); } catch(e){ tooBig = true; text = "(could not serialize this subtree)"; } }
     }
-    else text = JSON.stringify(r.value); // number / bool / null literal
     $("mtext").value = text;
     $("mtext").readOnly = tooBig;
-    $("pfmt").hidden = tooBig;
+    $("ptype").hidden = tooBig;
     $("msave").hidden = tooBig;
-    panelNote(tooBig ? "" : (isStr ? "Edit the text. Switch to JSON to replace it with structured data." : "Edit the JSON. Switch to Text to store it as a raw string."));
+    panelNote(tooBig ? "" : "Pick a type, then set the value. Use ⌘/Ctrl-Enter to apply.");
     resetPanelButtons();
     $("panel").hidden = false;
-    $("mtext").focus();
+    if (!$("mtext").hidden && !tooBig) $("mtext").focus();
   }
 
   function openAdd(i){
@@ -794,25 +896,17 @@
     $("mtitle").textContent = "Add to " + pathStr(pathKeysOf(i));
     $("mtype").textContent = r.type;
     $("pmodes").hidden = false;
-    $("pfmt").hidden = false;
-    setMode("add");
+    setMode("add");        // shows the type picker, sets the key-row visibility
     $("pkey").value = "";
-    setFmt("json");
+    setType("json");       // default; switch to String / Number / Bool / Null as needed
+    setBool(true);
     $("mtext").value = "";
     $("mtext").readOnly = false;
-    panelNote("Paste JSON (nests under the key), or switch to Text for a raw value. Merge folds a JSON object/array into this level.");
+    panelNote("Pick a type and enter the value. Merge folds a JSON object/array into this level.");
     $("msave").hidden = false;
     resetPanelButtons();
     $("panel").hidden = false;
     (panelCtx.target === "object" ? $("pkey") : $("mtext")).focus();
-  }
-
-  // read the textarea as a value, honoring the Text/JSON toggle
-  function readPanelValue(){
-    var raw = $("mtext").value;
-    if (panelFmt === "text") return { ok: true, value: raw };
-    try { return { ok: true, value: JSON.parse(raw) }; }
-    catch(e){ return { ok: false, error: e.message }; }
   }
 
   function savePanel(){
@@ -1024,9 +1118,10 @@
     panelCtx = null;
     $("mtitle").textContent = "Paste JSON";
     $("mtype").textContent = "";
-    $("pmodes").hidden = true; $("pfmt").hidden = true; $("pkeyrow").hidden = true;
+    $("pmodes").hidden = true; $("ptype").hidden = true; $("pbool").hidden = true; $("pkeyrow").hidden = true;
     panelNote("Paste or type JSON (or NDJSON), then Load.");
     $("mtext").value = "";
+    $("mtext").hidden = false;
     $("mtext").readOnly = false;
     $("msave").hidden = true;
     $("mcopy").textContent = "Load";
@@ -1061,7 +1156,8 @@
   $("downloadBtn").onclick = downloadJSON;
 
   // panel segmented toggles
-  $("pfmt").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) setFmt(b.dataset.fmt); });
+  $("ptype").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) setType(b.dataset.type); });
+  $("pbool").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) setBool(b.dataset.bool === "true"); });
   $("pmodes").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) setMode(b.dataset.mode); });
   $("mtext").addEventListener("keydown", function(e){
     if (!$("msave").hidden && (e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); savePanel(); }
