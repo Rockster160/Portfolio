@@ -34,6 +34,70 @@ RSpec.describe LocalIpManager do
     end
   end
 
+  describe "whitelisting the home IP on a change" do
+    before do
+      caches = class_double(UserCache, set: true)
+      allow(User).to receive(:me).and_return(instance_double(User, caches: caches))
+      BannedIp.delete_all
+    end
+
+    it "marks the new address whitelisted so the controller never 401s the house" do
+      DataStorage[:local_ip] = "97.117.17.133"
+
+      described_class.record_ping!("97.117.20.4")
+
+      expect(BannedIp.where(ip: "97.117.20.4", whitelisted: true)).to exist
+    end
+
+    it "un-bans the new address if it was already banned" do
+      DataStorage[:local_ip] = "97.117.17.133"
+      BannedIp.create!(ip: "97.117.20.4", whitelisted: false)
+
+      described_class.record_ping!("97.117.20.4")
+
+      expect(BannedIp.find_by(ip: "97.117.20.4").whitelisted).to be(true)
+    end
+
+    it "drops the previous address's whitelist so a reassigned IP isn't left trusted" do
+      DataStorage[:local_ip] = "97.117.17.133"
+      BannedIp.create!(ip: "97.117.17.133", whitelisted: true)
+
+      described_class.record_ping!("97.117.20.4")
+
+      expect(BannedIp.where(ip: "97.117.17.133")).not_to exist
+    end
+
+    it "leaves a real ban on the old address alone (only its whitelist is dropped)" do
+      DataStorage[:local_ip] = "97.117.17.133"
+      BannedIp.create!(ip: "97.117.17.133", whitelisted: false)
+
+      described_class.record_ping!("97.117.20.4")
+
+      expect(BannedIp.where(ip: "97.117.17.133", whitelisted: false)).to exist
+    end
+  end
+
+  describe "caching the home IP for Rack::Attack" do
+    before do
+      # The test env uses a null cache store; Rack::Attack reads a real one.
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+    end
+
+    it "writes the reported address under the rack safelist key" do
+      DataStorage[:local_ip] = "97.117.17.133"
+
+      described_class.record_ping!("97.117.17.133")
+
+      expect(Rails.cache.read(described_class::RACK_SAFELIST_KEY)).to eq("97.117.17.133")
+    end
+
+    it "does not cache the ignored loopback address" do
+      described_class.record_ping!("::1")
+
+      expect(Rails.cache.read(described_class::RACK_SAFELIST_KEY)).to be_nil
+    end
+  end
+
   describe ".last_seen_at" do
     it "is nil before anything has ever checked in" do
       expect(described_class.last_seen_at).to be_nil

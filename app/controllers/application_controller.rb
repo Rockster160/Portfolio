@@ -79,12 +79,23 @@ class ApplicationController < ActionController::Base
     current_user&.perma_safe? || BannedIp.where(ip: current_ip, whitelisted: true).any?
   end
 
-  def ban_spam_ip(exception)
-    if !ip_whitelisted? && current_ip_spamming?
-      BannedIp.find_or_create_by(ip: current_ip)
-      SlackNotifier.notify("Banned: #{current_ip}")
-    end
+  # A stale CSRF token (or a missing-record auth path) from a logged-in session
+  # is a client refreshing its token, never an attack — an attacker can't
+  # produce a valid session. So only an anonymous client that keeps failing
+  # while spamming is bannable; a signed-in user never is, even behind a shared
+  # home IP that trips the spam heuristic. That (not a per-client fix) is what
+  # stops a stale-token heartbeat from banning the whole household.
+  def bannable_spam?
+    current_user.blank? && !ip_whitelisted? && current_ip_spamming?
+  end
 
+  def ban_current_ip!
+    BannedIp.find_or_create_by(ip: current_ip)
+    SlackNotifier.notify("Banned: #{current_ip}")
+  end
+
+  def ban_spam_ip(exception)
+    ban_current_ip! if bannable_spam?
     raise exception
   end
 
@@ -96,9 +107,8 @@ class ApplicationController < ActionController::Base
   # when the same user keeps hitting it (i.e., client recovery is
   # actually broken, not just a one-off rotation).
   def handle_stale_csrf(exception)
-    if !ip_whitelisted? && current_ip_spamming?
-      BannedIp.find_or_create_by(ip: current_ip)
-      SlackNotifier.notify("Banned: #{current_ip}")
+    if bannable_spam?
+      ban_current_ip!
       raise exception
     end
 

@@ -20,6 +20,16 @@ class Rack::Attack
   # controller, after Rack::Attack has already returned the 429).
   safelist_ip("97.117.17.0/24")
 
+  # The residential IP occasionally jumps outside the static /24 above. The home
+  # Mac reports its public IP on every check-in (webhooks#local_ping,
+  # authenticated as the owner), and LocalIpManager caches it — so the current
+  # home address is safelisted the moment it moves, with no deploy. A single
+  # exact IP, not a block: only the address a trusted machine actually reported.
+  safelist("home ip (dynamic)") { |req|
+    home_ip = Rails.cache.read(LocalIpManager::RACK_SAFELIST_KEY)
+    home_ip.present? && req.ip == home_ip
+  }
+
   ### Throttle Spammy Clients ###
 
   # If any single client IP is making tons of requests, then they're

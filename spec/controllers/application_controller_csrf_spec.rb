@@ -60,10 +60,20 @@ RSpec.describe ApplicationController, type: :controller do
         expect(SlackNotifier).to have_received(:notify).once
       end
 
-      it "still bans + re-raises (so ExceptionNotifier fires) when the IP is actually spamming" do
+      it "never bans a signed-in user even while the shared IP is spamming (stale token = refresh)" do
         sign_in user
-        allow(controller).to receive(:current_ip_spamming?).and_return(true)
-        allow(controller).to receive(:ip_whitelisted?).and_return(false)
+        allow(controller).to receive_messages(current_ip_spamming?: true, ip_whitelisted?: false)
+        allow(BannedIp).to receive(:find_or_create_by)
+        allow(SlackNotifier).to receive(:notify)
+
+        post :create, format: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(BannedIp).not_to have_received(:find_or_create_by)
+      end
+
+      it "bans + re-raises an anonymous client that keeps failing CSRF while spamming" do
+        allow(controller).to receive_messages(current_ip_spamming?: true, ip_whitelisted?: false)
         allow(BannedIp).to receive(:find_or_create_by)
         allow(SlackNotifier).to receive(:notify)
 

@@ -2,6 +2,10 @@ module LocalIpManager
   module_function
 
   SEEN_AT_KEY = :local_ip_seen_at
+  # Rack::Attack reads this on every request that falls outside the static home
+  # /24, so the current home address lives in Rails.cache (fast) rather than the
+  # DB. Refreshed on every check-in; outlives the Mac being briefly offline.
+  RACK_SAFELIST_KEY = :rack_attack_home_ip
 
   def local_ip
     DataStorage[:local_ip]
@@ -14,6 +18,7 @@ module LocalIpManager
   # kept a sleeping-Mac theory permanently un-eliminable on every proxy alert.
   def record_ping!(ip)
     DataStorage[SEEN_AT_KEY] = Time.current.to_i
+    cache_rack_safelist(ip)
     self.local_ip = ip
   end
 
@@ -42,7 +47,25 @@ module LocalIpManager
 
     DataStorage[:local_ip] = new_ip
     User.me.caches.set(:local_ip, new_ip)
+    whitelist_home_ip!(new_ip, old_ip)
 
     Jarvis.say("Updated IP Addresses! #{new_ip}")
+  end
+
+  # The home router's public IP, as reported by the always-on Mac
+  # (webhooks#local_ping only answers for User.me), is an authenticated signal
+  # for "this is home" — so the new address is trusted outright. Clear any ban
+  # on it and mark it whitelisted at the controller layer, and drop the
+  # previous address's whitelist so a reassigned old IP doesn't stay trusted
+  # for whoever the ISP hands it to next.
+  def whitelist_home_ip!(new_ip, old_ip)
+    BannedIp.where(ip: old_ip, whitelisted: true).delete_all if old_ip.present?
+    BannedIp.find_or_create_by(ip: new_ip).update!(whitelisted: true)
+  end
+
+  def cache_rack_safelist(ip)
+    return if ip.to_s == "::1"
+
+    Rails.cache.write(RACK_SAFELIST_KEY, ip.to_s, expires_in: 2.days)
   end
 end
