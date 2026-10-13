@@ -9,8 +9,8 @@ RSpec.describe "Chore groups page", type: :request do
   before { post login_path, params: { user: { username: user.username, password: "password123" } } }
 
   describe "GET /chores/groups" do
-    it "lists every active chore with its groups prefilled" do
-      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home", "Shared"])
+    it "lists every active chore with its groups as toggle chips" do
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home", "Shared"], icon: "🧹")
       create(:chore, created_by_user: user, name: "Feed cat", tags: ["Pets"])
 
       get chores_groups_path
@@ -18,9 +18,14 @@ RSpec.describe "Chore groups page", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Vacuum")
       expect(response.body).to include("Feed cat")
-      expect(response.body).to include("Home, Shared")
-      # The household's vocabulary is offered for consistent spelling.
-      expect(response.body).to include("<option value=\"Pets\">")
+      expect(response.body).to include("🧹") # icon rendered next to the name
+      # The palette is the union of everything set, drawn on every row.
+      ["Home", "Pets", "Shared"].each do |g|
+        expect(response.body).to include("data-group=\"#{g}\"")
+      end
+      # A chore's own groups come up pressed.
+      expect(response.body).to include("aria-pressed=\"true\">Home")
+      expect(response.body).to include("aria-pressed=\"true\">Pets")
     end
 
     it "renders with no chores" do

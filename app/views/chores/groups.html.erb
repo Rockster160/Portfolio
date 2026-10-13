@@ -1,54 +1,84 @@
 <% content_for :title, "Chore Groups" %>
 
-<div class="chore-groups-page" style="max-width: 760px; margin: 20px auto; padding: 0 16px;">
+<style>
+  .chore-groups-page .cg-chip {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:3px 10px; border-radius:999px; cursor:pointer;
+    border:1px solid #39507f; background:transparent; color:#9fb3d6;
+    font-size:12px; line-height:1.4; user-select:none;
+  }
+  .chore-groups-page .cg-chip:hover { border-color:#5a7ac0; color:#cfe0ff; }
+  .chore-groups-page .cg-chip[aria-pressed="true"] {
+    background:#2f5fd0; border-color:#2f5fd0; color:#fff; font-weight:600;
+  }
+  .chore-groups-page .cg-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chore-groups-page .cg-row {
+    display:grid; grid-template-columns: minmax(140px, 1fr) 2fr max-content;
+    gap:10px 14px; align-items:center;
+    border-bottom:1px solid #2a3350; padding:12px 2px;
+  }
+  .chore-groups-page .cg-name { display:flex; align-items:center; gap:8px; min-width:0; }
+  .chore-groups-page .cg-name .icon-glyph,
+  .chore-groups-page .cg-name .icon-placeholder,
+  .chore-groups-page .cg-name img { width:22px; height:22px; font-size:18px; flex:none; object-fit:contain; }
+  .chore-groups-page .cg-status { font-size:12px; width:46px; text-align:right; }
+  @media (max-width: 560px) {
+    .chore-groups-page .cg-row { grid-template-columns: 1fr max-content; }
+    .chore-groups-page .cg-chips { grid-column: 1 / -1; }
+  }
+</style>
+
+<div class="chore-groups-page" style="max-width: 820px; margin: 20px auto; padding: 0 16px;">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
     <h1 style="margin:0;">Chore Groups</h1>
     <%= link_to "← Back to Chores", chores_path, class: "btn ghost" %>
   </div>
 
   <p class="dim" style="margin:0 0 14px; font-size:13px;">
-    One place to tag every chore. Type groups separated by commas; a board shows
-    a chore when they share any group. Each row saves on its own as you leave it.
+    Tap a group to add or remove it from a chore. A board shows a chore when they
+    share any group. Each chore saves on its own.
   </p>
 
-  <% if @chore_tags.any? %>
-    <p class="dim" style="margin:0 0 14px; font-size:12px;">
-      In use: <%= @chore_tags.map { |t| content_tag(:code, t) }.join(" ").html_safe %>
-    </p>
-  <% end %>
+  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 16px;
+              padding:10px 12px; border:1px solid #2a3350; border-radius:8px; background:#101527;">
+    <span class="dim" style="font-size:12px;">New group</span>
+    <input type="text" data-cg-new placeholder="e.g. Morning"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+           style="padding:6px 9px; min-width:150px;">
+    <button type="button" class="btn ghost" data-cg-add style="font-size:12px; padding:5px 12px;">Add</button>
+    <span class="dim" style="font-size:11px;">Appears on every chore until you tap it onto one.</span>
+  </div>
 
   <% if @chores.empty? %>
     <p class="dim">No chores yet.</p>
   <% else %>
-    <ul data-groups-list style="list-style:none; padding:0; margin:0;">
+    <div data-cg-list>
       <% @chores.each do |chore| %>
-        <li data-chore-id="<%= chore.id %>"
-            style="display:grid; grid-template-columns: 1fr 1.2fr; gap:10px 14px; align-items:center;
-                   border-bottom:1px solid #2a3350; padding:10px 2px;">
-          <div style="min-width:0;">
-            <span style="font-weight:600;"><%= chore.name %></span>
+        <% active = chore.tags.map(&:downcase).to_set %>
+        <div class="cg-row" data-chore-id="<%= chore.id %>" data-tags="<%= chore.tags.to_json %>">
+          <div class="cg-name">
+            <%= chore_icon_inline(chore) %>
+            <span style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              <%= chore.name %>
+            </span>
             <% if chore.parent_chore_id %>
-              <span class="dim" style="font-size:11px;">· sub-chore</span>
+              <span class="dim" style="font-size:11px;">· sub</span>
             <% end %>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <input type="text" data-groups-input
-                   value="<%= chore.tags.join(", ") %>"
-                   list="chore-groups-vocab"
-                   placeholder="Home, Morning"
-                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                   style="flex:1; min-width:0; padding:7px 9px;">
-            <span data-groups-status class="dim" style="font-size:12px; width:46px; text-align:left;"></span>
+          <div class="cg-chips" data-cg-chips>
+            <% @chore_tags.each do |group| %>
+              <button type="button" class="cg-chip" data-group="<%= group %>"
+                      aria-pressed="<%= active.include?(group.downcase) %>"><%= group %></button>
+            <% end %>
           </div>
-        </li>
+          <span class="cg-status dim" data-cg-status></span>
+        </div>
       <% end %>
-    </ul>
+    </div>
   <% end %>
-
-  <datalist id="chore-groups-vocab">
-    <% @chore_tags.each do |t| %><option value="<%= t %>"></option><% end %>
-  </datalist>
 </div>
+
+<script id="cg-palette" type="application/json"><%= raw @chore_tags.to_json %></script>
 
 <script type="module">
   function currentCsrf() {
@@ -82,43 +112,84 @@
     return res;
   }
 
-  const list = document.querySelector("[data-groups-list]");
+  const list = document.querySelector("[data-cg-list]");
+  let palette = [];
+  try { palette = JSON.parse(document.getElementById("cg-palette").textContent) || []; } catch (e) {}
 
   function status(row, text, color) {
-    const el = row.querySelector("[data-groups-status]");
+    const el = row.querySelector("[data-cg-status]");
     if (!el) return;
     el.textContent = text || "";
     el.style.color = color || "";
   }
 
-  async function saveRow(input) {
-    const row = input.closest("[data-chore-id]");
-    if (!row || input.value === input.defaultValue) return;
+  // The groups a row currently has ON: the pressed chips, in palette order.
+  function activeGroups(row) {
+    return [...row.querySelectorAll(".cg-chip[aria-pressed='true']")].map((c) => c.dataset.group);
+  }
 
+  // Repaint a row's chips from a saved tag list so casing and membership match
+  // what the server stored (it normalizes trimming + dedup).
+  function syncRow(row, tags) {
+    const have = new Set((tags || []).map((t) => t.toLowerCase()));
+    row.querySelectorAll(".cg-chip").forEach((chip) => {
+      chip.setAttribute("aria-pressed", have.has(chip.dataset.group.toLowerCase()) ? "true" : "false");
+    });
+    row.dataset.tags = JSON.stringify(tags || []);
+  }
+
+  async function saveRow(row) {
     status(row, "Saving…", "");
-    const res = await send(`/chores/items/${row.dataset.choreId}`, { chore: { tags_csv: input.value } });
+    const res = await send(`/chores/items/${row.dataset.choreId}`, { chore: { tags_csv: activeGroups(row).join(", ") } });
     if (res.ok) {
-      // Re-read the saved tags so the field shows the normalized set (deduped,
-      // trimmed) rather than whatever was typed.
       const data = await res.json().catch(() => null);
       const tags = data?.chore?.tags;
-      if (Array.isArray(tags)) input.value = tags.join(", ");
-      input.defaultValue = input.value;
+      if (Array.isArray(tags)) syncRow(row, tags);
       status(row, "Saved", "#5FD08A");
-      setTimeout(() => status(row, "", ""), 1500);
+      setTimeout(() => status(row, "", ""), 1200);
     } else {
       const err = await res.json().catch(() => ({}));
       status(row, (err.errors || ["Error"]).join(", "), "#FF8F8F");
-      input.value = input.defaultValue;
+      // Put the chips back to the last known-good state.
+      try { syncRow(row, JSON.parse(row.dataset.tags || "[]")); } catch (e) {}
     }
   }
 
-  list?.addEventListener("focusout", (e) => {
-    if (e.target.matches("input[data-groups-input]")) saveRow(e.target);
+  list?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".cg-chip");
+    if (!chip) return;
+    chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    saveRow(chip.closest(".cg-row"));
   });
-  list?.addEventListener("keydown", (e) => {
-    if (!e.target.matches("input[data-groups-input]")) return;
-    if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
-    if (e.key === "Escape") { e.target.value = e.target.defaultValue; e.target.blur(); }
+
+  // Add a new group to the palette: a muted chip on every row, ready to tap on.
+  // Nothing is stored until it's tapped onto a chore and that chore saves.
+  function addGroup(name) {
+    const clean = (name || "").trim();
+    if (!clean) return;
+    if (palette.some((g) => g.toLowerCase() === clean.toLowerCase())) return;
+    palette.push(clean);
+    document.querySelectorAll("[data-cg-chips]").forEach((chips) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "cg-chip";
+      chip.dataset.group = clean;
+      chip.setAttribute("aria-pressed", "false");
+      chip.textContent = clean;
+      chips.appendChild(chip);
+    });
+  }
+
+  const newInput = document.querySelector("[data-cg-new]");
+  document.querySelector("[data-cg-add]")?.addEventListener("click", () => {
+    addGroup(newInput.value);
+    newInput.value = "";
+    newInput.focus();
+  });
+  newInput?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    addGroup(newInput.value);
+    newInput.value = "";
   });
 </script>
