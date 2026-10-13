@@ -288,4 +288,45 @@ RSpec.describe SendDueAgendaNotificationsWorker do
       end
     end
   end
+
+  # The start-time fire a Buddy watch uses for "tell me when X is due". It is
+  # reached through the `incomplete` scope above, so "and only if it isn't done
+  # yet" is a property of the trigger rather than a condition anyone writes.
+  describe "the agenda_event start fire" do
+    let(:listener) { "agenda_event:action:started name::Shower" }
+
+    def shower(completed_at: nil)
+      create(
+        :agenda_item,
+        agenda:       agenda,
+        name:         "Shower",
+        kind:         :event,
+        start_at:     2.minutes.ago,
+        end_at:       28.minutes.from_now,
+        completed_at: completed_at,
+      )
+    end
+
+    before { stub_push }
+
+    it "fires for an item still open, carrying what a listener matches on" do
+      shower
+      fired = []
+      allow(::Jil).to receive(:trigger) { |_user, scope, payload| fired << [scope, payload] }
+
+      described_class.new.perform
+
+      _scope, payload = fired.detect { |scope, _| scope == :agenda_event }
+      expect(payload).to be_present
+      expect(::Jil::ListenerMatch.call(listener, "agenda_event", payload.serialize)).to be(true)
+    end
+
+    it "stays silent for one already marked complete" do
+      shower(completed_at: 1.minute.ago)
+
+      expect(::Jil).not_to receive(:trigger)
+
+      described_class.new.perform
+    end
+  end
 end

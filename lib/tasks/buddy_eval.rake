@@ -1417,6 +1417,22 @@ BUDDY_EDGE_PROBES = [
   # row anywhere, and he covered it himself with a 40m timer nineteen seconds
   # later. The greeting is the part that matters: the claim catcher was anchored
   # to the start of the MESSAGE.
+  # --- "when it is DUE" is not "when it is ADDED" ----------------------------
+  # Prod 8071, 13 Oct. The named `agenda` trigger is the only one whose name
+  # sounds like the ask, and it fires on ADD. Asked twice for the due time, the
+  # watch that got saved was one-shot, expiring that night, matching anything
+  # added to the calendar - and the reply said the rule was understood. The
+  # start-time scope fires only while the item is incomplete, so the "if it
+  # isn't done" half costs nothing.
+  {
+    case:       "prod 8071",
+    say:        "Whenever a Shower task comes up on the agenda, if the task isn't marked " \
+                "complete, please send me a message saying \"Time to shower!\"",
+    tool:       :remind_when,
+    args:       { remind_when: { trigger: /\Acustom\z/i, listener: /agenda_event/i, repeat: true } },
+    never_args: { remind_when: { trigger: /\Aagenda\z/i } },
+    note:       "set trigger=agenda (fires on ADD), one-shot, expiring that night",
+  },
   {
     case:  "prod 7761",
     say:   "Send me a reminder at 12:50 with the basics for the Bluestaq interview",

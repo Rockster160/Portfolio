@@ -15,8 +15,14 @@ RSpec.describe Jil::ListenerMatch do
     # `[^,\n]` rather than `[^,]`: a negated class matches newlines in Ruby, so
     # the greedy version happily spans from a `Jil.trigger(` on one line to a
     # symbol fifty lines below and reports scopes that don't exist.
+    #
+    # The `\s*` either side of the first argument is what lets a wrapped call
+    # be seen at all. Four scopes were triggered from calls whose arguments
+    # start on the next line, so the grep found none of them and the list it
+    # guards sat four short - which is not a list being out of date, it is the
+    # guard reporting on a subset of the app and passing.
     patterns = [
-      /Jil\.trigger\([^,\n]+,\s*:(\w+)/,
+      /Jil\.trigger\(\s*[^,\n]+,\s*:(\w+)/,
       /jil_trigger\(:(\w+)/,
     ]
     Rails.root.glob("app/**/*.rb").flat_map { |path|

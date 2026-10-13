@@ -22,6 +22,7 @@ class Jil
     #
     # This is HALF the picture - see `wired_scopes` for the other half.
     KNOWN_SCOPES = %w[
+      agenda_event
       agenda_item
       agenda_schedule
       agenda_sync
@@ -39,10 +40,13 @@ class Jil
       list
       monitor
       prompt
+      relay
+      schedule
       section
       sms
       startup
       task
+      tell
       tesla
       tesla_charge
       tesla_drive_start

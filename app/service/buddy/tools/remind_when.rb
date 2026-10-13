@@ -30,9 +30,19 @@ Buddy::Tools.register(
                  me to floss".
       "event"  - when they log an activity/event. `target` = the event name
                  ("Coffee", "Workout").
-      "agenda" - when something is added to one of their calendars. `target` =
-                 the calendar name ("Ours", "our agenda", "Work").
+      "agenda" - when something is ADDED to one of their calendars, and only
+                 then. `target` = the calendar name ("Ours", "our agenda",
+                 "Work").
                  e.g. "whenever something's added to our agenda, let me know".
+                 It does NOT fire when an item comes due. "Tell me when Shower
+                 is due", "message me when a task comes up" is `custom` with
+                 `agenda_event:action:started name::Shower`, which fires at the
+                 start time and only while the item is still INCOMPLETE - so
+                 "if it isn't done yet" is already true of it and needs nothing
+                 added. Asked for exactly that, a companion set this trigger
+                 and then said it was set for the due time; the receipt
+                 underneath read "when something's added", and the next thing
+                 added to that calendar would have fired it.
       "whisper" - the dog's day changing. `target` is one of `up` (she wakes
                  up), `nap` (she goes down for a nap), `bedtime` (she goes down
                  for the night), `home` (she gets back), `out` (she leaves).
@@ -104,7 +114,8 @@ Buddy::Tools.register(
 
     `text` is what to remind them of. It fires ONCE by default (the next time
     the condition happens). Set `repeat` true only if they clearly want it
-    every time ("every time I get home...").
+    every time ("every time I get home...", "whenever X comes up") - a
+    standing rule about a thing that recurs is every time, not the next one.
 
     **A repeating watch bounded in time needs `expires`, and they say so more
     often than they realise.** "Let me know each time the doorbell sees

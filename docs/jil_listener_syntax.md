@@ -158,7 +158,8 @@ These fire per user, carrying that user's own data.
 | `chore_transfer` | pebbles move between people | `action`, `amount_pebbles` |
 | `event` | an ActionEvent is logged, edited, or deleted | `action`, `name` |
 | `delivery` | a package is added, changed, arrives, or slips | `action` (`created`/`updated`/`delivered`/`delayed`), `name`, `carrier` (`amazon`/`ups`/`usps`/`fedex`/`manual`), `tracking_number`, `delivery_date`, `previous_date` (on `delayed` only), `delivered`, `amount`, `order_id`, `item_id`, `url` |
-| `agenda_item` | a calendar item is created or changed | `action`, `agenda_id`, `name` |
+| `agenda_item` | a calendar item is created or changed | `action` (`created`/`updated`), `agenda_id`, `name` |
+| `agenda_event` | an event reaches its START or END time. The start only fires while the item is still INCOMPLETE, so "when X is due and not done yet" needs no condition of its own | `action` (`started`/`ended`), `name`, `agenda_name`, `start_at`, `end_at`, `location` |
 | `agenda_schedule` | a recurring schedule changes | `action` |
 | `prompt` | an app prompt is created or answered | `status`, `params:source` |
 | `email` | an email arrives | `from`, `subject`, `body` |
@@ -175,6 +176,9 @@ These fire per user, carrying that user's own data.
 | `bowling` | a bowling set is recorded | `league` |
 | `climbing` | a climb is logged | varies |
 | `startup` | the app boots | - |
+| `tell` | something is said to Jarvis | `words` (the command with any time phrase removed), `full`, `timestamp`, `has_time` |
+| `schedule` | a Jil schedule is created or changed | `schedule_id`, `action` |
+| `relay` | another household member's task sends data over | whatever they put in it, plus `from` (their username) |
 
 The table is a map, not a contract - the authoritative answer for any scope is what the user's existing tasks listen to. Read those before writing something new on a scope you haven't seen a real example of.
 
