@@ -65,6 +65,19 @@ RSpec.describe "Byte chore board", type: :request do
       expect(board_chores.pluck("name")).to contain_exactly("Vacuum", "Feed Whisper")
     end
 
+    # Top-to-bottom by when they came due: today first, then the most recently
+    # missed, oldest last. `marked_due_at` fixes each chore's effective due day.
+    it "orders chores by due date, most recently due first" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      create(:chore, created_by_user: user, name: "Older", tags: ["Home"], marked_due_at: 3.days.ago)
+      create(:chore, created_by_user: user, name: "Today", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Yesterday", tags: ["Home"], marked_due_at: 1.day.ago)
+
+      get "/board/#{thread.id}"
+
+      expect(board_chores.pluck("name")).to eq(["Today", "Yesterday", "Older"])
+    end
+
     # A board set before groups went plural keeps watching what it did, read off
     # the old single `chore_tag` key until it is next changed.
     it "still honours a board pointed at a group the old way" do

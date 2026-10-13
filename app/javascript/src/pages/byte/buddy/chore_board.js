@@ -123,6 +123,14 @@ function onBoard(items) {
   );
 }
 
+// A whole number prints bare (2×), a fractional one keeps its places (1.5×).
+// Mirrors the chores page so a multiplier reads the same on every surface.
+function formatMultiplier(n) {
+  if (n == null) return "";
+  const f = Number(n);
+  return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
+}
+
 // The icon, in whatever shape it arrived. Mirrors the four kinds the chore
 // serializer resolves (`icon_kind`) rather than guessing from the string, so a
 // glyph that happens to look like a path can't be read as one.
@@ -303,6 +311,25 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
         count.textContent = `${chore.progress_count}/${chore.target_count}`;
     }
 
+    // The pay-extra pills, shown only when they're earning something: a hot
+    // multiplier is present only on a pick, a streak forecast is 1 until a
+    // bonus applies. Same thresholds the chores page draws its badges on.
+    const hot = cell.querySelector("[data-board-hot]");
+    if (hot) {
+      const show = chore.hot_multiplier != null;
+      hot.hidden = !show;
+      if (show) {
+        hot.textContent = `${formatMultiplier(chore.hot_multiplier)}×`;
+        hot.classList.toggle("rare", Number(chore.hot_multiplier) >= 5);
+      }
+    }
+    const streak = cell.querySelector("[data-board-streak]");
+    if (streak) {
+      const show = chore.streak_multiplier != null && chore.streak_multiplier > 1;
+      streak.hidden = !show;
+      if (show) streak.textContent = `${formatMultiplier(chore.streak_multiplier)}×`;
+    }
+
     // There is nothing to skip on a chore that is already done or already put
     // away, so the corners carry whichever control the state can actually act
     // on - the two skips while it is still asking, Undo once it isn't, and
@@ -462,7 +489,20 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     undo.title = "Put it back";
     undo.textContent = "Undo";
 
-    disc.append(press, skip, cycle, undo);
+    // Multiplier pills, in the same corners the chores page uses: a hot pick's
+    // boost top-left, the streak forecast top-right. Built hidden and filled in
+    // paintCell so an in-place repaint keeps their DOM identity.
+    const hotBadge = document.createElement("span");
+    hotBadge.className = "byte-board-hot";
+    hotBadge.dataset.boardHot = "";
+    hotBadge.hidden = true;
+
+    const streakBadge = document.createElement("span");
+    streakBadge.className = "byte-board-streak";
+    streakBadge.dataset.boardStreak = "";
+    streakBadge.hidden = true;
+
+    disc.append(press, skip, cycle, undo, hotBadge, streakBadge);
     cell.append(disc, title);
     paintCell(cell, chore);
     return cell;

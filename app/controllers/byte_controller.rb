@@ -902,12 +902,22 @@ class ByteController < ApplicationController
     chores = current_user.accessible_chores.tagged(tags)
       .order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
     ctx = ChoreSerializerContext.for_user(current_user, day: day)
-    chore_items = ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
+    chore_items = board_chores_by_due(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
 
     trigger_items = current_user.buddy_routines.for_board(tags).map(&:board_item)
     credit_items  = board_credit_buttons.for_board(tags).map(&:board_item)
 
     chore_items + trigger_items + credit_items
+  end
+
+  # Chores on a board read top-to-bottom by when they came due: today first,
+  # then the most recently missed, oldest last. `scheduled_due_on` is the same
+  # effective due date the Today page sorts on. Chores with no due frame
+  # (always-shown, no schedule) keep their own order after the dated ones.
+  def board_chores_by_due(items)
+    dated, undated = items.partition { |c| c[:scheduled_due_on].present? }
+    sorted = dated.sort_by.with_index { |c, i| [-Date.iso8601(c[:scheduled_due_on]).jd, i] }
+    sorted + undated
   end
 
   # The groups a board can watch: chore and credit-button tags are household-wide,

@@ -6039,6 +6039,37 @@ $board-cell-max: 200px;
   color: var(--bs-muted);
 }
 
+// Multiplier pills — hot pick top-LEFT, streak forecast top-RIGHT, matching the
+// chores page so the same corner carries the same meaning on every surface.
+// Anchored to the disc so they ride its corners, not the title underneath.
+.byte-board-disc .byte-board-hot,
+.byte-board-disc .byte-board-streak {
+  position: absolute;
+  top: -6px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #FFF;
+  pointer-events: none;
+  box-shadow: 0 2px 6px #0006;
+}
+
+.byte-board-disc .byte-board-hot {
+  left: -6px;
+  background: #16A34A;
+}
+
+.byte-board-disc .byte-board-hot.rare {
+  background: #C2410C;
+}
+
+.byte-board-disc .byte-board-streak {
+  right: -6px;
+  background: var(--actor-color);
+}
+
 // The chores page reserves two lines so labels line up across a row, and the
 // same applies here with more force: a board is scanned, and titles that
 // start at different heights make the grid look broken.
