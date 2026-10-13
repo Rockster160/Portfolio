@@ -106,8 +106,13 @@
             <% end %>
           </ol>
 
+          <%# Pinned to the bottom of the viewport rather than sitting under
+             half an hour of talking. It saves the names AND every turn moved
+             onto somebody else, which is why it does not say "speakers" - it
+             is in reach the whole way down, beside the pickers it also
+             commits. %>
           <div class="transcript-save">
-            <%= submit_tag "Save speakers" %>
+            <%= submit_tag "Save changes" %>
           </div>
         <% end %>
       </div>

@@ -18,6 +18,10 @@
   --iv-waiting: #b91c1c;
   --iv-waiting-soft: #{rgba(#b91c1c, 0.09)};
   --iv-surface: #{rgba(white, 0.55)};
+  // Opaque, unlike every other surface here: the only thing wearing it is a
+  // bar that a page of text scrolls underneath, and a translucent one there is
+  // two paragraphs on top of each other. Matches the card it sits in.
+  --iv-sheet: #{$blue-l5};
   --iv-line: #{rgba($grey-blue, 0.35)};
   --iv-muted: #{$grey-blue};
   --iv-text: #{$text-color};
@@ -836,6 +840,7 @@
   --iv-waiting: #f87171;
   --iv-waiting-soft: #{rgba(#f87171, 0.14)};
   --iv-surface: #{rgba(black, 0.18)};
+  --iv-sheet: #{$blue-d2};
   --iv-line: #{rgba($grey-light, 0.22)};
   --iv-muted: #{rgba($grey-light, 0.62)};
   --iv-text: #{$grey-light};
@@ -911,6 +916,25 @@
 }
 
 .transcript-page {
+  // A `position: sticky` element needs NO ancestor with hidden overflow
+  // between it and the page's own scroller - such an ancestor becomes its
+  // scrollport, and a scrollport that does not scroll gives sticky nothing to
+  // resolve against. `forms.scss` puts `overflow: hidden` on BOTH
+  // `.app-card-container` and `form:not(.basic)`, which this form is, so the
+  // save bar below was declared sticky and behaved exactly like the static
+  // footer it was written to stop being.
+  //
+  // On the card that overflow was only ever clipping the square-cornered title
+  // into the rounded shape, so the title carries the radius itself now.
+  .app-card-container,
+  .transcript-form {
+    overflow: visible;
+  }
+
+  .app-card-title {
+    border-radius: 10px 10px 0 0;
+  }
+
   .transcript-meta-row {
     display: flex;
     flex-wrap: wrap;
@@ -1055,10 +1079,14 @@
     bottom: 0;
     z-index: 2;
     margin-top: 18px;
-    padding: 10px 0;
+    padding: 10px 15px;
     border-top: 1px solid var(--iv-line);
-    background: var(--iv-surface);
-    backdrop-filter: blur(6px);
+    border-radius: 0 0 10px 10px;
+    background: var(--iv-sheet);
+
+    input[type="submit"] {
+      margin: 0;
+    }
   }
 }
 
