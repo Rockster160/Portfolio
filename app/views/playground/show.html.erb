@@ -13,8 +13,10 @@
   <% if locked_reason %>
     <div class="about-locked text-center">
       🔒 <%= locked_reason %>
-      <% if @project.access == :account && current_user.nil? %>
+      <% if current_user.nil? && @project.access == :account %>
         · <%= link_to "Sign in", login_path %> · <%= link_to "Create an account", register_path %>
+      <% elsif current_user.nil? && @project.access.in?([:admin, :owner]) %>
+        · <%= link_to "Sign in", login_path %>
       <% elsif @project.access == :account && current_user&.guest? %>
         · <%= link_to "Finish signing up", account_path %>
       <% end %>

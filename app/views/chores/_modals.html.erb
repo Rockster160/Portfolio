@@ -82,14 +82,14 @@
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
       </div>
 
-      <%# Which group this chore belongs to, and so which Buddy board shows it.
-          Free text with the household's existing groups offered: a datalist
-          rather than a select because the first chore in a new group has to be
-          able to name it, and a tag nobody uses any more should disappear by
-          nobody using it rather than by being deleted somewhere. %>
+      <%# Which groups this chore belongs to, and so which Buddy boards show it.
+          Comma-separated free text with the household's existing groups offered:
+          a datalist rather than a select because the first chore in a new group
+          has to be able to name it, and a tag nobody uses any more should
+          disappear by nobody using it rather than by being deleted somewhere. %>
       <div class="form-section">
-        <label class="field-label">Group</label>
-        <input type="text" data-field="tag" list="chore-tag-options" placeholder="Home"
+        <label class="field-label">Groups</label>
+        <input type="text" data-field="tags_csv" list="chore-tag-options" placeholder="Home, Morning"
                autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
         <datalist id="chore-tag-options">

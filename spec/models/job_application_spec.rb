@@ -244,8 +244,8 @@ RSpec.describe JobApplication do
       job.notes.create!(tag: :take_home, occurred_at: 5.days.ago)
       job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
 
-      expect(job.reload.engagement_depth).to eq(4)
-      expect(job.engagement_label).to eq("got a take-home")
+      expect(job.reload.engagement_depth).to eq(5)
+      expect(job.engagement_label).to eq("Take-home")
     end
 
     # A round falling through does not un-reach the rung it fell from, and the
@@ -254,8 +254,8 @@ RSpec.describe JobApplication do
       job.notes.create!(tag: :scheduled, occurred_at: 4.days.ago, follow_up_at: 3.days.ago)
       job.notes.create!(tag: :cancelled, occurred_at: 2.days.ago)
 
-      expect(job.reload.engagement_depth).to eq(2)
-      expect(job.engagement_label).to eq("got to a booking")
+      expect(job.reload.engagement_depth).to eq(3)
+      expect(job.engagement_label).to eq("Scheduled")
     end
 
     it "leaves out one that has stopped being live" do
@@ -269,7 +269,7 @@ RSpec.describe JobApplication do
       job.notes.create!(tag: :offer, occurred_at: 1.day.ago)
 
       expect(job.reload.status).to eq("offer")
-      expect(JobApplication.in_play_for(user).map(&:engagement_label)).to eq(["got an offer"])
+      expect(JobApplication.in_play_for(user).map(&:engagement_label)).to eq(["Offer"])
     end
 
     it "reaches nobody else's board" do
@@ -284,13 +284,69 @@ RSpec.describe JobApplication do
       # Created oldest-first on purpose: the order has to come off the beats,
       # and a row's own age would put these two the other way round.
       stale = user.job_applications.create!(company: "Neighbor")
-      stale.notes.create!(tag: :scheduled, occurred_at: 8.days.ago, follow_up_at: 2.days.from_now)
+      stale.notes.create!(tag: :availability, occurred_at: 8.days.ago)
       fresh = user.job_applications.create!(company: "Bluestaq")
       fresh.notes.create!(tag: :availability, occurred_at: 1.day.ago)
 
       standing = JobApplication.in_play_for(user)
 
       expect(standing.map(&:company)).to eq(%w[iCapital Bluestaq Neighbor])
+    end
+
+    # The "gone back and forth" half of a standing. Not a count of notes.
+    describe "counting what was actually said" do
+      it "leaves out the machine's receipt" do
+        job.notes.create!(tag: :applied, occurred_at: 5.days.ago)
+        job.notes.create!(tag: :acknowledged, occurred_at: 5.days.ago)
+        job.notes.create!(tag: :heard_back, body: "Luke wrote", occurred_at: 4.days.ago)
+
+        expect(job.reload.interaction_count).to eq(2)
+      end
+
+      # An ATS re-sends its own template on a timer. Two identical nudges a day
+      # apart are one thing being said.
+      it "counts the same words arriving twice as one send" do
+        nudge = "Hi Rocco,\n\nWe are still waiting on your availability."
+        again = "  hi rocco,\n we ARE still   waiting on your availability. "
+        job.notes.create!(tag: :note, body: nudge, occurred_at: 3.days.ago)
+        job.notes.create!(tag: :note, body: again, occurred_at: 2.days.ago)
+
+        expect(job.reload.interaction_count).to eq(1)
+      end
+
+      it "keeps two mails that merely open the same way" do
+        first  = "Excited to move you forward. Pick a week."
+        second = "Excited to move you forward. My calendar filled up."
+        job.notes.create!(tag: :availability, body: first, occurred_at: 6.days.ago)
+        job.notes.create!(tag: :availability, body: second, occurred_at: 1.day.ago)
+
+        expect(job.reload.interaction_count).to eq(2)
+      end
+
+      # Several beats carry nothing but their tag, and folding those together
+      # would count a whole timeline as one exchange.
+      it "never folds two beats together just because neither has a body" do
+        job.notes.create!(tag: :availability, occurred_at: 3.days.ago)
+        job.notes.create!(tag: :responded, occurred_at: 2.days.ago)
+        job.notes.create!(tag: :take_home, occurred_at: 1.day.ago)
+
+        expect(job.reload.interaction_count).to eq(3)
+      end
+
+      # A cancel and a rebook of the same meeting is a reschedule.
+      it "counts the booking once however often it moves" do
+        job.notes.create!(tag: :scheduled, occurred_at: 5.days.ago, follow_up_at: 4.days.ago)
+        job.notes.create!(tag: :cancelled, occurred_at: 3.days.ago)
+        job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 3.days.from_now)
+
+        expect(job.reload.interaction_count).to eq(1)
+      end
+
+      it "says nothing about a booking that never happened" do
+        job.notes.create!(tag: :heard_back, body: "Luke wrote", occurred_at: 1.day.ago)
+
+        expect(job.reload.interaction_count).to eq(1)
+      end
     end
 
     # `last_activity_at` is the same answer only while every write path

@@ -24,7 +24,7 @@
 #  threshold_seconds   :integer
 #  created_at          :datetime         not null
 #  dismissed_until     :date
-#  tag                 :text
+#  tags                :text             default([]), not null, is an Array
 #  updated_at          :datetime         not null
 #  assigned_to_user_id :bigint
 #  chore_household_id  :bigint           not null
@@ -32,7 +32,9 @@
 #  parent_chore_id     :bigint
 #
 class Chore < ApplicationRecord
-  include Jilable, Orderable
+  # GroupTaggable: the groups (tags) a chore belongs to, and so which boards show
+  # it — `tagged`, `tag_names`, and write-time normalization of the `tags` array.
+  include Jilable, Orderable, GroupTaggable
 
   orderable_by(sort_order: :asc)
   orderable_scope ->(chore) { Chore.where(chore_household_id: chore.chore_household_id) }
@@ -223,13 +225,6 @@ class Chore < ApplicationRecord
   scope :persistent, -> { where(one_off: false) }
   scope :sub_chores, -> { where.not(parent_chore_id: nil) }
   scope :top_level, -> { where(parent_chore_id: nil) }
-  # The chores one board is responsible for. Compared case-insensitively
-  # because the tag is typed, and "Home" and "home" are the same group to
-  # everyone except the database.
-  scope :tagged, ->(tag) { where("LOWER(chores.tag) = ?", tag.to_s.downcase.strip) }
-  # Every tag the household has filed something under, for the form's datalist
-  # and the board picker. Sorted by how it reads, not by case.
-  scope :tag_names, -> { where.not(tag: [nil, ""]).distinct.pluck(:tag).sort_by(&:downcase) }
   # `:after_chore` followers anchored to any of `anchor_ids`. The anchor
   # lives in the recurrence jsonb rather than a column, so this is a `->>`
   # text compare — a numeric and a stringified id both normalize to text.

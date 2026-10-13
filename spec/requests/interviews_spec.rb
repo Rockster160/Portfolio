@@ -228,14 +228,22 @@ RSpec.describe "Interview tracker", type: :request do
   end
 
   # Most of the board is rows nobody ever answered. This is the handful where a
-  # person on their side has moved, and how far each one got.
-  describe "the where-you-stand strip" do
+  # person on their side has moved, how far each one got and how much was said.
+  describe "the where-you-stand table" do
     let!(:job) { user.job_applications.create!(company: "Reserv", role: "Senior Engineer") }
 
-    # One whole row of the strip - pips and all - by the rung it reports.
-    def standing_row(reached)
-      rows = response.body.scan(/<li style="--job-color[^>]*>(.*?)<\/li>/m).flatten
-      rows.find { |row| row.include?(%(<span class="standing-reached">#{reached}</span>)) }
+    # One whole row of the table, by the stage it reports.
+    def standing_row(stage)
+      rows = response.body.scan(/<tbody>(.*?)<\/tbody>/m).flatten.first.to_s
+      rows.scan(/<tr>(.*?)<\/tr>/m).flatten.find { |row| row.include?(">#{stage}<") }
+    end
+
+    # Every cell of every row, in order, whitespace flattened.
+    def standing_cells
+      body = response.body.scan(/<tbody>(.*?)<\/tbody>/m).flatten.first.to_s
+      body.scan(/<tr>(.*?)<\/tr>/m).flatten.map { |row|
+        row.scan(/<td[^>]*>(.*?)<\/td>/m).flatten.map { |cell| cell.gsub(/<[^>]+>/, "").strip }
+      }
     end
 
     it "says nothing about a board nobody has answered" do
@@ -247,43 +255,40 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).not_to include("Where you stand")
     end
 
-    it "prints the rung, the company and how long it has been quiet" do
+    it "prints the stage, what was said, the company and the days quiet" do
+      job.notes.create!(tag: :applied, occurred_at: 5.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 5.days.ago)
       job.notes.create!(tag: :take_home, occurred_at: 3.days.ago)
 
       get interviews_path
 
       expect(response.body).to include("Where you stand")
-      row = standing_row("got a take-home")
-      expect(row).to include("Reserv — Senior Engineer")
-      expect(row).to include(interview_path(job))
-      expect(row).to include("quiet 3 days")
+      # The receipt is a machine, so two of the three beats were said.
+      expect(standing_cells).to eq([["Take-home", "2", "Reserv — Senior Engineer", "you", "3d"]])
+      expect(standing_row("Take-home")).to include(interview_path(job))
     end
 
-    # The dots are the progress at a glance, and they are filled to the rung.
-    it "fills a pip per rung reached and leaves the rest empty" do
-      job.notes.create!(tag: :interview, occurred_at: 1.day.ago)
+    it "names the FURTHEST stage reached, not the latest beat" do
+      job.notes.create!(tag: :interview, occurred_at: 4.days.ago)
+      job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
 
       get interviews_path
 
-      row = standing_row("interviewed")
-      expect(row.scan(/standing-pip is-on/).length).to eq(5)
-      expect(row.scan(/class="standing-pip "/).length).to eq(1)
+      expect(standing_cells.first.first).to eq("Interview")
     end
 
-    it "marks the ones that are his move and leaves the rest alone" do
+    it "marks whose move it is and leaves the rest alone" do
       job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
       other = user.job_applications.create!(company: "Bluestaq")
-      other.notes.create!(tag: :scheduled, occurred_at: 3.days.ago, follow_up_at: 2.days.from_now)
+      other.notes.create!(tag: :availability, occurred_at: 3.days.ago)
+      other.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 2.days.from_now)
 
       get interviews_path
 
-      rows = response.body.scan(/<li style="--job-color[^>]*>(.*?)<\/li>/m).flatten
-      owed = rows.map { |row| row.include?("your move") }
-
-      # Both sit at the same rung; the one owing availability moved later, so it
-      # leads, and the booked one says nothing about whose move it is.
-      expect(rows.length).to eq(2)
-      expect(owed).to eq([true, false])
+      # Bluestaq got further, so it leads; nothing is owed on a booked one.
+      expect(standing_cells.map { |cells| [cells[0], cells[3]] })
+        .to eq([["Scheduled", "them"], ["Availability", "you"]])
+      expect(response.body.scan(/is-yours/).length).to eq(1)
     end
 
     # The filter and the search narrow the WALL. Where things stand is a fact
@@ -293,7 +298,7 @@ RSpec.describe "Interview tracker", type: :request do
 
       get interviews_path(status: :rejected, q: "nothing matches this")
 
-      expect(standing_row("got an offer")).to include("Reserv")
+      expect(standing_row("Offer")).to include("Reserv")
     end
   end
 

@@ -88,14 +88,14 @@
      <%# what hides it. Keeping one page means the socket, the expression %>
      <%# state and the routine runner have exactly one implementation. %>
      data-kiosk="<%= @kiosk ? "true" : "false" %>"
-     <%# The chore board: the kiosk's surface with one group of chores on it %>
+     <%# The chore board: the kiosk's surface with its groups of chores on it %>
      <%# instead of the routine pad. A second attribute rather than a third %>
      <%# value on `data-kiosk`, because everything the kiosk hides this hides %>
      <%# too - the board IS a kiosk, with a different pad. %>
      data-board="<%= @board ? "true" : "false" %>"
-     data-board-tag="<%= @board_tag %>"
+     data-board-tags="<%= Array(@board_tags).to_json %>"
      data-chore-day="<%= @board_day&.iso8601 %>"
-     <%# The board's own set — chores AND triggers of one group, each tagged %>
+     <%# The board's own set — chores AND triggers of its groups, each tagged %>
      <%# with its `kind` — serialized for the first paint so a cold boot off %>
      <%# the cached shell paints before the first fetch lands. %>
      data-board-items="<%= Array(@board_items_json).to_json %>"

@@ -74,9 +74,9 @@ class ChoreSerializer
       icon_ref:             chore.icon.to_s,
       icon_kind:            icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
       aliases:              chore.aliases_array,
-      # Which group it is filed under, and so which board is responsible for
-      # it. Blank for a chore no board shows.
-      tag:                  chore.tag.to_s,
+      # Which groups it is filed under, and so which boards are responsible for
+      # it. Empty for a chore no board shows.
+      tags:                 chore.tags,
       notes_template:       chore.notes_template.to_s,
       notes:                chore.notes.to_s,
       reward_pebbles:       chore.reward_pebbles,

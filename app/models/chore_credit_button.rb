@@ -6,7 +6,7 @@
 #  color              :text
 #  label              :text             not null
 #  sort_order         :integer
-#  tag                :text
+#  tags               :text             default([]), not null, is an Array
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
 #  chore_household_id :bigint           not null
@@ -36,12 +36,13 @@ class ChoreCreditButton < ApplicationRecord
   validate  :chore_in_household
   validate  :credit_user_in_household
 
-  # The chores one board is responsible for, matched case-insensitively like
-  # Chore.tagged — the tag is typed, and "Shared" and "shared" are one group.
-  scope :tagged,    ->(tag) { where("LOWER(chore_credit_buttons.tag) = ?", tag.to_s.downcase.strip) }
-  scope :tag_names, -> { where.not(tag: [nil, ""]).distinct.pluck(:tag).sort_by(&:downcase) }
-  # A board's buttons, in the order they were added.
-  scope :for_board, ->(tag) { tagged(tag).order(Arel.sql("sort_order ASC NULLS LAST, id ASC")) }
+  # A button sits on a board when it shares a group with it — `tagged`,
+  # `tag_names` and write-time normalization of the `tags` array come from the
+  # concern.
+  include GroupTaggable
+
+  # A board's buttons: those in ANY of its groups, in the order they were added.
+  scope :for_board, ->(tags) { tagged(tags).order(Arel.sql("sort_order ASC NULLS LAST, id ASC")) }
 
   # How the board draws it: a stateless "tap to credit" circle. Carries its own
   # colour and the ids a press needs; `short_name` mirrors the field a chore cell

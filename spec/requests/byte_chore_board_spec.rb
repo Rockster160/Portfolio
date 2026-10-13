@@ -43,26 +43,48 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).not_to include("data-kiosk-pad")
     end
 
-    it "carries only the thread's own group, serialized for the first paint" do
-      thread.update!(metadata: thread.metadata.merge("chore_tag" => "Home"))
-      create(:chore, created_by_user: user, name: "Vacuum", tag: "Home", marked_due_at: Time.current)
-      create(:chore, created_by_user: user, name: "Feed Whisper", tag: "Pets", marked_due_at: Time.current)
+    it "carries only the thread's own groups, serialized for the first paint" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"], marked_due_at: Time.current)
 
       get "/board/#{thread.id}"
 
       expect(board_chores.pluck("name")).to eq(["Vacuum"])
-      expect(board_chores.first["tag"]).to eq("Home")
+      expect(board_chores.first["tags"]).to eq(["Home"])
+    end
+
+    it "gathers chores from ANY of the groups it watches" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home", "Pets"]))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Taxes", tags: ["Admin"], marked_due_at: Time.current)
+
+      get "/board/#{thread.id}"
+
+      expect(board_chores.pluck("name")).to contain_exactly("Vacuum", "Feed Whisper")
+    end
+
+    # A board set before groups went plural keeps watching what it did, read off
+    # the old single `chore_tag` key until it is next changed.
+    it "still honours a board pointed at a group the old way" do
+      thread.update!(metadata: thread.metadata.merge("chore_tag" => "Home"))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+
+      get "/board/#{thread.id}"
+
+      expect(board_chores.pluck("name")).to eq(["Vacuum"])
     end
 
     # An unpointed board shows NOTHING rather than everything. A screen filled
     # with every chore in the house would look deliberate and be wrong.
     it "loads nothing at all when the thread has no group yet" do
-      create(:chore, created_by_user: user, name: "Vacuum", tag: "Home", marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
 
       get "/board/#{thread.id}"
 
       expect(board_chores).to eq([])
-      expect(response.body).to include("Pick a group")
+      expect(response.body).to include("Pick groups")
     end
 
     # A board has no header and no composer, so without this there is no way
@@ -105,7 +127,7 @@ RSpec.describe "Byte chore board", type: :request do
   def routine!(name:, tag:, enabled: true, position: nil)
     user.buddy_routines.create!(
       name:     name,
-      tag:      tag,
+      tags:     Array(tag),
       enabled:  enabled,
       position: position,
       steps:    [BuddyRoutine.step(:log_event, { name: "ping" })],
@@ -116,7 +138,7 @@ RSpec.describe "Byte chore board", type: :request do
     before { thread.update!(metadata: thread.metadata.merge("chore_tag" => "Work")) }
 
     it "carries the group's triggers as stateless items, after its chores" do
-      create(:chore, created_by_user: user, name: "Daily task", tag: "Work", marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Daily task", tags: ["Work"], marked_due_at: Time.current)
       routine!(name: "Focus mode", tag: "Work")
       # Neither of these belongs on this board: one is another group, the other
       # is switched off.
@@ -136,7 +158,7 @@ RSpec.describe "Byte chore board", type: :request do
     end
 
     it "serves the merged live set from GET /byte/board/items for resync" do
-      create(:chore, created_by_user: user, name: "Daily task", tag: "Work", marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Daily task", tags: ["Work"], marked_due_at: Time.current)
       routine!(name: "Focus mode", tag: "Work")
 
       get "/byte/board/items", params: { conversation_id: thread.id }
@@ -172,7 +194,7 @@ RSpec.describe "Byte chore board", type: :request do
         created_by_user:    user,
         chore:              chore,
         credit_user:        housemate,
-        tag:                "Shared",
+        tags:               ["Shared"],
         label:              "Dishes, by mate",
         color:              "#6366F1",
       }.merge(attrs))
@@ -218,7 +240,7 @@ RSpec.describe "Byte chore board", type: :request do
     it "lists its buttons for a group with the chore and member options" do
       credit_button!
 
-      get "/byte/board/buttons", params: { tag: "Shared" }
+      get "/byte/board/buttons", params: { tags: "Shared" }
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body["buttons"].pluck("label")).to eq(["Dishes, by mate"])
@@ -231,7 +253,7 @@ RSpec.describe "Byte chore board", type: :request do
     it "creates, updates and deletes a button" do
       post "/byte/board/buttons", params: {
         button: {
-          tag:            "Shared",
+          tags_csv:       "Shared, Kitchen",
           label:          "Dishes, by me",
           color:          "#16A34A",
           chore_id:       chore.id,
@@ -239,6 +261,7 @@ RSpec.describe "Byte chore board", type: :request do
         },
       }
       expect(response).to have_http_status(:created)
+      expect(response.parsed_body["tags"]).to eq(["Shared", "Kitchen"])
       id = response.parsed_body["id"]
 
       patch "/byte/board/buttons/#{id}", params: { button: { label: "Dishes — me" } }
@@ -254,7 +277,7 @@ RSpec.describe "Byte chore board", type: :request do
       theirs = create(:chore, created_by_user: stranger, name: "Not ours")
 
       post "/byte/board/buttons", params: {
-        button: { tag: "Shared", label: "nope", chore_id: theirs.id, credit_user_id: user.id },
+        button: { tags_csv: "Shared", label: "nope", chore_id: theirs.id, credit_user_id: user.id },
       }
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -263,7 +286,7 @@ RSpec.describe "Byte chore board", type: :request do
 
   describe "GET /byte/board/tags" do
     it "unions the household's chore groups with the viewer's routine groups" do
-      create(:chore, created_by_user: user, name: "Vacuum", tag: "Home")
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"])
       routine!(name: "Focus mode", tag: "Work")
 
       get "/byte/board/tags"
@@ -273,13 +296,23 @@ RSpec.describe "Byte chore board", type: :request do
   end
 
   describe "PATCH /byte/board/tag" do
-    before { create(:chore, created_by_user: user, name: "Vacuum", tag: "Home") }
+    before { create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"]) }
 
     it "points the thread's board at a group" do
       patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Home" }
 
       expect(response).to have_http_status(:ok)
-      expect(thread.reload.chore_tag).to eq("Home")
+      expect(response.parsed_body["chore_tags"]).to eq(["Home"])
+      expect(thread.reload.chore_tags).to eq(["Home"])
+    end
+
+    it "points a board at several groups at once" do
+      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"])
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tags: ["Home", "Pets"] }
+
+      expect(response).to have_http_status(:ok)
+      expect(thread.reload.chore_tags).to eq(["Home", "Pets"])
     end
 
     # A typo'd group is a board that is permanently empty with nothing on the
@@ -289,7 +322,18 @@ RSpec.describe "Byte chore board", type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.parsed_body["tags"]).to eq(["Home"])
-      expect(thread.reload.chore_tag).to be_nil
+      expect(thread.reload.chore_tags).to eq([])
+    end
+
+    # One bad group in the set fails the whole change — a board half-pointed at
+    # what you asked for is a surprise, not a convenience.
+    it "refuses the set when any group in it is unknown" do
+      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"])
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tags: ["Home", "Workshp"] }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(thread.reload.chore_tags).to eq([])
     end
 
     # A group that holds only triggers is a real board, so it has to be settable

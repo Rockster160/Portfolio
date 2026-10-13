@@ -70,26 +70,44 @@ RSpec.describe Chore do
 
   describe ".tagged" do
     it "matches regardless of how the tag was typed" do
-      home = create(:chore, created_by_user: user, name: "Vacuum", tag: "Home")
-      create(:chore, created_by_user: user, name: "Feed Whisper", tag: "Pets")
+      home = create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"])
+      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"])
 
       expect(described_class.tagged("home")).to eq([home])
       expect(described_class.tagged("  HOME ")).to eq([home])
     end
 
     it "matches nothing for a tag nobody uses, rather than everything" do
-      create(:chore, created_by_user: user, name: "Vacuum", tag: "Home")
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"])
 
       expect(described_class.tagged("Workshop")).to eq([])
+    end
+
+    it "matches a chore on ANY of its groups, and a board watching any of them" do
+      multi = create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home", "Chores"])
+
+      expect(described_class.tagged("home")).to include(multi)
+      expect(described_class.tagged("chores")).to include(multi)
+      expect(described_class.tagged(["Errands", "Home"])).to include(multi)
+      expect(described_class.tagged("Errands")).not_to include(multi)
+    end
+  end
+
+  describe "tag normalization on write" do
+    it "trims, drops blanks, and de-dupes case-insensitively keeping the first" do
+      chore = create(:chore, created_by_user: user, name: "Vacuum",
+        tags: [" Home ", "home", "", "Chores"])
+
+      expect(chore.reload.tags).to eq(["Home", "Chores"])
     end
   end
 
   describe ".tag_names" do
     it "lists each group once, ordered by how it reads" do
-      create(:chore, created_by_user: user, name: "Vacuum", tag: "home")
-      create(:chore, created_by_user: user, name: "Dishes", tag: "home")
-      create(:chore, created_by_user: user, name: "Plants", tag: "Pets")
-      create(:chore, created_by_user: user, name: "Nothing", tag: nil)
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["home"])
+      create(:chore, created_by_user: user, name: "Dishes", tags: ["home"])
+      create(:chore, created_by_user: user, name: "Plants", tags: ["Pets"])
+      create(:chore, created_by_user: user, name: "Nothing", tags: [])
 
       expect(described_class.tag_names).to eq(["home", "Pets"])
     end

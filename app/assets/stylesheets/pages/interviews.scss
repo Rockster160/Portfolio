@@ -190,8 +190,8 @@
   // ---- Where you stand -------------------------------------------------
   // The quiet panel's weight, like the follow-up list: this is a READ, not
   // something to do, and the two loud strips above it are the to-do half of
-  // the page. Each row wears its own application's colour, which is the same
-  // identity the card on the wall and the calendar row already carry.
+  // the page. A real table, because every column here is a value compared
+  // down the page rather than part of a sentence.
   .interview-standing {
     margin-bottom: 6px;
     border: 1px solid var(--iv-line);
@@ -206,57 +206,49 @@
       letter-spacing: 0.04em;
     }
 
-    ul {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    li {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 8px;
-      padding: 3px 0;
+    table {
+      border-collapse: collapse;
+      width: 100%;
       font-size: 14px;
     }
 
-    // How deep the process got, as a run of dots. Fixed width whatever the
-    // rung, so a column of rows reads as one ladder rather than as a ragged
-    // set of lengths.
-    .standing-pips {
-      display: inline-flex;
-      flex: 0 0 auto;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .standing-pip {
-      display: inline-block;
-      border-radius: 50%;
-      background: var(--iv-line);
-      width: 7px;
-      height: 7px;
-
-      &.is-on {
-        background: var(--job-color, var(--iv-muted));
-      }
-    }
-
-    // Reserves the width of the longest rung so the company names line up —
-    // the same reason the follow-up strip pins its date column.
-    .standing-reached {
-      flex: 0 0 auto;
-      min-width: 118px;
+    th {
+      border-bottom: 1px solid var(--iv-line);
+      padding: 0 10px 4px 0;
       color: var(--iv-muted);
+      font-size: 11px;
+      font-weight: normal;
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 4px 10px 4px 0;
+      vertical-align: baseline;
+    }
+
+    // Stage, Move and the two numbers are short values that should stay on one
+    // line and keep their columns narrow; the company is the one cell allowed
+    // to wrap, which is what keeps this readable at phone width.
+    th:not(:nth-child(3)),
+    td:not(:nth-child(3)) {
+      white-space: nowrap;
+    }
+
+    // Counts and day figures line up on their digits, so a column of them can
+    // be compared without reading each one.
+    .num {
+      padding-right: 14px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
     // The same red the waiting strip uses, because it is the same fact: this
-    // one is on him. Quieter here, since the strip above is where the actual
-    // task is named.
-    .standing-yours {
+    // one is on him.
+    .is-yours {
       color: var(--iv-waiting);
-      font-size: 12px;
       font-weight: bold;
     }
   }

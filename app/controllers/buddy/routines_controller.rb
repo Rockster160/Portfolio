@@ -207,7 +207,11 @@ module Buddy
     # it outright. Pinning is that list plus one, unpinning is it minus one.
     # No `steps` either - #steps owns those, and on tighter terms.
     def routine_params
-      params.require(:routine).permit(:name, :description, :enabled, :tag)
+      permitted = params.require(:routine).permit(:name, :description, :enabled, tags: [])
+      if (csv = params.dig(:routine, :tags_csv))
+        permitted[:tags] = csv.to_s.split(",").map(&:strip).compact_blank
+      end
+      permitted
     end
   end
 end

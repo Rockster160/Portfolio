@@ -117,7 +117,7 @@ class JobNote < ApplicationRecord
   # and a nudge into silence is not interest. `rejected` and `withdrew` settle
   # the row, so an application carrying one has already stopped being live.
   #
-  # `cancelled` keeps its booking's rung. A round falling through does not
+  # `cancelled` shares `scheduled`'s rung. A round falling through does not
   # un-reach the rung it fell from, and they rebook from exactly there.
   #
   # The one judgment call is a take-home under an interview, on the grounds
@@ -128,29 +128,28 @@ class JobNote < ApplicationRecord
   ENGAGEMENT_DEPTH = {
     "heard_back"     => 1,
     "availability"   => 2,
-    "scheduled"      => 2,
-    "cancelled"      => 2,
-    "recruiter_call" => 3,
-    "take_home"      => 4,
-    "interview"      => 5,
-    "offer"          => 6,
+    "scheduled"      => 3,
+    "cancelled"      => 3,
+    "recruiter_call" => 4,
+    "take_home"      => 5,
+    "interview"      => 6,
+    "offer"          => 7,
   }.freeze
 
-  # What a rung is called, in the PAST TENSE, because the rung is history and a
-  # label in the present tense contradicts the board as soon as something falls
-  # through. An application that reached a booking, had it cancelled by the
-  # organiser and is now rescheduling is "got to a booking" the whole way
-  # through; a column reading "Scheduled" is a lie for most of that.
+  # What a rung is called: the tag's own label, since that is the vocabulary
+  # already on the dropdown, the chips and the timeline. The column is headed
+  # "Stage" and the rung is the FURTHEST one reached, so `cancelled` reads as
+  # the "Scheduled" it shares a rung with - the booking happened, and what
+  # became of it is on the timeline rather than in a one-word column.
   DEPTH_LABELS = {
-    1 => "heard back",
-    2 => "got to a booking",
-    3 => "had the screen",
-    4 => "got a take-home",
-    5 => "interviewed",
-    6 => "got an offer",
+    1 => "Heard back",
+    2 => "Availability",
+    3 => "Scheduled",
+    4 => "Recruiter call",
+    5 => "Take-home",
+    6 => "Interview",
+    7 => "Offer",
   }.freeze
-
-  DEEPEST = DEPTH_LABELS.keys.max
 
   # A tag that settles the whole application, not just this moment in it.
   # Logging the rejection IS marking the job rejected — having to then go and

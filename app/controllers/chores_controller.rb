@@ -563,7 +563,7 @@ class ChoresController < ApplicationController
     @daily_ids = ChoreDaily.for_user(current_user).pluck(:chore_id)
     # Off the set already loaded rather than through Chore.tag_names, which
     # would be a second trip to answer a question the rows in hand can.
-    @chore_tags = @chores.map(&:tag).compact_blank.uniq.sort_by(&:downcase)
+    @chore_tags = @chores.flat_map(&:tags).compact_blank.uniq(&:downcase).sort_by(&:downcase)
     @lookahead_json = build_lookahead_json
     @cutoff_hour = ChoreDay::CUTOFF_HOURS
     @can_manage_chores = current_user.can_manage_chores?
@@ -871,13 +871,18 @@ class ChoresController < ApplicationController
       :name, :short_name, :icon, :reward_pebbles, :target_count, :threshold_seconds,
       :one_off, :starts_on, :show_on_today_view, :hot_eligibility, :priority,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
-      :marked_due_at, :parent_chore_id, :tag,
+      :marked_due_at, :parent_chore_id,
       aliases:    [],
+      tags:       [],
       recurrence: {}
     )
 
     if (csv = params.dig(:chore, :aliases_csv))
       permitted[:aliases] = csv.to_s.split(",").map(&:strip).compact_blank
+    end
+
+    if (csv = params.dig(:chore, :tags_csv))
+      permitted[:tags] = csv.to_s.split(",").map(&:strip).compact_blank
     end
 
     if permitted.key?(:parent_chore_id)

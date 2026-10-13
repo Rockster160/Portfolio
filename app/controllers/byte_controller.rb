@@ -55,7 +55,7 @@ class ByteController < ApplicationController
     @board = true
     asked = params[:conversation_id].presence&.to_i
     load_thread(only_buddy: true, prefer: asked || current_user.byte_conversations.kiosk.pick(:id))
-    @board_tag = @conversation&.chore_tag
+    @board_tags = @conversation&.chore_tags || []
     @board_day = ChoreDay.current(current_user)
     @board_items_json = board_items_for(@conversation)
     render :show
@@ -84,8 +84,8 @@ class ByteController < ApplicationController
   # options the settings form needs (household chores and members). Household
   # scope: a shared board's buttons belong to the house, not to one person.
   def board_buttons
-    tag = params[:tag].to_s.strip
-    buttons = tag.present? ? board_credit_buttons.for_board(tag) : board_credit_buttons.none
+    tags = GroupTaggable.normalize(params[:tags].presence || params[:tag])
+    buttons = tags.any? ? board_credit_buttons.for_board(tags) : board_credit_buttons.none
 
     render json: {
       buttons: buttons.map { |b| credit_button_wire(b) },
@@ -172,15 +172,18 @@ class ByteController < ApplicationController
     convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
-    tag = params[:tag].to_s.strip
+    # Accepts the full set the board should watch (`tags`), and a lone `tag` still
+    # for anything that speaks the old single-group language.
+    wanted = GroupTaggable.normalize(params[:tags].presence || params[:tag])
     known = board_tag_names
-    if tag.present? && known.none? { |t| t.casecmp?(tag) }
+    unknown = wanted.reject { |t| known.any? { |k| k.casecmp?(t) } }
+    if unknown.any?
       return render(json: { error: "unknown_tag", tags: known }, status: :unprocessable_entity)
     end
 
-    convo.chore_tag = tag
+    convo.chore_tags = wanted
     convo.save!
-    render json: { ok: true, chore_tag: convo.chore_tag }
+    render json: { ok: true, chore_tags: convo.chore_tags }
   end
 
   # POST /byte/chore_cheer — the small encouraging line over a chore just
@@ -880,29 +883,29 @@ class ByteController < ApplicationController
 
   private
 
-  # The board's own set for one thread: the CHORES of its group, then the
-  # TRIGGERS (routines) of its group. One group, serialized the same way
-  # /chores/today's chores are so the circles out here read the same fields,
-  # with a `kind` tag telling the two apart. Chores come first, then triggers,
-  # because they sort in separate spaces (a chore's `sort_order`, a routine's
-  # `position`) and there is no shared order to interleave them by — and
-  # "things to do, then things to set off" is the order the group reads in.
+  # The board's own set for one thread: the CHORES in its groups, then the
+  # TRIGGERS (routines) in its groups, then the credit buttons. A chore in ANY
+  # of the watched groups qualifies. Serialized the same way /chores/today's
+  # chores are so the circles out here read the same fields, with a `kind` tag
+  # telling them apart. Chores come first, then triggers, because they sort in
+  # separate spaces (a chore's `sort_order`, a routine's `position`) and there
+  # is no shared order to interleave them by.
   #
-  # An unset tag loads NOTHING rather than everything. A board nobody has
+  # No groups loads NOTHING rather than everything. A board nobody has
   # pointed at a group yet is empty and says so; filling it with every chore in
   # the house would look deliberate and be wrong.
   def board_items_for(convo)
-    tag = convo&.chore_tag
-    return [] if tag.blank?
+    tags = convo&.chore_tags || []
+    return [] if tags.empty?
 
     day = @board_day || ChoreDay.current(current_user)
-    chores = current_user.accessible_chores.tagged(tag)
+    chores = current_user.accessible_chores.tagged(tags)
       .order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
     ctx = ChoreSerializerContext.for_user(current_user, day: day)
     chore_items = ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
 
-    trigger_items = current_user.buddy_routines.for_board(tag).map(&:board_item)
-    credit_items  = board_credit_buttons.for_board(tag).map(&:board_item)
+    trigger_items = current_user.buddy_routines.for_board(tags).map(&:board_item)
+    credit_items  = board_credit_buttons.for_board(tags).map(&:board_item)
 
     chore_items + trigger_items + credit_items
   end
@@ -927,7 +930,13 @@ class ByteController < ApplicationController
   end
 
   def credit_button_params
-    params.require(:button).permit(:label, :color, :tag, :chore_id, :credit_user_id)
+    permitted = params.require(:button).permit(
+      :label, :color, :chore_id, :credit_user_id, tags: []
+    )
+    if (csv = params.dig(:button, :tags_csv))
+      permitted[:tags] = csv.to_s.split(",").map(&:strip).compact_blank
+    end
+    permitted
   end
 
   # The chores a button can complete: every chore this person can see, by name.
@@ -953,7 +962,7 @@ class ByteController < ApplicationController
       id:               button.id,
       label:            button.label,
       color:            button.color,
-      tag:              button.tag,
+      tags:             button.tags,
       chore_id:         button.chore_id,
       chore_name:       button.chore&.name,
       credit_user_id:   button.credit_user_id,

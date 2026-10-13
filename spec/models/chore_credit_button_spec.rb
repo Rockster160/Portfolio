@@ -12,7 +12,7 @@ RSpec.describe ChoreCreditButton do
       created_by_user: owner,
       chore:           chore,
       credit_user:     mate,
-      tag:             "Shared",
+      tags:            ["Shared"],
       label:           "Dishes, by mate",
       color:           "#6366F1",
     }.merge(attrs))
@@ -43,6 +43,13 @@ RSpec.describe ChoreCreditButton do
       b = button.tap(&:save!)
       expect(described_class.tagged("shared")).to include(b)
       expect(described_class.tag_names).to eq(["Shared"])
+    end
+
+    it "matches on ANY of several groups, and a board watching any of them" do
+      b = button(tags: ["Shared", "Kitchen"]).tap(&:save!)
+      expect(described_class.tagged("kitchen")).to include(b)
+      expect(described_class.for_board(["Garage", "shared"])).to include(b)
+      expect(described_class.tagged("Garage")).not_to include(b)
     end
   end
 

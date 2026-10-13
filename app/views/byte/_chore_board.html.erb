@@ -27,7 +27,7 @@
       face: what it changes is legible without a label. %>
   <button type="button" class="byte-board-tag" data-board-tag-toggle
           aria-label="Choose which chores this screen looks after"
-          title="Choose which chores this screen looks after"><%= @board_tag.presence || "Pick a group" %></button>
+          title="Choose which chores this screen looks after"><%= Array(@board_tags).join(", ").presence || "Pick groups" %></button>
   <div class="byte-board-tag-picker" data-board-tag-picker hidden>
     <span class="byte-board-tag-label">This screen looks after</span>
     <%# Rebuilt by chore_board.js on every open, so nothing that has to survive
@@ -74,6 +74,15 @@
         <div class="byte-msg-form-row">
           <label class="byte-msg-form-label" for="bb-color">Color</label>
           <input type="color" id="bb-color" class="byte-msg-form-input" data-bb-color value="#16A34A">
+        </div>
+
+        <%# Which groups this button belongs to, comma-separated. Defaults to the
+            groups the board is watching, so a button for the board you're on
+            needs no thought; widen or narrow it to put the button on others. %>
+        <div class="byte-msg-form-row">
+          <label class="byte-msg-form-label" for="bb-tags">Groups</label>
+          <input type="text" id="bb-tags" class="byte-msg-form-input" data-bb-tags
+                 placeholder="Home, Morning">
         </div>
 
         <%# Carries the id being edited, empty for a new one. The form is reused

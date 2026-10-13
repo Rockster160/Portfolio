@@ -11,7 +11,7 @@
 #  position    :integer
 #  run_count   :integer          default(0), not null
 #  steps       :jsonb            not null
-#  tag         :string
+#  tags        :text             default([]), not null, is an Array
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  user_id     :bigint           not null
@@ -31,18 +31,15 @@ class BuddyRoutine < ApplicationRecord
   scope :ordered,  -> { order(Arel.sql("LOWER(name) ASC")) }
   scope :pinned,   -> { where.not(position: nil).order(:position, :id) }
 
-  # A chore board shows one GROUP, by tag, and a routine tagged with that group
-  # sits on it as a "tap to fire" circle beside the chores. Matched
-  # case-insensitively, exactly like Chore.tagged — "Work" and "work" are the
-  # same group to everyone but the database.
-  scope :tagged,    ->(tag) { where("LOWER(buddy_routines.tag) = ?", tag.to_s.downcase.strip) }
-  # Every group a routine is filed under, for the board picker's union with the
-  # chore tags. Sorted by how it reads, not by case.
-  scope :tag_names, -> { where.not(tag: [nil, ""]).distinct.pluck(:tag).sort_by(&:downcase) }
-  # The triggers one board is responsible for: the enabled routines of a group,
-  # pinned ones first (so the grid order carries over), then the rest by name.
-  scope :for_board, ->(tag) {
-    enabled.tagged(tag).order(Arel.sql("position ASC NULLS LAST, LOWER(name) ASC"))
+  # A routine sits on a board as a "tap to fire" circle beside the chores, when
+  # it shares a group with that board — `tagged`, `tag_names` and write-time
+  # normalization of the `tags` array all come from the concern.
+  include GroupTaggable
+
+  # The triggers a board is responsible for: the enabled routines in ANY of its
+  # groups, pinned ones first (so the grid order carries over), then by name.
+  scope :for_board, ->(tags) {
+    enabled.tagged(tags).order(Arel.sql("position ASC NULLS LAST, LOWER(name) ASC"))
   }
 
   # What the Quick grid and the wall tablet show: everything that's switched on,
@@ -146,7 +143,7 @@ class BuddyRoutine < ApplicationRecord
       monitor:     monitor,
       description: description,
       enabled:     enabled,
-      tag:         tag.to_s,
+      tags:        tags,
       steps:       Array(steps),
       summary:     summary,
       step_rows:   step_rows,

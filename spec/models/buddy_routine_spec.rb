@@ -14,7 +14,7 @@
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  position    :integer
-#  tag         :string
+#  tags        :text             default([]), not null, is an Array
 #
 require "rails_helper"
 
@@ -179,8 +179,8 @@ RSpec.describe BuddyRoutine do
   # A routine tagged with a group sits on that group's chore board as a
   # tap-to-fire circle beside the chores.
   describe "board grouping" do
-    def tagged!(name, tag, **attrs)
-      described_class.create!(user: user, name: name, tag: tag, steps: [tell(name)], **attrs)
+    def tagged!(name, *tags, **attrs)
+      described_class.create!(user: user, name: name, tags: tags, steps: [tell(name)], **attrs)
     end
 
     it "matches a group case-insensitively, like a chore tag" do
@@ -188,6 +188,14 @@ RSpec.describe BuddyRoutine do
 
       expect(described_class.tagged("work")).to include(r)
       expect(described_class.tagged("WORK")).to include(r)
+    end
+
+    it "matches on ANY of its groups" do
+      r = tagged!("Focus mode", "Work", "Home")
+
+      expect(described_class.tagged("home")).to include(r)
+      expect(described_class.tagged(["Errands", "work"])).to include(r)
+      expect(described_class.tagged("Errands")).not_to include(r)
     end
 
     it "lists its distinct groups, sorted by how they read" do
@@ -218,8 +226,8 @@ RSpec.describe BuddyRoutine do
       expect(item).not_to have_key(:target_count)
     end
 
-    it "carries its group in the client payload" do
-      expect(tagged!("Focus mode", "Work").serialize_for_client[:tag]).to eq("Work")
+    it "carries its groups in the client payload" do
+      expect(tagged!("Focus mode", "Work", "Home").serialize_for_client[:tags]).to eq(["Work", "Home"])
     end
   end
 

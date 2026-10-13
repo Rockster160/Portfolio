@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_12_195137) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -632,7 +632,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_12_195137) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "position"
-    t.string "tag"
+    t.text "tags", default: [], null: false, array: true
     t.index "user_id, lower((name)::text)", name: "index_buddy_routines_on_user_and_name", unique: true
     t.index ["user_id", "position"], name: "index_buddy_routines_pinned", where: "(\"position\" IS NOT NULL)"
     t.index ["user_id"], name: "index_buddy_routines_on_user_id"
@@ -799,13 +799,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_12_195137) do
     t.bigint "created_by_user_id", null: false
     t.bigint "chore_id", null: false
     t.bigint "credit_user_id", null: false
-    t.text "tag"
     t.text "label", null: false
     t.text "color"
     t.integer "sort_order"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["chore_household_id", "tag"], name: "index_chore_credit_buttons_on_chore_household_id_and_tag"
+    t.text "tags", default: [], null: false, array: true
     t.index ["chore_household_id"], name: "index_chore_credit_buttons_on_chore_household_id"
     t.index ["chore_id"], name: "index_chore_credit_buttons_on_chore_id"
     t.index ["created_by_user_id"], name: "index_chore_credit_buttons_on_created_by_user_id"
@@ -954,14 +953,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_12_195137) do
     t.bigint "parent_chore_id"
     t.integer "target_count", default: 1, null: false
     t.integer "priority", default: 2, null: false
-    t.text "tag"
     t.date "dismissed_until"
+    t.text "tags", default: [], null: false, array: true
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
     t.index ["chore_household_id", "sort_order"], name: "index_chores_active_by_household_sort", where: "(archived_at IS NULL)"
     t.index ["chore_household_id", "sort_order"], name: "index_chores_on_chore_household_id_and_sort_order"
-    t.index ["chore_household_id", "tag"], name: "index_chores_on_chore_household_id_and_tag"
     t.index ["one_off"], name: "index_chores_on_one_off"
     t.index ["parent_chore_id"], name: "index_chores_on_parent_chore_id"
     t.index ["reward_pebbles"], name: "index_chores_on_reward_pebbles"

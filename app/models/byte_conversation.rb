@@ -141,17 +141,28 @@ class ByteConversation < ApplicationRecord
   # reason: it is a preference about one thread, not an invariant across them,
   # so an ordinary PATCH setting it is the front door rather than a way round
   # one.
-  def chore_tag
-    return nil unless metadata.is_a?(Hash)
+  # Which GROUPS this thread's board watches. Several, matched as "any": a chore,
+  # routine or credit button in ANY of these groups appears on the board. Reads
+  # the legacy single `chore_tag` key too, so a board set before groups went plural
+  # keeps watching what it did until it is changed.
+  def chore_tags
+    return [] unless metadata.is_a?(Hash)
 
-    metadata["chore_tag"].to_s.presence
+    raw = metadata["chore_tags"]
+    raw = metadata["chore_tag"] if raw.nil?
+    GroupTaggable.normalize(raw)
   end
 
-  def chore_tag=(value)
-    tag = value.to_s.strip
-    self.metadata = (
-      tag.present? ? metadata.to_h.merge("chore_tag" => tag) : metadata.to_h.except("chore_tag")
-    )
+  def chore_tags=(values)
+    tags = GroupTaggable.normalize(values)
+    base = metadata.to_h.except("chore_tag") # retire the legacy single-tag key
+    self.metadata = (tags.present? ? base.merge("chore_tags" => tags) : base.except("chore_tags"))
+  end
+
+  # The first group this board watches, or nil — for callers that still think of
+  # a board as watching one.
+  def chore_tag
+    chore_tags.first
   end
 
   # Move the wall to this thread. Exclusive by construction: "which one is out

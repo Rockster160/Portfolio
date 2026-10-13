@@ -21,11 +21,12 @@
     <input type="text" name="chore[aliases_csv]" value="<%= chore.aliases_array.join(", ") %>" placeholder="floss, toothpaste">
   </div>
 
-  <%# Which group this belongs to, and so which Buddy board shows it. See the
-      same field in the edit modal for why it is free text with suggestions. %>
+  <%# Which groups this belongs to, and so which Buddy boards show it. Comma-
+      separated; see the same field in the edit modal for why it is free text
+      with suggestions. %>
   <div>
-    <label>Group</label>
-    <input type="text" name="chore[tag]" value="<%= chore.tag %>" list="chore-form-tag-options" placeholder="Home">
+    <label>Groups</label>
+    <input type="text" name="chore[tags_csv]" value="<%= chore.tags.join(", ") %>" list="chore-form-tag-options" placeholder="Home, Morning">
     <datalist id="chore-form-tag-options">
       <% Chore.where(chore_household_id: chore.chore_household_id).tag_names.each do |name| %>
         <option value="<%= name %>"></option>

@@ -170,6 +170,8 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const bbListEl = root.querySelector("[data-board-buttons-list]");
   const bbFormEl = root.querySelector("[data-board-button-form]");
   const bbLabelEl = root.querySelector("[data-bb-label]");
+  // The groups a new/edited button belongs to, comma-separated.
+  const bbTagsEl = root.querySelector("[data-bb-tags]");
   // Completes: a type-to-find picker. The text field searches; the hidden input
   // holds the chosen chore id; the results box is the dropdown.
   const bbChoreSearchEl = root.querySelector("[data-bb-chore-search]");
@@ -190,7 +192,15 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   const tagUrl = app.dataset.boardTagUrl;
   const tagsUrl = app.dataset.boardTagsUrl;
 
-  let tag = app.dataset.boardTag || "";
+  // The groups this board watches. Several, matched as "any": a chore, routine
+  // or button in ANY of them appears here.
+  let tags = [];
+  try {
+    tags = JSON.parse(app.dataset.boardTags || "[]");
+  } catch (e) {
+    tags = [];
+  }
+  const tagLabel = () => (tags.length ? tags.join(", ") : "Pick groups");
   let items = [];
   // Presses the server hasn't confirmed, by item id. A count rather than a
   // flag: a chore with a target of three gets pressed three times in a row and
@@ -217,16 +227,16 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   function paintEmpty() {
     if (!emptyEl) return;
 
-    // Two different kinds of nothing. No tag is a screen nobody has pointed at
-    // a group yet, and the fix is a setting; an empty group means the day is
+    // Two different kinds of nothing. No groups is a screen nobody has pointed
+    // at a group yet, and the fix is a setting; empty groups means the day is
     // actually clear, which is the good one.
-    if (!tag) {
+    if (!tags.length) {
       emptyEl.textContent =
         "This screen isn't looking after anything yet — pick a group below.";
     } else if (items.length === 0) {
-      emptyEl.textContent = `Nothing left in ${tag} today.`;
+      emptyEl.textContent = `Nothing left in ${tags.join(", ")} today.`;
     }
-    emptyEl.hidden = Boolean(tag) && items.length > 0;
+    emptyEl.hidden = tags.length > 0 && items.length > 0;
   }
 
   // Whether a press on this id is still in flight / came back failed. Shared by
@@ -527,7 +537,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   // serializer), so there is nothing to filter here and triggers come back on
   // the set instead of being dropped.
   async function resync() {
-    if (!itemsUrl || !tag) return;
+    if (!itemsUrl || !tags.length) return;
 
     const conversationId = conversationIdFn ? conversationIdFn() : null;
     const url = conversationId
@@ -816,7 +826,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
           btn.className = "byte-board-tag-option";
           btn.dataset.boardPickTag = name;
           btn.textContent = name;
-          if (name.toLowerCase() === tag.toLowerCase())
+          if (tags.some((t) => t.toLowerCase() === name.toLowerCase()))
             btn.dataset.current = "true";
           tagListEl.appendChild(btn);
         });
@@ -832,24 +842,32 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     }
   }
 
-  async function pickTag(name) {
+  // Add or remove one group from the set this board watches. The picker stays
+  // open so several can be toggled in a row — each toggle is its own save, so
+  // the board reflects the full set the moment it comes back.
+  async function toggleTag(name) {
     const conversationId = conversationIdFn ? conversationIdFn() : null;
     if (!tagUrl || !conversationId) return;
+
+    const has = tags.some((t) => t.toLowerCase() === name.toLowerCase());
+    const next = has
+      ? tags.filter((t) => t.toLowerCase() !== name.toLowerCase())
+      : tags.concat(name);
 
     try {
       const data = await apiCall(tagUrl, "PATCH", {
         conversation_id: conversationId,
-        tag: name,
+        tags: next,
       });
-      tag = data?.chore_tag || "";
-      if (tagToggleEl) tagToggleEl.textContent = tag || "Pick a group";
-      tagToggleEl?.setAttribute("aria-expanded", "false");
+      tags = Array.isArray(data?.chore_tags) ? data.chore_tags : [];
+      if (tagToggleEl) tagToggleEl.textContent = tagLabel();
       items = [];
       paint();
       resync();
-      // The group just changed under the manager, so its buttons and the chore
-      // it files them against have too - repaint them rather than leaving the
-      // previous group's showing.
+      // The watched groups just changed under the manager, so which buttons it
+      // shows and the chore it files a new one against have too - re-mark the
+      // picker and repaint the buttons rather than leaving the old set showing.
+      paintTagPicker();
       resetButtonForm();
       paintButtons();
     } catch (e) {
@@ -937,6 +955,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     if (!bbFormEl) return;
     if (bbIdEl) bbIdEl.value = "";
     if (bbLabelEl) bbLabelEl.value = "";
+    // A new button defaults to the groups the board is watching — the common
+    // case is a button for the board you're on.
+    if (bbTagsEl) bbTagsEl.value = tags.join(", ");
     if (bbColorEl) bbColorEl.value = "#16A34A";
     if (bbChoreSearchEl) bbChoreSearchEl.value = "";
     if (bbChoreIdEl) bbChoreIdEl.value = "";
@@ -957,6 +978,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   function editButton(button) {
     if (bbIdEl) bbIdEl.value = String(button.id);
     if (bbLabelEl) bbLabelEl.value = button.label || "";
+    if (bbTagsEl) bbTagsEl.value = (button.tags || []).join(", ");
     if (bbColorEl) bbColorEl.value = button.color || "#16A34A";
     if (bbChoreSearchEl) bbChoreSearchEl.value = button.chore_name || "";
     if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
@@ -969,13 +991,13 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   async function paintButtons() {
     if (!bbSectionEl) return;
 
-    // A button has to belong to a group, so the manager only appears once one is
-    // picked.
-    bbSectionEl.hidden = !tag;
-    if (!tag) return;
+    // A button has to belong to a group, so the manager only appears once the
+    // board watches at least one.
+    bbSectionEl.hidden = !tags.length;
+    if (!tags.length) return;
 
     try {
-      const data = await apiCall(`${BUTTONS_URL}?tag=${encodeURIComponent(tag)}`, "GET");
+      const data = await apiCall(`${BUTTONS_URL}?tags=${encodeURIComponent(tags.join(","))}`, "GET");
       choreOptions = Array.isArray(data?.chores) ? data.chores : [];
       if (data?.me != null) meId = data.me;
       // Keep an editing selection; otherwise default a fresh form to crediting me.
@@ -1046,7 +1068,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     }
 
     const payload = {
-      tag,
+      tags_csv: bbTagsEl?.value ?? tags.join(", "),
       label: bbLabelEl?.value.trim(),
       color: bbColorEl?.value,
       chore_id: bbChoreIdEl.value,
@@ -1255,7 +1277,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
   if (tagListEl) {
     tagListEl.addEventListener("click", (e) => {
       const pick = e.target.closest("[data-board-pick-tag]");
-      if (pick) pickTag(pick.dataset.boardPickTag);
+      if (pick) toggleTag(pick.dataset.boardPickTag);
     });
   }
 

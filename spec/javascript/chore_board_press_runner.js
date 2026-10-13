@@ -103,7 +103,7 @@ root.dataset.byteBoard = "";
 root.append(pad, empty);
 
 const app = fakeEl("div");
-app.dataset.boardTag = "Home";
+app.dataset.boardTags = JSON.stringify(["Home"]);
 app.dataset.boardItemsUrl = "/byte/board/items";
 app.dataset.choreCheerUrl = "/byte/chore_cheer";
 app.dataset.boardItems = JSON.stringify([
@@ -113,7 +113,7 @@ app.dataset.boardItems = JSON.stringify([
     short_name: "Vacuum",
     icon: "🧹",
     icon_kind: "emoji",
-    tag: "Home",
+    tags: ["Home"],
     target_count: 3,
     progress_count: 0,
     dismissed: false,
@@ -127,7 +127,7 @@ app.dataset.boardItems = JSON.stringify([
     short_name: "Dishes",
     icon: "🍽",
     icon_kind: "emoji",
-    tag: "Home",
+    tags: ["Home"],
     target_count: 1,
     progress_count: 0,
     dismissed: false,

@@ -109,10 +109,10 @@ RSpec.describe "Chore dismiss", type: :request do
 
   describe "GET /chores/tags" do
     it "lists what the household has filed things under, and nothing else" do
-      chore.update!(tag: "Home")
-      create(:chore, created_by_user: user, name: "Water plants", tag: "Pets")
+      chore.update!(tags: ["Home"])
+      create(:chore, created_by_user: user, name: "Water plants", tags: ["Pets"])
       create(:chore, created_by_user: user, name: "Untagged")
-      create(:chore, name: "Someone else's", tag: "Theirs")
+      create(:chore, name: "Someone else's", tags: ["Theirs"])
 
       get "/chores/tags"
 

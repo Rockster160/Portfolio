@@ -177,6 +177,30 @@ class JobApplication < ApplicationRecord
     JobNote::DEPTH_LABELS[engagement_depth]
   end
 
+  # How many times anybody actually said something here. Not a count of notes,
+  # and three kinds of row are deliberately not an exchange:
+  #
+  #   * an `acknowledged` receipt is a machine answering a form
+  #   * THE SAME WORDS TWICE ARE ONE SEND. An ATS re-sends its own template on
+  #     a timer, and two identical "we are still waiting on your availability"
+  #     nudges a day apart are one thing being said. Compared on the body with
+  #     case and whitespace flattened, and only where there IS a body - plenty
+  #     of beats carry nothing but their tag, and each of those is its own.
+  #   * the booking cluster counts ONCE however often it moves. A cancel and a
+  #     rebook of the same meeting is a reschedule, not two exchanges. The
+  #     trade is that a genuine second round is absorbed into the first, which
+  #     is the cheaper way to be wrong about a number read at a glance.
+  #
+  # Two mails that merely open with the same template line still count twice:
+  # the first availability ask and the one six days later saying the calendar
+  # filled up are the same opening and different asks.
+  def interaction_count
+    said = notes.reject(&:acknowledged?)
+    booking, rest = said.partition { |note| note.scheduled? || note.cancelled? }
+
+    rest.uniq { |note| same_send_key(note) }.size + (booking.empty? ? 0 : 1)
+  end
+
   # When anything last happened here, for sorting and for saying how long it
   # has been quiet.
   #
@@ -237,6 +261,12 @@ class JobApplication < ApplicationRecord
   end
 
   private
+
+  # What makes two beats the same send. A beat with no body is only ever
+  # itself, so it keys on the object and never folds in with another.
+  def same_send_key(note)
+    note.body.to_s.downcase.gsub(/\s+/, " ").strip.presence || "self:#{note.object_id}"
+  end
 
   def normalize_fields
     self.company = company.to_s.strip
