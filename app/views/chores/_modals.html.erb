@@ -171,8 +171,15 @@
       </div>
 
       <%# ----- Repeats ----- %>
-      <div class="form-section" data-recurring-only>
+      <%# Shown for recurring chores AND single tasks. For a single task the
+        schedule doesn't repeat the chore — it re-surfaces it onto Today each
+        matching day until it's completed once (then it archives like any
+        finished single task). The hint below says so when Single Task is on. %>
+      <div class="form-section" data-schedule-section>
         <label class="field-label">Repeats</label>
+        <span class="field-hint hidden" data-single-task-only>
+          Keeps bringing this back to the top of Today each scheduled day until you complete it once.
+        </span>
         <div class="pill-group" data-pill-group="freq">
           <button type="button" class="pill active" data-value="never">Never</button>
           <button type="button" class="pill" data-value="daily">Daily</button>

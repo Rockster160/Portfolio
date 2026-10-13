@@ -48,6 +48,22 @@ RSpec.describe ChoreDailyResetWorker do
     expect(untouched_oneoff.reload.archived?).to be(false)
   end
 
+  # A single task carrying a recurrence stays on the list day after day until
+  # it's completed once; completion then finishes it like any one-off, so the
+  # next reset archives it and it stops re-surfacing.
+  it "archives a completed single task that carried a recurrence" do
+    today = ChoreDay.current
+    scheduled = create(
+      :chore, created_by_user: user, one_off: true, reward_pebbles: 3,
+      recurrence: { freq: :daily }
+    )
+    create(:chore_completion, user: user, chore: scheduled, day_key: today - 1)
+
+    described_class.new.perform
+
+    expect(scheduled.reload.archived?).to be(true)
+  end
+
   describe "#clear_completed_marked_due!" do
     it "clears marked_due_at on chores whose most recent completion postdates the mark" do
       marked_at = 6.hours.ago

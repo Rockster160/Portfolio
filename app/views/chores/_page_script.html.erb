@@ -3172,7 +3172,13 @@
     // an existing single-task chore with no starts_on doesn't silently
     // stamp today's date into the form and save it back as a date the
     // chore never had.
-    editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", isSingleTask()));
+    const single = isSingleTask();
+    // Cooldown and other repeat-forever-only rows stay hidden for a single
+    // task; the schedule block (data-schedule-section) stays visible so the
+    // task can carry a re-surfacing recurrence. The single-task-only hint
+    // explains what the schedule means in that mode.
+    editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", single));
+    editForm.querySelectorAll('[data-single-task-only]').forEach(el => el.classList.toggle("hidden", !single));
   }
   // Fill starts_on with today's date IFF it's currently blank. Called
   // when the user picks a recurrence freq so the schedule anchor isn't
@@ -4698,10 +4704,15 @@
 
     let recurrence = {};
     let thresholdSeconds = null;
+    // Cooldown is a repeat-forever concept — a single task completes once, so
+    // it never carries one. The recurrence, on the other hand, is built for
+    // both: on a single task it drives re-surfacing until done.
     if (!oneOff) {
-      const freq = getField("freq") || "never";
       thresholdSeconds = parseInt(editForm.querySelector('[data-field="threshold_seconds"]')?.value, 10);
       if (!Number.isFinite(thresholdSeconds) || thresholdSeconds === 0) thresholdSeconds = null;
+    }
+    {
+      const freq = getField("freq") || "never";
       if (freq !== "never") {
         recurrence.freq = freq;
         if (freq === "weekly") recurrence.by_day = collectWeekdays();

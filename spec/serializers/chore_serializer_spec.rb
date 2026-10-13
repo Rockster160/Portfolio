@@ -383,6 +383,53 @@ RSpec.describe ChoreSerializer, type: :serializer do
       expect(render(ch)[:due_today]).to be(false)
     end
 
+    # A single task carrying a recurrence rides the schedule (re-surfaces on
+    # matching days, carries over between them) until it's completed once,
+    # rather than sitting on Today unconditionally like a plain one-off.
+    describe "single task carrying a recurrence" do
+      it "daily: due today and surfaces its due date as today while incomplete" do
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          recurrence: { freq: :daily }
+        )
+        json = render(ch)
+        expect(json[:today_visible]).to be(true)
+        expect(json[:due_today]).to be(true)
+        expect(json[:scheduled_due_on]).to eq(today.iso8601)
+      end
+
+      it "daily: stays visible the day it's completed (archive happens at next reset)" do
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          recurrence: { freq: :daily }
+        )
+        create(
+          :chore_completion, chore: ch, user: user,
+          completed_at: 1.hour.ago, day_key: today
+        )
+        expect(render(ch)[:today_visible]).to be(true)
+      end
+
+      it "weekly: due today on its weekday" do
+        key = AgendaSchedule::WEEKDAY_KEYS[today.wday]
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          recurrence: { freq: :weekly, by_day: [key] }, starts_on: today - 7
+        )
+        expect(render(ch)[:due_today]).to be(true)
+      end
+
+      it "weekly: carries over (visible, not due) between scheduled days" do
+        key = AgendaSchedule::WEEKDAY_KEYS[(today - 1).wday]
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          recurrence: { freq: :weekly, by_day: [key] }, starts_on: today - 8
+        )
+        expect(render(ch)[:today_visible]).to be(true)
+        expect(render(ch)[:due_today]).to be(false)
+      end
+    end
+
     it "due_today: relative chore is due today on its due_on date, overdue after" do
       # Last completed exactly `interval` days ago → due_on == today
       on_due_day = create(

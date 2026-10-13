@@ -288,8 +288,10 @@ class ChoreListSync
     # today buys neither of them back in. A `freq: daily` chore is due every
     # single day, so reading dueness first put the whole standing routine at the
     # top of the list — the one thing this was asked not to carry. The pin and
-    # the recurrence each answer on their own.
-    return false if row[:on_dailies] || daily?(row)
+    # the recurrence each answer on their own. A single task carrying a daily
+    # recurrence is the exception: its schedule exists precisely to keep it on
+    # the list until it's completed once, so the daily rule doesn't evict it.
+    return false if row[:on_dailies] || (daily?(row) && !row[:one_off])
     return true  if row[:due_today]
     return false unless row[:today_visible] && row[:scheduled_due_on].present?
 

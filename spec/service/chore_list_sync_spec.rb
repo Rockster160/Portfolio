@@ -94,6 +94,17 @@ RSpec.describe ChoreListSync do
       expect(item_names).not_to include("Kitty Litter")
     end
 
+    # A single task carrying a daily recurrence is the exception to the rule
+    # above: the schedule exists precisely to keep it on the list until it's
+    # completed once, so the daily rule doesn't evict it.
+    it "keeps a single task carrying a daily recurrence" do
+      chore!("Renew Registration", one_off: true, recurrence: { freq: :daily })
+
+      described_class.push(user)
+
+      expect(item_names).to include("Renew Registration")
+    end
+
     it "leaves off a chore that is on Today but not due" do
       chore!("Tidy Desk", show_on_today_view: :always)
 

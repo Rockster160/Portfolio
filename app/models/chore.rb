@@ -331,6 +331,15 @@ class Chore < ApplicationRecord
     freq != :never
   end
 
+  # A single task carrying a recurrence: the schedule re-surfaces it onto
+  # Today each matching day until it's completed once, after which it
+  # archives like any completed one-off. Distinguished from a plain
+  # recurring chore (which never finishes) and a plain one-off (no
+  # schedule at all).
+  def scheduled_one_off?
+    one_off? && scheduled?
+  end
+
   def relative?
     freq == :relative
   end

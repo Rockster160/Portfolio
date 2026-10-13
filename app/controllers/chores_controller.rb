@@ -614,10 +614,11 @@ class ChoresController < ApplicationController
       seen << c.id
     end
 
-    # Second pass: recurring chores follow their schedule. One-offs
-    # without a marked due date have no future surfacing rule —
-    # they're either visible on Today already or sitting in Grid.
-    candidates = @chores.reject { |c| c.one_off || c.show_on_today_view.to_sym == :never }
+    # Second pass: recurring chores follow their schedule. A plain one-off
+    # without a marked due date has no future surfacing rule — it's either
+    # visible on Today already or sitting in Grid. A single task carrying a
+    # recurrence does follow its schedule, so it stays a candidate.
+    candidates = @chores.reject { |c| (c.one_off && !c.scheduled?) || c.show_on_today_view.to_sym == :never }
     ((@day + 1)..(@day + 7)).each do |d|
       candidates.each do |c|
         next unless c.scheduled?

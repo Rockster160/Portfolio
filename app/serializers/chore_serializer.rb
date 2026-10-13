@@ -150,7 +150,7 @@ class ChoreSerializer
   # (e.g. today_always with no marked override) so they sort to the bottom.
   def scheduled_due_on
     return ChoreDay.current(viewer, at: chore.marked_due_at) if chore.marked_due?
-    return chore.starts_on if chore.one_off
+    return chore.starts_on if chore.one_off && !chore.scheduled?
     return nil unless chore.scheduled?
 
     last_before = last_completion_before_today&.day_key
@@ -454,7 +454,17 @@ class ChoreSerializer
     if chore.marked_due?
       return chore.marked_due_at < ChoreDay.ends_at(day, viewer)
     end
-    return true  if chore.one_off
+
+    # A single task with a recurrence rides the schedule like any
+    # recurring chore — surfaced on matching days and carried over until
+    # done — rather than sitting on Today unconditionally. The
+    # show_on_today_view field isn't exposed for single tasks, so this
+    # is treated as `when_scheduled`. A plain one-off still shows always.
+    if chore.one_off
+      return true unless chore.scheduled?
+
+      return scheduled_or_carried?(last_completion_before_today&.day_key)
+    end
     return true  if chore.today_always?
     return false if chore.show_on_today_view.to_sym == :never
 
@@ -491,7 +501,10 @@ class ChoreSerializer
     # One-offs are "due today" only on their starts_on date. Without a
     # starts_on (or past it), they fall through to Scheduled (Hourglass)
     # rather than implying today is the intended day.
-    return chore.starts_on.present? && chore.starts_on == day if chore.one_off
+    # A single task with a recurrence falls through to the schedule's
+    # own strict due-today test below; a plain one-off is due only on its
+    # starts_on date.
+    return chore.starts_on.present? && chore.starts_on == day if chore.one_off && !chore.scheduled?
     return false unless chore.scheduled?
 
     last_before = last_completion_before_today&.day_key
