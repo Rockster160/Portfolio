@@ -902,7 +902,7 @@ class ByteController < ApplicationController
     chores = current_user.accessible_chores.tagged(tags)
       .order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
     ctx = ChoreSerializerContext.for_user(current_user, day: day)
-    chore_items = board_chores_by_due(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
+    chore_items = board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
 
     trigger_items = current_user.buddy_routines.for_board(tags).map(&:board_item)
     credit_items  = board_credit_buttons.for_board(tags).map(&:board_item)
@@ -910,14 +910,26 @@ class ByteController < ApplicationController
     chore_items + trigger_items + credit_items
   end
 
-  # Chores on a board read top-to-bottom by when they came due: today first,
-  # then the most recently missed, oldest last. `scheduled_due_on` is the same
-  # effective due date the Today page sorts on. Chores with no due frame
-  # (always-shown, no schedule) keep their own order after the dated ones.
-  def board_chores_by_due(items)
-    dated, undated = items.partition { |c| c[:scheduled_due_on].present? }
-    sorted = dated.sort_by.with_index { |c, i| [-Date.iso8601(c[:scheduled_due_on]).jd, i] }
-    sorted + undated
+  # Chores on a board read in the Today page's order, so a chore sits in the same
+  # place out here as everywhere else it appears. Due-today first, then the
+  # carryovers; within each, higher priority wins and the manual Grid order
+  # (sort_order, which is the order they arrive in) breaks ties, so chores grouped
+  # together stay together. Carryovers then fall by how recently they were due,
+  # the ones with no derived due date last.
+  def board_chores_ordered(items)
+    due, rest = items.partition { |c| c[:due_today] }
+    sorted_due = due.sort_by.with_index { |c, i| [-board_priority_rank(c), i] }
+    sorted_rest = rest.sort_by.with_index { |c, i|
+      date = c[:scheduled_due_on]
+      [-board_priority_rank(c), date.present? ? 0 : 1, date.present? ? -Date.iso8601(date).jd : 0, i]
+    }
+    sorted_due + sorted_rest
+  end
+
+  # none → 0 … critical → 4, the same ladder the Today page ranks priority by.
+  # Unknown or missing reads as normal, matching the client's default.
+  def board_priority_rank(item)
+    %w[none low normal high critical].index(item[:priority].to_s) || 2
   end
 
   # The groups a board can watch: chore and credit-button tags are household-wide,

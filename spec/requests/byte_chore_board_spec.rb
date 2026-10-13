@@ -78,6 +78,20 @@ RSpec.describe "Byte chore board", type: :request do
       expect(board_chores.pluck("name")).to eq(["Today", "Yesterday", "Older"])
     end
 
+    # Due-today chores keep the manual Grid order among themselves, so chores a
+    # person grouped together stay together — the way they read on Today, where
+    # the not-due chores between them drop out. Carryovers follow, by recency.
+    it "keeps due-today chores in Grid order, with carryovers after them" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      create(:chore, created_by_user: user, name: "Alpha", tags: ["Home"], sort_order: 1, marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "MidCarry", tags: ["Home"], sort_order: 2, marked_due_at: 2.days.ago)
+      create(:chore, created_by_user: user, name: "Zeta", tags: ["Home"], sort_order: 3, marked_due_at: Time.current)
+
+      get "/board/#{thread.id}"
+
+      expect(board_chores.pluck("name")).to eq(["Alpha", "Zeta", "MidCarry"])
+    end
+
     # A board set before groups went plural keeps watching what it did, read off
     # the old single `chore_tag` key until it is next changed.
     it "still honours a board pointed at a group the old way" do
