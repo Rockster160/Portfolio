@@ -134,10 +134,19 @@ module Buddy
     # datetime otherwise - and the record itself decides which it's reading.
     def apply_time
       return unless record.is_a?(BuddyReminder)
+      return refuse_anchor_edit if record.anchored? && (schedule_touched? || edits[:at].present?)
       return move_recurrence if record.recurring? && schedule_touched?
 
       at = edits[:at].to_s.strip
       move_fire_at(at) if at.present?
+    end
+
+    # An anchored reminder's rule is the thing it hangs off, and writing a clock
+    # over the top would leave two answers to when it fires - the typed one, and
+    # the one the next propagation puts back. Said rather than ignored: a time
+    # field that quietly does nothing reads as a saved edit.
+    def refuse_anchor_edit
+      fail_with("that one goes off #{::Anchor.describe(record.anchor)}, so there's no time to move")
     end
 
     # Rescheduling a repeat recomputes its next firing, so it has to be reserved

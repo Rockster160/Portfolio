@@ -49,6 +49,7 @@ class JobApplicationsController < ApplicationController
   # application means scrolling past the history to find it.
   def show
     @notes = @job.notes.recent.to_a
+    @transcripts = @job.transcripts.to_a
     @note = @job.notes.new(occurred_at: Time.current)
     @merge_candidates = merge_candidates
   end

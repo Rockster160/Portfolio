@@ -206,9 +206,12 @@ Buddy::Tools.register(
       }
     end
   },
-  # Level 3, same as add_job_note: a whole new row on the board is more than a
-  # beat on one, so it waits to be tapped rather than arriving pre-checked.
-  level:       3,
+  # Level 2, same as add_job_note: the row is opened on arrival and drawn
+  # pre-checked. Undoing destroys it and takes its first beat with it, so a
+  # company that turns out to be the board host rather than the employer costs
+  # an untick - and a row that was never opened costs the application itself,
+  # which is nowhere on the board until some mail about it is filed.
+  level:       2,
   # One particular company on one particular day. Replaying it next month would
   # make a duplicate of something that is by then already there.
   routinable:  false,

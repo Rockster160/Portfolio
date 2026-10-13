@@ -1177,7 +1177,8 @@ module Buddy
             not_today:    (true unless r.fire_at.in_time_zone(tz).to_date == today),
           }.compact
         }
-        live + already_rang(conversation, now) + switched_off(BuddyReminder, conversation)
+        live + standing(conversation) + already_rang(conversation, now) +
+          switched_off(BuddyReminder, conversation)
       rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: conversation.user)
         []
@@ -1219,6 +1220,27 @@ module Buddy
       # TRUE and "I cancelled it" is also true, and with no way to
       # hold both, the reply argued about whether it was a reminder or a watch.
       # Marked `status: off` so the difference is a fact rather than an absence.
+      # A standing rule with nothing on it yet - "half an hour before any
+      # interview", set on a week with no interview booked. It has no `fire_at`
+      # at all, so the 48-hour window above cannot see it, and not seeing one is
+      # exactly how a second copy of the same rule gets set on top of it.
+      #
+      # No time on the row, because there isn't one. `rule` is what it's waiting
+      # for, and that is the only true thing to say about when it goes off.
+      def standing(conversation)
+        BuddyReminder.pending.where(byte_conversation_id: conversation.id, fire_at: nil)
+          .limit(10).map { |r|
+            {
+              id:     r.id,
+              body:   r.body.to_s.first(120),
+              rule:   ::Anchor.describe(r.anchor),
+              status: :standing,
+            }.compact
+          }
+      rescue StandardError
+        []
+      end
+
       def switched_off(klass, conversation)
         klass.where(byte_conversation_id: conversation.id, fired_at: nil)
           .where.not(cancelled_at: nil)

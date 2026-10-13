@@ -211,6 +211,25 @@ class User < ApplicationRecord
     self.byte_prefs = byte_prefs.to_h.merge("affirmation" => on.present?)
   end
 
+  # Whether a wall surface rings and shows Buddy's timers. The board and the
+  # kiosk each hold their own switch, so a chore board can be made quiet without
+  # touching the chat - which is the home of the timers and always shows them.
+  # Absent means on, the behaviour before the switch existed.
+  BYTE_TIMER_ALERT_SURFACES = %w[board kiosk].freeze
+
+  def byte_timer_alerts?(surface)
+    byte_prefs.to_h["timer_alerts"].to_h[surface.to_s] != false
+  end
+
+  def set_byte_timer_alerts(surface, value)
+    key = surface.to_s
+    return unless BYTE_TIMER_ALERT_SURFACES.include?(key)
+
+    on = ActiveModel::Type::Boolean.new.cast(value).present?
+    current = byte_prefs.to_h["timer_alerts"].to_h
+    self.byte_prefs = byte_prefs.to_h.merge("timer_alerts" => current.merge(key => on))
+  end
+
   # Icons this person has most recently reacted with, newest first. Raw — see
   # Buddy::Reactions.recents_for for the list the picker row actually shows,
   # which pads this out with sensible defaults.

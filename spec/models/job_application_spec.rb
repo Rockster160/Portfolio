@@ -293,56 +293,82 @@ RSpec.describe JobApplication do
       expect(standing.map(&:company)).to eq(%w[iCapital Bluestaq Neighbor])
     end
 
-    # The "gone back and forth" half of a standing. Not a count of notes.
-    describe "counting what was actually said" do
-      it "leaves out the machine's receipt" do
+    # The "gone back and forth" half of a standing: ROUND TRIPS, not mails.
+    describe "counting the round trips" do
+      it "counts nothing off his own moves or a machine's receipt" do
         job.notes.create!(tag: :applied, occurred_at: 5.days.ago)
         job.notes.create!(tag: :acknowledged, occurred_at: 5.days.ago)
-        job.notes.create!(tag: :heard_back, body: "Luke wrote", occurred_at: 4.days.ago)
+        job.notes.create!(tag: :responded, body: "Nudged them", occurred_at: 4.days.ago)
 
-        expect(job.reload.interaction_count).to eq(2)
+        expect(job.reload.interaction_count).to eq(0)
       end
 
-      # An ATS re-sends its own template on a timer. Two identical nudges a day
-      # apart are one thing being said.
-      it "counts the same words arriving twice as one send" do
-        nudge = "Hi Rocco,\n\nWe are still waiting on your availability."
-        again = "  hi rocco,\n we ARE still   waiting on your availability. "
-        job.notes.create!(tag: :note, body: nudge, occurred_at: 3.days.ago)
-        job.notes.create!(tag: :note, body: again, occurred_at: 2.days.ago)
+      # The ask, the times he sent back and the confirmation that follows are
+      # one thing happening, however many rows it leaves behind.
+      it "counts the whole exchange that produces a booking as one" do
+        job.notes.create!(tag: :availability, occurred_at: 5.days.ago)
+        job.notes.create!(tag: :responded, body: "Sent availability", occurred_at: 4.days.ago)
+        job.notes.create!(tag: :scheduled, occurred_at: 3.days.ago, follow_up_at: 2.days.from_now)
+        job.notes.create!(tag: :note, body: "You are confirmed", occurred_at: 3.days.ago)
 
         expect(job.reload.interaction_count).to eq(1)
       end
 
-      it "keeps two mails that merely open the same way" do
-        first  = "Excited to move you forward. Pick a week."
-        second = "Excited to move you forward. My calendar filled up."
-        job.notes.create!(tag: :availability, body: first, occurred_at: 6.days.ago)
-        job.notes.create!(tag: :availability, body: second, occurred_at: 1.day.ago)
+      it "counts the booking and the call it booked separately" do
+        job.notes.create!(tag: :availability, occurred_at: 6.days.ago)
+        job.notes.create!(tag: :scheduled, occurred_at: 5.days.ago, follow_up_at: 3.days.ago)
+        job.notes.create!(tag: :recruiter_call, occurred_at: 3.days.ago)
 
         expect(job.reload.interaction_count).to eq(2)
       end
 
-      # Several beats carry nothing but their tag, and folding those together
-      # would count a whole timeline as one exchange.
-      it "never folds two beats together just because neither has a body" do
-        job.notes.create!(tag: :availability, occurred_at: 3.days.ago)
-        job.notes.create!(tag: :responded, occurred_at: 2.days.ago)
-        job.notes.create!(tag: :take_home, occurred_at: 1.day.ago)
-
-        expect(job.reload.interaction_count).to eq(3)
-      end
-
       # A cancel and a rebook of the same meeting is a reschedule.
       it "counts the booking once however often it moves" do
-        job.notes.create!(tag: :scheduled, occurred_at: 5.days.ago, follow_up_at: 4.days.ago)
+        job.notes.create!(tag: :scheduled, occurred_at: 5.days.ago, follow_up_at: 1.day.ago)
         job.notes.create!(tag: :cancelled, occurred_at: 3.days.ago)
         job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 3.days.from_now)
 
         expect(job.reload.interaction_count).to eq(1)
       end
 
-      it "says nothing about a booking that never happened" do
+      # Two of these arrive for one meeting all the time: the organizer's
+      # confirmation, then the correction half an hour later.
+      it "counts a re-confirmation of a meeting still ahead of us as nothing" do
+        job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 4.days.from_now)
+        job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 5.days.from_now)
+
+        expect(job.reload.interaction_count).to eq(1)
+      end
+
+      # The one that matters for a real board: the screen happened, nobody
+      # wrote it up, and the second round still has to count.
+      it "counts the next booking once the last meeting's time has passed" do
+        job.notes.create!(tag: :scheduled, occurred_at: 8.days.ago, follow_up_at: 6.days.ago)
+        job.notes.create!(tag: :availability, occurred_at: 2.days.ago)
+        job.notes.create!(tag: :scheduled, occurred_at: 1.day.ago, follow_up_at: 3.days.from_now)
+
+        expect(job.reload.interaction_count).to eq(2)
+      end
+
+      it "counts homework and an offer as rounds of their own" do
+        job.notes.create!(tag: :take_home, occurred_at: 4.days.ago)
+        job.notes.create!(tag: :offer, occurred_at: 1.day.ago)
+
+        expect(job.reload.interaction_count).to eq(2)
+      end
+
+      # Reminders, calendar confirmations and an ATS re-sending its own
+      # template all land as plain notes, and none of them is an exchange.
+      it "counts nothing off the notes a timeline collects" do
+        nudge = "Still waiting on your availability"
+        job.notes.create!(tag: :availability, occurred_at: 4.days.ago)
+        job.notes.create!(tag: :note, body: nudge, occurred_at: 3.days.ago)
+        job.notes.create!(tag: :note, body: nudge, occurred_at: 2.days.ago)
+
+        expect(job.reload.interaction_count).to eq(1)
+      end
+
+      it "counts an exchange nothing has come of yet as one round trip" do
         job.notes.create!(tag: :heard_back, body: "Luke wrote", occurred_at: 1.day.ago)
 
         expect(job.reload.interaction_count).to eq(1)

@@ -1,0 +1,116 @@
+<%= meta_title "#{@transcript.label} — #{@job.company}" %>
+<%= meta_description "Transcript — #{@job.company}." %>
+
+<div class="wide-container interview-back-row">
+  <%= link_to "← #{@job.company}", interview_path(@job), class: :btn %>
+</div>
+
+<%# ONE FORM OVER THE WHOLE PAGE.
+   Naming a speaker and moving a turn onto the right one are the same job at
+   two scales, and both are done while reading: you recognise who Speaker 3 is
+   four minutes in, and you spot the handover the recorder missed a paragraph
+   later. Two forms would mean saving, losing your place, and scrolling back. %>
+<div class="wide-container interviews-page transcript-page"
+     style="--job-color: <%= @job.color %>;">
+  <div class="app-card-container">
+    <div class="app-card-title">
+      <div class="job-identity">
+        <div class="job-identity-names">
+          <%= @transcript.label %>
+          <div class="subtitle">
+            <%= @job.company %><%= " · #{@job.role}" if @job.role.present? %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-card-body">
+      <div class="app-card-inner">
+        <div class="transcript-meta-row">
+          <span><%= pluralize(@transcript.turns.size, "turn") %></span>
+          <% if @transcript.spoken_minutes %>
+            <span><%= @transcript.spoken_minutes %> minutes</span>
+          <% end %>
+          <% if @transcript.occurred_at %>
+            <span><%= interview_day(@transcript.occurred_at) %></span>
+          <% end %>
+          <% if @transcript.file.attached? %>
+            <%= link_to "the file as uploaded",
+                  rails_blob_path(@transcript.file, disposition: "attachment") %>
+          <% end %>
+          <%= link_to "Delete", interview_transcript_path(@job, @transcript),
+                method: :delete, class: "danger-link",
+                data: { confirm: "Delete this transcript? The file goes with it." } %>
+        </div>
+
+        <%= form_with url: interview_transcript_path(@job, @transcript), method: :patch,
+              local: true, class: "transcript-form" do %>
+
+          <%# Open until somebody has been named, because until then every
+             bubble on the page is headed `Speaker 2` and the conversation
+             cannot be followed. Once they have names it collapses out of the
+             way — it is a thing you do once. %>
+          <details class="job-details transcript-speakers"
+                   <%= "open" if @transcript.speakers.blank? %>>
+            <summary>Who was speaking</summary>
+            <p class="field-hint">
+              The recorder guesses at these and gets some of them wrong. Name each
+              one here, tick the one that is you, and then fix any individual turn
+              it put on the wrong person using the picker on the turn itself.
+            </p>
+
+            <ul class="speaker-rows">
+              <% @transcript.labels.each do |label| %>
+                <li class="speaker-row">
+                  <span class="speaker-raw"><%= label %></span>
+                  <%= text_field_tag "speakers[#{label}][name]",
+                        @transcript.speakers.dig(label, "name"),
+                        placeholder: "Who this was" %>
+                  <label class="speaker-mine">
+                    <%= hidden_field_tag "speakers[#{label}][me]", "0" %>
+                    <%= check_box_tag "speakers[#{label}][me]", "1",
+                          @transcript.mine?(label) %>
+                    This is me
+                  </label>
+                  <span class="speaker-hint">
+                    <%= pluralize(@transcript.turn_count(label), "turn") %> ·
+                    “<%= @transcript.first_words(label) %>”
+                  </span>
+                </li>
+              <% end %>
+            </ul>
+          </details>
+
+          <ol class="transcript-turns">
+            <% @transcript.turns.each_with_index do |turn, index| %>
+              <li class="tt-turn <%= transcript_side(@transcript, turn) %>">
+                <div class="tt-head">
+                  <span class="tt-name"><%= @transcript.name_for(turn["speaker"]) %></span>
+                  <% if transcript_clock(turn["at"]) %>
+                    <span class="tt-at"><%= transcript_clock(turn["at"]) %></span>
+                  <% end %>
+                  <%# Hidden until the turn is hovered or the picker is focused:
+                     126 dropdowns down a page you are trying to READ is the
+                     page unreadable. %>
+                  <%= select_tag "turns[#{index}]",
+                        options_for_select(
+                          @transcript.speaker_options.map { |label|
+                            [@transcript.name_for(label), label]
+                          },
+                          turn["speaker"],
+                        ),
+                        class: "tt-move", title: "Move this turn onto somebody else" %>
+                </div>
+                <p class="tt-said"><%= turn["text"] %></p>
+              </li>
+            <% end %>
+          </ol>
+
+          <div class="transcript-save">
+            <%= submit_tag "Save speakers" %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</div>

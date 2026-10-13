@@ -186,13 +186,17 @@ RSpec.describe "Buddy job hunt tools" do
   end
 
   describe "add_job_note" do
-    # Prod 5759, and the reason this is the one job tool that must not write on
-    # arrival. He said Corporate Tools; the row that got settled as rejected was
-    # CSC Generation, because Corporate Tools was already closed and so wasn't
-    # on the visible board. At level 2 that wrote the moment it was said and
-    # the read-back was the only thing standing in the way.
-    it "waits for a tap instead of writing on arrival" do
-      expect(Buddy::Tools[:add_job_note][:level]).to eq(3)
+    # It writes on arrival and draws a row that can be unticked.
+    #
+    # Prod 5759 is why it did not for a while: he said Corporate Tools, and the
+    # row settled as rejected was CSC Generation, because Corporate Tools was
+    # already closed and so off the visible board. Both halves of that are shut
+    # in `applications_for` now - it searches the WHOLE board rather than the
+    # live rows, and a name matching several DIFFERENT companies returns nothing
+    # rather than the best of them. Picking a neighbour is no longer the likely
+    # outcome, and `undo` puts back the note, the status and the mail.
+    it "writes on arrival and draws a row that can be unticked" do
+      expect(Buddy::Tools[:add_job_note][:level]).to eq(2)
       expect(Buddy::Tools[:add_job_note][:auto]).to be(false)
     end
 

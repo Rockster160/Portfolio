@@ -61,6 +61,14 @@ cron_jobs = [
     cron:  every_minute,
   },
   {
+    # The supply side of every anchored reminder and cron. Five minutes rather
+    # than one: a feed is a no-op unless a time actually moved, and the only
+    # thing waiting on it is a rule that fires minutes-to-days out.
+    name:  "Feed Anchors",
+    class: "AnchorFeedWorker",
+    cron:  every_5_minutes,
+  },
+  {
     name:  "Send Due Agenda Notifications",
     class: "SendDueAgendaNotificationsWorker",
     cron:  every_minute,

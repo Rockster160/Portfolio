@@ -45,6 +45,7 @@ module Buddy
           body:       live[:cycle]["label"].to_s,
           at:         nil,
           recurring:  true,
+          anchored:   false,
           listener:   nil,
           custom:     false,
           templated:  false,
@@ -71,8 +72,12 @@ module Buddy
           # than the display ones - `label` is truncated and `sublabel` is
           # prose, and round-tripping either would quietly rewrite the reminder.
           body:       r.body.to_s,
-          at:         edit_time(r, user),
+          # An anchored one has no clock to hand back: its time is a
+          # consequence of the thing it hangs off, so the editor shows neither a
+          # when nor a repeat and `sublabel` carries the rule instead.
+          at:         (edit_time(r, user) unless r.anchored?),
           recurring:  r.recurring?,
+          anchored:   r.anchored?,
           # Both row types carry the same keys so the editor reads one shape.
           listener:   nil,
           custom:     false,
@@ -90,7 +95,10 @@ module Buddy
     # Handed over already normalized, so a row still written in the old shape
     # edits as though it had always been in the new one.
     def recurrence_fields(reminder)
-      return NO_RECURRENCE unless reminder.recurring?
+      # An anchored reminder repeats, but not on a rule of its OWN - its next
+      # time comes from the thing it hangs off, and a half-filled repeat editor
+      # over the top of that is an invitation to overwrite it.
+      return NO_RECURRENCE if reminder.anchored? || !reminder.recurring?
 
       rule = reminder.rule
       {
@@ -160,6 +168,7 @@ module Buddy
           # A watch has no clock to move - it fires on a condition.
           at:         nil,
           recurring:  false,
+          anchored:   false,
           # The condition, when it's a hand-written one. A named trigger
           # (deploy, arriving somewhere, finishing a chore) was assembled from
           # structured pieces rather than written, so there's no line to hand
@@ -190,11 +199,29 @@ module Buddy
     # are indistinguishable in the list, and "did that go to them or to me?"
     # has no answer short of opening it.
     def when_text(reminder, user)
-      base = reminder.recurring? ? recurrence_text(reminder) : Buddy::Clock.day_at(reminder.fire_at, zone: user.timezone)
-      base = "#{base}, #{stops_at(reminder)}" if stops_at(reminder)
+      base   = anchor_text(reminder, user)
+      base ||= reminder.recurring? ? recurrence_text(reminder) : Buddy::Clock.day_at(reminder.fire_at, zone: user.timezone)
+      base   = "#{base}, #{stops_at(reminder)}" if stops_at(reminder)
       return base if reminder.notify_user_id.blank?
 
       "to #{reminder.notify_user&.first_name || "someone else"} · #{base}"
+    end
+
+    # An anchored reminder says the RULE, with the time it currently works out
+    # to after it. The time alone was what the row showed, and "Thu 11:30am" is
+    # a true sentence about the wrong thing: it reads as a one-off on Thursday,
+    # where what is set is every interview there will ever be.
+    #
+    # And a standing rule with nothing booked has no time at all. That row still
+    # has to read as something that is set, or parking it would be the same
+    # silent failure as refusing it.
+    def anchor_text(reminder, user)
+      return nil unless reminder.anchored?
+
+      said = ::Anchor.describe(reminder.anchor) || reminder.anchor
+      return "#{said} · nothing on it yet" if reminder.fire_at.blank?
+
+      "#{said} · next #{Buddy::Clock.day_at(reminder.fire_at, zone: user.timezone)}"
     end
 
     # The rule that ENDS it, which lives on a separate watch and so was

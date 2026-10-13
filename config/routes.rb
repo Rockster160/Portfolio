@@ -88,6 +88,7 @@ Rails.application.routes.draw do
   post "/byte/font_scale" => "byte#font_scale",   as: :byte_font_scale
   post "/byte/pet_scale" => "byte#pet_scale",     as: :byte_pet_scale
   post "/byte/affirmation_action" => "byte#affirmation_action", as: :byte_affirmation_action
+  post "/byte/timer_alerts" => "byte#timer_alerts", as: :byte_timer_alerts
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
   post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
@@ -421,6 +422,8 @@ Rails.application.routes.draw do
   resources :interviews, controller: :job_applications, except: [:new, :edit] do
     post :merge, on: :member
     resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
+    resources :transcripts, controller: :job_transcripts,
+      only: [:create, :show, :update, :destroy]
   end
 
   resource :summoners_war do

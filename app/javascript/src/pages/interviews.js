@@ -7,6 +7,7 @@
 // common case, the status form keeps its submit button, and a job with no logo
 // shows its initials), so a failure here degrades rather than breaks.
 import { bindIconStack } from "../icon_stack";
+import { bindDropZones } from "../drop_zone";
 
 $(document).ready(function () {
   const page = document.querySelector("[data-interviews]")
@@ -285,4 +286,8 @@ $(document).ready(function () {
   }
 
   page.querySelectorAll("[data-logo-scope]").forEach(wireLogoControl)
+
+  // The transcript upload. See `drop_zone.js` — the file input underneath
+  // works on its own, so this only adds the gesture and the signposting.
+  bindDropZones(page)
 })

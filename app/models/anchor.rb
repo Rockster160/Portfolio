@@ -52,6 +52,62 @@ class Anchor < ApplicationRecord
     find_by(user_id: ::User.id(user), key: key.to_s.downcase.strip)
   end
 
+  # Make an expression usable and hand back the moment it resolves to now.
+  #
+  # This is what makes a class key self-serve: "half an hour before any
+  # interview" needs `agenda:interview` to exist, and nobody should have to
+  # create it by hand first. A domain the app feeds itself (see
+  # AnchorFeeder::FED_DOMAINS) gets its key created and stated on the spot.
+  #
+  # Any other domain is left to whoever feeds it - `sun:sunset` comes from a Jil
+  # task, and creating an empty one here would hand back a key that silently
+  # never resolves.
+  def self.subscribe!(expression, user:)
+    parsed = ::AnchorExpression.parse(expression)
+    raise ::ArgumentError, "#{expression} isn't an anchor expression" if parsed.nil?
+
+    key = parsed[:key]
+    if self.for(user, key).nil?
+      domain = key.split(":").first
+      raise ::ArgumentError, "#{key} isn't an anchor you have" unless ::AnchorFeeder::FED_DOMAINS.include?(domain)
+
+      create!(user: user, key: key)
+      ::AnchorFeeder.call(user)
+    end
+
+    resolve(expression, user: user)
+  end
+
+  # The expression as a person would say it: "30 minutes before the next
+  # interview", "when leaving comes round".
+  #
+  # Needed because an anchored schedule has a time only as a CONSEQUENCE. A
+  # standing rule with nothing booked has none at all, and a row that shows
+  # neither a time nor a rule reads as nothing being set.
+  #
+  # The three agenda edges are the only keys that need words put to them. Every
+  # other one is already a word somebody chose - `agenda:interview`,
+  # `agenda:birthdays` - and reads back as itself.
+  PHRASES = {
+    "agenda:start"  => "anything starting",
+    "agenda:end"    => "anything ending",
+    "agenda:leave"  => "leaving",
+    "trigger:start" => "the next scheduled trigger",
+  }.freeze
+
+  def self.describe(expression)
+    parsed = ::AnchorExpression.parse(expression)
+    return nil if parsed.nil?
+
+    event   = parsed[:key].split(":").last.tr("_", " ")
+    subject = PHRASES[parsed[:key]] || "#{parsed[:identifier] ? "that" : "the next"} #{event}"
+    offset  = parsed[:offset_seconds]
+    return "when #{subject} comes round" if offset.zero?
+
+    gap = ::ActiveSupport::Duration.build(offset.abs).inspect
+    "#{gap} #{offset.negative? ? "before" : "after"} #{subject}"
+  end
+
   def self.keys_for(user)
     where(user_id: ::User.id(user)).order(:key).pluck(:key)
   end
@@ -131,7 +187,7 @@ class Anchor < ApplicationRecord
   # by FK, so they follow that one exactly - no window, no nearest-match, and
   # nothing that assumes the anchor repeats daily.
   def propagate!
-    { triggers: propagate_triggers!, tasks: propagate_tasks! }
+    { triggers: propagate_triggers!, tasks: propagate_tasks!, reminders: propagate_reminders! }
   end
 
   # A move that puts a trigger in the past removes it rather than letting it
@@ -139,6 +195,39 @@ class Anchor < ApplicationRecord
   def propagate_triggers!
     scope = ::ScheduledTrigger.not_started.where(anchor_occurrence_id: occurrences.select(:id))
     scope.includes(:anchor_occurrence).find_each.count { |trigger| trigger.follow_source!.present? }
+  end
+
+  # Buddy reminders hang off the EXPRESSION rather than an occurrence, because a
+  # standing rule ("half an hour before any interview") is about the next one
+  # each time and not about a particular one. So they are re-asked the way a
+  # task's cron is: clear `fire_at`, save, and the model resolves it again.
+  #
+  # A pinned reminder is included and must be: its occurrence moving is exactly
+  # the case this exists for, and the identifier means it re-resolves onto the
+  # same one.
+  def propagate_reminders!
+    scope = ::BuddyReminder.pending.where(user_id: user_id).where("anchor ILIKE ?", "%#{key}%")
+
+    scope.find_each.count { |reminder|
+      next false unless ::AnchorExpression.parse(reminder.anchor)&.dig(:key) == key
+
+      was      = reminder.fire_at
+      resolved = ::Anchor.resolve(reminder.anchor, user: user, after: ::Time.current)
+
+      if resolved.nil?
+        # Nothing left to hang off, and what that MEANS depends on which kind of
+        # rule it is. A pinned one was about a single occurrence that has now
+        # been or been dropped, so it is over rather than due this instant - the
+        # same call ScheduledTrigger#follow_source! makes. A standing one is
+        # about the next of a class, so it parks and arms again when the next
+        # one turns up.
+        reminder.anchor_pinned? ? reminder.update!(cancelled_at: ::Time.current) : reminder.update!(fire_at: nil)
+      else
+        reminder.update!(fire_at: resolved)
+      end
+
+      reminder.fire_at != was || reminder.cancelled_at.present?
+    }
   end
 
   def propagate_tasks!

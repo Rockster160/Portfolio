@@ -225,6 +225,37 @@ the top of each hour, which is exactly when hourly data changes. The api key
 stayed on the server as a side effect — the browser has no reason to hold it, so
 `show.html.erb` no longer ships it to the page.
 
+## Anchors the app feeds itself
+
+Two domains don't need a Jil task. `AnchorFeedWorker` restates them every five minutes from what the app already knows, so a rule can be hung off something on the calendar without anybody writing a feeder first.
+
+```
+agenda:start          every upcoming item, by its id
+agenda:end            the same items' end times
+agenda:leave          the travel-derived leave-by, where a drive is known
+agenda:<any word>     items whose name — or whose calendar's name — contains that word
+trigger:start         one-off triggers the person scheduled by hand
+```
+
+The key is the subscription. `agenda:interview` exists because somebody made a rule about interviews, and the feeder fills whatever keys are there; `agenda:dentist` works the same way the moment it is created, with no code change. An underscore in the word reads as a space, so `agenda:parent_teacher` matches "Parent teacher conference".
+
+Re-feeding converges rather than piling up, because every occurrence is identified. A one-off is identified by its row id; a recurring occurrence by its rule and its date, so the identifier survives the phantom becoming a real row. Anything that stops qualifying — cancelled, renamed, pushed past the horizon — has its occurrence dropped. Only ahead of now: past occurrences are the history the anchor deliberately keeps.
+
+**A repeat counts whether or not it is a row yet.** Agenda keeps recurring occurrences as phantoms until something touches them or they come due, and a key reads them exactly as the calendar draws them — overrides, detached rows and excluded dates included. So `agenda:shower-15m` works on every occurrence of a daily task rather than only the ones that already exist.
+
+Each key holds the earliest `KEEP_AHEAD` occurrences inside the horizon. The horizon has to be long so a yearly key has anything to answer with at all, and a daily key inside the same window would be 120 rows restated every five minutes — where nothing ever resolves further ahead than the next occurrence plus its offset.
+
+**Completion is deliberately not a filter.** An anchor answers WHEN, and ticking something off does not move it: "ten minutes after my interview" has to survive marking the interview done, which is the obvious thing to do the moment it ends. "…unless it's already done" is a question about state, and a schedule asks that with a condition (`ScheduleCondition`) instead of having the time disappear underneath it. Cancelled is different and is dropped — a cancelled thing isn't happening at all.
+
+The state check that pairs with a key is worth writing down, because the obvious way round doesn't work: look for the DONE one and expect it to be **missing**, rather than looking for an outstanding one and expecting it to be found. A phantom isn't a row, so a search can never find it, where a completion always is one.
+
+```
+anchor:       agenda:shower
+condition:    { find: :agenda_items, query: 'name:"Shower" is:complete is:today', expect: :missing }
+```
+
+Any other domain is left alone by the feeder. `sun:sunset` is fed by a task, and nothing here will empty it or invent it.
+
 ## Buddy and Byte
 
 `check_anchor` gives the assistant read access:
@@ -232,10 +263,15 @@ stayed on the server as a side effect — the browser has no reason to hold it, 
 - `check_anchor` with a `key` — when that anchor is next, optionally shifted by an `offset`
 - `check_anchor` with no key — every anchor and its next time, which is also how it discovers what exists
 
-That's enough for "when's sunset?", "when do the bins go out?", and for reasoning that needs the time to answer something else ("do I have time for a walk before dark?"). It's a read-only tool — Buddy can't create or feed anchors, since a feeder is a task you write deliberately.
+That's enough for "when's sunset?", "when do the bins go out?", and for reasoning that needs the time to answer something else ("do I have time for a walk before dark?").
+
+`schedule_reminder`'s `anchor` argument is the write side, and the only one: "half an hour before any interview" is `agenda:interview-30m`, and the reminder keeps the expression rather than the minute, so it moves when the interview does. A key in an app-fed domain is created on the spot (`Anchor.subscribe!`) because the key is the subscription; a key in any other domain has to exist already, since a feeder is a task you write deliberately and an empty key would resolve to nothing forever.
+
+A standing rule does not need an example of the thing to exist. With nothing booked it parks — no `fire_at` at all — and arms itself when the next occurrence appears, which is the occurrence telling it rather than anything polling. It parks again after firing if there is still nothing ahead. That is only safe while a parked rule is visible, so `ReminderPresenter` says what it is waiting on in place of a time ("30 minutes before the next interview · nothing on it yet") and `Buddy::Context` lists it, so a second copy of the same rule doesn't get set on top of one nobody can see. A **pinned** expression is refused instead: it names one occurrence, and that occurrence not being there is a mistake rather than a wait.
 
 ## See also
 
 - `docs/jil_listener_syntax.md` — listeners, the other half of what makes a task fire
 - `app/models/anchor.rb` — resolution, propagation and retention
 - `app/service/anchor_expression.rb` — the expression grammar
+- `app/service/anchor_feeder.rb` — the app-fed domains above

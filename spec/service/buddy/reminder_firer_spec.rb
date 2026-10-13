@@ -24,6 +24,67 @@ RSpec.describe Buddy::ReminderFirer do
     convo.byte_messages.where(direction: :inbound).order(:id).pluck(:body)
   end
 
+  # The shape the Shower nudge is built out of: a rule about every occurrence of
+  # a thing, a time that comes from the thing rather than from a clock, and a
+  # state check so it stays quiet on a day it has already been done.
+  #
+  # The check looks for the DONE one and expects it to be absent, which is the
+  # way round that works whether or not the occurrence exists as a row yet - a
+  # repeat is a phantom until something touches it, and a phantom cannot be
+  # found by a search.
+  describe "a standing rule anchored to something that comes round" do
+    let!(:agenda) { Agenda.create!(user: user, name: "Mine") }
+
+    def shower!(completed: false)
+      AgendaItem.create!(
+        agenda: agenda, kind: :task, name: "Shower", start_at: 30.minutes.from_now,
+        end_at: 45.minutes.from_now, completed_at: (Time.current if completed)
+      )
+    end
+
+    def standing!
+      Anchor.create!(user: user, key: "agenda:shower")
+      AnchorFeeder.call(user)
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: "Time to shower!", anchor: "agenda:shower",
+        condition: { find: :agenda_items, query: 'name:"Shower" is:complete is:today', expect: :missing }
+      )
+    end
+
+    around { |example| travel_to(Time.current.change(hour: 12, min: 0)) { example.run } }
+
+    it "says it when the time comes and nothing has been ticked off" do
+      shower!
+      described_class.fire!(standing!)
+
+      expect(bodies.join).to include("Reminder: Time to shower!")
+    end
+
+    # Nothing is posted and nothing is pushed; the chip is what explains the
+    # silence without breaking it.
+    it "stays quiet on a day it has already been done" do
+      shower!(completed: true)
+      described_class.fire!(standing!)
+
+      expect(bodies.join).not_to include("Reminder: Time to shower!")
+      expect(bodies.join).to include("Skipped")
+    end
+
+    # Going terminal here would retire the rule on its first firing, and nothing
+    # would ever put it back.
+    it "parks rather than finishing when there is no next one yet" do
+      shower!
+      reminder = standing!
+
+      travel 31.minutes
+      described_class.fire!(reminder)
+
+      expect(reminder.reload.fire_at).to be_nil
+      expect(reminder.fired_at).to be_nil
+      expect(BuddyReminder.pending).to include(reminder)
+    end
+  end
+
   # 21 Aug: Byte briefed once a minute for ten minutes until the reminder was
   # cancelled by hand. Agenda item 1006 ("Focus") started at 8:30, the briefing
   # is pulled 30 minutes ahead of the first thing, and 8:30 minus 30 is 8:00 -

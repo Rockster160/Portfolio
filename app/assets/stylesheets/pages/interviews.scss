@@ -847,3 +847,293 @@
 .interview-back-row {
   margin-top: 20px;
 }
+
+// ---- transcripts ----------------------------------------------------------
+//
+// A recording read as a conversation rather than as a wall of captions. The
+// two sides sit on opposite edges for the same reason a chat app does it: the
+// question being asked of this page is "what did THEY ask and what did I say",
+// and alternating indentation answers it without reading a word.
+//
+// A third side exists and matters: `unplaced`, for a turn whose speaker nobody
+// has named yet. The recorder labels two different people `Unknown`, so these
+// are the turns to go and correct, and they are drawn to look unfinished
+// instead of being quietly dropped on one side or the other.
+.interviews-page {
+  --tt-mine: #{rgba($base-blue, 0.1)};
+  --tt-mine-line: #{rgba($base-blue, 0.35)};
+  --tt-theirs: #{rgba($grey-blue, 0.12)};
+  --tt-theirs-line: #{rgba($grey-blue, 0.3)};
+}
+
+.dark-mode .interviews-page {
+  --tt-mine: #{rgba($base-blue, 0.22)};
+  --tt-mine-line: #{rgba($base-blue, 0.5)};
+  --tt-theirs: #{rgba($grey-light, 0.1)};
+  --tt-theirs-line: #{rgba($grey-light, 0.22)};
+}
+
+.job-transcripts {
+  .count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--iv-line);
+    color: var(--iv-text);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .transcript-list {
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--iv-line);
+    }
+  }
+
+  .transcript-link {
+    font-weight: 600;
+  }
+
+  .transcript-meta {
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+}
+
+.transcript-page {
+  .transcript-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: baseline;
+    margin-bottom: 16px;
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+
+  .danger-link {
+    color: $danger;
+  }
+
+  .speaker-rows {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  // One row per label, and it wraps rather than scrolls — the hint at the end
+  // is the first thing that person said, which is how you tell Speaker 2 from
+  // Speaker 3, so it must not be the part that gets cut off.
+  .speaker-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--iv-line);
+
+    input[type="text"] {
+      width: 180px;
+      margin: 0;
+    }
+  }
+
+  .speaker-raw {
+    min-width: 92px;
+    color: var(--iv-muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .speaker-mine {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .speaker-hint {
+    flex: 1 1 220px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--iv-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .transcript-turns {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tt-turn {
+    max-width: 78%;
+    padding: 9px 13px;
+    border: 1px solid var(--tt-theirs-line);
+    border-radius: 13px;
+    background: var(--tt-theirs);
+
+    &.mine {
+      margin-left: auto;
+      border-color: var(--tt-mine-line);
+      background: var(--tt-mine);
+    }
+
+    &.unplaced {
+      border-style: dashed;
+      border-color: var(--iv-waiting);
+      background: var(--iv-waiting-soft);
+    }
+  }
+
+  .tt-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+
+  .tt-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .tt-at {
+    color: var(--iv-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // INVISIBLE WHILE READING. A hundred and twenty dropdowns down a page you
+  // are trying to read is the page unreadable, and taking them out of the flow
+  // instead would make every turn jump when one appeared. Kept keyboard
+  // reachable: focus brings it back, so tabbing through the page still works.
+  .tt-move {
+    width: auto;
+    min-width: 0;
+    height: auto;
+    margin: 0 0 0 auto;
+    padding: 1px 4px;
+    opacity: 0;
+    font-size: 12px;
+    transition: opacity 0.12s ease;
+  }
+
+  .tt-turn:hover .tt-move,
+  .tt-turn:focus-within .tt-move {
+    opacity: 1;
+  }
+
+  .tt-said {
+    margin: 0;
+    color: var(--iv-text);
+    line-height: 1.5;
+  }
+
+  // One save for the whole page, and it has to be reachable from anywhere in
+  // half an hour of talking — a button at the bottom of 126 turns is a button
+  // nobody presses.
+  .transcript-save {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: 18px;
+    padding: 10px 0;
+    border-top: 1px solid var(--iv-line);
+    background: var(--iv-surface);
+    backdrop-filter: blur(6px);
+  }
+}
+
+@media (max-width: 700px) {
+  .transcript-page {
+    .tt-turn {
+      max-width: 92%;
+    }
+
+    // The picker cannot be revealed by hovering on a touch screen, so it is
+    // simply there.
+    .tt-move {
+      opacity: 1;
+    }
+  }
+}
+
+// THE TARGET HAS TO LOOK LIKE A TARGET. A file input on its own says you may
+// pick a file and says nothing about dropping one, which is the gesture
+// everybody tries first — so the box says it in words and the dashed edge says
+// it again. `ready` lights it the moment a file is anywhere over the window,
+// which is the half that answers "where am I supposed to put this".
+.interviews-page {
+  .drop {
+    padding: 18px 16px;
+    border: 2px dashed var(--iv-line);
+    border-radius: 10px;
+    text-align: center;
+    transition: border-color 0.12s ease, background 0.12s ease;
+
+    &.ready {
+      border-color: $base-blue;
+    }
+
+    &.over {
+      border-color: $base-blue;
+      background: var(--tt-mine);
+    }
+
+    // Something is picked, so the box stops asking for one.
+    &.got {
+      border-style: solid;
+      border-color: $base-complementary;
+    }
+
+    label {
+      display: block;
+      margin: 0 0 8px;
+      color: var(--iv-muted);
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    input[type="file"] {
+      margin: 0 auto;
+    }
+
+    .field-hint {
+      display: block;
+      margin-top: 10px;
+    }
+  }
+
+  .drop-say {
+    margin: 0 0 4px;
+    font-size: 15px;
+  }
+
+  .drop-got {
+    margin: 10px 0 0;
+    color: $base-complementary;
+    font-weight: 600;
+
+    &:empty {
+      display: none;
+    }
+  }
+}

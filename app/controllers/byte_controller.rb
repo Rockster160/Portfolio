@@ -852,6 +852,19 @@ class ByteController < ApplicationController
     render json: { on: current_user.byte_affirmation? }
   end
 
+  # Whether this wall surface rings and shows Buddy's timers. Held per surface
+  # (board vs kiosk) so one screen can be silenced without quieting the chat.
+  def timer_alerts
+    return head(:forbidden) unless current_user&.byte_access?
+
+    surface = params[:surface].to_s
+    return head(:unprocessable_entity) unless User::BYTE_TIMER_ALERT_SURFACES.include?(surface)
+
+    current_user.set_byte_timer_alerts(surface, params[:on])
+    current_user.save!
+    render json: { surface: surface, on: current_user.byte_timer_alerts?(surface) }
+  end
+
   # Per device. The subscription-less form is the legacy whole-person key,
   # which nothing writes anymore — kept so an older caller reads a miss rather
   # than raising.

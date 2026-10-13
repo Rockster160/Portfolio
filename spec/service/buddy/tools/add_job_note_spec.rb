@@ -24,6 +24,13 @@ RSpec.describe "add_job_note tool" do
     tool[:execute].call(confirm(**payload)[:resolved], ctx)
   end
 
+  # Filed on arrival and drawn pre-checked. A beat nobody taps is a board
+  # saying an application is still waiting on them when it was answered a week
+  # ago, and `undo` puts back the note, the status it moved and the mail.
+  it "is a level 2 proposal, undone by unticking" do
+    expect(tool[:level]).to eq(2)
+  end
+
   describe "a booked interview" do
     it "puts the appointment on the calendar as a timed event" do
       execute(tag: :scheduled, follow_up_at: at, duration_minutes: 20, note: "Phone screen.")

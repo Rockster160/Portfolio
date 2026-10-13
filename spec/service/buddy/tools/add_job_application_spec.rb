@@ -16,10 +16,11 @@ RSpec.describe "add_job_application tool" do
     tool[:execute].call(confirm(**payload)[:resolved], ctx)
   end
 
-  # It waits to be tapped rather than arriving pre-checked: a whole new row on
-  # the board is more than a beat on one.
-  it "is a level 3 proposal" do
-    expect(tool[:level]).to eq(3)
+  # Opened on arrival and drawn pre-checked. A row that was never tapped costs
+  # the application itself, which is on the board nowhere else; an untick
+  # destroys the row and takes its first beat with it.
+  it "is a level 2 proposal, undone by unticking" do
+    expect(tool[:level]).to eq(2)
   end
 
   it "creates the row with its first beat, timestamped when the mail came in" do

@@ -46,9 +46,9 @@ RSpec.describe Buddy::JobMailOffer do
       expect(message.metadata["job_application_id"]).to eq(job.id)
     end
 
-    # add_job_note is level 3: calling it puts an UNCHECKED card on screen that
-    # writes nothing until it's tapped. The card IS the question, so asking in
-    # prose first is a round trip for something already reviewable.
+    # add_job_note is level 2: calling it files the beat and draws a pre-checked
+    # row they can untick, so asking in prose first is a round trip for
+    # something the row already shows.
     # Prod 6395, Aledade: a rejection's headline names no role, and the seed
     # called the job it was about "a different role" because only the headline
     # was checked.
@@ -160,14 +160,29 @@ RSpec.describe Buddy::JobMailOffer do
         expect(body).to include("CALL add_job_note")
       end
 
-      # The one case where the resolved row itself might be the wrong one.
-      # Filing anyway would put the receipt on a sibling application.
-      it "files nothing when the mail may be about a different role" do
+      # The one case where the row itself is the open question: several rows for
+      # the company, and nothing in the mail saying which. Filing anyway would
+      # put the beat on a sibling application.
+      it "files nothing when the company holds several rows and the mail names none" do
         user.job_applications.create!(company: "iCapital", role: "Backend Engineer")
         verdict[:headline] = "Application confirmation for iCapital"
         metadata[:subject] = "Thank you for applying"
 
         expect { call(email: email, body: "Thanks!") }.not_to change(JobNote, :count)
+      end
+
+      # An interview is booked, moved and confirmed by mail that names no job at
+      # all, which is the mail the board most needs. One row for the company
+      # means there is no sibling for it to belong to instead.
+      it "files a mail that names no role when the company holds ONE row" do
+        verdict[:headline] = "Interview with iCapital"
+        metadata[:subject] = "Please provide your interview availability"
+
+        call(email: email, body: "We're still waiting on your availability.")
+
+        expect(job.notes.last.body).to eq("We're still waiting on your availability.")
+        expect(job.notes.last.tag).to eq("note")
+        expect(email.reload.job_triage[:job_note_id]).to eq(job.notes.last.id)
       end
 
       it "files nothing when there is no mail to file" do

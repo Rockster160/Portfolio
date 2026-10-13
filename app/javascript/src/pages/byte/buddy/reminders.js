@@ -175,12 +175,15 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
   // A watch shows its condition and no schedule; a reminder shows its schedule
   // and no condition. What a watch wants from the time domain is a BOUND, not
   // a rule, which is what the expiry is for.
+  // An ANCHORED reminder is a third shape: it repeats, but its rule is the
+  // thing it hangs off ("half an hour before any interview") rather than a
+  // clock, so neither field has anything to show. The sublabel says the rule.
   function paintWhen(row) {
     const isWatch = row.type === "watch";
     field("when").hidden = isWatch || row.at == null || row.recurring;
     if (!field("when").hidden) field("at").value = row.at || "";
 
-    field("repeat").hidden = isWatch || !row.recurring;
+    field("repeat").hidden = isWatch || row.anchored || !row.recurring;
     if (!field("repeat").hidden) {
       field("time").value = row.at || "";
       field("until").value = row.until_on || "";
@@ -310,7 +313,7 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
     if (editing.type === "watch") {
       if (editing.custom) edit.listener = field("listener").value;
       edit.expires_on = field("expires").value;
-    } else if (editing.recurring) {
+    } else if (editing.recurring && !editing.anchored) {
       edit.at = field("time").value;
       edit.until_on = field("until").value;
       edit.freq = draft.freq;

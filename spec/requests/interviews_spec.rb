@@ -255,7 +255,7 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).not_to include("Where you stand")
     end
 
-    it "prints the stage, what was said, the company and the days quiet" do
+    it "prints the stage reached, the round trips, the company and the days quiet" do
       job.notes.create!(tag: :applied, occurred_at: 5.days.ago)
       job.notes.create!(tag: :acknowledged, occurred_at: 5.days.ago)
       job.notes.create!(tag: :take_home, occurred_at: 3.days.ago)
@@ -263,12 +263,13 @@ RSpec.describe "Interview tracker", type: :request do
       get interviews_path
 
       expect(response.body).to include("Where you stand")
-      # The receipt is a machine, so two of the three beats were said.
-      expect(standing_cells).to eq([["Take-home", "2", "Reserv — Senior Engineer", "you", "3d"]])
+      # One round trip: the homework. The application and the machine's
+      # receipt are not exchanges.
+      expect(standing_cells).to eq([["Take-home", "1", "Reserv — Senior Engineer", "you", "3d"]])
       expect(standing_row("Take-home")).to include(interview_path(job))
     end
 
-    it "names the FURTHEST stage reached, not the latest beat" do
+    it "names the FURTHEST rung reached, not the latest beat" do
       job.notes.create!(tag: :interview, occurred_at: 4.days.ago)
       job.notes.create!(tag: :availability, occurred_at: 1.day.ago)
 

@@ -20,6 +20,8 @@ class JobApplication < ApplicationRecord
   belongs_to :user
   has_many :notes, -> { ordered }, class_name: "JobNote", inverse_of: :job_application,
     dependent: :destroy
+  has_many :transcripts, -> { ordered }, class_name: "JobTranscript", inverse_of: :job_application,
+    dependent: :destroy
 
   # active   → still in play, still worth chasing.
   # offer    → they said yes. Still open, because it isn't decided yet.
@@ -177,28 +179,63 @@ class JobApplication < ApplicationRecord
     JobNote::DEPTH_LABELS[engagement_depth]
   end
 
-  # How many times anybody actually said something here. Not a count of notes,
-  # and three kinds of row are deliberately not an exchange:
+  # How many ROUND TRIPS this has been through. Not a count of notes and not a
+  # count of mails: their reply, the times he sent back and the confirmation
+  # that follows are three rows and ONE interaction.
   #
-  #   * an `acknowledged` receipt is a machine answering a form
-  #   * THE SAME WORDS TWICE ARE ONE SEND. An ATS re-sends its own template on
-  #     a timer, and two identical "we are still waiting on your availability"
-  #     nudges a day apart are one thing being said. Compared on the body with
-  #     case and whitespace flattened, and only where there IS a body - plenty
-  #     of beats carry nothing but their tag, and each of those is its own.
-  #   * the booking cluster counts ONCE however often it moves. A cancel and a
-  #     rebook of the same meeting is a reschedule, not two exchanges. The
-  #     trade is that a genuine second round is absorbed into the first, which
-  #     is the cheaper way to be wrong about a number read at a glance.
+  # What finishes a round:
   #
-  # Two mails that merely open with the same template line still count twice:
-  # the first availability ask and the one six days later saying the calendar
-  # filled up are the same opening and different asks.
+  #   * a meeting getting BOOKED. The whole exchange that produced it - the ask,
+  #     the availability, the confirmation - is the one round.
+  #   * a meeting HAPPENING. The booking and the call it booked are two rounds,
+  #     because they are two separate things that came back from them.
+  #   * homework arriving, or an offer.
+  #
+  # What finishes nothing: his own moves, a machine's receipt, and the plain
+  # notes a timeline collects - reminders, calendar confirmations, and the ATS
+  # re-sending its own template on a timer.
+  #
+  # A `scheduled` beat landing while a meeting is still ahead of us is that
+  # meeting MOVING - a correction, a re-confirmation, or a rebook after a
+  # cancel - so it adds nothing. Once its time has passed the next booking is a
+  # new round, which is what keeps a second interview out of the first's count
+  # even when nobody wrote the first one up afterwards.
+  #
+  # The trailing `+ 1` is an exchange they have opened that has not led
+  # anywhere yet. A row where the only thing that ever happened is "we would
+  # like to talk" has been through one round trip, not none.
   def interaction_count
-    said = notes.reject(&:acknowledged?)
-    booking, rest = said.partition { |note| note.scheduled? || note.cancelled? }
+    rounds     = 0
+    meeting_at = nil   # when the booking still ahead of us is, if there is one
+    pending    = false # a booking with no time on it, or one awaiting a rebook
+    opened     = false # they have said something nothing has come of yet
 
-    rest.uniq { |note| same_send_key(note) }.size + (booking.empty? ? 0 : 1)
+    notes.sort_by { |note| [note.occurred_at, note.id] }.each do |note|
+      case note.tag.to_sym
+      when :heard_back, :availability
+        opened = true
+      when :scheduled
+        rounds    += 1 unless pending || meeting_at&.after?(note.occurred_at)
+        meeting_at = note.follow_up_at
+        pending    = note.follow_up_at.blank?
+        opened     = false
+      when :cancelled
+        pending = true
+      # The meeting happening is the only thing that SPENDS a booking. A
+      # take-home alongside one does not, or the rebook of a cancelled round
+      # would read as a round of its own.
+      when :recruiter_call, :interview
+        rounds    += 1
+        meeting_at = nil
+        pending    = false
+        opened     = false
+      when :take_home, :offer
+        rounds += 1
+        opened  = false
+      end
+    end
+
+    rounds + (opened ? 1 : 0)
   end
 
   # When anything last happened here, for sorting and for saying how long it
@@ -261,12 +298,6 @@ class JobApplication < ApplicationRecord
   end
 
   private
-
-  # What makes two beats the same send. A beat with no body is only ever
-  # itself, so it keys on the object and never folds in with another.
-  def same_send_key(note)
-    note.body.to_s.downcase.gsub(/\s+/, " ").strip.presence || "self:#{note.object_id}"
-  end
 
   def normalize_fields
     self.company = company.to_s.strip

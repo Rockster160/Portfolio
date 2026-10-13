@@ -95,13 +95,24 @@ RSpec.describe Buddy::Supersede do
       }])
     end
 
-    it "retires the booking it corrects" do
-      book("c1", "2026-10-05T09:00:00-06:00")
-      book("c2", "2026-10-07T08:00:00-06:00")
+    # add_job_note files on arrival now, so there is no pending card for a
+    # correction to retire - and no card one tap away from booking a slot that
+    # had been called off, which is what the incident above actually was.
+    #
+    # What leaves ONE meeting is `JobNote#withdraw_booking`: both mails are
+    # filed, and the booking that was replaced keeps its note and loses its
+    # date, which is the half that owned the calendar entry.
+    it "files both bookings and leaves ONE meeting on the calendar" do
+      book("c1", 3.days.from_now.change(hour: 9, min: 0, sec: 0, usec: 0).iso8601)
+      book("c2", 5.days.from_now.change(hour: 8, min: 0, sec: 0, usec: 0).iso8601)
 
       first, second = checklists.to_a
-      expect(rows(first).first["status"]).to eq("superseded")
-      expect(rows(second).first["status"]).to eq("pending")
+      expect(rows(first).first["status"]).to eq("executed")
+      expect(rows(second).first["status"]).to eq("executed")
+
+      booked = job.notes.where(tag: :scheduled)
+      expect(booked.count).to eq(2)
+      expect(booked.where.not(follow_up_at: nil).count).to eq(1)
     end
 
     # Keyed on the JOB, because the words are the one thing a reschedule is
@@ -120,26 +131,9 @@ RSpec.describe Buddy::Supersede do
       note("c2", "Sending availability now.")
 
       first, second = checklists.to_a
-      expect(rows(first).first["status"]).to eq("pending")
-      expect(rows(second).first["status"]).to eq("pending")
-    end
-
-    # The half that must NOT happen. A tapped booking has written a note and a
-    # calendar entry, and the replacement does not own either of them - the
-    # untick on that row is the only way to take them back.
-    it "leaves a booking that was already tapped standing, undo and all" do
-      book("c1", "2026-10-05T09:00:00-06:00")
-      action = checklists.first
-      action.apply_decision!(value: [rows(action).first["id"]])
-      Buddy::ProposalExecutor.perform(action.id)
-      expect(rows(action).first["status"]).to eq("executed")
-
-      book("c2", "2026-10-07T08:00:00-06:00")
-
-      filed = rows(checklists.first).first
-      expect(filed["status"]).to eq("executed")
-      expect(filed["undoable"]).not_to be(false)
-      expect(job.notes.where(tag: :scheduled).count).to eq(1)
+      expect(rows(first).first["status"]).to eq("executed")
+      expect(rows(second).first["status"]).to eq("executed")
+      expect(job.notes.where(tag: :note).count).to eq(2)
     end
   end
 

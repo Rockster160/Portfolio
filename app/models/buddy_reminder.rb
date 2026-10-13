@@ -7,7 +7,7 @@
 #  body                 :text             not null
 #  cancelled_at         :datetime
 #  condition            :jsonb
-#  fire_at              :datetime         not null
+#  fire_at              :datetime
 #  fired_at             :datetime
 #  kind                 :string           default("reminder"), not null
 #  last_fired_at        :datetime
@@ -40,8 +40,13 @@ class BuddyReminder < ApplicationRecord
   }
 
   validates :body,    presence: true, length: { maximum: 500 }
-  validates :fire_at, presence: true
+  validates :fire_at, presence: true, unless: :anchored?
   validates :kind,    inclusion: { in: KINDS }
+  validate  :anchor_parses
+
+  # Fills `fire_at` from the anchor, so a caller says WHEN relative to a moving
+  # thing and never has to resolve it itself.
+  before_validation :resolve_anchor, if: -> { anchor.present? && fire_at.blank? }
 
   # A `stop_when` arms a one-shot watch pointing back at this row. Switching the
   # reminder off by hand leaves that watch armed with nothing left to end, so it
@@ -49,7 +54,27 @@ class BuddyReminder < ApplicationRecord
   # cancelling, because there are several and they'd each have to remember.
   after_update :retire_stoppers, if: :saved_change_to_cancelled_at?
 
+  # Scheduled against a moment that MOVES - an anchor expression rather than a
+  # clock time. See docs/jil_anchors.md for the syntax; the same parser.
+  #
+  #   agenda:interview-30m       half an hour before the next interview
+  #   agenda:interview[1289]+0m  that one interview, and no other
+  #   contact:birthday-10d       ten days before the next birthday
+  def anchored? = anchor.present?
+
+  # A pinned expression names ONE occurrence, so it is a single nudge about a
+  # single thing. Without an identifier the expression is a standing rule about
+  # a class of them - the next interview, then the one after that - which is
+  # what makes it recurring without a recurrence of its own.
+  def anchor_pinned?
+    return false if anchor.blank?
+
+    ::AnchorExpression.parse(anchor)&.dig(:identifier).present?
+  end
+
   def recurring?
+    return true if anchored? && !anchor_pinned?
+
     normalized_recurrence["freq"].present?
   end
 
@@ -255,6 +280,11 @@ class BuddyReminder < ApplicationRecord
   # days, and lives here where it's needed. "Hourly from 9 to 11pm on weekdays"
   # is one of each, composed.
   def next_fire_at(from: Time.current)
+    # Re-ASKED rather than stepped: the whole reason the time is an anchor is
+    # that the answer changes. A pinned one has no next - it was about one
+    # occurrence and that occurrence has been.
+    return nil if anchored? && anchor_pinned?
+    return ::Anchor.resolve(anchor, user: user, after: from) if anchored?
     return nil unless recurring?
 
     tz    = ActiveSupport::TimeZone[user&.timezone.to_s] || Time.zone
@@ -333,6 +363,40 @@ class BuddyReminder < ApplicationRecord
   # Only on the way OFF. Reinstating a reminder doesn't rearm its stopper,
   # because a condition that may already have passed would switch the thing
   # straight back off — and there's no way to know from here whether it did.
+  def resolve_anchor
+    self.fire_at = ::Anchor.resolve(anchor, user: user, after: ::Time.current)
+  end
+
+  # A key that was never created is a typo, and a reminder that believed it was
+  # set is the one failure a reminder must not have.
+  #
+  # Nothing upcoming on a real key is a different thing, and for a STANDING rule
+  # it is not an error at all: "half an hour before any interview" is a complete
+  # instruction on a week with no interview booked, and refusing it would mean
+  # the rule can only be set while an example of the thing happens to exist. So
+  # it parks with no `fire_at` and arms itself the moment one appears - the
+  # occurrence being created is what tells it, via `propagate_reminders!`.
+  #
+  # A PINNED expression is still refused: it names one occurrence, and that
+  # occurrence isn't there. Which is a typo rather than a wait.
+  #
+  # Parked is only tolerable while it is VISIBLE, and that is what this used to
+  # refuse for. ReminderPresenter says what a parked rule is waiting on in place
+  # of a time, and Buddy::Context lists it, so a second copy of the same rule
+  # doesn't get set on top of one nobody can see.
+  def anchor_parses
+    return if anchor.blank?
+
+    parsed = ::AnchorExpression.parse(anchor)
+    return errors.add(:anchor, "isn't an anchor expression") if parsed.nil?
+
+    key = parsed[:key]
+    return errors.add(:anchor, "names #{key}, which doesn't exist") if ::Anchor.for(user, key).nil?
+    return if fire_at.present? || parsed[:identifier].blank?
+
+    errors.add(:anchor, "names an occurrence of #{key} that isn't there")
+  end
+
   def retire_stoppers
     return if cancelled_at.blank?
 

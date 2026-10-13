@@ -174,6 +174,61 @@ Buddy::Tools.register(
     the thing. "Every weekday at 7, run my morning routine" is this. It's
     resolved when it FIRES, so a name that stops matching quietly goes back to
     being an ordinary nudge rather than running the nearest thing to it.
+
+    ## Before or after something that's coming up
+
+    `anchor` is for a time you can't write down: "half an hour before any
+    interview", "ten days before anybody's birthday", "before I leave",
+    "after my interview today". It hangs the reminder off the THING, so when
+    the thing moves the reminder moves with it, and nothing has to be reset.
+
+    An expression is a key, an optional pinned occurrence, and an offset with a
+    unit on it:
+
+      agenda:interview-30m        half an hour before the next interview
+      agenda:birthdays-10d        ten days before the next birthday
+      agenda:leave-5m             five minutes before the next leave-by
+      agenda:end[1289]+10m        ten minutes after THAT item ends
+      trigger:start-15m           a quarter hour before a one-off they scheduled
+
+    Under `agenda:`, three words are the item's own edges - `start`, `end` and
+    `leave` (the leave-by, which only exists where a drive is known). ANY OTHER
+    WORD is matched against the names of their items and calendars, so
+    `agenda:interview` is interviews and `agenda:dentist` is dentist
+    appointments. You do not have to ask whether a key exists; writing one
+    creates it.
+
+    Without brackets the expression is a STANDING rule about a class of them -
+    the next interview, then the one after that - and it keeps going until
+    cancelled. With `[<item id>]` it is one nudge about one thing, which is what
+    "after my interview today" wants: pin it, and use `search_agenda` to get
+    the id. Never invent an id.
+
+    `kind: "prompt"` is how "give me a few reminders about what the company is
+    like and what I should expect" works: the reminder seeds a turn at that
+    moment, with everything you'd know then, rather than replaying a sentence
+    written now. Use it whenever the ask is for something that has to be
+    thought about at the time, and plain `reminder` when the words are the
+    point.
+
+    A standing rule does NOT need an example of the thing to exist yet. "Thirty
+    minutes before any interview" with nothing booked is set and waiting, and it
+    arms itself the moment one appears - say that it's waiting rather than
+    claiming a time. A PINNED one is different: nothing matching means the
+    occurrence isn't there, and the call fails.
+
+    Repeats count the same as one-offs. A daily task is on the calendar whether
+    or not it has been touched yet, so `agenda:shower-15m` works on every
+    occurrence of it rather than only the ones that already exist.
+
+    An anchor says WHEN and never whether the thing is done. For "when the
+    shower comes due unless I've already had one", add the state check:
+    `check: "agenda_items"`, `check_query: 'name:"Shower" is:complete is:today'`,
+    `check_expect: "missing"` - looking for the DONE one and expecting it to be
+    absent, which is the way round that works whether or not the occurrence
+    exists as a row yet.
+
+    The offset's unit is required - `-30` is rejected rather than guessed at.
   TXT
   args: {
     text:   {
@@ -186,6 +241,13 @@ Buddy::Tools.register(
                    "is for makes them come and ask you.",
     },
     at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
+    anchor:        {
+      type:        :string,
+      required:    false,
+      description: "Hang it off something upcoming instead of a clock time: " \
+                   "`agenda:interview-30m`, `agenda:birthdays-10d`, `agenda:leave-5m`, " \
+                   "`agenda:end[<item id>]+10m`, `trigger:start-15m`. Instead of `at`.",
+    },
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     every_minutes: { type: :integer, required: false, description: "Repeat WITHIN the day this often, starting at the repeat spec's time" },
@@ -328,17 +390,36 @@ Buddy::Tools.register(
     else ScheduleCondition.met?(condition, user: ctx.user)
     end
 
-    fire_at = ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0
+    # An anchor is a moment that MOVES, so the row keeps the expression and
+    # re-asks it; resolving here is only so the receipt can say when.
+    #
+    # Nothing upcoming is fine for a STANDING rule and it parks - "before any
+    # interview" is a complete instruction on a week with no interview booked.
+    # A PINNED one names a single occurrence, so nothing to hang off means the
+    # occurrence isn't there, which is a mistake rather than a wait.
+    anchor = payload[:anchor].to_s.strip.presence
+    if anchor
+      fire_at = ::Anchor.subscribe!(anchor, user: ctx.user)
+      pinned  = ::AnchorExpression.parse(anchor)&.dig(:identifier).present?
+      raise "nothing matches #{anchor}" if fire_at.nil? && pinned
+    end
+
+    fire_at ||= ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0
     # If recurring and no explicit `at`, compute the first fire from the
     # recurrence spec.
     if fire_at.nil? && recurrence_hash
       dummy = BuddyReminder.new(user: ctx.user, recurrence: recurrence_hash)
       fire_at = dummy.next_fire_at(from: Time.current)
     end
-    raise "couldn't determine a fire time" if fire_at.nil?
-    raise "fire time is in the past" if fire_at < Time.current
+    raise "couldn't determine a fire time" if fire_at.nil? && anchor.nil?
+    raise "fire time is in the past" if fire_at && fire_at < Time.current
 
-    when_str = Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone)
+    # For an anchor the WHEN is the RULE. The minute it currently works out to
+    # is worth saying as well, but on its own it reads as a one-off on Thursday
+    # where what is being set is every interview there will ever be.
+    rule     = (::Anchor.describe(anchor) if anchor)
+    clock    = (Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone) if fire_at)
+    when_str = (rule ? [rule, ("(next: #{clock})" if clock)].compact.join(" ") : clock)
 
     # Who it's FOR. Naming someone we can't place is refused rather than
     # quietly aimed back at the asker - a reminder that reaches the wrong
@@ -357,7 +438,9 @@ Buddy::Tools.register(
       raise "#{clash.body.inspect} is already set for #{when_str} - nothing new to add"
     end
 
-    summary = if notify_user && recurrence_hash
+    summary = if rule
+      "Remind #{notify_user ? notify_user.first_name : "you"} #{when_str}?"
+    elsif notify_user && recurrence_hash
       "Send this to #{notify_user.first_name} repeatedly, starting #{when_str}?"
     elsif notify_user
       "Send this to #{notify_user.first_name} at #{when_str}?"
@@ -371,7 +454,7 @@ Buddy::Tools.register(
     {
       summary:  summary,
       resolved: {
-        fire_at_iso:    fire_at.iso8601,
+        fire_at_iso:    fire_at&.iso8601,
         recurrence:     recurrence_hash,
         condition:      condition,
         notify_user_id: notify_user&.id,
@@ -389,11 +472,16 @@ Buddy::Tools.register(
     fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
     when_str = fire_at ? Buddy::Clock.day_at(fire_at, zone: ctx.user.timezone) : payload[:at].to_s
     sub      = payload[:recurrence] ? "repeats #{payload[:repeat] || payload.dig(:recurrence, 'kind')}" : when_str
+    sub      = ::Anchor.describe(payload[:anchor]) || sub if payload[:anchor].present?
     sub      = "to #{payload[:recipient_name]} · #{sub}" if payload[:recipient_name].present?
     { title: payload[:text].to_s.truncate(60), sub: sub.presence }
   },
   execute: ->(payload, ctx) {
+    # An anchored reminder works its own time out on save and re-asks it every
+    # time the thing moves, so the minute the propose step resolved is only ever
+    # staler than what the row will do for itself.
     fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) || ctx.resolve_time(payload[:at])
+    fire_at = nil if payload[:anchor].present?
     # The thread it will FIRE into, which is a question about weeks from now
     # rather than about this moment — so it's the primary one, not whichever
     # happened to be open when they asked. Falls back to any thread at all,
@@ -409,6 +497,7 @@ Buddy::Tools.register(
       kind:              (payload[:kind] || :reminder).to_s,
       body:              payload[:text].to_s.first(500),
       fire_at:           fire_at,
+      anchor:            payload[:anchor].presence,
       recurrence:        payload[:recurrence],
       condition:         payload[:condition],
     )
@@ -438,7 +527,10 @@ Buddy::Tools.register(
 
     {
       reminder_id:    reminder.id,
-      fire_at:        fire_at.iso8601,
+      # What the ROW says, which for an anchored one is what it resolved for
+      # itself - and is simply absent when there is nothing on it yet.
+      fire_at:        reminder.fire_at&.iso8601,
+      anchor:         payload[:anchor].presence,
       recurrence:     payload[:recurrence],
       recipient_name: payload[:recipient_name],
       stop_watch_id:  stopper&.id,
@@ -473,7 +565,14 @@ Buddy::Tools.register(
     stops = (", #{Buddy::WatchCondition.until_phrase(result[:stop_human])}" if result[:stop_watch_id].present? && result[:stop_human].present?)
     stops ||= " (won't stop on its own)" if result[:stop_failed].present?
 
-    if rec.is_a?(Hash)
+    rule = (::Anchor.describe(result[:anchor]) if result[:anchor].present?)
+
+    if rule
+      # No time at all when nothing is booked yet, and the receipt says so
+      # rather than naming a minute: the rule is set and it is waiting.
+      nxt = (fire_at ? " (next: #{ctx.friendly_future(fire_at)})" : " - nothing on it yet")
+      "#{name} will #{who ? "send this to #{who}" : "remind you"} #{rule}#{nxt}#{stops}"
+    elsif rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? Buddy::Clock.at(hhmm) : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""

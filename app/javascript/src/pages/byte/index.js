@@ -2373,10 +2373,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Buddy timer chips (top-left under the nav). Server-authoritative countdowns
   // that ride the existing Timer stack; this just renders + reconciles them.
+  // The wall surfaces (board / kiosk) each carry a "Timer alerts" switch; off
+  // means the chips never appear here at all. The chat has no switch and always
+  // reports true.
   const buddyTimers = initBuddyTimers({
     container: app.querySelector("[data-buddy-timers]"),
     hero: buddyHero,
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
+    enabled: app.dataset.timerAlerts !== "false",
   });
 
   // What Byte is doing in the background (top-right, opposite the timers).
@@ -2436,10 +2440,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const modal = document.querySelector(modalSel);
     if (!modal) return;
 
-    document.querySelector(openSel)?.addEventListener("click", () => {
-      manager?.refresh();
-      if (typeof modal.showModal === "function") modal.showModal();
-      else modal.setAttribute("open", "");
+    // Every opener, not the first — a wall surface has its own settings gear in
+    // addition to the drawer link, and both have to open the one dialog.
+    document.querySelectorAll(openSel).forEach((opener) => {
+      opener.addEventListener("click", () => {
+        manager?.refresh();
+        if (typeof modal.showModal === "function") modal.showModal();
+        else modal.setAttribute("open", "");
+      });
     });
     document
       .querySelector(closeSel)
@@ -2602,6 +2610,53 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await res.json().catch(() => null);
       paintAffirmation(data ? data.on === true : next);
     } catch (_e) { /* the row stays as it was, which is what is still stored */ }
+  });
+
+  // This surface's "Timer alerts" switch (board / kiosk only; the chat never
+  // renders the row). Off takes the timer chips away here entirely — the alarm,
+  // the face takeover and all — without touching the other surfaces or the
+  // chat. Paints from the server's answer, so a failed save leaves the button
+  // saying what is actually stored; the live enable/disable rides off the tap
+  // so the chips come or go immediately.
+  const timerAlertsBtn = document.querySelector("[data-byte-timer-alerts]");
+  const paintTimerAlerts = (on) => {
+    if (!timerAlertsBtn) return;
+    timerAlertsBtn.textContent = on ? "On" : "Off";
+    timerAlertsBtn.setAttribute("aria-pressed", String(on));
+    timerAlertsBtn.classList.toggle("on", on);
+  };
+  timerAlertsBtn?.addEventListener("click", async () => {
+    const url = app.dataset.timerAlertsUrl;
+    const surface = timerAlertsBtn.dataset.surface;
+    if (!url || !surface) return;
+
+    const next = timerAlertsBtn.getAttribute("aria-pressed") !== "true";
+    paintTimerAlerts(next);
+    buddyTimers?.setEnabled(next);
+    try {
+      const res = await fetch(url, {
+        method:      "POST",
+        credentials: "same-origin",
+        headers:     {
+          "Content-Type": "application/json",
+          Accept:         "application/json",
+          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+        },
+        body: JSON.stringify({ surface: surface, on: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json().catch(() => null);
+      const stored = data ? data.on === true : next;
+      if (stored !== next) {
+        paintTimerAlerts(stored);
+        buddyTimers?.setEnabled(stored);
+      }
+    } catch (_e) {
+      // Put both back to what is still stored.
+      paintTimerAlerts(!next);
+      buddyTimers?.setEnabled(!next);
+    }
   });
 
   // Buddy naps while the realtime channel is down. The hero renders

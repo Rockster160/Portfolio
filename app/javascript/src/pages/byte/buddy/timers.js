@@ -86,8 +86,14 @@ function isDue(t) {
   return Date.parse(t.end_at) <= Date.now();
 }
 
-export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
+export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = true }) {
   if (!container) return null;
+
+  // A wall surface (board / kiosk) can turn its timer alerts off, and off means
+  // GONE here — no chips, no ring, no face takeover, and the per-user :timers
+  // stream ignored — not merely silenced. The chat is always enabled; it is the
+  // home of the timers.
+  let active = enabled !== false;
 
   const timers = new Map(); // id → serialized timer
   let pageId = null;
@@ -118,6 +124,11 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
   }
 
   function render() {
+    if (!active) {
+      container.hidden = true;
+      container.innerHTML = "";
+      return;
+    }
     const list = ordered();
     container.hidden = list.length === 0 || !isBuddyActive();
     container.innerHTML = "";
@@ -405,6 +416,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     // as acknowledged (the person was away and got a push) — confirm it quietly
     // rather than starting the alarm.
     async hydrate() {
+      if (!active) return;
       try {
         const data = await apiCall("/buddy/timers", "GET");
         pageId = data.page_id;
@@ -431,6 +443,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     // A :timers MonitorChannel broadcast. Ignores timers that aren't Buddy's
     // (the person's regular board timers ride the same per-user stream).
     applyBroadcast(payload) {
+      if (!active) return;
       const data = payload?.data || {};
       const t = data.timer;
       if (!t) return;
@@ -449,6 +462,32 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
 
     setActive() {
       render();
+    },
+
+    // The surface's "Timer alerts" switch. Turning it off tears everything
+    // down at once — the chips, the alarm, the ack listener, the local ticker —
+    // and makes the stream a no-op; turning it on re-hydrates from the server.
+    setEnabled(on) {
+      const next = on !== false;
+      if (next === active) return;
+
+      active = next;
+      if (!active) {
+        timers.clear();
+        silenced.clear();
+        cancelling.clear();
+        cancelFailed.clear();
+        if (tickHandle) {
+          clearInterval(tickHandle);
+          tickHandle = 0;
+        }
+        stopAlarm({ hero });
+        disarmAck();
+        dueCount = 0;
+        render();
+      } else {
+        this.hydrate();
+      }
     },
 
     muted: isBuddyMuted,

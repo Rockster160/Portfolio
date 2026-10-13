@@ -58,6 +58,11 @@
      data-pet-scale="<%= current_user.byte_pet_scale %>"
      data-pet-scale-url="<%= byte_pet_scale_path %>"
      data-affirmation-url="<%= byte_affirmation_action_path %>"
+     <%# Whether Buddy's timers ring and show on THIS surface. Only the wall %>
+     <%# surfaces carry their own switch; the chat is the timers' home and is %>
+     <%# always on, so it reports true and never offers the toggle. %>
+     data-timer-alerts="<%= @kiosk ? current_user.byte_timer_alerts?(@board ? :board : :kiosk) : true %>"
+     data-timer-alerts-url="<%= byte_timer_alerts_path %>"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
      data-send-url="<%= byte_messages_path %>"
@@ -799,6 +804,24 @@
           <button type="button" class="byte-setting-toggle" data-byte-mute aria-pressed="true">On</button>
         </div>
       </div>
+      <%# Only the wall surfaces carry this. The chat is where timers are set and %>
+      <%# watched, so it always shows them; a board or kiosk can be made quiet %>
+      <%# without quieting the chat. Off hides the chips here entirely. %>
+      <% if @kiosk %>
+        <% timer_surface = @board ? :board : :kiosk %>
+        <% timer_alerts_on = current_user.byte_timer_alerts?(timer_surface) %>
+        <div class="byte-setting">
+          <div class="byte-setting-label">
+            <span class="byte-setting-name">Timer alerts</span>
+            <span class="byte-setting-hint">Show and ring Buddy's timers on this screen.</span>
+          </div>
+          <div class="byte-setting-control">
+            <button type="button" class="byte-setting-toggle<%= " on" if timer_alerts_on %>"
+                    data-byte-timer-alerts data-surface="<%= timer_surface %>"
+                    aria-pressed="<%= timer_alerts_on %>"><%= timer_alerts_on ? "On" : "Off" %></button>
+          </div>
+        </div>
+      <% end %>
       <%# Affirmation is a row in the actions list rather than a thing with %>
       <%# options, and the only one there somebody might not want: "Affirmation %>
       <%# should just be a Quick Action that can be removed if the user so %>

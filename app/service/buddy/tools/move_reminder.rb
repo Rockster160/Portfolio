@@ -88,6 +88,15 @@ Buddy::Tools.register(
     end
     raise "no reminder matching #{needle.inspect}" if reminder.nil?
 
+    # An anchored one's time comes from the thing it hangs off, so a clock
+    # written over the top is undone the next time that thing moves. Refused
+    # with the rule said out loud: "moved it to 9" followed by it going off at
+    # the old time is worse than being told no.
+    if reminder.anchored?
+      raise "that one goes off #{::Anchor.describe(reminder.anchor)}, so there's no time to move - " \
+            "cancel it and set a new one to change the rule"
+    end
+
     fire_at = ctx.resolve_time(payload[:at])
     raise "couldn't work out the new time" if fire_at.nil?
     raise "that time has already gone by" if fire_at < Time.current

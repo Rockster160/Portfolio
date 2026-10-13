@@ -126,9 +126,18 @@ module Buddy
       # the seed raises is for — `add_job_note` revises this note rather than
       # adding a second.
       #
-      # Skipped when the role is in doubt: that is the one case where the
-      # resolved row itself may be the wrong one (see `seed`).
-      pre_logged = log_arrival!(job, email, body, occurred_at) if same_role?(job, verdict, metadata)
+      # Unconditional. A role the mail does not NAME is not a role in doubt, and
+      # gating this on `same_role?` read the two as the same thing - so the
+      # beats most worth having were the ones never filed, because an interview
+      # is booked, moved and confirmed by mail that names no job at all.
+      #
+      # Reaching here with a row means the company resolved, and
+      # `resolve_application` answers without consulting the role ONLY when the
+      # company holds exactly one of them, so there is no sibling for the mail
+      # to belong to instead. Where the row genuinely is in doubt the company
+      # holds several, `job` is nil, and the ambiguous branch above has already
+      # returned.
+      pre_logged = log_arrival!(job, email, body, occurred_at)
 
       CompanionDelivery.deliver_prompt(
         user:         user,
@@ -350,10 +359,10 @@ module Buddy
     end
 
     # What to DO with it. Two things, in this order, and neither of them is
-    # asking permission: `add_job_note` is a level-3 tool, so calling it puts an
-    # UNCHECKED card on screen that writes nothing until it is tapped. The card
-    # IS the question. Asking in prose first produces a sentence they then have
-    # to answer, which is a second round trip for something already reviewable.
+    # asking permission: `add_job_note` is a level-2 tool, so calling it FILES
+    # the beat and draws a pre-checked row they can untick. Asking in prose
+    # first produces a sentence they then have to answer, which is a second
+    # round trip for something the row already shows.
     def instruction(job, occurred_at, email, body, outgoing=false, pre_logged=nil)
       [
         (
@@ -414,7 +423,8 @@ module Buddy
         "#{JobMailRules.times}",
         "",
         "Then CALL add_job_application with that company - do not offer to, do not ask " \
-        "first. It is a level-3 tool, so the card writes nothing until they tap it. " \
+        "first. It is a level-2 tool, so it opens the row on arrival and draws a " \
+        "pre-checked line they can untick. " \
         "Give it the `role` if the mail names one, the `tag` that matches what happened, " \
         "and#{log_hint(occurred_at, email).presence || " the time it arrived"}." \
         "#{JobMailRules.plain}#{JobMailRules.note(body)}",

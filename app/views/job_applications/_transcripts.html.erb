@@ -1,0 +1,78 @@
+<%# Recordings of the conversations with this employer. The file is kept as it
+   was dropped in, and the conversation it holds is read on its own page —
+   thirty minutes of talking is not something that belongs inline under a
+   timeline of one-line notes.
+
+   Behind a <details> and closed when there are none: most applications never
+   get as far as a call, and an empty upload box on every one of them is a
+   permanent invitation to do something there is nothing to do. %>
+<details class="job-details job-transcripts" <%= "open" if transcripts.any? %>>
+  <summary>
+    Transcripts
+    <% if transcripts.any? %>
+      <span class="count"><%= transcripts.size %></span>
+    <% end %>
+  </summary>
+
+  <% if transcripts.any? %>
+    <ul class="transcript-list">
+      <% transcripts.each do |transcript| %>
+        <li>
+          <%= link_to transcript.label, interview_transcript_path(job, transcript),
+                class: "transcript-link" %>
+          <span class="transcript-meta">
+            <%= pluralize(transcript.turns.size, "turn") %>
+            <% if transcript.spoken_minutes %>
+              · <%= transcript.spoken_minutes %> min
+            <% end %>
+            <% if transcript.occurred_at %>
+              · <%= transcript.occurred_at.strftime("%b %-d, %Y") %>
+            <% end %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <%= form_with url: interview_transcripts_path(job), method: :post, local: true,
+        multipart: true, class: "transcript-upload" do %>
+    <div class="form-fields">
+      <%# The box IS the instruction. A file input on its own says you may pick
+         a file and says nothing at all about dropping one, which is the gesture
+         everybody tries first. The input stays underneath, so this degrades to
+         exactly what was here before if the script never runs. %>
+      <div class="drop" data-drop>
+        <p class="drop-say"><strong>Drop a transcript here</strong></p>
+        <%= label_tag :file, "or choose a file" %>
+        <%= file_field_tag :file, accept: ".txt,.vtt,.srt,text/plain" %>
+        <p class="drop-got" data-drop-got></p>
+        <span class="field-hint">
+          A recorder's export — captions with timestamps, or plain
+          <code>Name: what they said</code> lines. The file is kept; the
+          conversation is read off it.
+        </span>
+      </div>
+
+      <div class="split-fields">
+        <div class="form-field">
+          <%= label_tag "job_transcript[title]", "What it was" %>
+          <%= text_field_tag "job_transcript[title]", nil,
+                placeholder: "Hiring manager interview" %>
+        </div>
+
+        <div class="form-field">
+          <%= label_tag "job_transcript[job_note_id]", "Against which beat" %>
+          <%= select_tag "job_transcript[job_note_id]",
+                options_for_select(notes.map { |note|
+                  ["#{note.tag_label} · #{note.occurred_at.strftime('%b %-d')}", note.id]
+                }),
+                include_blank: "Not tied to one" %>
+        </div>
+      </div>
+
+      <div class="form-submission">
+        <%= submit_tag "Add transcript" %>
+      </div>
+    </div>
+  <% end %>
+</details>

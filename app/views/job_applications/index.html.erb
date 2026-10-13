@@ -106,7 +106,10 @@
             <table>
               <thead>
                 <tr>
-                  <th>Stage</th>
+                  <%# "Reached", not "Stage": the FURTHEST rung, so a fresh
+                     booking after an interview does not make the row read
+                     shallower than it is. %>
+                  <th>Reached</th>
                   <th class="num">Interactions</th>
                   <th>Company</th>
                   <th>Move</th>

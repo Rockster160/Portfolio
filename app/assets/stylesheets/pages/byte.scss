@@ -5753,6 +5753,35 @@ $ghosty_expr_aliases: (
   }
 }
 
+// The settings gear sits just left of the companion picker, the same dim-until-
+// touched control, so the two read as one cluster in the corner rather than a
+// second piece of chrome. Top-right keeps it clear of the timer chips, which
+// pin top-left.
+.ctr-byte .byte-app .byte-kiosk .byte-kiosk-settings {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: calc(env(safe-area-inset-right) + 60px);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--bs-border);
+  background: rgba(0, 0, 0, 0.25);
+  opacity: 0.35;
+  transition: opacity 140ms ease;
+
+  &:hover,
+  &:active {
+    opacity: 1;
+  }
+}
+
 .byte-kiosk-picker {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 56px);

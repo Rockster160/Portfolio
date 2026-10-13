@@ -63,6 +63,12 @@
       The control is the current pet's own face, so what it changes is legible
       without a label. `data-byte-pet-avatar` gets it repointed along with
       every other avatar when the thread switches. %>
+  <%# This screen's own preferences — notifications, sound, timer alerts.
+      Opens the shared settings dialog; a wall surface has no drawer to reach it
+      from, so it gets its own control, grouped with the companion picker. %>
+  <button type="button" class="byte-kiosk-settings" data-byte-open-settings
+          aria-label="Settings" title="Settings">⚙️</button>
+
   <button type="button" class="byte-kiosk-who" data-kiosk-who
           aria-label="Choose which companion is on this screen"
           title="Choose which companion is on this screen">

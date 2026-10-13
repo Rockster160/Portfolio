@@ -1417,21 +1417,57 @@ BUDDY_EDGE_PROBES = [
   # row anywhere, and he covered it himself with a 40m timer nineteen seconds
   # later. The greeting is the part that matters: the claim catcher was anchored
   # to the start of the MESSAGE.
+  # --- before something that is coming up -----------------------------------
+  # Asked for on 13 Oct, with these sentences. The failure these watch for is a
+  # clock time: "half an hour before any interview" answered with a fixed `at`
+  # is right once and wrong for every interview after it, and it does not move
+  # when the interview does. All three are class-shaped on purpose, so none of
+  # them needs a particular row on the calendar to be answerable.
+  {
+    case:       "anchor: before any interview",
+    say:        "30 minutes before any interview, give me a few reminders about what the " \
+                "company is like and what I should expect",
+    tool:       :schedule_reminder,
+    args:       { schedule_reminder: { anchor: /\Aagenda:interview-30m\z/i, kind: /prompt/i } },
+    never_args: { schedule_reminder: { at: /.+/ } },
+    note:       "a standing rule about a class of them, and the words have to be thought " \
+                "about at the time rather than written now",
+  },
+  {
+    case:       "anchor: before a birthday",
+    say:        "Remind me 10 days before anybody's birthday",
+    tool:       :schedule_reminder,
+    args:       { schedule_reminder: { anchor: /\Aagenda:birthdays?-10d\z/i } },
+    never_args: { schedule_reminder: { at: /.+/ } },
+    note:       "birthdays are rows on a calendar of their own, so the key is the calendar",
+  },
+  {
+    case:       "anchor: before leaving",
+    say:        "Remind me to grab my watch before I go",
+    tool:       :schedule_reminder,
+    args:       { schedule_reminder: { anchor: /\Aagenda:leave-\d+m\z/i } },
+    never_args: { schedule_reminder: { at: /.+/ } },
+    note:       "the leave-by, not the event start - what they are early for is the drive",
+  },
   # --- "when it is DUE" is not "when it is ADDED" ----------------------------
   # Prod 8071, 13 Oct. The named `agenda` trigger is the only one whose name
   # sounds like the ask, and it fires on ADD. Asked twice for the due time, the
   # watch that got saved was one-shot, expiring that night, matching anything
-  # added to the calendar - and the reply said the rule was understood. The
-  # start-time scope fires only while the item is incomplete, so the "if it
-  # isn't done" half costs nothing.
+  # added to the calendar - and the reply said the rule was understood.
+  #
+  # The answer is an anchor on the thing itself, which is also what lets the
+  # same rule be asked for EARLY ("fifteen minutes before"), and which sees a
+  # repeat that is not a row yet. "If it isn't done" is the state check, and it
+  # has to look for the DONE one and expect it missing - an outstanding
+  # occurrence may be a phantom, and a search can never find one of those.
   {
     case:       "prod 8071",
     say:        "Whenever a Shower task comes up on the agenda, if the task isn't marked " \
                 "complete, please send me a message saying \"Time to shower!\"",
-    tool:       :remind_when,
-    args:       { remind_when: { trigger: /\Acustom\z/i, listener: /agenda_event/i, repeat: true } },
-    never_args: { remind_when: { trigger: /\Aagenda\z/i } },
-    note:       "set trigger=agenda (fires on ADD), one-shot, expiring that night",
+    tool:       :schedule_reminder,
+    args:       { schedule_reminder: { anchor: /\Aagenda:shower\z/i, check_expect: /missing/i } },
+    never_args: { schedule_reminder: { at: /.+/ } },
+    note:       "set remind_when trigger=agenda (fires on ADD), one-shot, expiring that night",
   },
   {
     case:  "prod 7761",

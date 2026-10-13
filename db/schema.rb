@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_13_192212) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -603,7 +603,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
     t.bigint "byte_conversation_id", null: false
     t.string "kind", default: "reminder", null: false
     t.text "body", null: false
-    t.datetime "fire_at", null: false
+    t.datetime "fire_at"
     t.datetime "fired_at"
     t.datetime "cancelled_at"
     t.jsonb "metadata", default: {}, null: false
@@ -614,6 +614,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
     t.bigint "notify_user_id"
     t.jsonb "condition"
     t.jsonb "action"
+    t.text "anchor"
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
     t.index ["notify_user_id"], name: "index_buddy_reminders_on_notify_user_id"
@@ -1377,6 +1378,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
     t.index ["job_application_id"], name: "index_job_notes_on_job_application_id"
   end
 
+  create_table "job_transcripts", force: :cascade do |t|
+    t.bigint "job_application_id", null: false
+    t.bigint "job_note_id"
+    t.string "title"
+    t.datetime "occurred_at"
+    t.jsonb "speakers", default: {}, null: false
+    t.jsonb "turns", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["job_application_id"], name: "index_job_transcripts_on_job_application_id"
+    t.index ["job_note_id"], name: "index_job_transcripts_on_job_note_id"
+  end
+
   create_table "lines", id: :serial, force: :cascade do |t|
     t.integer "flash_card_id"
     t.string "text", limit: 255
@@ -2110,6 +2124,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_003646) do
   add_foreign_key "image_descriptions", "users"
   add_foreign_key "job_applications", "users"
   add_foreign_key "job_notes", "job_applications"
+  add_foreign_key "job_transcripts", "job_applications"
+  add_foreign_key "job_transcripts", "job_notes"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"

@@ -118,6 +118,12 @@ module Buddy
       next_fire = next_fire_for(reminder)
       if next_fire
         reminder.update!(last_fired_at: Time.current, fire_at: next_fire)
+      elsif reminder.anchored?
+        # A standing rule whose thing simply isn't on the calendar again yet.
+        # Parks rather than going terminal: "when the shower comes due" is still
+        # the rule after it has gone off once, and nothing else would ever put
+        # it back - the next occurrence appearing is what arms it again.
+        reminder.update!(last_fired_at: Time.current, fire_at: nil)
       else
         # Bad recurrence spec - treat as one-shot rather than loop forever.
         reminder.update!(fired_at: Time.current, last_fired_at: Time.current)

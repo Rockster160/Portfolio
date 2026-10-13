@@ -360,20 +360,19 @@ Buddy::Tools.register(
   # arrives weeks later - long after the first card was answered - where a
   # correction arrives while the first is still sitting there unanswered.
   supersedes:  :pending,
-  # Level 3: an offer that writes nothing until it's tapped.
+  # Level 2: filed on arrival, drawn as a pre-checked row, undone by unticking.
   #
-  # It was level 2 - written on arrival, pre-checked, undo by unchecking - and
-  # that is too much trust for this. The model picks WHICH application a beat
-  # lands on, and when the one they named isn't on the visible board it will
-  # pick a neighbour rather than stop, settling one company as rejected off a
-  # sentence about another. A pre-checked row makes the read-back the only
-  # defence, and reading "Rejected — <company>" as a statement of fact is
-  # exactly what a level-2 row invites.
+  # It sat at level 3 - an offer writing nothing at all until tapped - because
+  # the model picks WHICH application a beat lands on, and a settling tag moves
+  # that application's whole status rather than just adding a row to it.
   #
-  # A settling tag also moves the application's whole status, so the cost of
-  # being wrong isn't one stray row - it closes an application that is still
-  # open. That belongs behind a tap.
-  level:       3,
+  # `#undo` is what carries that weight now: it puts back the note's previous
+  # attributes, the status the application moved off, and the mail's unread
+  # state, so a wrong read costs an untick rather than a reconstruction. And a
+  # beat nobody taps is not the safe outcome it looks like - it is a board
+  # saying an application is still waiting on them when it was answered a week
+  # ago, which is the one thing this tool exists to prevent.
+  level:       2,
   # The value is one particular thing that happened on one particular day.
   # Replaying it inside a routine next month is meaningless.
   routinable:  false,
