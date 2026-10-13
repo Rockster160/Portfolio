@@ -3136,6 +3136,104 @@
     editForm.querySelector('[data-field="parent_chore_id"]')?.addEventListener("change", syncParentChoreLock);
   }
 
+  // ----- Groups -----
+  // A multi-select set of chips over the groups the household already uses,
+  // with a field to coin a new one. The shell HTML is deliberately
+  // user-agnostic (SW-cached across accounts), so the chips can't be
+  // server-rendered — they're built from the loaded ChoreStore each time the
+  // modal opens. The chips are the UI; the hidden `tags_csv` field is the
+  // canonical value the form reads on save, so every change runs through
+  // syncGroupsField.
+  function groupChipsBox() { return editForm?.querySelector('[data-group-chips]'); }
+  function activeGroups() {
+    return Array.from(groupChipsBox()?.querySelectorAll('.pill.active') || [])
+      .map(p => p.dataset.group).filter(Boolean);
+  }
+  function syncGroupsField() {
+    const input = editForm?.querySelector('[data-field="tags_csv"]');
+    if (input) input.value = activeGroups().join(", ");
+  }
+  // Every distinct group across the loaded chores, keeping the first-seen
+  // casing and collapsing case so "Home" and "home" don't both appear.
+  function knownGroups() {
+    const byLc = new Map();
+    ChoreStore.all().forEach(c => (c.tags || []).forEach(t => {
+      const name = String(t).trim();
+      if (name && !byLc.has(name.toLowerCase())) byLc.set(name.toLowerCase(), name);
+    }));
+    return Array.from(byLc.values());
+  }
+  // Rebuild the chip set from the household's groups plus whatever this chore
+  // already carries (so a group only this chore uses still shows), marking
+  // the chore's own groups active. Fully replaces the box, so it doubles as
+  // the reset: renderGroups([]) is a clean slate.
+  function renderGroups(selected) {
+    const box = groupChipsBox();
+    if (!box) return;
+    const chosen = Array(selected).flat().map(s => String(s).trim()).filter(Boolean);
+    const chosenLc = new Set(chosen.map(s => s.toLowerCase()));
+    const byLc = new Map();
+    [...knownGroups(), ...chosen].forEach(name => {
+      if (!byLc.has(name.toLowerCase())) byLc.set(name.toLowerCase(), name);
+    });
+    const names = Array.from(byLc.values())
+      .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    box.textContent = "";
+    names.forEach(name => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = chosenLc.has(name.toLowerCase()) ? "pill active" : "pill";
+      chip.dataset.group = name;
+      chip.textContent = name;
+      box.appendChild(chip);
+    });
+    const add = editForm.querySelector('[data-group-add]');
+    if (add) add.value = "";
+    syncGroupsField();
+  }
+  // Toggle a group on, coining a fresh chip for a name not already shown.
+  // Matching is case-insensitive so a new "Home" folds onto the existing one.
+  function addGroup(name) {
+    const box = groupChipsBox();
+    const clean = String(name || "").trim();
+    if (!box || !clean) return;
+    const existing = Array.from(box.querySelectorAll('.pill'))
+      .find(p => (p.dataset.group || "").toLowerCase() === clean.toLowerCase());
+    if (existing) { existing.classList.add("active"); return; }
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "pill active";
+    chip.dataset.group = clean;
+    chip.textContent = clean;
+    box.appendChild(chip);
+  }
+  function bindGroupChips() {
+    groupChipsBox()?.addEventListener("click", e => {
+      const chip = e.target.closest('.pill');
+      if (!chip) return;
+      e.preventDefault();
+      chip.classList.toggle("active");
+      syncGroupsField();
+    });
+    const add = editForm?.querySelector('[data-group-add]');
+    const commit = () => {
+      if (!add) return;
+      add.value.split(",").map(s => s.trim()).filter(Boolean).forEach(addGroup);
+      add.value = "";
+      syncGroupsField();
+      add.focus();
+    };
+    editForm?.querySelector('[data-group-add-btn]')?.addEventListener("click", e => {
+      e.preventDefault();
+      commit();
+    });
+    add?.addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      commit();
+    });
+  }
+
   // Mirrors syncAnchorPickerButton — render the currently-selected
   // parent chore into the trigger button. Falls back to the "None"
   // placeholder when the hidden input is empty. Also toggles the
@@ -4384,10 +4482,10 @@
     setField("name", "");
     setField("short_name", "");
     setField("aliases_csv", "");
-    setField("tags_csv", "");
+    renderGroups([]);
     setField("notes_template", "");
     setField("notes", "");
-    setField("assigned_to_user_id", "");
+    setPillValue("assigned_to_user_id", "");
     setField("starts_on", "");
     setField("marked_due_at", "");
     setField("parent_chore_id", "");
@@ -4520,7 +4618,7 @@
     // serialized before `icon_ref` was added.
     setIconField(c.icon_ref || c.icon || "");
     setField("aliases_csv", (c.aliases || []).join(", "));
-    setField("tags_csv", (c.tags || []).join(", "));
+    renderGroups(c.tags || []);
     setField("notes_template", c.notes_template || "");
     setField("notes", c.notes || "");
     const reward = c.reward_pebbles || 0;
@@ -4530,7 +4628,7 @@
     if (oneOffCb) oneOffCb.checked = !!c.one_off;
     setPillValue("priority", c.priority || "normal");
     setPillValue("sharing_mode", c.sharing_mode || "household");
-    setField("assigned_to_user_id", c.assigned_to_user_id || "");
+    setPillValue("assigned_to_user_id", c.assigned_to_user_id || "");
     setPillValue("show_on_today_view", c.show_on_today_view || "when_scheduled");
     setPillValue("hot_eligibility", c.hot_eligibility || "when_available");
     setCooldownSeconds(c.threshold_seconds || 0);
@@ -4670,7 +4768,7 @@
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
 
   // Form submit
-  if (editForm) { bindPillGroups(); bindIconUploader(editForm); }
+  if (editForm) { bindPillGroups(); bindGroupChips(); bindIconUploader(editForm); }
   // Cancel buttons reset the form; backdrop click is treated as
   // accidental and only hides (so reopening preserves what was typed).
   // The drag-from-inside-to-outside text selection no longer dismisses.

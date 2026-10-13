@@ -83,20 +83,25 @@
       </div>
 
       <%# Which groups this chore belongs to, and so which Buddy boards show it.
-          Comma-separated free text with the household's existing groups offered:
-          a datalist rather than a select because the first chore in a new group
-          has to be able to name it, and a tag nobody uses any more should
-          disappear by nobody using it rather than by being deleted somewhere. %>
+          A chip per group the household already uses — tap to toggle any number
+          on — plus a field to name a brand-new one, since the first chore in a
+          group has to be able to coin it. Chips rather than a select because a
+          chore belongs to several groups at once; free entry alongside because
+          a group nobody uses any more should disappear by nobody tapping it
+          rather than by being deleted somewhere. The chips are filled from the
+          loaded chores when the modal opens — the shell is cached across
+          accounts, so no household's groups are baked into it here. The hidden
+          field carries the canonical comma-separated value the form submits. %>
       <div class="form-section">
         <label class="field-label">Groups</label>
-        <input type="text" data-field="tags_csv" list="chore-tag-options" placeholder="Home, Morning"
-               autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
-        <datalist id="chore-tag-options">
-          <% Array(@chore_tags).each do |name| %>
-            <option value="<%= name %>"></option>
-          <% end %>
-        </datalist>
+        <div class="pill-group group-chips" data-group-chips></div>
+        <div class="group-add-row">
+          <input type="text" class="group-add-input" data-group-add placeholder="New group…"
+                 autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+          <button type="button" class="pill group-add-btn" data-group-add-btn>Add</button>
+        </div>
+        <input type="hidden" data-field="tags_csv" value="">
       </div>
 
       <%# ----- Pebbles -----
@@ -369,19 +374,19 @@
           <input type="hidden" data-field="sharing_mode" value="household">
         </div>
 
-        <%# ----- Assignee (independent of sharing mode) ----- %>
+        <%# ----- Assignee (independent of sharing mode) -----
+          One chip per household member, plus "Anyone" (the empty value).
+          Single-select, so it rides the shared pill-group machinery; the
+          hidden field carries the chosen user id (blank = Anyone). %>
         <div class="form-section">
           <label class="field-label">Assigned to</label>
-          <div class="assignee-row">
-            <select data-field="assigned_to_user_id" data-1p-ignore="true" data-lpignore="true">
-              <option value="">Anyone</option>
-              <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
-                <option value="<%= u.id %>">
-                  <%= u.username %><%= " (me)" if u.id == current_user.id %>
-                </option>
-              <% end %>
-            </select>
+          <div class="pill-group" data-pill-group="assigned_to_user_id">
+            <button type="button" class="pill active" data-value="">Anyone</button>
+            <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
+              <button type="button" class="pill" data-value="<%= u.id %>"><%= u.username %><%= " (me)" if u.id == current_user.id %></button>
+            <% end %>
           </div>
+          <input type="hidden" data-field="assigned_to_user_id" value="">
         </div>
 
         <%# ----- Show on Today View (button order per spec) ----- %>

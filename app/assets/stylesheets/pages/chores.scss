@@ -2284,6 +2284,34 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     padding: 6px 8px;
   }
 
+  // Groups: toggle chips over the household's existing groups (reusing
+  // .pill-group) with a row beneath for coining a new one — a text field
+  // taking the slack and an Add button that mints a fresh chip.
+  .chore-form .group-chips {
+    margin-bottom: 8px;
+  }
+  .chore-form .group-add-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .chore-form .group-add-row .group-add-input {
+    flex: 1;
+    min-width: 0;
+  }
+  .chore-form .group-add-btn {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--chores-accent);
+    background: var(--chores-accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
   .chore-form .reward-custom {
     margin-top: 8px;
   }
@@ -2331,7 +2359,6 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   // All children sit on one inline row — no wrap by default so the
   // `[Every] [N] [unit]` pattern reads naturally.
   .chore-form .repeat-detail,
-  .chore-form .assignee-row,
   .chore-form .cooldown-custom-row {
     display: flex;
     align-items: center;
@@ -2368,10 +2395,6 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .chore-form .cooldown-unit {
     width: auto !important;
     min-width: 110px;
-  }
-  .chore-form .assignee-row select {
-    flex: 1;
-    min-width: 0;
   }
 
   // Monthly: segmented mode picker + chip grid + nth-weekday row.
