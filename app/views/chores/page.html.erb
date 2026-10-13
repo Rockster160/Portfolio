@@ -198,6 +198,10 @@
     <div class="section-heading">
       <h3>History</h3>
       <div style="display:flex; align-items:center; gap:8px;">
+        <%= link_to chores_groups_path, class: "btn ghost", style: "font-size:12px; padding:4px 10px;",
+                    title: "Tag chores into groups" do %>
+          <i class="fa fa-tags" aria-hidden="true"></i> Groups
+        <% end %>
         <%= link_to chores_archived_path, class: "btn ghost", style: "font-size:12px; padding:4px 10px;",
                     title: "View archived chores" do %>
           <i class="fa fa-archive" aria-hidden="true"></i> Archived

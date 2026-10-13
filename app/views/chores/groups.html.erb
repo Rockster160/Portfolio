@@ -1,0 +1,124 @@
+<% content_for :title, "Chore Groups" %>
+
+<div class="chore-groups-page" style="max-width: 760px; margin: 20px auto; padding: 0 16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+    <h1 style="margin:0;">Chore Groups</h1>
+    <%= link_to "← Back to Chores", chores_path, class: "btn ghost" %>
+  </div>
+
+  <p class="dim" style="margin:0 0 14px; font-size:13px;">
+    One place to tag every chore. Type groups separated by commas; a board shows
+    a chore when they share any group. Each row saves on its own as you leave it.
+  </p>
+
+  <% if @chore_tags.any? %>
+    <p class="dim" style="margin:0 0 14px; font-size:12px;">
+      In use: <%= @chore_tags.map { |t| content_tag(:code, t) }.join(" ").html_safe %>
+    </p>
+  <% end %>
+
+  <% if @chores.empty? %>
+    <p class="dim">No chores yet.</p>
+  <% else %>
+    <ul data-groups-list style="list-style:none; padding:0; margin:0;">
+      <% @chores.each do |chore| %>
+        <li data-chore-id="<%= chore.id %>"
+            style="display:grid; grid-template-columns: 1fr 1.2fr; gap:10px 14px; align-items:center;
+                   border-bottom:1px solid #2a3350; padding:10px 2px;">
+          <div style="min-width:0;">
+            <span style="font-weight:600;"><%= chore.name %></span>
+            <% if chore.parent_chore_id %>
+              <span class="dim" style="font-size:11px;">· sub-chore</span>
+            <% end %>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="text" data-groups-input
+                   value="<%= chore.tags.join(", ") %>"
+                   list="chore-groups-vocab"
+                   placeholder="Home, Morning"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   style="flex:1; min-width:0; padding:7px 9px;">
+            <span data-groups-status class="dim" style="font-size:12px; width:46px; text-align:left;"></span>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <datalist id="chore-groups-vocab">
+    <% @chore_tags.each do |t| %><option value="<%= t %>"></option><% end %>
+  </datalist>
+</div>
+
+<script type="module">
+  function currentCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || "";
+  }
+  async function refreshCsrf() {
+    try {
+      const res = await fetch("/chores/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.token) {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = data.token;
+        return data.token;
+      }
+    } catch (e) {}
+    return null;
+  }
+  async function send(url, body) {
+    const call = (token) => fetch(url, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": token },
+      body: JSON.stringify(body),
+    });
+    let res = await call(currentCsrf());
+    if (res.status === 422) {
+      const fresh = await refreshCsrf();
+      if (fresh) res = await call(fresh);
+    }
+    return res;
+  }
+
+  const list = document.querySelector("[data-groups-list]");
+
+  function status(row, text, color) {
+    const el = row.querySelector("[data-groups-status]");
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.color = color || "";
+  }
+
+  async function saveRow(input) {
+    const row = input.closest("[data-chore-id]");
+    if (!row || input.value === input.defaultValue) return;
+
+    status(row, "Saving…", "");
+    const res = await send(`/chores/items/${row.dataset.choreId}`, { chore: { tags_csv: input.value } });
+    if (res.ok) {
+      // Re-read the saved tags so the field shows the normalized set (deduped,
+      // trimmed) rather than whatever was typed.
+      const data = await res.json().catch(() => null);
+      const tags = data?.chore?.tags;
+      if (Array.isArray(tags)) input.value = tags.join(", ");
+      input.defaultValue = input.value;
+      status(row, "Saved", "#5FD08A");
+      setTimeout(() => status(row, "", ""), 1500);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      status(row, (err.errors || ["Error"]).join(", "), "#FF8F8F");
+      input.value = input.defaultValue;
+    }
+  }
+
+  list?.addEventListener("focusout", (e) => {
+    if (e.target.matches("input[data-groups-input]")) saveRow(e.target);
+  });
+  list?.addEventListener("keydown", (e) => {
+    if (!e.target.matches("input[data-groups-input]")) return;
+    if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+    if (e.key === "Escape") { e.target.value = e.target.defaultValue; e.target.blur(); }
+  });
+</script>

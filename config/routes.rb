@@ -209,6 +209,7 @@ Rails.application.routes.draw do
   get  "/chores/balance_data"   => "chores#balance_data",   as: :chores_balance_data
   get  "/chores/history"        => "chores#history",        as: :chores_history
   get  "/chores/archived"       => "chores#archived",       as: :chores_archived
+  get  "/chores/groups"         => "chores#groups",         as: :chores_groups
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync" => "chores#sync", as: :chores_sync

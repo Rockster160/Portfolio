@@ -2,7 +2,7 @@ class ChoresController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :ensure_chore_household!, only: [:new, :create]
   before_action :set_chore, only: [:show, :edit, :update, :destroy, :unarchive]
-  before_action :require_chore_manager!, only: [:create, :update, :destroy, :unarchive]
+  before_action :require_chore_manager!, only: [:create, :update, :destroy, :unarchive, :groups]
   before_action :assignable_users, only: [:index, :today, :balance, :history, :new]
   helper_method :assignable_users
 
@@ -546,6 +546,16 @@ class ChoresController < ApplicationController
   def unarchive
     @chore.update!(archived_at: nil)
     redirect_to chores_archived_path, notice: "Unarchived #{@chore.name}"
+  end
+
+  # GET /chores/groups — bulk group mapping. One row per active chore with its
+  # groups as an editable comma-separated field, saved on blur through the
+  # ordinary update path (so normalization and the household broadcast stay in
+  # one place). Server-rendered like the archived list: no PWA shell, no
+  # websockets, fresh each visit.
+  def groups
+    @chores = current_user.accessible_chores.order(Arel.sql("LOWER(name) ASC")).to_a
+    @chore_tags = @chores.flat_map(&:tags).compact_blank.uniq(&:downcase).sort_by(&:downcase)
   end
 
   private
