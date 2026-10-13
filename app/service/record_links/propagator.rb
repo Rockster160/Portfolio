@@ -44,6 +44,11 @@ module RecordLinks
 
     WINDOW = 1.second
 
+    # How far back to look for the real event an uphill completion reproduces.
+    # A daily medication is a handful of rows deep; this is the ceiling, not the
+    # expectation.
+    EXEMPLAR_SCAN = 100
+
     # Scopes that can start a cascade. One set lookup for everything else on the
     # bus, which is most of it.
     SCOPES = %w[event chore chore_completion item prompt].to_set.freeze
@@ -242,13 +247,43 @@ module RecordLinks
       # and logging a second one would be a phantom duplicate.
       return false unless event_partner(user, link.source_name, link.source_scope, at).nil?
 
-      event = user.action_events.create!(
-        name:      link.source_name,
-        notes:     link.source_scope.to_s,
-        timestamp: at,
-      )
+      event = user.action_events.create!(uphill_event_attrs(user, link).merge(timestamp: at))
       ::ActionEventNotifier.notify(user, event, :added, auth: :link)
       true
+    end
+
+    # What to log when a direct completion runs uphill. `source_name` and
+    # `source_scope` are MATCH PATTERNS, not content: a `starts_with` name, a
+    # `contains` scope, or a blank scope over events that carry notes all throw
+    # away whatever the pattern didn't need to match — which for a medication is
+    # the dose. So reproduce the newest real event the pairing matches, and the
+    # board press records what the person actually logs, dose and all. Only when
+    # nothing has been logged yet does the pattern itself stand in.
+    def uphill_event_attrs(user, link)
+      template = exemplar_event(user, link)
+      return { name: link.source_name, notes: link.source_scope.to_s } if template.nil?
+
+      { name: template.name, notes: template.notes }
+    end
+
+    def exemplar_event(user, link)
+      scoped = events_named_like(user, link).order(timestamp: :desc).limit(EXEMPLAR_SCAN)
+      scoped.detect { |e| link.matches?(e.name, e.notes) }
+    end
+
+    # Narrow by name in SQL the way the link's own name match reads it, so the
+    # scan covers the few events that could match rather than the whole history;
+    # `matches?` then confirms both name and scope.
+    def events_named_like(user, link)
+      name = link.source_name.to_s.strip
+      return user.action_events.none if name.empty?
+
+      like = ActiveRecord::Base.sanitize_sql_like(name.downcase)
+      case link.source_name_match.to_s
+      when "starts_with" then user.action_events.where("LOWER(name) LIKE ?", "#{like}%")
+      when "contains"    then user.action_events.where("LOWER(name) LIKE ?", "%#{like}%")
+      else                    user.action_events.where("LOWER(name) = ?", name.downcase)
+      end
     end
 
     def remove_completion_event(user, link, completion)

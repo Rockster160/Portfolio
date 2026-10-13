@@ -431,6 +431,43 @@ RSpec.describe RecordLinks::Propagator do
       end
     end
 
+    # The link's name/scope are MATCH PATTERNS, so logging them verbatim drops
+    # whatever the pattern didn't need — the dose a medication carries in its
+    # notes. A board press has to reproduce what the person actually logs.
+    describe "reproducing the real event, not the match pattern" do
+      it "carries a medication's dose forward through a contains scope" do
+        chore!("Cymbalta")
+        link!(:event, "M", :chore, "Cymbalta", source_scope: "Duloxetine", source_scope_match: :contains, reverse: true)
+        log_event!("M", notes: "Duloxetine Hydrochlride 30mg", at: 1.day.ago)
+
+        complete!(Chore.find_by(name: "Cymbalta"))
+
+        latest = user.action_events.where(name: "M").order(:timestamp).last
+        expect(latest.notes).to eq("Duloxetine Hydrochlride 30mg")
+      end
+
+      it "recovers the dose a blank-scope prefix link would otherwise blank out" do
+        chore!("Focus")
+        link!(:event, "D-Amphetamine", :chore, "Focus", source_name_match: :starts_with, reverse: true)
+        log_event!("D-Amphetamine", notes: "20mg", at: 1.day.ago)
+
+        complete!(Chore.find_by(name: "Focus"))
+
+        latest = user.action_events.where(name: "D-Amphetamine").order(:timestamp).last
+        expect(latest.notes).to eq("20mg")
+      end
+
+      it "falls back to the link's own words when nothing has been logged yet" do
+        chore!("Cymbalta")
+        link!(:event, "M", :chore, "Cymbalta", source_scope: "Duloxetine", source_scope_match: :contains, reverse: true)
+
+        complete!(Chore.find_by(name: "Cymbalta"))
+
+        event = user.action_events.where(name: "M").order(:timestamp).last
+        expect(event.notes).to eq("Duloxetine")
+      end
+    end
+
     # Several events reach one chore (Whisper: Nap/Sleep/Down -> Puppy Down).
     # Completing it once must log ONE event, not one per pairing.
     it "logs a single event for a chore several events can complete" do
