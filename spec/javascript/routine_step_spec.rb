@@ -16,6 +16,8 @@ RSpec.describe "Routine step fields" do
     hold:    { key: "then_continue", type: "boolean", required: false },
     kind:    { key: "kind", type: "enum", required: false, values: %w[reminder prompt] },
     at:      { key: "at", type: "iso_time", required: false },
+    dur:     { key: "seconds", type: "duration", unit: "seconds", required: false },
+    brk:     { key: "break_minutes", type: "duration", unit: "minutes", required: false },
   }
 
   # One node process for the whole file: each example below asks a different
@@ -23,7 +25,7 @@ RSpec.describe "Routine step fields" do
   let(:out) {
     module_path = Rails.root.join("app/javascript/src/pages/byte/buddy/routine_step.js")
     script = <<~JS
-      import { fieldFor, readPayload, stepPhrase } from "#{module_path}";
+      import { fieldFor, readPayload, stepPhrase, durationRead } from "#{module_path}";
       const a = #{args.transform_keys(&:to_s).to_json};
       const read = (args, values) => readPayload(args, (arg) => values[arg.key] ?? null);
 
@@ -44,6 +46,19 @@ RSpec.describe "Routine step fields" do
         no_field:      read([a.chore], {}),
         time:          read([a.at], { at: { value: "2026-10-14T11:00" } }),
         bad_time:      read([a.at], { at: { value: "not a time" } }),
+
+        dur_field:     fieldFor(a.dur),
+        dur_plain:     read([a.dur], { seconds: { value: "4m" } }),
+        dur_compound:  read([a.dur], { seconds: { value: "4m30s" } }),
+        dur_loose:     read([a.dur], { seconds: { value: "1h 30m" } }),
+        dur_colon:     read([a.dur], { seconds: { value: "4:30" } }),
+        dur_bare:      read([a.dur], { seconds: { value: "90" } }),
+        dur_junk:      read([a.dur], { seconds: { value: "soonish" } }),
+        dur_minutes:   read([a.brk], { break_minutes: { value: "90s" } }),
+
+        read_plain:    durationRead("4m30s"),
+        read_junk:     durationRead("soonish"),
+        read_blank:    durationRead("  "),
 
         named_step:    stepPhrase({ tool_name: "complete_chore", payload: { chore: "8oz Water" } }),
         bare_step:     stepPhrase({ tool_name: "check_weather", payload: {} }),
@@ -88,6 +103,43 @@ RSpec.describe "Routine step fields" do
 
     it "escapes a value that would otherwise close the attribute it sits in" do
       expect(out[:escaped_attr]).to include('value="say &quot;hi&quot;"')
+    end
+  end
+
+  # Two arguments because the model picks whichever matches how it was said.
+  # A person filling in a form has one length and no reason to care which box
+  # it belongs in - and the pair arrived as two empty fields under a hint
+  # explaining to use one and not the other.
+  describe "a length" do
+    it "is one text box taking the shorthand used everywhere else" do
+      expect(out[:dur_field]).to include('type="text"', 'data-arg-type="duration"')
+      expect(out[:dur_field]).to include("4m30s").and include("1h30m")
+    end
+
+    it "takes every shape that box takes" do
+      expect(out.dig(:dur_plain, :payload)).to eq(seconds: 240)
+      expect(out.dig(:dur_compound, :payload)).to eq(seconds: 270)
+      expect(out.dig(:dur_loose, :payload)).to eq(seconds: 5400)
+      expect(out.dig(:dur_colon, :payload)).to eq(seconds: 270)
+      expect(out.dig(:dur_bare, :payload)).to eq(seconds: 90)
+    end
+
+    it "converts into whichever unit the argument wanted" do
+      expect(out.dig(:dur_minutes, :payload)).to eq(break_minutes: 2)
+    end
+
+    it "treats one it can't read as one that isn't filled in" do
+      expect(out.dig(:dur_junk, :missing)).to eq(["seconds"])
+      expect(out.dig(:dur_junk, :payload)).to be_empty
+    end
+
+    # "4m30" being four and a half minutes is only obvious once something says
+    # so, and a length nothing can read has to say that while it can still be
+    # fixed rather than on the way out.
+    it "says what it was understood as, or that it wasn't" do
+      expect(out[:read_plain]).to eq("4 minutes, 30 seconds")
+      expect(out[:read_junk]).to match(/can't read/i)
+      expect(out[:read_blank]).to eq("")
     end
   end
 

@@ -24,6 +24,21 @@ module Buddy
     # The argument types a field can hold. See `offerable?`.
     FIELD_TYPES = %i[string integer enum boolean iso_time duration_min].freeze
 
+    # What a synthesized duration field says it is for, replacing the pair of
+    # descriptions it stands in for - both of which are about which of the two
+    # arguments to use, a question the form has already answered.
+    DURATION_SAID = "How long the countdown runs.".freeze
+
+    # An integer argument NAMED for its unit is a length too, whatever its type
+    # says - `break_minutes`, `every_minutes`. The name is the declaration, and
+    # treating them as plain numbers left "10" meaning minutes in one box and
+    # seconds in the one above it.
+    UNIT_NAMES = { /_minutes\z/ => :minutes, /_seconds\z/ => :seconds }.freeze
+
+    # The tool's OWN length, as opposed to one named for something narrower.
+    # See `ranked`.
+    PRIMARY_DURATIONS = %i[seconds minutes duration].freeze
+
     def index
       render json: { routines: current_user.buddy_routines.ordered.map(&:serialize_for_client) }
     end
@@ -277,8 +292,56 @@ module Buddy
       tool[:args].to_h.none? { |_key, spec| spec[:required] && FIELD_TYPES.exclude?(spec[:type]) }
     end
 
+    # A DURATION IS ONE FIELD, however the tool takes it.
+    #
+    # `seconds` and `minutes` are separate arguments because the model picks
+    # whichever matches how it was said. A person filling in a form has one
+    # duration and no reason to care which box it belongs in - offered raw it
+    # was two empty fields, either of which might be the wrong one, under a hint
+    # explaining to use one and not the other.
+    #
+    # The field takes the shorthand the rest of the app takes (`4m`, `4m30s`,
+    # `1h30m`, `4:30`, or a bare number of seconds) and the client converts it
+    # to whichever unit the argument wants.
     def fields_for(tool)
-      tool[:args].to_h.filter_map { |key, spec| arg_schema(key, spec) if FIELD_TYPES.include?(spec[:type]) }
+      args   = tool[:args].to_h.select { |_key, spec| FIELD_TYPES.include?(spec[:type]) }
+      paired = args.key?(:seconds) && args.key?(:minutes)
+      args   = args.except(:minutes) if paired
+
+      ranked(args.map { |key, spec| arg_schema(key, spec, paired: paired && key == :seconds) })
+    end
+
+    def unit_for(key, spec, paired)
+      return :seconds if paired
+      return :minutes if spec[:type] == :duration_min
+
+      UNIT_NAMES.find { |pattern, _unit| key.to_s.match?(pattern) }&.last if spec[:type] == :integer
+    end
+
+    # Required first and on screen, everything else folded away.
+    #
+    # A tool's arguments are its whole surface to the model, and that is a lot
+    # more than a person setting one up has to decide: `set_timer` takes ten, six
+    # of them about a repeating work/break rhythm with a stop condition. Asked
+    # all at once it reads as ten decisions rather than one.
+    #
+    # The tool's OWN length is primary whatever it says about it, because on
+    # anything that has one it IS the question. A length named for something
+    # narrower is not: `break_minutes` is about a work/break rhythm and
+    # `every_minutes` about repeating within a day, and both only mean anything
+    # once a switch below has been turned on.
+    #
+    # When nothing is primary there is nothing to fold behind, so it all shows
+    # rather than hiding an entire form.
+    def ranked(fields)
+      primary = fields.select { |field| field[:required] || main_length?(field) }
+      return fields if primary.empty?
+
+      fields.map { |field| primary.include?(field) ? field : field.merge(advanced: true) }
+    end
+
+    def main_length?(field)
+      field[:type] == :duration && PRIMARY_DURATIONS.include?(field[:key])
     end
 
     # One line, from the top of the tool's own description. The descriptions are
@@ -292,14 +355,19 @@ module Buddy
 
     # Enough for the panel to draw a field and refuse an empty required one
     # before it ever asks the server. `values` is what makes an enum a select
-    # rather than a text box somebody has to guess the spelling into.
-    def arg_schema(key, spec)
+    # rather than a text box somebody has to guess the spelling into, and `unit`
+    # is what a duration gets converted back into.
+    def arg_schema(key, spec, paired: false)
+      unit = unit_for(key, spec, paired)
+      said = paired ? DURATION_SAID : spec[:description]
+
       {
         key:         key,
-        type:        spec[:type],
+        type:        unit ? :duration : spec[:type],
+        unit:        unit,
         required:    spec[:required] == true,
         values:      (Array(spec[:values]).map(&:to_s).presence if spec[:type] == :enum),
-        description: spec[:description].to_s.strip.squish.truncate(180).presence,
+        description: said.to_s.strip.squish.truncate(180).presence,
       }.compact
     end
 

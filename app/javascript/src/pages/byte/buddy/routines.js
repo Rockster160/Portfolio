@@ -21,7 +21,7 @@
 // the front of both, and their order there is the order they drag them into.
 
 import Sortable from "../../../../jil/Sortable.min.js";
-import { escapeHtml, escapeAttr, fieldFor, readPayload, stepPhrase } from "./routine_step.js";
+import { escapeHtml, escapeAttr, fieldFor, readPayload, stepPhrase, durationRead } from "./routine_step.js";
 
 async function apiCall(url, method, body) {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -426,17 +426,32 @@ export function initBuddyRoutines({
       return;
     }
 
-    const fields = (chosen.args || []).map(fieldFor).join("");
+    const args  = chosen.args || [];
+    const shown = args.filter((a) => !a.advanced).map(fieldFor).join("");
+    const rest  = args.filter((a) => a.advanced);
+
+    // Folded rather than dropped. Everything a tool takes is still reachable -
+    // the repeating work/break rhythm, the stop condition - but a form opens on
+    // the one or two decisions somebody actually came to make.
+    const more = rest.length
+      ? `<details class="byte-arg-more">
+           <summary>More options (${rest.length})</summary>
+           ${rest.map(fieldFor).join("")}
+         </details>`
+      : "";
+
     toolArgs.hidden = false;
     toolArgs.innerHTML = `
       <h4 class="byte-builder-heading">${escapeHtml(chosen.label)}</h4>
       ${chosen.description ? `<p class="byte-arg-blurb">${escapeHtml(chosen.description)}</p>` : ""}
-      ${fields || `<p class="byte-builder-none">Nothing to fill in.</p>`}
+      ${shown || (more ? "" : `<p class="byte-builder-none">Nothing to fill in.</p>`)}
+      ${more}
       <div class="byte-modal-actions">
-        <button type="button" class="byte-modal-btn" data-arg-add>Add step</button>
         <button type="button" class="byte-modal-btn" data-arg-back>Back</button>
+        <button type="button" class="byte-modal-btn byte-modal-btn-primary" data-arg-add>Add step</button>
       </div>
     `;
+    paintReadbacks();
     toolArgs.querySelector(".byte-modal-input")?.focus();
   }
 
@@ -446,6 +461,24 @@ export function initBuddyRoutines({
     const el = toolArgs.querySelector(`[data-arg-key="${arg.key}"]`);
     return el && { value: el.value, checked: el.checked };
   }
+
+  // "4m30" is four and a half minutes, which is only obvious once something
+  // says so - and a length nothing can read has to say that while it is still
+  // being typed rather than on the way out.
+  function paintReadbacks() {
+    toolArgs?.querySelectorAll('[data-arg-type="duration"]').forEach((el) => {
+      const line = toolArgs.querySelector(`[data-arg-read="${el.dataset.argKey}"]`);
+      if (!line) return;
+
+      const said = durationRead(el.value);
+      line.textContent = said;
+      line.dataset.unreadable = said.startsWith("Can't") ? "true" : "false";
+    });
+  }
+
+  toolArgs?.addEventListener("input", (e) => {
+    if (e.target.dataset?.argType === "duration") paintReadbacks();
+  });
 
   function paintDraft() {
     // Nothing to draft when appending: the step lands on save, and the routine's

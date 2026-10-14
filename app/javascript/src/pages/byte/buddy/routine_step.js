@@ -11,6 +11,16 @@
 // Buddy::Routines.sanitize a routine saved in conversation goes through; this
 // exists so the obvious mistakes are caught in front of the person making them,
 // and so a time means what they picked.
+//
+// One shape IS decided here, because it is about typing rather than about the
+// tool: a duration is a single box taking the shorthand every other duration
+// box in the app takes, and `parseDuration` is that same parser.
+
+import { parseDuration, humanizeSeconds } from "../../timers/duration.js";
+
+// What a duration box accepts, said in the box itself. The readback under it is
+// the proof it was understood.
+export const DURATION_PLACEHOLDER = "4m · 4m30s · 1h30m · 4:30";
 
 export function escapeHtml(s) {
   return String(s ?? "")
@@ -41,6 +51,10 @@ export function controlFor(arg) {
       .join("");
     return `<select class="byte-modal-input" ${common}>${blank}${opts}</select>`;
   }
+  if (arg.type === "duration") {
+    return `<input type="text" class="byte-modal-input" inputmode="text" autocomplete="off" ` +
+      `spellcheck="false" placeholder="${escapeAttr(DURATION_PLACEHOLDER)}" ${common}>`;
+  }
   if (arg.type === "boolean") {
     return `<input type="checkbox" class="byte-arg-check" ${common}>`;
   }
@@ -64,8 +78,26 @@ export function fieldFor(arg) {
     return `<label class="byte-arg byte-arg-inline">${controlFor(arg)}` +
       `<span class="byte-arg-text"><span class="byte-arg-name">${name}${req}</span>${hint}</span></label>`;
   }
+  // A duration carries a live readback as well as its hint: "4m30" meaning four
+  // and a half minutes is only obvious once something says so, and a box that
+  // can't read what was typed has to say that while it can still be fixed.
+  const read = arg.type === "duration"
+    ? `<span class="byte-arg-read" data-arg-read="${escapeAttr(arg.key)}" aria-live="polite"></span>`
+    : "";
+
   return `<label class="byte-arg byte-modal-label">` +
-    `<span class="byte-arg-name">${name}${req}</span>${controlFor(arg)}${hint}</label>`;
+    `<span class="byte-arg-name">${name}${req}</span>${controlFor(arg)}${read}${hint}</label>`;
+}
+
+// The line under a duration box: what it was understood as, or that it wasn't.
+// Blank reads as blank — most of these open empty and a required one is caught
+// on the way out, not scolded while it's still being typed.
+export function durationRead(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+
+  const seconds = parseDuration(text);
+  return seconds == null ? "Can't read that as a length" : humanizeSeconds(seconds);
 }
 
 // What the fields hold, as the payload a step is made of. `valueOf` hands back
@@ -91,6 +123,19 @@ export function readPayload(args, valueOf) {
     const raw = String(field.value ?? "").trim();
     if (!raw) {
       if (arg.required) missing.push(argLabel(arg));
+      return;
+    }
+
+    // One box, whichever unit the argument wanted. `minutes` is rounded rather
+    // than truncated: "90s" on a minutes argument is nearer 2 than 1, and a
+    // duration rounding down to zero would be sent as no duration at all.
+    if (arg.type === "duration") {
+      const seconds = parseDuration(raw);
+      if (seconds == null) {
+        missing.push(argLabel(arg));
+        return;
+      }
+      payload[arg.key] = arg.unit === "minutes" ? Math.max(1, Math.round(seconds / 60)) : seconds;
       return;
     }
 

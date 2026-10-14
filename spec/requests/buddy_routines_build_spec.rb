@@ -56,6 +56,79 @@ RSpec.describe "Building a Buddy routine", type: :request do
       expect(arg["description"]).to be_present
     end
 
+    # Two arguments because the model picks whichever matches how it was said.
+    # Offered raw they were two empty boxes under a hint explaining to use one
+    # and not the other.
+    describe "a length" do
+      before { get "/buddy/routines/tools" }
+
+      let(:timer) { json["tools"].find { |t| t["name"] == "set_timer" } }
+
+      it "is one field rather than a seconds box and a minutes box" do
+        keys = timer["args"].pluck("key")
+
+        expect(keys).to include("seconds")
+        expect(keys).not_to include("minutes")
+      end
+
+      it "says which unit it converts back into" do
+        seconds = timer["args"].find { |a| a["key"] == "seconds" }
+
+        expect(seconds).to include("type" => "duration", "unit" => "seconds")
+      end
+
+      it "drops the description about which of the two to use" do
+        seconds = timer["args"].find { |a| a["key"] == "seconds" }
+
+        expect(seconds["description"]).not_to match(/OR minutes/i)
+      end
+
+      # Minutes of break between blocks is a length too, whatever it is called.
+      it "takes a minutes-only argument the same way" do
+        brk = timer["args"].find { |a| a["key"] == "break_minutes" }
+
+        expect(brk).to include("type" => "duration", "unit" => "minutes")
+      end
+    end
+
+    # set_timer takes ten arguments, six of them about a repeating work/break
+    # rhythm with a stop condition. Asked all at once a form reads as ten
+    # decisions rather than one.
+    describe "how much it asks at once" do
+      before { get "/buddy/routines/tools" }
+
+      it "keeps a length and anything required on screen" do
+        timer = json["tools"].find { |t| t["name"] == "set_timer" }
+        shown = timer["args"].reject { |a| a["advanced"] }.pluck("key")
+
+        expect(shown).to eq(["seconds"])
+      end
+
+      it "folds the rest away rather than dropping them" do
+        timer = json["tools"].find { |t| t["name"] == "set_timer" }
+        folded = timer["args"].select { |a| a["advanced"] }.pluck("key")
+
+        expect(folded).to include("label", "repeat", "stop_when", "break_minutes")
+      end
+
+      it "keeps a required argument on screen beside the optional ones folded away" do
+        chore = json["tools"].find { |t| t["name"] == "complete_chore" }
+        shown = chore["args"].reject { |a| a["advanced"] }.pluck("key")
+
+        expect(shown).to eq(["chore"])
+      end
+
+      # Folding everything would leave a form with nothing on it.
+      it "shows the lot when nothing stands out" do
+        loose = json["tools"].find { |t|
+          t["args"].any? && t["args"].none? { |a| a["required"] || %w[seconds minutes duration].include?(a["key"]) }
+        }
+
+        expect(loose).to be_present
+        expect(loose["args"].select { |a| a["advanced"] }).to be_empty
+      end
+    end
+
     # The descriptions are written for the model and run to paragraphs. One line
     # is what fits beside a name in a list.
     it "says what a tool is for in one line" do
