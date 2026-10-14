@@ -16,19 +16,6 @@ class Jil::Methods::Mac < Jil::Methods::Base
   # it is one person's machine, not a house automation. See `permitted?` — that
   # takes two checks, not one.
 
-  # Auth types that name the PERSON who set the execution off, and how to get
-  # from `auth_type_id` to them — see the note on Execution's enum. Every other
-  # type carries a task id, an API key id, or nothing, so nobody but the owner
-  # is involved and the owner check is the whole answer for those.
-  ACTOR_FROM_AUTH = {
-    guest:    ->(id) { ::User.find_by(id: id) },
-    userpass: ->(id) { ::User.find_by(id: id) },
-    run:      ->(id) { ::User.find_by(id: id) },
-    jwt:      ->(id) { ::User.find_by(id: id) },
-    buddy:    ->(id) { ::User.find_by(id: id) },
-    agenda:   ->(id) { ::AgendaItem.find_by(id: id)&.user },
-  }.freeze
-
   def cast(value)
     @jil.cast(value, :Hash)
   end
@@ -53,37 +40,10 @@ class Jil::Methods::Mac < Jil::Methods::Base
 
   private
 
-  # Both have to be me: the task is mine AND the person who set it off is me.
-  #
-  # The owner check alone is not enough, because `@jil.user` is the task's OWNER
-  # and not necessarily whoever asked. A SHARED task always runs as its owner —
-  # that's `Task#execute` calling `Jil::Executor.call(user, ...)`, and it's
-  # deliberate, since running as the owner is how a task reaches their
-  # credentials at all. So anybody else pressing Run on the owner's task, or
-  # asking their companion to fire one, arrives here with `@jil.user` already
-  # set to the owner. Checking only the owner would let them drive the owner's
-  # machine.
-  #
-  # The execution knows who asked: `auth_type_id` names the acting person for
-  # the types above (the same fact `Jil::Methods::Buddy#recipient` reads to
-  # answer the right person). Nothing to read means nobody but the owner is
-  # involved — cron, a `tell:`, a devExec script — and the owner is the answer.
-  # An actor-bearing execution that can't name its actor fails CLOSED.
-  #
-  # One gap, stated rather than papered over: a trigger CHAIN loses the actor.
-  # `Global.triggerNow` re-fires as the owner with `auth: :trigger` and a TASK
-  # id, so a shared task that triggers another task that runs a Mac command
-  # still reaches it. Closing that means carrying the actor through
-  # ScheduledTrigger, which is a change to every trigger path rather than to
-  # this one — so don't share a task that fires a Mac command, directly or
-  # down a chain.
+  # Both have to be me, which is two checks and not one - see
+  # `Jil::Methods::Base#owned_and_run_by_me?`, which is where it lives because
+  # `Interview.prep` reaches the same machine and has to ask the same question.
   def permitted?
-    return false unless @jil.user&.me?
-
-    execution = @jil.execution
-    finder = ACTOR_FROM_AUTH[execution&.auth_type&.to_sym]
-    return true if finder.nil?
-
-    finder.call(execution.auth_type_id)&.me? || false
+    owned_and_run_by_me?
   end
 end

@@ -111,6 +111,7 @@ Rails.application.routes.draw do
   post   "/buddy/routines"         => "buddy/routines#create"
   # Before the :id routes so "jil_actions" is never read as one.
   get    "/buddy/routines/jil_actions" => "buddy/routines#jil_actions", as: :buddy_routine_jil_actions
+  get    "/buddy/routines/tools" => "buddy/routines#tools", as: :buddy_routine_tools
   post   "/buddy/routines/reorder" => "buddy/routines#reorder", as: :buddy_routines_reorder
   post   "/buddy/routines/:id/run" => "buddy/routines#run",     as: :buddy_routine_run
   patch  "/buddy/routines/:id"       => "buddy/routines#update",  as: :buddy_routine
@@ -424,6 +425,10 @@ Rails.application.routes.draw do
     resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
     resources :transcripts, controller: :job_transcripts,
       only: [:create, :show, :update, :destroy]
+    # The brief written before an interview. Generated rather than typed, so
+    # there is nothing to create here - it arrives, it is read once, and a bad
+    # one gets deleted.
+    resources :preps, controller: :interview_preps, only: [:show, :destroy]
   end
 
   resource :summoners_war do

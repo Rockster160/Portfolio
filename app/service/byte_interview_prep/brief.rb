@@ -1,0 +1,171 @@
+# Everything the pre-interview session is told, in one place.
+#
+# Separate from the run because they are two different jobs: ByteInterviewPrep
+# owns the thread, the guards, and what happens to the answer; this owns what
+# the session knows when it starts. This is the half that gets edited - a brief
+# that came back thin is nearly always a question this file did not ask.
+#
+# Spelled out rather than left to be worked out, for the reason the standup
+# prompt gives: a fresh session spends its first turns rediscovering where
+# things are, and rediscovery inside an hour is where a run quietly decides to
+# research the wrong company.
+module ByteInterviewPrep
+  module Brief
+    module_function
+
+    # How much of the timeline to hand over. An application with forty beats on
+    # it has them because mail keeps arriving; the last dozen are the ones that
+    # describe the conversation being prepared for.
+    MOST_NOTES = 12
+    NOTE_LIMIT = 400
+
+    def stamp(time, user)
+      return "(no time on the row)" if time.nil?
+
+      time.in_time_zone(user.timezone).strftime("%A %B %-d, %Y at %-I:%M %p")
+    end
+
+    # The booking in its own words. The first line of the notes is dropped: it
+    # is the link that got us here, and everything it points at is below.
+    def event_block(item, user)
+      return "There is no calendar row for this one - it was asked for by hand." if item.nil?
+
+      said = item.notes.to_s.lines.drop(1).join.strip
+      [
+        "- On the calendar as: **#{item.name}**",
+        "- Starts: #{stamp(item.start_at, user)}",
+        ("- Ends: #{stamp(item.end_at, user)}" if item.end_at.present?),
+        ("- Where: #{item.location}" if item.location.present?),
+        ("- The row says:\n\n#{said.indent(2)}" if said.present?),
+      ].compact.join("\n")
+    end
+
+    def job_block(application)
+      posting = (
+        if application.jobhunt_job_id.present?
+          "- The posting as it was scraped: #{JOBHUNT_URL}/jobs/#{application.jobhunt_job_id}"
+        end
+      )
+
+      [
+        "- Company: **#{application.company}**",
+        "- Role: #{application.role.presence || "(not recorded)"}",
+        ("- Their listing: #{application.url}" if application.url.present?),
+        ("- Found via: #{application.source}" if application.source.present?),
+        posting,
+      ].compact.join("\n")
+    end
+
+    # The timeline, newest first, which is the order it reads as a story
+    # working backwards from "and now there is an interview".
+    def timeline_block(application, user)
+      notes = application.notes.recent.first(MOST_NOTES)
+      return "Nothing is logged against this one yet." if notes.empty?
+
+      notes.map { |note|
+        head = [
+          note.occurred_at.in_time_zone(user.timezone).strftime("%b %-d"),
+          note.tag_label,
+          ("with #{note.spoke_to}" if note.spoke_to.present?),
+        ].compact.join(" - ")
+        body = note.body.to_s.strip.truncate(NOTE_LIMIT)
+
+        body.empty? ? "- #{head}" : "- #{head}: #{body}"
+      }.join("\n")
+    end
+
+    # Who he has already met, named. Both places it gets written down: the
+    # `spoke_to` on a beat, and the speakers he named on a recording.
+    def people(application)
+      said = application.notes.filter_map { |note| note.spoke_to.presence }
+      named = application.transcripts.flat_map { |transcript|
+        transcript.labels.filter_map { |label|
+          name = transcript.name_for(label)
+          name unless transcript.mine?(label) || name == label
+        }
+      }
+
+      (said + named).map(&:strip).uniq
+    end
+
+    def people_block(application)
+      found = people(application)
+      return "Nobody on this one is recorded by name yet." if found.empty?
+
+      "Already spoken to, by name: #{found.join(", ")}. " \
+        "Say what is known about them where it helps and skip them where it does not."
+    end
+
+    def recordings_block(application)
+      found = application.transcripts.to_a
+      return nil if found.empty?
+
+      titles = found.map { |transcript|
+        [transcript.label, transcript.occurred_at&.strftime("%b %-d")].compact_blank.join(", ")
+      }
+      "Earlier calls with them have been transcribed (#{titles.join("; ")}). " \
+        "They are on the application's own page - you cannot open it from here, " \
+        "but it is worth saying in the brief if something from one of them matters."
+    end
+
+    def text(application, item, user: nil)
+      user ||= application.user
+
+      <<~TXT
+        I have an interview in about an hour. Write me the brief.
+
+        THE CONVERSATION
+        #{event_block(item, user)}
+
+        THE APPLICATION
+        #{job_block(application)}
+
+        #{people_block(application)}
+        #{recordings_block(application)}
+
+        WHAT HAS HAPPENED SO FAR
+        Newest first. This is the whole of what I have written down about them.
+
+        #{timeline_block(application, user)}
+
+        WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST
+        Everything else follows from it, and the material above is what decides it - the title on the row, who it is with, how long it is, and what the last beat on the timeline said. A 30 minute first call with a recruiter is not a technical screen, and a brief that prepares me for the wrong one is worse than no brief.
+
+        - **A recruiter or screening call**: what the company does, in a sentence I could say back. Why the role exists. What they are likely to ask (notice period, salary, why them) and what I should ask back. No algorithms.
+        - **A technical interview**: the stack it will be in, the two or three things in it I should go over before I sit down, and the shape of the exercise if the material says anything about it. Be specific - "brush up on X" is worth nothing without saying what about X.
+        - **A hiring manager or behavioral round**: what this team owns, who I would be working for, and the questions that come with that seat. I keep written answers to the common behavioral ones - see below - so point me at the ones that fit rather than writing new ones.
+        - **A panel or onsite**: who is in it and what each of them is likely to be probing.
+
+        WHERE TO LOOK
+        - **The web is the main source for the company.** Search for them, read their own site, and read their engineering blog and careers page if they have one. What they build, who they sell it to, how big they are, how old they are, who funds them, what they have shipped or announced lately, and anything that has been said about what it is like to work there. If the listing above is still up, read it.
+        - **`#{JOBHUNT_URL}` is my own job board, running on this machine.** `/jobs/<id>` above has the posting as it was scraped, which outlives their listing going dead. Try it; if it does not answer, carry on without it.
+        - **`#{CWD}/profile/profile.yml`** is me: what I do, what I am asking for, what I have said about my own background. Read it before you tell me what to brush up on.
+        - **`#{RESUME_REPO}`** is the resume repo - `resume.html`, `accomplishments.md`, `experience.txt`, and `interview-answers.md`, which is where my behavioral answers are already written. It is on an external drive. If it is not mounted, say so in one line and write the brief without it rather than stopping.
+
+        TWO RULES
+        This session is READ ONLY and there is nobody to ask. Every tool call is answered by a hook against a fixed read-only list and anything else is refused on the spot - do not retry a refusal, and do not ask a question. If you could not find something out, say so in the brief in one line and move on.
+
+        Nothing here is mine to write to. No commits, no edits, no files - the brief is what you reply with, and it is saved and linked for me automatically.
+
+        WHAT TO WRITE
+        Open with exactly two lines, in this order and nothing above them:
+
+        ```
+        # <a title: what this conversation is, and with whom>
+        KIND: <one of recruiter, technical, behavioral, manager, panel, onsite - or unknown>
+        ```
+
+        Then the brief itself, in markdown, in this order:
+
+        1. **The company** - what they do and who for, in two or three sentences I could say back out loud. Then the handful of facts worth having: size, age, funding or ownership, what they have shipped or announced lately.
+        2. **This role, and why it exists** - what the team is for and where I would sit in it.
+        3. **What to go over before it starts** - the specific things, named. This is the section I will actually act on, so put the most useful thing first and stop when you run out of real ones. Three good lines beat eight filler ones.
+        4. **What they are likely to ask** - real questions, in the words they would use, with a line on how I would answer each. Where one of my written answers fits, name it.
+        5. **What I should ask them** - three or four, specific to this company and this team. Nothing that could be asked of anybody.
+        6. **Anything odd** - a bad sign, a gap in what I know, something in the timeline worth raising. One line each, and leave the section out if there is nothing in it.
+
+        I am reading this in the ten minutes before I join the call, on a phone. Write it to be read standing up: short paragraphs, no preamble, no restating the question, no telling me I will do great. Say where something is a guess rather than stating it flatly - a confident wrong fact about the company said out loud in the call is the one failure that is worse than a thin brief.
+      TXT
+    end
+  end
+end

@@ -4619,6 +4619,204 @@ dialog.byte-modal {
   &:empty { display: none; }
 }
 
+// ---- Step builder ---------------------------------------------------------
+//
+// Its own dialog, so it uses the dialog furniture: .byte-modal-label and
+// .byte-modal-input for every field, .byte-modal-actions for the buttons. The
+// earlier version drew bare inputs, which forms.scss styles app-wide into
+// full-width filled bars - three of them stacked under the routine list read as
+// part of the last routine rather than as a form.
+
+.byte-builder-about {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// A labelled block - the steps so far, then what to add. Separated by a rule
+// rather than a card, because a card inside a dialog is a second panel.
+.byte-builder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bs-border);
+}
+
+.byte-builder-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
+}
+
+// Reuses .byte-step from the saved rows, so a draft reads as the thing it is
+// about to become.
+.byte-builder-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  &:empty { display: none; }
+}
+
+.byte-builder-none {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--bs-muted);
+}
+
+.byte-builder-error {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--bs-danger);
+}
+
+.byte-tool-list {
+  list-style: none;
+  padding: 4px;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bs-panel-soft);
+  border: 1px solid var(--bs-border);
+  border-radius: 10px;
+
+  &:empty { display: none; }
+}
+
+// Both selectors, the way .byte-jil-add carries them: forms.scss turns a bare
+// <button> into a gradient pill, and the wall surfaces don't all sit under
+// .byte-app.
+.ctr-byte .byte-modal .byte-tool-pick,
+.byte-modal .byte-tool-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: none;
+  background-image: none;
+  color: inherit !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: normal;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.byte-tool-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bs-text);
+}
+
+// The first line of the tool's own description, which is the half that says
+// what picking it will do - the name alone is mechanical.
+.byte-tool-desc {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--bs-muted);
+}
+
+// The chosen action's arguments. A card here, unlike the sections above,
+// because it replaces the picker rather than sitting beside it and the edge is
+// what says so.
+.byte-tool-args {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bs-panel-soft);
+  border: 1px solid var(--bs-border);
+  border-radius: 10px;
+}
+
+.byte-arg-blurb {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--bs-muted);
+}
+
+.byte-arg-name {
+  font-size: 13px;
+  color: var(--bs-muted);
+}
+
+.byte-arg-req {
+  margin-left: 2px;
+  color: var(--bs-danger);
+}
+
+// The registry's own wording for the argument. It is written for the model and
+// it is the only explanation anybody gets here, so it stays.
+.byte-arg-hint {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--bs-muted);
+  opacity: 0.85;
+}
+
+// A checkbox reads the wrong way round stacked - the box lands under its own
+// name - so it sits in front of the text instead.
+.byte-arg-inline {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.byte-arg-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ctr-byte .byte-modal input.byte-arg-check[type="checkbox"],
+.byte-modal input.byte-arg-check[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--bs-accent);
+  cursor: pointer;
+}
+
+// Adding to a saved routine rather than a draft. Quiet, because it sits under
+// every row in the list and the steps above it are the content.
+.ctr-byte .byte-app .byte-routine-addstep,
+.byte-modal .byte-routine-addstep {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--bs-muted);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--bs-text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
 // ---- Reminders manager -----------------------------------------------------
 
 .byte-reminder-list {
@@ -5471,41 +5669,136 @@ dialog.byte-modal {
   max-height: none;
 }
 
-// Board-only: the lead running timer blown up across the pet, so a break set
-// from the wall reads from the far side of the room. Absolutely pinned over the
-// hero (which is position:relative) so it sits IN FRONT of the character rather
-// than displacing it; the corner chips still carry any other timers. Taps fall
-// through (`pointer-events: none`) so the one tap that acknowledges a ring still
-// reaches the document listener. Painted by buddy/timers.js.
+// Board-only: the lead timer blown up across the pet, so a break set from the
+// wall reads from the far side of the room. Absolutely pinned over the hero
+// (which is position:relative) so it sits IN FRONT of the character rather than
+// displacing it. The corner chip stack is hidden on the board, so this is the
+// surface's whole timer UI — cancel the lead and the next timer takes its place.
+// The overlay itself is pointer-events:none so a tap on the pet still reaches
+// the document ack listener; the ring and its × re-enable events to take taps.
+// Painted by buddy/timers.js.
 .byte-board-timer {
   position: absolute;
   inset: 0;
   z-index: 5;
   display: flex;
   flex-direction: column;
+  // Sit low over the buddy's body, like a clock it is holding, rather than
+  // covering its face — the pet stays visible around the band.
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 16px;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 0 9%;
   pointer-events: none;
-  background: radial-gradient(
-    circle at center,
-    rgba(0, 0, 0, 0.5),
-    rgba(0, 0, 0, 0.78)
-  );
 
   &[hidden] { display: none; }
 }
-// vmin keeps the ring square and bounded by whichever side is shorter, so it
-// fills a portrait tablet without overflowing a landscape one.
+// A banner running the full width of the page, hugging the ring with just a
+// little breathing room above and below it. Three columns — two equal edges and
+// an auto centre — keep the ring centred while the × sits in the right edge, so
+// neither one is positioned with `top` (which `button:active` would override
+// mid-press, the same pin the corner chip-close needs).
+.byte-board-timer-band {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding-block: 16px;
+  background: rgba(6, 10, 20, 0.62);
+}
+// Shorter than the buddy itself: a clock-sized ring, not a hero-filling one.
+// vmin keeps it square and bounded by whichever side is shorter. The band
+// behind it supplies the backdrop, so the ring needs no disc of its own.
+//
+// pointer-events are re-enabled here (the overlay is `none` so a tap on the pet
+// still reaches the alarm-ack) — the ring itself is the board's tap target.
 .byte-board-timer-ring {
   position: relative;
-  width: 58vmin;
-  max-width: 430px;
+  grid-column: 2;
+  width: 22vmin;
+  max-width: 185px;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+// The explicit cancel, in the band's right column so the ring stays centred. A
+// finger-sized target with pointer-events of its own.
+.byte-board-timer-close {
+  grid-column: 3;
+  justify-self: end;
+  margin-right: 5%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+// On the board the banner is the whole timer UI (lead ring + mini row), so the
+// top-left corner chip stack is taken off screen — it otherwise lands on the
+// board's group buttons. The JS already renders no corner chips there; this is
+// the belt-and-suspenders so none can ever paint over the board controls.
+.byte-app[data-board="true"] .byte-buddy-timers {
+  display: none;
+}
+// The other timers, under the band: a centred row of small coarse pills, each
+// tappable with its own ×. pointer-events are re-enabled per pill (the overlay
+// is `none`).
+.byte-board-timer-minis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 92%;
+
+  &[hidden] { display: none; }
+}
+.byte-board-timer-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 12px;
+  border-radius: 999px;
+  background: rgba(6, 10, 20, 0.62);
+  border-left: 3px solid var(--timer-accent, #5c9bf2);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+  cursor: pointer;
+
+  &[data-pending="cancel"] { opacity: 0.5; }
+  &[data-state="fired"] { border-left-color: #f0756b; }
+}
+.byte-board-timer-mini-time {
+  font-size: 2.4vmin;
+  font-weight: 600;
+}
+.byte-board-timer-mini-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .byte-board-timer-svg {
   position: absolute;
@@ -5530,15 +5823,15 @@ dialog.byte-modal {
   transition: stroke-dashoffset 0.3s linear;
 }
 .byte-board-timer-readout {
-  font-size: 15vmin;
+  font-size: 7vmin;
   font-weight: 700;
   line-height: 1;
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
 .byte-board-timer-label {
-  max-width: 80vw;
-  font-size: 5vmin;
+  max-width: 60vw;
+  font-size: 2.6vmin;
   text-align: center;
   text-transform: capitalize;
   color: rgba(255, 255, 255, 0.82);

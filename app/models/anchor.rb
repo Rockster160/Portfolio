@@ -98,6 +98,7 @@ class Anchor < ApplicationRecord
   def self.describe(expression)
     parsed = ::AnchorExpression.parse(expression)
     return nil if parsed.nil?
+    return chore_phrase(parsed) if parsed[:key].start_with?("chore:")
 
     event   = parsed[:key].split(":").last.tr("_", " ")
     subject = PHRASES[parsed[:key]] || "#{parsed[:identifier] ? "that" : "the next"} #{event}"
@@ -106,6 +107,19 @@ class Anchor < ApplicationRecord
 
     gap = ::ActiveSupport::Duration.build(offset.abs).inspect
     "#{gap} #{offset.negative? ? "before" : "after"} #{subject}"
+  end
+
+  # A chore comes due for a DAY rather than at a minute, so its occurrence sits
+  # on the chore-day boundary and the offset is really a time of day (see
+  # AnchorFeeder). Read back as a gap it would be arithmetic nobody asked for:
+  # "7 hours after the next shower" is 11am, said the long way round.
+  def self.chore_phrase(parsed)
+    name    = parsed[:key].split(":", 2).last.tr("_", " ")
+    seconds = ::ChoreDay::CUTOFF_HOURS.hours.to_i + parsed[:offset_seconds]
+    return "when #{name} is due" unless (0...(1.day)).cover?(seconds)
+
+    clock = ::Time.current.midnight.since(seconds).strftime("%-l:%M%P").sub(":00", "")
+    "#{clock} when #{name} is due"
   end
 
   def self.keys_for(user)

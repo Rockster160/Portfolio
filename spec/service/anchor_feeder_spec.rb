@@ -188,6 +188,102 @@ RSpec.describe AnchorFeeder do
     end
   end
 
+  describe "a chore that comes round" do
+    # Chores come due for a DAY, so the anchor sits on the chore-day boundary
+    # and a nudge says its hour as an offset. 4am local.
+    def due_at(date) = ChoreDay.starts_at(date, user)
+
+    def chore!(name, recurrence, **attrs)
+      create(:chore, created_by_user: user, name: name, recurrence: recurrence, **attrs)
+    end
+
+    it "states a due day on the chore-day boundary rather than a clock time" do
+      chore = chore!("Shower", { "freq" => "daily" })
+      anchor = key!("chore:shower")
+
+      described_class.call(user)
+
+      today = ChoreDay.current(user)
+      expect(anchor.occurrences.find_by(identifier: "#{chore.id}:#{today.iso8601}").occurs_at)
+        .to be_within(1.second).of(due_at(today))
+    end
+
+    it "keeps today even once 4am has gone, so a new rule works this morning" do
+      chore = chore!("Shower", { "freq" => "daily" })
+      anchor = key!("chore:shower")
+
+      travel_to(Time.current.change(hour: 10, min: 0)) { described_class.call(user) }
+
+      today = ChoreDay.current(user)
+      expect(anchor.occurrences.pluck(:identifier)).to include("#{chore.id}:#{today.iso8601}")
+    end
+
+    # The whole point of the domain: 11am on a day the shower is due, resolved
+    # from an occurrence whose own moment is already behind us.
+    it "resolves this morning's occurrence through a positive offset" do
+      chore!("Shower", { "freq" => "daily" })
+      key!("chore:shower")
+
+      travel_to(Time.current.change(hour: 10, min: 0)) {
+        described_class.call(user)
+
+        expect(Anchor.resolve("chore:shower+7h", user: user))
+          .to be_within(1.second).of(ChoreDay.starts_at(ChoreDay.current(user), user) + 7.hours)
+      }
+    end
+
+    # `matches_day?` answers true for every date after an overdue one, which
+    # would claim the entire horizon for a chore that comes round twice a week.
+    it "states the day a relative chore comes round and not every day after it" do
+      chore = chore!("Bins", { "freq" => "relative", "unit" => "day", "interval" => 3 })
+      create(:chore_completion, chore: chore, user: user, day_key: ChoreDay.current(user))
+      anchor = key!("chore:bins")
+
+      described_class.call(user)
+
+      expect(anchor.occurrences.pluck(:identifier))
+        .to contain_exactly("#{chore.id}:#{(ChoreDay.current(user) + 3).iso8601}")
+    end
+
+    it "finds one by its alias, because that is what gets said out loud" do
+      chore = chore!("Evening rinse", { "freq" => "daily" }, aliases: ["shower"])
+      anchor = key!("chore:shower")
+
+      described_class.call(user)
+
+      expect(anchor.occurrences.pluck(:identifier)).to include("#{chore.id}:#{ChoreDay.current(user).iso8601}")
+    end
+
+    it "leaves an ad-hoc chore alone, since it never comes round" do
+      chore!("Tidy the shed", {})
+      anchor = key!("chore:shed")
+
+      described_class.call(user)
+
+      expect(anchor.occurrences).to be_empty
+    end
+
+    it "holds the earliest handful rather than the whole horizon" do
+      chore!("Shower", { "freq" => "daily" })
+      anchor = key!("chore:shower")
+
+      described_class.call(user)
+
+      expect(anchor.occurrences.count).to eq(described_class::KEEP_AHEAD)
+    end
+
+    it "drops a day once the chore stops coming round on it" do
+      chore = chore!("Shower", { "freq" => "daily" })
+      anchor = key!("chore:shower")
+      described_class.call(user)
+
+      chore.update!(recurrence: { "freq" => "weekly", "days" => [ChoreDay.current(user).wday] })
+      described_class.call(user)
+
+      expect(anchor.occurrences.count).to be < described_class::KEEP_AHEAD
+    end
+  end
+
   describe "a one-off the person scheduled by hand" do
     it "states it on trigger:start" do
       trigger = ScheduledTrigger.create!(user: user, trigger: "whisper_quiet", execute_at: noon, data: {})

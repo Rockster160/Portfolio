@@ -227,13 +227,14 @@ stayed on the server as a side effect — the browser has no reason to hold it, 
 
 ## Anchors the app feeds itself
 
-Two domains don't need a Jil task. `AnchorFeedWorker` restates them every five minutes from what the app already knows, so a rule can be hung off something on the calendar without anybody writing a feeder first.
+Three domains don't need a Jil task. `AnchorFeedWorker` restates them every five minutes from what the app already knows, so a rule can be hung off something on the calendar without anybody writing a feeder first.
 
 ```
 agenda:start          every upcoming item, by its id
 agenda:end            the same items' end times
 agenda:leave          the travel-derived leave-by, where a drive is known
 agenda:<any word>     items whose name — or whose calendar's name — contains that word
+chore:<any word>      the days a chore comes round, by its name, short name or an alias
 trigger:start         one-off triggers the person scheduled by hand
 ```
 
@@ -247,12 +248,30 @@ Each key holds the earliest `KEEP_AHEAD` occurrences inside the horizon. The hor
 
 **Completion is deliberately not a filter.** An anchor answers WHEN, and ticking something off does not move it: "ten minutes after my interview" has to survive marking the interview done, which is the obvious thing to do the moment it ends. "…unless it's already done" is a question about state, and a schedule asks that with a condition (`ScheduleCondition`) instead of having the time disappear underneath it. Cancelled is different and is dropped — a cancelled thing isn't happening at all.
 
-The state check that pairs with a key is worth writing down, because the obvious way round doesn't work: look for the DONE one and expect it to be **missing**, rather than looking for an outstanding one and expecting it to be found. A phantom isn't a row, so a search can never find it, where a completion always is one.
+The state check that pairs with a key is worth writing down, because the obvious way round doesn't work: look for the DONE one and expect it to be **missing**, rather than looking for an outstanding one and expecting it to be found. A search can only ever see rows that exist, so "is there an outstanding one" has nothing to find on precisely the day the nudge is wanted — where a completion is always a row when it's there, which makes its absence a fact.
 
 ```
-anchor:       agenda:shower
-condition:    { find: :agenda_items, query: 'name:"Shower" is:complete is:today', expect: :missing }
+anchor:       chore:shower+7h
+condition:    { find: :chore_completions, query: 'name:"Shower" is:today', expect: :missing }
 ```
+
+### A recurring task is a chore, not a calendar item
+
+`chore:` exists because `agenda:` looked like it covered this and didn't. The shower, the bins, the pills, feeding the dog — anything on a chore schedule comes due as a chore and usually never appears on the calendar at all. A rule anchored to `agenda:shower` was accepted, read back as waiting, and went a whole day without firing: six Shower calendar items had been made by hand in five months, and none of them that morning.
+
+A chore has **no clock time** — it comes due for a whole chore-day — so an occurrence lands on the instant that day begins, which is `ChoreDay`'s 4am cutoff and the same moment every other chore surface starts calling it due. The hour of a nudge is then the offset:
+
+```
+chore:shower+7h       11am on a day the shower is due
+chore:bins+18h        10pm on a day the bins go out
+chore:shower          4am, which is almost never what anybody meant
+```
+
+`Anchor.describe` reads that back as a time of day rather than a gap — "11am when shower is due" — because "7 hours after the next shower" is the same fact said the long way round.
+
+Two things are different here from the other domains. The day a chore **comes round** is not the same question as whether it can be done today: `Chore#matches_day?` answers true for every date after an overdue one, so `strictly_matches_day?` is what the feeder asks. And **today still counts** after 4am has gone, where a finished event would be dropped — a chore-day is live until it rolls over, and `next_occurrence` already moves its comparison by the offset, so this morning's 4am resolves to this morning's 11am.
+
+Completion is not a filter here either, for the same reason as everywhere else: a daily chore comes round today whether or not it's been ticked, and the condition is what keeps the nudge quiet.
 
 Any other domain is left alone by the feeder. `sun:sunset` is fed by a task, and nothing here will empty it or invent it.
 

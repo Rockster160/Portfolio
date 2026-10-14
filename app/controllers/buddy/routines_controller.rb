@@ -1,9 +1,18 @@
 module Buddy
-  # The routines panel in the Byte drawer: see what's saved, rename one, turn
-  # one off, delete one. Creating and editing STEPS happens by talking to Byte
-  # (`save_routine`), because the steps are tool calls with validated arguments
-  # and a text box is a poor way to write those - so this deliberately doesn't
-  # take `steps`.
+  # The routines panel in the Byte drawer: see what's saved, build one, rename
+  # one, turn one off, delete one.
+  #
+  # Writing steps used to be conversation-only, on the grounds that a tool call
+  # with validated arguments is a bad thing to type into a text box. The box was
+  # the problem, not the UI: the registry already declares every tool's
+  # arguments, their types and which are required, so a form built FROM the
+  # registry can only offer arguments that exist, and `Buddy::Routines.sanitize`
+  # - the same check a routine Byte saves goes through, including each tool's own
+  # `confirm` - is what decides whether a step is real. Nothing here composes a
+  # step by hand.
+  #
+  # `update` still refuses `steps`, because #steps owns them and on tighter
+  # terms.
   class RoutinesController < ApplicationController
     before_action :authorize_user
     before_action :authorize_owner
@@ -11,6 +20,9 @@ module Buddy
     # High enough that nobody hits it on purpose, low enough that a stuck finger
     # on the stepper can't cash in two hundred waters.
     MAX_STEP_COUNT = 20
+
+    # The argument types a field can hold. See `offerable?`.
+    FIELD_TYPES = %i[string integer enum boolean iso_time duration_min].freeze
 
     def index
       render json: { routines: current_user.buddy_routines.ordered.map(&:serialize_for_client) }
@@ -36,21 +48,29 @@ module Buddy
     # grid and the wall. This is only here because getting one used to mean
     # asking Buddy to save it, and there's nothing to discuss when the whole
     # routine is "fire this".
+    # What a step can be MADE of: the tool registry, minus everything a routine
+    # can't replay (`routinable: false` - anything whose whole value is one
+    # particular moment), with each tool's arguments as the form to fill in.
+    #
+    # Sent as the schema rather than rendered server-side, because the step
+    # builder is a live form - picking a tool repaints the fields under it.
+    def tools
+      render json: { tools: composable_tools }
+    end
+
     def create
+      return create_from_steps if params[:steps].present?
+
       task = firable_tasks.find_by(id: params[:task_id])
-      return render(json: { errors: ["that automation isn't available"] }, status: :unprocessable_entity) if task.nil?
+      return fail_with("that automation isn't available") if task.nil?
 
       name = params[:name].to_s.strip.presence || task.name
-      if current_user.buddy_routines.exists?(["LOWER(name) = ?", name.downcase])
-        return render(json: { errors: ["you already have one called \"#{name}\""] }, status: :unprocessable_entity)
-      end
+      return fail_with("you already have one called \"#{name}\"") if named_already?(name)
 
       routine = build_jil_routine(task, name)
-      if routine.save
-        render json: routine.serialize_for_client, status: :created
-      else
-        render json: { errors: routine.errors.full_messages }, status: :unprocessable_entity
-      end
+      return fail_with(*routine.errors.full_messages) unless routine.save
+
+      render json: routine.serialize_for_client, status: :created
     rescue StandardError => e
       render json: { errors: [e.message] }, status: :unprocessable_entity
     end
@@ -63,17 +83,19 @@ module Buddy
       end
     end
 
-    # Prune, reorder, and re-count the steps that are already there.
+    # The whole step list, in the order it should end up in. A row is either one
+    # already saved, named by its ORIGINAL index, or a new one carrying a
+    # `tool_name` and a payload - so this prunes, reorders, re-counts and adds.
     #
-    # The client sends the ORIGINAL index of each step it's keeping, in the
-    # order it wants them, so it never composes a step of its own - it can only
-    # rearrange ones that were validated when they were saved. That's the whole
-    # reason `update` still refuses `steps`: a tool call written into a text box
-    # is a routine that looks fine and fails at 6am.
+    # A kept step rides through exactly as it was stored and is never re-checked
+    # against the live registry here. That matters: `sanitize` asks each tool's
+    # `confirm` whether the name still resolves, so running kept steps back
+    # through it would let a routine that has gone stale - a renamed chore, a
+    # deleted task - refuse the reorder that has nothing to do with it.
     #
-    # Count is the one value editable in place, because it's the one that's
-    # purely a number and the one that's most often wrong - "cup water" was
-    # saved to cash in three and read back as one for days.
+    # Count is the one value editable in place on a kept step, because it's the
+    # one that's purely a number and the one that's most often wrong - "cup
+    # water" was saved to cash in three and read back as one for days.
     def steps
       rebuilt = rebuilt_steps
       return render(json: { errors: ["a routine needs at least one step"] }, status: :unprocessable_entity) if rebuilt.empty?
@@ -83,6 +105,8 @@ module Buddy
       else
         render json: { errors: routine.errors.full_messages }, status: :unprocessable_entity
       end
+    rescue StandardError => e
+      render json: { errors: [e.message] }, status: :unprocessable_entity
     end
 
     def destroy
@@ -174,18 +198,109 @@ module Buddy
       current_user.buddy_routines.new(name: name, description: task.description.to_s.strip.presence, steps: steps)
     end
 
-    # Kept steps, in the order asked for. An index that isn't there is dropped
-    # rather than erroring: the panel and the record can be a moment apart, and
-    # a step that has already gone is the outcome either way.
+    # The final list, in the order asked for.
     #
-    # `uniq` because this reorders and prunes - it doesn't add. Two of the same
-    # index is a dragging glitch, not a request for the step twice.
+    # An index that isn't there is dropped rather than erroring: the panel and
+    # the record can be a moment apart, and a step that has already gone is the
+    # outcome either way. Each index is taken once - two of the same is a
+    # dragging glitch, not a request for the step twice - and that de-duping
+    # deliberately does NOT apply to new rows, which have no index and of which
+    # two identical ones is a perfectly reasonable thing to want.
     def rebuilt_steps
       current = Array(routine.steps)
-      Array(params[:steps]).uniq { |raw| raw[:index].to_i }.filter_map { |raw|
-        step = current[raw[:index].to_i]
+      taken   = Set.new
+
+      Array(params[:steps]).filter_map { |raw|
+        next composed_step(raw) if raw[:tool_name].present?
+
+        index = raw[:index].to_i
+        next nil unless taken.add?(index)
+
+        step = current[index]
         step && recounted(step, raw[:count])
       }
+    end
+
+    # A step the panel just built, through exactly what checks one Byte saves -
+    # the registry for the arguments, then the tool's own `confirm` for whether
+    # the names in them resolve to anything. A step that fails says why in the
+    # tool's own words, which is a better sentence than this could write.
+    def composed_step(raw)
+      Buddy::Routines.sanitize_step(
+        raw.to_unsafe_h, (raw[:position].presence || 1).to_i, Buddy::ToolContext.new(current_user)
+      )
+    end
+
+    def create_from_steps
+      name = params[:name].to_s.strip
+      return fail_with("a routine needs a name") if name.blank?
+      return fail_with("you already have one called \"#{name}\"") if named_already?(name)
+
+      routine = current_user.buddy_routines.new(
+        name:        name,
+        description: params[:description].to_s.strip.presence,
+        steps:       Buddy::Routines.sanitize(params[:steps].map(&:to_unsafe_h), Buddy::ToolContext.new(current_user)),
+      )
+      return fail_with(*routine.errors.full_messages) unless routine.save
+
+      render json: routine.serialize_for_client, status: :created
+    end
+
+    def named_already?(name)
+      current_user.buddy_routines.exists?(["LOWER(name) = ?", name.downcase])
+    end
+
+    def fail_with(*messages)
+      render json: { errors: messages }, status: :unprocessable_entity
+    end
+
+    def composable_tools
+      Buddy::Tools.all.select { |tool| offerable?(tool) }.map { |tool|
+        {
+          name:        tool[:name],
+          label:       tool[:name].to_s.tr("_", " "),
+          description: blurb(tool),
+          args:        fields_for(tool),
+        }
+      }
+    end
+
+    # A tool the panel can actually offer. Beyond `routinable?`, every REQUIRED
+    # argument has to be something a field can hold: an `:object` arg is a shape
+    # rather than a value - the only one is a prompt's question-to-answer map -
+    # and a text box asking for it would be a step that looks filled in and
+    # fails. Those stay conversational, the way a Jil task with data filters on
+    # its listener does.
+    def offerable?(tool)
+      return false unless Buddy::Tools.routinable?(tool)
+
+      tool[:args].to_h.none? { |_key, spec| spec[:required] && FIELD_TYPES.exclude?(spec[:type]) }
+    end
+
+    def fields_for(tool)
+      tool[:args].to_h.filter_map { |key, spec| arg_schema(key, spec) if FIELD_TYPES.include?(spec[:type]) }
+    end
+
+    # One line, from the top of the tool's own description. The descriptions are
+    # written for the model and run to paragraphs; the first sentence is the one
+    # that says what the tool is for, and it is the only part that fits beside a
+    # name in a list.
+    def blurb(tool)
+      first = tool[:description].to_s.split("\n").map(&:strip).find(&:present?)
+      first.to_s.delete("*`#").split(/(?<=[.!?])\s/).first.to_s.truncate(140).presence
+    end
+
+    # Enough for the panel to draw a field and refuse an empty required one
+    # before it ever asks the server. `values` is what makes an enum a select
+    # rather than a text box somebody has to guess the spelling into.
+    def arg_schema(key, spec)
+      {
+        key:         key,
+        type:        spec[:type],
+        required:    spec[:required] == true,
+        values:      (Array(spec[:values]).map(&:to_s).presence if spec[:type] == :enum),
+        description: spec[:description].to_s.strip.squish.truncate(180).presence,
+      }.compact
     end
 
     # Only the count moves, and only on a tool that has repeat semantics at all

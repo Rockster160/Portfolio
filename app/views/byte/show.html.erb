@@ -619,9 +619,9 @@
     </div>
   </dialog>
 
-  <%# Saved routines — a phrase that runs a whole sequence. Read-mostly on %>
-  <%# purpose: the STEPS are tool calls with validated arguments, so they get %>
-  <%# written by talking to Byte. This is for reviewing and pruning them. %>
+  <%# Saved routines — a phrase that runs a whole sequence. Built here or by %>
+  <%# talking to Byte; the steps are tool calls with validated arguments, and %>
+  <%# the builder below offers the registry's own fields rather than a text box. %>
   <dialog class="byte-modal byte-modal-wide" data-byte-routines-modal>
     <div class="byte-modal-form basic">
       <h3 class="byte-modal-title">Routines</h3>
@@ -629,10 +629,10 @@
       <%# screen said what it was for. %>
       <%# `data-buddy-name-slot` is repainted by paintThemeChrome on every %>
       <%# thread switch — server-rendered here so it never flashes a default. %>
-      <p class="byte-modal-hint">★ pins one to the front of Quick and the kiosk. Drag ⠿ to reorder. Ask <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> to save a new one.</p>
+      <p class="byte-modal-hint">★ pins one to the front of Quick and the kiosk. Drag ⠿ to reorder. Build one with ＋ Routine, or ask <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> after it does something worth repeating.</p>
       <div class="byte-manage-body" data-byte-routines>
         <ul class="byte-routine-list" data-byte-routine-list></ul>
-        <p class="byte-manage-empty" data-byte-routines-empty hidden>Nothing saved yet. Tell <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> to "save that as a routine" after it does something worth repeating.</p>
+        <p class="byte-manage-empty" data-byte-routines-empty hidden>Nothing saved yet. Build one with ＋ Routine below, or tell <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> to "save that as a routine" after it does something worth repeating.</p>
 
         <%# A one-tap button for a Jil automation. It becomes an ordinary %>
         <%# one-step routine, so it pins, orders, mutes and deletes like the %>
@@ -649,10 +649,68 @@
         </div>
       </div>
       <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-add-routine>＋ Routine</button>
         <button type="button" class="byte-modal-btn" data-byte-add-jil>＋ Jil action</button>
         <button type="button" class="byte-modal-btn" data-byte-routines-close>Close</button>
       </div>
     </div>
+  </dialog>
+
+  <%# The step builder, in a dialog of its own rather than unfolding under the %>
+  <%# list - it is a form you fill in and finish, and three bare fields stacked %>
+  <%# under three routines read as part of the last one. %>
+  <%# %>
+  <%# The fields come from the tool registry, so only arguments that exist can %>
+  <%# be offered, and the server runs the same sanitize a routine saved in %>
+  <%# conversation goes through: a name resolving to nothing is refused here %>
+  <%# with the tool's own sentence rather than saved broken. %>
+  <dialog class="byte-modal" data-byte-builder-modal>
+    <form class="byte-modal-form basic" data-byte-builder-form method="dialog" autocomplete="off">
+      <h3 class="byte-modal-title" data-byte-builder-title>New routine</h3>
+
+      <div class="byte-builder-about" data-byte-builder-about>
+        <label class="byte-modal-label">
+          Name
+          <input type="text" class="byte-modal-input" data-byte-builder-name
+                 maxlength="80" placeholder="Good night" spellcheck="false">
+        </label>
+        <label class="byte-modal-label">
+          What it's for
+          <input type="text" class="byte-modal-input" data-byte-builder-desc
+                 maxlength="300" placeholder="Optional — the line under its name">
+        </label>
+      </div>
+
+      <%# The draft. Hidden entirely when adding to a routine that already %>
+      <%# exists - its steps are on the row behind this dialog, and repeating %>
+      <%# them here would read as a second copy about to be saved. %>
+      <section class="byte-builder-section" data-byte-builder-made>
+        <h4 class="byte-builder-heading">Steps</h4>
+        <ol class="byte-builder-steps" data-byte-builder-steps></ol>
+        <p class="byte-builder-none" data-byte-builder-none>Nothing yet — pick an action below.</p>
+      </section>
+
+      <%# Hidden while an action's arguments are showing: picking a second one %>
+      <%# mid-fill would quietly throw away what had been typed. %>
+      <section class="byte-builder-section" data-byte-builder-pick>
+        <label class="byte-modal-label">
+          Action
+          <input type="search" class="byte-modal-input" data-byte-tool-search
+                 placeholder="Search actions" autocomplete="off" spellcheck="false">
+        </label>
+        <ul class="byte-tool-list" data-byte-tool-list></ul>
+        <p class="byte-builder-none" data-byte-tool-none hidden></p>
+      </section>
+
+      <section class="byte-tool-args" data-byte-tool-args hidden></section>
+
+      <p class="byte-builder-error" data-byte-builder-error role="alert" hidden></p>
+
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-builder-cancel>Cancel</button>
+        <button type="button" class="byte-modal-btn byte-modal-btn-primary" data-byte-builder-save>Save routine</button>
+      </div>
+    </form>
   </dialog>
 
   <%# Everything Buddy is holding for later: clock reminders and condition %>

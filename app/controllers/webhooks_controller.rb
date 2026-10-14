@@ -386,6 +386,12 @@ class WebhooksController < ApplicationController
     # it streams. Ignores anything that isn't that report; see #forward!.
     if message.state == "delivered" && message.saved_change_to_state?
       ::ByteStandupPrep.forward!(message)
+      # And the same for the pre-interview brief, which rides the same
+      # mechanism for the same reason: the research happens in a claude thread
+      # because that is the only one that reaches the Mac, and what comes back
+      # is filed against the application and pushed as a link. Ignores
+      # anything that is not that report; see #submit!.
+      ::ByteInterviewPrep.submit!(message)
     end
 
     # Detect Anthropic usage-cap errors coming back through the failed-

@@ -1165,3 +1165,136 @@
     }
   }
 }
+
+// THE BRIEF WRITTEN BEFORE AN INTERVIEW.
+//
+// Read in the ten minutes before a call, on a phone, standing up — so this is
+// a reading column and nothing else: no cards, no tiles, no chrome competing
+// with the prose. The one thing it does spend on is the heading rhythm, which
+// is what makes it skimmable when there is no time to read all of it.
+.job-preps {
+  .count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--iv-line);
+    color: var(--iv-text);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .prep-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--iv-line);
+    }
+  }
+
+  .prep-meta {
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+}
+
+.prep-page {
+  .prep-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: baseline;
+    margin-bottom: 18px;
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+
+  // What kind of conversation it is, which decides whether the rest of the
+  // page is worth reading right now.
+  .prep-kind {
+    padding: 2px 9px;
+    border-radius: 11px;
+    background: var(--job-color);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .danger-link {
+    color: $danger;
+  }
+
+  .prep-body {
+    max-width: 68ch;
+    line-height: 1.55;
+
+    // The first heading sits against the meta row above it, so it loses the
+    // top margin every later one needs.
+    > :first-child {
+      margin-top: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 26px 0 8px;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: 21px;
+    }
+
+    h2 {
+      font-size: 18px;
+    }
+
+    h3 {
+      font-size: 16px;
+      color: var(--iv-muted);
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      margin: 0 0 14px;
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--iv-line);
+      font-size: 13px;
+    }
+
+    // A quoted question, which is what this is nearly always holding: the words
+    // they are likely to use, set apart from the line about how to answer it.
+    blockquote {
+      margin: 0 0 12px;
+      padding-left: 12px;
+      border-left: 3px solid var(--job-color);
+      color: var(--iv-text);
+    }
+
+    hr {
+      margin: 22px 0;
+      border: 0;
+      border-top: 1px solid var(--iv-line);
+    }
+  }
+}

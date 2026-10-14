@@ -22,6 +22,11 @@ class JobApplication < ApplicationRecord
     dependent: :destroy
   has_many :transcripts, -> { ordered }, class_name: "JobTranscript", inverse_of: :job_application,
     dependent: :destroy
+  # The briefs written for this one's interviews. Research rather than record:
+  # they are read once in the hour before and kept afterwards for the next
+  # round, which is why they go with the application rather than with the beat.
+  has_many :preps, -> { ordered }, class_name: "InterviewPrep", inverse_of: :job_application,
+    dependent: :destroy
 
   # active   → still in play, still worth chasing.
   # offer    → they said yes. Still open, because it isn't decided yet.

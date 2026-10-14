@@ -394,6 +394,19 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(result[:answers]).to eq([])
       end
 
+      # Prod 8108. A Tesla Navigate called from a reminder answered `true`, and
+      # `to_s` posted that as a sentence: "Navigate to Petsmart after Davis'
+      # dedication practice." with a bare "true" on the line under it. A
+      # function reporting that it worked is not a function saying a word.
+      it "carries nothing up when a function answered with a flag" do
+        allow(::Jil).to receive(:trigger).and_return([fan])
+        allow(fan).to receive(:last_message).and_return(true)
+
+        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+        expect(result[:answers]).to eq([])
+      end
+
       # CSS puts a ✓ in front of every chip, and most receipts end with one of
       # their own - together they rendered "✓ Fired Fan High ✓".
       it "does not leave a second checkmark on the end of the receipt" do

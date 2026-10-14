@@ -10,11 +10,13 @@ RSpec.describe Jil::Schema do
 
   describe ".for" do
     it "hides the owner-only classes from everyone else" do
-      expect(classes_in(described_class.for(other))).not_to include("Tesla", "TeslaStartOptions", "Mac")
+      expect(classes_in(described_class.for(other)))
+        .not_to include("Tesla", "TeslaStartOptions", "Mac", "Interview")
     end
 
     it "keeps them for the owner" do
-      expect(classes_in(described_class.for(owner))).to include("Tesla", "TeslaStartOptions", "Mac")
+      expect(classes_in(described_class.for(owner)))
+        .to include("Tesla", "TeslaStartOptions", "Mac", "Interview")
     end
 
     it "hides them from a logged-out schema request" do
@@ -26,7 +28,7 @@ RSpec.describe Jil::Schema do
       theirs = classes_in(described_class.for(other))
 
       expect(theirs).to include("Global", "Hash", "Array", "Chore", "Agenda")
-      expect(mine - theirs).to contain_exactly("Tesla", "TeslaStartOptions", "Mac")
+      expect(mine - theirs).to contain_exactly("Tesla", "TeslaStartOptions", "Mac", "Interview")
     end
 
     # The gate is a marker for this filter, not part of the language — it must

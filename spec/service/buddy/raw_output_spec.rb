@@ -56,6 +56,19 @@ RSpec.describe Buddy::RawOutput do
       expect(described_class.localize("kennel is closed", user)).to eq("kennel is closed")
     end
 
+    # Prod 8108. A Tesla Navigate fired from a reminder returned a Boolean, and
+    # it was posted as prose: "Navigate to Petsmart after Davis' dedication
+    # practice." with a bare "true" on the line underneath.
+    it "has nothing to say about a flag" do
+      expect(described_class.localize(true, user)).to be_nil
+      expect(described_class.localize(false, user)).to be_nil
+    end
+
+    # A reading IS content, even when it arrives as a number.
+    it "still says a number, because that is an answer" do
+      expect(described_class.localize(72, user)).to eq("72")
+    end
+
     it "rewrites every stamp in a line, not just the first" do
       at("2026-08-05 14:00:00") {
         out = described_class.localize("opened 2026-08-05T18:00:00Z, closed 2026-08-05T18:58:03Z", user)

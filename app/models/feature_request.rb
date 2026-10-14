@@ -44,21 +44,51 @@ class FeatureRequest < ApplicationRecord
   scope :live,   -> { where(status: [:open, :planned]) }
   scope :recent, -> { order(created_at: :desc) }
 
+  # How much of the shorter of two titles has to be shared before they are the
+  # same gap written down twice. A SHARE rather than a count: two absolute words
+  # was the bar, and it was being asked of bodies that run to 2000 characters,
+  # so any two incidental verbs cleared it.
+  MIN_TITLE_SHARE = 0.5
+
   # A request about the same thing, already written down.
   #
   # Only ever consulted among LIVE ones: something shipped or declined is
   # settled, and asking again after that is a real second data point rather
-  # than a duplicate. Two shared significant words rather than one, because a
-  # single overlap ("timer", "reminder") is how unrelated asks collapse into
-  # each other — the lesson from BuddyReminder.cancelled_like, which matched on
-  # one and told somebody they'd switched off a reminder they'd never had.
-  def self.similar_to(user, title, body)
-    words = significant_words("#{title} #{body}")
-    return nil if words.length < 2
+  # than a duplicate.
+  #
+  # THE TITLE DECIDES, and the body is not consulted at all. It used to be
+  # title and body together, needing two shared significant words - and
+  # "attach" plus "automatically" put a request for the first link in an
+  # event's note onto a row about chaining an action onto a running timer.
+  # Nothing about those asks is the same.
+  #
+  # The body is the wrong thing to ask, twice over. It is prose about context,
+  # so its vocabulary is mostly incidental; and a merge APPENDS to it, so every
+  # row absorbed makes the next absorption likelier. One live row had ended up
+  # holding three unrelated asks under a title naming only the first, which is
+  # worse than having none of them written down - the title is what anybody
+  # reading the list sees, so the two it had swallowed were invisible.
+  #
+  # A title is the handful of words somebody chose to name the gap, it doesn't
+  # grow, and two rows about one gap share most of it. Getting this wrong in
+  # the other direction costs a second row for one gap, which is visible and
+  # mergeable by hand; getting it wrong this way loses the request.
+  def self.similar_to(user, title)
+    wanted = significant_words(title)
+    return nil if wanted.length < 2
 
-    live.where(user_id: user.id).recent.find { |row|
-      (significant_words("#{row.title} #{row.body}") & words).length >= 2
-    }
+    live.where(user_id: user.id).recent.find { |row| row.same_gap_as?(wanted) }
+  end
+
+  # Still never on a single shared word, whatever the share works out to - the
+  # lesson from BuddyReminder.cancelled_like, which matched on one and told
+  # somebody they'd switched off a reminder they had never had.
+  def same_gap_as?(wanted)
+    mine   = self.class.significant_words(title)
+    shared = (mine & wanted).length
+    return false if shared < 2
+
+    shared >= (MIN_TITLE_SHARE * [mine.length, wanted.length].min).ceil
   end
 
   FILLER = <<~WORDS.split.to_set.freeze

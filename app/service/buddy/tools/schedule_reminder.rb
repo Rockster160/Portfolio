@@ -189,6 +189,7 @@ Buddy::Tools.register(
       agenda:birthdays-10d        ten days before the next birthday
       agenda:leave-5m             five minutes before the next leave-by
       agenda:end[1289]+10m        ten minutes after THAT item ends
+      chore:shower+7h             11am on a day the shower is due
       trigger:start-15m           a quarter hour before a one-off they scheduled
 
     Under `agenda:`, three words are the item's own edges - `start`, `end` and
@@ -197,6 +198,19 @@ Buddy::Tools.register(
     `agenda:interview` is interviews and `agenda:dentist` is dentist
     appointments. You do not have to ask whether a key exists; writing one
     creates it.
+
+    **`chore:<name>` IS WHERE A RECURRING TASK LIVES, NOT THE CALENDAR.** The
+    shower, the bins, the pills, feeding the dog - anything on a chore schedule
+    comes due as a chore and usually never appears as a calendar item at all.
+    `agenda:shower` looks like it should work and quietly never fires: a rule
+    anchored to it sat on the list for a day and never went off, because six
+    Shower items had been made by hand in five months and none of them that
+    morning. If what they named is a chore, the key is `chore:`.
+
+    A chore has no clock time - it comes due for the whole DAY - so the hour is
+    the offset, counted from 4am when the chore day turns over: `chore:bins+18h`
+    is 10pm, `chore:pills+8h` is noon. An offset is therefore almost always
+    wanted; bare `chore:shower` is 4am and is nearly never what they meant.
 
     Without brackets the expression is a STANDING rule about a class of them -
     the next interview, then the one after that - and it keeps going until
@@ -221,12 +235,17 @@ Buddy::Tools.register(
     or not it has been touched yet, so `agenda:shower-15m` works on every
     occurrence of it rather than only the ones that already exist.
 
-    An anchor says WHEN and never whether the thing is done. For "when the
-    shower comes due unless I've already had one", add the state check:
-    `check: "agenda_items"`, `check_query: 'name:"Shower" is:complete is:today'`,
-    `check_expect: "missing"` - looking for the DONE one and expecting it to be
-    absent, which is the way round that works whether or not the occurrence
-    exists as a row yet.
+    An anchor says WHEN and never whether the thing is done. For "tell me when
+    the shower is due unless I've already had one", the time is
+    `anchor: "chore:shower+7h"` and the state is a check beside it:
+    `check: "chore_completions"`, `check_query: 'name:"Shower" is:today'`,
+    `check_expect: "missing"`.
+
+    Look for the thing being DONE and expect it absent, never the other way
+    round. A search can only ever see rows that exist, so "is there an
+    outstanding shower" has nothing to find on a day nobody has touched it -
+    which is precisely the day the nudge is wanted. A completion is always a
+    row when it is there, so its absence is a fact.
 
     The offset's unit is required - `-30` is rejected rather than guessed at.
   TXT
@@ -246,7 +265,9 @@ Buddy::Tools.register(
       required:    false,
       description: "Hang it off something upcoming instead of a clock time: " \
                    "`agenda:interview-30m`, `agenda:birthdays-10d`, `agenda:leave-5m`, " \
-                   "`agenda:end[<item id>]+10m`, `trigger:start-15m`. Instead of `at`.",
+                   "`agenda:end[<item id>]+10m`, `chore:shower+7h`, `trigger:start-15m`. " \
+                   "A recurring task is a `chore:` key, not an `agenda:` one, and its " \
+                   "offset counts from 4am. Instead of `at`.",
     },
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },

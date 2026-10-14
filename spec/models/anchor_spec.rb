@@ -70,6 +70,33 @@ RSpec.describe Anchor do
     end
   end
 
+  # What a rule says in the reminders list, and the one place it is read back
+  # to the person before it goes off.
+  describe ".describe" do
+    it "says a gap for something with a moment of its own" do
+      expect(described_class.describe("agenda:interview-30m")).to eq("30 minutes before the next interview")
+    end
+
+    # A chore has no clock time: the occurrence is the chore-day boundary and
+    # the offset is really a time of day. "7 hours after the next shower" is
+    # 11am said the long way round.
+    it "says a time of day for a chore, because that is what the offset is" do
+      expect(described_class.describe("chore:shower+7h")).to eq("11am when shower is due")
+    end
+
+    it "keeps the minutes when there are some" do
+      expect(described_class.describe("chore:bins+18h30m")).to eq("10:30pm when bins is due")
+    end
+
+    it "says the bare key plainly, offset or not" do
+      expect(described_class.describe("chore:shower")).to eq("4am when shower is due")
+    end
+
+    it "drops the clock when an offset leaves the day altogether" do
+      expect(described_class.describe("chore:shower-6h")).to eq("when shower is due")
+    end
+  end
+
   describe ".resolve" do
     let!(:anchor) { anchor_for }
 

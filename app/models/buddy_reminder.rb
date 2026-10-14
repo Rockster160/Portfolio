@@ -4,6 +4,7 @@
 #
 #  id                   :bigint           not null, primary key
 #  action               :jsonb
+#  anchor               :text
 #  body                 :text             not null
 #  cancelled_at         :datetime
 #  condition            :jsonb

@@ -1456,18 +1456,42 @@ BUDDY_EDGE_PROBES = [
   # added to the calendar - and the reply said the rule was understood.
   #
   # The answer is an anchor on the thing itself, which is also what lets the
-  # same rule be asked for EARLY ("fifteen minutes before"), and which sees a
-  # repeat that is not a row yet. "If it isn't done" is the state check, and it
-  # has to look for the DONE one and expect it missing - an outstanding
-  # occurrence may be a phantom, and a search can never find one of those.
+  # same rule be asked for EARLY ("fifteen minutes before"). "If it isn't done"
+  # is the state check, and it has to look for the DONE one and expect it
+  # missing - a search can only see rows, so there is nothing to find on the one
+  # day the nudge is wanted.
+  #
+  # And the key is `chore:`, however the sentence says "agenda". The shower is a
+  # chore schedule; the handful of Shower calendar items were made by hand on
+  # the day. Set as `agenda:shower` the rule was accepted, read back as waiting,
+  # and went a full day without ever having an occurrence to fire on.
   {
     case:       "prod 8071",
     say:        "Whenever a Shower task comes up on the agenda, if the task isn't marked " \
                 "complete, please send me a message saying \"Time to shower!\"",
     tool:       :schedule_reminder,
-    args:       { schedule_reminder: { anchor: /\Aagenda:shower\z/i, check_expect: /missing/i } },
-    never_args: { schedule_reminder: { at: /.+/ } },
-    note:       "set remind_when trigger=agenda (fires on ADD), one-shot, expiring that night",
+    args:       {
+      schedule_reminder: { anchor: /\Achore:shower\b/i, check: /chore_completions/i, check_expect: /missing/i },
+    },
+    never_args: { schedule_reminder: { at: /.+/, anchor: /agenda:/i } },
+    note:       "set remind_when trigger=agenda (fires on ADD), one-shot, expiring that night; " \
+                "then agenda:shower, which has nothing to resolve to",
+  },
+  # --- the row is the record, never the thing you did instead ---------------
+  # Prod 8170, 14 Oct. "45 minutes before any Interview event, please send me a
+  # link to the corresponding company." The link part genuinely isn't there, so
+  # the filing is right - and it was the ONLY call. The reminder was entirely
+  # available, and the row that got written says so in its own words.
+  #
+  # So `request_feature` is not in `avoid:`: writing it down is half the right
+  # answer. What has to also happen is the half that works.
+  {
+    case:  "prod 8170",
+    say:   "45 minutes before any Interview event, please send me a link to the " \
+           "corresponding company.",
+    tool:  :schedule_reminder,
+    args:  { schedule_reminder: { anchor: /\Aagenda:interview-45m\z/i } },
+    note:  "filed the gap and set nothing, so there was no nudge before either interview",
   },
   {
     case:  "prod 7761",

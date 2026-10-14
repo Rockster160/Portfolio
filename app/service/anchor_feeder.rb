@@ -13,7 +13,8 @@
 # Under `agenda:`, three event names are an item's own edges - `start`, `end`
 # and `leave` - and any other word is matched against item and calendar NAMES,
 # which is what makes a class key self-serve. `trigger:start` asks the same
-# question of a one-off the person scheduled by hand.
+# question of a one-off the person scheduled by hand, and `chore:<name>` the
+# days a chore comes round.
 #
 # A recurring occurrence counts whether or not it is a row yet. Agenda keeps
 # repeats as phantoms until something touches them or they come due, and reading
@@ -28,6 +29,11 @@
 # a schedule asks that with a condition (see ScheduleCondition) rather than by
 # having the time disappear underneath it. Cancelled is different and IS
 # dropped - a cancelled thing is not happening at all.
+# A chore is the one fed thing with no clock on it: it comes due for a whole
+# chore-day rather than at a minute. So an occurrence lands on the instant that
+# day BEGINS - ChoreDay's 4am cutoff, which is when every other chore surface
+# starts calling it due - and the hour of a nudge is written as an offset:
+# `chore:shower+7h` is 11am on a day the shower is due.
 class AnchorFeeder
   # Far enough ahead for "ten days before anybody's birthday" to have something
   # to hang off all year, short enough that a class key is a handful of rows.
@@ -47,7 +53,7 @@ class AnchorFeeder
   # an item with no drive contributes nothing rather than its start time.
   AGENDA_EDGES = { "start" => :start_at, "end" => :end_at, "leave" => :leave_at }.freeze
 
-  FED_DOMAINS = %w[agenda trigger].freeze
+  FED_DOMAINS = %w[agenda chore trigger].freeze
 
   def self.call(user) = new(user).call
 
@@ -72,6 +78,7 @@ class AnchorFeeder
     wanted = (
       case domain
       when "agenda"  then agenda_times(event)
+      when "chore"   then chore_times(event)
       when "trigger" then trigger_times(event)
       end
     )
@@ -144,6 +151,67 @@ class AnchorFeeder
     return false if term.blank?
 
     "#{item.name} #{item.agenda&.name}".downcase.include?(term.downcase)
+  end
+
+  def chore_times(event)
+    matching = chores.select { |chore| chore_named?(chore, event) }
+    return {} if matching.empty?
+
+    last  = last_chore_days(matching)
+    found = matching.flat_map { |chore| chore_due_times(chore, last[chore.id]) }
+
+    found.sort_by(&:last).first(KEEP_AHEAD).to_h
+  end
+
+  # Everything the person can see, unfiltered: a chore with no recurrence
+  # answers `strictly_matches_day?` false on every date, so an ad-hoc one drops
+  # out without needing a scope of its own.
+  def chores
+    @chores ||= @user.accessible_chores.to_a
+  end
+
+  # The day a chore COMES ROUND, which is not the same question as whether it
+  # can be done today - `matches_day?` answers true for every date after an
+  # overdue one, so a relative chore would claim the whole horizon.
+  #
+  # TODAY counts even though 4am has gone. A chore-day is live until it rolls
+  # over, so dropping it the way a finished event is dropped would push the
+  # first nudge of a brand-new rule to tomorrow - and `next_occurrence` already
+  # moves its comparison by the offset, so this morning's 4am still resolves to
+  # this morning's 11am.
+  def chore_due_times(chore, last_day)
+    from = ::ChoreDay.current(@user)
+    days = from..(@now + HORIZON).to_date
+
+    days.lazy.filter_map { |day|
+      next nil unless chore.strictly_matches_day?(day, @user, last_completed_day: last_day)
+
+      ["#{chore.id}:#{day.iso8601}", ::ChoreDay.starts_at(day, @user)]
+    }.first(KEEP_AHEAD)
+  end
+
+  # One query for the whole pass. `strictly_matches_day?` looks a relative
+  # chore's last completion up for itself when it isn't told, which is a query
+  # per chore per DAY across the horizon.
+  #
+  # A chore with no completion is absent rather than nil-valued, and a missing
+  # key reads as nil - which is what the model takes for "never done", falling
+  # back to `starts_on`. `:unset` is the sentinel that means "go and look", so
+  # it must not be what gets passed.
+  def last_chore_days(matching)
+    ::ChoreCompletion.where(chore_id: matching.map(&:id), user_id: @user.id)
+      .group(:chore_id).maximum(:day_key)
+  end
+
+  # Short names and aliases count as well as the name, because they are what a
+  # person says out loud - the chore called "Shower (evening)" is reached as
+  # `chore:shower` either way.
+  def chore_named?(chore, event)
+    term = event.to_s.tr("_", " ")
+    return false if term.blank?
+
+    said = ([chore.name, chore.short_name] + chore.aliases_array).compact_blank.join(" ")
+    said.downcase.include?(term.downcase)
   end
 
   def trigger_times(event)

@@ -149,11 +149,12 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
       return;
     }
     const list = ordered();
-    // On a board the lead timer (ringing first, else soonest) is blown up to the
-    // banner; the corner chips carry only the rest. Everywhere else the banner
-    // is absent and every timer is a chip.
+    // On a board the banner owns every timer: the lead blown up to the ring, the
+    // rest as a coarse mini row beneath it (renderBanner). The corner chip stack
+    // is unused there. Everywhere else the banner is absent and every timer is a
+    // corner chip.
     renderBanner(list);
-    const chipList = banner ? list.slice(1) : list;
+    const chipList = banner ? [] : list;
     container.hidden = chipList.length === 0 || !isBuddyActive();
     container.innerHTML = "";
 
@@ -228,21 +229,120 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
     if (bannerId !== lead.id || !banner.firstChild) {
       bannerId = lead.id;
       banner.innerHTML = `
-        <div class="byte-board-timer-ring" data-state="running">
-          <svg class="byte-board-timer-svg" viewBox="0 0 100 100" aria-hidden="true">
-            <circle class="byte-board-timer-track" cx="50" cy="50" r="45"></circle>
-            <circle class="byte-board-timer-progress" cx="50" cy="50" r="45"
-                    stroke-dasharray="${BANNER_CIRCUMFERENCE.toFixed(2)}"></circle>
-          </svg>
-          <span class="byte-board-timer-readout" data-banner-readout></span>
+        <div class="byte-board-timer-band">
+          <div class="byte-board-timer-ring" data-state="running" data-banner-ring>
+            <svg class="byte-board-timer-svg" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="byte-board-timer-track" cx="50" cy="50" r="45"></circle>
+              <circle class="byte-board-timer-progress" cx="50" cy="50" r="45"
+                      stroke-dasharray="${BANNER_CIRCUMFERENCE.toFixed(2)}"></circle>
+            </svg>
+            <span class="byte-board-timer-readout" data-banner-readout></span>
+          </div>
+          <button type="button" class="byte-board-timer-close" data-banner-close
+                  aria-label="Cancel timer">×</button>
         </div>
         <div class="byte-board-timer-label" data-banner-label hidden></div>
+        <div class="byte-board-timer-minis" data-banner-minis hidden></div>
       `;
+      wireBanner();
     }
     banner.hidden = false;
     if (lead.color) banner.style.setProperty("--timer-accent", lead.color);
     else banner.style.removeProperty("--timer-accent");
     updateBanner(lead);
+    renderMinis(isBuddyActive() ? list.slice(1) : []);
+  }
+
+  // The other timers, as a small coarse row under the band — the board shows
+  // whole minutes (fmtBanner), never the m:ss a corner chip carries. Reconciled
+  // by id so a tick can refresh a readout in place without rebuilding the row;
+  // each one taps to pause/resume (or cancel when ringing) and carries its own ×.
+  function renderMinis(rest) {
+    const wrap = banner.querySelector("[data-banner-minis]");
+    if (!wrap) return;
+
+    const seen = new Set();
+    rest.forEach((t) => {
+      seen.add(String(t.id));
+      let chip = wrap.querySelector(`[data-mini-id="${t.id}"]`);
+      if (!chip) {
+        chip = document.createElement("div");
+        chip.className = "byte-board-timer-mini";
+        chip.dataset.miniId = t.id;
+        chip.innerHTML = `
+          <span class="byte-board-timer-mini-time" data-mini-readout></span>
+          <button type="button" class="byte-board-timer-mini-close" data-mini-close
+                  aria-label="Cancel timer">×</button>
+        `;
+        wireMini(chip, t.id);
+        wrap.appendChild(chip);
+      }
+      if (t.color) chip.style.setProperty("--timer-accent", t.color);
+      else chip.style.removeProperty("--timer-accent");
+      updateMini(chip, t);
+    });
+
+    Array.from(wrap.children).forEach((c) => {
+      if (!seen.has(c.dataset.miniId)) c.remove();
+    });
+    wrap.hidden = wrap.children.length === 0;
+  }
+
+  function updateMini(chip, t) {
+    const ringing = isDue(t) && !isWait(t);
+    chip.dataset.state = ringing ? "fired" : isPaused(t) ? "paused" : "running";
+    if (cancelling.has(t.id)) chip.dataset.pending = "cancel";
+    else delete chip.dataset.pending;
+    const r = chip.querySelector("[data-mini-readout]");
+    if (r) r.textContent = ringing ? "0m" : fmtBanner(remainingMs(t));
+  }
+
+  function wireMini(chip, id) {
+    onChipTap(chip, (e) => {
+      if (e.target?.closest?.("button")) return;
+
+      const current = timers.get(id);
+      if (!current) return;
+      if (isDue(current)) cancelTimer(id);
+      else toggleTimer(current);
+    });
+    const close = chip.querySelector("[data-mini-close]");
+    if (close) {
+      onChipTap(close, (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        cancelTimer(id);
+      });
+    }
+  }
+
+  // The banner is the board's only timer control — the corner chip stack is
+  // hidden there (CSS), so the lead timer is reached through the ring and its ×.
+  // A tap on a ringing banner ends it (the same "make it stop means gone" as a
+  // ringing chip); a tap on a running one pauses/resumes; the × always cancels.
+  // Everything else on the overlay stays pointer-events:none so a tap on the pet
+  // still acknowledges the alarm (armAck's document-level listener). The handler
+  // reads `bannerId` live, so it always acts on whatever timer the banner shows.
+  function wireBanner() {
+    const ringEl = banner.querySelector("[data-banner-ring]");
+    const closeEl = banner.querySelector("[data-banner-close]");
+    if (ringEl) {
+      onChipTap(ringEl, (e) => {
+        if (e.target?.closest?.("button")) return;
+
+        const current = bannerId != null ? timers.get(bannerId) : null;
+        if (!current) return;
+        if (isDue(current)) cancelTimer(current.id);
+        else toggleTimer(current);
+      });
+    }
+    if (closeEl) {
+      onChipTap(closeEl, (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (bannerId != null) cancelTimer(bannerId);
+      });
+    }
   }
 
   function updateBanner(t) {
@@ -288,9 +388,15 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
     });
     // The banner's lead is not in the chip list, so move it here too — its ring
     // and readout have to advance every tick, not only when the stack changes.
+    // The mini row rides along: coarse minutes still need the tick that crosses
+    // a minute boundary, since no socket event marks it.
     if (banner && bannerId != null) {
       const lead = timers.get(bannerId);
       if (lead) updateBanner(lead);
+      banner.querySelectorAll("[data-mini-id]").forEach((chip) => {
+        const t = timers.get(Number(chip.dataset.miniId));
+        if (t) updateMini(chip, t);
+      });
     }
     if (due !== dueCount) {
       render();

@@ -1,4 +1,22 @@
 class Jil::Methods::Base
+  # Auth types that name the PERSON who set the execution off, and how to get
+  # from `auth_type_id` to them - see the note on Execution's enum. Every other
+  # type carries a task id, an API key id, or nothing, so nobody but the owner
+  # is involved and the owner check is the whole answer for those.
+  #
+  # Here rather than on one method class because it is a fact about the
+  # EXECUTION, and because the two methods that reach the desk Mac both need
+  # the same answer - a second copy of this table is a second chance to get it
+  # wrong.
+  ACTOR_FROM_AUTH = {
+    guest:    ->(id) { ::User.find_by(id: id) },
+    userpass: ->(id) { ::User.find_by(id: id) },
+    run:      ->(id) { ::User.find_by(id: id) },
+    jwt:      ->(id) { ::User.find_by(id: id) },
+    buddy:    ->(id) { ::User.find_by(id: id) },
+    agenda:   ->(id) { ::AgendaItem.find_by(id: id)&.user },
+  }.freeze
+
   attr_accessor :jil
 
   def cast(value)
@@ -86,6 +104,39 @@ class Jil::Methods::Base
     else
       token_val(line.objname).send(line.methodname, *evalargs(line.args))
     end
+  end
+
+  # BOTH have to be me: the task is mine AND the person who set it off is me.
+  # What anything reaching one person's own machine has to ask.
+  #
+  # The owner check alone is not enough, because `@jil.user` is the task's
+  # OWNER and not necessarily whoever asked. A SHARED task always runs as its
+  # owner - that's `Task#execute` calling `Jil::Executor.call(user, ...)`, and
+  # it's deliberate, since running as the owner is how a task reaches their
+  # credentials at all. So anybody else pressing Run on the owner's task, or
+  # asking their companion to fire one, arrives with `@jil.user` already set to
+  # the owner. Checking only the owner would let them drive his machine.
+  #
+  # The execution knows who asked: `auth_type_id` names the acting person for
+  # the types above (the same fact `Jil::Methods::Buddy#recipient` reads to
+  # answer the right person). Nothing to read means nobody but the owner is
+  # involved - cron, a `tell:`, a devExec script - and the owner is the answer.
+  # An actor-bearing execution that can't name its actor fails CLOSED.
+  #
+  # One gap, stated rather than papered over: a trigger CHAIN loses the actor.
+  # `Global.triggerNow` re-fires as the owner with `auth: :trigger` and a TASK
+  # id, so a shared task that triggers another task that reaches the Mac still
+  # gets there. Closing that means carrying the actor through ScheduledTrigger,
+  # which is a change to every trigger path rather than to one method - so
+  # don't share a task that reaches the Mac, directly or down a chain.
+  def owned_and_run_by_me?
+    return false unless @jil.user&.me?
+
+    execution = @jil.execution
+    finder = ACTOR_FROM_AUTH[execution&.auth_type&.to_sym]
+    return true if finder.nil?
+
+    finder.call(execution.auth_type_id)&.me? || false
   end
 
   def set_value(token, val, type: nil)

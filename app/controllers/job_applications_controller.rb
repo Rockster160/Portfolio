@@ -50,6 +50,7 @@ class JobApplicationsController < ApplicationController
   def show
     @notes = @job.notes.recent.to_a
     @transcripts = @job.transcripts.to_a
+    @preps = @job.preps.to_a
     @note = @job.notes.new(occurred_at: Time.current)
     @merge_candidates = merge_candidates
   end

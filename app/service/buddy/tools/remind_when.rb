@@ -36,15 +36,16 @@ Buddy::Tools.register(
                  e.g. "whenever something's added to our agenda, let me know".
                  It does NOT fire when an item comes due. "Tell me when
                  Shower is due", "message me when a task comes up" belongs to
-                 `schedule_reminder`, hung off the thing itself with
-                 `anchor: "agenda:shower"` - which also covers a repeat that is
-                 not a row yet, and lets them ask for a nudge BEFORE it rather
-                 than only at it. "If it isn't done yet" is a state check on
-                 that same call; its description has the shape. Asked for
-                 exactly that, a companion set this trigger and then said it
-                 was set for the due time; the receipt underneath read "when
-                 something's added", and the next thing added to that calendar
-                 would have fired it.
+                 `schedule_reminder`, hung off the thing itself - and a
+                 recurring task like the shower is a CHORE, so the key is
+                 `anchor: "chore:shower+7h"` rather than an `agenda:` one. "If
+                 it isn't done yet" is a state check on that same call; its
+                 description has both shapes. Asked for exactly that, a
+                 companion set this trigger and then said it was set for the
+                 due time; the receipt underneath read "when something's
+                 added", and the next thing added to that calendar would have
+                 fired it. Set as an `agenda:` anchor instead, it was accepted,
+                 read back as waiting, and never had anything to fire on.
       "whisper" - the dog's day changing. `target` is one of `up` (she wakes
                  up), `nap` (she goes down for a nap), `bedtime` (she goes down
                  for the night), `home` (she gets back), `out` (she leaves).

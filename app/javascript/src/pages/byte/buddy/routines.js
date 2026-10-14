@@ -1,15 +1,17 @@
 // The saved-routines manager, opened from the Byte drawer.
 //
 // A routine's STEPS are tool calls with validated arguments, which is a bad
-// thing to hand-edit in a text box - so WRITING one is still a conversation
-// with Byte (`save_routine`). What this panel does is the part conversation is
-// bad at: seeing everything at once, fixing a name, muting one, throwing one
-// away, and rearranging the steps that are already there.
+// thing to hand-edit in a TEXT BOX - and that was the whole objection, so this
+// isn't one. The builder draws its fields from the tool registry, which already
+// declares every argument, its type and whether it's required, so it can only
+// offer arguments that exist; and the server runs the same `sanitize` a routine
+// saved in conversation goes through, including each tool's own `confirm`. A
+// step naming a chore that isn't there is refused with the tool's own sentence
+// rather than saved broken.
 //
-// Rearranging, specifically: drop a step, drag them into a different order,
-// change how many times one runs. Never composing a new one. The client only
-// ever sends back the ORIGINAL index of a step it's keeping, so the worst a
-// bug here can do is reorder or lose a step, never invent a broken one.
+// The rest is what conversation is bad at: seeing everything at once, fixing a
+// name, muting one, throwing one away, dropping a step, dragging them into a
+// different order and changing how many times one runs.
 //
 // Hydrated when the drawer opens rather than at boot — most sessions never
 // open it, and the list is only interesting once it's on screen.
@@ -19,6 +21,7 @@
 // the front of both, and their order there is the order they drag them into.
 
 import Sortable from "../../../../jil/Sortable.min.js";
+import { escapeHtml, escapeAttr, fieldFor, readPayload, stepPhrase } from "./routine_step.js";
 
 async function apiCall(url, method, body) {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -32,20 +35,26 @@ async function apiCall(url, method, body) {
     options.body = JSON.stringify(body);
   }
   const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`http_${res.status}`);
+  if (!res.ok) {
+    // Carry the server's own sentence up. A refused step is a tool saying why
+    // it can't run - "there's no chore called Bins" - and that is strictly
+    // better than anything this file could write in its place.
+    const said = await res.json().catch(() => null);
+    const error = new Error(`http_${res.status}`);
+    error.detail = Array.isArray(said?.errors) ? said.errors.join("; ") : (said?.error || null);
+    throw error;
+  }
   if (res.status === 204) return null;
   return res.json();
 }
 
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
-
-export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBtn, picker, pickerList, pickerEmpty, pickerSearch }) {
+export function initBuddyRoutines({
+  panel, list, empty, indexUrl, onCount,
+  addBtn, picker, pickerList, pickerEmpty, pickerSearch,
+  newBtn, builder, builderForm, builderTitle, builderAbout, builderName, builderDesc,
+  builderMade, builderSteps, builderNone, builderSave, builderCancel, builderError,
+  toolPick, toolSearch, toolList, toolNone, toolArgs,
+}) {
   if (!panel || !list) return null;
 
   let routines = [];
@@ -102,6 +111,7 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
           </div>
           ${r.description ? `<p class="byte-routine-desc">${escapeHtml(r.description)}</p>` : ""}
           <ol class="byte-routine-steps" data-routine-steps>${steps}</ol>
+          <button type="button" class="byte-routine-addstep" data-routine-add-step>＋ step</button>
         </li>
       `;
     }).join("");
@@ -341,9 +351,282 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
     if (row && e.target.closest("[data-jil-add]")) addJil(Number(row.dataset.jilId), row.dataset.jilName);
   });
 
+  // ---- building one out of the registry's own fields ----
+  //
+  // Its own dialog rather than a panel unfolding under the list: it is a form
+  // you fill in and finish, and three bare fields stacked under the last saved
+  // routine read as part of that routine.
+  //
+  // Two modes, one form. With no routine named it collects steps into a draft
+  // and saves them as a new routine; opened from a row's "＋ step" it appends to
+  // that routine as soon as the step is filled in, because there is nothing to
+  // name and nothing left to save.
+
+  let tools    = [];
+  let draft    = [];
+  let appendTo = null;
+  let chosen   = null;
+
+  async function loadTools() {
+    if (tools.length) return;
+    try {
+      const data = await apiCall(`${indexUrl}/tools`, "GET");
+      tools = Array.isArray(data?.tools) ? data.tools : [];
+    } catch (e) {
+      tools = [];
+    }
+  }
+
+  function showError(message) {
+    if (!builderError) return;
+    builderError.textContent = message || "";
+    builderError.hidden = !message;
+  }
+
+  // Name and description match, because which one you'd search by depends on
+  // the tool: "complete chore" is findable by name and "put something on a
+  // list" by what the line under it says.
+  function matchingTools() {
+    const q = (toolSearch?.value || "").trim().toLowerCase();
+    if (!q) return tools;
+    return tools.filter((t) => `${t.label} ${t.description || ""}`.toLowerCase().includes(q));
+  }
+
+  function paintTools() {
+    if (!toolList) return;
+    const shown = matchingTools();
+
+    if (toolNone) {
+      toolNone.hidden = shown.length > 0;
+      toolNone.textContent = tools.length
+        ? `No action matches “${(toolSearch?.value || "").trim()}”.`
+        : "Couldn't load the actions.";
+    }
+
+    toolList.innerHTML = shown.map((t) => `
+      <li class="byte-tool" data-tool-name="${escapeAttr(t.name)}">
+        <button type="button" class="byte-tool-pick" data-tool-pick>
+          <span class="byte-tool-label">${escapeHtml(t.label)}</span>
+          ${t.description ? `<span class="byte-tool-desc">${escapeHtml(t.description)}</span>` : ""}
+        </button>
+      </li>
+    `).join("");
+  }
+
+  function paintArgs() {
+    if (!toolArgs) return;
+
+    // The picker hides while an action is being filled in. Picking a second one
+    // halfway through would throw away what had been typed with nothing said.
+    if (toolPick) toolPick.hidden = chosen != null;
+
+    if (!chosen) {
+      toolArgs.hidden = true;
+      toolArgs.innerHTML = "";
+      return;
+    }
+
+    const fields = (chosen.args || []).map(fieldFor).join("");
+    toolArgs.hidden = false;
+    toolArgs.innerHTML = `
+      <h4 class="byte-builder-heading">${escapeHtml(chosen.label)}</h4>
+      ${chosen.description ? `<p class="byte-arg-blurb">${escapeHtml(chosen.description)}</p>` : ""}
+      ${fields || `<p class="byte-builder-none">Nothing to fill in.</p>`}
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-arg-add>Add step</button>
+        <button type="button" class="byte-modal-btn" data-arg-back>Back</button>
+      </div>
+    `;
+    toolArgs.querySelector(".byte-modal-input")?.focus();
+  }
+
+  // The elements the fields were drawn into, handed to readPayload so it can
+  // stay free of the DOM.
+  function fieldValue(arg) {
+    const el = toolArgs.querySelector(`[data-arg-key="${arg.key}"]`);
+    return el && { value: el.value, checked: el.checked };
+  }
+
+  function paintDraft() {
+    // Nothing to draft when appending: the step lands on save, and the routine's
+    // own steps are on the row behind this dialog.
+    if (builderMade) builderMade.hidden = appendTo != null;
+    if (builderNone) builderNone.hidden = draft.length > 0;
+    if (!builderSteps) return;
+
+    builderSteps.innerHTML = draft.map((step, i) => `
+      <li class="byte-step" data-draft-index="${i}">
+        <span class="byte-step-phrase">${escapeHtml(stepPhrase(step))}</span>
+        <button type="button" class="byte-step-remove" data-draft-remove aria-label="Remove step">×</button>
+      </li>
+    `).join("");
+  }
+
+  function closeBuilder() {
+    draft = [];
+    appendTo = null;
+    chosen = null;
+    showError("");
+    paintDraft();
+    paintArgs();
+    if (!builder) return;
+    if (typeof builder.close === "function") builder.close();
+    else builder.removeAttribute("open");
+  }
+
+  async function openBuilder(routine) {
+    if (!builder) return;
+    if (picker) picker.hidden = true;
+
+    appendTo = routine ? routine.id : null;
+    draft = [];
+    chosen = null;
+    showError("");
+
+    // Appending has nothing to name and nothing to hold back: the step lands
+    // the moment it's filled in, so a Save button would be a second press that
+    // does nothing.
+    if (builderTitle) builderTitle.textContent = routine ? `Add a step to “${routine.name}”` : "New routine";
+    if (builderAbout) builderAbout.hidden = appendTo != null;
+    if (builderSave) builderSave.hidden = appendTo != null;
+    if (builderName) builderName.value = "";
+    if (builderDesc) builderDesc.value = "";
+    if (toolSearch) toolSearch.value = "";
+    paintDraft();
+    paintArgs();
+
+    if (typeof builder.showModal === "function") builder.showModal();
+    else builder.setAttribute("open", "");
+
+    await loadTools();
+    paintTools();
+    (appendTo == null ? builderName : toolSearch)?.focus();
+  }
+
+  // In append mode this is the whole transaction: the existing steps by index,
+  // plus the new one, which is the shape #steps takes anyway.
+  async function appendStep(step) {
+    const routine = routines.find((r) => r.id === appendTo);
+    if (!routine) return closeBuilder();
+
+    const steps = (routine.step_rows || []).map((s) => ({ index: s.index, count: s.count }));
+    steps.push(step);
+
+    try {
+      const updated = await apiCall(`${indexUrl}/${routine.id}/steps`, "PATCH", { steps });
+      const i = routines.findIndex((r) => r.id === routine.id);
+      if (i >= 0 && updated) routines[i] = updated;
+      closeBuilder();
+      render();
+    } catch (e) {
+      showError(e.detail || "Couldn't add that step.");
+    }
+    return undefined;
+  }
+
+  function addStep() {
+    if (!chosen) return undefined;
+
+    const { payload, missing } = readPayload(chosen.args, fieldValue);
+    if (missing.length) return showError(`Still needs ${missing.join(", ")}.`);
+
+    const step = { tool_name: chosen.name, payload };
+    showError("");
+    if (appendTo != null) return appendStep(step);
+
+    draft.push(step);
+    chosen = null;
+    paintDraft();
+    paintArgs();
+    if (toolSearch) toolSearch.value = "";
+    paintTools();
+    toolSearch?.focus();
+    return undefined;
+  }
+
+  async function saveDraft() {
+    const name = (builderName?.value || "").trim();
+    if (!name) {
+      showError("Give it a name first.");
+      builderName?.focus();
+      return;
+    }
+    if (!draft.length) {
+      showError("Add at least one step.");
+      return;
+    }
+
+    try {
+      await apiCall(indexUrl, "POST", {
+        name,
+        description: (builderDesc?.value || "").trim(),
+        steps: draft,
+      });
+      closeBuilder();
+      await refresh();
+    } catch (e) {
+      showError(e.detail || "Couldn't save that one.");
+    }
+  }
+
+  newBtn?.addEventListener("click", () => openBuilder(null));
+  builderSave?.addEventListener("click", saveDraft);
+  builderCancel?.addEventListener("click", closeBuilder);
+  toolSearch?.addEventListener("input", paintTools);
+
+  // Enter does the nearest sensible thing instead of submitting the dialog
+  // closed: finish the action being filled in, or save what's there.
+  builderForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (chosen) addStep();
+    else if (appendTo == null) saveDraft();
+  });
+
+  // Esc and the backdrop close a <dialog> without going through Cancel, and a
+  // half-built draft left in memory would reappear the next time it opened.
+  builder?.addEventListener("close", () => {
+    draft = [];
+    appendTo = null;
+    chosen = null;
+    showError("");
+  });
+
+  toolList?.addEventListener("click", (e) => {
+    const row = e.target.closest?.("[data-tool-name]");
+    if (!row || !e.target.closest("[data-tool-pick]")) return;
+    chosen = tools.find((t) => t.name === row.dataset.toolName) || null;
+    showError("");
+    paintArgs();
+  });
+
+  toolArgs?.addEventListener("click", (e) => {
+    if (e.target.closest("[data-arg-add]")) {
+      addStep();
+      return;
+    }
+    if (e.target.closest("[data-arg-back]")) {
+      chosen = null;
+      showError("");
+      paintArgs();
+      toolSearch?.focus();
+    }
+  });
+
+  builderSteps?.addEventListener("click", (e) => {
+    const row = e.target.closest?.("[data-draft-index]");
+    if (!row || !e.target.closest("[data-draft-remove]")) return;
+    draft.splice(Number(row.dataset.draftIndex), 1);
+    paintDraft();
+  });
+
   list.addEventListener("click", async (e) => {
     const routine = routineFor(e.target);
     if (!routine) return;
+
+    if (e.target.closest("[data-routine-add-step]")) {
+      openBuilder(routine);
+      return;
+    }
 
     const step = e.target.closest?.("[data-step-index]");
     if (step) {

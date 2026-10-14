@@ -1,0 +1,54 @@
+<%= meta_title "#{@prep.label} — prep" %>
+<%= meta_description "Interview prep — #{@job.company}." %>
+
+<div class="wide-container interview-back-row">
+  <%= link_to "← #{@job.company}", interview_path(@job), class: :btn %>
+</div>
+
+<div class="wide-container interviews-page prep-page"
+     style="--job-color: <%= @job.color %>;">
+  <div class="app-card-container">
+    <div class="app-card-title">
+      <div class="job-identity">
+        <div class="job-identity-names">
+          <%= @prep.title.presence || @prep.label %>
+          <div class="subtitle">
+            <%= @job.company %><%= " · #{@job.role}" if @job.role.present? %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-card-body">
+      <div class="app-card-inner">
+        <div class="prep-meta-row">
+          <% if @prep.kind_label %>
+            <span class="prep-kind"><%= @prep.kind_label %></span>
+          <% end %>
+          <%# When the interview is, not when the brief was written: the brief
+             is read against the clock, and "in 50 minutes" is the whole reason
+             the page is open. Past the hour it says the day instead, because
+             by then it is reference for the next round. %>
+          <% if @prep.interview_at %>
+            <span>
+              <%= @prep.spent? ? "was" : "" %>
+              <%= interview_day(@prep.interview_at) %>
+            </span>
+          <% end %>
+          <span>written <%= @prep.created_at.strftime("%b %-d, %-I:%M %p") %></span>
+          <%= link_to "Delete", interview_prep_path(@job, @prep),
+                method: :delete, class: "danger-link",
+                data: { confirm: "Delete this prep?" } %>
+        </div>
+
+        <%# The brief as the session wrote it. Nothing is reflowed or
+           summarised on the way in or out — it was written to be read in ten
+           minutes and a second opinion on its wording is not what the page is
+           for. %>
+        <div class="prep-body">
+          <%= Markdown.new(@prep.body.to_s, user: current_user).to_html %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

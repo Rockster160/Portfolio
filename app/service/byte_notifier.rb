@@ -16,6 +16,7 @@ module ByteNotifier
   def notify(user, message)
     return unless message.state == "delivered"
     return if kiosk?(message)
+    return if plumbing?(message)
 
     meta = message.metadata.is_a?(Hash) ? message.metadata : {}
 
@@ -54,6 +55,23 @@ module ByteNotifier
       # is exactly when a badge is the whole point.
       data:          { count: ByteConversation.unread_total_for(user) },
     )
+  end
+
+  # An ARCHIVED thread is machinery, not a place.
+  #
+  # Two jobs run a Claude session in a thread of their own because that is the
+  # only handle on one - the pre-standup brief and the pre-interview brief -
+  # and both archive it so it stays out of the list and out of the unread
+  # count. Both then hand the finished thing to the person properly: the brief
+  # is forwarded into the primary thread, the prep is filed and its link
+  # pushed. The session's own reply buzzing as well is the same work announcing
+  # itself twice, seconds apart, the second time as a wall of markdown.
+  #
+  # Nothing else is affected: self-initiated delivery already picks an
+  # unarchived thread (`ByteConversation.for_self_initiated` is `.active`), so
+  # the only pushes this takes away are the ones from threads nobody reads.
+  def plumbing?(message)
+    message.byte_conversation&.archived?
   end
 
   # Reading a thread clears the badge on every OTHER device.

@@ -26,7 +26,17 @@ module Buddy
       (?: Z | [+-]\d{2}:?\d{2} )
     /x
 
+    # A BOOLEAN IS NOT AN ANSWER. `true` is a function reporting that it worked,
+    # and stringifying it produces a word that reads as speech: a Tesla Navigate
+    # fired from a reminder posted "Navigate to Petsmart after Davis' dedication
+    # practice." with a bare "true" on the line underneath (prod 8108). Every
+    # action that calls a function returning a flag would do the same.
+    #
+    # Numbers and the rest pass through, because those ARE content - a
+    # thermostat answering 72 is the answer to what it's set to.
     def localize(text, user)
+      return nil if text.is_a?(TrueClass) || text.is_a?(FalseClass)
+
       today = Time.current.in_time_zone(zone_for(user)).to_date
       text.to_s.gsub(STAMP_RX) { |stamp| phrase(stamp, user, today) || stamp }
     end

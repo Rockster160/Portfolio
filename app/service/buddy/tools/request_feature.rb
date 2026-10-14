@@ -71,6 +71,15 @@ Buddy::Tools.register(
     stop-when-it-finishes part on the list." Never offer them a choice between
     the request and the doable half - do the half.
 
+    **FILING IS NOT THE HALF.** Asked for "45 minutes before any Interview
+    event, send me a link to the company", a companion called this and nothing
+    else. The reminder was entirely available - `schedule_reminder` with
+    `anchor: "agenda:interview-45m"` - and the row it wrote even says so, in
+    its own words: "I can anchor reminders to interview events, but I don't
+    have a way to attach a company link." It knew, wrote it down, and left
+    them with no reminder before either interview that day. Writing a row is
+    the record of what you couldn't do; it is never the thing you did instead.
+
     **WRITE DOWN THE PART THAT DOESN'T WORK, not the whole request.** If you
     can set a repeat but not its ending, the request is the ending. A row
     titled for the thing you could already do is worse than none: it reads as
@@ -85,6 +94,13 @@ Buddy::Tools.register(
     Asking for the same thing again adds to the one that's already written down
     rather than making a second; you'll be told when that happens, and it's
     worth saying, because "you've asked for that before" is a real answer.
+
+    **WHEN IT MERGES, SAY WHICH ROW IT WENT ONTO** - by the title you get back.
+    "Done, I've put the request in" over a receipt reading "Added that to
+    **Chain actions onto running timers**" leaves two sentences disagreeing in
+    front of them, and the one they have no reason to doubt is the wrong one.
+    "That went onto the <title> row" is the whole fix, and it is also their one
+    chance to tell you it belongs somewhere else.
 
     **"THAT'S NOT WHAT I MEANT" IS NOT A SECOND FILING.** When they tell you the
     row you just wrote is wrong, sending the same words again writes nothing at
@@ -123,7 +139,7 @@ Buddy::Tools.register(
     # A second telling fills in what the first didn't carry rather than starting
     # a second row. Somebody who keeps hitting the same wall says so more than
     # once, and a list with the same gap on it four times is a list nobody reads.
-    again = FeatureRequest.similar_to(ctx.user, title, body)
+    again = FeatureRequest.similar_to(ctx.user, title)
     if again
       merged = [again.body, body].uniq.join("\n\n").first(2000)
       added  = merged != again.body

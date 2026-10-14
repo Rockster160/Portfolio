@@ -192,8 +192,12 @@ Buddy::Tools.register(
     # The timestamp is rewritten to local BEFORE the model sees it. Asking it to
     # convert one gets 18:58Z read back as "6:58 PM" - the same digits with the
     # offset discarded, six hours out.
-    raw    = execution.respond_to?(:result) ? execution.result.to_s.strip : ""
-    answer = Buddy::RawOutput.localize(raw, ctx.user) if raw.present?
+    #
+    # Handed over RAW rather than pre-stringified. Whether a return value is
+    # something to say is RawOutput's question, and `to_s` had already answered
+    # it wrongly for a function that reports with a flag.
+    raw    = (execution.result if execution.respond_to?(:result))
+    answer = Buddy::RawOutput.localize(raw, ctx.user)&.strip.presence
     lookup = ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
 
     # An answering tool never reaches ProposalBuilder, so it files its own trace

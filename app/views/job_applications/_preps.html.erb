@@ -1,0 +1,30 @@
+<%# The briefs written before this company's interviews.
+   Nothing to fill in: one is written an hour before each interview and the
+   link to it is pushed at the time. This block is how to find it again
+   afterwards — the next round against the same company starts from the last
+   one — so it only exists once there is something in it. %>
+<% if preps.any? %>
+  <details class="job-details job-preps" <%= "open" if preps.any?(&:upcoming?) %>>
+    <summary>
+      Prep
+      <span class="count"><%= preps.size %></span>
+    </summary>
+
+    <ul class="prep-list">
+      <% preps.each do |prep| %>
+        <li>
+          <%= link_to prep.title.presence || prep.label,
+                interview_prep_path(job, prep), class: "prep-link" %>
+          <span class="prep-meta">
+            <% if prep.kind_label %>
+              <%= prep.kind_label %>
+            <% end %>
+            <% if prep.interview_at %>
+              · <%= interview_day(prep.interview_at, at_time: false) %>
+            <% end %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  </details>
+<% end %>

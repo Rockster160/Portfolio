@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_13_192212) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_14_185942) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1318,6 +1318,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_192212) do
     t.index ["user_id"], name: "index_image_descriptions_on_user_id"
   end
 
+  create_table "interview_preps", force: :cascade do |t|
+    t.bigint "job_application_id", null: false
+    t.bigint "agenda_item_id"
+    t.bigint "byte_message_id"
+    t.string "title"
+    t.text "body"
+    t.string "kind"
+    t.datetime "interview_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agenda_item_id"], name: "index_interview_preps_on_agenda_item_id"
+    t.index ["byte_message_id"], name: "index_interview_preps_on_byte_message_id"
+    t.index ["job_application_id"], name: "index_interview_preps_on_job_application_id"
+  end
+
   create_table "ip_visits", force: :cascade do |t|
     t.string "ip_address", null: false
     t.integer "visit_count", default: 0, null: false
@@ -2122,6 +2137,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_13_192212) do
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"
   add_foreign_key "image_descriptions", "active_storage_blobs", column: "blob_id"
   add_foreign_key "image_descriptions", "users"
+  add_foreign_key "interview_preps", "agenda_items"
+  add_foreign_key "interview_preps", "byte_messages", on_delete: :nullify
+  add_foreign_key "interview_preps", "job_applications"
   add_foreign_key "job_applications", "users"
   add_foreign_key "job_notes", "job_applications"
   add_foreign_key "job_transcripts", "job_applications"

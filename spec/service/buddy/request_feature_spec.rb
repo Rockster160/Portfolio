@@ -162,6 +162,47 @@ RSpec.describe "request_feature" do
       }.to change { FeatureRequest.count }.by(1)
     end
 
+    # Prod 14 Oct. "45 minutes before any Interview event, send me a link to
+    # the corresponding company" landed on the one live row, which was about
+    # chaining a follow-on action onto a running timer. "attach" and
+    # "automatically" were the two words they shared - both incidental, both
+    # from bodies running to a couple of thousand characters.
+    it "keeps a request about an event's notes off a row about running timers" do
+      timer = "User wants to attach a follow-on action to the end of a timer while it is " \
+              "already running, so the next step happens automatically when the timer completes."
+      link  = "They want a reminder 45 minutes before interview events that includes a link to " \
+              "the company. I can anchor the reminder but can't attach the link automatically."
+
+      ask!(eve, eve_convo, "Chain actions onto running timers", timer)
+      ask!(eve, eve_convo, "Reminder link from event notes", link)
+
+      expect(FeatureRequest.live.pluck(:title)).to contain_exactly(
+        "Chain actions onto running timers", "Reminder link from event notes"
+      )
+    end
+
+    # A merge APPENDS, so judging on the body made every row absorbed raise the
+    # odds of the next one being absorbed too. One live row had ended up holding
+    # three unrelated asks under a title naming only the first.
+    it "doesn't get more absorbent each time something is merged into it" do
+      ask!(eve, eve_convo, "Work/break rhythm", "30 minutes on, 10 minutes off")
+      ask!(eve, eve_convo, "Work break rhythm", "attach a break automatically after each stretch")
+
+      ask!(eve, eve_convo, "Pantry photo search", "find a thing in the pantry from a picture")
+
+      expect(FeatureRequest.live.pluck(:title)).to include("Pantry photo search")
+    end
+
+    # The title is what anybody reading the list sees, so a row that has
+    # swallowed an ask it isn't named for has hidden it.
+    it "leaves the title naming the gap it was written for" do
+      ask!(eve, eve_convo, "Work/break rhythm", "30 minutes on, 10 minutes off")
+      result = ask!(eve, eve_convo, "Work break rhythm", "30 minutes working, 10 minutes resting")
+
+      expect(result[:title]).to eq("Work/break rhythm")
+      expect(tool[:receipt].call(result, nil)).to include("Work/break rhythm")
+    end
+
     it "treats a second ask after it shipped as a new one" do
       ask!(eve, eve_convo, "Work/break rhythm", "30 minutes on, 10 minutes off")
       FeatureRequest.last.update!(status: :shipped)
@@ -231,6 +272,18 @@ RSpec.describe "request_feature" do
     # "keep that feature request parked, or should I set up the check-ins the
     # plain way?", which is a choice between two things they could have had
     # both of, after they'd already said yes.
+    # Prod 8170. The reminder was available - `anchor: agenda:interview-45m` -
+    # and the row it wrote says so in its own words. It filed and set nothing.
+    it "says a filing is the record, never the thing done instead" do
+      expect(tool[:description]).to match(/FILING IS NOT THE HALF/i)
+    end
+
+    # Prod 8175. "Done, I've put the request in" over a receipt reading "Added
+    # that to Chain actions onto running timers".
+    it "says to name the row a merge went onto" do
+      expect(tool[:description]).to match(/SAY WHICH ROW IT WENT ONTO/i)
+    end
+
     it "says to do the doable half rather than offering a choice" do
       prompt = Buddy::Personality.for(eve, conversation: eve_convo)
 
