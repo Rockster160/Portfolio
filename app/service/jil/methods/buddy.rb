@@ -109,9 +109,15 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # Returns false when it reached nobody - no key, no words, no companion thread
   # yet, or a name nobody in the house goes by - so a task can tell that from a
   # message that landed.
-  def alert(key, message, who=nil)
+  # `groups` aims it at a board: a board shows an alert only when these overlap
+  # the groups it watches, the same "any of these" match chores use. Blank means
+  # it belongs to no board and stands in the chat strip alone. A comma string
+  # ("Whisper, Puppy") or an array; split like the chore tag field.
+  def alert(key, message, who=nil, groups=nil)
+    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
+    groups = groups.map(&:strip).compact_blank
     delivered = recipients_for(who).count { |user|
-      ::Buddy::Alerts.raise!(user: user, key: key, body: message).present?
+      ::Buddy::Alerts.raise!(user: user, key: key, body: message, groups: groups).present?
     }
     delivered.positive?
   end

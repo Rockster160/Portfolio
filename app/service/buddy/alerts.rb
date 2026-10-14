@@ -34,16 +34,17 @@ module Buddy
     # Open one, or tell an open one that it happened again. Returns the
     # BuddyAlert, or nil when there was nothing to say it to - no key, no words,
     # or nobody with a companion thread to put it in.
-    def raise!(user:, key:, body:, conversation: nil)
-      key  = key.to_s.strip
-      body = body.to_s.strip
+    def raise!(user:, key:, body:, conversation: nil, groups: nil)
+      key    = key.to_s.strip
+      body   = body.to_s.strip
+      groups = Array(groups).map { |g| g.to_s.strip }.compact_blank
       return nil if key.empty? || body.empty?
 
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
       return nil if conversation.nil?
 
       open = ::BuddyAlert.open_for(user, key)
-      open ? seen_again!(open, body) : open!(user, conversation, key, body)
+      open ? seen_again!(open, body, groups) : open!(user, conversation, key, body, groups)
     end
 
     # It's been dealt with. `body` is what the bubble should say now; without
@@ -112,7 +113,7 @@ module Buddy
       })
     end
 
-    def open!(user, conversation, key, body)
+    def open!(user, conversation, key, body, groups = [])
       now   = Time.current
       alert = ::BuddyAlert.create!(
         user:              user,
@@ -123,6 +124,7 @@ module Buddy
         raised_at:         now,
         last_raised_at:    now,
         raised_count:      1,
+        metadata:          (groups.present? ? { "groups" => groups } : {}),
       )
       message = ::Buddy::CompanionDelivery.deliver_plain(
         user:         user,
@@ -140,11 +142,16 @@ module Buddy
     # - a caller that puts a reading in the sentence ("garage open 40 minutes")
     # means the new one - and the count and the clock are what make the bubble
     # say that this is not simply the same moment still on screen.
-    def seen_again!(alert, body)
+    def seen_again!(alert, body, groups = [])
       now   = Time.current
       buzz  = alert.push_again?
       attrs = { body: body, raised_count: alert.raised_count + 1, last_raised_at: now }
-      attrs[:metadata] = alert.metadata.merge("notified_at" => now.iso8601) if buzz
+      meta  = alert.metadata
+      meta  = meta.merge("notified_at" => now.iso8601) if buzz
+      # A re-raise may name groups the first one didn't (or change them); keep
+      # them current so the board it belongs to never drifts from the raiser.
+      meta  = meta.merge("groups" => groups) if groups.present?
+      attrs[:metadata] = meta unless meta.equal?(alert.metadata)
       alert.update!(attrs)
 
       message = repaint!(alert)

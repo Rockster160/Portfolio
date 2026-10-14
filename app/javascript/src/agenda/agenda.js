@@ -138,6 +138,7 @@
     const end   = node.getAttribute("data-end-epoch");
     const fmt   = node.getAttribute("data-format") || "time";
     const prefix = node.getAttribute("data-prefix") || "";
+    const suffix = node.getAttribute("data-suffix") || "";
     if (!start) return;
     let text = "";
     switch (fmt) {
@@ -153,7 +154,7 @@
       default:
         text = fmtTime(start);
     }
-    node.textContent = `${prefix}${text}`;
+    node.textContent = `${prefix}${text}${suffix}`;
   }
   function hydrateTimeNodes(root = document) {
     root.querySelectorAll("[data-time-hydrate]").forEach(hydrateOneTimeNode);
@@ -2614,7 +2615,8 @@
       set("[data-travel-target]",       travelMin > 0      ? fmtMin(travelMin)      : "");
       const startEpoch = parseInt(d.startAt, 10) || 0;
       const leaveEpoch = startEpoch - (arriveEarlyMin + travelMin) * 60;
-      set("[data-leave-at-target]", (visible && startEpoch > 0) ? `→${fmtCalTime(leaveEpoch)}` : "");
+      const leaveSuffix = window.AgendaItemRenderer?.leaveDaySuffix?.(leaveEpoch, startEpoch) || "";
+      set("[data-leave-at-target]", (visible && startEpoch > 0) ? `→${fmtCalTime(leaveEpoch)}${leaveSuffix}` : "");
     }
 
     // Post-travel row — populated when the event has a `to:<location>`

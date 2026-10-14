@@ -5705,6 +5705,68 @@ dialog.byte-modal {
   max-height: none;
 }
 
+// -------- Kiosk in landscape: the half/half laid out side by side ----------
+//
+// A wall tablet mounted landscape (and a phone turned sideways) has the room
+// the wrong way round for the stacked split: the pet on top, as tall as half
+// the short dimension, leaves him small, and the pad underneath is a wide strip
+// a couple of rows deep. Turned on its side the SAME two halves read far
+// better — the pet gets a full-height column to fill and the buttons/circles
+// get the other, several to a row.
+//
+// Nothing moves in the DOM. In kiosk mode the only in-flow children of the app
+// are the hero and `.byte-kiosk` (everything else is `display:none` or pinned),
+// and both are already `flex: 1 1 0`, so flipping the app's main axis to a row
+// splits the width between them exactly the way it split the height. Covers the
+// chore board too — a board IS a kiosk (ByteController#board sets @kiosk).
+@media (orientation: landscape) {
+  .byte-app[data-kiosk="true"] {
+    flex-direction: row;
+  }
+
+  // `min-width: 0` on both halves: `flex: 1 1 0` splits the width evenly only
+  // while neither item is held open by its own content min-width (a grid of
+  // 150px buttons, a long routine name). Without it a wide pad would steal from
+  // the pet's column.
+  .byte-app[data-kiosk="true"] .byte-buddy-hero {
+    min-width: 0;
+  }
+
+  // The seam between the two halves is now vertical.
+  .byte-app[data-kiosk="true"] .byte-kiosk {
+    min-width: 0;
+    border-top: 0;
+    border-left: 1px solid var(--bs-border);
+  }
+
+  // Bound the pet to its own half rather than the whole screen (88vw), so a
+  // tall window can't grow him — height-driven, aspect-ratio 1 — wider than the
+  // left column and clip him against the seam.
+  .byte-app[data-kiosk="true"] .byte-buddy-char {
+    max-width: 46vw;
+  }
+
+  // The speech + standing-alert bubbles anchor to the top edge of `.byte-kiosk`
+  // (`bottom: 100%`) so in the stacked layout they float up over the pet above.
+  // Side by side, that top edge points off the top of the screen — so re-aim
+  // them over the LEFT half: right edge just inside the seam, floated up from
+  // the pet's feet. The alert sits a little higher so a passing cheer in the
+  // say bubble doesn't land on it, same as the stacked layout.
+  .byte-app[data-kiosk="true"] .byte-kiosk-say,
+  .byte-app[data-kiosk="true"] .byte-board-alert {
+    left: auto;
+    right: calc(100% + 16px);
+    transform: none;
+    max-width: 44vw;
+  }
+  .byte-app[data-kiosk="true"] .byte-kiosk-say {
+    bottom: 14%;
+  }
+  .byte-app[data-kiosk="true"] .byte-board-alert {
+    bottom: calc(14% + 66px);
+  }
+}
+
 // Board-only: the lead timer blown up across the pet, so a break set from the
 // wall reads from the far side of the room. Absolutely pinned over the hero
 // (which is position:relative) so it sits IN FRONT of the character rather than
@@ -5888,6 +5950,98 @@ dialog.byte-modal {
   50% { opacity: 0.55; }
 }
 
+// Whisper status rings, justified along the hero's bottom edge. A readout, not
+// a control (pointer-events: none) — the pet keeps the taps. `space-between`
+// does exactly the asked-for spread: one ring sits left, two go to the edges,
+// three land left / centre / right, and so on. Painted by buddy/durations.js;
+// wholly separate from the countdown-timer banner above.
+.byte-whisper-rings {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2%;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 4%;
+  pointer-events: none;
+
+  &[hidden] { display: none; }
+
+  // Whisper's own ring dimensions — 140×140, stroke 8 — so the board reads the
+  // same as the tablet it replaces.
+  .duration-ring {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    flex: none;
+  }
+  .ring-svg {
+    width: 100%;
+    height: 100%;
+    // Start at 12 o'clock, run clockwise, like Whisper's rings.
+    transform: rotate(-90deg);
+  }
+  .ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.14);
+    stroke-width: 8;
+  }
+  .ring-progress {
+    fill: none;
+    stroke: #5c9bf2;
+    stroke-width: 8;
+    stroke-linecap: round;
+
+    &.overdue {
+      stroke: #f0756b;
+      animation: byte-board-timer-pulse 1s ease-in-out infinite;
+    }
+  }
+
+  // Quiet mode: the house is meant to be still, so every ring but the quiet one
+  // (and the kennel, which keeps its own colour) recedes to grey.
+  .duration-ring.quieted:not([data-duration-key="quiet"]):not([data-duration-key="kennel"]) {
+    .ring-bg { stroke: rgba(255, 255, 255, 0.08); }
+    .ring-progress { stroke: #555; }
+    .ring-progress.overdue { stroke: #666; animation: none; }
+  }
+
+  .duration-ring[data-duration-key="kennel"] {
+    .ring-progress,
+    .ring-progress.overdue { stroke: #800000; animation: none; }
+    .ring-timer,
+    .ring-timer.overdue { color: #800000; }
+  }
+
+  .ring-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .ring-label {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .ring-timer {
+    margin-top: 5px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-family: monospace;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+
+    &.overdue { color: #f0756b; }
+  }
+}
+
 .byte-kiosk {
   flex: 1 1 0;
   min-height: 0;
@@ -6035,6 +6189,39 @@ dialog.byte-modal {
     margin: 0;
     padding-left: 20px;
     text-align: left;
+  }
+}
+
+// A standing alert on the board — the pet holding something up. Same bubble as
+// the say above, but it doesn't fade (it stands while the condition does) and
+// wears a warm attention tint so it reads as "look at this", not "I replied".
+// Sits a little higher so a passing cheer in the say bubble doesn't land on it.
+.byte-board-alert {
+  position: absolute;
+  bottom: calc(100% + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: max-content;
+  max-width: 88vw;
+  @media (min-width: 780px) {
+    max-width: 680px;
+  }
+  max-height: 34vh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(240, 117, 107, 0.55);
+  background: var(--bs-panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: #ffd9d3;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+
+  &[hidden] {
+    display: none;
   }
 }
 

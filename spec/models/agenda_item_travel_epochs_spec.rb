@@ -89,6 +89,28 @@ RSpec.describe AgendaItem do
     expect(row.leave_at).to be_present
   end
 
+  # The window is the 12h floor OR the drive itself, whichever is longer — so a
+  # real cross-day drive (not a 46-min one 13h early) keeps its leave-by. A 14h
+  # drive leaving 14h ahead is coherent; the stale case above stays rejected
+  # because its drive was short.
+  it "keeps a long lead when the drive itself is that long" do
+    drive = 14.hours.to_i
+    row = item({ "leave_at" => (start_at - 14.hours).to_i, "travel_seconds" => drive })
+
+    expect(row.leave_at).to eq(Time.zone.at(row.travel_hash["leave_at"]))
+  end
+
+  # The departure is the night before, so the reader names the day rather than a
+  # bare clock time that would read as the event's own day.
+  it "names the day when a long drive leaves the day before" do
+    drive = 14.hours.to_i
+    row = item({ "leave_at" => (start_at - 14.hours).to_i, "travel_seconds" => drive })
+
+    said = Buddy::Context.send(:leave_by, row, user, now: start_at - 15.hours)
+    expect(said).to eq(Buddy::Clock.day_at(row.leave_at, zone: user.timezone))
+    expect(said).to match(/\A[A-Z][a-z]{2} /) # "Sun 12:45am"
+  end
+
   # A departure AFTER the start is the shape that shipped, and it is never
   # right whatever the gap.
   it "rejects a departure after the thing has started" do

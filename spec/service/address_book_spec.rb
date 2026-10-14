@@ -56,6 +56,46 @@ RSpec.describe AddressBook do
     it "returns nil for blank input" do
       expect(book.to_traveltime_param("   ")).to be_nil
     end
+
+    # The 16h-drive bug: a bare venue name handed straight to Distance Matrix
+    # geocodes globally. Anchor it to a plausible local point first.
+    context "when a bare venue name geocodes implausibly far" do
+      before {
+        allow(book).to receive(:match_contact).and_return(nil)
+        allow(book).to receive(:current_loc).and_return([40.51, -112.01])
+      }
+
+      it "falls back to a location-biased Places point and returns coords" do
+        allow(book).to receive(:coords_for_location).with("The Neurodiversity Clinic")
+          .and_return([-37.8796922, 145.0230786]) # Melbourne — the wrong continent
+        allow(book).to receive(:nearest_from_name).with("The Neurodiversity Clinic", extract: :loc)
+          .and_return([40.57, -111.86]) # the clinic down the road
+        expect(book.to_traveltime_param("The Neurodiversity Clinic")).to eq("40.57,-111.86")
+      end
+
+      it "reports no drive rather than a wrong one when Places can't place it either" do
+        allow(book).to receive(:coords_for_location).with("The Neurodiversity Clinic")
+          .and_return([-37.8796922, 145.0230786])
+        allow(book).to receive(:nearest_from_name).with("The Neurodiversity Clinic", extract: :loc)
+          .and_return(nil)
+        expect(book.to_traveltime_param("The Neurodiversity Clinic")).to be_nil
+      end
+    end
+  end
+
+  describe "#plausible_drive?" do
+    let(:book) { described_class.new(User.me) }
+
+    it "is true within the cap and false beyond it" do
+      allow(book).to receive(:current_loc).and_return([40.51, -112.01])
+      expect(book.plausible_drive?([40.57, -111.86])).to be(true)       # same valley
+      expect(book.plausible_drive?([-37.8796922, 145.0230786])).to be(false) # Melbourne
+    end
+
+    it "has no opinion when there is no origin to measure against" do
+      allow(book).to receive(:current_loc).and_return([])
+      expect(book.plausible_drive?([-37.8796922, 145.0230786])).to be(true)
+    end
   end
 
   describe "#traveltime_seconds" do

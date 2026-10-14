@@ -110,6 +110,41 @@ export function startAlarm({ hero }) {
   }, 500);
 }
 
+// --- Standing-alert face loop (silent) -------------------------------------
+
+// A board alert (the laundry gate is open, the Whisper is hungry) makes the pet
+// do the same back-and-forth as a ringing timer so it's noticed from across the
+// room — but with NO sound, because it's a standing condition, not a one-shot
+// that someone has to come and silence. Shares the alarm faces; a REAL ringing
+// timer always wins the face, so this yields whenever one is going and picks
+// back up on its next tick once that stops.
+let alertFlipInterval = 0;
+let alertFlipRunning = false;
+
+export function startAlertFlip({ hero }) {
+  if (alertFlipRunning) return;
+  alertFlipRunning = true;
+
+  const [faceA, faceB] = alarmFaces();
+  let flip = false;
+  if (!running) hero?.setExpression(faceA, { transient: true });
+  alertFlipInterval = window.setInterval(() => {
+    if (running) return; // a ringing timer owns the face while it rings
+    flip = !flip;
+    hero?.setExpression(flip ? faceB : faceA, { transient: true });
+  }, 600);
+}
+
+export function stopAlertFlip({ hero } = {}) {
+  if (!alertFlipRunning) return;
+  alertFlipRunning = false;
+  if (alertFlipInterval) {
+    clearInterval(alertFlipInterval);
+    alertFlipInterval = 0;
+  }
+  if (!running) hero?.restExpression?.();
+}
+
 // Stop just the sound (used by mute) without touching the face loop.
 function stopAlarmSound() {
   if (soundInterval) {
@@ -127,7 +162,10 @@ export function stopAlarm({ hero } = {}) {
     clearInterval(faceInterval);
     faceInterval = 0;
   }
-  hero?.restExpression?.();
+  // If a standing alert is still flipping the face, leave it be — its loop takes
+  // the face back over now that `running` is false. Only rest when nothing else
+  // is driving the expression.
+  if (!alertFlipRunning) hero?.restExpression?.();
 }
 
 export function alarmRunning() {

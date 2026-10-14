@@ -256,6 +256,8 @@
       leaveSpan.setAttribute("data-start-epoch", leaveEpoch);
       leaveSpan.setAttribute("data-format", "cal");
       leaveSpan.setAttribute("data-prefix", "→");
+      const leaveSuffix = window.AgendaItemRenderer?.leaveDaySuffix?.(leaveEpoch, startEpoch) || "";
+      if (leaveSuffix) leaveSpan.setAttribute("data-suffix", leaveSuffix);
       wrap.appendChild(leaveSpan);
 
       const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);

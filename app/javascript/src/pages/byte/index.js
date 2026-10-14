@@ -74,12 +74,16 @@ import {
 import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
+import { initBoardDurations } from "./buddy/durations";
 import { initBuddyProcesses } from "./buddy/processes";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { initChoreBoard } from "./buddy/chore_board";
+import { initBoardAlert } from "./buddy/board_alert";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
+import { playBoardSound } from "./buddy/sound";
+import { boardTags, groupsOverlap } from "./buddy/board_scope";
 import {
   UnreadTracker,
   countsAsUnread,
@@ -174,6 +178,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // handleSwitch (which can fire before the hero is mounted on the first
   // render) doesn't hit a TDZ error.
   let buddyHero = null;
+  // The board's standing-alert bubble + pet shuffle. Null until it is wired
+  // after the hero exists; the alert handlers below guard with `?.`.
+  let boardAlert = null;
   // Same reason: hydrateForConversation runs during init and feeds this, well
   // before the mount point below exists. Null on every page but the kiosk.
   let buddyKiosk = null;
@@ -2394,6 +2401,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     enabled: app.dataset.timerAlerts !== "false",
   });
 
+  // Board-only Whisper status rings (out / nap / quiet / kennel), off the
+  // whisper-durations stream. No-ops off the board — the element is board-only,
+  // and with no element this neither renders nor subscribes.
+  const boardDurations = initBoardDurations({
+    container: app.querySelector("[data-whisper-rings]"),
+    app,
+  });
+
+  // The board shows a standing alert in the pet's bubble (no strip out here) and
+  // has the pet shuffle beside it. No-op off the board (no bubble element). Fed
+  // the same alert list the strip gets, below.
+  boardAlert = initBoardAlert({
+    bubble: app.querySelector("[data-board-alert]"),
+    hero: buddyHero,
+    tags: boardTags(app),
+  });
+  boardAlert.setAlerts(bootstrap.alerts || []);
+
   // What Byte is doing in the background (top-right, opposite the timers).
   // Reported by whoever is doing the work - the Mac filling in applications, a
   // worker reading mail - so this only renders and reconciles.
@@ -3352,6 +3377,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     received(payload) {
       const data = payload?.data;
       if (!data) return;
+      // A Jil task can play a sound on the wall with
+      //   Monitor.broadcast("byte", { ...sound: "wake", groups: [...] })
+      // — the board's own channel, alongside the whisper-durations one the
+      // rings ride. Board only, and only when the sound's groups overlap what
+      // this board watches, so one board's sound doesn't play on all of them.
+      if (
+        data.sound &&
+        app.dataset.board === "true" &&
+        groupsOverlap(data.groups, boardTags(app))
+      ) {
+        playBoardSound(data.sound);
+      }
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
         updateSleepChip(); // mode may have changed under the active thread
@@ -3433,6 +3470,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       if (data.kind === "alerts") {
         alertStrip.setAlerts(data.alerts);
+        boardAlert?.setAlerts(data.alerts);
         return;
       }
       if (data.kind === "font_scale") {
@@ -3590,6 +3628,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!res.ok) return;
       const payload = await res.json();
       alertStrip.setAlerts(payload?.alerts);
+      boardAlert?.setAlerts(payload?.alerts);
     } catch (_) {}
   }
 

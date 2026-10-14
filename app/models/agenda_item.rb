@@ -362,17 +362,29 @@ class AgendaItem < ApplicationRecord
   MAX_TRAVEL_LEAD = 12.hours
 
   def leave_at
-    in_window(travel_hash["leave_at"], from: start_at && (start_at - MAX_TRAVEL_LEAD), to: start_at)
+    in_window(travel_hash["leave_at"], from: start_at && (start_at - lead_window(travel_seconds)), to: start_at)
   end
 
   def home_at
-    stamped = in_window(travel_hash["post_arrive_at"], from: end_at, to: end_at && (end_at + MAX_TRAVEL_LEAD))
+    stamped = in_window(travel_hash["post_arrive_at"], from: end_at, to: end_at && (end_at + lead_window(travel_home_seconds)))
     return stamped if stamped
 
     secs = travel_home_seconds
     return nil if secs.nil? || end_at.blank?
 
     Time.zone.at(end_at.to_i + secs)
+  end
+
+  # How far before the event (or after it) a stamped travel epoch may sit and
+  # still belong to it. The 12h floor by default, widened to cover the drive
+  # itself when it is longer — a genuine cross-day departure, which is exactly
+  # what was dropping a real long lead — plus the arrive-early buffer and an
+  # hour of slack. A leftover epoch from a prior placement is an unrelated time
+  # and still won't land inside this window, so the staleness check the bound
+  # exists for is kept.
+  def lead_window(drive_seconds)
+    secs = drive_seconds.to_i + (arrive_early_minutes.to_i * 60) + 1.hour.to_i
+    [MAX_TRAVEL_LEAD.to_i, secs].max
   end
 
   # nil for anything that cannot belong to this item, so a stale stamp reads as

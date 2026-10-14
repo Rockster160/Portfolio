@@ -36,6 +36,9 @@ RSpec.describe AgendaTravelChain::Service do
     # Where the person is, for the resolver's distance sanity check. Every
     # geocode in here answers somewhere in the valley, so the bound never bites.
     allow(address_book).to receive(:current_loc).and_return([40.0, -111.0])
+    # Every destination in these chain-detection cases is a local, plausible
+    # drive; the sanity bound itself is exercised in address_book_spec/resolver_spec.
+    allow(address_book).to receive(:plausible_drive?).and_return(true)
     # Default to no contact match — individual specs can override when testing
     # the contact-first branch added in resolver.rb.
     allow(address_book).to receive(:match_contact).and_return(nil)

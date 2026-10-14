@@ -121,7 +121,12 @@ module Buddy
       leave = item.leave_at
       if leave.present?
         zone = recipient_zone(item.user)
-        "Travel: about #{minutes} min away — leave by #{leave.in_time_zone(zone).strftime("%-l:%M %p")}"
+        local = leave.in_time_zone(zone)
+        # Name the weekday when the departure is on an earlier day than the event
+        # (a long drive), so it doesn't read as the same day.
+        cross_day = item.start_at && local.to_date != item.start_at.in_time_zone(zone).to_date
+        stamp = cross_day ? local.strftime("%a %-l:%M %p") : local.strftime("%-l:%M %p")
+        "Travel: about #{minutes} min away — leave by #{stamp}"
       else
         "Travel: about #{minutes} min away"
       end

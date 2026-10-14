@@ -563,7 +563,14 @@ module Buddy
         return nil if at.blank? || at <= now
         return nil if item.travel_seconds.nil?
 
-        Buddy::Clock.at(at, zone: user.timezone)
+        zone = user.timezone
+        # A long drive leaves the day before — name the day so "leave by 11:40pm"
+        # for tomorrow's event doesn't read as tonight.
+        if item.start_at && at.in_time_zone(zone).to_date != item.start_at.in_time_zone(zone).to_date
+          Buddy::Clock.day_at(at, zone: zone)
+        else
+          Buddy::Clock.at(at, zone: zone)
+        end
       end
 
       # The other end of the same drive: what time they are back through the

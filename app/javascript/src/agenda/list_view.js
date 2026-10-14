@@ -281,6 +281,13 @@
       sectionItems = sectionItems.filter((it) => !hiddenAgendaIds.has(String(it.agenda_id)));
     }
 
+    // Leave-for markers: a drive whose departure crosses back onto an earlier
+    // day gets a synthetic "🚙 Leave … for X" row on THAT day. The marker's
+    // start_at is the leave epoch, so it buckets and sorts through the same
+    // path as a real row — it just rides along in sectionItems.
+    const markers = leaveMarkersFor(sectionItems, dates);
+    if (markers.length > 0) sectionItems = sectionItems.concat(markers);
+
     // Carry-over: only painted if visible AND we cover today.
     const carrySection = root.querySelector(".section-carry");
     if (carrySection) {
@@ -385,6 +392,31 @@
 
   function itemsForDate(items, dateISO) {
     return items.filter((it) => itemVisibleOn(it, dateISO)).sort(sortByStart);
+  }
+
+  // One synthetic "leave-for" marker per item whose derived departure lands on
+  // an earlier local day than the event AND that earlier day is on screen. The
+  // marker factory + leave math live on the renderer so they're unit-tested
+  // there; here we only decide which earlier-day departures to surface.
+  function leaveMarkersFor(items, dates) {
+    const Renderer = window.AgendaItemRenderer;
+    if (!Renderer || typeof Renderer.makeLeaveMarker !== "function") return [];
+
+    const visibleDays = new Set(dates);
+    const out = [];
+    items.forEach((it) => {
+      if (!it || it.marker || !it.start_at || it.all_day) return;
+      const info = Renderer.deriveLeave(it.presentation_attrs || {});
+      if (!info.visible || !info.leaveEpoch) return;
+
+      const startISO = epochToISO(Number(it.start_at));
+      const leaveISO = epochToISO(info.leaveEpoch);
+      if (leaveISO >= startISO) return;        // same local day — nothing to surface
+      if (!visibleDays.has(leaveISO)) return;  // the earlier day isn't on screen
+
+      out.push(Renderer.makeLeaveMarker(it, info.leaveEpoch, leaveISO));
+    });
+    return out;
   }
 
   // Mirrors `User#agenda_carry_over_items`: kind:task, start_at <

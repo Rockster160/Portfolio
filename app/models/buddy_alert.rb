@@ -98,7 +98,15 @@ class BuddyAlert < ApplicationRecord
       "raised_at"       => raised_at&.iso8601,
       "conversation_id" => byte_conversation_id,
       "message_id"      => byte_message_id,
+      "groups"          => groups,
     }
+  end
+
+  # The groups this alert is aimed at, which a board matches against the ones it
+  # watches to decide whether to show it. Empty means it belongs to no board —
+  # it stands in the chat strip only.
+  def groups
+    Array(metadata["groups"]).map(&:to_s)
   end
 
   # When it last buzzed. Held in metadata rather than a column of its own: it is

@@ -896,13 +896,15 @@ class ByteController < ApplicationController
 
   private
 
-  # The board's own set for one thread: the CHORES in its groups, then the
-  # TRIGGERS (routines) in its groups, then the credit buttons. A chore in ANY
-  # of the watched groups qualifies. Serialized the same way /chores/today's
-  # chores are so the circles out here read the same fields, with a `kind` tag
-  # telling them apart. Chores come first, then triggers, because they sort in
-  # separate spaces (a chore's `sort_order`, a routine's `position`) and there
-  # is no shared order to interleave them by.
+  # The board's own set for one thread: the TRIGGERS (routines) in its groups,
+  # then the credit buttons, then the CHORES in its groups. A chore in ANY of
+  # the watched groups qualifies. Serialized the same way /chores/today's chores
+  # are so the circles out here read the same fields, with a `kind` tag telling
+  # them apart. The action circles (routines, then credit buttons) lead — they
+  # are the one-press things reached for on the way past — and the chores, which
+  # carry the day's state, follow. The three sort in separate spaces (a chore's
+  # `sort_order`, a routine's `position`), so there is no shared order to
+  # interleave them by.
   #
   # No groups loads NOTHING rather than everything. A board nobody has
   # pointed at a group yet is empty and says so; filling it with every chore in
@@ -920,7 +922,7 @@ class ByteController < ApplicationController
     trigger_items = current_user.buddy_routines.for_board(tags).map(&:board_item)
     credit_items  = board_credit_buttons.for_board(tags).map(&:board_item)
 
-    chore_items + trigger_items + credit_items
+    trigger_items + credit_items + chore_items
   end
 
   # Chores on a board read in the Today page's order, so a chore sits in the same

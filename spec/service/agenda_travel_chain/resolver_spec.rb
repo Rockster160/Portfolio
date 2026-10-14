@@ -10,6 +10,12 @@ RSpec.describe AgendaTravelChain::Resolver do
     # Home, for the distance sanity check. Every existing case resolves to
     # somewhere in the valley, so the bound never bites on them.
     allow(address_book).to receive(:current_loc).and_return([40.51, -112.01])
+    # The distance check lives on AddressBook now; run the real math against
+    # whatever `current_loc` each case stubs, so these cases still verify the
+    # bound end-to-end rather than trusting a boolean.
+    allow(address_book).to receive(:plausible_drive?) { |latlng, **|
+      ::AddressBook.new(user).plausible_drive?(latlng, from: address_book.current_loc)
+    }
   }
 
   describe "#resolve_location" do

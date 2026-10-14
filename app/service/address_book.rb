@@ -1,5 +1,15 @@
 class AddressBook
-  include DistanceHelper
+  include DistanceHelper, CoordCalculator
+
+  # Cross-state happens. Cross-ocean does not. A bare venue name with no city
+  # geocodes confidently to the other side of the world — "The Neurodiversity
+  # Clinic" landing ~980mi away and producing a 16h drive — so anything this far
+  # from where the person is is a wrong geocode, not a destination. Measured from
+  # `current_loc` (the live coord, falling back to home) so a trip doesn't make
+  # every venue around them implausible. Shared with AgendaTravelChain::Resolver,
+  # which delegates here.
+  MAX_DRIVE_MILES = 1_000
+  FEET_PER_MILE   = 5_280.0
 
   def self.me
     new(User.me)
@@ -187,10 +197,48 @@ class AddressBook
       contact_address = match_contact(str)&.primary_address&.street
       return contact_address if contact_address.present?
 
+      # Anchor the name near the user before handing it to Distance Matrix, which
+      # otherwise geocodes a bare venue name globally and lands on the wrong
+      # continent. Coords are unambiguous to the API; :reject means we found only
+      # an implausibly-distant point (a wrong geocode) and would rather report no
+      # drive than a 16h one; nil means nothing resolved, so keep the old
+      # behaviour and let the raw string through.
+      point = plausible_travel_point(str)
+      return point.join(",") if point.is_a?(Array)
+      return nil if point == :reject
+
       return str
     end
 
     to_address(input)
+  end
+
+  # A point near the person to drive to, or a signal when there isn't one.
+  # Tries the cheap cascade first (contact / own address / geocode), then a
+  # Places lookup biased to where they are — the right tool for a bare venue
+  # name. Mirrors AgendaTravelChain::Resolver#resolve_location.
+  def plausible_travel_point(name)
+    direct = coords_for_location(name)
+    return direct if valid_loc?(direct) && plausible_drive?(direct)
+
+    biased = nearest_from_name(name, extract: :loc)
+    return biased if valid_loc?(biased) && plausible_drive?(biased)
+
+    # We resolved a point, it was just too far to be a drive — a confident wrong
+    # geocode. Drop it rather than let the raw name re-geocode globally.
+    return :reject if valid_loc?(direct) || valid_loc?(biased)
+
+    nil
+  end
+
+  # Within MAX_DRIVE_MILES of where the person is. No origin to measure against
+  # means no opinion — an install with no location cache and no home gets the old
+  # behaviour, not a blanket refusal.
+  def plausible_drive?(latlng, from: current_loc)
+    origin = Array(from).compact
+    return true if origin.length < 2 || Array(latlng).compact.length < 2
+
+    distance_between(origin, latlng) / FEET_PER_MILE <= MAX_DRIVE_MILES
   end
 
   def nearest_from_name(name, loc: nil, extract: :address)

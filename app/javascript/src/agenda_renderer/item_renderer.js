@@ -44,6 +44,37 @@ function bool(v) {
   return v === true || v === "true";
 }
 
+// The one place the leave-by time is derived from an item's travel attrs, so
+// the four render sites (list row build + patch, month cell, details modal)
+// agree. `leaveEpoch` is when you have to walk out the door: the start, less
+// the drive and the arrive-early buffer.
+function deriveLeave(attrs) {
+  const { travelMin, arriveMin, visible } = travelBand(attrs);
+  const startEpoch = Number(attrs["start-at"]) || 0;
+  return {
+    visible,
+    travelMin,
+    arriveMin,
+    startEpoch,
+    leaveEpoch: startEpoch - (arriveMin + travelMin) * 60,
+  };
+}
+
+// A short qualifier for a leave-by that lands on an earlier local day than the
+// event — so "→9:15p" on tomorrow's event reads as the night before, not as
+// today. Empty when the leave is the same day. Self-contained (local-date
+// arithmetic) so it can run wherever the leave label is rendered.
+function leaveDaySuffix(leaveEpoch, startEpoch) {
+  if (!leaveEpoch || !startEpoch) return "";
+  const l = new Date(leaveEpoch * 1000);
+  const s = new Date(startEpoch * 1000);
+  const dayL = new Date(l.getFullYear(), l.getMonth(), l.getDate());
+  const dayS = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const days = Math.round((dayS - dayL) / 86400000);
+  if (days <= 0) return "";
+  return days === 1 ? " (prev day)" : ` (${days} days before)`;
+}
+
 // Public entry point. Returns a fully populated <div class="agenda-item">
 // element ready to append to a section container. Falls back gracefully
 // (returns null) if the template isn't on the page or the item is
@@ -52,6 +83,8 @@ function buildAgendaItem(item, opts = {}) {
   if (!item) return null;
   const tpl = document.getElementById("agenda-item-template");
   if (!tpl || !tpl.content) return null;
+
+  if (isLeaveMarker(item)) return buildLeaveMarker(item, tpl);
 
   const node = tpl.content.firstElementChild.cloneNode(true);
   const attrs = item.presentation_attrs || {};
@@ -200,10 +233,12 @@ function fillBody(node, attrs) {
     travelSpan.remove();
     return;
   }
-  const startEpoch = Number(attrs["start-at"]) || 0;
-  const leaveEpoch = startEpoch - (arriveEarlyMin + travelMin) * 60;
+  const { startEpoch, leaveEpoch } = deriveLeave(attrs);
   const leaveSpan = node.querySelector(".agenda-item-travel-leave");
-  if (leaveSpan) leaveSpan.setAttribute("data-start-epoch", leaveEpoch);
+  if (leaveSpan) {
+    leaveSpan.setAttribute("data-start-epoch", leaveEpoch);
+    leaveSpan.setAttribute("data-suffix", leaveDaySuffix(leaveEpoch, startEpoch));
+  }
 
   const arriveIcon = node.querySelector(".agenda-item-travel-arrive-icon");
   const arriveText = node.querySelector(".agenda-item-travel-arrive-text");
@@ -297,6 +332,7 @@ function fillIcons(node, item, attrs, ctx) {
 // Returns the same node it was given so callers can chain.
 function patchAgendaItem(node, item, opts = {}) {
   if (!node || !item) return node;
+  if (isLeaveMarker(item)) return patchLeaveMarker(node, item);
   const attrs = item.presentation_attrs || {};
   const editable = opts.editable !== false && item.editable !== false;
   const preview = !!opts.preview;
@@ -501,11 +537,11 @@ function patchTravelBlock(node, attrs) {
     block.innerHTML = '<span class="agenda-item-travel-leave" data-time-hydrate data-format="cal" data-prefix="→"></span>';
     textWrap.appendChild(block);
   }
-  const startEpoch = Number(attrs["start-at"]) || 0;
-  const leaveEpoch = startEpoch - (arriveMin + travelMin) * 60;
+  const { startEpoch, leaveEpoch } = deriveLeave(attrs);
   const leaveSpan = block.querySelector(".agenda-item-travel-leave");
   if (leaveSpan) {
     setAttrIfChanged(leaveSpan, "data-start-epoch", String(leaveEpoch));
+    setAttrIfChanged(leaveSpan, "data-suffix", leaveDaySuffix(leaveEpoch, startEpoch));
     if (typeof window.__hydrateAgendaTimeNode === "function") {
       window.__hydrateAgendaTimeNode(leaveSpan);
     }
@@ -578,7 +614,100 @@ function setAttrIfChanged(el, name, value) {
   if (el.getAttribute(name) !== value) el.setAttribute(name, value);
 }
 
-const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem, fmtMinutes, travelBand };
+// ---- leave-for markers ----
+// A synthetic row shown on an EARLIER day than its event, for a departure that
+// crosses midnight ("🚙 Leave 9:15p for Soccer game"). It is not an AgendaItem:
+// its `start_at` is the leave epoch, so the existing day-bucketing and sort
+// place it on the right day with no changes, and `diffItems` keeps it by its
+// unique id. `presentation_attrs["item-id"]` MUST equal `id` — diffItems keys on
+// the id but re-finds the node by `data-item-id`, so a mismatch rebuilds the row
+// every tick.
+function isLeaveMarker(item) {
+  if (!item) return false;
+  return item.marker === true || (item.presentation_attrs || {}).marker === "leave";
+}
+
+function makeLeaveMarker(srcItem, leaveEpoch, leaveISO) {
+  const attrs = srcItem.presentation_attrs || {};
+  const srcId = srcItem.id != null ? srcItem.id : attrs["item-id"];
+  const id = `leave-${srcId}-${leaveISO}`;
+  const startEpoch = Number(attrs["start-at"]) || 0;
+  return {
+    id,
+    marker: true,
+    marker_kind: "leave",
+    start_at: leaveEpoch,
+    all_day: false,
+    editable: false,
+    presentation_attrs: {
+      "item-id": id,
+      "source-item-id": String(srcId),
+      marker: "leave",
+      "leave-at-epoch": leaveEpoch,
+      name: attrs.name || "",
+      "event-start-at": startEpoch,
+    },
+  };
+}
+
+const MARKER_STRIP = [
+  ".agenda-item-check-zone",
+  ".agenda-item-icons",
+  ".agenda-item-loc",
+  ".agenda-item-travel",
+  ".agenda-item-post-travel",
+];
+
+function buildLeaveMarker(item, tpl) {
+  const template = tpl || document.getElementById("agenda-item-template");
+  if (!template || !template.content) return null;
+
+  const node = template.content.firstElementChild.cloneNode(true);
+  const attrs = item.presentation_attrs || {};
+  node.classList.add("marker", "leave-marker");
+  node.setAttribute("data-readonly", "");
+  applyDataAttrs(node, attrs); // stamps data-item-id (= id), data-source-item-id, data-marker
+
+  MARKER_STRIP.forEach((sel) => node.querySelector(sel)?.remove());
+
+  // Not a real item — the body must not open a details modal.
+  node.querySelector(".agenda-item-body")?.removeAttribute("data-open-details");
+
+  const time = node.querySelector(".agenda-item-time");
+  if (time) {
+    time.setAttribute("data-start-epoch", String(attrs["leave-at-epoch"] || ""));
+    time.setAttribute("data-format", "cal");
+    time.setAttribute("data-prefix", "🚙 Leave ");
+  }
+  const name = node.querySelector(".agenda-item-name");
+  if (name) name.textContent = `for ${attrs.name || ""}`.trim();
+
+  return node;
+}
+
+function patchLeaveMarker(node, item) {
+  const attrs = item.presentation_attrs || {};
+  patchDataAttrs(node, attrs);
+  if (!node.classList.contains("leave-marker")) node.classList.add("marker", "leave-marker");
+
+  const time = node.querySelector(".agenda-item-time");
+  if (time) {
+    setAttrIfChanged(time, "data-start-epoch", String(attrs["leave-at-epoch"] || ""));
+    setAttrIfChanged(time, "data-format", "cal");
+    setAttrIfChanged(time, "data-prefix", "🚙 Leave ");
+    // The added-node observer only fires on build; a patch must hydrate itself.
+    if (typeof window.__hydrateAgendaTimeNode === "function") window.__hydrateAgendaTimeNode(time);
+  }
+  const name = node.querySelector(".agenda-item-name");
+  if (name) name.textContent = `for ${attrs.name || ""}`.trim();
+
+  return node;
+}
+
+const AgendaItemRenderer = {
+  buildAgendaItem, patchAgendaItem, fmtMinutes, travelBand,
+  deriveLeave, leaveDaySuffix, makeLeaveMarker, isLeaveMarker,
+};
 
 if (typeof module !== "undefined" && module.exports) module.exports = AgendaItemRenderer;
 if (typeof window !== "undefined") window.AgendaItemRenderer = AgendaItemRenderer;

@@ -616,6 +616,23 @@ body.ctr-agendas {
       font-style: italic;
     }
 
+    // Leave-for marker: a synthetic "🚙 Leave … for X" cue on the day you'd
+    // actually set off for a long-drive event the next day. Lighter than a real
+    // row, dotted border, so it reads as a departure for something rather than a
+    // thing on the calendar.
+    &.leave-marker {
+      background: transparent;
+      border-left-style: dotted;
+      .agenda-item-body {
+        cursor: default;
+      }
+      .agenda-item-time,
+      .agenda-item-name {
+        opacity: 0.6;
+        font-style: italic;
+      }
+    }
+
     // Tentative: connected user hasn't accepted yet (needsAction /
     // tentative) OR the event's overall status is tentative. Visually
     // faded + italicized so the user can tell at a glance.

@@ -258,6 +258,13 @@
     <% if @board %>
       <div class="byte-board-timer" data-buddy-timer-banner hidden></div>
     <% end %>
+    <%# Board-only: the Whisper status rings (out / nap / quiet / kennel), %>
+    <%# justified along the hero's bottom edge. Fed by the whisper-durations %>
+    <%# monitor and painted by buddy/durations.js; a wholly separate surface %>
+    <%# from the countdown-timer banner above, empty + hidden when none stand. %>
+    <% if @board %>
+      <div class="byte-whisper-rings" data-whisper-rings hidden></div>
+    <% end %>
     <%# What Byte is doing in the background - the mirror of the timers, pinned %>
     <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>
     <%# through /api/v1/background_processes; rendered by buddy/processes.js. %>
