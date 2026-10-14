@@ -29,6 +29,34 @@ module Buddy
       broadcast(conversation, :thinking, transient: true)
     end
 
+    # A greeting gesture: the pet waves. Transient exactly like `thinking` —
+    # never written to the column, cleared back to the stored mood by `settle!`
+    # at turn end — so it shows through the greeting reply and then the pet rests
+    # on its real mood. Only sent when this pet has wave art, so one without
+    # simply doesn't wave rather than painting its neutral face; drop in a
+    # `face_wave.png` later and it waves with no code change.
+    def wave!(conversation)
+      return if conversation.nil?
+      return unless can_wave?(conversation)
+
+      broadcast(conversation, :wave, transient: true)
+    end
+
+    # The turn-start overlay for a greeting turn: wave if the pet can, otherwise
+    # the ordinary thinking overlay. A briefing and a greet-back both open on a
+    # greeting (see Buddy::Personality), so this is the face while one is written.
+    def greet!(conversation)
+      return if conversation.nil?
+
+      can_wave?(conversation) ? wave!(conversation) : thinking!(conversation)
+    end
+
+    # Does this pet have the wave gesture drawn? (Gated the same way the thinking
+    # overlay is: a pet with no art for it just doesn't do it.)
+    def can_wave?(conversation)
+      Buddy::Faces.valid?(conversation.buddy_theme, :wave)
+    end
+
     # Turn ended (or any point we want the pet off "thinking"): re-assert the
     # stored mood so the client drops the overlay. The mood itself is unchanged
     # — this never picks a default, it just echoes what's already persisted.

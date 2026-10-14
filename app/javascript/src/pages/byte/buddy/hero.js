@@ -105,11 +105,10 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     hero.dataset.buddyExpression = String(expression);
     if (charEl) charEl.dataset.buddyExpression = String(expression);
     // The face is a single data-driven image, not a per-theme CSS rule: look up
-    // this pet's resolved art for the expression (faceUrl falls back to neutral
-    // when a pet has no art for one, which is how the always-broadcast
-    // `thinking` overlay renders for a pet with no thinking pose) and set it as
-    // the face layer's background. A companion is its images + sentiment map,
-    // with nothing to wire in CSS.
+    // this pet's resolved art for the expression and set it as the face layer's
+    // background. `thinking` resolves server-side to a stand-in pose for a pet
+    // with no thinking art, so the overlay is always a visible change here. A
+    // companion is its images + sentiment map, with nothing to wire in CSS.
     if (faceEl) {
       const url = faceUrl && faceUrl(hero.dataset.buddyTheme, expression);
       faceEl.style.setProperty("--buddy-face-url", url ? `url("${url}")` : "none");

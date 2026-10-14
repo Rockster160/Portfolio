@@ -191,7 +191,7 @@ module Buddy
 
     # The days `week_outlook` flagged, as the abbreviations it wrote them in.
     def flagged_days(outlook)
-      outlook.to_s.scan(/\b(#{DAY_ABBREVS.join('|')})\b/).flatten.uniq
+      outlook.to_s.scan(/\b(#{DAY_ABBREVS.join("|")})\b/).flatten.uniq
     end
 
     # The words that make a day word a WEATHER mention rather than a date.
@@ -259,7 +259,7 @@ module Buddy
     def week_said?(body, days, today: Date.current)
       return true if body.blank? || days.empty?
 
-      said = home_sentences(body).select { |sentence| sentence.match?(WEATHER_WORDS_RX) }
+      said = home_sentences(body).grep(WEATHER_WORDS_RX)
       said = said.map { |sentence| with_day_ranges_filled(sentence) }
       return false if said.empty?
 
@@ -511,7 +511,7 @@ module Buddy
     # the canyon at all ("rain off and on from 11am to 3pm"), so a place test
     # would read every window as dropped and staple all of them back.
     def weather_sentences(body)
-      sentences(body).select { |sentence| sentence.match?(WEATHER_WORDS_RX) }.join(" ")
+      sentences(body).grep(WEATHER_WORDS_RX).join(" ")
     end
 
     def window_starts(windows)
@@ -825,7 +825,10 @@ module Buddy
         },
       )
       MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
-      Buddy::ExpressionState.thinking!(conversation)
+      # A briefing opens on a time-of-day greeting, so the pet waves while it's
+      # written if it has the gesture, and falls back to the thinking overlay if
+      # it doesn't.
+      Buddy::ExpressionState.greet!(conversation)
       BuddyDeliverWorker.perform_async(msg.id)
       msg
     end

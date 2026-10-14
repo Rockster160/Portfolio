@@ -68,7 +68,7 @@ RSpec.describe Buddy::Themes do
     end
 
     it "gives a Moss thread Chelsea's voice no matter whose account it's on" do
-      expect(prompt_for("moss", user: User.me)).to include("Voice for Moss")
+      expect(prompt_for("moss", user: User.me)).to include("the warm household voice")
     end
 
     # The profile is ~3,400 tokens sitting in front of ~29,000 of rules and
@@ -145,7 +145,11 @@ RSpec.describe Buddy::Themes do
           expect(chrome["faces"]).not_to be_empty, "#{theme} has no face images"
           expect(chrome["faces"]).to include("neutral"), "#{theme} has no neutral face"
           chrome["faces"].each { |expr, url|
-            expect(url).to include("buddy/#{theme}/face_#{expr}")
+            # `thinking` resolves to a stand-in pose for a pet with no thinking
+            # art of its own, so it needn't match its own name — but it is still
+            # one of THIS pet's real face images.
+            match = expr == "thinking" ? "buddy/#{theme}/face_" : "buddy/#{theme}/face_#{expr}"
+            expect(url).to include(match)
           }
         }
       end

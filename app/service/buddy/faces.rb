@@ -16,6 +16,24 @@ module Buddy
     # so the server can set it during a turn.
     TRANSITIONAL = %i[thinking].freeze
 
+    # When a pet has its own `thinking` pose it uses it; when it doesn't, it
+    # borrows the nearest "working on it" face it DOES have, in this order. The
+    # point is that the in-flight overlay is a VISIBLE change the moment you talk
+    # to it — a pet with no thinking art used to repaint its resting face, so it
+    # looked like nothing happened at all. Add a real `face_thinking.png` later
+    # and it takes over on its own; nothing here has to change.
+    THINKING_STANDINS = %i[focused peeking eager nerd confused cool content happy grin].freeze
+
+    # The face whose ART stands in for "thinking" on this pet. The expression
+    # NAME stays `thinking` everywhere (so the client's transient/settle logic is
+    # untouched); only which drawing it resolves to changes.
+    def thinking(theme)
+      drawn = all(theme)
+      return :thinking if drawn.include?(:thinking)
+
+      (THINKING_STANDINS & drawn).first || default
+    end
+
     def dir(theme)
       Rails.root.join("app/assets/images/buddy/#{theme.to_s.presence || "byte"}")
     end

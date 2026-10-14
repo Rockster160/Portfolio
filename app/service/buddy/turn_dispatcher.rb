@@ -76,6 +76,15 @@ module Buddy
         broadcast_message(user, message.reload)
       end
 
+      # A bare hello or goodbye gets a wave back while the pet answers it - one
+      # of the few turns it opens on a greeting rather than an answer. Only a
+      # message that is JUST a greeting, so "hi, add milk" still goes straight to
+      # the ask, and only the person's own side of the thread (a hidden seed or
+      # an action chip is the house talking, not them). No-op without wave art.
+      if message.outbound? && !message.metadata["hidden"] && Buddy::Greeting.bare?(message.body, name: conversation.buddy_name)
+        Buddy::ExpressionState.wave!(conversation)
+      end
+
       Buddy::GPT::Turn.run!(message).tap {
         settle_ideas(conversation)
         flag_compile(conversation, message)

@@ -55,6 +55,43 @@ RSpec.describe Buddy::ExpressionState do
     end
   end
 
+  it "waves only when the pet has the gesture art, never painting blank" do
+    cobalt = buddy_convo(User.me, "cobalt")       # has face_wave.png
+    tiko   = buddy_convo(create(:user), "tiko")   # has none
+
+    described_class.wave!(cobalt)
+    expect(MonitorChannel).to have_received(:broadcast_to).with(
+      cobalt.user, hash_including(data: hash_including(expression: "wave", transient: true))
+    )
+
+    described_class.wave!(tiko)   # no art → no wave broadcast at all
+    expect(MonitorChannel).not_to have_received(:broadcast_to).with(
+      tiko.user, hash_including(data: hash_including(expression: "wave"))
+    )
+  end
+
+  it "greets with a wave when it can and falls back to thinking when it can't" do
+    cobalt = buddy_convo(User.me, "cobalt")
+    tiko   = buddy_convo(create(:user), "tiko")
+
+    described_class.greet!(cobalt)
+    expect(MonitorChannel).to have_received(:broadcast_to).with(
+      cobalt.user, hash_including(data: hash_including(expression: "wave", transient: true))
+    )
+
+    described_class.greet!(tiko)
+    expect(MonitorChannel).to have_received(:broadcast_to).with(
+      tiko.user, hash_including(data: hash_including(expression: "thinking", transient: true))
+    )
+  end
+
+  # The wave is a greeting gesture, not a mood — the sentiment picker must never
+  # land on it, so it stays off the declared face set the picker draws from.
+  it "keeps the wave gesture out of the selectable moods" do
+    expect(Buddy::Faces.valid?(:cobalt, :wave)).to be(true)         # it has the art
+    expect(Buddy::Faces.selectable(:cobalt)).not_to include(:wave)  # but it is not a mood
+  end
+
   it "refuses `thinking` as a worn face — it is transitional, never a mood" do
     convo = buddy_convo(User.me, "byte")
     convo.update_column(:buddy_expression, "happy")
@@ -86,6 +123,22 @@ RSpec.describe Buddy::ExpressionState do
         missing = Buddy::Faces.selectable(theme).reject { |f| Buddy::Faces.summary(f, theme) }
         expect(missing).to be_empty
       end
+
+      # The in-flight "thinking" overlay must resolve to a pose this pet actually
+      # has art for, or the pet repaints blank mid-turn — which is exactly how a
+      # pet with no thinking art used to look like it wasn't reacting at all.
+      it "#{theme} has a thinking pose it can render" do
+        expect(Buddy::Faces.valid?(theme, Buddy::Faces.thinking(theme))).to be(true)
+      end
+    end
+
+    # A pet with no dedicated `thinking` art borrows a stand-in rather than its
+    # resting face, so talking to it is a visible change. Byte DOES have the art,
+    # so it keeps its own pose.
+    it "borrows a thinking stand-in only when a pet lacks its own" do
+      expect(Buddy::Faces.thinking(:byte)).to eq(:thinking)        # has face_thinking.png
+      expect(Buddy::Faces.thinking(:cobalt)).not_to eq(:thinking)  # has none → stand-in
+      expect(Buddy::Faces.thinking(:cobalt)).not_to eq(:neutral)   # and not its resting face
     end
 
     # The check-in is the one expression change with no model turn behind it: the

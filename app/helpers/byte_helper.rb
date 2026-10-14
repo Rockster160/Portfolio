@@ -28,15 +28,23 @@ module ByteHelper
   # which faces a pet has — the folder is the only source, which is what lets a
   # companion be its images plus its sentiment map and nothing else.
   def buddy_face_paths(theme)
-    Rails.root.glob("app/assets/images/buddy/#{theme}/face_*.{png,svg}").sort.to_h { |path|
+    faces = Rails.root.glob("app/assets/images/buddy/#{theme}/face_*.{png,svg}").sort.to_h { |path|
       [File.basename(path, ".*").delete_prefix("face_"), image_path("buddy/#{theme}/#{File.basename(path)}")]
     }
+    # A pet with no `thinking` pose of its own borrows a stand-in, so the
+    # in-flight overlay is a visible change rather than its resting face
+    # repainted. Buddy::Faces.thinking returns a face this pet DOES have art for,
+    # so the lookup can't miss. A dedicated `face_thinking.png` means the key is
+    # already here and this no-ops.
+    faces["thinking"] ||= faces[Buddy::Faces.thinking(theme).to_s]
+    faces
   end
 
   # The URL for one expression, falling back to the pet's neutral when it has no
-  # art for that one — so the always-broadcast `thinking` overlay (and any stale
-  # stored mood from a pet that had the face) still renders something. Used for
-  # the hero's first paint, before the client takes over.
+  # art for that one — so a stale stored mood from a pet that once had the face
+  # still renders something. (`thinking` resolves to a stand-in in
+  # buddy_face_paths, so it never reaches this fallback.) Used for the hero's
+  # first paint, before the client takes over.
   def buddy_face_url(theme, expression)
     faces = buddy_face_paths(theme)
     faces[expression.to_s] || faces["neutral"]
