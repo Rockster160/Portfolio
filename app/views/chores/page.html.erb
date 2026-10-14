@@ -7,6 +7,7 @@
   end
 ) %>
 <%= render "shell_head" %>
+<% content_for(:favicon) { render "chores/favicon" } %>
 <% content_for :head do %>
   <script src="/chores_sortable.js" defer></script>
 <% end %>
