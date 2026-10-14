@@ -1,161 +1,38 @@
 module Buddy
-  # Everything that differs between companions, in one table.
+  # The chrome table, now a thin facade over the companion classes.
   #
-  # A pet used to be spelled out wherever it mattered: a `case` in the favicon
-  # partial, another in the header, a ternary in SleepGuard that knew about Moss
-  # and nothing else, and several branches keyed off a USER ID rather than the
-  # theme. That meant adding a pet touched half a dozen files, and a thread whose
-  # theme differed from its owner's default showed the wrong name, icon and
-  # voice.
+  # Each pet's name, colour, icons, manifests and tone used to be spelled out in
+  # a big literal here. They live on the companion now (Buddy::Companions::*),
+  # and this derives the same `{theme => chrome}` shape from them so every
+  # caller — the favicon partial, the header, the PWA manifests, SleepGuard —
+  # keeps working unchanged. Adding a companion is a class under
+  # Buddy::Companions and its asset folder; nothing here.
   #
-  # So: one entry per pet, keyed by theme, and nothing anywhere keys off who the
-  # user is. Adding a companion is this table plus its asset folder.
-  #
-  # - `tone` is whose voice profile that companion speaks with
-  #   (app/service/buddy/tone_profiles). The persona file is the theme's own
-  #   name in app/service/buddy/personalities.
-  # - The chrome keys drive the PWA install: what it's called on a home screen,
-  #   which icon, which manifest, what colour the browser paints around it.
-  #   `kiosk_manifest` is the same pet installed as the wall-tablet view — a
-  #   second manifest rather than a flag, because `start_url` is what makes the
-  #   home-screen icon open the kiosk instead of the chat.
+  # - `tone` is whose voice profile the companion speaks with
+  #   (app/service/buddy/tone_profiles); the persona file is the pet's own name
+  #   in app/service/buddy/personalities. Both are pointers the companion holds.
+  # - The chrome keys drive the PWA install: the home-screen name, which icon,
+  #   which manifest, and the colour the browser paints around it.
   module Themes
     module_function
 
-    DEFAULT = :byte
+    DEFAULT = Buddy::Companion::DEFAULT
 
-    ALL = {
-      byte:    {
-        name:           "Byte",
-        tone:           :rimuru,
-        color:          "#0E1930",
-        avatar:         "byte_favicon/byte.png",
-        touch_icon:     "byte_favicon/apple-touch-icon.png",
-        favicon:        "byte_favicon/favicon-96x96.png",
-        manifest:       "/byte.webmanifest",
-        kiosk_manifest: "/byte_kiosk.webmanifest",
-      },
-      moss:    {
-        name:           "Moss",
-        tone:           :chelsea,
-        color:          "#14231A",
-        avatar:         "moss_favicon/moss.png",
-        touch_icon:     "moss_favicon/moss-apple-touch-icon.png",
-        favicon:        "moss_favicon/moss-favicon-96x96.png",
-        manifest:       "/moss.webmanifest",
-        kiosk_manifest: "/moss_kiosk.webmanifest",
-      },
-      suki:    {
-        name:           "Suki",
-        tone:           :eve,
-        color:          "#150A22",
-        avatar:         "suki_favicon/suki.png",
-        touch_icon:     "suki_favicon/suki-apple-touch-icon.png",
-        favicon:        "suki_favicon/suki-favicon-96x96.png",
-        manifest:       "/suki.webmanifest",
-        kiosk_manifest: "/suki_kiosk.webmanifest",
-      },
-      glimmer: {
-        name:           "Glimmer",
-        tone:           :chelsea,
-        color:          "#2A1E0A",
-        avatar:         "glimmer_favicon/glimmer.png",
-        touch_icon:     "glimmer_favicon/glimmer-apple-touch-icon.png",
-        favicon:        "glimmer_favicon/glimmer-favicon-96x96.png",
-        manifest:       "/glimmer.webmanifest",
-        kiosk_manifest: "/glimmer_kiosk.webmanifest",
-      },
-      kumoko:  {
-        name:           "Kumoko",
-        tone:           :kumoko,
-        color:          "#22140F",
-        avatar:         "kumoko_favicon/kumoko.png",
-        touch_icon:     "kumoko_favicon/kumoko-apple-touch-icon.png",
-        favicon:        "kumoko_favicon/kumoko-favicon-96x96.png",
-        manifest:       "/kumoko.webmanifest",
-        kiosk_manifest: "/kumoko_kiosk.webmanifest",
-      },
-      mocha:   {
-        name:           "Mocha",
-        tone:           :chelsea,
-        color:          "#241610",
-        avatar:         "mocha_favicon/mocha.png",
-        touch_icon:     "mocha_favicon/mocha-apple-touch-icon.png",
-        favicon:        "mocha_favicon/mocha-favicon-96x96.png",
-        manifest:       "/mocha.webmanifest",
-        kiosk_manifest: "/mocha_kiosk.webmanifest",
-      },
-      ghosty:  {
-        name:           "Ghosty",
-        tone:           :chelsea,
-        color:          "#2A1A24",
-        avatar:         "ghosty_favicon/ghosty.png",
-        touch_icon:     "ghosty_favicon/ghosty-apple-touch-icon.png",
-        favicon:        "ghosty_favicon/ghosty-favicon-96x96.png",
-        manifest:       "/ghosty.webmanifest",
-        kiosk_manifest: "/ghosty_kiosk.webmanifest",
-      },
-      flux:    {
-        name:           "Flux",
-        tone:           :chelsea,
-        color:          "#0C1E3C",
-        avatar:         "flux_favicon/flux.png",
-        touch_icon:     "flux_favicon/flux-apple-touch-icon.png",
-        favicon:        "flux_favicon/flux-favicon-96x96.png",
-        manifest:       "/flux.webmanifest",
-        kiosk_manifest: "/flux_kiosk.webmanifest",
-      },
-      tiko:    {
-        name:           "Tiko",
-        tone:           :chelsea,
-        color:          "#101D38",
-        avatar:         "tiko_favicon/tiko.png",
-        touch_icon:     "tiko_favicon/tiko-apple-touch-icon.png",
-        favicon:        "tiko_favicon/tiko-favicon-96x96.png",
-        manifest:       "/tiko.webmanifest",
-        kiosk_manifest: "/tiko_kiosk.webmanifest",
-      },
-      gizmo:   {
-        name:           "Gizmo",
-        tone:           :chelsea,
-        color:          "#281B07",
-        avatar:         "gizmo_favicon/gizmo.png",
-        touch_icon:     "gizmo_favicon/gizmo-apple-touch-icon.png",
-        favicon:        "gizmo_favicon/gizmo-favicon-96x96.png",
-        manifest:       "/gizmo.webmanifest",
-        kiosk_manifest: "/gizmo_kiosk.webmanifest",
-      },
-      sprig:   {
-        name:           "Sprig",
-        tone:           :chelsea,
-        color:          "#0F1E0D",
-        avatar:         "sprig_favicon/sprig.png",
-        touch_icon:     "sprig_favicon/sprig-apple-touch-icon.png",
-        favicon:        "sprig_favicon/sprig-favicon-96x96.png",
-        manifest:       "/sprig.webmanifest",
-        kiosk_manifest: "/sprig_kiosk.webmanifest",
-      },
-      cobalt:  {
-        name:           "Cobalt",
-        tone:           :chelsea,
-        color:          "#0D1640",
-        avatar:         "cobalt_favicon/cobalt.png",
-        touch_icon:     "cobalt_favicon/cobalt-apple-touch-icon.png",
-        favicon:        "cobalt_favicon/cobalt-favicon-96x96.png",
-        manifest:       "/cobalt.webmanifest",
-        kiosk_manifest: "/cobalt_kiosk.webmanifest",
-      },
-    }.freeze
+    # { theme => chrome-hash }, in display order. Live off the companions, so a
+    # tweak to one shows up without anything here to update.
+    def all
+      Buddy::Companion.all.transform_values(&:chrome)
+    end
 
     # Anything unrecognised reads as the default rather than raising — a theme
     # string arrives from a database column and a slash command, and a typo
-    # should land you on Byte, not on an error page.
+    # should land on Byte, not an error page.
     def for(theme)
-      ALL.fetch(theme.to_s.to_sym, ALL[DEFAULT])
+      Buddy::Companion.find(theme).chrome
     end
 
     def keys
-      ALL.keys
+      Buddy::Companion.keys
     end
 
     def name_for(theme)
@@ -168,7 +45,7 @@ module Buddy
 
     # Every pet's display name, for a "byte|moss|suki" usage string.
     def names
-      ALL.values.pluck(:name)
+      all.values.pluck(:name)
     end
   end
 end

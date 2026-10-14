@@ -671,6 +671,10 @@ Rails.application.routes.draw do
     # What an alert links to, so a Slack line ends at the whole row rather than
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error
+    # Every companion's expressions and the mood values that pick each one,
+    # drawn entirely from Buddy::Faces + Buddy::Themes so it is never out of
+    # step with what the pets can actually do.
+    get "/system/expressions" => "system#expressions", as: :system_expressions
   end
   # Everybody the constraint above turns away gets the About page instead of
   # a 404.

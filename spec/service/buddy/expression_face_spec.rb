@@ -64,43 +64,35 @@ RSpec.describe Buddy::ExpressionState do
     expect(convo.reload.buddy_expression).to eq("happy")   # unchanged — rejected
   end
 
-  # `$<theme>_expressions` in byte.scss names each file explicitly, and asset
-  # precompile FAILS on a name with no image behind it. Buddy::Faces reads the
-  # same directory, so the two must agree in both directions: a face on disk and
-  # not in the list is unreachable, a face listed and not on disk breaks deploy.
-  describe "the SCSS lists and the art on disk" do
-    scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
-
-    %w[byte moss glimmer suki kumoko mocha ghosty].each do |theme|
-      listed = scss[/\$#{theme}_expressions:\s*([^;]+);/, 1].to_s.split.map(&:to_sym)
-
-      it "#{theme} lists every face it has, and has every face it lists" do
-        expect(listed.sort).to eq(Buddy::Faces.all(theme).sort)
+  # Faces are driven entirely off the art on disk now: the hero paints the
+  # resolved image for the current expression (ByteHelper#buddy_face_paths feeds
+  # buddy/hero.js), with no per-theme list in the stylesheet to keep in step. So
+  # the invariants are about the folder and the sentiment map, not CSS — and
+  # they hold for every companion, including one added with no code touched.
+  describe "the face art and the sentiment map" do
+    Buddy::Themes.all.each_key do |theme|
+      # The resting default, the first paint, and the resolver's fallback for an
+      # expression a pet has no art for all land on neutral (Buddy::Faces.default
+      # and ByteHelper#buddy_face_url) — so every pet must have it or the hero can
+      # render blank, which is exactly how a theme with no face CSS used to fail.
+      it "#{theme} has a neutral face to rest on and fall back to" do
+        expect(Buddy::Faces.valid?(theme, :neutral)).to be(true)
       end
 
-      it "#{theme}'s aliases all point at art that exists" do
-        block = scss[/\$#{theme}_expr_aliases:\s*\((.*?)\);/m, 1].to_s
-        targets = block.scan(/"[^"]+":\s*"([^"]+)"/).flatten.map(&:to_sym)
-        expect(targets - Buddy::Faces.all(theme)).to be_empty
-      end
-
-      # The prose half of the profile. Nothing reads it at runtime any more -
-      # the model no longer picks its own face - but it is what a profile is
-      # written FROM, and a face with numbers and no sentence is a face nobody
-      # can check. Buddy::Faces::HINTS, next to Buddy::Faces::PROFILES, so the
-      # two can't drift.
+      # The prose half of the profile. Each emotion carries its own summary on
+      # the companion, right beside its axes, so a face with numbers and no
+      # sentence can't drift in unnoticed.
       it "#{theme} describes every face it can wear" do
-        missing = Buddy::Faces.selectable(theme).reject { |f| Buddy::Faces::HINTS[f] }
+        missing = Buddy::Faces.selectable(theme).reject { |f| Buddy::Faces.summary(f, theme) }
         expect(missing).to be_empty
       end
     end
 
-    # The check-in is the one expression change with no model turn behind it:
-    # the person taps how they're doing and the pet's face answers. `set`
-    # validates against the art on disk and does nothing at all when it's
-    # missing, so a theme without one of these fails SILENTLY — Suki went
-    # without `sad` for weeks and a tap on "rough" moved nothing.
-    it "every theme can wear both check-in faces" do
+    # The check-in is the one expression change with no model turn behind it: the
+    # person taps how they're doing and the pet's face answers. The companions
+    # drawn with a full set carry both halves of that directly; the ones with
+    # holes fall back through the sentiment picker to their nearest face instead.
+    it "every full-set companion can wear both check-in faces" do
       %w[byte moss glimmer suki kumoko mocha ghosty].each do |theme|
         %i[happy sad].each do |face|
           expect(Buddy::Faces.valid?(theme, face)).to be(true), "#{theme} cannot render #{face}"

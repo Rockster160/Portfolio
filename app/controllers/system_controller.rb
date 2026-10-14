@@ -25,6 +25,12 @@ class SystemController < ApplicationController
 
   def index; end
 
+  # A read-only gallery: every companion, every expression it can wear, and the
+  # four mood axes + reach that decide when the picker reaches for it. The view
+  # reads Buddy::Faces and Buddy::Themes directly, so there is nothing to keep
+  # in step here.
+  def expressions; end
+
   def gpt_spending
     @windows = SPEND_WINDOWS
     @days = params[:days].to_i

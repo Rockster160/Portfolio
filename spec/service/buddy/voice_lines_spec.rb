@@ -59,7 +59,7 @@ RSpec.describe Buddy::VoiceLines do
 
     it "gives every theme a line for every kind" do
       kinds = Buddy::VoiceLines::LINES.values.flat_map(&:keys).uniq
-      Buddy::Themes::ALL.each_key { |theme|
+      Buddy::Themes.all.each_key { |theme|
         kinds.each { |kind| expect(described_class.lines_for(theme, kind)).to be_present }
       }
     end

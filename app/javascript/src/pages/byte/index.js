@@ -2024,7 +2024,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function warmFaces(theme) {
     if (warmedThemes.has(theme)) return;
     warmedThemes.add(theme);
-    (buddyThemes[theme]?.faces || []).forEach((src) => {
+    Object.values(buddyThemes[theme]?.faces || {}).forEach((src) => {
       const img = new Image();
       img.decoding = "async";
       img.src = src;
@@ -2359,6 +2359,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     menu:       app.querySelector("[data-byte-actions-menu]"),
     menuToggle: app.querySelector("[data-byte-actions-toggle]"),
     conversationIdFn: () => currentConversationId,
+    // The pet's face image for a given theme + expression, resolved off the
+    // server-provided face map (fingerprinted paths read from disk), with a
+    // neutral fallback for an expression a pet has no art for. This is what lets
+    // the hero paint any companion with no per-theme CSS behind it.
+    faceUrl: (theme, expression) => {
+      const faces = buddyThemes[theme]?.faces || {};
+      return faces[expression] || faces.neutral || null;
+    },
     // Brain-dump: after a bucket is picked, hint in the composer that the next
     // message is the idea being stashed. Reset on send (see handleSend).
     onStashArmed: (category) => {

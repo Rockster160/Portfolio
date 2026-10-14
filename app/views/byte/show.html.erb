@@ -257,7 +257,12 @@
     <div class="byte-buddy-processes" data-buddy-processes hidden></div>
     <div class="byte-buddy-char" aria-label="<%= buddy_page_chrome[:name] %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
-      <div class="byte-buddy-face" aria-hidden="true"></div>
+      <%# The face is a single background image — this pet's resolved art for the %>
+      <%# current expression — set here for the first paint (the static %>
+      <%# `sleeping` state) and updated by buddy/hero.js thereafter. No per-theme %>
+      <%# CSS: a companion is its images + sentiment map. %>
+      <div class="byte-buddy-face" aria-hidden="true"
+           style="--buddy-face-url: url('<%= buddy_face_url(buddy_page_theme, :sleeping) %>')"></div>
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
     </div>
     <%# Debug-only picker: switch theme (Byte/Moss) and preview any face,

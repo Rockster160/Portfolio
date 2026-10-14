@@ -1,0 +1,16 @@
+<%# The four mood axes plus reach for one expression, as labelled bars. %>
+<%# `vals` is a Buddy::Faces::INDEX row; `axes` is Buddy::Faces::AXES. %>
+<dl class="exlab-axes">
+  <% (axes + [:reach]).each do |axis| %>
+    <% v = vals[axis].to_f %>
+    <div class="exlab-axis">
+      <dt><%= axis %></dt>
+      <dd>
+        <span class="exlab-track">
+          <span class="exlab-bar exlab-bar-<%= axis %>" style="width: <%= (v * 100).round %>%"></span>
+        </span>
+        <em><%= format("%.2f", v) %></em>
+      </dd>
+    </div>
+  <% end %>
+</dl>

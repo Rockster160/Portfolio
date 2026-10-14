@@ -8,7 +8,7 @@ module ByteHelper
   # stays generated from Buddy::Themes, so adding a companion is still one entry
   # there and nothing to remember here.
   def buddy_themes_json
-    Buddy::Themes::ALL.to_h { |theme, chrome|
+    Buddy::Themes.all.to_h { |theme, chrome|
       [theme, {
         name:       chrome[:name],
         color:      chrome[:color],
@@ -20,13 +20,26 @@ module ByteHelper
     }.to_json
   end
 
-  # Fingerprinted paths for a pet's face set, so switching into a thread can
-  # warm them before the hero asks for one. Inlined rather than fetched: it's
-  # about forty paths across every pet, which is cheaper than another endpoint.
+  # A pet's face set as `{ expression => fingerprinted_url }`, read straight off
+  # disk. The hero paints the character from this (buddy/hero.js sets the one
+  # for the current expression as the face layer's background), and switching
+  # into a thread warms the lot before the hero asks for any. Keyed by
+  # expression so neither the client nor the stylesheet keeps a second list of
+  # which faces a pet has — the folder is the only source, which is what lets a
+  # companion be its images plus its sentiment map and nothing else.
   def buddy_face_paths(theme)
-    Rails.root.glob("app/assets/images/buddy/#{theme}/face_*.{png,svg}").sort.map { |path|
-      image_path("buddy/#{theme}/#{File.basename(path)}")
+    Rails.root.glob("app/assets/images/buddy/#{theme}/face_*.{png,svg}").sort.to_h { |path|
+      [File.basename(path, ".*").delete_prefix("face_"), image_path("buddy/#{theme}/#{File.basename(path)}")]
     }
+  end
+
+  # The URL for one expression, falling back to the pet's neutral when it has no
+  # art for that one — so the always-broadcast `thinking` overlay (and any stale
+  # stored mood from a pet that had the face) still renders something. Used for
+  # the hero's first paint, before the client takes over.
+  def buddy_face_url(theme, expression)
+    faces = buddy_face_paths(theme)
+    faces[expression.to_s] || faces["neutral"]
   end
 
   # Compact form of an absolute filesystem path — swaps `/Users/zoro`

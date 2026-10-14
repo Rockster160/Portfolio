@@ -457,6 +457,11 @@ RSpec.describe Buddy::Sentiment do
     # facts about the errand - neither is an argument about how their day is
     # going, and the face has to say the day.
     it "stays with the room however the errand went" do
+      # The missed-errand blend puts both `sad` and `confused` in the pool, so
+      # the probabilistic draw decides between them. This is a claim about which
+      # face the ROOM points at — the nearest — not about that tie-break, so pin
+      # the draw to the nearest rather than leaning on the global seed.
+      allow(Random).to receive(:rand).and_return(0.0)
       bleak = '{"warmth":0.1,"play":0.05,"weight":0.85,"strain":0.2}'
 
       %i[talking landed missed].each { |shape|

@@ -7,7 +7,7 @@ require "rails_helper"
 # came out wearing the wrong name, icon, and voice.
 RSpec.describe Buddy::Themes do
   it "gives every pet a name, a voice, and its own browser chrome" do
-    described_class::ALL.each_key { |theme|
+    described_class.all.each_key { |theme|
       chrome = described_class.for(theme)
 
       expect(chrome[:name]).to be_present
@@ -21,7 +21,7 @@ RSpec.describe Buddy::Themes do
   # decides whether the home-screen icon opens the chat or the wall tablet. A
   # missing file is an install that silently falls back to the chat.
   it "ships both manifests for every pet, pointed at the right page" do
-    described_class::ALL.each_key { |theme|
+    described_class.all.each_key { |theme|
       chrome = described_class.for(theme)
       chat   = JSON.parse(Rails.public_path.join(chrome[:manifest].delete_prefix("/")).read)
       kiosk  = JSON.parse(Rails.public_path.join(chrome[:kiosk_manifest].delete_prefix("/")).read)
@@ -39,7 +39,7 @@ RSpec.describe Buddy::Themes do
   # to speak with. A missing file means a companion falls back to a one-line
   # stub, which reads as a different (blander) character entirely.
   it "has both files on disk for every pet" do
-    described_class::ALL.each_key { |theme|
+    described_class.all.each_key { |theme|
       expect(Buddy::Personality::PERSONA_ROOT.join("#{theme}.md")).to exist
       expect(Buddy::Personality::TONE_PROFILE_ROOT.join("#{described_class.tone_for(theme)}.md")).to exist
     }
@@ -78,7 +78,7 @@ RSpec.describe Buddy::Themes do
     # repeated last - the position nearest the person's message.
     describe "the voice floor" do
       it "ends every pet's profile, so a new companion is still one file" do
-        described_class::ALL.each_key { |theme|
+        described_class.all.each_key { |theme|
           path = Buddy::Personality::TONE_PROFILE_ROOT.join("#{described_class.tone_for(theme)}.md")
 
           expect(path.read).to include(Buddy::Personality::FLOOR_HEADING), "#{theme} has no floor"
@@ -125,7 +125,7 @@ RSpec.describe Buddy::Themes do
       let(:table) { JSON.parse(ApplicationController.helpers.buddy_themes_json) }
 
       it "covers every pet" do
-        expect(table.keys).to match_array(described_class::ALL.keys.map(&:to_s))
+        expect(table.keys).to match_array(described_class.all.keys.map(&:to_s))
       end
 
       it "gives each one everything a repaint needs" do
@@ -137,9 +137,16 @@ RSpec.describe Buddy::Themes do
       end
 
       it "resolves each pet's face set so a switch can warm them" do
+        # `faces` is `{ expression => url }` — keyed so the hero can look up the
+        # art for a mood with no second list of which faces a pet has, and
+        # `neutral` is the one every pet must carry (the resting default and the
+        # resolver's fallback).
         table.each { |theme, chrome|
           expect(chrome["faces"]).not_to be_empty, "#{theme} has no face images"
-          expect(chrome["faces"]).to all(include("buddy/#{theme}/face_"))
+          expect(chrome["faces"]).to include("neutral"), "#{theme} has no neutral face"
+          chrome["faces"].each { |expr, url|
+            expect(url).to include("buddy/#{theme}/face_#{expr}")
+          }
         }
       end
     end

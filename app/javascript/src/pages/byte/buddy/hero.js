@@ -52,10 +52,11 @@ async function fetchQuickRoutines() {
   return quickOrder(data?.routines);
 }
 
-export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStashArmed }) {
+export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStashArmed, faceUrl }) {
   if (!hero) return null;
 
   const charEl     = hero.querySelector(".byte-buddy-char");
+  const faceEl     = hero.querySelector(".byte-buddy-face");
   const facePopover = hero.querySelector("[data-buddy-face-popover]");
   const panels     = menu ? Array.from(menu.querySelectorAll("[data-actions-panel]")) : [];
   const quickList  = menu ? menu.querySelector("[data-buddy-quick-list]") : null;
@@ -103,6 +104,16 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   const paint = (expression) => {
     hero.dataset.buddyExpression = String(expression);
     if (charEl) charEl.dataset.buddyExpression = String(expression);
+    // The face is a single data-driven image, not a per-theme CSS rule: look up
+    // this pet's resolved art for the expression (faceUrl falls back to neutral
+    // when a pet has no art for one, which is how the always-broadcast
+    // `thinking` overlay renders for a pet with no thinking pose) and set it as
+    // the face layer's background. A companion is its images + sentiment map,
+    // with nothing to wire in CSS.
+    if (faceEl) {
+      const url = faceUrl && faceUrl(hero.dataset.buddyTheme, expression);
+      faceEl.style.setProperty("--buddy-face-url", url ? `url("${url}")` : "none");
+    }
     syncFaceStates();
   };
 
@@ -201,13 +212,15 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   const openFace  = () => { if (facePopover) { facePopover.hidden = false; syncFaceStates(); } };
   const closeFace = () => { if (facePopover) facePopover.hidden = true; };
 
-  // Theme swap is purely client-side here — it just flips the hero's
-  // data-buddy-theme, which the CSS keys palette + body + faces off of, so
-  // Moss can be previewed without touching the persisted user theme.
+  // Theme swap is purely client-side here — it flips the hero's
+  // data-buddy-theme, which the CSS keys the palette off, so a pet can be
+  // previewed without touching the persisted user theme. The face is this pet's
+  // own art, so repaint the current expression or the previous pet's face would
+  // stay on screen.
   const setTheme = (theme) => {
     if (!theme) return;
     hero.dataset.buddyTheme = String(theme);
-    syncFaceStates();
+    paint(hero.dataset.buddyExpression || restingExpression);
   };
 
   // Reflect the live theme + expression back onto the picker buttons, and

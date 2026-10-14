@@ -189,6 +189,112 @@ html.html-ctr-byte body {
     --bs-pending: #B094AC;
   }
 
+  // Cobalt theme — a deep sapphire surface for the blue dragon, his bright
+  // cobalt scales as the accent. Same `:has` override as the others. The
+  // reader's own (outbound) messages are Chelsea purple, which sits clear of
+  // the dragon's blue replies against the navy.
+  &:has(.byte-app[data-buddy-theme="cobalt"]) {
+    --bs-bg: #0A0F28;
+    --bs-panel: #141A3A;
+    --bs-panel-soft: #1E2650;
+    --bs-border: #2E3A6E;
+    --bs-text: #E6ECFB;
+    --bs-text-buddy: #BAC8F3;
+    --bs-muted: #8E9BC8;
+    --bs-accent: #5C7CF2;
+    --bs-accent-strong: #8AA2FF;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #3A5CD8 0%, #5C7CF2 100%);  // cobalt buttons
+    --bs-them-bg: #222E5E;
+    --bs-danger: #F0756B;
+    --bs-attention: #F0B45C;
+    --bs-pending: #94A0C8;
+  }
+
+  // Flux theme — a dark tidal surface for the little octopus, a bright aqua as
+  // the accent. Same `:has` override as the others. The reader's own (outbound)
+  // messages stay Chelsea purple, clear of the aqua.
+  &:has(.byte-app[data-buddy-theme="flux"]) {
+    --bs-bg: #08131F;
+    --bs-panel: #0F2133;
+    --bs-panel-soft: #163049;
+    --bs-border: #244466;
+    --bs-text: #E2EEF7;
+    --bs-text-buddy: #B4D6F0;
+    --bs-muted: #85A3C0;
+    --bs-accent: #46B6E8;
+    --bs-accent-strong: #6ED0FF;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #2A8FC8 0%, #46B6E8 100%);  // aqua buttons
+    --bs-them-bg: #1A3650;
+    --bs-danger: #F0756B;
+    --bs-attention: #F0B45C;
+    --bs-pending: #8CA2B6;
+  }
+
+  // Tiko theme — a cool spirit-wood surface for the fox, his teal foxfire as
+  // the accent. Same `:has` override as the others. The reader's own (outbound)
+  // messages stay Chelsea purple, clear of the teal.
+  &:has(.byte-app[data-buddy-theme="tiko"]) {
+    --bs-bg: #081713;
+    --bs-panel: #0F241F;
+    --bs-panel-soft: #16332C;
+    --bs-border: #244A40;
+    --bs-text: #E2F2EC;
+    --bs-text-buddy: #B4EAD9;
+    --bs-muted: #85B4A6;
+    --bs-accent: #3FC9C0;
+    --bs-accent-strong: #6EE0D4;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #2A9F97 0%, #3FC9C0 100%);  // teal buttons
+    --bs-them-bg: #1A382F;
+    --bs-danger: #F0756B;
+    --bs-attention: #F0B45C;
+    --bs-pending: #8CA69C;
+  }
+
+  // Gizmo theme — a warm treasure-vault surface for the mimic chest, its gold
+  // hoard as the accent. Same `:has` override as the others. The reader's own
+  // (outbound) messages stay Chelsea purple, clear of the gold.
+  &:has(.byte-app[data-buddy-theme="gizmo"]) {
+    --bs-bg: #140D04;
+    --bs-panel: #221709;
+    --bs-panel-soft: #302212;
+    --bs-border: #4A3820;
+    --bs-text: #F3ECDD;
+    --bs-text-buddy: #F0D7A6;
+    --bs-muted: #B39B7A;
+    --bs-accent: #E0A838;
+    --bs-accent-strong: #F2C45C;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #C0872A 0%, #E0A838 100%);  // gold buttons
+    --bs-them-bg: #3A2A12;
+    --bs-danger: #E8825C;
+    --bs-attention: #F0B45C;
+    --bs-pending: #A89478;
+  }
+
+  // Sprig theme — a mossy glade surface for the nature dragon, his leaf green as
+  // the accent. Same `:has` override as the others. The reader's own (outbound)
+  // messages stay Chelsea purple, clear of the green.
+  &:has(.byte-app[data-buddy-theme="sprig"]) {
+    --bs-bg: #0A160A;
+    --bs-panel: #142414;
+    --bs-panel-soft: #1E331E;
+    --bs-border: #2E4A2E;
+    --bs-text: #E8F2E2;
+    --bs-text-buddy: #C6EBB4;
+    --bs-muted: #94B48D;
+    --bs-accent: #7ACB5A;
+    --bs-accent-strong: #9CE07E;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #5CA83E 0%, #7ACB5A 100%);  // leaf buttons
+    --bs-them-bg: #223820;
+    --bs-danger: #E88A5C;
+    --bs-attention: #E8C063;
+    --bs-pending: #8CA886;
+  }
+
   .byte-app,
   .byte-app *,
   .byte-drawer,
@@ -5004,6 +5110,44 @@ dialog.byte-modal {
     --buddy-art-trim: 0.05;
   }
 
+  // Cobalt, Flux, Tiko, Gizmo and Sprig ship as square cutouts tight to the
+  // creature, centred with no transparent foot to reclaim — so art-trim is 0
+  // (byte's 0.19 default would crop the pet's bottom and shove it down the hero).
+  &[data-buddy-theme="cobalt"] {
+    --buddy-primary: #1A2656;
+    --buddy-accent: #5C7CF2;
+    --buddy-danger: #F0756B;
+    --buddy-art-trim: 0;
+  }
+
+  &[data-buddy-theme="flux"] {
+    --buddy-primary: #143046;
+    --buddy-accent: #46B6E8;
+    --buddy-danger: #F0756B;
+    --buddy-art-trim: 0;
+  }
+
+  &[data-buddy-theme="tiko"] {
+    --buddy-primary: #14302A;
+    --buddy-accent: #3FC9C0;
+    --buddy-danger: #F0756B;
+    --buddy-art-trim: 0;
+  }
+
+  &[data-buddy-theme="gizmo"] {
+    --buddy-primary: #3A2A12;
+    --buddy-accent: #E0A838;
+    --buddy-danger: #E8825C;
+    --buddy-art-trim: 0;
+  }
+
+  &[data-buddy-theme="sprig"] {
+    --buddy-primary: #1E3A1E;
+    --buddy-accent: #7ACB5A;
+    --buddy-danger: #E88A5C;
+    --buddy-art-trim: 0;
+  }
+
   &[hidden] {
     display: none;
   }
@@ -5149,12 +5293,13 @@ dialog.byte-modal {
 // within the hero, so no special height cap is needed anymore — just a little
 // sky above so the sprout sits clear of the header rather than jammed against
 // it. (The compact layout overrides this padding back to 8px.)
-.byte-buddy-hero[data-buddy-theme="moss"],
-.byte-buddy-hero[data-buddy-theme="suki"],
-.byte-buddy-hero[data-buddy-theme="glimmer"],
-.byte-buddy-hero[data-buddy-theme="kumoko"],
-.byte-buddy-hero[data-buddy-theme="mocha"],
-.byte-buddy-hero[data-buddy-theme="ghosty"] {
+// A little sky above the character so art that fills the top of its frame (a
+// sprout, ears, a hat) sits clear of the header rather than jammed against it.
+// Every companion but Byte is drawn that way — Byte's puddle sits at the
+// bottom and wants the room below, not above — so this keys off "not Byte"
+// rather than a hand-kept list a new pet has to be added to. (The compact
+// layout overrides this back to 8px.)
+.byte-buddy-hero:not([data-buddy-theme="byte"]) {
   padding-top: 3vh;
 }
 .byte-buddy-body,
@@ -5168,6 +5313,11 @@ dialog.byte-modal {
   pointer-events: none;
 }
 .byte-buddy-face {
+  // One rule for every companion. The image is the pet's resolved art for its
+  // current expression, set as --buddy-face-url by buddy/hero.js (and inline on
+  // the first paint). There are deliberately no per-theme face rules here — a
+  // companion is its expression images plus its sentiment map, nothing in CSS.
+  background-image: var(--buddy-face-url, none);
   transition: opacity 180ms ease;
 }
 .byte-buddy-arm {
@@ -5236,193 +5386,11 @@ dialog.byte-modal {
   background-image: none;
 }
 
-// Face per theme + expression. Every companion ships a full raster set (PNG),
-// and every face in the folder is wired so the debug picker can switch to any
-// of them. Each entry must have a matching face_#{name}.png or precompile
-// fails — spec/service/buddy/expression_face_spec.rb checks these lists against
-// the art on disk in both directions so that lands in a spec, not a deploy.
-$byte_expressions: neutral neutral_blush happy uwu loving annoyed sad crying thinking nerd sleeping focused confused surprised playful unamused cheering thumbs_up hugging content eager caring;
-$moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy confused focused dismayed;
-@each $expr in $byte_expressions {
-  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/byte/face_#{$expr}.png");
-  }
-}
-// Names nothing emits any more, kept because a stale stored expression can
-// still ask for one.
-$byte_expr_aliases: ("celebrating": "cheering", "encouraging": "caring");
-@each $mood, $face in $byte_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/byte/face_#{$face}.png");
-  }
-}
-@each $expr in $moss_expressions {
-  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/moss/face_#{$expr}.png");
-  }
-}
-// Server-driven moods that Moss has no identically-named art for, aliased to
-// the closest expression: encouraging→grin (warm beam), celebrating→star
-// (starry-eyed). `focused` used to sit here on top of surprised and is Moss's
-// own art now.
-$moss_expr_aliases: ("encouraging": "grin", "celebrating": "star");
-@each $mood, $face in $moss_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/moss/face_#{$face}.png");
-  }
-}
-
-// Glimmer — spliced from a 9-pose sheet, so a smaller
-// raster set than Moss. Each name here must have a matching
-// buddy/glimmer/face_#{name}.png or precompile fails.
-$glimmer_expressions: neutral happy grin sad content surprised loving star sleeping crying thinking focused dismayed;
-@each $expr in $glimmer_expressions {
-  .byte-buddy-hero[data-buddy-theme="glimmer"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/glimmer/face_#{$expr}.png");
-  }
-}
-// Moods Glimmer has no dedicated art for, aliased to the closest face she does
-// have: the harsher negatives fold into sad, alert/off-kilter into surprised,
-// puzzlement onto the hand-at-chin thinking pose (it already carries the
-// question mark), and the server's celebratory moods into grin/star.
-// crying/thinking/focused used to be aliases here and are her own art now.
-$glimmer_expr_aliases: (
-  "wink": "happy",
-  "angry": "sad",
-  "frustrated": "sad",
-  "queasy": "sad",
-  "unamused": "sad",
-  "shocked": "surprised",
-  "dizzy": "surprised",
-  "confused": "thinking",
-  "encouraging": "grin",
-  "celebrating": "star",
-);
-@each $mood, $face in $glimmer_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="glimmer"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/glimmer/face_#{$face}.png");
-  }
-}
-
-// Suki — a full raster set of the purple sunbird. Each name here must
-// have a matching buddy/suki/face_#{name}.png or precompile fails.
-$suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sleeping surprised focused sad;
-@each $expr in $suki_expressions {
-  .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/suki/face_#{$expr}.png");
-  }
-}
-// Server- and system-driven expressions Suki has no identically-named art for,
-// aliased to the closest sunbird face so a proposal state, a check-in, the
-// thinking/sleeping system faces, or a stale stored mood always render.
-// `overwhelmed` doubles onto dizzy, `crying` onto her teary sad. sad/focused
-// were both parked on neutral for want of art — a check-in of "rough" moved
-// nothing at all — and are her own faces now.
-$suki_expr_aliases: (
-  "thinking": "neutral",
-  "crying": "sad",
-  "celebrating": "excited",
-  "encouraging": "cheery",
-  "overwhelmed": "dizzy",
-);
-@each $mood, $face in $suki_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/suki/face_#{$face}.png");
-  }
-}
-
-// Kumoko — spliced from two pose sheets drawn in one style. Each name here
-// must have a matching buddy/kumoko/face_#{name}.png or precompile fails.
-$kumoko_expressions: neutral happy loving wink surprised confused sad sleeping munching cheering angry nervous eager bashful star thinking hiding touched content peeking umbrella;
-@each $expr in $kumoko_expressions {
-  .byte-buddy-hero[data-buddy-theme="kumoko"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/kumoko/face_#{$expr}.png");
-  }
-}
-// Moods Kumoko has no art for, aliased to the closest pose she does have.
-$kumoko_expr_aliases: (
-  "crying": "sad",
-  "frustrated": "angry",
-  "annoyed": "angry",
-  "unamused": "confused",
-  "queasy": "nervous",
-  "dismayed": "nervous",
-  "dizzy": "confused",
-  "shocked": "surprised",
-  "celebrating": "cheering",
-  "encouraging": "happy",
-);
-@each $mood, $face in $kumoko_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="kumoko"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/kumoko/face_#{$face}.png");
-  }
-}
-
-// Mocha — the little coffee cup, a Moss-shaped set with a work/motivated lean.
-// Each name here must have a matching buddy/mocha/face_#{name}.png or precompile
-// fails (and Buddy::Faces reads the same folder, so the two must agree).
-$mocha_expressions: neutral happy grin cheering wink hugging caring loving content cool eager offering surprised confused thinking sleeping sad crying angry dizzy queasy;
-@each $expr in $mocha_expressions {
-  .byte-buddy-hero[data-buddy-theme="mocha"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/mocha/face_#{$expr}.png");
-  }
-}
-// Moods Mocha has no identically-named art for, aliased to the closest cup face.
-$mocha_expr_aliases: (
-  "celebrating": "cheering",
-  "encouraging": "caring",
-  "overwhelmed": "queasy",
-  "frustrated": "angry",
-  "annoyed": "angry",
-  "unamused": "confused",
-  "shocked": "surprised",
-);
-@each $mood, $face in $mocha_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="mocha"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/mocha/face_#{$face}.png");
-  }
-}
-
-// Ghosty — the little ghost, a Moss-shaped set with a home/cosy lean. Each name
-// here must have a matching buddy/ghosty/face_#{name}.png or precompile fails.
-$ghosty_expressions: neutral happy grin cheering wink hugging loving content eager offering surprised confused sad sleeping angry dizzy star excited playful peeking;
-@each $expr in $ghosty_expressions {
-  .byte-buddy-hero[data-buddy-theme="ghosty"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/ghosty/face_#{$expr}.png");
-  }
-}
-// Ghosty has no `thinking` art, so the mid-turn overlay (always broadcast as
-// `thinking`) must alias to a real face or it renders blank. The rest are moods
-// she has no identically-named pose for, aliased to the closest ghost face.
-$ghosty_expr_aliases: (
-  "thinking": "neutral",
-  "crying": "sad",
-  "celebrating": "cheering",
-  "encouraging": "loving",
-  "overwhelmed": "dizzy",
-  "frustrated": "angry",
-  "annoyed": "angry",
-  "unamused": "confused",
-);
-@each $mood, $face in $ghosty_expr_aliases {
-  .byte-buddy-hero[data-buddy-theme="ghosty"][data-buddy-expression="#{$mood}"]
-    .byte-buddy-face {
-    background-image: image-url("buddy/ghosty/face_#{$face}.png");
-  }
-}
+// The face image used to be a hand-kept list per theme here, one `@each` of
+// `image-url` rules per companion. It is a single rule on `.byte-buddy-face`
+// now (see above): the resolved art for the current expression, driven off the
+// pet's face folder by the server and buddy/hero.js. A companion needs no
+// entry here — its expressions are the images on disk and its sentiment map.
 
 @keyframes buddy-idle {
   0%,

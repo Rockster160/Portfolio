@@ -1,0 +1,351 @@
+<%= meta_title "Expression Lab", include_name: false %>
+<%= meta_description "Every companion's expressions and the mood values that pick them." %>
+
+<%
+  # Everything on this page is read straight off the companion classes, so a pet
+  # or an emotion added there shows up here with no edit:
+  #   Buddy::Companion.all  — the companions (name, summary, chrome)
+  #   pet.faces / pet.summaries — each emotion's mood values and its sentence
+  #   Buddy::Faces          — the resting/system/transitional groupings
+  axes = Buddy::Faces::AXES                       # warmth play weight strain
+
+  # The faces the pet does NOT choose: its resting default, the "thinking"
+  # overlay shown mid-reply, and the "sleeping" outage/cap face. Pulled from the
+  # same constants that drive them, and shown first because they are the ones
+  # that are always on and never a mood.
+  system_order = ([Buddy::Faces.default] + Buddy::Faces::TRANSITIONAL + Buddy::Faces::SYSTEM).uniq
+  system_role  = {
+    Buddy::Faces.default         => ["rests here", "The resting default — where the pet sits when nothing has moved it."],
+    Buddy::Faces::TRANSITIONAL.first => ["transitional", "Shown while a reply is being written, never as a mood."],
+    Buddy::Faces::SYSTEM.first       => ["system", "Shown when the connection drops or the usage cap is hit."],
+  }
+  axis_hint = {
+    warmth: "how good the moment is",
+    play:   "how light it is",
+    weight: "how much is at stake",
+    strain: "how much friction is in the room",
+    reach:  "how far from its centre this face still answers — tighter is louder",
+  }
+
+  pets = Buddy::Companion.all.values.select { |pet| pet.faces.present? }
+%>
+
+<div class="exlab" data-exlab>
+  <div class="lists-title">
+    <small>Expression Lab</small>
+  </div>
+  <p class="exlab-intro">
+    Every companion's expressions, and the four mood axes plus reach that decide
+    when each one is worn. Each pet sets its own emotions in its
+    <code>Buddy::Companion</code> class — add an emotion or a pet and it appears
+    here.
+  </p>
+
+  <ul class="exlab-legend">
+    <% axes.each do |axis| %>
+      <li><span class="exlab-dot exlab-dot-<%= axis %>"></span><b><%= axis %></b> — <%= axis_hint[axis] %></li>
+    <% end %>
+    <li><span class="exlab-dot exlab-dot-reach"></span><b>reach</b> — <%= axis_hint[:reach] %></li>
+  </ul>
+
+  <div class="exlab-chips" role="tablist">
+    <% pets.each_with_index do |pet, i| %>
+      <button type="button" class="exlab-chip<%= " is-active" if i.zero? %>" data-exlab-chip="<%= pet.theme %>" role="tab" aria-selected="<%= i.zero? %>">
+        <img src="<%= image_path(pet.chrome[:avatar]) %>" alt="" aria-hidden="true">
+        <%= pet.display_name %>
+      </button>
+    <% end %>
+  </div>
+
+  <div class="exlab-stage">
+    <% pets.each_with_index do |pet, i| %>
+      <%
+        theme     = pet.theme
+        faces     = pet.faces
+        # System faces first (those the pet can actually show), then every mood
+        # it chooses, minus any already shown above.
+        systems   = system_order.select { |f| f == Buddy::Faces.default || Buddy::Faces.valid?(theme, f) }
+        moods     = faces.keys.map(&:to_sym).sort_by(&:to_s) - systems
+      %>
+      <section class="exlab-pet" data-exlab-pet="<%= theme %>"<%= " hidden".html_safe unless i.zero? %>>
+        <header class="exlab-pet-head">
+          <img class="exlab-avatar" src="<%= image_path(pet.chrome[:avatar]) %>" alt="<%= pet.display_name %>">
+          <div>
+            <h2><%= pet.display_name %></h2>
+            <% if pet.summary.present? %><p class="exlab-summary"><%= pet.summary %></p><% end %>
+            <span class="exlab-meta">
+              tone <%= pet.tone %> · <%= faces.size %> <%= "expression".pluralize(faces.size) %>
+            </span>
+          </div>
+        </header>
+
+        <div class="exlab-group-label">System</div>
+        <div class="exlab-grid">
+          <% systems.each do |name| %>
+            <%
+              vals     = faces[name]
+              tag, say = system_role[name]
+              has_art  = Buddy::Faces.valid?(theme, name)
+            %>
+            <article class="exlab-card exlab-card-system">
+              <div class="exlab-face">
+                <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
+              </div>
+              <div class="exlab-name">
+                <%= name.to_s.tr("_", " ") %>
+                <% if tag %><span class="exlab-tag"><%= tag %></span><% end %>
+              </div>
+              <p class="exlab-say">
+                <%= say || pet.summaries[name] %>
+                <% unless has_art %><em class="exlab-fallback">· no pose of its own, falls back to neutral</em><% end %>
+              </p>
+              <% if vals %>
+                <%= render "system/expression_axes", vals: vals, axes: axes %>
+              <% end %>
+            </article>
+          <% end %>
+        </div>
+
+        <% if moods.any? %>
+          <div class="exlab-group-label">Expressions</div>
+          <div class="exlab-grid">
+            <% moods.each do |name| %>
+              <% vals = faces[name] %>
+              <article class="exlab-card">
+                <div class="exlab-face">
+                  <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
+                </div>
+                <div class="exlab-name"><%= name.to_s.tr("_", " ") %></div>
+                <% if pet.summaries[name] %>
+                  <p class="exlab-say"><%= pet.summaries[name] %></p>
+                <% end %>
+                <%= render "system/expression_axes", vals: vals, axes: axes %>
+              </article>
+            <% end %>
+          </div>
+        <% end %>
+      </section>
+    <% end %>
+  </div>
+</div>
+
+<%# Chip → pet. Generic: no per-theme anything, so a new companion just works. %>
+<script>
+  (function () {
+    var root = document.querySelector("[data-exlab]");
+    if (!root) return;
+    var chips = root.querySelectorAll("[data-exlab-chip]");
+    var pets  = root.querySelectorAll("[data-exlab-pet]");
+    root.querySelector(".exlab-chips").addEventListener("click", function (e) {
+      var chip = e.target.closest("[data-exlab-chip]");
+      if (!chip) return;
+      var theme = chip.dataset.exlabChip;
+      chips.forEach(function (c) {
+        var on = c === chip;
+        c.classList.toggle("is-active", on);
+        c.setAttribute("aria-selected", String(on));
+      });
+      pets.forEach(function (p) { p.hidden = p.dataset.exlabPet !== theme; });
+    });
+  })();
+</script>
+
+<style>
+  .exlab {
+    --exlab-bg: #0E1116;
+    --exlab-card: #161B22;
+    --exlab-line: #262D38;
+    --exlab-text: #E6EDF3;
+    --exlab-muted: #8B98A8;
+    --exlab-warmth: #F2B84B;
+    --exlab-play: #6FCF72;
+    --exlab-weight: #5C9BF2;
+    --exlab-strain: #F0756B;
+    --exlab-reach: #9B8CCB;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 16px 48px;
+    color: var(--exlab-text);
+  }
+  .exlab-intro {
+    color: var(--exlab-muted);
+    max-width: 62ch;
+    line-height: 1.5;
+    margin: 4px 0 18px;
+  }
+  .exlab code {
+    background: var(--exlab-card);
+    border: 1px solid var(--exlab-line);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 0.86em;
+  }
+  .exlab-legend {
+    list-style: none;
+    padding: 12px 14px;
+    margin: 0 0 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    background: var(--exlab-card);
+    border: 1px solid var(--exlab-line);
+    border-radius: 10px;
+    color: var(--exlab-muted);
+    font-size: 0.86rem;
+  }
+  .exlab-legend li { display: flex; align-items: baseline; gap: 7px; }
+  .exlab-legend b { color: var(--exlab-text); font-weight: 600; text-transform: capitalize; }
+  .exlab-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; align-self: center; }
+  .exlab-dot-warmth { background: var(--exlab-warmth); }
+  .exlab-dot-play   { background: var(--exlab-play); }
+  .exlab-dot-weight { background: var(--exlab-weight); }
+  .exlab-dot-strain { background: var(--exlab-strain); }
+  .exlab-dot-reach  { background: var(--exlab-reach); }
+
+  /* Chips — one per pet, wrapping onto as many rows as they need. The app's
+     global button styling paints every <button> blue (background, a blue glow
+     box-shadow, a text-shadow, and `color: white !important`), so each of those
+     is explicitly neutralised here; the colour needs !important to win. */
+  .exlab-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .exlab-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 5px 13px 5px 5px;
+    border-radius: 999px;
+    border: 1px solid var(--exlab-line);
+    background: var(--exlab-card);
+    color: var(--exlab-muted) !important;
+    box-shadow: none;
+    text-shadow: none;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  .exlab-chip img { width: 24px; height: 24px; border-radius: 50%; object-fit: contain; background: #0B0E13; }
+  .exlab-chip:hover,
+  .exlab-chip:active {
+    background: var(--exlab-card);
+    box-shadow: none;
+    color: var(--exlab-text) !important;
+  }
+  .exlab-chip.is-active {
+    color: var(--exlab-text) !important;
+    border-color: var(--exlab-reach);
+    background: color-mix(in srgb, var(--exlab-reach) 16%, var(--exlab-card));
+    box-shadow: inset 0 0 0 1px var(--exlab-reach);
+  }
+  .exlab-chip:focus-visible { outline: 2px solid var(--exlab-reach); outline-offset: 2px; }
+
+  .exlab-pet[hidden] { display: none; }
+  .exlab-pet-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--exlab-line);
+  }
+  .exlab-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    object-fit: contain;
+    background: var(--exlab-card);
+    border: 1px solid var(--exlab-line);
+    flex: 0 0 auto;
+  }
+  .exlab-pet-head h2 { margin: 0; font-size: 1.3rem; }
+  .exlab-summary { margin: 2px 0 3px; color: var(--exlab-text); font-size: 0.9rem; line-height: 1.4; }
+  .exlab-meta { color: var(--exlab-muted); font-size: 0.85rem; text-transform: capitalize; }
+
+  .exlab-group-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--exlab-muted);
+    margin: 18px 0 10px;
+  }
+  .exlab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .exlab-card {
+    background: var(--exlab-card);
+    border: 1px solid var(--exlab-line);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .exlab-card-system { border-style: dashed; }
+  .exlab-face {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.05), transparent 70%),
+      #0B0E13;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .exlab-face img { width: 86%; height: 86%; object-fit: contain; }
+  .exlab-name {
+    font-weight: 600;
+    text-transform: capitalize;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .exlab-tag {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--exlab-muted);
+    border: 1px solid var(--exlab-line);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-weight: 600;
+  }
+  .exlab-say { margin: 0; color: var(--exlab-muted); font-size: 0.8rem; line-height: 1.45; }
+  .exlab-fallback { color: var(--exlab-reach); font-style: normal; }
+
+  .exlab-axes { margin: 2px 0 0; display: flex; flex-direction: column; gap: 5px; }
+  .exlab-axis { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 8px; }
+  .exlab-axis dt { margin: 0; font-size: 0.72rem; color: var(--exlab-muted); text-transform: capitalize; }
+  .exlab-axis dd { margin: 0; display: contents; }
+  .exlab-track { height: 6px; border-radius: 3px; background: #0B0E13; overflow: hidden; }
+  .exlab-bar { display: block; height: 100%; border-radius: 3px; }
+  .exlab-bar-warmth { background: var(--exlab-warmth); }
+  .exlab-bar-play   { background: var(--exlab-play); }
+  .exlab-bar-weight { background: var(--exlab-weight); }
+  .exlab-bar-strain { background: var(--exlab-strain); }
+  .exlab-bar-reach  { background: var(--exlab-reach); }
+  .exlab-axis em {
+    font-style: normal;
+    font-size: 0.72rem;
+    color: var(--exlab-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 2.4ch;
+    text-align: right;
+  }
+
+  @media (max-width: 480px) {
+    .exlab-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  }
+</style>
