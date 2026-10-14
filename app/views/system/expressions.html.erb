@@ -13,11 +13,16 @@
   # overlay shown mid-reply, and the "sleeping" outage/cap face. Pulled from the
   # same constants that drive them, and shown first because they are the ones
   # that are always on and never a mood.
-  system_order = ([Buddy::Faces.default] + Buddy::Faces::TRANSITIONAL + Buddy::Faces::SYSTEM).uniq
+  # The faces that are always on and never a mood: the resting default, the
+  # "thinking" overlay, the "sleeping" outage/cap face, and the wave gesture.
+  # Every one is a slot shown for every pet — one the pet has no pose of its own
+  # for draws blank, so the gaps in a set are visible rather than hidden.
+  system_order = ([Buddy::Faces.default] + Buddy::Faces::TRANSITIONAL + Buddy::Faces::SYSTEM + Buddy::Faces::GESTURES).uniq
   system_role  = {
-    Buddy::Faces.default         => ["rests here", "The resting default — where the pet sits when nothing has moved it."],
+    Buddy::Faces.default             => ["rests here", "The resting default — where the pet sits when nothing has moved it."],
     Buddy::Faces::TRANSITIONAL.first => ["transitional", "Shown while a reply is being written, never as a mood."],
     Buddy::Faces::SYSTEM.first       => ["system", "Shown when the connection drops or the usage cap is hit."],
+    Buddy::Faces::GESTURES.first     => ["gesture", "A hello/goodbye wave — played on a bare greeting and at the top of the briefing, never as a mood."],
   }
   axis_hint = {
     warmth: "how good the moment is",
@@ -62,10 +67,9 @@
       <%
         theme     = pet.theme
         faces     = pet.faces
-        # System faces first (those the pet can actually show), then every mood
-        # it chooses, minus any already shown above.
-        systems   = system_order.select { |f| f == Buddy::Faces.default || Buddy::Faces.valid?(theme, f) }
-        moods     = faces.keys.map(&:to_sym).sort_by(&:to_s) - systems
+        # Every system slot is shown for every pet (a missing one draws blank),
+        # then every mood it chooses, minus any already shown above.
+        moods     = faces.keys.map(&:to_sym).sort_by(&:to_s) - system_order
       %>
       <section class="exlab-pet" data-exlab-pet="<%= theme %>"<%= " hidden".html_safe unless i.zero? %>>
         <header class="exlab-pet-head">
@@ -81,15 +85,19 @@
 
         <div class="exlab-group-label">System</div>
         <div class="exlab-grid">
-          <% systems.each do |name| %>
+          <% system_order.each do |name| %>
             <%
               vals     = faces[name]
               tag, say = system_role[name]
               has_art  = Buddy::Faces.valid?(theme, name)
             %>
-            <article class="exlab-card exlab-card-system">
+            <article class="exlab-card exlab-card-system<%= " is-blank" unless has_art %>">
               <div class="exlab-face">
-                <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
+                <% if has_art %>
+                  <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
+                <% else %>
+                  <span class="exlab-blank" aria-hidden="true">no pose</span>
+                <% end %>
               </div>
               <div class="exlab-name">
                 <%= name.to_s.tr("_", " ") %>
@@ -97,7 +105,7 @@
               </div>
               <p class="exlab-say">
                 <%= say || pet.summaries[name] %>
-                <% unless has_art %><em class="exlab-fallback">· no pose of its own, falls back to neutral</em><% end %>
+                <% unless has_art %><em class="exlab-fallback">· no pose of its own</em><% end %>
               </p>
               <% if vals %>
                 <%= render "system/expression_axes", vals: vals, axes: axes %>
@@ -292,6 +300,16 @@
     min-width: 0;
   }
   .exlab-card-system { border-style: dashed; }
+  .exlab-card.is-blank { opacity: 0.72; }
+  .exlab-blank {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--exlab-muted);
+    border: 1px dashed var(--exlab-line);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
   .exlab-face {
     aspect-ratio: 1;
     border-radius: 10px;

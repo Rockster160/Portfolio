@@ -2386,6 +2386,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // reports true.
   const buddyTimers = initBuddyTimers({
     container: app.querySelector("[data-buddy-timers]"),
+    // Board-only big-countdown surface. Absent on the chat and the plain kiosk,
+    // where the corner chips are the whole story.
+    banner: app.querySelector("[data-buddy-timer-banner]"),
     hero: buddyHero,
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
     enabled: app.dataset.timerAlerts !== "false",

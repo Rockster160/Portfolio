@@ -41,6 +41,21 @@ function fmt(ms) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+// The board banner's readout, in the Whisper countdown style: whole minutes
+// (rounded UP) for as long as more than a minute is left, then a seconds count
+// in the final minute. The point is a wall-tablet reading from across the room
+// — "14m" rather than "13:47" ticking too fast to read — dropping to ":45s"
+// only when the end is close. Clamped at zero so it never counts negative.
+function fmtBanner(ms) {
+  const secs = Math.max(0, ms / 1000);
+  if (secs > 0 && secs <= 60) return `:${Math.ceil(secs)}s`;
+  return `${Math.ceil(secs / 60)}m`;
+}
+
+// The progress ring is a 45-radius circle in a 100×100 viewBox, same geometry
+// as Whisper's duration rings; the stroke recedes as time elapses.
+const BANNER_CIRCUMFERENCE = 2 * Math.PI * 45;
+
 // Server-authoritative remaining for a serialized countdown.
 function remainingMs(t) {
   if (t.paused_at) return t.paused_remaining_ms ?? 0;
@@ -86,7 +101,7 @@ function isDue(t) {
   return Date.parse(t.end_at) <= Date.now();
 }
 
-export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = true }) {
+export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = true, banner = null }) {
   if (!container) return null;
 
   // A wall surface (board / kiosk) can turn its timer alerts off, and off means
@@ -98,6 +113,9 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
   const timers = new Map(); // id → serialized timer
   let pageId = null;
   let tickHandle = 0;
+  // The timer the board banner is currently drawn for, so a tick updates its
+  // ring and readout in place and only a change of lead rebuilds the markup.
+  let bannerId = null;
   let ackArmed = false;
   let ackHandler = null;
   let dueCount = 0;
@@ -127,13 +145,19 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
     if (!active) {
       container.hidden = true;
       container.innerHTML = "";
+      hideBanner();
       return;
     }
     const list = ordered();
-    container.hidden = list.length === 0 || !isBuddyActive();
+    // On a board the lead timer (ringing first, else soonest) is blown up to the
+    // banner; the corner chips carry only the rest. Everywhere else the banner
+    // is absent and every timer is a chip.
+    renderBanner(list);
+    const chipList = banner ? list.slice(1) : list;
+    container.hidden = chipList.length === 0 || !isBuddyActive();
     container.innerHTML = "";
 
-    list.forEach((t) => {
+    chipList.forEach((t) => {
       // A wait that has reached zero is finished, not ringing — it never wears
       // the fired face, and it is about to be archived out from under itself.
       const ringing = isDue(t) && !isWait(t);
@@ -184,6 +208,68 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
     ensureTicking();
   }
 
+  // ---- board banner -------------------------------------------------------
+
+  function hideBanner() {
+    if (!banner) return;
+    banner.hidden = true;
+    banner.innerHTML = "";
+    banner.style.removeProperty("--timer-accent");
+    bannerId = null;
+  }
+
+  // The lead timer, drawn big. Rebuilds the markup only when the lead changes;
+  // otherwise `updateBanner` moves the ring and readout in place each tick.
+  function renderBanner(list) {
+    if (!banner) return;
+    const lead = isBuddyActive() ? list[0] : null;
+    if (!lead) return hideBanner();
+
+    if (bannerId !== lead.id || !banner.firstChild) {
+      bannerId = lead.id;
+      banner.innerHTML = `
+        <div class="byte-board-timer-ring" data-state="running">
+          <svg class="byte-board-timer-svg" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="byte-board-timer-track" cx="50" cy="50" r="45"></circle>
+            <circle class="byte-board-timer-progress" cx="50" cy="50" r="45"
+                    stroke-dasharray="${BANNER_CIRCUMFERENCE.toFixed(2)}"></circle>
+          </svg>
+          <span class="byte-board-timer-readout" data-banner-readout></span>
+        </div>
+        <div class="byte-board-timer-label" data-banner-label hidden></div>
+      `;
+    }
+    banner.hidden = false;
+    if (lead.color) banner.style.setProperty("--timer-accent", lead.color);
+    else banner.style.removeProperty("--timer-accent");
+    updateBanner(lead);
+  }
+
+  function updateBanner(t) {
+    if (!banner || !banner.firstChild) return;
+    const ringing = isDue(t) && !isWait(t);
+    const remMs = remainingMs(t);
+    const totalMs = t.duration_ms || remMs || 1;
+    const progress = Math.min(Math.max((totalMs - remMs) / totalMs, 0), 1);
+
+    const ringEl = banner.querySelector(".byte-board-timer-ring");
+    const prog = banner.querySelector(".byte-board-timer-progress");
+    const readout = banner.querySelector("[data-banner-readout]");
+    const label = banner.querySelector("[data-banner-label]");
+
+    if (ringEl) {
+      ringEl.dataset.state = ringing ? "fired" : isPaused(t) ? "paused" : "running";
+    }
+    if (prog) {
+      prog.setAttribute("stroke-dashoffset", (BANNER_CIRCUMFERENCE * progress).toFixed(2));
+    }
+    if (readout) readout.textContent = ringing ? "0m" : fmtBanner(remMs);
+    if (label) {
+      label.textContent = t.name || "";
+      label.hidden = !t.name;
+    }
+  }
+
   // Update only the readout text each tick — cheap, no re-layout. A timer
   // crossing its end_at gets the fuller treatment: that changes the chip's
   // state and its place in the stack, and it's the moment the alarm starts.
@@ -200,6 +286,12 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
       const el = container.querySelector(`[data-readout="${t.id}"]`);
       if (el) el.textContent = fmt(remainingMs(t));
     });
+    // The banner's lead is not in the chip list, so move it here too — its ring
+    // and readout have to advance every tick, not only when the stack changes.
+    if (banner && bannerId != null) {
+      const lead = timers.get(bannerId);
+      if (lead) updateBanner(lead);
+    }
     if (due !== dueCount) {
       render();
       syncAlarm();

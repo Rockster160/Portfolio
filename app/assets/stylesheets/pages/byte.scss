@@ -5471,6 +5471,94 @@ dialog.byte-modal {
   max-height: none;
 }
 
+// Board-only: the lead running timer blown up across the pet, so a break set
+// from the wall reads from the far side of the room. Absolutely pinned over the
+// hero (which is position:relative) so it sits IN FRONT of the character rather
+// than displacing it; the corner chips still carry any other timers. Taps fall
+// through (`pointer-events: none`) so the one tap that acknowledges a ring still
+// reaches the document listener. Painted by buddy/timers.js.
+.byte-board-timer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 16px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0.5),
+    rgba(0, 0, 0, 0.78)
+  );
+
+  &[hidden] { display: none; }
+}
+// vmin keeps the ring square and bounded by whichever side is shorter, so it
+// fills a portrait tablet without overflowing a landscape one.
+.byte-board-timer-ring {
+  position: relative;
+  width: 58vmin;
+  max-width: 430px;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.byte-board-timer-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  // Start the stroke at 12 o'clock and run it clockwise, like Whisper's rings.
+  transform: rotate(-90deg);
+}
+.byte-board-timer-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 5;
+}
+.byte-board-timer-progress {
+  fill: none;
+  stroke: var(--timer-accent, #5c9bf2);
+  stroke-width: 5;
+  stroke-linecap: round;
+  // The readout updates four times a second; a short linear ease keeps the
+  // stroke from stepping visibly between ticks.
+  transition: stroke-dashoffset 0.3s linear;
+}
+.byte-board-timer-readout {
+  font-size: 15vmin;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.byte-board-timer-label {
+  max-width: 80vw;
+  font-size: 5vmin;
+  text-align: center;
+  text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.82);
+
+  &[hidden] { display: none; }
+}
+// The end: the stroke goes red and the whole ring pulses until a tap anywhere
+// acknowledges it (the same gesture that silences the alarm).
+.byte-board-timer-ring[data-state="fired"] {
+  animation: byte-board-timer-pulse 1s ease-in-out infinite;
+}
+.byte-board-timer-ring[data-state="fired"] .byte-board-timer-progress {
+  stroke: #f0756b;
+}
+.byte-board-timer-ring[data-state="paused"] { opacity: 0.55; }
+@keyframes byte-board-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .byte-kiosk {
   flex: 1 1 0;
   min-height: 0;

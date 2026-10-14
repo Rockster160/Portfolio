@@ -16,6 +16,12 @@ module Buddy
     # so the server can set it during a turn.
     TRANSITIONAL = %i[thinking].freeze
 
+    # A deliberate gesture the pet makes on cue, not a mood it settles into: the
+    # wave shown on a greeting (see Buddy::ExpressionState#wave!). Like the system
+    # faces it is art-on-disk only, never a declared emotion, so the sentiment
+    # picker can't land on it — `valid?` sees it, `selectable` doesn't.
+    GESTURES = %i[wave].freeze
+
     # When a pet has its own `thinking` pose it uses it; when it doesn't, it
     # borrows the nearest "working on it" face it DOES have, in this order. The
     # point is that the in-flight overlay is a VISIBLE change the moment you talk

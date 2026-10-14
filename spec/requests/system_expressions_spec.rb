@@ -22,6 +22,16 @@ RSpec.describe "Expression Lab", type: :request do
     end
   end
 
+  it "folds the wave into the System group and draws a blank slot for a missing system pose" do
+    get system_expressions_path
+
+    # The wave is a system slot now (tagged a gesture), not a mood — a pet with
+    # the art (e.g. Cobalt) shows it; one without (Tiko) shows a blank slot
+    # rather than hiding the slot, so the gaps in a set are visible.
+    expect(response.body).to include(">gesture<")
+    expect(response.body).to include("no pose")
+  end
+
   it "shows each expression's label and its mood values, read from the constants" do
     get system_expressions_path
 

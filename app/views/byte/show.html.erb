@@ -251,6 +251,13 @@
     <%# Buddy's area so they don't push the character down. Rendered by %>
     <%# buddy/timers.js off the live Timer stack; empty + hidden when none. %>
     <div class="byte-buddy-timers" data-buddy-timers hidden></div>
+    <%# Board-only: the lead running timer blown up to a banner across the pet, %>
+    <%# so a break set from the wall is readable from across the room. Painted %>
+    <%# by buddy/timers.js off the same live stack as the chips (which carry any %>
+    <%# others); empty + hidden when nothing is running. %>
+    <% if @board %>
+      <div class="byte-board-timer" data-buddy-timer-banner hidden></div>
+    <% end %>
     <%# What Byte is doing in the background - the mirror of the timers, pinned %>
     <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>
     <%# through /api/v1/background_processes; rendered by buddy/processes.js. %>
