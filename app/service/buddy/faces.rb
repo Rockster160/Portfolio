@@ -382,7 +382,6 @@ module Buddy
       },
       # Sprig — the nature dragon. Leaf-breath, blossoms, a bird friend; holes are fine, the picker falls back.
       sprig:   {
-        angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
         annoyed:       { warmth: 0.25, play: 0.30, weight: 0.35, strain: 0.80, reach: 0.25 },
         caring:        { warmth: 0.85, play: 0.15, weight: 0.35, strain: 0.05, reach: 0.18 },
         cheering:      { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
