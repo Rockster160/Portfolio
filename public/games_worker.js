@@ -2,7 +2,7 @@
 // mutations never go through the SW; the page's localStorage queue
 // (offline_queue.js) owns retries. Adapted from timers_worker.js.
 
-const CACHE = "games-v7";
+const CACHE = "games-v8";
 
 // Only the two STATIC shells - /games/plays/:id is dynamic (live while
 // active, read-only once finished) and must never be served stale from a

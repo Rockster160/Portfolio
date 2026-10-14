@@ -1,6 +1,6 @@
 {
   "short_name": "Chores",
-  "name": "Pebbles — Chores",
+  "name": "Pebbles \u2014 Chores",
   "id": "chores",
   "start_url": "/chores/today?source=pwa",
   "scope": "/chores",
@@ -13,13 +13,13 @@
       "src": "/chores_favicon/android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/chores_favicon/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

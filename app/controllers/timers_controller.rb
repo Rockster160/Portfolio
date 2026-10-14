@@ -36,8 +36,8 @@ class TimersController < ApplicationController
       short_name:       label.truncate(12),
       name:             label,
       icons:            [
-        { src: "/timers_favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-        { src: "/timers_favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+        { src: "/timers_favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+        { src: "/timers_favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
       ],
       id:               "timers-page-#{page.slug}",
       start_url:        "/timers/page/#{page.slug}?source=pwa",
