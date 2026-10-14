@@ -1,0 +1,26 @@
+{
+  "short_name": "Tiko Kiosk",
+  "name": "Tiko Kiosk",
+  "icons": [
+    {
+      "src": "/tiko_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/tiko_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "tiko-kiosk",
+  "start_url": "/kiosk",
+  "background_color": "#0A1428",
+  "display": "standalone",
+  "orientation": "any",
+  "scope": "/",
+  "theme_color": "#101D38",
+  "description": "Tiko on the wall: the character, and the routines you tap."
+}

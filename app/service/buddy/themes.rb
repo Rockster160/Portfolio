@@ -25,7 +25,7 @@ module Buddy
     DEFAULT = :byte
 
     ALL = {
-      byte: {
+      byte:    {
         name:           "Byte",
         tone:           :rimuru,
         color:          "#0E1930",
@@ -35,7 +35,7 @@ module Buddy
         manifest:       "/byte.webmanifest",
         kiosk_manifest: "/byte_kiosk.webmanifest",
       },
-      moss: {
+      moss:    {
         name:           "Moss",
         tone:           :chelsea,
         color:          "#14231A",
@@ -45,7 +45,7 @@ module Buddy
         manifest:       "/moss.webmanifest",
         kiosk_manifest: "/moss_kiosk.webmanifest",
       },
-      suki: {
+      suki:    {
         name:           "Suki",
         tone:           :eve,
         color:          "#150A22",
@@ -65,7 +65,7 @@ module Buddy
         manifest:       "/glimmer.webmanifest",
         kiosk_manifest: "/glimmer_kiosk.webmanifest",
       },
-      kumoko: {
+      kumoko:  {
         name:           "Kumoko",
         tone:           :kumoko,
         color:          "#22140F",
@@ -75,7 +75,7 @@ module Buddy
         manifest:       "/kumoko.webmanifest",
         kiosk_manifest: "/kumoko_kiosk.webmanifest",
       },
-      mocha: {
+      mocha:   {
         name:           "Mocha",
         tone:           :chelsea,
         color:          "#241610",
@@ -85,7 +85,7 @@ module Buddy
         manifest:       "/mocha.webmanifest",
         kiosk_manifest: "/mocha_kiosk.webmanifest",
       },
-      ghosty: {
+      ghosty:  {
         name:           "Ghosty",
         tone:           :chelsea,
         color:          "#2A1A24",
@@ -94,6 +94,56 @@ module Buddy
         favicon:        "ghosty_favicon/ghosty-favicon-96x96.png",
         manifest:       "/ghosty.webmanifest",
         kiosk_manifest: "/ghosty_kiosk.webmanifest",
+      },
+      flux:    {
+        name:           "Flux",
+        tone:           :chelsea,
+        color:          "#0C1E3C",
+        avatar:         "flux_favicon/flux.png",
+        touch_icon:     "flux_favicon/flux-apple-touch-icon.png",
+        favicon:        "flux_favicon/flux-favicon-96x96.png",
+        manifest:       "/flux.webmanifest",
+        kiosk_manifest: "/flux_kiosk.webmanifest",
+      },
+      tiko:    {
+        name:           "Tiko",
+        tone:           :chelsea,
+        color:          "#101D38",
+        avatar:         "tiko_favicon/tiko.png",
+        touch_icon:     "tiko_favicon/tiko-apple-touch-icon.png",
+        favicon:        "tiko_favicon/tiko-favicon-96x96.png",
+        manifest:       "/tiko.webmanifest",
+        kiosk_manifest: "/tiko_kiosk.webmanifest",
+      },
+      gizmo:   {
+        name:           "Gizmo",
+        tone:           :chelsea,
+        color:          "#281B07",
+        avatar:         "gizmo_favicon/gizmo.png",
+        touch_icon:     "gizmo_favicon/gizmo-apple-touch-icon.png",
+        favicon:        "gizmo_favicon/gizmo-favicon-96x96.png",
+        manifest:       "/gizmo.webmanifest",
+        kiosk_manifest: "/gizmo_kiosk.webmanifest",
+      },
+      sprig:   {
+        name:           "Sprig",
+        tone:           :chelsea,
+        color:          "#0F1E0D",
+        avatar:         "sprig_favicon/sprig.png",
+        touch_icon:     "sprig_favicon/sprig-apple-touch-icon.png",
+        favicon:        "sprig_favicon/sprig-favicon-96x96.png",
+        manifest:       "/sprig.webmanifest",
+        kiosk_manifest: "/sprig_kiosk.webmanifest",
+      },
+      cobalt:  {
+        name:           "Cobalt",
+        tone:           :chelsea,
+        color:          "#0D1640",
+        avatar:         "cobalt_favicon/cobalt.png",
+        touch_icon:     "cobalt_favicon/cobalt-apple-touch-icon.png",
+        favicon:        "cobalt_favicon/cobalt-favicon-96x96.png",
+        manifest:       "/cobalt.webmanifest",
+        kiosk_manifest: "/cobalt_kiosk.webmanifest",
       },
     }.freeze
 

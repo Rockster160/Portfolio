@@ -1,0 +1,25 @@
+{
+  "short_name": "Tiko",
+  "name": "Tiko",
+  "icons": [
+    {
+      "src": "/tiko_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/tiko_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "tiko",
+  "start_url": "/?source=pwa",
+  "background_color": "#0A1428",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#101D38",
+  "description": "Your spark of a companion."
+}

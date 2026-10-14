@@ -20,7 +20,7 @@ module Buddy
     TRANSITIONAL = %i[thinking].freeze
 
     def dir(theme)
-      Rails.root.join("app/assets/images/buddy/#{theme.to_s.presence || 'byte'}")
+      Rails.root.join("app/assets/images/buddy/#{theme.to_s.presence || "byte"}")
     end
 
     # Every face that exists for a theme (png or svg), as symbols.
@@ -114,6 +114,10 @@ module Buddy
       hiding:        "tucked under a leaf like a blanket, just the eyes out — hiding, wanting to disappear, overwhelmed in a cute way",
       touched:       "glassy, teary eyes and a wobbly little smile — moved, touched, grateful, about to cry in a good way",
       peeking:       "just her eyes and front legs over an edge — sneaking a look, checking in, shy curiosity",
+      # New pets: shared vocabulary plus three flavor faces.
+      cozy:          "wrapped up warm with a hot drink (or snuggled into a hood) — cosy, settled, content",
+      fired_up:      "breathing a little gust of their element — fired up, determined, showing off a bit",
+      silly:         "tongue out, goofy grin — silly, cheeky, mucking about",
     }.freeze
 
     # ---- the index: every face a pet HAS, with its own numbers -------------
@@ -283,7 +287,7 @@ module Buddy
       # Ghosty — the little ghost. Moss-shaped, home / cosy lean: `peeking` for a
       # soft check-in, `playful` (witch hat) and `star`/`excited` for the
       # sparkly wonder it leans into when something delights it.
-      ghosty:     {
+      ghosty:  {
         angry:     { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
         cheering:  { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
         confused:  { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
@@ -303,6 +307,117 @@ module Buddy
         star:      { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
         surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
         wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
+      },
+      # Flux — the little octopus. Water-and-spark flavor: swirls, bubbles, a cosy box.
+      flux:    {
+        angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        confused:      { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:       { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        cool:          { warmth: 0.70, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.18 },
+        crying:        { warmth: 0.05, play: 0.00, weight: 0.95, strain: 0.30, reach: 0.08 },
+        dismayed:      { warmth: 0.25, play: 0.20, weight: 0.50, strain: 0.50, reach: 0.25 },
+        eager:         { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        excited:       { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.15 },
+        focused:       { warmth: 0.45, play: 0.05, weight: 0.85, strain: 0.35, reach: 0.13 },
+        grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hiding:        { warmth: 0.45, play: 0.60, weight: 0.30, strain: 0.60, reach: 0.18 },
+        hugging:       { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        nerd:          { warmth: 0.70, play: 0.50, weight: 0.35, strain: 0.05, reach: 0.25 },
+        neutral:       { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        neutral_blush: { warmth: 0.75, play: 0.30, weight: 0.30, strain: 0.05, reach: 0.25 },
+        playful:       { warmth: 0.80, play: 0.95, weight: 0.10, strain: 0.10, reach: 0.18 },
+        sad:           { warmth: 0.10, play: 0.05, weight: 0.80, strain: 0.25, reach: 0.20 },
+        star:          { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
+        surprised:     { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
+      },
+      # Cobalt — the blue dragon. A little flame it breathes when fired up, gems, a witch hat and shades.
+      cobalt:  {
+        angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        annoyed:       { warmth: 0.25, play: 0.30, weight: 0.35, strain: 0.80, reach: 0.25 },
+        cheering:      { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:      { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:       { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        cool:          { warmth: 0.70, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.18 },
+        cozy:          { warmth: 0.82, play: 0.20, weight: 0.20, strain: 0.05, reach: 0.22 },
+        crying:        { warmth: 0.05, play: 0.00, weight: 0.95, strain: 0.30, reach: 0.08 },
+        eager:         { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        excited:       { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.15 },
+        fired_up:      { warmth: 0.60, play: 0.55, weight: 0.55, strain: 0.30, reach: 0.18 },
+        focused:       { warmth: 0.45, play: 0.05, weight: 0.85, strain: 0.35, reach: 0.13 },
+        frustrated:    { warmth: 0.20, play: 0.15, weight: 0.55, strain: 0.90, reach: 0.15 },
+        grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hugging:       { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        nerd:          { warmth: 0.70, play: 0.50, weight: 0.35, strain: 0.05, reach: 0.25 },
+        nervous:       { warmth: 0.30, play: 0.25, weight: 0.60, strain: 0.60, reach: 0.18 },
+        neutral:       { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        neutral_blush: { warmth: 0.75, play: 0.30, weight: 0.30, strain: 0.05, reach: 0.25 },
+        offering:      { warmth: 0.80, play: 0.30, weight: 0.25, strain: 0.10, reach: 0.25 },
+        peeking:       { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+        playful:       { warmth: 0.80, play: 0.95, weight: 0.10, strain: 0.10, reach: 0.18 },
+        sad:           { warmth: 0.10, play: 0.05, weight: 0.80, strain: 0.25, reach: 0.20 },
+        surprised:     { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
+      },
+      # Tiko — the spirit fox. Foxfire and quiet wonder; holes where it has no art (no sad/cry), the picker falls back.
+      tiko:    {
+        angry:     { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        cheering:  { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:  { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:   { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        cool:      { warmth: 0.70, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.18 },
+        cozy:      { warmth: 0.82, play: 0.20, weight: 0.20, strain: 0.05, reach: 0.22 },
+        eager:     { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        grin:      { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:     { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        loving:    { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        nerd:      { warmth: 0.70, play: 0.50, weight: 0.35, strain: 0.05, reach: 0.25 },
+        neutral:   { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        peeking:   { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+        playful:   { warmth: 0.80, play: 0.95, weight: 0.10, strain: 0.10, reach: 0.18 },
+        surprised: { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
+        wink:      { warmth: 0.80, play: 0.90, weight: 0.10, strain: 0.10, reach: 0.18 },
+      },
+      # Sprig — the nature dragon. Leaf-breath, blossoms, a bird friend; holes are fine, the picker falls back.
+      sprig:   {
+        angry:         { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        annoyed:       { warmth: 0.25, play: 0.30, weight: 0.35, strain: 0.80, reach: 0.25 },
+        caring:        { warmth: 0.85, play: 0.15, weight: 0.35, strain: 0.05, reach: 0.18 },
+        cheering:      { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        cheery:        { warmth: 0.90, play: 0.55, weight: 0.15, strain: 0.05, reach: 0.25 },
+        confused:      { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:       { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        eager:         { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        fired_up:      { warmth: 0.60, play: 0.55, weight: 0.55, strain: 0.30, reach: 0.18 },
+        grin:          { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        happy:         { warmth: 0.85, play: 0.45, weight: 0.20, strain: 0.05, reach: 0.25 },
+        hugging:       { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:        { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        neutral:       { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        neutral_blush: { warmth: 0.75, play: 0.30, weight: 0.30, strain: 0.05, reach: 0.25 },
+        peeking:       { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+      },
+      # Gizmo — the mimic chest. Tongue-out silliness, treasure spills, gems it offers up.
+      gizmo:   {
+        angry:      { warmth: 0.05, play: 0.05, weight: 0.65, strain: 0.95, reach: 0.14 },
+        cheering:   { warmth: 0.95, play: 0.35, weight: 0.70, strain: 0.05, reach: 0.14 },
+        confused:   { warmth: 0.40, play: 0.25, weight: 0.40, strain: 0.45, reach: 0.25 },
+        content:    { warmth: 0.80, play: 0.15, weight: 0.25, strain: 0.05, reach: 0.25 },
+        eager:      { warmth: 0.65, play: 0.30, weight: 0.55, strain: 0.20, reach: 0.18 },
+        excited:    { warmth: 0.95, play: 0.65, weight: 0.25, strain: 0.05, reach: 0.15 },
+        frustrated: { warmth: 0.20, play: 0.15, weight: 0.55, strain: 0.90, reach: 0.15 },
+        grin:       { warmth: 0.95, play: 0.70, weight: 0.15, strain: 0.05, reach: 0.18 },
+        hugging:    { warmth: 0.95, play: 0.15, weight: 0.80, strain: 0.05, reach: 0.12 },
+        loving:     { warmth: 0.90, play: 0.30, weight: 0.60, strain: 0.05, reach: 0.18 },
+        neutral:    { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 },
+        offering:   { warmth: 0.80, play: 0.30, weight: 0.25, strain: 0.10, reach: 0.25 },
+        peeking:    { warmth: 0.55, play: 0.55, weight: 0.20, strain: 0.25, reach: 0.20 },
+        playful:    { warmth: 0.80, play: 0.95, weight: 0.10, strain: 0.10, reach: 0.18 },
+        silly:      { warmth: 0.80, play: 0.95, weight: 0.08, strain: 0.10, reach: 0.18 },
+        star:       { warmth: 0.95, play: 0.60, weight: 0.35, strain: 0.05, reach: 0.15 },
+        surprised:  { warmth: 0.50, play: 0.40, weight: 0.55, strain: 0.25, reach: 0.25 },
       },
     }.freeze
 

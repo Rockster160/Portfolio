@@ -168,6 +168,7 @@ Metrics/BlockLength:
 Metrics/ModuleLength:
   Exclude:
     - "app/models/concerns/application_recordable.rb"
+    - "app/service/buddy/faces.rb" # the per-pet face emotion tables (HINTS + INDEX)
 
 Metrics/PerceivedComplexity:
   Enabled: false

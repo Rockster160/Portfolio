@@ -1,0 +1,25 @@
+{
+  "short_name": "Cobalt",
+  "name": "Cobalt",
+  "icons": [
+    {
+      "src": "/cobalt_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/cobalt_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "cobalt",
+  "start_url": "/?source=pwa",
+  "background_color": "#080E2A",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#0D1640",
+  "description": "Your fiery little companion."
+}
