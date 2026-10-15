@@ -736,6 +736,31 @@ RSpec.describe ByteController, type: :controller do
       end
     end
 
+    # The wall picker (a kiosk or a board) sets which companion wears the thread
+    # through a plain conversation PATCH, not the slash command — so a board's
+    # chosen pet survives being reopened.
+    describe "PATCH #update_conversation buddy_theme" do
+      before { sign_in rocco }
+
+      it "re-themes a buddy thread and resets its expression to neutral" do
+        convo = rocco.byte_conversations.create!(mode: :buddy, buddy_theme: "byte", buddy_expression: "wink")
+
+        patch :update_conversation, params: { id: convo.id, buddy_theme: "moss" }
+
+        expect(response).to have_http_status(:ok)
+        expect(convo.reload.buddy_theme).to eq("moss")
+        expect(convo.buddy_expression).to eq("neutral")
+      end
+
+      it "ignores an unknown theme rather than landing the pet on missing art" do
+        convo = rocco.byte_conversations.create!(mode: :buddy, buddy_theme: "byte")
+
+        patch :update_conversation, params: { id: convo.id, buddy_theme: "dragon" }
+
+        expect(convo.reload.buddy_theme).to eq("byte")
+      end
+    end
+
     describe "POST #create_message" do
       before { sign_in rocco }
 

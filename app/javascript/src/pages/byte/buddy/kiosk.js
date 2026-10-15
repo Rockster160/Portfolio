@@ -21,7 +21,6 @@ import { renderMultiSelect } from "../message_actions/multi_select";
 import { kioskOrder, NO_PINNED_ROUTINES } from "./routine_order";
 
 const ROUTINES_URL = "/buddy/routines";
-const PIN_URL = "/byte/kiosk/conversation";
 
 // How long a line stays up. Long enough to look away and back for a short
 // receipt, and scaled by length so a briefing isn't yanked mid-sentence.
@@ -110,7 +109,7 @@ export function initBuddyKiosk({
   conversationIdFn,
   conversationsFn,
   themes,
-  switchTo,
+  setTheme,
   renderMarkdown,
 } = {}) {
   if (!root) return null;
@@ -358,25 +357,31 @@ export function initBuddyKiosk({
 
   // ---- which companion is out here ----
 
-  // A thread and a companion are the same choice: the theme on the row decides
-  // the character, the name, the palette, and the voice it answers in. So this
-  // lists threads and shows them as their pets.
+  // The companion IS the choice, not the thread. A wall surface has one thread
+  // and the picker sets which pet wears it, so this lists the COMPANIONS (the
+  // whole catalogue the server rendered, one per character) rather than every
+  // buddy conversation — the old thread list showed the same pet several times
+  // for several threads and left out any companion the account had no thread
+  // for. Picking one re-themes the thread this screen is on (see `pick`).
+  function currentTheme() {
+    const id = conversationIdFn ? conversationIdFn() : null;
+    const list = (conversationsFn ? conversationsFn() : []) || [];
+    const open = list.find((c) => c.id === id);
+    return open?.buddy_theme || root.closest(".byte-app")?.dataset.buddyTheme || null;
+  }
+
   function paintPicker() {
     if (!pickListEl) return;
 
-    const current = conversationIdFn ? conversationIdFn() : null;
-    const list = (conversationsFn ? conversationsFn() : []) || [];
+    const current = currentTheme();
 
     pickListEl.innerHTML = "";
-    list.forEach((convo) => {
-      if (convo.mode !== "buddy") return;
-
-      const chrome = (themes || {})[convo.buddy_theme] || {};
+    Object.entries(themes || {}).forEach(([theme, chrome]) => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "byte-kiosk-pick";
-      row.dataset.kioskPick = String(convo.id);
-      row.setAttribute("aria-current", String(convo.id === current));
+      row.dataset.kioskPickTheme = theme;
+      row.setAttribute("aria-current", String(theme === current));
 
       if (chrome.avatar) {
         const img = document.createElement("img");
@@ -389,16 +394,8 @@ export function initBuddyKiosk({
       text.className = "byte-kiosk-pick-text";
       const pet = document.createElement("span");
       pet.className = "byte-kiosk-pick-pet";
-      pet.textContent = convo.buddy_name || chrome.name || "Buddy";
+      pet.textContent = chrome.name || "Buddy";
       text.appendChild(pet);
-      // Several threads can wear the same companion, so the thread's own name
-      // is what tells two Sukis apart.
-      if (convo.name && convo.name !== pet.textContent) {
-        const thread = document.createElement("span");
-        thread.className = "byte-kiosk-pick-thread";
-        thread.textContent = convo.name;
-        text.appendChild(thread);
-      }
       row.appendChild(text);
 
       pickListEl.appendChild(row);
@@ -418,21 +415,16 @@ export function initBuddyKiosk({
     whoEl?.setAttribute("aria-expanded", "false");
   }
 
-  // Switch now, and remember it. The switch is client-side because the page
-  // already knows how to repaint a thread's whole identity, and reloading
-  // would come back off the cached shell still wearing the old pet. The POST
-  // is what makes the next COLD boot render this one server-side, with no
-  // first-paint flash of whoever was here before.
-  async function pick(id) {
+  // Re-theme the thread this screen is on. A wall surface is one thread, so
+  // choosing a companion changes the pet wearing it rather than switching to a
+  // different conversation — that is what makes the choice stick when the board
+  // is reopened, and what keeps a board from jumping to some chat thread. The
+  // repaint and the persistence both live in setTheme (index.js), which PATCHes
+  // the conversation and paints the new pet from the broadcast that comes back.
+  function pick(theme) {
     closePicker();
     clearAsk();
-    switchTo?.(Number(id));
-    try {
-      await apiCall(PIN_URL, "POST", { conversation_id: Number(id) });
-    } catch (e) {
-      // The screen is already showing the right companion; all that's lost is
-      // it surviving a restart, and picking again fixes that.
-    }
+    if (theme) setTheme?.(theme);
   }
 
   if (whoEl) {
@@ -445,8 +437,8 @@ export function initBuddyKiosk({
 
   if (pickerEl) {
     pickerEl.addEventListener("click", (e) => {
-      const row = e.target.closest("[data-kiosk-pick]");
-      if (row) pick(row.dataset.kioskPick);
+      const row = e.target.closest("[data-kiosk-pick-theme]");
+      if (row) pick(row.dataset.kioskPickTheme);
     });
 
     document.addEventListener("click", (e) => {

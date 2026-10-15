@@ -19,10 +19,9 @@ function csrfMetaToken() {
 //
 // The last resort walks to the account's own default pet rather than a
 // literal — naming somebody else's companion is worse than being vague.
-// A board is its own surface (/board), never a chat-drawer row. The server
-// leaves them out of the list, but a stale cached list from before boards were
-// split out, or a live broadcast for one, could still carry one — so the drawer
-// drops them on the way in too.
+// A board is its own surface (/board), never a chat-drawer row — but it is still
+// a real conversation, the one the board page is open ON, so it stays in the
+// data and is filtered only where the drawer list is painted.
 function isBoardConvo(convo) {
   return !!convo?.metadata && String(convo.metadata.board) === "true";
 }
@@ -138,11 +137,15 @@ export class ConversationManager {
     // (Map-backed in index.js). Rendered as a badge on each row.
     this.unreadFor          = unreadFor || (() => 0);
     this.onConversations    = onConversations || null;
+    // A board stays IN this list — it is a real conversation the board page is
+    // open ON, so its id has to resolve for lookups, config saves and the chore
+    // fetch. It is kept out of the DRAWER in render() instead; filtering it from
+    // the data here left the board page with no current conversation at all.
     this.conversations      = (
       initialConversations && initialConversations.length
         ? initialConversations
         : loadCachedList()
-    ).filter((c) => !isBoardConvo(c));
+    );
     // Resolve initial id, most-specific first. A pinned id comes from an
     // explicit `?conversation_id=` — a request rather than a guess, so it beats
     // whatever this browser happened to have open last; that's what makes a
@@ -239,7 +242,15 @@ export class ConversationManager {
     try {
       const data = await apiCall(this.conversationsUrl, "GET");
       if (data && Array.isArray(data.conversations)) {
-        this.conversations = data.conversations;
+        // The drawer list leaves boards out, but a board page is open ON one —
+        // so the thread we're currently on has to survive a refresh even when
+        // the server list doesn't carry it. Without this the board drops out of
+        // the list, currentConversation() goes null, and the fallback below
+        // switches the wall off its own board to the default chat thread.
+        const open = this.currentConversation();
+        let next = data.conversations;
+        if (open && !next.some((c) => c.id === open.id)) next = [open, ...next];
+        this.conversations = next;
         if (data.primary_id != null) this.primaryId = data.primary_id;
         saveCachedList(this.conversations);
         // If our current id disappeared server-side (archived elsewhere),
@@ -331,7 +342,9 @@ export class ConversationManager {
     if (!payload) return;
     const convo = payload.conversation;
     if (!convo) return;
-    if (isBoardConvo(convo)) return;
+    // A board's own broadcast (its theme or groups changed on another device)
+    // still updates the cached record so the board page stays current. It is
+    // render() that keeps a board off the drawer, not this.
 
     // Somebody set it on another device. Only the thread that GAINED the flag
     // is acted on — the one that lost it broadcasts too, and reading that as
@@ -462,7 +475,11 @@ export class ConversationManager {
 
     if (!this.list) return;
     this.list.innerHTML = "";
-    this.conversations.forEach((c) => this.list.appendChild(this.renderConvoRow(c)));
+    // Boards are their own kind of surface, not chat threads, so they never get
+    // a drawer row — even though they live in `this.conversations`.
+    this.conversations
+      .filter((c) => !isBoardConvo(c))
+      .forEach((c) => this.list.appendChild(this.renderConvoRow(c)));
   }
 
   permissionModeFor(convo) {

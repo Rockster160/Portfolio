@@ -19,6 +19,16 @@ class ByteController < ApplicationController
   HISTORY_LIMIT = 50
   MAX_LIMIT     = 200
 
+  # Groups a board can watch that no chore, routine or button carries, so they
+  # would never show up in the picker on their own:
+  # - "All" is a wildcard — a board watching it shows every chore (and only
+  #   chores; the one-press routines and buttons belong to the named groups).
+  # - "Whisper" is the feed group the Whisper PWA board watches for its duration
+  #   rings, sounds and alerts, which are broadcast with groups: "Whisper" and
+  #   have no chore behind them.
+  BOARD_ALL_TAG       = "All".freeze
+  BOARD_RESERVED_TAGS = [BOARD_ALL_TAG, "Whisper"].freeze
+
   def show
     load_thread
   end
@@ -571,6 +581,17 @@ class ByteController < ApplicationController
     attrs = {}
     attrs[:name]     = params[:name].to_s.strip.presence if params.key?(:name)
     attrs[:archived] = ActiveModel::Type::Boolean.new.cast(params[:archived]) if params.key?(:archived)
+    # The wall picker sets which companion wears this thread. A known theme only
+    # (an unknown one would land the thread on a pet with no art); the reset to a
+    # neutral face mirrors the `/buddy <pet>` command, so a switched pet doesn't
+    # keep the old one's expression.
+    if params.key?(:buddy_theme)
+      theme = params[:buddy_theme].to_s.downcase
+      if Buddy::Themes.keys.map(&:to_s).include?(theme) && convo.buddy?
+        attrs[:buddy_theme]      = theme
+        attrs[:buddy_expression] = "neutral"
+      end
+    end
     if params.key?(:mode)
       new_mode = normalized_mode(params[:mode])
       attrs[:mode] = new_mode if new_mode
@@ -938,13 +959,18 @@ class ByteController < ApplicationController
     return [] if tags.empty?
 
     day = @board_day || ChoreDay.current(current_user)
-    chores = current_user.accessible_chores.tagged(tags)
-      .order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
+    # "All" is every chore, whatever it is tagged; any other groups narrow by tag.
+    wants_all = tags.any? { |t| t.casecmp?(BOARD_ALL_TAG) }
+    chore_scope = wants_all ? current_user.accessible_chores : current_user.accessible_chores.tagged(tags)
+    chores = chore_scope.order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
     ctx = ChoreSerializerContext.for_user(current_user, day: day)
     chore_items = board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
 
-    trigger_items = current_user.buddy_routines.for_board(tags).map(&:board_item)
-    credit_items  = board_credit_buttons.for_board(tags).map(&:board_item)
+    # Routines and buttons come from the NAMED groups only — "All" is a chores-only
+    # wildcard, so an all-chores board doesn't also sweep in every routine.
+    named = tags.reject { |t| t.casecmp?(BOARD_ALL_TAG) }
+    trigger_items = named.any? ? current_user.buddy_routines.for_board(named).map(&:board_item) : []
+    credit_items  = named.any? ? board_credit_buttons.for_board(named).map(&:board_item) : []
 
     trigger_items + credit_items + chore_items
   end
@@ -975,10 +1001,13 @@ class ByteController < ApplicationController
   # routine tags are the viewer's own, unioned and de-duped case-insensitively so
   # "Work" is offered once however it was typed on any of them.
   def board_tag_names
-    names = current_user.accessible_chores.tag_names +
+    names = (current_user.accessible_chores.tag_names +
       current_user.buddy_routines.tag_names +
-      board_credit_buttons.tag_names
-    names.uniq(&:downcase).sort_by(&:downcase)
+      board_credit_buttons.tag_names).uniq(&:downcase).sort_by(&:downcase)
+    # Reserved groups lead, and drop any real tag that happens to collide with one
+    # so it isn't offered twice.
+    real = names.reject { |n| BOARD_RESERVED_TAGS.any? { |r| r.casecmp?(n) } }
+    BOARD_RESERVED_TAGS + real
   end
 
   # Credit buttons the viewer can see — their whole household's, since a shared

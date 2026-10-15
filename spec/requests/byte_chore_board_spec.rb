@@ -10,7 +10,10 @@ require "rails_helper"
 RSpec.describe "Byte chore board", type: :request do
   let(:user) { User.me }
   let!(:thread) {
-    user.byte_conversations.create!(mode: :buddy, name: "Home", last_message_at: Time.current)
+    user.byte_conversations.create!(
+      mode: :buddy, name: "Home", last_message_at: Time.current,
+      metadata: { "board" => true },
+    )
   }
 
   # The page lives on its own subdomain and the session cookie belongs to the
@@ -123,16 +126,16 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).to include("Back to the chat")
     end
 
-    it "falls through to a thread of the viewer's own when the id isn't theirs" do
+    it "redirects to the board index when the id isn't a board of the viewer's" do
       stranger = create(:user)
       theirs = stranger.byte_conversations.create!(
         mode: :buddy, name: "Not yours", last_message_at: Time.current,
+        metadata: { "board" => true },
       )
 
       get "/board/#{theirs.id}"
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).not_to include("Not yours")
+      expect(response).to redirect_to(byte_board_path)
     end
   end
 
@@ -164,7 +167,7 @@ RSpec.describe "Byte chore board", type: :request do
   describe "triggers on the board" do
     before { thread.update!(metadata: thread.metadata.merge("chore_tag" => "Work")) }
 
-    it "carries the group's triggers as stateless items, after its chores" do
+    it "carries the group's triggers as stateless items, before its chores" do
       create(:chore, created_by_user: user, name: "Daily task", tags: ["Work"], marked_due_at: Time.current)
       routine!(name: "Focus mode", tag: "Work")
       # Neither of these belongs on this board: one is another group, the other
@@ -174,8 +177,9 @@ RSpec.describe "Byte chore board", type: :request do
 
       get "/board/#{thread.id}"
 
-      expect(board_items.pluck("kind")).to eq(["chore", "trigger"])
-      trigger = board_items.last
+      # The one-press actions lead; the chores, which carry the day's state, follow.
+      expect(board_items.pluck("kind")).to eq(["trigger", "chore"])
+      trigger = board_items.first
       expect(trigger["name"]).to eq("Focus mode")
       expect(trigger["short_name"]).to eq("Focus mode")
       # No occurrence, so none of the chore state fields - the client reads the
@@ -192,7 +196,7 @@ RSpec.describe "Byte chore board", type: :request do
 
       expect(response).to have_http_status(:ok)
       kinds = response.parsed_body["items"].pluck("kind")
-      expect(kinds).to eq(["chore", "trigger"])
+      expect(kinds).to eq(["trigger", "chore"])
     end
 
     it "404s the items endpoint on somebody else's thread" do
@@ -255,7 +259,10 @@ RSpec.describe "Byte chore board", type: :request do
     # The whole constraint: a board is only ever a board. Pressing a credit
     # button on one thread must not touch which Buddy is the person's primary.
     it "a press leaves the primary Buddy untouched" do
-      ByteConversation.pin_primary!(thread)
+      # A board can't be primary, so the person's primary is a separate thread;
+      # pressing a credit button on the board must not disturb it.
+      primary = user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current)
+      ByteConversation.pin_primary!(primary)
       before = ByteConversation.primary_for(user).id
       btn = credit_button!
 
@@ -312,13 +319,15 @@ RSpec.describe "Byte chore board", type: :request do
   end
 
   describe "GET /byte/board/tags" do
-    it "unions the household's chore groups with the viewer's routine groups" do
+    it "unions the household's chore groups with the viewer's routine groups, reserved groups first" do
       create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"])
       routine!(name: "Focus mode", tag: "Work")
 
       get "/byte/board/tags"
 
-      expect(response.parsed_body["tags"]).to eq(["Home", "Work"])
+      # "All" and "Whisper" lead: no chore or routine carries them, so they would
+      # never appear on their own, but a board has to be able to watch them.
+      expect(response.parsed_body["tags"]).to eq(["All", "Whisper", "Home", "Work"])
     end
   end
 
@@ -348,7 +357,7 @@ RSpec.describe "Byte chore board", type: :request do
       patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Workshp" }
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["tags"]).to eq(["Home"])
+      expect(response.parsed_body["tags"]).to eq(["All", "Whisper", "Home"])
       expect(thread.reload.chore_tags).to eq([])
     end
 
@@ -389,6 +398,40 @@ RSpec.describe "Byte chore board", type: :request do
 
       expect(response).to have_http_status(:not_found)
       expect(theirs.reload.chore_tag).to be_nil
+    end
+  end
+
+  # The reserved groups, which no chore or routine carries.
+  describe "reserved groups" do
+    it "settles the Whisper feed group even though nothing is tagged with it" do
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Whisper" }
+
+      expect(response).to have_http_status(:ok)
+      expect(thread.reload.chore_tags).to eq(["Whisper"])
+    end
+
+    it "shows every chore for an All board, and no routines or buttons" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["All"]))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Taxes", tags: ["Admin"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Untagged", tags: [], marked_due_at: Time.current)
+      routine!(name: "Focus mode", tag: "Work")
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.pluck("kind").uniq).to eq(["chore"])
+      expect(board_items.pluck("name")).to contain_exactly("Vacuum", "Taxes", "Untagged")
+    end
+
+    it "still brings a named group's routines alongside All's chores" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["All", "Work"]))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      routine!(name: "Focus mode", tag: "Work")
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.pluck("kind")).to include("trigger")
+      expect(board_items.select { |i| i["kind"] == "chore" }.pluck("name")).to include("Vacuum")
     end
   end
 

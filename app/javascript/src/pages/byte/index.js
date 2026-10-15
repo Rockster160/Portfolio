@@ -2547,7 +2547,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     conversationIdFn: () => currentConversationId,
     conversationsFn: () => convoManager.conversations,
     themes: buddyThemes,
-    switchTo: (id) => convoManager.switchTo(id),
+    // Choosing a companion on the wall re-themes the thread this screen is on,
+    // rather than switching threads: a board is a single fixed thread, so this is
+    // what makes the choice persist on it instead of jumping to a chat thread.
+    setTheme: async (theme) => {
+      if (!currentConversationId || !theme) return;
+      const updated = await convoManager.updateConversation(currentConversationId, {
+        buddy_theme: theme,
+      });
+      if (updated) applyBuddyTheme(updated);
+    },
     renderMarkdown,
   });
   buddyKiosk?.sync(messages);

@@ -5765,6 +5765,16 @@ dialog.byte-modal {
   .byte-app[data-kiosk="true"] .byte-board-alert {
     bottom: calc(14% + 66px);
   }
+
+  // The companion picker and the gear are fixed to the screen's top-right corner.
+  // Landscape puts the pad (routines) and the board's circle grid in the right
+  // column, running right up to that corner — so their first row would sit under
+  // the controls. Drop both below the control cluster. Portrait needs none of
+  // this: up there the corner floats over the pet, not the buttons.
+  .byte-app[data-kiosk="true"] .byte-kiosk-pad,
+  .byte-app[data-kiosk="true"] .byte-board-pad {
+    padding-top: calc(env(safe-area-inset-top) + 56px);
+  }
 }
 
 // Board-only: the lead timer blown up across the pet, so a break set from the
@@ -6390,8 +6400,10 @@ dialog.byte-modal {
   gap: 4px;
 }
 
-// One row per Buddy thread: its pet's face, its pet's name, and the thread's
-// own name underneath, since several threads can wear the same companion.
+// One row per companion variation: its face and its name. Picking it re-themes
+// the thread this wall surface is on. (The `.byte-kiosk-pick-thread` second line
+// is unused now the rows are companions, not threads, but kept for any that
+// still carry a subtitle.)
 .ctr-byte .byte-app .byte-kiosk-pick {
   display: flex;
   align-items: center;
