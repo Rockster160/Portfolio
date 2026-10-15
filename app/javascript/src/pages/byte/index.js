@@ -2401,12 +2401,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     enabled: app.dataset.timerAlerts !== "false",
   });
 
+  // The board's pet mirrors Whisper: it sleeps when she sleeps or naps, and
+  // hides when she's gone. Driven off the same whisper-durations status the
+  // rings read, and ONLY on a board that watches the feed (the status arrives
+  // null otherwise), so no other board's pet reacts. A transient paint, so it
+  // never overwrites the pet's remembered mood — clearing the state restores it.
+  const buddyCharEl = app.querySelector(".byte-buddy-char");
+  let whisperOverride = false;
+  function applyWhisperState(state) {
+    if (!buddyCharEl) return;
+    if (!state) {
+      if (whisperOverride) {
+        delete buddyCharEl.dataset.whisperState;
+        buddyHero?.setExpression(buddyWakeExpr || DEFAULT_WAKE_EXPRESSION, { transient: true });
+        whisperOverride = false;
+      }
+      return;
+    }
+    whisperOverride = true;
+    buddyCharEl.dataset.whisperState = state;
+    // The pet wears the matching FACE — asleep the sleeping one, gone the hiding
+    // one — while staying right where it is. (A pet with no art for one falls
+    // back to neutral in the hero.) Awake restores its normal mood.
+    const face =
+      state === "asleep" ? "sleeping"
+      : state === "gone" ? "hiding"
+      : (buddyWakeExpr || DEFAULT_WAKE_EXPRESSION);
+    buddyHero?.setExpression(face, { transient: true });
+  }
+
   // Board-only Whisper status rings (out / nap / quiet / kennel), off the
   // whisper-durations stream. No-ops off the board — the element is board-only,
   // and with no element this neither renders nor subscribes.
   const boardDurations = initBoardDurations({
     container: app.querySelector("[data-whisper-rings]"),
     app,
+    onStatus: applyWhisperState,
   });
 
   // The board shows a standing alert in the pet's bubble (no strip out here) and
@@ -2552,6 +2582,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     // what makes the choice persist on it instead of jumping to a chat thread.
     setTheme: async (theme) => {
       if (!currentConversationId || !theme) return;
+      // Paint the pick now so the tap lands on the wall even if the save is slow;
+      // the PATCH then persists it (survives a reload) and syncs the other copies
+      // of this board through the broadcast it sends back.
+      const chrome = buddyThemes[theme];
+      if (chrome) {
+        applyBuddyTheme({ buddy_theme: theme, buddy_name: chrome.name, buddy_expression: "neutral" });
+      }
       const updated = await convoManager.updateConversation(currentConversationId, {
         buddy_theme: theme,
       });
@@ -2573,6 +2610,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     app,
     conversationIdFn: () => currentConversationId,
     sayText: (text) => buddyKiosk?.sayText(text),
+    // Repointing the board's groups (here) also re-scopes the rings, sounds and
+    // alerts, which read the watched set off app.dataset.boardTags that the chore
+    // board just rewrote. Keeps every surface on the same groups in one move.
+    onTagsChanged: (tags) => {
+      boardDurations?.setTags(tags);
+      boardAlert?.setTags(tags);
+    },
   });
 
   // Chore broadcasts carry `id: :chores` and the Monitor dispatcher routes by
@@ -3410,6 +3454,17 @@ document.addEventListener("DOMContentLoaded", async () => {
           convo.mode === "buddy"
         ) {
           applyBuddyTheme(convo);
+          // The board this screen is on was repointed at other groups (here or on
+          // another device): re-scope every surface to the new watched set. The
+          // chore board rewrites app.dataset.boardTags; the feeds read it fresh.
+          if (app.dataset.board === "true") {
+            const nextTags = Array.isArray(convo.metadata?.chore_tags)
+              ? convo.metadata.chore_tags
+              : [];
+            choreBoard?.setTags(nextTags);
+            boardDurations?.setTags(nextTags);
+            boardAlert?.setTags(nextTags);
+          }
         }
         return;
       }

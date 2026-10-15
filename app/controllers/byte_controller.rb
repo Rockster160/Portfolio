@@ -217,6 +217,10 @@ class ByteController < ApplicationController
 
     convo.chore_tags = wanted
     convo.save!
+    # Tell every open copy of this board the watched set changed, so the other
+    # one on the wall (or a phone looking at the same board) re-scopes its chores,
+    # rings, sounds and alerts live instead of drifting until a reload.
+    broadcast_convo_change(convo, :updated)
     render json: { ok: true, chore_tags: convo.chore_tags }
   end
 

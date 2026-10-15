@@ -35,16 +35,43 @@ function formatRemaining(seconds) {
   return `${sign}${m}m`;
 }
 
-export function initBoardDurations({ container, app }) {
-  if (!container) return { refresh() {} };
+export function initBoardDurations({ container, app, onStatus }) {
+  if (!container) return { refresh() {}, setTags() {} };
 
-  const tags = boardTags(app);
+  // Read fresh on every use, not captured once: the watched groups can change
+  // live (another device repoints the board), and setTags re-runs the match.
+  let tags = boardTags(app);
   let timers = [];
   let wasQuietActive = false;
   // Whether the feed's most recent groups overlap what this board watches. The
   // sound-only broadcasts carry no groups, so they ride this last-known verdict
   // from the duration broadcasts (229), which run on every whisper event.
   let channelMatches = false;
+  // The last broadcast's groups, timers and status, kept so a live tag change
+  // can re-decide the match and repaint without waiting for the next broadcast.
+  let lastGroups;
+  let lastTimers = [];
+  let lastStatus;
+
+  // Whisper's own state, parsed from the broadcast status string ("Awake ☀️",
+  // "Napping 💤", "🛏️ Sleeping", "Gone 👋"), so the board's pet can mirror it.
+  function whisperState(status) {
+    const s = String(status || "").toLowerCase();
+    if (/gone/.test(s)) return "gone";
+    if (/sleep|nap/.test(s)) return "asleep";
+    if (/awake/.test(s)) return "awake";
+    return null;
+  }
+
+  // Push the current match + status out to the pet and the rings. Called from a
+  // broadcast and from a live tag change, so both paths render identically.
+  function reconcile() {
+    syncTimers(channelMatches ? lastTimers : []);
+    updateAllDurations();
+    // Only a board that watches this feed wears Whisper's state; every other
+    // board hears the same channel and must ignore it.
+    onStatus?.(channelMatches ? whisperState(lastStatus) : null);
+  }
 
   function createRingElement(key, label) {
     const ring = document.createElement("div");
@@ -155,20 +182,29 @@ export function initBoardDurations({ container, app }) {
       // sounds when its watched groups overlap — otherwise it stays dark, even
       // though every board on the account hears the same channel.
       if (monitorData.groups !== undefined) {
-        channelMatches = groupsOverlap(monitorData.groups, tags);
+        lastGroups = monitorData.groups;
+        channelMatches = groupsOverlap(lastGroups, tags);
       }
-      // status is intentionally ignored — the pet's own face carries the mood.
+      if (monitorData.status !== undefined) lastStatus = monitorData.status;
+      if (Array.isArray(monitorData.timers)) lastTimers = monitorData.timers;
       if (monitorData.sound && channelMatches) playBoardSound(monitorData.sound);
-      if (Array.isArray(monitorData.timers)) {
-        // Not ours → clear the row rather than drawing someone else's timers.
-        syncTimers(channelMatches ? monitorData.timers : []);
-        updateAllDurations();
-      }
+      // A status-only or sound-only broadcast still re-asserts the pet's state.
+      reconcile();
     },
   });
 
   setInterval(updateAllDurations, Time.second());
   updateAllDurations();
 
-  return { refresh: () => durationMonitor.refresh() };
+  return {
+    refresh: () => durationMonitor.refresh(),
+    // The watched groups changed under us (the board was repointed, here or on
+    // another device). Re-decide the match against the last broadcast and
+    // repaint — no need to wait for the feed to speak again.
+    setTags(next) {
+      tags = Array.isArray(next) ? next.map((t) => String(t).toLowerCase()) : [];
+      if (lastGroups !== undefined) channelMatches = groupsOverlap(lastGroups, tags);
+      reconcile();
+    },
+  };
 }

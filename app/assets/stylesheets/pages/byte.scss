@@ -5522,6 +5522,15 @@ dialog.byte-modal {
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
 }
+
+// The board's pet mirrors Whisper's state (buddy/durations.js drives these from
+// the whisper-durations status, only on a board that watches the feed). The FACE
+// carries each state — the hero sets the sleeping face when she sleeps and the
+// hiding face when she's gone — so the pet stays in place. The one extra touch:
+// a sleeping pet's idle bob slows to a breath so it reads as resting, not frozen.
+.byte-buddy-char[data-whisper-state="asleep"] {
+  animation-duration: 7s;
+}
 // Moss's art bakes the sprout into the TOP of the 500×500 frame. The
 // height-driven sizing above already fits the whole square (sprout included)
 // within the hero, so no special height cap is needed anymore — just a little

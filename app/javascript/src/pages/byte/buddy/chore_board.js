@@ -164,7 +164,7 @@ function iconNode(chore) {
   return box;
 }
 
-export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
+export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsChanged } = {}) {
   if (!root || !app) return null;
 
   const padEl = root.querySelector("[data-board-pad]");
@@ -899,20 +899,31 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
         conversation_id: conversationId,
         tags: next,
       });
-      tags = Array.isArray(data?.chore_tags) ? data.chore_tags : [];
-      if (tagToggleEl) tagToggleEl.textContent = tagLabel();
-      items = [];
-      paint();
-      resync();
-      // The watched groups just changed under the manager, so which buttons it
-      // shows and the chore it files a new one against have too - re-mark the
-      // picker and repaint the buttons rather than leaving the old set showing.
-      paintTagPicker();
-      resetButtonForm();
-      paintButtons();
+      applyTags(Array.isArray(data?.chore_tags) ? data.chore_tags : [], { broadcast: true });
     } catch (e) {
       // The screen keeps looking after whatever it was looking after.
     }
+  }
+
+  // Everything a change of watched groups has to repaint, from either source:
+  // this device's own toggle (above) or another device's change arriving as a
+  // conversation broadcast (setTags). The dataset is the shared source the
+  // rings, sounds and alert scopes read from, so it is kept in step here —
+  // leaving it stale was why the Whisper feeds didn't follow a group change.
+  function applyTags(next, { broadcast } = {}) {
+    tags = Array.isArray(next) ? next : [];
+    try { app.dataset.boardTags = JSON.stringify(tags); } catch (e) {}
+    if (tagToggleEl) tagToggleEl.textContent = tagLabel();
+    items = [];
+    paint();
+    resync();
+    // The watched groups just changed, so which buttons the picker shows and the
+    // chore a new one files against have too - re-mark and repaint rather than
+    // leaving the old set showing.
+    paintTagPicker();
+    resetButtonForm();
+    paintButtons();
+    if (broadcast) onTagsChanged?.(tags);
   }
 
   // ---- managing credit buttons ----
@@ -1382,6 +1393,18 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText } = {}) {
     async onReconnect() {
       await drainFailed();
       await resync();
+    },
+
+    // The board was repointed on another device. Apply the new groups without
+    // re-saving them (the change came FROM the server) — same repaint the local
+    // toggle does. No onTagsChanged callback: the caller already knows.
+    setTags(next) {
+      const same =
+        Array.isArray(next) &&
+        next.length === tags.length &&
+        next.every((t, i) => String(t).toLowerCase() === String(tags[i]).toLowerCase());
+      if (same) return;
+      applyTags(next);
     },
 
     resync,

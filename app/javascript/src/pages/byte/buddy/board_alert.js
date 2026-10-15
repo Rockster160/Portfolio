@@ -17,9 +17,12 @@ import { groupsOverlap } from "./board_scope";
 const CYCLE_MS = 5000;
 
 export function initBoardAlert({ bubble, hero, tags }) {
-  if (!bubble) return { setAlerts: () => {} };
+  if (!bubble) return { setAlerts: () => {}, setTags: () => {} };
 
-  const watched = Array.isArray(tags) ? tags : [];
+  // Mutable: the board can be repointed at other groups live, and setTags
+  // re-filters the alerts already in hand against the new set.
+  let watched = Array.isArray(tags) ? tags : [];
+  let lastAlerts = [];
   let alerts = [];
   let cycleTimer = 0;
   let index = 0;
@@ -37,12 +40,11 @@ export function initBoardAlert({ bubble, hero, tags }) {
   }
 
   function setAlerts(next) {
+    if (Array.isArray(next)) lastAlerts = next;
     // Only the alerts aimed at a group this board watches. An alert with no
     // groups belongs to no board — it still stands in the chat strip, just not
     // out here — so an unrelated condition never lights up the Whisper wall.
-    alerts = Array.isArray(next)
-      ? next.filter((a) => a && a.body && groupsOverlap(a.groups, watched))
-      : [];
+    alerts = lastAlerts.filter((a) => a && a.body && groupsOverlap(a.groups, watched));
 
     if (alerts.length === 0) {
       stopCycle();
@@ -68,5 +70,12 @@ export function initBoardAlert({ bubble, hero, tags }) {
     }
   }
 
-  return { setAlerts };
+  // Repointed at other groups: re-filter the alerts already in hand so a
+  // newly-watched condition shows (and a no-longer-watched one clears) at once.
+  function setTags(next) {
+    watched = Array.isArray(next) ? next.map((t) => String(t).toLowerCase()) : [];
+    setAlerts(lastAlerts);
+  }
+
+  return { setAlerts, setTags };
 }

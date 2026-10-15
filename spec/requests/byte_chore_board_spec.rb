@@ -342,6 +342,14 @@ RSpec.describe "Byte chore board", type: :request do
       expect(thread.reload.chore_tags).to eq(["Home"])
     end
 
+    it "broadcasts the change so other open copies of the board re-scope live" do
+      expect(MonitorChannel).to receive(:broadcast_to).with(
+        user, hash_including(data: hash_including(kind: :conversation)),
+      )
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Home" }
+    end
+
     it "points a board at several groups at once" do
       create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"])
 
