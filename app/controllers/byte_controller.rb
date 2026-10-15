@@ -43,21 +43,45 @@ class ByteController < ApplicationController
   # The chore board: the kiosk's surface with one group of chores on it as big
   # circles, instead of the routine pad.
   #
-  # Same page, same socket, same hero, same everything the kiosk shares with
-  # the chat - `@board` only decides what sits below the pet. Which chores is
-  # the THREAD's business (ByteConversation#chore_tag), so a board opened on a
-  # phone and on the tablet by the same URL is the same board, and the pet
-  # looking after them is whichever one that thread wears.
-  #
-  # Buddy-only for the kiosk's reason: there is no composer here.
+  # /board — the index of the boards you have: a card per board (its pet + name)
+  # with the groups it watches below, each opening its wall. A board is its own
+  # kind of thread (metadata "board"), so it stays out of the chat drawer and
+  # off the path anything self-initiated takes.
+  def board_index
+    @boards = current_user.byte_conversations.active.buddy.board.ordered.to_a
+    render :board_index
+  end
+
+  # POST /board — make a new board and open it. Flagged from birth, so it is
+  # never a chat-drawer row; its groups are chosen on the board itself.
+  def create_board
+    convo = current_user.byte_conversations.create!(
+      mode:            :buddy,
+      name:            params[:name].to_s.strip.presence,
+      last_message_at: Time.current,
+      metadata:        { "board" => true },
+    )
+    redirect_to byte_board_thread_path(convo)
+  end
+
+  # GET /board/:id — one board's wall: the kiosk's chrome-less surface with a pad
+  # of chore/routine/credit circles instead of the routine pad. `@board` decides
+  # what sits below the pet. Which chores is the THREAD's business (its
+  # chore_tags), so the same board opens the same on a phone and on the wall.
+  # Loaded directly rather than through load_thread, because a board is kept out
+  # of that list. Buddy-only, like the kiosk — there is no composer.
   def board
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return redirect_to byte_board_path if convo.nil?
+
     @kiosk = true
     @board = true
-    asked = params[:conversation_id].presence&.to_i
-    load_thread(only_buddy: true, prefer: asked || current_user.byte_conversations.kiosk.pick(:id))
-    @board_tags = @conversation&.chore_tags || []
+    @conversation  = convo
+    @conversations = [convo]
+    @messages      = convo.visible_messages.chronological.last(HISTORY_LIMIT)
+    @board_tags = convo.chore_tags
     @board_day = ChoreDay.current(current_user)
-    @board_items_json = board_items_for(@conversation)
+    @board_items_json = board_items_for(convo)
     render :show
   end
 
@@ -464,7 +488,7 @@ class ByteController < ApplicationController
   # ---------- conversation management ----------
 
   def list_conversations
-    convos = current_user.byte_conversations.active.ordered.to_a
+    convos = current_user.byte_conversations.active.not_board.ordered.to_a
     render json: {
       conversations: convos.map(&:as_wire),
       # An eval thread is listed but never landed on — a `bx rails buddy:eval` run
@@ -1013,7 +1037,9 @@ class ByteController < ApplicationController
 
   def load_thread(only_buddy: false, prefer: nil)
     buddy = only_buddy || buddy_only?
-    scope = current_user.byte_conversations.active.ordered
+    # Boards are their own surface (/board), never a chat-drawer row — the
+    # board action loads its thread directly rather than through here.
+    scope = current_user.byte_conversations.active.not_board.ordered
     scope = scope.buddy if buddy
     @conversations = scope.to_a
     @conversation  = open_thread(prefer) || default_conversation(buddy)

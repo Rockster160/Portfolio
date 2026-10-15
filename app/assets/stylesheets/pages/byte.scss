@@ -8114,3 +8114,117 @@ $board-cell-max: 200px;
   text-decoration: none;
   cursor: pointer;
 }
+
+// ---------------------------------------------------------------------------
+// The /board index: a gallery of the boards you have. Standalone page (not the
+// chat SPA) — a card per board previews its pet and name with the groups it
+// watches below, and opens that board's wall.
+// ---------------------------------------------------------------------------
+.byte-board-index {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  color: var(--bs-text);
+}
+.byte-board-index-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+  }
+}
+.byte-board-new {
+  display: flex;
+  gap: 8px;
+}
+.byte-board-new-name {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+  color: var(--bs-text);
+  font-size: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
+
+  &::placeholder { color: var(--bs-muted); }
+}
+.byte-board-new-btn {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--bs-accent);
+  background: var(--bs-accent);
+  color: #06101f;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.byte-board-index-empty {
+  color: var(--bs-muted);
+  font-size: 15px;
+}
+.byte-board-index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.byte-board-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 140ms ease, transform 140ms ease;
+
+  &:hover {
+    border-color: var(--bs-accent);
+    transform: translateY(-2px);
+  }
+}
+.byte-board-card-pet {
+  width: 92px;
+  height: 92px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.byte-board-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--bs-text-buddy);
+}
+.byte-board-card-groups {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.byte-board-card-group {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel-soft);
+  color: var(--bs-text);
+  font-size: 12px;
+  line-height: 1.4;
+
+  &.is-empty {
+    border-style: dashed;
+    color: var(--bs-muted);
+    background: transparent;
+  }
+}

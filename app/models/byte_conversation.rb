@@ -104,6 +104,15 @@ class ByteConversation < ApplicationRecord
   # routine on it.
   scope :not_kiosk, -> { where("metadata->>'kiosk' IS DISTINCT FROM 'true'") }
 
+  # A board is a wall surface you open at /board/:id — a pet watching a group of
+  # chores, kept deliberately apart from the chat threads. Its own kind, not a
+  # thread that happens to watch groups: the primary thread carries chore_tags
+  # too, so the flag is what tells them apart. Flagged ones are listed on the
+  # /board index and kept OUT of the chat drawer and out of where anything
+  # self-initiated lands.
+  scope :board, -> { where("metadata->>'board' = 'true'") }
+  scope :not_board, -> { where("metadata->>'board' IS DISTINCT FROM 'true'") }
+
   # THE thread. Everything nobody asked for lands here — the morning briefing, a
   # reminder firing, a watch tripping, a relay from the other person — rather
   # than in whichever one happens to have been touched most recently.
@@ -127,6 +136,10 @@ class ByteConversation < ApplicationRecord
 
   def kiosk?
     metadata.is_a?(Hash) && metadata["kiosk"].to_s == "true"
+  end
+
+  def board?
+    metadata.is_a?(Hash) && metadata["board"].to_s == "true"
   end
 
   def primary?
@@ -224,7 +237,7 @@ class ByteConversation < ApplicationRecord
   # one, so a caller can't get the eligibility half wrong while getting the
   # ordering half right.
   def self.primary_among(conversations)
-    eligible = conversations.select { |c| c.buddy? && !c.archived? && !c.kiosk? && !c.eval? }
+    eligible = conversations.select { |c| c.buddy? && !c.archived? && !c.kiosk? && !c.board? && !c.eval? }
 
     eligible.find(&:primary?) || eligible.min_by(&:id)
   end
@@ -241,7 +254,7 @@ class ByteConversation < ApplicationRecord
     # ONE query, and `ordered` is what makes the fallback free — the rows come
     # back newest-first already, so `.first` is the old "newest live thread"
     # answer with no second round trip.
-    all = user.byte_conversations.active.buddy.ordered.to_a
+    all = user.byte_conversations.active.buddy.not_board.ordered.to_a
 
     primary_among(all) || all.first
   end
@@ -287,7 +300,7 @@ class ByteConversation < ApplicationRecord
   # Fallback used when a message arrives without an explicit conversation
   # (legacy webhook payloads, misconfigured CLI, etc.).
   def self.default_for(user)
-    user.byte_conversations.active.real.ordered.first ||
+    user.byte_conversations.active.real.not_board.ordered.first ||
       user.byte_conversations.create!(name: :Byte, mode: :claude)
   end
 

@@ -31,10 +31,11 @@ Rails.application.routes.draw do
     # Addressed by CONVERSATION rather than by category, because the thread is
     # already what decides the pet, the name, the palette and the voice - and
     # so that the same board opens on a phone and on the tablet by opening the
-    # same URL. The bare path is for a home-screen icon installed before there
-    # was an id to put in it, and opens whichever thread is flagged as the one.
-    get "/board" => "byte#board", as: :byte_board
-    get "/board/:conversation_id" => "byte#board", as: :byte_board_thread
+    # same URL. The bare path is the INDEX of the boards you have; a new board
+    # is POSTed there; a board opens at /board/:id.
+    get  "/board" => "byte#board_index", as: :byte_board
+    post "/board" => "byte#create_board", as: :byte_create_board
+    get  "/board/:conversation_id" => "byte#board", as: :byte_board_thread
   end
 
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"

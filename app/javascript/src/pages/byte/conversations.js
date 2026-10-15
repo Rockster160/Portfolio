@@ -19,6 +19,14 @@ function csrfMetaToken() {
 //
 // The last resort walks to the account's own default pet rather than a
 // literal — naming somebody else's companion is worse than being vague.
+// A board is its own surface (/board), never a chat-drawer row. The server
+// leaves them out of the list, but a stale cached list from before boards were
+// split out, or a live broadcast for one, could still carry one — so the drawer
+// drops them on the way in too.
+function isBoardConvo(convo) {
+  return !!convo?.metadata && String(convo.metadata.board) === "true";
+}
+
 function convoLabel(convo) {
   if (convo?.name) return convo.name;
   if (convo?.buddy_name) return convo.buddy_name;
@@ -130,9 +138,11 @@ export class ConversationManager {
     // (Map-backed in index.js). Rendered as a badge on each row.
     this.unreadFor          = unreadFor || (() => 0);
     this.onConversations    = onConversations || null;
-    this.conversations      = initialConversations && initialConversations.length
-      ? initialConversations
-      : loadCachedList();
+    this.conversations      = (
+      initialConversations && initialConversations.length
+        ? initialConversations
+        : loadCachedList()
+    ).filter((c) => !isBoardConvo(c));
     // Resolve initial id, most-specific first. A pinned id comes from an
     // explicit `?conversation_id=` — a request rather than a guess, so it beats
     // whatever this browser happened to have open last; that's what makes a
@@ -321,6 +331,7 @@ export class ConversationManager {
     if (!payload) return;
     const convo = payload.conversation;
     if (!convo) return;
+    if (isBoardConvo(convo)) return;
 
     // Somebody set it on another device. Only the thread that GAINED the flag
     // is acted on — the one that lost it broadcasts too, and reading that as

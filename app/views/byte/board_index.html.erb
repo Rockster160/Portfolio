@@ -1,0 +1,44 @@
+<%# The index of the boards you have. Each card is a little preview — the pet
+    and the board's name — with the groups it watches below, and opens that
+    board's wall. A board is its own kind of thread, so it lives here rather
+    than in the chat drawer. %>
+<% page_theme = ByteConversation.default_theme_for(current_user) %>
+<%= meta_title "Boards", include_name: false %>
+<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: page_theme, kiosk: false } %>
+
+<div class="byte-board-index">
+  <header class="byte-board-index-head">
+    <h1>Boards</h1>
+    <%= form_with url: byte_create_board_path, method: :post, class: "byte-board-new" do %>
+      <input type="text" name="name" class="byte-board-new-name" placeholder="New board name…"
+             autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
+      <button type="submit" class="byte-board-new-btn">+ New board</button>
+    <% end %>
+  </header>
+
+  <% if @boards.empty? %>
+    <p class="byte-board-index-empty">
+      No boards yet. Make one, then pick the groups it watches on the board itself.
+    </p>
+  <% else %>
+    <div class="byte-board-index-grid">
+      <% @boards.each do |b| %>
+        <%= link_to byte_board_thread_path(b), class: "byte-board-card" do %>
+          <div class="byte-board-card-pet"
+               style="background-image: url('<%= buddy_face_url(b.buddy_theme, b.buddy_expression) %>')"
+               aria-hidden="true"></div>
+          <div class="byte-board-card-name"><%= b.display_name %></div>
+          <div class="byte-board-card-groups">
+            <% if b.chore_tags.any? %>
+              <% b.chore_tags.each do |group| %>
+                <span class="byte-board-card-group"><%= group %></span>
+              <% end %>
+            <% else %>
+              <span class="byte-board-card-group is-empty">No groups yet</span>
+            <% end %>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% end %>
+</div>
