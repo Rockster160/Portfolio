@@ -1851,7 +1851,17 @@ module Buddy
 
         missing = Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week)
         hours   = Buddy::TodayBriefing.week_hours_missing(body, briefing_alpine_week)
-        line    = Buddy::TodayBriefing.week_odds_line(missing, hours)
+
+        # Written in where the day is already on the page, appended only for a
+        # day the briefing never raised. The home week's days are held back from
+        # the in-place half - see with_week_odds_written_in.
+        body, missing = Buddy::TodayBriefing.with_week_odds_written_in(
+          body,
+          missing,
+          avoid: Buddy::TodayBriefing.flagged_days(seed_week_outlook),
+        )
+
+        line = Buddy::TodayBriefing.week_odds_line(missing, hours)
         return body if line.blank?
 
         "#{body.rstrip}\n\n#{line}"

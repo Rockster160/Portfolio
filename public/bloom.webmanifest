@@ -1,21 +1,21 @@
 {
-  "short_name": "Sprig",
-  "name": "Sprig",
+  "short_name": "Bloom",
+  "name": "Bloom",
   "icons": [
     {
-      "src": "/sprig_favicon/web-app-manifest-192x192.png",
+      "src": "/bloom_favicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/sprig_favicon/web-app-manifest-512x512.png",
+      "src": "/bloom_favicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
   ],
-  "id": "sprig",
+  "id": "bloom",
   "start_url": "/?source=pwa",
   "background_color": "#0A160A",
   "display": "standalone",

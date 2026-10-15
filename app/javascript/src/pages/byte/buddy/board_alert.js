@@ -36,7 +36,19 @@ export function initBoardAlert({ bubble, hero, tags }) {
 
   function paint() {
     const alert = alerts[index % alerts.length];
-    bubble.textContent = alertRowText(alert?.body);
+    // A standing condition that carries an icon (a hungry dog's 🍖) shows the
+    // glyph big, read from across the room — the words ride along as the title
+    // for anyone up close. Everything else is the sentence, as before.
+    const icon = alert?.icon;
+    if (icon) {
+      bubble.textContent = icon;
+      bubble.dataset.icon = "true";
+      bubble.title = alertRowText(alert?.body);
+    } else {
+      bubble.textContent = alertRowText(alert?.body);
+      delete bubble.dataset.icon;
+      bubble.removeAttribute("title");
+    }
   }
 
   function setAlerts(next) {

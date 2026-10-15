@@ -9,7 +9,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
   #   #checklist("List" String BR "Message" Text)::Numeric
-  #   #alert("Key" String BR "Message" Text BR "Who" String)::Boolean
+  #   #alert("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String)::Boolean
   #   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
   #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
   #   #clearMiniAlert("Key" String BR "Who" String)::Boolean
@@ -113,11 +113,14 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # the groups it watches, the same "any of these" match chores use. Blank means
   # it belongs to no board and stands in the chat strip alone. A comma string
   # ("Whisper, Puppy") or an array; split like the chore tag field.
-  def alert(key, message, who=nil, groups=nil)
+  # `icon` is an optional glyph (an emoji like "🍖") the BOARD shows in place of
+  # the sentence, read from across the room where words can't be; the chat strip
+  # keeps the words. Blank means text everywhere, as before.
+  def alert(key, message, who=nil, groups=nil, icon=nil)
     groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
     groups = groups.map(&:strip).compact_blank
     delivered = recipients_for(who).count { |user|
-      ::Buddy::Alerts.raise!(user: user, key: key, body: message, groups: groups).present?
+      ::Buddy::Alerts.raise!(user: user, key: key, body: message, groups: groups, icon: icon).present?
     }
     delivered.positive?
   end

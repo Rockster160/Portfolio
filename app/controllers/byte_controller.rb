@@ -95,6 +95,40 @@ class ByteController < ApplicationController
     render :show
   end
 
+  # GET /board/:conversation_id/manifest.webmanifest — a board's OWN install
+  # manifest. Added to a home screen, a board has to come back to THAT board
+  # wearing THAT board's pet — the shared per-theme kiosk manifest it used to
+  # borrow opened the routine pad (/kiosk) and installed every board under one
+  # icon. Generated from the board's live buddy_theme, so re-theming the board
+  # re-skins the installed icon the next time it is added. Mirrors
+  # TimersController#page_manifest.
+  def board_manifest
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    theme = convo.buddy_theme.to_s
+    chrome = Buddy::Themes.for(theme)
+    label = convo.display_name
+    path = byte_board_thread_path(convo)
+
+    render json: {
+      short_name:       label.truncate(12),
+      name:             label,
+      icons:            [
+        { src: "/#{theme}_favicon/web-app-manifest-192x192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+        { src: "/#{theme}_favicon/web-app-manifest-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ],
+      id:               "byte-board-#{convo.id}",
+      start_url:        "#{path}?source=pwa",
+      scope:            "/",
+      background_color: chrome[:color],
+      display:          :standalone,
+      orientation:      :any,
+      theme_color:      chrome[:color],
+      description:      "Board: #{label}",
+    }, content_type: "application/manifest+json"
+  end
+
   # GET /byte/board/items — the board's live set for a thread: the chores of its
   # group AND the triggers (routines) of its group, merged and ordered. The
   # client's resync hits this rather than /chores/sync, because /chores/sync
@@ -195,6 +229,26 @@ class ByteController < ApplicationController
       chore:    ChoreSerializer.new(chore, viewer: current_user, ctx: ctx).as_json,
       credited: credited.username,
     }
+  end
+
+  # POST /byte/board/tasks/:id/press — run a task button's Jil task, the way
+  # tapping it on its own page does: with `execute: true` in its input, as the
+  # task's own owner (so a shared task keeps the right account's reach). The run
+  # is async — the board button is a fire-and-forget control, and the task posts
+  # its own feedback (the rings, a monitor relabel, a sound) through the board's
+  # live feeds, not through this response.
+  def press_board_task
+    button = current_user.board_task_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    task = button.task
+    return head(:unprocessable_entity) if task.nil?
+
+    ::Jil::Executor.async_call(
+      task.user, task.code, { "execute" => true },
+      task: task, auth: :run, auth_id: current_user.id
+    )
+    head :ok
   end
 
   # PATCH /byte/board/tag — which group of chores this thread's board watches.
@@ -975,8 +1029,11 @@ class ByteController < ApplicationController
     named = tags.reject { |t| t.casecmp?(BOARD_ALL_TAG) }
     trigger_items = named.any? ? current_user.buddy_routines.for_board(named).map(&:board_item) : []
     credit_items  = named.any? ? board_credit_buttons.for_board(named).map(&:board_item) : []
+    # "Run this Jil task" buttons (the Whisper fed/quiet/nap/gone controls). Own
+    # kind, run on a press as the task's owner — see BoardTaskButton.
+    task_items = named.any? ? current_user.board_task_buttons.for_board(named).map(&:board_item) : []
 
-    trigger_items + credit_items + chore_items
+    trigger_items + credit_items + task_items + chore_items
   end
 
   # Chores on a board read in the Today page's order, so a chore sits in the same

@@ -274,10 +274,10 @@ html.html-ctr-byte body {
     --bs-pending: #A89478;
   }
 
-  // Sprig theme — a mossy glade surface for the nature dragon, his leaf green as
+  // Bloom theme — a mossy glade surface for the nature dragon, its leaf green as
   // the accent. Same `:has` override as the others. The reader's own (outbound)
   // messages stay Chelsea purple, clear of the green.
-  &:has(.byte-app[data-buddy-theme="sprig"]) {
+  &:has(.byte-app[data-buddy-theme="bloom"]) {
     --bs-bg: #0A160A;
     --bs-panel: #142414;
     --bs-panel-soft: #1E331E;
@@ -5344,7 +5344,7 @@ dialog.byte-modal {
     --buddy-art-trim: 0.05;
   }
 
-  // Cobalt, Flux, Tiko, Gizmo and Sprig ship as square cutouts tight to the
+  // Cobalt, Flux, Tiko, Gizmo and Bloom ship as square cutouts tight to the
   // creature, centred with no transparent foot to reclaim — so art-trim is 0
   // (byte's 0.19 default would crop the pet's bottom and shove it down the hero).
   &[data-buddy-theme="cobalt"] {
@@ -5375,7 +5375,7 @@ dialog.byte-modal {
     --buddy-art-trim: 0;
   }
 
-  &[data-buddy-theme="sprig"] {
+  &[data-buddy-theme="bloom"] {
     --buddy-primary: #1E3A1E;
     --buddy-accent: #7ACB5A;
     --buddy-danger: #E88A5C;
@@ -5755,23 +5755,20 @@ dialog.byte-modal {
     max-width: 46vw;
   }
 
-  // The speech + standing-alert bubbles anchor to the top edge of `.byte-kiosk`
-  // (`bottom: 100%`) so in the stacked layout they float up over the pet above.
-  // Side by side, that top edge points off the top of the screen — so re-aim
-  // them over the LEFT half: right edge just inside the seam, floated up from
-  // the pet's feet. The alert sits a little higher so a passing cheer in the
-  // say bubble doesn't land on it, same as the stacked layout.
-  .byte-app[data-kiosk="true"] .byte-kiosk-say,
+  // The standing-alert bubble anchors to the top edge of `.byte-kiosk`
+  // (`bottom: 100%`) so in the stacked layout it floats up over the pet above.
+  // Side by side, that top edge points off the top of the screen — so re-aim it
+  // over the LEFT half: right edge just inside the seam, floated up from the
+  // pet's feet.
+  //
+  // The say bubble is NOT here any more: it lives in the hero now, anchored to
+  // the pet's head, which is the left column in landscape just as it is the top
+  // band in portrait — so the one rule carries both.
   .byte-app[data-kiosk="true"] .byte-board-alert {
     left: auto;
     right: calc(100% + 16px);
     transform: none;
     max-width: 44vw;
-  }
-  .byte-app[data-kiosk="true"] .byte-kiosk-say {
-    bottom: 14%;
-  }
-  .byte-app[data-kiosk="true"] .byte-board-alert {
     bottom: calc(14% + 66px);
   }
 
@@ -6157,21 +6154,23 @@ dialog.byte-modal {
 // What the pet just said, floated over the bottom of its half. Positioned
 // against the kiosk section rather than the app so it always sits on the
 // dividing line, whatever the split works out to.
+// The pet's speech bubble, up by its head at the TOP of the hero (not down at
+// its feet, where it used to float up from the pad) — so a reply reads as
+// coming FROM the character, with a tail pointing down at it. The hero is the
+// positioning context, and `overflow: hidden` on it keeps the bubble inside the
+// pet's own box, which is why the width is a share of that box rather than of
+// the viewport — the same in portrait (top band) and landscape (left column).
 .byte-kiosk-say {
   position: absolute;
-  bottom: calc(100% + 10px);
+  top: calc(env(safe-area-inset-top) + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
   width: max-content;
-  // SassC can't evaluate a mixed-unit min(), so the two bounds are written
-  // separately the way the drawer's are — nearly all of a tablet, but capped
-  // to a readable line once the screen is wider than that.
-  max-width: 88vw;
-  @media (min-width: 780px) {
-    max-width: 680px;
-  }
-  max-height: 34vh;
+  max-width: calc(100% - 24px);
+  // The tail and its clearance mustn't push the bubble past the hero's floor,
+  // so it never grows taller than the head's share of the band.
+  max-height: 42%;
   overflow-y: auto;
   padding: 12px 16px;
   border-radius: 16px;
@@ -6186,6 +6185,24 @@ dialog.byte-modal {
   text-align: center;
   opacity: 1;
   transition: opacity 260ms ease;
+
+  // The tail: a little triangle off the bottom edge, pointing down at the pet,
+  // so the bubble belongs to the head above it rather than floating free.
+  &::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    border: 10px solid transparent;
+    border-bottom: 0;
+    border-top-color: var(--bs-panel);
+    // A hair of drop so the panel seam under the border reads as one piece.
+    margin-top: -1px;
+    filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.2));
+  }
 
   &[hidden] {
     display: none;
@@ -6238,6 +6255,14 @@ dialog.byte-modal {
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
+
+  // Icon alerts (a hungry dog's 🍖) are a single glyph, blown up to read from
+  // across the room — no sentence, no wrapping, just the mark.
+  &[data-icon="true"] {
+    font-size: 44px;
+    line-height: 1;
+    padding: 10px 14px;
+  }
 
   &[hidden] {
     display: none;
@@ -6828,14 +6853,17 @@ $board-cell-max: 200px;
 // rather than the chores' flat dark disc waiting on a ring, so "set this off" /
 // "credit this" and "check this off" don't look identical from across the room.
 //
-// A trigger gets the indigo default; a credit button defaults to the done-green
-// but usually carries its own colour inline (set from the button's config), which
-// overrides the default here and drives both the disc tint and the flash.
+// A trigger gets the indigo default; a credit button defaults to the done-green;
+// a task button a sky default — each usually carries its own colour inline (set
+// from the button's config), which overrides the default here and drives both
+// the disc tint and the flash.
 .byte-board-cell[data-kind="trigger"] { --actor-color: #6366F1; }
 .byte-board-cell[data-kind="credit"]  { --actor-color: #16A34A; }
+.byte-board-cell[data-kind="task"]    { --actor-color: #0EA5E9; }
 
 .byte-board-cell[data-kind="trigger"],
-.byte-board-cell[data-kind="credit"] {
+.byte-board-cell[data-kind="credit"],
+.byte-board-cell[data-kind="task"] {
   .byte-board-circle {
     background: color-mix(in srgb, var(--actor-color) 16%, #0F1B33);
     border-color: color-mix(in srgb, var(--actor-color) 55%, transparent);

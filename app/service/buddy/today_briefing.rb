@@ -642,6 +642,62 @@ module Buddy
       "In Alpine, #{parts.to_sentence}."
     end
 
+    # The missing odds written INTO the sentence that already named their day,
+    # rather than appended as a second forecast.
+    #
+    # A day list with the figures taken out is a complete-looking sentence -
+    # `week_odds_missing` says so - and what it is short of is one token. That is
+    # `with_corrected_temperatures`'s shape rather than `week_line`'s: the
+    # restoration belongs where the claim already is, because a briefing that
+    # raised the subject and then carries a second paragraph raising it again is
+    # the one thing every repair in the chain is written to avoid.
+    #
+    # Returns the body and the days it could NOT place. Those still append,
+    # which is where a day the briefing never mentioned belongs.
+    #
+    # `avoid` is every day the HOME week flagged, and nothing on that list is
+    # written in anywhere. A sentence naming a day both forecasts flagged is as
+    # likely to be about home as about the canyon, and a canyon figure slotted
+    # into a home sentence is a WRONG fact where a duplicated one used to be -
+    # the one direction this file does not trade in.
+    def with_week_odds_written_in(body, missing, avoid: [])
+      text    = body.to_s
+      skipped = day_words(avoid, Date.current).map(&:downcase)
+
+      unplaced = Array(missing).reject { |m|
+        next false if skipped.include?(m[:day].to_s.downcase)
+
+        written = odds_written_in(text, m)
+        next false if written.nil?
+
+        text = written
+        true
+      }
+      [text, unplaced]
+    end
+
+    # A figure already sitting against the day, which is another day's odds
+    # read as this one's. Short-range, because what follows the day word in a
+    # list is the next day along.
+    ODDS_AT_HAND_RX = /\A[^.!?]{0,12}\d{1,3}\s*(?:%|percent)/i
+
+    # One day's figure, into the first weather sentence that names it. nil when
+    # there is no such sentence, so the caller can append instead.
+    def odds_written_in(text, match)
+      day = match[:day].to_s
+      return nil if day.blank?
+
+      day_rx   = /\b#{Regexp.escape(day)}\b/i
+      sentence = sentences(text).grep(WEATHER_WORDS_RX).find { |s| s.match?(day_rx) }
+      return nil if sentence.nil?
+
+      ends = (sentence =~ day_rx) + day.length
+      rest = sentence[ends..].to_s
+      return nil if rest.match?(ODDS_AT_HAND_RX)
+
+      text.sub(sentence, "#{sentence[0...ends]} (#{match[:pop]}%)#{rest}")
+    end
+
     # The departure time, composed here for the same reason the weather line is.
     #
     # `leave_by` arrives already worked out and the prompt is explicit about it

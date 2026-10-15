@@ -23,7 +23,7 @@ module Buddy
     # Display order, Byte (the default) first; a companion not listed sorts
     # after the listed ones, alphabetically. Drives the drawer, the theme
     # switcher, and the "byte|moss|…" usage strings.
-    ORDER = %i[byte moss suki glimmer kumoko mocha ghosty flux tiko gizmo sprig cobalt].freeze
+    ORDER = %i[byte moss suki glimmer kumoko mocha ghosty flux tiko gizmo bloom cobalt].freeze
 
     COMPANION_DIR = Rails.root.join("app/service/buddy/companions")
 

@@ -483,4 +483,63 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response).to have_http_status(:not_found)
     end
   end
+
+  # Task buttons — a board button that RUNS a Jil task on a press (the Whisper
+  # fed/quiet/nap/gone controls), beside the chores and credit buttons.
+  describe "task buttons" do
+    let(:task) {
+      Task.create!(user: user, name: "Whisper Fed", listener: "monitor::whisper-btn-fed", code: "// noop", enabled: true)
+    }
+    let!(:button) {
+      BoardTaskButton.create!(user: user, task: task, label: "Fed", icon: "🍖", color: "#8B5E34", tags: ["Whisper"])
+    }
+
+    it "sits on a board watching its group, carrying its icon" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"]))
+
+      get "/board/#{thread.id}"
+
+      item = board_items.find { |i| i["kind"] == "task" }
+      expect(item).to be_present
+      expect(item["name"]).to eq("Fed")
+      expect(item["icon"]).to eq("🍖")
+      expect(item["icon_kind"]).to eq("emoji")
+    end
+
+    it "runs its task with execute:true as the task's owner on a press" do
+      allow(Jil::Executor).to receive(:async_call)
+
+      post "/byte/board/tasks/#{button.id}/press"
+
+      expect(response).to have_http_status(:ok)
+      expect(Jil::Executor).to have_received(:async_call).with(
+        user, task.code, { "execute" => true }, hash_including(task: task, auth: :run, auth_id: user.id)
+      )
+    end
+
+    it "404s pressing someone else's button" do
+      theirs = create(:user)
+      their_task = Task.create!(user: theirs, name: "T", listener: "tell:x", code: "// noop")
+      their_button = BoardTaskButton.create!(user: theirs, task: their_task, label: "X", tags: ["Whisper"])
+
+      post "/byte/board/tasks/#{their_button.id}/press"
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  # A board installs under its own pet and reopens to itself.
+  describe "GET /board/:id/manifest.webmanifest" do
+    it "names the board, carries its pet's icon, and starts at this board" do
+      thread.update!(name: "Desk", buddy_theme: "bloom")
+
+      get "/board/#{thread.id}/manifest.webmanifest"
+
+      expect(response).to have_http_status(:ok)
+      manifest = JSON.parse(response.body)
+      expect(manifest["name"]).to eq("Desk")
+      expect(manifest["start_url"]).to eq("/board/#{thread.id}?source=pwa")
+      expect(manifest["icons"].first["src"]).to eq("/bloom_favicon/web-app-manifest-192x192.png")
+    end
+  end
 end

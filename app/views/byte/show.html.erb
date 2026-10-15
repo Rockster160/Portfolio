@@ -8,7 +8,7 @@
 <% buddy_page_chrome = Buddy::Themes.for(buddy_page_theme) %>
 <%= meta_title buddy_page_chrome[:name], include_name: false %>
 <%= meta_description "Direct chat channel to your automations." %>
-<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme, kiosk: @kiosk } %>
+<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme, kiosk: @kiosk, board: (@conversation if @board) } %>
 <%= content_for(:meta) do %>
   <%# interactive-widget=resizes-content: Android Chrome shrinks the layout %>
   <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
@@ -269,6 +269,12 @@
     <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>
     <%# through /api/v1/background_processes; rendered by buddy/processes.js. %>
     <div class="byte-buddy-processes" data-buddy-processes hidden></div>
+    <%# What the pet just said, as a speech bubble by its head — the wall's only
+        rendering of a reply, and the chore-board cheers. Lives in the hero (not
+        down in the pad) so it reads as coming FROM the character, with a tail
+        pointing down at it. Filled and cleared by buddy/kiosk.js; only the
+        kiosk/board surfaces show it. %>
+    <div class="byte-kiosk-say" data-kiosk-say aria-live="polite" hidden></div>
     <div class="byte-buddy-char" aria-label="<%= buddy_page_chrome[:name] %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <%# The face is a single background image — this pet's resolved art for the %>

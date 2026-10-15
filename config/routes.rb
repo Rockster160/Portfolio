@@ -35,6 +35,10 @@ Rails.application.routes.draw do
     # is POSTed there; a board opens at /board/:id.
     get  "/board" => "byte#board_index", as: :byte_board
     post "/board" => "byte#create_board", as: :byte_create_board
+    # Each board installs under its own pet and reopens to itself (see
+    # ByteController#board_manifest). Declared before the bare :id route — the
+    # extra path segment keeps them distinct, but the specific one leads.
+    get  "/board/:conversation_id/manifest.webmanifest" => "byte#board_manifest", as: :byte_board_manifest
     get  "/board/:conversation_id" => "byte#board", as: :byte_board_thread
   end
 
@@ -74,6 +78,9 @@ Rails.application.routes.draw do
   patch  "/byte/board/buttons/:id"       => "byte#update_board_button",  as: :byte_board_button
   delete "/byte/board/buttons/:id"       => "byte#delete_board_button"
   post   "/byte/board/buttons/:id/press" => "byte#press_board_button",   as: :byte_press_board_button
+  # Task buttons: a board button that RUNS a Jil task on a press (the Whisper
+  # fed/quiet/nap/gone controls). See BoardTaskButton.
+  post   "/byte/board/tasks/:id/press"   => "byte#press_board_task",     as: :byte_press_board_task
   post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation

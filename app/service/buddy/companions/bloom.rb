@@ -1,11 +1,11 @@
 module Buddy
   module Companions
-    # Sprig — the nature dragon. Leaf-breath, blossoms, a bird friend; holes are
+    # Bloom — the nature dragon. Leaf-breath, blossoms, a bird friend; holes are
     # fine, the picker falls back around them.
-    class Sprig < Buddy::Companion
+    class Bloom < Buddy::Companion
       identity(
-        key:         :sprig,
-        name:        "Sprig",
+        key:         :bloom,
+        name:        "Bloom",
         description: "the nature dragon",
         color:       "#0F1E0D",
         tone:        :chelsea,

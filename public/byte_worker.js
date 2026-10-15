@@ -22,11 +22,15 @@ const CACHE = "byte-v26";
 // `/board` is the chore board on the same terms.
 //
 // These are the ones PREWARMED, so they have to be literal paths. A board is
-// also reachable as `/board/<conversation id>`, which is a family rather than
-// a path and can't be fetched ahead of time — see isShellRequest, which
-// recognises one so it caches itself the first time it is opened. That is when
-// a tablet is being set up, which is exactly when it is online.
-const SHELL_PATHS = ["/", "/kiosk", "/board"];
+// reached as `/board/<conversation id>`, which is a family rather than a path
+// and can't be fetched ahead of time — see isShellRequest, which recognises one
+// so it caches itself the first time it is opened. That is when a tablet is
+// being set up, which is exactly when it is online.
+//
+// `/board` with no id is NOT here: it is the board INDEX page, a normal server
+// page with no SPA shell marker, not the app shell. Treating it as a shell made
+// every revalidation of it fail the marker check and flash "sync failed".
+const SHELL_PATHS = ["/", "/kiosk"];
 
 // A board addressed by thread. Anchored at both ends: `/boardroom` is not a
 // board, and neither is `/board/4/anything`.

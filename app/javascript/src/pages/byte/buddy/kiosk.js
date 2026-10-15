@@ -114,7 +114,11 @@ export function initBuddyKiosk({
 } = {}) {
   if (!root) return null;
 
-  const sayEl = root.querySelector("[data-kiosk-say]");
+  // The say bubble lives in the hero (by the pet's head), not inside this
+  // kiosk/board root — so reach up to the app for it.
+  const sayEl = (root.closest(".byte-app") || document).querySelector(
+    "[data-kiosk-say]",
+  );
   const padEl = root.querySelector("[data-kiosk-pad]");
   const askEl = root.querySelector("[data-kiosk-ask]");
   const askBodyEl = root.querySelector("[data-kiosk-ask-body]");

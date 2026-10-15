@@ -8,10 +8,15 @@
     than the chat. %>
 <% chrome = Buddy::Themes.for(buddy_page_theme) %>
 <% kiosk = local_assigns[:kiosk] %>
+<%# A board installs under ITS OWN manifest (ByteController#board_manifest), so
+    its home-screen icon is this board's pet and opens straight back to this
+    board — not the shared per-theme kiosk manifest, whose start_url is /kiosk
+    and whose id is one-per-pet (every board landing on the same icon). %>
+<% board = local_assigns[:board] %>
 <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path chrome[:touch_icon] %>">
 <link rel="icon" type="image/png" href="<%= asset_path chrome[:favicon] %>" sizes="96x96">
-<link rel="manifest" href="<%= kiosk ? chrome[:kiosk_manifest] : chrome[:manifest] %>">
+<link rel="manifest" href="<%= board ? byte_board_manifest_path(board) : (kiosk ? chrome[:kiosk_manifest] : chrome[:manifest]) %>">
 <meta name="theme-color" content="<%= chrome[:color] %>">
-<meta name="apple-mobile-web-app-title" content="<%= kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name] %>">
+<meta name="apple-mobile-web-app-title" content="<%= board ? board.display_name : (kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name]) %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

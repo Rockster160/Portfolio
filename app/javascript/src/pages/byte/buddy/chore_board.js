@@ -33,24 +33,33 @@ const RUN_URL = (id) => `/buddy/routines/${id}/run`;
 // A credit button's press: completes its chore crediting its chosen member.
 const PRESS_URL = (id) => `/byte/board/buttons/${id}/press`;
 
+// A task button's press: runs its Jil task (the Whisper fed/quiet/nap/gone
+// controls). Fire-and-forget — the task reports back through the board's live
+// feeds (rings, a sound, an alert), not this response.
+const TASK_PRESS_URL = (id) => `/byte/board/tasks/${id}/press`;
+
 // Managing credit buttons: list/create at the collection, update/delete at one.
 const BUTTONS_URL = "/byte/board/buttons";
 const BUTTON_URL = (id) => `/byte/board/buttons/${id}`;
 
-// A board item is one of three kinds, stamped by the server in `kind`:
+// A board item is one of four kinds, stamped by the server in `kind`:
 //   * CHORE   — tick to complete, has state (ring, count, skips).
 //   * TRIGGER — a routine, tapped to fire, no occurrence to settle.
 //   * CREDIT  — a custom button that completes a chore crediting a chosen person.
-// Triggers and credit buttons are both stateless ACTION circles: one press, a
-// flash, nothing to undo. Chores are the only stateful kind.
+//   * TASK    — a custom button that runs a Jil task (the Whisper controls).
+// Triggers, credit buttons and task buttons are all stateless ACTION circles:
+// one press, a flash, nothing to undo. Chores are the only stateful kind.
 function isTrigger(item) {
   return item && item.kind === "trigger";
 }
 function isCredit(item) {
   return item && item.kind === "credit";
 }
+function isTask(item) {
+  return item && item.kind === "task";
+}
 function isAction(item) {
-  return isTrigger(item) || isCredit(item);
+  return isTrigger(item) || isCredit(item) || isTask(item);
 }
 
 // What a press looks like before the server has answered, and it is the same
@@ -758,6 +767,32 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     })();
   }
 
+  // Run a task button's Jil task: fire it, then flash "Done!" over the disc.
+  // Like a trigger fire — no predict (nothing on this board moves), no cheer
+  // (you set it off, you didn't finish a chore); the task's own effect comes
+  // back through the board's live feeds. A failure is remembered and retried on
+  // the next foreground/reconnect.
+  function taskPress(id) {
+    if (!find(id, "task")) return;
+
+    hold(id, 1);
+    paint();
+
+    return (async () => {
+      try {
+        await apiCall(TASK_PRESS_URL(id), "POST", {});
+        const at = failed.findIndex((f) => f.key === String(id));
+        if (at >= 0) failed.splice(at, 1);
+        flashCell(id, "task");
+      } catch (e) {
+        remember(id, () => taskPress(id));
+      } finally {
+        hold(id, -1);
+        paint();
+      }
+    })();
+  }
+
   // The "Done!" receipt over an action disc. Scoped by board-key so it lands on
   // the right cell and not another kind's item sharing its id.
   function flashCell(id, kind) {
@@ -1223,6 +1258,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       // its own corner carries Undo, the only thing a press on it could mean.
       if (isTrigger(item)) return fire(item.id);
       if (isCredit(item)) return creditPress(item.id);
+      if (isTask(item)) return taskPress(item.id);
       if (item.dismissed || item.skipped_today) return;
 
       return complete(item.id);

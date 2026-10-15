@@ -3917,24 +3917,59 @@ RSpec.describe Buddy::GPT::Turn do
       }
     end
 
-    def briefing(rounds, alpine: alpine_facts)
+    def briefing(rounds, alpine: alpine_facts, week: nil)
+      facts = { "alpine" => alpine }
+      facts["weather"] = { "week" => week } if week
       message = convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
         metadata: {
           "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
-          "briefing" => { "alpine" => alpine },
+          "briefing" => facts,
         },
       )
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
-    it "puts the figures on the end when the draft gave only the days" do
+    # A day list with the figures taken out is a complete-looking sentence, so
+    # what it wants is the missing token where the claim already is - not a
+    # second weather paragraph underneath saying the same days over again.
+    it "writes the figures into the sentence that gave only the days" do
       briefing([
         { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
         { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
       ])
 
-      expect(reply.body).to include("In Alpine, Monday rain at 27% and Thursday rain at 100%.")
+      expect(reply.body).to eq("Morning! Rain odds on Monday (27%) and Thursday (100%) up the canyon.")
+    end
+
+    it "records the repair it made in place" do
+      briefing([
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
+      ])
+
+      expect(reply.metadata["repairs"]).to include("alpine_week_odds")
+    end
+
+    it "puts the figures on the end when the draft never raised the days" do
+      briefing([
+        { text: "Morning! Quiet one." },
+        { text: "Morning! Quiet one." },
+      ])
+
+      expect(reply.body).to end_with("In Alpine, Monday rain at 27% and Thursday rain at 100%.")
+    end
+
+    # The home forecast and the canyon's flag the same storm most weeks, and a
+    # canyon figure inside a sentence about home is a wrong fact where a
+    # duplicated one used to be.
+    it "appends rather than writing in when the home week flagged the day too" do
+      said = "Morning! Rain odds on Monday and Thursday this week."
+      briefing([{ text: said }, { text: said }], week: "rain Mon")
+
+      expect(reply.body).to eq(
+        "Morning! Rain odds on Monday and Thursday (100%) this week.\n\nIn Alpine, Monday rain at 27%.",
+      )
     end
 
     it "names only the day whose figure went missing" do

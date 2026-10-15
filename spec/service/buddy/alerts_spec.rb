@@ -57,6 +57,22 @@ RSpec.describe Buddy::Alerts do
       expect(described_class.raise!(user: user, key: "gate", body: "words")).to be_nil
       expect(ByteMessage.count).to eq(0)
     end
+
+    # The board shows this glyph in place of the sentence; the chat keeps the
+    # words. A re-raise can also set or change it.
+    it "carries an optional icon through to the board wire" do
+      alert = described_class.raise!(
+        user: user, key: "whisper-hungry", body: "Whisper Hungry! 😢", icon: "🍖",
+      )
+
+      expect(alert.icon).to eq("🍖")
+      expect(alert.strip_wire["icon"]).to eq("🍖")
+      # The words are untouched — only the board prefers the icon.
+      expect(alert.byte_message.body).to eq("Whisper Hungry! 😢")
+
+      described_class.raise!(user: user, key: "whisper-hungry", body: "Still hungry", icon: "🥩")
+      expect(alert.reload.icon).to eq("🥩")
+    end
   end
 
   describe "the same condition, seen again" do

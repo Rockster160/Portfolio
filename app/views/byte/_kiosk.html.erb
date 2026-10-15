@@ -5,10 +5,9 @@
     on, starred ones first — so there's nothing kiosk-specific to curate. Save
     a routine and it's on the wall; star it to move it to the front. %>
 <section class="byte-kiosk" data-byte-kiosk>
-  <%# What the pet just said, floated over the bottom of its half. Filled and
-      cleared by buddy/kiosk.js; a tap here has no thread to scroll, so this is
-      the only place a receipt can land. %>
-  <div class="byte-kiosk-say" data-kiosk-say aria-live="polite" hidden></div>
+  <%# The pet's speech bubble (`data-kiosk-say`) now lives up in the hero, by
+      its head — see byte/show.html.erb. A tap here has no thread to scroll, so
+      that bubble is still the only place a receipt lands. %>
 
   <%# Board-only: a STANDING alert (the laundry gate is open, the Whisper is
       hungry). Unlike the say bubble above, this doesn't fade — it holds for as

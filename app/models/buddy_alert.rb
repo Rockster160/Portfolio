@@ -99,6 +99,7 @@ class BuddyAlert < ApplicationRecord
       "conversation_id" => byte_conversation_id,
       "message_id"      => byte_message_id,
       "groups"          => groups,
+      "icon"            => icon,
     }
   end
 
@@ -107,6 +108,13 @@ class BuddyAlert < ApplicationRecord
   # it stands in the chat strip only.
   def groups
     Array(metadata["groups"]).map(&:to_s)
+  end
+
+  # An optional glyph the board shows in place of the sentence — a hungry dog's
+  # 🍖, say, read from across the room where a line of text can't be. The chat
+  # strip ignores it and keeps the words; it is the wall that wants the icon.
+  def icon
+    metadata["icon"].to_s.strip.presence
   end
 
   # When it last buzzed. Held in metadata rather than a column of its own: it is

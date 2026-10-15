@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_14_185942) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_15_150953) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -363,6 +363,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_14_185942) do
     t.string "text", limit: 255
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
+  end
+
+  create_table "board_task_buttons", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "task_id", null: false
+    t.text "label", null: false
+    t.text "icon"
+    t.text "color"
+    t.text "tags", default: [], null: false, array: true
+    t.integer "sort_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["task_id"], name: "index_board_task_buttons_on_task_id"
+    t.index ["user_id"], name: "index_board_task_buttons_on_user_id"
   end
 
   create_table "bowler_sets", id: :serial, force: :cascade do |t|
@@ -2059,6 +2073,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_14_185942) do
   add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
   add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "bank_transactions", "bank_transactions", column: "transfer_counterpart_id", on_delete: :nullify
+  add_foreign_key "board_task_buttons", "tasks"
+  add_foreign_key "board_task_buttons", "users"
   add_foreign_key "boxes", "users"
   add_foreign_key "buddy_alerts", "byte_conversations"
   add_foreign_key "buddy_alerts", "byte_messages"

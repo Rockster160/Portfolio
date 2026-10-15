@@ -1152,6 +1152,63 @@ RSpec.describe "Buddy Today forward-looking" do
     it "says nothing about a week the seed never carried" do
       expect(Buddy::TodayBriefing.week_odds_missing("Quiet one.", [])).to be_empty
     end
+
+    # A briefing that raised the day and left the number off used to earn a
+    # second weather paragraph under it. The figure goes where the day is.
+    describe "writing the figure in rather than under" do
+      def written(body, avoid: [])
+        Buddy::TodayBriefing.with_week_odds_written_in(body, missing(body), avoid: avoid)
+      end
+
+      it "puts the figure against the day the briefing already named" do
+        body = "Monday looks rainy up there, but only at the day level."
+        text, unplaced = written(body)
+
+        expect(text).to eq("Monday (27%) looks rainy up there, but only at the day level.")
+        expect(unplaced.pluck(:pop)).to eq(%w[100])
+      end
+
+      it "writes every day it can find and hands back the ones it cannot" do
+        body = "Rain is around Monday and again Thursday."
+        text, unplaced = written(body)
+
+        expect(text).to eq("Rain is around Monday (27%) and again Thursday (100%).")
+        expect(unplaced).to be_empty
+      end
+
+      it "leaves a day the briefing never raised to the appended line" do
+        body = "Rain is around Monday."
+        text, unplaced = written(body)
+
+        expect(text).to eq("Rain is around Monday (27%).")
+        expect(Buddy::TodayBriefing.week_odds_line(unplaced)).to eq("In Alpine, Thursday rain at 100%.")
+      end
+
+      # The home forecast and the canyon one flag the same storm most weeks, and
+      # a canyon figure written into a sentence about home is a wrong fact where
+      # a duplicate used to be.
+      it "holds back a day the home week also flagged" do
+        body = "Rain is around Monday and again Thursday."
+        text, unplaced = written(body, avoid: %w[Mon])
+
+        expect(text).to eq("Rain is around Monday and again Thursday (100%).")
+        expect(unplaced.pluck(:pop)).to eq(%w[27])
+      end
+
+      it "ignores a day named outside any weather sentence" do
+        body = "Monday has the dentist at 9am. Rain is around Thursday."
+        text, unplaced = written(body)
+
+        expect(text).to eq("Monday has the dentist at 9am. Rain is around Thursday (100%).")
+        expect(unplaced.pluck(:pop)).to eq(%w[27])
+      end
+
+      it "leaves a day that already carries a figure of its own alone" do
+        body = "Rain is around Monday at 30% there."
+
+        expect(written(body).first).to eq(body)
+      end
+    end
   end
 
   # Prod 6374, 16 Sep: the seed carried "Rain in Alpine 3-6pm" and "tomorrow

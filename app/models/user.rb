@@ -67,6 +67,7 @@ class User < ApplicationRecord
   # table is dropped.
   has_many :buddy_ideas, dependent: :destroy
   has_many :buddy_routines, dependent: :destroy
+  has_many :board_task_buttons, dependent: :destroy
   has_many :record_links, dependent: :destroy
   has_many :jil_trigger_shapes, dependent: :destroy
   has_many :timer_pages, dependent: :destroy

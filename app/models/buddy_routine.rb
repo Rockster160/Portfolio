@@ -165,11 +165,24 @@ class BuddyRoutine < ApplicationRecord
       id:          id,
       name:        name,
       short_name:  name,
-      icon:        nil,
-      icon_kind:   :empty,
+      icon:        board_icon,
+      icon_kind:   board_icon_kind,
       run_count:   run_count,
       last_run_at: last_run_at&.iso8601,
     }
+  end
+
+  # An optional glyph for the board circle, stored on the routine as
+  # `metadata["icon"]` — an emoji, a Tabler `ti-…` name, or an image URL. The
+  # board's cell reads the same `icon`/`icon_kind` pair a chore does (see
+  # ChoreSerializer#icon_kind); without one it falls back to the first letter of
+  # the name, as it always has.
+  def board_icon
+    metadata.is_a?(Hash) ? metadata["icon"].to_s.strip.presence : nil
+  end
+
+  def board_icon_kind
+    Buddy::BoardIcon.kind_for(board_icon)
   end
 
   # What the editor needs per step, which is more than the summary line: its

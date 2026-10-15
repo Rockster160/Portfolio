@@ -32,7 +32,12 @@ module Buddy
         "ALREADY GIVEN is the opposite of that and is NOT that beat: thanking him for " \
         "his availability, listing the windows he picked back at him, or promising a " \
         "final time later all say he has done his part and the next move is theirs. " \
-        "Those are `note`. Reading the echoed windows as an ask is the specific " \
+        "Those are `note`. But a reply that PICKS one of those windows is not an " \
+        "echo of them - it is the booking, and it is `scheduled` with that time in " \
+        "`follow_up_at`. An echo hands the windows back whole and names no hour to " \
+        "be anywhere; a pick names one and drops the rest, and the next thing that " \
+        "has to happen is him being somewhere at it. " \
+        "Reading the echoed windows as an ask is the specific " \
         "mistake - `availability` is one of the four beats printed at the TOP of his " \
         "board as waiting on him, so wearing it puts a job he has finished back in " \
         "front of him and leaves it there until something else arrives. " \

@@ -636,6 +636,25 @@ BUDDY_EDGE_PROBES = [
     needs:      :halloway_application,
     note:       "he has done his part; the next move is theirs",
   },
+  # --- a time picked out of his own window IS the booking -------------------
+  # Prod 8202/8204, 14 Oct. He had offered "after 1pm or so", she wrote back
+  # choosing 1:15, and it was filed `note` twice under the rule above - a mail
+  # confirming times already given. It only reached `scheduled` after being told
+  # twice, and `scheduled` is the only tag that reaches the calendar, so those
+  # two rounds cost the appointment rather than the label. The second filing
+  # also revised the mail's own words off the board, which is what an
+  # `email_id` on a row that already holds one does.
+  {
+    case:       "prod 8202",
+    say:        "Halloway Systems wrote back - I'd told them any time after 1pm works and " \
+                "she says she can call me at 1:15 tomorrow - log it",
+    tool:       :add_job_note,
+    avoid:      %i[add_agenda_item set_reminder],
+    args:       { add_job_note: { tag: "scheduled", follow_up_at: /./ } },
+    never_args: { add_job_note: { tag: /\A(?:note|availability)\z/ } },
+    needs:      :halloway_application,
+    note:       "she picked one hour out of his window, so it is the booking and not an echo",
+  },
   # --- times HE sent are an answer, not an ask ------------------------------
   # Prod 7776 (Neighbor, 8 Oct) and 7837 (Reserv, 10 Oct), both retagged by
   # hand within the minute. His own reply listing windows he could do was
