@@ -46,6 +46,16 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).not_to include("data-kiosk-pad")
     end
 
+    # The background-process strip ("Reading mail", an application filling in) is
+    # scoped to the account, not the thread - it belongs to the chat. A board is
+    # its own surface and must not carry the account's machinery, so the strip is
+    # left out of the DOM entirely here.
+    it "does not carry the account's background-process strip" do
+      get "/board/#{thread.id}"
+
+      expect(response.body).not_to include("data-buddy-processes")
+    end
+
     it "carries only the thread's own groups, serialized for the first paint" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
       create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
@@ -119,11 +129,13 @@ RSpec.describe "Byte chore board", type: :request do
 
     # A board has no header and no composer, so without this there is no way
     # off it but the browser's own back button - and an installed board has no
-    # browser chrome at all.
-    it "offers a way back to the chat" do
+    # browser chrome at all. Boards are their own kind of thread now, so the way
+    # out leads to the board index rather than the chat.
+    it "offers a way back to the board index" do
       get "/board/#{thread.id}"
 
-      expect(response.body).to include("Back to the chat")
+      expect(response.body).to include("All boards")
+      expect(response.body).to include("href=\"#{byte_board_path}\"")
     end
 
     it "redirects to the board index when the id isn't a board of the viewer's" do
@@ -540,6 +552,24 @@ RSpec.describe "Byte chore board", type: :request do
       expect(manifest["name"]).to eq("Desk")
       expect(manifest["start_url"]).to eq("/board/#{thread.id}?source=pwa")
       expect(manifest["icons"].first["src"]).to eq("/bloom_favicon/web-app-manifest-192x192.png")
+    end
+  end
+
+  # The gallery of boards. Each card can be renamed in place and keeps its pet
+  # on the board's current mood; both are wired client-side, so the page only
+  # has to carry the hooks they read.
+  describe "GET /board (index)" do
+    it "offers each board a rename control and the data its face-swap reads" do
+      thread.update!(name: "Desk", buddy_theme: "bloom")
+
+      get byte_board_path
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("data-board-index")
+      expect(response.body).to include("data-buddy-themes")
+      expect(response.body).to include("data-rename-url=\"#{byte_conversation_path(thread)}\"")
+      expect(response.body).to include("data-board-rename")
+      expect(response.body).to include("data-conversation-id=\"#{thread.id}\"")
     end
   end
 end

@@ -268,7 +268,13 @@
     <%# What Byte is doing in the background - the mirror of the timers, pinned %>
     <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>
     <%# through /api/v1/background_processes; rendered by buddy/processes.js. %>
-    <div class="byte-buddy-processes" data-buddy-processes hidden></div>
+    <%# Scoped to the person, not the thread, so it belongs to the chat: a board %>
+    <%# is its own surface and must not show the account's machinery (reading %>
+    <%# mail, filling applications) that has nothing to do with it. Left out of %>
+    <%# the DOM on a board, so processes.js never mounts there. %>
+    <% unless @board %>
+      <div class="byte-buddy-processes" data-buddy-processes hidden></div>
+    <% end %>
     <%# What the pet just said, as a speech bubble by its head — the wall's only
         rendering of a reply, and the chore-board cheers. Lives in the hero (not
         down in the pad) so it reads as coming FROM the character, with a tail

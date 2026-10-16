@@ -29,7 +29,13 @@
           aria-label="Choose which chores this screen looks after"
           title="Choose which chores this screen looks after"><%= Array(@board_tags).join(", ").presence || "Pick groups" %></button>
   <div class="byte-board-tag-picker" data-board-tag-picker hidden>
-    <span class="byte-board-tag-label">This screen looks after</span>
+    <%# Tapping a group saves it immediately and leaves the picker open so
+        several can be set in a row, so there is nothing to cancel - only a
+        way to put the panel away and get back to the board. %>
+    <div class="byte-board-tag-head">
+      <span class="byte-board-tag-label">This screen looks after</span>
+      <button type="button" class="byte-board-tag-done" data-board-tag-done>Done</button>
+    </div>
     <%# Rebuilt by chore_board.js on every open, so nothing that has to survive
         goes inside it. %>
     <div class="byte-board-tag-list" data-board-tag-list></div>
@@ -97,10 +103,11 @@
     </div>
 
     <%# The way back. A board has no header and no composer - that is the point
-        on a wall - but it is reached from the conversation drawer on a phone
-        too, and a screen you can walk into with no way out is a screen people
-        close the tab on. Hung off the one control that is already here rather
-        than adding a second piece of chrome over the circles. %>
-    <a class="byte-board-leave" href="<%= byte_root_path %>">← Back to the chat</a>
+        on a wall - and a screen you can walk into with no way out is a screen
+        people close the tab on. Boards are their own kind of thread now, not
+        chats, so this leads to the board index rather than the chat. Hung off
+        the one control that is already here rather than adding a second piece
+        of chrome over the circles. %>
+    <a class="byte-board-leave" href="<%= byte_board_path %>">← All boards</a>
   </div>
 </section>

@@ -180,6 +180,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   const emptyEl = root.querySelector("[data-board-empty]");
   const tagToggleEl = root.querySelector("[data-board-tag-toggle]");
   const tagPickerEl = root.querySelector("[data-board-tag-picker]");
+  const tagDoneEl = root.querySelector("[data-board-tag-done]");
   const tagListEl = root.querySelector("[data-board-tag-list]");
 
   // The credit-button manager, inside the group picker.
@@ -1358,6 +1359,16 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
         resetButtonForm();
         paintButtons();
       }
+    });
+  }
+
+  // The only way to put the picker away other than the toggle itself - a panel
+  // on a wall you can't see the edge of needs a plain "done", not a re-tap of a
+  // control half off the screen.
+  if (tagDoneEl && tagPickerEl) {
+    tagDoneEl.addEventListener("click", () => {
+      tagPickerEl.hidden = true;
+      if (tagToggleEl) tagToggleEl.setAttribute("aria-expanded", "false");
     });
   }
 

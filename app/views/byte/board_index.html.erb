@@ -21,23 +21,47 @@
       No boards yet. Make one, then pick the groups it watches on the board itself.
     </p>
   <% else %>
-    <div class="byte-board-index-grid">
+    <%# data-buddy-themes is the pet→faces table the live-mood script reads to
+        swap a card's face when its board's expression changes; see
+        ByteHelper#buddy_themes_json and pages/byte/board_index.js. %>
+    <div class="byte-board-index-grid" data-board-index
+         data-buddy-themes="<%= buddy_themes_json %>">
       <% @boards.each do |b| %>
-        <%= link_to byte_board_thread_path(b), class: "byte-board-card" do %>
-          <div class="byte-board-card-pet"
-               style="background-image: url('<%= buddy_face_url(b.buddy_theme, b.buddy_expression) %>')"
-               aria-hidden="true"></div>
-          <div class="byte-board-card-name"><%= b.display_name %></div>
-          <div class="byte-board-card-groups">
-            <% if b.chore_tags.any? %>
-              <% b.chore_tags.each do |group| %>
-                <span class="byte-board-card-group"><%= group %></span>
+        <div class="byte-board-card-wrap" data-board-card
+             data-conversation-id="<%= b.id %>"
+             data-buddy-theme="<%= b.buddy_theme %>"
+             data-rename-url="<%= byte_conversation_path(b) %>">
+          <%= link_to byte_board_thread_path(b), class: "byte-board-card" do %>
+            <div class="byte-board-card-pet" data-board-card-pet
+                 style="background-image: url('<%= buddy_face_url(b.buddy_theme, b.buddy_expression) %>')"
+                 aria-hidden="true"></div>
+            <div class="byte-board-card-name" data-board-card-name><%= b.display_name %></div>
+            <div class="byte-board-card-groups">
+              <% if b.chore_tags.any? %>
+                <% b.chore_tags.each do |group| %>
+                  <span class="byte-board-card-group"><%= group %></span>
+                <% end %>
+              <% else %>
+                <span class="byte-board-card-group is-empty">No groups yet</span>
               <% end %>
-            <% else %>
-              <span class="byte-board-card-group is-empty">No groups yet</span>
-            <% end %>
-          </div>
-        <% end %>
+            </div>
+          <% end %>
+          <%# Rename sits OUTSIDE the link so a tap on it doesn't open the board.
+              The field is revealed in place; saving PATCHes the conversation. %>
+          <button type="button" class="byte-board-card-rename" data-board-rename
+                  title="Rename" aria-label="Rename <%= b.display_name %>">✎</button>
+          <form class="byte-board-card-rename-form" data-board-rename-form hidden>
+            <input type="text" class="byte-board-card-rename-input" data-board-rename-input
+                   value="<%= b.display_name %>" maxlength="60" autocomplete="off"
+                   autocorrect="off" autocapitalize="words" spellcheck="false"
+                   aria-label="Board name">
+            <div class="byte-board-card-rename-actions">
+              <button type="button" class="byte-board-card-rename-cancel"
+                      data-board-rename-cancel>Cancel</button>
+              <button type="submit" class="byte-board-card-rename-save">Save</button>
+            </div>
+          </form>
+        </div>
       <% end %>
     </div>
   <% end %>
