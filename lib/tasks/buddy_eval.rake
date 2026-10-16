@@ -655,6 +655,23 @@ BUDDY_EDGE_PROBES = [
     needs:      :halloway_application,
     note:       "she picked one hour out of his window, so it is the booking and not an echo",
   },
+  # --- the hour of a chore nudge is HIS, not the example's -------------------
+  # Prod 8071/8074, 13 Oct. "When Shower is due, if it isn't done, say Time to
+  # shower" was set with the offset this tool's own arithmetic uses to show how
+  # an offset works, so it landed at 11am every due day - hours before he ever
+  # showers. The completion check beside it can't save a nudge sent too early:
+  # at that hour nothing has been done yet, so `missing` is true every time.
+  {
+    case:       "prod 8071",
+    say:        "Whenever the Shower chore comes due, if I haven't done it yet, send me a " \
+                "message saying Time to shower",
+    tool:       :schedule_reminder,
+    avoid:      %i[set_reminder remind_when],
+    args:       { schedule_reminder: { anchor: %r{\Achore:[a-z_]*shower} } },
+    never_args: { schedule_reminder: { anchor: %r{\+7h\z} } },
+    needs:      :shower_chore,
+    note:       "the offset is an hour late enough that not having done it is news, asked for or inferred - never carried over from the syntax example",
+  },
   # --- times HE sent are an answer, not an ask ------------------------------
   # Prod 7776 (Neighbor, 8 Oct) and 7837 (Reserv, 10 Oct), both retagged by
   # hand within the minute. His own reply listing windows he could do was

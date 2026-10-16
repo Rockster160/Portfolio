@@ -119,6 +119,7 @@ module BuddyEvalNeeds
   TABLE = {
     recycling_chore:      { label: "a recycling chore",            check: ->(u) { chore(u, /recycl/i) } },
     water_chore:          { label: "a water chore",                check: ->(u) { chore(u, /water/i) } },
+    shower_chore:         { label: "a shower chore",               check: ->(u) { chore(u, /shower/i) } },
     dish_chores:          { label: "the load + unload dish chores", check: ->(u) { chore(u, /unload dishwasher/i) && chore(u, /load dishes/i) } },
     water_completion:     { label: "a water completion today",     check: ->(u) { completion(u, /water/i) } },
     recycling_completion: { label: "a recycling completion today", check: ->(u) { completion(u, /recycl/i) } },

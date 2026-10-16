@@ -35,6 +35,9 @@
     // for yesterday's date. Reconcile from the URL BEFORE the first
     // render so the first paint matches what the user asked for.
     syncDateFromURL(root);
+    // After the URL has had its say: an unpinned shell may still be baked for
+    // a day that has since gone by.
+    reconcileToday(root);
     // Toggle-tabs are static links on the server (day_path, week_path,
     // cal_month_path) with no date param. Rewriting them here means a
     // click on any tab carries the currently-selected date across to
@@ -50,6 +53,7 @@
     window.AgendaSync.boot().then(() => render(root));
     render(root);
     installNavInterception(root);
+    installDateWatch(root);
     window.addEventListener("popstate", () => {
       const params = new URLSearchParams(window.location.search);
       const dateISO = params.get("date") || todayISO();
@@ -194,10 +198,8 @@
     if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, -stride)}`);
     if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, +stride)}`);
 
-    // Jump-to-today row: visible unless dateISO === today
     const today = todayISO();
-    const jumpRow = root.querySelector(".agenda-jump-row");
-    if (jumpRow) jumpRow.classList.toggle("hidden", dateISO === today);
+    updateJumpRow(root, dateISO, today);
 
     // Sections: section-today is offset 0, section-tomorrow is offset 1
     // for day view; week view uses offsets 0..7. Stamp data-date on each
@@ -226,6 +228,51 @@
     });
 
     render(root);
+  }
+
+  // Whether the way back is offered, decided by comparing what the page is
+  // SHOWING against what the date actually is. Both halves move underneath a
+  // shell that is already on screen — the service worker serves one baked for
+  // another day, and the day itself turns over while the app sits in the
+  // background — so the question is asked again on every resume rather than
+  // only when something here was clicked.
+  function updateJumpRow(root, dateISO, today) {
+    const jumpRow = root.querySelector(".agenda-jump-row");
+    if (jumpRow) jumpRow.classList.toggle("hidden", dateISO === today);
+  }
+
+  // A view carrying no `?date=` is the UNPINNED one, and it means "today" —
+  // whatever today is by the time somebody looks at it. So a stale shell or a
+  // rollover is not a missing button, it is the wrong DAY on screen, and
+  // walking it forward is the fix; revealing the button would leave the stale
+  // day there behind it. A pinned date stays where it was put and only has
+  // the button reconciled.
+  function reconcileToday(root) {
+    const today = todayISO();
+    const pinned = new URLSearchParams(window.location.search).has("date");
+
+    if (!pinned && root.dataset.currentDate !== today) {
+      renderForDate(root, today);
+    } else if (root.dataset.today !== today) {
+      // Pinned, but midnight has passed under it: the stamp every label and
+      // the carry-over cover read from is a day behind.
+      renderForDate(root, root.dataset.currentDate);
+    } else {
+      updateJumpRow(root, root.dataset.currentDate, today);
+    }
+  }
+
+  // Coming back to the app is when the answer is most likely to have gone
+  // stale, and it arrives as any of three events depending on how it was
+  // left: a tab switch, a home-screen resume, or a back/forward cache
+  // restore. All three are idempotent, so overlapping ones cost nothing.
+  function installDateWatch(root) {
+    const check = () => reconcileToday(root);
+    window.addEventListener("focus", check);
+    window.addEventListener("pageshow", check);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") check();
+    });
   }
 
   // Prefer the shared 3am-aware helper (defined in agenda.js) so a

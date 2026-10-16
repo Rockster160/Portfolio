@@ -115,9 +115,21 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).not_to include("Following up")
     end
 
-    it "drops an interview that has already happened off both strips" do
+    it "holds an interview that has happened until something is written about it" do
       job = user.job_applications.create!(company: "Acme")
       job.notes.create!(tag: :scheduled, occurred_at: 10.days.ago, follow_up_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(response.body).to include("Interviews booked")
+      expect(response.body).to include("how did it go?")
+      expect(response.body).not_to include("Following up")
+    end
+
+    it "lets it go once a beat lands after it" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :scheduled, occurred_at: 10.days.ago, follow_up_at: 2.days.ago)
+      job.notes.create!(tag: :note, body: "Went well", occurred_at: 1.day.ago)
 
       get interviews_path
 

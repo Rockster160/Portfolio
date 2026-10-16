@@ -212,6 +212,15 @@ Buddy::Tools.register(
     is 10pm, `chore:pills+8h` is noon. An offset is therefore almost always
     wanted; bare `chore:shower` is 4am and is nearly never what they meant.
 
+    THE HOUR IS THEIRS AND IT IS A JUDGEMENT, not a default to be carried over
+    from the arithmetic above. The offset has to land late enough that not
+    having done it yet is news - that is the only hour at which the nudge says
+    anything. Take it from when they actually do the thing when you know, and
+    ASK when you don't. An hour chosen for them arrives every due day at a time
+    that has nothing to do with them, and no check beside it can rescue that:
+    early enough and the honest answer is always "not yet", so it fires every
+    time and means nothing by the third.
+
     Without brackets the expression is a STANDING rule about a class of them -
     the next interview, then the one after that - and it keeps going until
     cancelled. With `[<item id>]` it is one nudge about one thing, which is what
@@ -235,11 +244,11 @@ Buddy::Tools.register(
     or not it has been touched yet, so `agenda:shower-15m` works on every
     occurrence of it rather than only the ones that already exist.
 
-    An anchor says WHEN and never whether the thing is done. For "tell me when
-    the shower is due unless I've already had one", the time is
-    `anchor: "chore:shower+7h"` and the state is a check beside it:
-    `check: "chore_completions"`, `check_query: 'name:"Shower" is:today'`,
-    `check_expect: "missing"`.
+    An anchor says WHEN and never whether the thing is done. "...unless I've
+    already done it" is a second half of the ask and it rides beside the
+    anchor, not inside it: name the records to look in, the search that decides
+    it, and whether a match should be there or absent. Build the search out of
+    what THEY called the thing.
 
     Look for the thing being DONE and expect it absent, never the other way
     round. A search can only ever see rows that exist, so "is there an

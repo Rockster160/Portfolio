@@ -62,6 +62,12 @@
                   <% if note.spoke_to.present? %>
                     <span class="field-hint">with <%= note.spoke_to %></span>
                   <% end %>
+                  <%# Why one in the past is still here: it is held until the
+                     timeline says something about it, so the line has to ask
+                     for that rather than read as a date that slipped. %>
+                  <% if note.follow_up_at.past? %>
+                    <span class="field-hint">how did it go?</span>
+                  <% end %>
                 </li>
               <% end %>
             </ul>

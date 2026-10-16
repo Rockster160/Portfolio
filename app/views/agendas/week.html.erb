@@ -25,7 +25,7 @@
 
   <%# Placed BELOW the nav so the prev/next/date-label row holds a fixed
       position. See the matching note in day.html.erb. %>
-  <div class="agenda-jump-row <%= "hidden" if @date == Date.current %>">
+  <div class="agenda-jump-row <%= "hidden" if @date == current_user.perceived_today %>">
     <a class="agenda-jump-today" href="<%= week_path %>">Jump to Today</a>
   </div>
 

@@ -273,6 +273,28 @@ class JobApplication < ApplicationRecord
     booked.map(&:follow_up_at).select(&:future?).min
   end
 
+  # The interview that has already HAPPENED with nothing recorded since.
+  #
+  # `next_interview_at` empties the instant a slot passes, which drops the job
+  # out of the booked strip and back into plain recency on the very day the page
+  # is being opened to write down how it went. This holds it there until a beat
+  # is filed after it - a note typed by hand, or the mail that arrived because
+  # of it. Either way something is now on the timeline about it.
+  #
+  # A scheduled note's own `occurred_at` is when it was FILED, which is before
+  # the slot it names, so it can never answer for itself.
+  def unreported_interview_at
+    held = notes.filter_map { |note|
+      note.follow_up_at if note.scheduled? && note.follow_up_at&.past?
+    }
+    return nil if held.empty?
+
+    last = held.max
+    return nil if notes.any? { |note| note.occurred_at.present? && note.occurred_at > last }
+
+    last
+  end
+
   protected
 
   # The notes move by `update_all` so nothing re-fires - a note's callbacks are

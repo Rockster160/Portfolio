@@ -220,7 +220,17 @@ class JobApplicationsController < ApplicationController
     return jobs if @query.present?
 
     booked, rest = jobs.partition { |job| job.next_interview_at.present? }
-    booked.sort_by(&:next_interview_at) + rest
+    # One that has been and gone with nothing written about it stays in this
+    # block rather than dropping into recency - see
+    # JobApplication#unreported_interview_at. Below the ones still ahead,
+    # because a slot you have to turn up to outranks one you only have to write
+    # up, and newest first within that, since that is the one still fresh
+    # enough to write.
+    unwritten, rest = rest.partition { |job| job.unreported_interview_at.present? }
+
+    booked.sort_by(&:next_interview_at) +
+      unwritten.sort_by(&:unreported_interview_at).reverse +
+      rest
   end
 
   # Two different obligations, and running them together is what made this
@@ -228,8 +238,11 @@ class JobApplicationsController < ApplicationController
   # message you owe. They read differently and they're kept apart, so a booked
   # interview never has to compete for a slot in a list of chases.
   #
-  # An interview that has already happened leaves both strips — it's history,
-  # and the timeline on the job is where history goes.
+  # An interview that has already happened leaves the CHASE strip — it's
+  # history, and the timeline on the job is where history goes. It stays in the
+  # booked one until something is written about it, which is the only thing
+  # that makes it history; until then it is the thing most owed, and the strip
+  # is already sorted soonest-first, so it sits at the top of its own accord.
   #
   # THREE strips now, and the new one is not a third flavour of the same thing.
   # Both of the originals read `follow_up_at`, so between them they could only
@@ -242,9 +255,11 @@ class JobApplicationsController < ApplicationController
   # The chase list SUBTRACTS it. A dated availability note is one obligation, and
   # printing it in both strips reads as two.
   def load_upcoming
-    notes = JobNote.follow_ups_for(current_user).includes(:job_application).to_a
+    notes = JobNote.follow_ups_for(current_user).includes(job_application: :notes).to_a
     booked, chases = notes.partition(&:scheduled?)
-    @interviews = booked.select { |note| note.follow_up_at.future? }
+    @interviews = booked.select { |note|
+      note.follow_up_at.future? || note.follow_up_at == note.job_application.unreported_interview_at
+    }
     @waiting = JobNote.waiting_on_you_for(current_user).includes(:job_application).to_a
     @follow_ups = (chases - @waiting).first(5)
   end

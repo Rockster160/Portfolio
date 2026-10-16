@@ -221,6 +221,44 @@ RSpec.describe JobApplication do
 
   # The few applications where something is genuinely happening, picked out of a
   # board that is mostly rows nobody ever answered.
+  describe "an interview that has been and gone" do
+    let(:job) { user.job_applications.create!(company: "Reserv") }
+
+    it "is held once the slot has passed and nothing has been said" do
+      job.notes.create!(tag: :scheduled, occurred_at: 3.days.ago, follow_up_at: 1.day.ago)
+
+      expect(job.reload.next_interview_at).to be_nil
+      expect(job.unreported_interview_at).to be_within(1.second).of(1.day.ago)
+    end
+
+    it "lets go once any beat lands after it" do
+      job.notes.create!(tag: :scheduled, occurred_at: 3.days.ago, follow_up_at: 2.days.ago)
+      job.notes.create!(tag: :note, body: "Went well", occurred_at: 1.day.ago)
+
+      expect(job.reload.unreported_interview_at).to be_nil
+    end
+
+    it "does not count the scheduling note itself as having said something" do
+      job.notes.create!(tag: :scheduled, occurred_at: 1.hour.ago, follow_up_at: 1.minute.ago)
+
+      expect(job.reload.unreported_interview_at).to be_present
+    end
+
+    it "holds nothing while the slot is still ahead" do
+      job.notes.create!(tag: :scheduled, occurred_at: 1.day.ago, follow_up_at: 2.days.from_now)
+
+      expect(job.reload.unreported_interview_at).to be_nil
+    end
+
+    it "asks about the LAST one when two have passed" do
+      job.notes.create!(tag: :scheduled, occurred_at: 9.days.ago, follow_up_at: 8.days.ago)
+      job.notes.create!(tag: :note, body: "Round one done", occurred_at: 7.days.ago)
+      job.notes.create!(tag: :scheduled, occurred_at: 6.days.ago, follow_up_at: 2.days.ago)
+
+      expect(job.reload.unreported_interview_at).to be_within(1.second).of(2.days.ago)
+    end
+  end
+
   describe "where you stand" do
     let(:job) { user.job_applications.create!(company: "Reserv") }
 

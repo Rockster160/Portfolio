@@ -32,7 +32,7 @@
       DOM. Without this, navigating away from today after a fresh page
       load (which started on today) leaves the affordance gone for the
       rest of the session. %>
-  <div class="agenda-jump-row <%= "hidden" if @date == Date.current %>">
+  <div class="agenda-jump-row <%= "hidden" if @date == current_user.perceived_today %>">
     <a class="agenda-jump-today" href="<%= day_path %>">Jump to Today</a>
   </div>
 
