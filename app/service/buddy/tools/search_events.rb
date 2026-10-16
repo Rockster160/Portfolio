@@ -20,6 +20,13 @@ Buddy::Tools.register(
     `days` bounds how far back (default 14) - raise it, or put a `timestamp`
     bound in the query, for anything older.
 
+    A HOW MUCH question - caffeine today, calories this week, miles this month
+    - is `sums`: every number logged on the matches, added up across all of
+    them, not just the rows shown. Search the span (`timestamp:today`) and
+    read the key they asked about; only events that logged it count toward
+    it, so there's nothing to filter out first. Never add the rows up
+    yourself.
+
     Matches come back to you with their ids, in this same turn, so act on them
     right away rather than saying you'll go looking: `delete_event` with that id
     to remove one, `edit_event` to change it. If several could match, ask which.
@@ -47,6 +54,9 @@ Buddy::Tools.register(
       # `total` vs what's shown matters for a counting question ("how many
       # coffees last month") — fifteen rows is the display cap, not the answer.
       total:    found[:total],
+      # Across every match, not the rows above: "how much caffeine today" is
+      # `sums["Caffeine"]` on a search of today.
+      sums:     found[:sums].presence,
       how:      (
         if rows.any?
           "Most recent first#{" - #{rows.length} of #{found[:total]} shown" if found[:total] > rows.length}. " \

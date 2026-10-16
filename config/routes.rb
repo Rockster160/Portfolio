@@ -70,6 +70,8 @@ Rails.application.routes.draw do
   get  "/byte/board", to: redirect(subdomain: "byte", path: "/board")
   patch "/byte/board/tag" => "byte#set_board_tag", as: :byte_board_tag
   post  "/byte/board/shared" => "byte#set_board_shared", as: :byte_board_shared
+  post  "/byte/board/chore_dreams" => "byte#set_board_chore_dreams", as: :byte_board_chore_dreams
+  post  "/byte/board/hidden" => "byte#set_board_hidden", as: :byte_board_hidden
   post  "/byte/board/members" => "byte#set_board_members", as: :byte_board_members
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
   get   "/byte/version" => "byte#version", as: :byte_version

@@ -293,6 +293,10 @@ class JobNote < ApplicationRecord
     where(follow_up_at: ..at.in_time_zone(zone).end_of_day)
   }
 
+  # Declared ABOVE `sync_follow_up` because after_commit callbacks run in
+  # reverse order here (load_defaults 7.0): the venue goes on the row that
+  # `sync_follow_up` has just written.
+  after_commit :place_interview_venue, on: [:create, :update]
   after_commit :sync_follow_up, on: [:create, :update]
   after_commit :retire_follow_up, on: :destroy
   after_commit :sync_waiting_alert
@@ -492,6 +496,12 @@ class JobNote < ApplicationRecord
 
     item.update(follow_up_attrs)
     item.agenda.broadcast!
+  end
+
+  # Any note can be the one carrying the office address, so every landing
+  # re-reads the application's onsite bookings. See InterviewVenue.
+  def place_interview_venue
+    ::InterviewVenue.place!(job_application)
   end
 
   def write_follow_up_item

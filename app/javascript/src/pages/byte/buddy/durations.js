@@ -8,12 +8,12 @@
 // A faithful port of the ring half of pages/whisper.js — same geometry (r=45 in
 // a 100 viewBox), same readout (whole minutes, then :Ns in the final minute,
 // negative when overdue), same per-key states (overdue pulse, quiet greys the
-// others, kennel maroon). Two deliberate differences:
-//   * NO per-overdue auto-alarm. Whisper nagged when a ring ran out; the board
-//     only makes a sound when a Jil task explicitly broadcasts { sound } (which
-//     we hand to playBoardSound). The rings are a readout, not an alarm.
-//   * The row hides itself when there are no timers (sleeping / gone broadcasts
-//     an empty list), so an idle board shows the pet alone.
+// others, kennel maroon), and the same sounds: a ring that runs out plays its
+// key's tune (the nap ring, the nap sound) and again every five minutes while
+// it stays overdue, held during quiet mode; and a Jil task broadcasting
+// { sound } plays that one. One deliberate difference: the row hides itself
+// when there are no timers (sleeping / gone broadcasts an empty list), so an
+// idle board shows the pet alone.
 //
 // This is entirely separate from buddy/timers.js (the countdown-timer banner) —
 // different data, different element, neither touches the other.
@@ -47,6 +47,8 @@ export function initBoardDurations({ container, app, onStatus }) {
   const boardOwner = boardOwnerId(app);
   let timers = [];
   let wasQuietActive = false;
+  // The repeating sound for each overdue ring, by key.
+  const ringAlarms = {};
   // Whether the feed's most recent groups overlap what this board watches AND it
   // belongs to this board's owner. The sound-only broadcasts carry no groups, so
   // they ride this last-known verdict from the duration broadcasts (229), which
@@ -163,6 +165,26 @@ export function initBoardDurations({ container, app, onStatus }) {
     return remaining;
   }
 
+  // The Whisper page's ring alarms: a ring running out plays its key's sound,
+  // then again every five minutes until it's reset. Quiet mode holds them all;
+  // the quiet, out and kennel rings count time rather than ask for anything.
+  function soundOverdue(overdueKeys, quietActive) {
+    overdueKeys.forEach((key) => {
+      if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
+      if (ringAlarms[key]) return;
+
+      playBoardSound(key);
+      ringAlarms[key] = setInterval(() => playBoardSound(key), Time.minutes(5));
+    });
+
+    Object.keys(ringAlarms).forEach((key) => {
+      if (overdueKeys.has(key) && !quietActive) return;
+
+      clearInterval(ringAlarms[key]);
+      delete ringAlarms[key];
+    });
+  }
+
   function isQuietModeActive() {
     const quietTimer = timers.find((t) => t.key === "quiet");
     if (!quietTimer) return false;
@@ -172,7 +194,12 @@ export function initBoardDurations({ container, app, onStatus }) {
 
   function updateAllDurations() {
     const quietActive = isQuietModeActive();
-    timers.forEach((timerData) => updateDurationRing(timerData));
+    const overdueKeys = new Set();
+    timers.forEach((timerData) => {
+      const remaining = updateDurationRing(timerData);
+      if (remaining !== undefined && remaining <= 0) overdueKeys.add(timerData.key);
+    });
+    soundOverdue(overdueKeys, quietActive);
     // Quiet mode greys everything but the quiet (and kennel) rings — the house
     // is meant to be still, so the other countdowns recede.
     container.querySelectorAll(".duration-ring").forEach((ring) => {

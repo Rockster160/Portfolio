@@ -128,6 +128,7 @@ RSpec.describe Jil::Methods::Interview do
           k1 = Keyval.new("id", itemId)::Keyval
         })::Hash
         sched = Global.trigger_for(evt, "interview-prep", -60, "minutes", "interview-prep", data)::Schedule
+        join = Global.trigger_for(evt, "interview-join", -2, "minutes", "interview-join", data)::Schedule
       JIL
     }
 
@@ -139,9 +140,18 @@ RSpec.describe Jil::Methods::Interview do
       JIL
     }
 
-    it "validates both" do
+    let(:join_code) {
+      <<~JIL
+        *input = Global.input_data()::Hash
+        itemId = input.get("id")::Numeric
+        out = Interview.headsUp(itemId)::Hash
+      JIL
+    }
+
+    it "validates all three" do
       expect { Jil::Validator.validate!(schedule_code) }.not_to raise_error
       expect { Jil::Validator.validate!(prep_code) }.not_to raise_error
+      expect { Jil::Validator.validate!(join_code) }.not_to raise_error
     end
 
     # An hour before, and it has to FOLLOW the event: an interview moved by an
@@ -194,7 +204,62 @@ RSpec.describe Jil::Methods::Interview do
 
       Jil::Executor.call(owner, schedule_code, { id: item.id })
 
-      expect(owner.scheduled_triggers.where(source_item_id: item.id)).to be_empty
+      expect(owner.scheduled_triggers.where(source_item_id: item.id, name: "interview-prep")).to be_empty
+    end
+
+    # The brief's hour being gone says nothing about the two minutes: an
+    # interview booked at short notice still wants its link.
+    it "hangs a -2 minute heads-up off the same event, even inside the hour" do
+      agenda = FactoryBot.create(:agenda, user: owner)
+      item = FactoryBot.create(
+        :agenda_item,
+        agenda: agenda, kind: :event, name: "Interview: Bluestaq",
+        start_at: 20.minutes.from_now, end_at: 50.minutes.from_now
+      )
+
+      Jil::Executor.call(owner, schedule_code, { id: item.id })
+      trigger = owner.scheduled_triggers.find_by(source_item_id: item.id, name: "interview-join")
+
+      expect(trigger.trigger).to eq("interview-join")
+      expect(trigger.execute_at).to be_within(1.second).of(item.start_at - 2.minutes)
+      expect(trigger.data["id"]).to eq(item.id)
+
+      expect(ByteInterviewPrep::HeadsUp).to receive(:dispatch).with(owner, item.id).and_return(:link)
+      ctx = Jil::Executor.call(owner, join_code, { timestamp: trigger.execute_at }.merge(trigger.data))
+      expect(value(ctx, :out)).to eq({ "sent" => true, "state" => "link" })
+    end
+  end
+
+  describe "#headsUp" do
+    let(:code) {
+      <<~JIL
+        out = Interview.headsUp(123)::Hash
+        sent = out.get("sent")::Boolean
+        state = out.get("state")::String
+      JIL
+    }
+
+    it "reports the link or phone branch as sent" do
+      expect(ByteInterviewPrep::HeadsUp).to receive(:dispatch).with(owner, 123).and_return(:phone)
+
+      ctx = run(owner, code)
+      expect(value(ctx, :sent)).to be(true)
+      expect(value(ctx, :state)).to eq("phone")
+    end
+
+    it "says nothing was sent for an onsite" do
+      allow(ByteInterviewPrep::HeadsUp).to receive(:dispatch).and_return(:in_person)
+
+      ctx = run(owner, code)
+      expect(value(ctx, :sent)).to be(false)
+      expect(value(ctx, :state)).to eq("in_person")
+    end
+
+    it "refuses another person pressing Run on a shared task" do
+      expect(ByteInterviewPrep::HeadsUp).not_to receive(:dispatch)
+
+      ctx = run(owner, code, auth: :run, auth_id: other.id)
+      expect(value(ctx, :sent)).to be(false)
     end
   end
 end

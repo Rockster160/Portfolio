@@ -100,9 +100,16 @@ async function apiCall(url, method, body) {
     options.body = JSON.stringify(body);
   }
   const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`http_${res.status}`);
-  if (res.status === 204) return null;
-  return res.json();
+  if (!res.ok) {
+    const err = new Error(`http_${res.status}`);
+    // The server's reason, where it gave one, for the field that sent it.
+    err.body = await res.json().catch(() => null);
+    throw err;
+  }
+  // A bare `head :ok` (a task press) is a success with nothing to read; parsing
+  // it would throw and file the press as failed, to be run again later.
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // Which of the four states a cell is in, most settled first. Order matters:
@@ -181,20 +188,25 @@ const SCALE_MIN = 70;
 const SCALE_MAX = 150;
 const SCALE_STEP = 10;
 
-export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsChanged, onItems } = {}) {
+export function initChoreBoard({
+  root, app, conversationIdFn, sayText, onTagsChanged, onItems, onChoreDreamsChanged,
+} = {}) {
   if (!root || !app) return null;
 
   const padEl = root.querySelector("[data-board-pad]");
   const emptyEl = root.querySelector("[data-board-empty]");
   const tagToggleEl = root.querySelector("[data-board-tag-toggle]");
   const tagPickerEl = root.querySelector("[data-board-tag-picker]");
-  const tagDoneEl = root.querySelector("[data-board-tag-done]");
   const tagListEl = root.querySelector("[data-board-tag-list]");
 
   // The credit-button manager, inside the group picker.
   const bbSectionEl = root.querySelector("[data-board-buttons-section]");
   const bbListEl = root.querySelector("[data-board-buttons-list]");
   const bbFormEl = root.querySelector("[data-board-button-form]");
+  const bbDialogEl = root.querySelector("[data-bb-dialog]");
+  const bbTitleEl = root.querySelector("[data-bb-title]");
+  const bbNewEl = root.querySelector("[data-bb-new]");
+  const bbCancelEl = root.querySelector("[data-bb-cancel]");
   const bbLabelEl = root.querySelector("[data-bb-label]");
   // The groups a new/edited button belongs to, comma-separated.
   const bbTagsEl = root.querySelector("[data-bb-tags]");
@@ -897,6 +909,28 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     });
   }
 
+  // The panel's border says where things stand: a brief flash when a save
+  // lands, and orange while something typed is waiting on its save button (a
+  // lit button is an unsaved change) or a credit button is half filled in.
+  let savedTimer = 0;
+  function flashSaved() {
+    if (!tagPickerEl) return;
+    tagPickerEl.dataset.saved = "true";
+    clearTimeout(savedTimer);
+    savedTimer = window.setTimeout(() => { tagPickerEl.dataset.saved = "false"; }, 1200);
+  }
+
+  // The credit-button dialog carries its own: orange once anything in it is
+  // changed, until it's saved or put away.
+  let bbDirty = false;
+  function paintDirty() {
+    if (bbDialogEl) bbDialogEl.dataset.dirty = String(bbDirty);
+    if (!tagPickerEl) return;
+    const unsaved = [...tagPickerEl.querySelectorAll("[data-board-rename-save], [data-board-hidden-save]")]
+      .some((btn) => !btn.disabled);
+    tagPickerEl.dataset.dirty = String(unsaved);
+  }
+
   // ---- which group ----
 
   async function paintTagPicker() {
@@ -947,6 +981,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
         tags: next,
       });
       applyTags(Array.isArray(data?.chore_tags) ? data.chore_tags : [], { broadcast: true });
+      flashSaved();
     } catch (e) {
       // The screen keeps looking after whatever it was looking after.
     }
@@ -1049,8 +1084,19 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     paintChoreResults(bbChoreSearchEl?.value || "");
   }
 
+  // The form lives in its own dialog, opened by "+ New" or a row tapped to edit.
+  function showButtonForm(open) {
+    if (!bbDialogEl) return;
+    if (open && !bbDialogEl.open) bbDialogEl.showModal();
+    if (!open && bbDialogEl.open) bbDialogEl.close();
+  }
+
   function resetButtonForm() {
     if (!bbFormEl) return;
+    showButtonForm(false);
+    bbDirty = false;
+    paintDirty();
+    if (bbTitleEl) bbTitleEl.textContent = "New credit button";
     if (bbIdEl) bbIdEl.value = "";
     if (bbLabelEl) bbLabelEl.value = "";
     // A new button defaults to the groups the board is watching — the common
@@ -1082,6 +1128,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     hideChoreResults();
     if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id);
     if (bbSaveEl) bbSaveEl.textContent = "Save";
+    if (bbTitleEl) bbTitleEl.textContent = "Edit credit button";
+    showButtonForm(true);
+    bbLabelEl?.focus();
   }
 
   async function paintButtons() {
@@ -1177,6 +1226,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       else await apiCall(BUTTONS_URL, "POST", { button: payload });
 
       resetButtonForm();
+      flashSaved();
       await paintButtons();
       resync();
     } catch (err) {
@@ -1191,6 +1241,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     try {
       await apiCall(BUTTON_URL(id), "DELETE");
       if (bbIdEl?.value === String(id)) resetButtonForm();
+      flashSaved();
       await paintButtons();
       resync();
     } catch (e) {
@@ -1408,13 +1459,32 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     });
   }
 
-  // The only way to put the picker away other than the toggle itself - a panel
-  // on a wall you can't see the edge of needs a plain "done", not a re-tap of a
-  // control half off the screen.
-  if (tagDoneEl && tagPickerEl) {
-    tagDoneEl.addEventListener("click", () => {
-      tagPickerEl.hidden = true;
-      if (tagToggleEl) tagToggleEl.setAttribute("aria-expanded", "false");
+  // Put away like a modal: a tap anywhere outside it, or Escape. Anything typed
+  // and unsaved stays in its field for the next open.
+  function closePicker() {
+    if (!tagPickerEl || tagPickerEl.hidden) return;
+    tagPickerEl.hidden = true;
+    tagToggleEl?.setAttribute("aria-expanded", "false");
+  }
+  if (tagPickerEl) {
+    document.addEventListener("pointerdown", (e) => {
+      if (tagPickerEl.hidden) return;
+      if (tagPickerEl.contains(e.target) || tagToggleEl?.contains(e.target)) return;
+      // A dialog opened from the panel is still the panel's business.
+      if (e.target.closest?.("dialog[open]")) return;
+      closePicker();
+      // The tap that closes it does only that, as with a modal: a chore circle
+      // under it must not be pressed on the way.
+      const swallow = (click) => {
+        click.preventDefault();
+        click.stopPropagation();
+      };
+      document.addEventListener("click", swallow, { capture: true, once: true });
+      window.setTimeout(() => document.removeEventListener("click", swallow, true), 600);
+    }, true);
+    document.addEventListener("keydown", (e) => {
+      // Escape inside a dialog closes just the dialog.
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) closePicker();
     });
   }
 
@@ -1427,6 +1497,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     const ids = memberBoxes.filter((b) => b.checked).map((b) => parseInt(b.value, 10));
     try {
       await apiCall(membersUrl, "POST", { conversation_id: conversationId, member_ids: ids });
+      flashSaved();
       items = [];
       resync();
     } catch (e) {
@@ -1442,12 +1513,14 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   const renameInputEl = root.querySelector("[data-board-rename-input]");
   const renameSaveEl = root.querySelector("[data-board-rename-save]");
   const shareBoxEl = root.querySelector("[data-board-share]");
+  const choreDreamsBoxEl = root.querySelector("[data-board-chore-dreams]");
 
-  if (settingsEl && renameFormEl && renameInputEl) {
+  if (renameFormEl && renameInputEl) {
     let savedName = renameInputEl.value;
     const syncRenameSave = () => {
       const name = renameInputEl.value.trim();
       if (renameSaveEl) renameSaveEl.disabled = !name || name === savedName;
+      paintDirty();
     };
     syncRenameSave();
     renameInputEl.addEventListener("input", syncRenameSave);
@@ -1458,9 +1531,10 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       if (!name || name === savedName) return;
 
       try {
-        await apiCall(settingsEl.dataset.renameUrl, "PATCH", { name });
+        await apiCall(renameFormEl.dataset.url, "PATCH", { name });
         savedName = name;
         renameInputEl.blur();
+        flashSaved();
       } catch (err) {
         renameInputEl.value = savedName;
       }
@@ -1476,8 +1550,25 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       const conversationId = conversationIdFn ? conversationIdFn() : null;
       try {
         await apiCall(settingsEl.dataset.shareUrl, "POST", { conversation_id: conversationId, shared });
+        flashSaved();
       } catch (err) {
         shareBoxEl.checked = !shared;
+      }
+    });
+  }
+
+  // Same bargain as the share box: a flip that doesn't land reverts.
+  if (settingsEl && choreDreamsBoxEl) {
+    choreDreamsBoxEl.addEventListener("change", async () => {
+      const on = choreDreamsBoxEl.checked;
+      const conversationId = conversationIdFn ? conversationIdFn() : null;
+      try {
+        await apiCall(settingsEl.dataset.choreDreamsUrl, "POST", { conversation_id: conversationId, on });
+        app.dataset.boardChoreDreams = String(on);
+        onChoreDreamsChanged?.(on);
+        flashSaved();
+      } catch (err) {
+        choreDreamsBoxEl.checked = !on;
       }
     });
   }
@@ -1489,7 +1580,75 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     });
   }
 
-  if (bbFormEl) bbFormEl.addEventListener("submit", submitButton);
+  // What this board keeps off, as a search. Typed, so it saves with its button
+  // (lit only while there's a change), and a search the server can't read comes
+  // back with the reason instead of being stored.
+  const hiddenFormEl = root.querySelector("[data-board-hidden-form]");
+  const hiddenInputEl = root.querySelector("[data-board-hidden-input]");
+  const hiddenSaveEl = root.querySelector("[data-board-hidden-save]");
+  const hiddenErrorEl = root.querySelector("[data-board-hidden-error]");
+  let savedFilter = hiddenInputEl?.value.trim() || "";
+  const syncHiddenSave = () => {
+    if (hiddenSaveEl) hiddenSaveEl.disabled = hiddenInputEl.value.trim() === savedFilter;
+    paintDirty();
+  };
+  const showHiddenError = (text) => {
+    if (!hiddenErrorEl) return;
+    hiddenErrorEl.hidden = !text;
+    hiddenErrorEl.textContent = text || "";
+  };
+
+  if (hiddenFormEl && hiddenInputEl) {
+    syncHiddenSave();
+    hiddenInputEl.addEventListener("input", () => {
+      showHiddenError("");
+      syncHiddenSave();
+    });
+
+    hiddenFormEl.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const filter = hiddenInputEl.value.trim();
+      if (filter === savedFilter) return;
+
+      try {
+        const data = await apiCall(hiddenFormEl.dataset.url, "POST", {
+          conversation_id: conversationIdFn ? conversationIdFn() : null,
+          filter,
+        });
+        savedFilter = data?.hidden_filter ?? filter;
+        hiddenInputEl.value = savedFilter;
+        showHiddenError("");
+        flashSaved();
+        items = [];
+        resync();
+      } catch (err) {
+        showHiddenError(err.body?.error ? `Couldn't read that: ${err.body.error}` : "Couldn't save that.");
+      }
+      syncHiddenSave();
+    });
+  }
+
+  if (bbFormEl) {
+    bbFormEl.addEventListener("submit", submitButton);
+    const markDirty = () => {
+      bbDirty = true;
+      paintDirty();
+    };
+    bbFormEl.addEventListener("input", markDirty);
+    bbFormEl.addEventListener("change", markDirty);
+  }
+  if (bbNewEl) {
+    bbNewEl.addEventListener("click", () => {
+      resetButtonForm();
+      showButtonForm(true);
+      bbLabelEl?.focus();
+    });
+  }
+  if (bbCancelEl) bbCancelEl.addEventListener("click", resetButtonForm);
+  // Escape closes the dialog natively; drop the draft with it.
+  bbDialogEl?.addEventListener("close", () => {
+    if (bbDirty || bbIdEl?.value) resetButtonForm();
+  });
 
   if (bbChoreSearchEl) {
     bbChoreSearchEl.addEventListener("input", onChoreInput);
@@ -1561,6 +1720,24 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
         next.every((t, i) => String(t).toLowerCase() === String(tags[i]).toLowerCase());
       if (same) return;
       applyTags(next);
+    },
+
+    // Switched on another device: keep the box honest.
+    setChoreDreams(on) {
+      app.dataset.boardChoreDreams = String(on);
+      if (choreDreamsBoxEl) choreDreamsBoxEl.checked = on;
+    },
+
+    // Changed on another device: follow it without saving it back, and leave
+    // the field alone while someone here is typing in it.
+    setHiddenFilter(next) {
+      const filter = String(next || "");
+      if (filter === savedFilter) return;
+      savedFilter = filter;
+      if (hiddenInputEl && document.activeElement !== hiddenInputEl) hiddenInputEl.value = filter;
+      if (hiddenInputEl) syncHiddenSave();
+      items = [];
+      resync();
     },
 
     resync,

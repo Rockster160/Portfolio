@@ -47,6 +47,23 @@ class Jil::Methods::Interview < Jil::Methods::Base
     { started: false, state: e.message }
   end
 
+  # [Interview]
+  #   #headsUp(Numeric:"Agenda Item")::Hash
+
+  # The two-minute nudge: the join link, or a warning that it's a call. See
+  # ByteInterviewPrep::HeadsUp. `sent` is the branch taken - `link`, `phone`,
+  # `in_person` (nothing sent), `already_sent`, `not_an_interview`.
+  def headsUp(item_id) # rubocop:disable Naming/MethodName
+    return { sent: false, state: "not authorized" } unless permitted?
+
+    state = ::ByteInterviewPrep::HeadsUp.dispatch(@jil.user, @jil.cast(item_id, :Numeric).to_i)
+
+    { sent: [:link, :phone].include?(state), state: state.to_s }
+  rescue StandardError => e
+    ::PrettyLogger.error("[JIL INTERVIEW] headsUp #{item_id}: #{e.class}: #{e.message}")
+    { sent: false, state: e.message }
+  end
+
   private
 
   def permitted?

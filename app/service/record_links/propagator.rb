@@ -130,8 +130,10 @@ module RecordLinks
         # `sync_completion_event`) - the completer is known, so there is nothing
         # to ask. An event logged on its own, with no completion yet, still
         # prompts.
+        # A stand-in from an earlier question attributes nothing.
         leaf = chore.completion_leaf_for(user)
-        return nil if completion_partner(user, leaf, parse_time(event.timestamp))
+        partner = completion_partner(user, leaf, parse_time(event.timestamp))
+        return nil if partner && partner.skipped_reason != WAITING_FOR_WHO
 
         return ask_who(user, link, event)
       end
@@ -501,8 +503,10 @@ module RecordLinks
     WHO_QUESTION  = "Who did it?".freeze
     WHEN_QUESTION = "When?".freeze
 
-    # Several chores share one event and only a person can say which. The event
-    # is left exactly as logged; nothing completes until the answer comes back.
+    # Only a person can say who did it - the button that logged it may be on a
+    # wall everybody uses. The chore is marked done straight away, credited to
+    # nobody (anonymous), so every board shows it done; the answer then hands
+    # that completion to whoever was named.
     def ask_who(user, link, event)
       names = household_names(user)
       return false if names.empty?
@@ -511,12 +515,19 @@ module RecordLinks
       return false if asked_about?(user, event)
       return false if open_question_about?(user, link, event)
 
+      placeholder = done_by_nobody_yet(user, link, event)
       prompt = user.prompts.create!(
         question: "Who did: #{link.target_name}?",
         # `scope` is what the question is later compared on: which of the links
         # into this chore the doing arrived through. Kept on the prompt rather
         # than re-derived, because the event behind it can be deleted.
-        params:   { source: "ambiguous_chore", chore_name: link.target_name, event_id: event.id, scope: link.source_scope },
+        params:   {
+          source:        "ambiguous_chore",
+          chore_name:    link.target_name,
+          event_id:      event.id,
+          scope:         link.source_scope,
+          completion_id: placeholder&.id,
+        },
         options:  [
           { type: :select, question: WHO_QUESTION, choices: names, default: "" },
           { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, event.timestamp) },
@@ -532,6 +543,28 @@ module RecordLinks
       Rails.logger.warn("[RecordLinks] ask_who #{link.target_name.inspect}: #{e.class}: #{e.message}")
       false
     end
+
+    # The anonymous completion that stands until the question is answered.
+    def done_by_nobody_yet(user, link, event)
+      chore = find_chore(user, link.target_name)&.completion_leaf_for(user)
+      at = parse_time(event.timestamp) || Time.current
+      return nil if chore.nil?
+
+      completion = ::ChoreCompletion.create!(
+        chore:          chore,
+        user:           user,
+        completed_at:   at,
+        day_key:        ::ChoreDay.current(user, at: at),
+        payout_skipped: true,
+        skipped_reason: WAITING_FOR_WHO,
+        anonymous:      true,
+      )
+      related = (chore.parent_chore if chore.sub_chore?)
+      ::ChoreBroadcaster.broadcast_changes!(user, chore, related: related)
+      completion
+    end
+
+    WAITING_FOR_WHO = "Waiting to hear who did it".freeze
 
     # The field this lands in is `<input type="datetime-local">`, which accepts a
     # local date and time and NOTHING else. `iso8601` ends in an offset, which
@@ -631,19 +664,24 @@ module RecordLinks
       Guard.visiting([:prompt, prompt.try(:id)]) {
         answered(
           user,
-          chore_name: params[:chore_name],
-          event_id:   params[:event_id],
-          completer:  response[WHO_QUESTION],
-          at:         parse_time(response[WHEN_QUESTION]),
+          chore_name:    params[:chore_name],
+          event_id:      params[:event_id],
+          completer:     response[WHO_QUESTION],
+          at:            parse_time(response[WHEN_QUESTION]),
+          completion_id: params[:completion_id],
         )
       }
     end
 
-    def answered(user, chore_name:, event_id:, completer:, at:)
+    def answered(user, chore_name:, event_id:, completer:, at:, completion_id: nil)
       chore = find_chore(user, chore_name)
       return false if chore.nil?
 
       who = ::User.find_by(username: completer) || user
+      # The anonymous stand-in made when the question was asked gives way to the
+      # real, credited completion - paid and streaked for whoever did it.
+      placeholder = ::ChoreCompletion.find_by(id: completion_id, anonymous: true) if completion_id.present?
+      ::ChoreCompletionUndoer.call(user, placeholder) if placeholder
       # For WHO did it, not for whose links these are - the whole point of the
       # question is that it wasn't necessarily the person who logged it.
       complete_once(chore.completion_leaf_for(who), who, at || Time.current)
@@ -673,11 +711,13 @@ module RecordLinks
     # Not `user.chore_completions` like `completion_partner` — the person named
     # in the answer is usually NOT the person whose links these are, so a
     # user-scoped lookup never sees the row it just made.
+    # A stand-in still waiting on its own question is not the doing being
+    # recorded already.
     def completed_in_window?(chore, at)
-      ::ChoreCompletion.exists?(
+      ::ChoreCompletion.where(
         chore_id:     chore.id,
         completed_at: (at - WINDOW)..(at + WINDOW),
-      )
+      ).exists?(["skipped_reason IS DISTINCT FROM ?", WAITING_FOR_WHO])
     end
 
     def household_names(user)

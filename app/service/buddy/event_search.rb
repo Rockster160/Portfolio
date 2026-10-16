@@ -22,7 +22,32 @@ module Buddy
       scope  = scope.where(user_id: user.id, timestamp: window..)
       scope  = scope.where(name: Array.wrap(names).map(&:to_s)) if names.present?
 
-      { events: scope.order(timestamp: :desc).limit(limit).to_a, total: scope.count }
+      {
+        events: scope.order(timestamp: :desc).limit(limit).to_a,
+        total:  scope.count,
+        sums:   sums(scope),
+      }
+    end
+
+    # Every number logged on the matches, added up across ALL of them rather
+    # than the rows shown. An event only counts toward a key it carries, so the
+    # day's caffeine is the day's events summed on `Caffeine` - the drinks and
+    # the chocolate, never the deploys. Ids and clocks are numbers nobody adds.
+    SUM_VALUE_RX = '^-?[0-9]+(\.[0-9]+)?$'.freeze
+    UNSUMMED_KEY_RX = /(\A|_)id\z|_time\z|\Atimestamp\z/i
+
+    def sums(scope)
+      totals = ::ActionEvent.where(id: scope.select(:id)).where(
+        "jsonb_typeof(action_events.data) = 'object'",
+      ).joins(
+        "CROSS JOIN LATERAL jsonb_each_text(action_events.data) AS kv",
+      ).where(
+        "kv.value ~ ?", SUM_VALUE_RX,
+      ).group("kv.key").sum("kv.value::numeric")
+
+      totals.reject { |key, _| key.match?(UNSUMMED_KEY_RX) }.transform_values { |total|
+        total.to_d == total.to_i ? total.to_i : total.to_f.round(2)
+      }
     end
 
     # A `timestamp` term in the query means the QUERY owns the range, and `days`

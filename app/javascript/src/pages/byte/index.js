@@ -84,6 +84,8 @@ import { initBoardAlert } from "./buddy/board_alert";
 import { initBoardDream } from "./buddy/dream";
 import { faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
+import { initSoundToggle } from "./buddy/sound_toggle";
+import { initReloadCountdown } from "./reload_countdown";
 import { playBoardSound } from "./buddy/sound";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
 import {
@@ -2460,6 +2462,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     tags: boardTags(app),
     boardIdFn: () => currentConversationId,
     iconFor: iconNode,
+    choreDreams: app.dataset.boardChoreDreams !== "false",
   });
   boardDream.setAlerts(bootstrap.alerts || []);
 
@@ -2633,6 +2636,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       boardDream?.setTags(tags);
     },
     onItems: (items) => boardDream?.setItems(items),
+    onChoreDreamsChanged: (on) => boardDream?.setChoreDreams(on),
   });
 
   // Chore broadcasts carry `id: :chores` and the Monitor dispatcher routes by
@@ -2689,9 +2693,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     muteBtn.setAttribute("aria-pressed", String(on));
     muteBtn.classList.toggle("on", on);
   };
+  // The board's corner speaker is the same switch, so each repaints the other.
+  const boardSound = initSoundToggle({
+    button: app.querySelector("[data-board-sound]"),
+    onChange: paintMute,
+  });
   muteBtn?.addEventListener("click", () => {
     toggleBuddyMuted();
     paintMute();
+    boardSound?.paint();
   });
   paintMute();
 
@@ -3491,6 +3501,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             boardDurations?.setTags(nextTags);
             boardAlert?.setTags(nextTags);
             boardDream?.setTags(nextTags);
+            const boardMeta = convo.metadata || {};
+            choreBoard?.setHiddenFilter(boardMeta.hidden_chore_filter || "");
+            const dreamsOn = String(boardMeta.chore_dreams) !== "false";
+            choreBoard?.setChoreDreams(dreamsOn);
+            boardDream?.setChoreDreams(dreamsOn);
           }
         }
         return;
@@ -3847,6 +3862,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       queuedCount() === 0,
   });
 
+  // A wall screen takes an update by itself, after a countdown anyone using it
+  // keeps resetting. Held while anything is open over the board or the pad.
+  const reloadCountdown = initReloadCountdown({
+    el: document.querySelector("[data-reload-countdown]"),
+    reload: hardReload,
+    held: () => overlayOpen() || !!document.querySelector("[data-board-tag-picker]:not([hidden]), [data-kiosk-picker]:not([hidden])"),
+  });
+
   function setUpdateAvailable(v) {
     if (!reloadBtn) return;
     reloadBtn.classList.toggle("has-update", !!v);
@@ -3873,9 +3896,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // A wall screen nobody navigates never re-fetches its own shell, so it can't
   // hear about a deploy the way a phone does. It asks instead, whenever its
   // socket connects (a deploy restarts the server) or the screen wakes, and
-  // hard-reloads when a fresh page would carry a different version from its
-  // own. Once per version per tab, so a reload that still lands on the old page
-  // can't loop.
+  // starts the reload countdown when a fresh page would carry a different
+  // version from its own. Once per version per tab, so a reload that still
+  // lands on the old page can't loop, and a paused countdown stays paused.
   async function reloadIfDeployed() {
     if (!isKiosk || !app.dataset.versionUrl) return;
     const mine = document.querySelector('meta[name="byte-version"]')?.content;
@@ -3899,7 +3922,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (window.sessionStorage.getItem("byte.reloadedFor") === version) return;
       window.sessionStorage.setItem("byte.reloadedFor", version);
     } catch (_) {}
-    hardReload();
+    reloadCountdown.start();
   }
 
   async function hardReload() {
@@ -4034,12 +4057,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (data.kind === "shell_sync_failed") {
       setSyncBadge("sync failed", "failed");
     } else if (data.kind === "shell_updated") {
-      // The kiosk takes it immediately instead. Its header is hidden, so the
-      // "!" badge has nowhere to appear and there's no reload button to press
-      // — a wall tablet nobody navigates would otherwise sit on the shell it
-      // booted with forever. Anything unanswered on screen comes back: that's
-      // what buddyKiosk.sync restores after the load.
-      if (isKiosk) hardReload();
+      // The kiosk takes it by itself instead, after the countdown. Its header is
+      // hidden, so the "!" badge has nowhere to appear and there's no reload
+      // button to press — a wall tablet nobody navigates would otherwise sit on
+      // the shell it booted with forever. Anything unanswered on screen comes
+      // back: that's what buddyKiosk.sync restores after the load.
+      if (isKiosk) reloadCountdown.start();
       else setUpdateAvailable(true);
     } else if (data.kind === "sw_version") {
       const el = document.querySelector("[data-byte-version-sw]");

@@ -169,7 +169,9 @@ class Chore < ApplicationRecord
     reward:      :reward_pebbles,
     archived_at: :archived_at,
     created_at:  :created_at,
-    updated_at:  :updated_at
+    updated_at:  :updated_at,
+    group:       :in_group,
+    assignee:    :assigned_to_named
 
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
@@ -243,6 +245,73 @@ class Chore < ApplicationRecord
       sharing_modes[:household], user_id
     )
   }
+
+  # The search terms `group:home` and `assignee:<username>`. Written so the
+  # search's paren-reducer leaves them whole: it unwraps any `(word)`, which
+  # would turn `LOWER(t)` into `LOWERt`.
+  scope :in_group, ->(name) {
+    where("EXISTS (SELECT 1 FROM unnest(chores.tags) AS tag WHERE tag ILIKE ?)", name.to_s)
+  }
+  scope :assigned_to_named, ->(username) {
+    where("chores.assigned_to_user_id IN (SELECT users.id FROM users WHERE users.username ILIKE ?)", username.to_s)
+  }
+
+  # What a board's hidden filter keeps off (ByteConversation#hidden_chore_filter).
+  # Each top-level term hides on its own, so `"Puppy Fed" group:home` hides both;
+  # parentheses join terms into one, so `(group:pet Fae)` hides only the pet
+  # chores matching Fae. Plain words in a row are one name, so `Puppy Fed` hides
+  # Puppy Fed rather than everything with "puppy" or "fed" in it.
+  scope :board_hidden, ->(filter) {
+    terms = board_hidden_terms(filter)
+    next none if terms.empty?
+
+    terms.map { |term| query(term) }.reduce(:or)
+  }
+
+  # The top-level terms of a hidden filter, with a NOT kept on the term it
+  # negates, a spelled-out OR dropped since the terms are alternatives anyway,
+  # and a run of plain words quoted into the one name it spells.
+  def self.board_hidden_terms(filter)
+    terms = []
+    negation = nil
+    words = []
+    flush = -> {
+      next if words.empty?
+
+      phrase = words.many? ? "\"#{words.join(" ")}\"" : words.first
+      terms << [negation, phrase].compact.join(" ")
+      negation = nil
+      words = []
+    }
+
+    ::Tokenizer.split(filter.to_s).each do |token|
+      word = token.upcase
+      if word.in?(%w[OR AND])
+        flush.call
+        next
+      end
+
+      if word.in?(%w[NOT ! -])
+        flush.call
+        negation = token
+        next
+      end
+
+      if token.match?(BOARD_HIDDEN_PLAIN_WORD)
+        words << token
+        next
+      end
+
+      flush.call
+      terms << [negation, token].compact.join(" ")
+      negation = nil
+    end
+    flush.call
+    terms
+  end
+
+  # A bare word: no field, operator, quote or bracket - the pieces of a name.
+  BOARD_HIDDEN_PLAIN_WORD = /\A[^\s:"'()<>=!~-][^\s:"()<>=~]*\z/
 
   def archived? = archived_at.present?
 

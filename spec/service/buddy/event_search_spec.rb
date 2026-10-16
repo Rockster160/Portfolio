@@ -128,6 +128,18 @@ RSpec.describe Buddy::EventSearch do
         expect(found[:total]).to eq(2)
       end
 
+      it "sums every logged number across all matches, only where an event carries it" do
+        drink = { Caffeine: 200, Calories: 10 }
+        ActionEvent.create!(user: user, name: "Drink", notes: "Celsius", data: drink, timestamp: 3.hours.ago)
+        ActionEvent.create!(user: user, name: "Drink", notes: "Celsius", data: drink, timestamp: 2.hours.ago)
+        ActionEvent.create!(user: user, name: "Food", data: { Caffeine: "19", Calories: "" }, timestamp: 1.hour.ago)
+        ActionEvent.create!(user: user, name: "Deploy", data: { event_id: 99, start_time: 5 }, timestamp: 1.hour.ago)
+
+        found = described_class.call(user: user, limit: 1)
+        expect(found[:events].length).to eq(1)
+        expect(found[:sums]).to eq("Caffeine" => 419, "Calories" => 20)
+      end
+
       it "narrows to specific event names when the caller already knows them" do
         start = event!("PrintStart", notes: "vase")
         event!("Coffee")

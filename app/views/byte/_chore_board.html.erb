@@ -29,16 +29,44 @@
           aria-label="Choose which chores this screen looks after"
           title="Choose which chores this screen looks after"><%= Array(@board_tags).join(", ").presence || "Pick groups" %></button>
   <div class="byte-board-tag-picker" data-board-tag-picker hidden>
-    <%# Tapping a group saves it immediately and leaves the picker open so
-        several can be set in a row, so there is nothing to cancel - only a
-        way to put the panel away and get back to the board. %>
-    <div class="byte-board-tag-head">
-      <span class="byte-board-tag-label">This screen looks after</span>
-      <button type="button" class="byte-board-tag-done" data-board-tag-done>Done</button>
-    </div>
+    <%# Taps save the moment they're made; typed fields save with their own
+        button. The panel's border says which state it's in - orange while
+        something typed hasn't been saved, a brief flash when a save lands -
+        and a tap anywhere outside puts it away. %>
+    <%# The board's own name, heading the panel it names. Owner-only. %>
+    <% if @board_owned %>
+      <form class="byte-board-rename byte-board-name" data-board-rename-form
+            data-url="<%= byte_conversation_path(@conversation) %>">
+        <input type="text" class="byte-msg-form-input" data-board-rename-input
+               value="<%= @conversation.display_name %>" maxlength="60"
+               autocomplete="off" autocorrect="off" autocapitalize="words"
+               spellcheck="false" aria-label="Board name">
+        <button type="submit" class="byte-board-rename-save" data-board-rename-save>Rename</button>
+      </form>
+    <% end %>
+
     <%# Rebuilt by chore_board.js on every open, so nothing that has to survive
         goes inside it. %>
     <div class="byte-board-tag-list" data-board-tag-list></div>
+
+    <% if @board_owned %>
+      <%# What this board keeps OFF, as a search: a chore it matches stays off
+          even when a group above (or "All") brings it. Each term hides on its
+          own; parentheses join terms into one. %>
+      <form class="byte-board-hidden" data-board-hidden-form
+            data-url="<%= byte_board_hidden_path %>">
+        <span class="byte-board-tag-label">Hidden on this board</span>
+        <div class="byte-board-rename">
+          <input type="text" class="byte-msg-form-input" data-board-hidden-input
+                 value="<%= @conversation.hidden_chore_filter %>"
+                 placeholder='"Puppy Fed" group:home'
+                 autocomplete="off" autocorrect="off" autocapitalize="off"
+                 spellcheck="false" aria-label="Hide chores matching">
+          <button type="submit" class="byte-board-rename-save" data-board-hidden-save>Save</button>
+        </div>
+        <p class="byte-board-bb-error" data-board-hidden-error hidden></p>
+      </form>
+    <% end %>
 
     <%# How big the circles are drawn on THIS screen - a phone and a wall tablet
         showing the same board want different sizes, so it is kept on the
@@ -77,81 +105,27 @@
         has, rather than behind new chrome over the circles. The whole section
         hides until a group is picked, since a button has to belong to one. %>
     <div class="byte-board-buttons" data-board-buttons-section hidden>
-      <span class="byte-board-tag-label">Credit buttons on this board</span>
+      <div class="byte-board-buttons-head">
+        <span class="byte-board-tag-label">Credit buttons on this board</span>
+        <button type="button" class="byte-board-bb-new" data-bb-new>+ New</button>
+      </div>
       <div class="byte-board-buttons-list" data-board-buttons-list></div>
-
-      <%# Built on the same `.byte-msg-form` the companion forms use, so it reads
-          like the rest of Byte rather than a bolted-on panel. %>
-      <form class="byte-msg-form byte-board-button-form" data-board-button-form>
-        <div class="byte-msg-form-row">
-          <label class="byte-msg-form-label" for="bb-label">Label</label>
-          <input type="text" id="bb-label" class="byte-msg-form-input" data-bb-label
-                 placeholder="e.g. Dishes, by me" maxlength="60" required>
-        </div>
-
-        <%# Completes: a type-to-find chore picker rather than a select of every
-            chore in the house - the same "search to narrow it" the chores page
-            leans on, so a chore can actually be found. The hidden input carries
-            the chosen id; the text field is only for searching. %>
-        <div class="byte-msg-form-row byte-board-chore-field">
-          <label class="byte-msg-form-label" for="bb-chore-search">Completes</label>
-          <input type="text" id="bb-chore-search" class="byte-msg-form-input"
-                 data-bb-chore-search placeholder="Search chores…"
-                 autocomplete="off" role="combobox" aria-expanded="false"
-                 aria-controls="bb-chore-results">
-          <div class="byte-board-chore-results" id="bb-chore-results"
-               data-bb-chore-results role="listbox" hidden></div>
-          <input type="hidden" data-bb-chore>
-        </div>
-
-        <div class="byte-msg-form-row">
-          <label class="byte-msg-form-label" for="bb-credit">Credits</label>
-          <select id="bb-credit" class="byte-msg-form-input" data-bb-credit required></select>
-        </div>
-
-        <div class="byte-msg-form-row">
-          <label class="byte-msg-form-label" for="bb-color">Color</label>
-          <input type="color" id="bb-color" class="byte-msg-form-input" data-bb-color value="#16A34A">
-        </div>
-
-        <%# Which groups this button belongs to, comma-separated. Defaults to the
-            groups the board is watching, so a button for the board you're on
-            needs no thought; widen or narrow it to put the button on others. %>
-        <div class="byte-msg-form-row">
-          <label class="byte-msg-form-label" for="bb-tags">Groups</label>
-          <input type="text" id="bb-tags" class="byte-msg-form-input" data-bb-tags
-                 placeholder="Home, Morning">
-        </div>
-
-        <%# Carries the id being edited, empty for a new one. The form is reused
-            for both so there is one set of fields to get right; closing the
-            panel drops an edit, since every open starts the form fresh. %>
-        <input type="hidden" data-bb-id value="">
-        <div class="byte-board-button-form-actions">
-          <button type="submit" class="byte-board-bb-save" data-bb-save>Add button</button>
-        </div>
-        <p class="byte-board-bb-error" data-bb-error hidden></p>
-      </form>
     </div>
 
-    <%# The board's own name and who can open it. Owner-only, like the rest of
-        the knobs, and here rather than on the index card: a board is managed
-        from the board. Each saves on its own, like the groups above. %>
+    <%# Who can open the board, and whether its pet dreams of chores. Owner-only,
+        like the rest of the knobs, and here rather than on the index card: a
+        board is managed from the board. Each saves on its own. %>
     <% if @board_owned %>
       <div class="byte-board-settings" data-board-settings
-           data-rename-url="<%= byte_conversation_path(@conversation) %>"
-           data-share-url="<%= byte_board_shared_path %>">
-        <span class="byte-board-tag-label">This board</span>
-        <form class="byte-board-rename" data-board-rename-form>
-          <input type="text" class="byte-msg-form-input" data-board-rename-input
-                 value="<%= @conversation.display_name %>" maxlength="60"
-                 autocomplete="off" autocorrect="off" autocapitalize="words"
-                 spellcheck="false" aria-label="Board name">
-          <button type="submit" class="byte-board-rename-save" data-board-rename-save>Rename</button>
-        </form>
+           data-share-url="<%= byte_board_shared_path %>"
+           data-chore-dreams-url="<%= byte_board_chore_dreams_path %>">
         <label class="byte-board-member">
           <input type="checkbox" data-board-share <%= "checked" if @conversation.shared? %>>
           <span>Shared with the household</span>
+        </label>
+        <label class="byte-board-member">
+          <input type="checkbox" data-board-chore-dreams <%= "checked" if @conversation.chore_dreams? %>>
+          <span>Dream of hot chores now and then</span>
         </label>
       </div>
     <% end %>
@@ -164,4 +138,58 @@
         of chrome over the circles. %>
     <a class="byte-board-leave" href="<%= byte_board_path %>">← All boards</a>
   </div>
+
+  <%# Adding or editing a credit button: its own dialog, like Byte's other
+      forms, opened by "+ New" or a tap on a button in the list. The form is
+      reused for both, so there is one set of fields to get right; closing it
+      drops the draft, since every open starts fresh. %>
+  <dialog class="byte-modal" data-bb-dialog>
+    <form class="byte-modal-form basic byte-board-button-form" data-board-button-form autocomplete="off">
+      <h3 class="byte-modal-title" data-bb-title>New credit button</h3>
+      <label class="byte-modal-label">
+        Label
+        <input type="text" class="byte-modal-input" data-bb-label
+               placeholder="e.g. Dishes, by me" maxlength="60" required>
+      </label>
+
+      <%# Completes: a type-to-find chore picker rather than a select of every
+          chore in the house - the same "search to narrow it" the chores page
+          leans on, so a chore can actually be found. The hidden input carries
+          the chosen id; the text field is only for searching. %>
+      <label class="byte-modal-label byte-board-chore-field">
+        Completes
+        <input type="text" class="byte-modal-input" data-bb-chore-search
+               placeholder="Search chores…" autocomplete="off" role="combobox"
+               aria-expanded="false" aria-controls="bb-chore-results">
+        <div class="byte-board-chore-results" id="bb-chore-results"
+             data-bb-chore-results role="listbox" hidden></div>
+        <input type="hidden" data-bb-chore>
+      </label>
+
+      <label class="byte-modal-label">
+        Credits
+        <select class="byte-modal-input" data-bb-credit required></select>
+      </label>
+
+      <label class="byte-modal-label">
+        Color
+        <input type="color" class="byte-modal-input" data-bb-color value="#16A34A">
+      </label>
+
+      <%# Which groups this button belongs to, comma-separated. Defaults to the
+          groups the board is watching, so a button for the board you're on
+          needs no thought; widen or narrow it to put the button on others. %>
+      <label class="byte-modal-label">
+        Groups
+        <input type="text" class="byte-modal-input" data-bb-tags placeholder="Home, Morning">
+      </label>
+
+      <input type="hidden" data-bb-id value="">
+      <p class="byte-board-bb-error" data-bb-error hidden></p>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-bb-cancel>Cancel</button>
+        <button type="submit" class="byte-modal-btn byte-modal-btn-primary" data-bb-save>Add button</button>
+      </div>
+    </form>
+  </dialog>
 </section>

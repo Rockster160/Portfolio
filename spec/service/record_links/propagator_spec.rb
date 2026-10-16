@@ -690,10 +690,35 @@ RSpec.describe RecordLinks::Propagator do
       Jil::Executor.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
     end
 
-    it "raises a prompt instead of completing anything" do
+    # The button that logged it may be on a wall everybody uses, so it can't
+    # say who - but the work happened. Done now, credited to nobody, and asked.
+    it "marks it done for nobody and asks who" do
       expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
-      expect(chore.chore_completions.count).to eq(0)
       expect(user.prompts.last.question).to eq("Who did: Puppy Down?")
+
+      completion = chore.chore_completions.sole
+      expect(completion.anonymous).to be(true)
+      expect(completion.paid_pebbles.to_i).to eq(0)
+      expect(user.prompts.last.params["completion_id"]).to eq(completion.id)
+    end
+
+    it "hands the stand-in to whoever is named, paid like any other" do
+      log_event!("Whisper", notes: "Down")
+      at = 1.hour.ago.change(usec: 0)
+
+      answer!(user.prompts.last, partner.username, at)
+
+      completion = chore.reload.chore_completions.sole
+      expect(completion.anonymous).to be(false)
+      expect(completion.user_id).to eq(partner.id)
+      expect(completion.completed_at).to eq(at)
+    end
+
+    it "leaves it done for nobody when the question is never answered" do
+      log_event!("Whisper", notes: "Down")
+      user.prompts.last.destroy!
+
+      expect(chore.reload.chore_completions.sole.anonymous).to be(true)
     end
 
     it "asks once per event, not once per delivery" do

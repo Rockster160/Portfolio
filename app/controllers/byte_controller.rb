@@ -95,7 +95,7 @@ class ByteController < ApplicationController
     @board_whisper_state = Buddy::BoardFace.whisper_state(convo)
     # The face it opens on, including a hot chore it is dreaming of this half
     # hour: the script makes the same draw, so nothing flips once it runs.
-    chore_dream = Buddy::BoardDream.pick(@board_items_json, convo.id).present?
+    chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(@board_items_json, convo.id).present?
     @board_held_face = Buddy::BoardFace.showing(convo, chore_dream:)
     # Only the owner configures a board, so the settings the picker offers are
     # theirs alone; a member looking at a shared board gets the pad, not the
@@ -302,6 +302,26 @@ class ByteController < ApplicationController
     render json: { ok: true, chore_tags: convo.chore_tags }
   end
 
+  # POST /byte/board/hidden — the search for what this board keeps off (see
+  # Chore.board_hidden). A search that can't be read is refused with the reason
+  # rather than stored, since it would hide nothing and say nothing about why.
+  def set_board_hidden
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    filter = params[:filter].to_s.strip
+    problems = Chore.board_hidden_terms(filter).flat_map { |term|
+      Chore.query(term)
+      Chore.search_notes.map { |note| "#{term}: #{note}" }
+    }
+    return render(json: { error: problems.join("; ") }, status: :unprocessable_entity) if problems.any?
+
+    convo.hidden_chore_filter = filter
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, hidden_filter: convo.hidden_chore_filter }
+  end
+
   # POST /byte/board/shared — open a board to the household, or close it again.
   # Scoped to the viewer's OWN boards, so only the owner manages sharing: a
   # member looking at a shared board carries no control to un-share it. Broadcasts
@@ -315,6 +335,20 @@ class ByteController < ApplicationController
     convo.save!
     broadcast_convo_change(convo, :updated)
     render json: { ok: true, shared: convo.shared? }
+  end
+
+  # POST /byte/board/chore_dreams — whether the board's pet dreams of its hot
+  # chores now and then. Owner-only like sharing; broadcast so every open copy
+  # of the board follows.
+  def set_board_chore_dreams
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    on = ActiveModel::Type::Boolean.new.cast(params[:on])
+    convo.metadata = convo.metadata.to_h.merge("chore_dreams" => on)
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, chore_dreams: convo.chore_dreams? }
   end
 
   # POST /byte/board/members — which household members' chores this board shows.
@@ -1080,6 +1114,11 @@ class ByteController < ApplicationController
     # "All" is every chore, whatever it is tagged; any other groups narrow by tag.
     wants_all = tags.any? { |t| t.casecmp?(BOARD_ALL_TAG) }
     chore_items = board_chore_items(convo, owner, tags, wants_all, day)
+    # The hidden filter wins over the watched groups: a chore it matches stays off.
+    if convo.hidden_chore_filter.present?
+      hidden_ids = Chore.board_hidden(convo.hidden_chore_filter).pluck(:id).to_set
+      chore_items = chore_items.reject { |item| hidden_ids.include?(item[:id]) }
+    end
     chore_items = board_hot_weighted(chore_items, day)
     chore_items = board_pinned_order(convo, chore_items, day)
 

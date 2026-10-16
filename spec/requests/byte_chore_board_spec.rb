@@ -484,7 +484,86 @@ RSpec.describe "Byte chore board", type: :request do
     end
   end
 
-  # The reserved groups, which no chore or routine carries.
+  # A search for what the board keeps off. Each top-level term hides on its own;
+  # parentheses join terms into one.
+  describe "hidden filter" do
+    def board_names(filter)
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["All"], "hidden_chore_filter" => filter))
+      get "/board/#{thread.id}"
+      board_items.pluck("name")
+    end
+
+    let!(:housemate) { create(:user, username: "Housemate", chore_household_id: user.chore_household_id) }
+
+    before do
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Puppy Fed", marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Brush Fae", tags: ["Pet"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Bathe Fae", marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Drink Water", marked_due_at: Time.current)
+      create(
+        :chore, created_by_user: user, name: "Her laundry", assigned_to_user: housemate,
+        sharing_mode: :household, marked_due_at: Time.current
+      )
+    end
+
+    it "hides a chore by name, even on an All board" do
+      expect(board_names('"Puppy Fed"')).not_to include("Puppy Fed")
+      expect(board_names('"Puppy Fed"')).to include("Vacuum")
+    end
+
+    it "reads plain words in a row as one name" do
+      create(:chore, created_by_user: user, name: "Fed the fish", marked_due_at: Time.current)
+      names = board_names("Puppy Fed group:home")
+
+      expect(names).not_to include("Puppy Fed", "Vacuum")
+      expect(names).to include("Fed the fish")
+      expect(Chore.board_hidden_terms("Puppy Fed group:home NOT Drink Water")).to eq(
+        ['"Puppy Fed"', "group:home", 'NOT "Drink Water"'],
+      )
+    end
+
+    it "hides a whole group" do
+      expect(board_names("group:home")).not_to include("Vacuum")
+    end
+
+    it "hides each term on its own, and a parenthesized one only where all of it matches" do
+      names = board_names('(group:pet Fae) "Drink Water"')
+
+      expect(names).not_to include("Brush Fae", "Drink Water")
+      expect(names).to include("Bathe Fae", "Vacuum")
+    end
+
+    it "hides what is assigned to someone" do
+      expect(board_names("assignee:Housemate")).not_to include("Her laundry")
+    end
+
+    it "saves the filter, and refuses one it can't read" do
+      post "/byte/board/hidden", params: { conversation_id: thread.id, filter: " group:home " }
+
+      expect(response.parsed_body["hidden_filter"]).to eq("group:home")
+      expect(thread.reload.hidden_chore_filter).to eq("group:home")
+
+      post "/byte/board/hidden", params: { conversation_id: thread.id, filter: "(" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(thread.reload.hidden_chore_filter).to eq("group:home")
+    end
+  end
+
+  describe "chore dreams" do
+    it "is on until the owner switches it off" do
+      expect(thread.chore_dreams?).to be(true)
+
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, on: false }
+
+      expect(response.parsed_body["chore_dreams"]).to be(false)
+      expect(thread.reload.chore_dreams?).to be(false)
+      get "/board/#{thread.id}"
+      expect(response.body).to include('data-board-chore-dreams="false"')
+    end
+  end
+
   describe "reserved groups" do
     it "settles the Whisper feed group even though nothing is tagged with it" do
       patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Whisper" }
@@ -662,7 +741,8 @@ RSpec.describe "Byte chore board", type: :request do
       get "/board/#{thread.id}"
 
       expect(response.body).to include("data-board-settings")
-      expect(response.body).to include("data-rename-url=\"#{byte_conversation_path(thread)}\"")
+      expect(response.body).to include("data-board-rename-form")
+      expect(response.body).to include("data-url=\"#{byte_conversation_path(thread)}\"")
       expect(response.body).to include("data-board-share")
     end
 

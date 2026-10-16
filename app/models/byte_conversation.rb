@@ -166,6 +166,12 @@ class ByteConversation < ApplicationRecord
     metadata.is_a?(Hash) && metadata["shared"].to_s == "true"
   end
 
+  # Whether a board's pet dreams of its hot chores now and then (see
+  # buddy/dream.js). On unless it has been switched off.
+  def chore_dreams?
+    !(metadata.is_a?(Hash) && metadata["chore_dreams"].to_s == "false")
+  end
+
   def primary?
     primary_at.present?
   end
@@ -194,6 +200,19 @@ class ByteConversation < ApplicationRecord
     tags = GroupTaggable.normalize(values)
     base = metadata.to_h.except("chore_tag") # retire the legacy single-tag key
     self.metadata = (tags.present? ? base.merge("chore_tags" => tags) : base.except("chore_tags"))
+  end
+
+  # A search (the chores page's syntax) for what this board keeps OFF, whatever
+  # it watches: a chore it matches stays off even when a watched group (or
+  # "All") would bring it. See Chore.board_hidden.
+  def hidden_chore_filter
+    metadata.is_a?(Hash) ? metadata["hidden_chore_filter"].to_s : ""
+  end
+
+  def hidden_chore_filter=(value)
+    filter = value.to_s.strip
+    base = metadata.to_h
+    self.metadata = (filter.present? ? base.merge("hidden_chore_filter" => filter) : base.except("hidden_chore_filter"))
   end
 
   # The first group this board watches, or nil — for callers that still think of

@@ -157,6 +157,15 @@ app.dataset.boardItems = JSON.stringify([
     chore_id: 1,
     credit_user_id: 99,
   },
+  // A task button: runs a Jil task, answered with an empty 200.
+  {
+    id: 8,
+    kind: "task",
+    name: "Fed",
+    short_name: "Fed",
+    icon: null,
+    icon_kind: "empty",
+  },
 ]);
 
 globalThis.document = {
@@ -226,6 +235,9 @@ globalThis.fetch = async (url, opts = {}) => {
     // Firing a trigger (routine). Nothing to fold back - the flash is the
     // receipt.
     body = {};
+  } else if (url.startsWith("/byte/board/tasks/") && method === "POST") {
+    // A task button press: the server answers a bare `head :ok`, no body.
+    return { ok: true, status: 200, text: async () => "" };
   } else if (url.endsWith("/press") && method === "POST") {
     // A credit button press completes its chore (1 here) crediting someone, and
     // answers with the fresh chore so its circle updates.
@@ -256,7 +268,7 @@ globalThis.fetch = async (url, opts = {}) => {
     body = {};
   }
 
-  return { ok: true, status: 200, json: async () => body };
+  return { ok: true, status: 200, text: async () => JSON.stringify(body) };
 };
 
 // ---- drive it ----
@@ -398,5 +410,14 @@ requests.length = 0;
 await click('[data-board-complete="7"]');
 out.credit_requests = requests;
 out.credit_hit_no_chore_endpoint = requests.every((r) => !r.includes("/chores/"));
+
+// A task press answered with an empty 200 landed: no amber dot, and nothing
+// kept back to run the task a second time.
+const beforeTask = requests.length;
+await click('[data-board-complete="8"]');
+out.task_press = {
+  syncPending: cellFor(8).dataset.syncPending,
+  requests: requests.slice(beforeTask),
+};
 
 process.stdout.write(JSON.stringify(out, null, 2));

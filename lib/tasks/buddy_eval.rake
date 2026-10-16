@@ -2031,7 +2031,7 @@ BUDDY_EDGE_PROBES = [
   {
     case:         "prod 8286",
     say:          "What's my caffeine for the day?",
-    tool:         :get_context,
+    tool:         :search_events,
     # Just past midnight, so the drinks are already today whenever this runs.
     seed:         ->(user, _convo) {
       day = user.timezone ? Time.current.in_time_zone(user.timezone) : Time.current

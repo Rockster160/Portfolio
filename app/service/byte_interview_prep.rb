@@ -18,6 +18,9 @@
 #           -> HERE: a read-only `claude -p` on the Mac
 #             -> InterviewPrep record + one push carrying the link
 #
+# The same schedule task hangs a -2 minute trigger off the event too, for the
+# join link or a phone heads-up - see ByteInterviewPrep::HeadsUp.
+#
 # The Jil half is in Jil on purpose: when it fires, whether it fires at all,
 # and what it fires on are his to change without a deploy. What it reaches is
 # here, because a local Claude session is not something Jil can express.

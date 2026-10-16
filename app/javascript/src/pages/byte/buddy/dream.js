@@ -77,8 +77,10 @@ export function newestDream(alerts, tags) {
     .sort((a, b) => String(b.last_raised_at || "").localeCompare(String(a.last_raised_at || "")))[0] || null;
 }
 
-export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor }) {
-  if (!bubble) return { setAlerts: () => {}, setItems: () => {}, setTags: () => {} };
+export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDreams = true }) {
+  if (!bubble) {
+    return { setAlerts: () => {}, setItems: () => {}, setTags: () => {}, setChoreDreams: () => {} };
+  }
 
   let watched = Array.isArray(tags) ? tags : [];
   let alerts = [];
@@ -126,7 +128,8 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor }) {
       }, dream.expression);
     }
 
-    const chore = pickChoreDream(items, boardIdFn?.(), Date.now());
+    // Hot-chore dreams can be switched off per board; Jil's still show.
+    const chore = choreDreams ? pickChoreDream(items, boardIdFn?.(), Date.now()) : null;
     if (!chore) return clear();
 
     show(`chore:${chore.id}:${chore.short_name}`, () => {
@@ -161,6 +164,10 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor }) {
     },
     setTags(next) {
       watched = Array.isArray(next) ? next.map((t) => String(t).toLowerCase()) : [];
+      render();
+    },
+    setChoreDreams(on) {
+      choreDreams = on !== false;
       render();
     },
   };

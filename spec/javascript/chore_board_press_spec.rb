@@ -142,4 +142,14 @@ RSpec.describe "Chore board presses" do
       expect(result["credit_hit_no_chore_endpoint"]).to be(true)
     end
   end
+
+  # A task button's endpoint answers `head :ok` with no body. Reading that as
+  # JSON threw, filed a press that worked as failed (the amber dot), and queued
+  # the task to run again on the next reconnect.
+  describe "a task button" do
+    it "takes an empty answer as success" do
+      expect(result["task_press"]["requests"]).to eq(["POST /byte/board/tasks/8/press"])
+      expect(result["task_press"]["syncPending"]).to eq("false")
+    end
+  end
 end

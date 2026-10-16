@@ -66,6 +66,26 @@ let audioCtx = new (window.AudioContext ||
   window.webkitAudioContext ||
   window.audioContext)();
 
+// A context made before anyone has touched the page starts suspended, and a
+// browser keeps it silent until a gesture lets it resume - so every tap or key
+// anywhere on the page is offered as that gesture until it takes.
+function resumeAudio() {
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+}
+["pointerdown", "keydown", "touchend"].forEach((evt) =>
+  document.addEventListener(evt, resumeAudio, { capture: true, passive: true }),
+);
+
+// Whether the browser will actually play a beep right now: "running", or
+// "suspended" while it is still waiting on a gesture.
+export function audioState() {
+  return audioCtx.state;
+}
+
+export function onAudioStateChange(cb) {
+  audioCtx.addEventListener("statechange", () => cb(audioCtx.state));
+}
+
 // -- All arguments are optional:
 
 // `duration` of the tone in milliseconds. Default is 500
@@ -77,7 +97,11 @@ export let beep = function (duration, frequency, volume, type, callback) {
   if (muted) {
     return;
   }
-  if (volume <= 0) {
+  resumeAudio();
+  // A tone the browser won't play is dropped rather than queued on a stopped
+  // clock, where it would wait and then burst out with every other one at the
+  // first tap.
+  if (volume <= 0 || audioCtx.state !== "running") {
     setTimeout(function () {
       if (callback) callback();
     }, duration);

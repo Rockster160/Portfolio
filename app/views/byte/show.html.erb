@@ -108,6 +108,7 @@
      <%# stays dark. See buddy/board_scope.js#feedOwnerMatches. %>
      data-board-owner-id="<%= @conversation.user_id %>"
      data-board-tags="<%= Array(@board_tags).to_json %>"
+     data-board-chore-dreams="<%= @conversation.chore_dreams? %>"
      <%# Whisper's state as this board wears it (asleep / gone), known before %>
      <%# the feed speaks, so the pet opens holding it rather than on its mood. %>
      data-board-whisper-state="<%= @board_whisper_state %>"
@@ -278,8 +279,47 @@
     <%# justified along the hero's bottom edge. Fed by the whisper-durations %>
     <%# monitor and painted by buddy/durations.js; a wholly separate surface %>
     <%# from the countdown-timer banner above, empty + hidden when none stand. %>
+    <% if @kiosk %>
+      <%# A wall screen's update, counting down along the top. Any touch puts it
+          back to the start; pause holds it, the arrow takes it now. Run by
+          reload_countdown.js. %>
+      <div class="byte-reload-countdown" data-reload-countdown hidden>
+        <button type="button" class="byte-reload-countdown-btn" data-reload-now
+                title="Reload now" aria-label="Reload now">
+          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+        <span class="byte-reload-countdown-count" data-reload-count></span>
+        <button type="button" class="byte-reload-countdown-btn" data-reload-pause>
+          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <g class="byte-reload-countdown-pause" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1"></rect>
+              <rect x="14" y="5" width="4" height="14" rx="1"></rect>
+            </g>
+            <path class="byte-reload-countdown-play" d="M7 5l12 7-12 7z" fill="currentColor"></path>
+          </svg>
+        </button>
+      </div>
+    <% end %>
     <% if @board %>
       <div class="byte-whisper-rings" data-whisper-rings hidden></div>
+      <%# Whether this screen can make its sounds: the Whisper page's speaker,
+          in the corner beside the settings gear, struck through while sound
+          won't play. Driven by buddy/sound_toggle.js. %>
+      <button type="button" class="byte-board-sound" data-board-sound data-state="on">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"></path>
+          <g class="byte-board-sound-waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M16 9.5a3.5 3.5 0 0 1 0 5"></path>
+            <path d="M18.5 7a7 7 0 0 1 0 10"></path>
+          </g>
+          <g class="byte-board-sound-off" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M16 9l5 6M21 9l-5 6"></path>
+          </g>
+        </svg>
+      </button>
     <% end %>
     <%# What Byte is doing in the background - the mirror of the timers, pinned %>
     <%# top-RIGHT. Reported by whatever is doing the work (the Mac, a worker) %>

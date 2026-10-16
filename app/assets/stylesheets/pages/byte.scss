@@ -6268,10 +6268,19 @@ dialog.byte-modal {
   }
 }
 
-// The pet's thought bubble: a cloud up beside its head with a trail of dots
-// falling toward it, so it reads as something the pet is thinking about rather
-// than saying. Softer than the alert bubble - a want, not a problem.
+// The pet's thought bubble, drawn like the pet's own thinking cloud: a white
+// puffed cloud outlined in the pet's color, with a trail of two outlined dots
+// falling toward its head - something it is thinking about, not saying.
+//
+// The cloud is the `::before` layer behind the words: one ellipse filling the
+// box with puffs around its edge, all sized in percentages so the cloud grows
+// with whatever it holds (a long name wraps and the cloud deepens to fit). The
+// outline is four hard drop-shadows of the union, which traces the scalloped
+// edge where a border could only trace the box.
 .byte-board-dream {
+  --dream-line: var(--bs-accent);
+  --dream-fill: #FFFFFF;
+
   position: absolute;
   top: calc(env(safe-area-inset-top) + 12%);
   right: 6%;
@@ -6281,40 +6290,51 @@ dialog.byte-modal {
   align-items: center;
   gap: 2px;
   width: max-content;
-  max-width: calc(min(42%, 260px));
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: var(--bs-them-bg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  color: var(--bs-text-buddy);
+  max-width: calc(min(46%, 280px));
+  // Room inside the scallops, so the words sit in the cloud's body.
+  padding: 22px 30px;
+  color: var(--bs-them-bg);
   font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 700;
+  line-height: 1.25;
   text-align: center;
   animation: byte-board-dream-float 6s ease-in-out infinite;
 
-  // The trail: two shrinking dots down and to the left, toward the head.
-  &::before,
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 50% 50% / 100% 78% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 14% 8% / 42% 56% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 54% 0 / 46% 56% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 90% 12% / 38% 52% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 100% 58% / 30% 56% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 76% 100% / 42% 52% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 30% 100% / 44% 54% no-repeat,
+      radial-gradient(closest-side, var(--dream-fill) 97%, transparent) 0 52% / 30% 58% no-repeat;
+    filter:
+      drop-shadow(3px 0 0 var(--dream-line))
+      drop-shadow(-3px 0 0 var(--dream-line))
+      drop-shadow(0 3px 0 var(--dream-line))
+      drop-shadow(0 -3px 0 var(--dream-line))
+      drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45));
+  }
+
+  // The trail: two shrinking outlined dots down and to the left, toward the
+  // head, painted in one layer.
   &::after {
     content: "";
     position: absolute;
-    border-radius: 50%;
-    background: var(--bs-them-bg);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  }
-
-  &::before {
-    width: 16px;
-    height: 16px;
-    left: 14%;
-    bottom: -20px;
-  }
-
-  &::after {
-    width: 9px;
-    height: 9px;
-    left: 4%;
+    left: 2%;
     bottom: -34px;
+    width: 34px;
+    height: 36px;
+    background:
+      radial-gradient(circle at 72% 24%, var(--dream-fill) 0 6px, var(--dream-line) 6px 9px, transparent 9.5px),
+      radial-gradient(circle at 22% 80%, var(--dream-fill) 0 3.5px, var(--dream-line) 3.5px 6px, transparent 6.5px);
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
   }
 
   &[hidden] {
@@ -6480,6 +6500,95 @@ dialog.byte-modal {
   &:hover,
   &:active {
     opacity: 1;
+  }
+}
+
+// A wall screen's update countdown, a small faint chip centered along the top,
+// level with the corner controls, so it reads as a note rather than an
+// interruption.
+.byte-reload-countdown {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-variant-numeric: tabular-nums;
+
+  .byte-reload-countdown-count {
+    min-width: 2ch;
+    text-align: center;
+  }
+
+  &[hidden] {
+    display: none;
+  }
+
+  .byte-reload-countdown-play {
+    display: none;
+  }
+
+  &[data-paused="true"] {
+    .byte-reload-countdown-pause { display: none; }
+    .byte-reload-countdown-play { display: inline; }
+  }
+}
+
+.ctr-byte .byte-app .byte-reload-countdown-btn {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.35) !important;
+  cursor: pointer;
+  transition: color 0.2s;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+}
+
+// The board's speaker, styled as the Whisper page's: a bare faint glyph, left
+// of the gear. Struck through whenever sound won't play - muted here, or the
+// browser still holding it back for a first tap.
+.ctr-byte .byte-app .byte-board-sound {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 20px);
+  right: calc(env(safe-area-inset-right) + 112px);
+  z-index: 6;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.25) !important;
+  cursor: pointer;
+  transition: color 0.2s;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.5) !important;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .byte-board-sound-off {
+    display: none;
+  }
+
+  &[data-state="muted"],
+  &[data-state="blocked"] {
+    .byte-board-sound-waves { display: none; }
+    .byte-board-sound-off { display: inline; }
   }
 }
 
@@ -7070,27 +7179,23 @@ $board-cell-max: 200px;
   border: 1px solid var(--bs-border);
   background: var(--bs-them-bg);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.3s ease;
 
   &[hidden] {
     display: none;
   }
-}
 
-// Done gets its own row with a divider under it, so it doesn't read as one more
-// group pill or sit close enough to the groups to be hit for one.
-.byte-board-tag-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--bs-border);
+  // Something typed and not yet saved.
+  &[data-dirty="true"] {
+    border-color: rgba(245, 165, 36, 0.7);
+  }
 
-  .byte-board-tag-label {
-    margin-bottom: 0;
+  // A save just landed.
+  &[data-saved="true"] {
+    border-color: var(--bs-accent);
   }
 }
+
 .byte-board-tag-label {
   display: block;
   margin-bottom: 8px;
@@ -7099,22 +7204,6 @@ $board-cell-max: 200px;
   text-transform: uppercase;
   color: var(--bs-muted);
 }
-// A filled, square-cornered button: the group options are outlined pills, so
-// the way out must look nothing like them.
-.ctr-byte .byte-app .byte-board-tag-done {
-  flex: none;
-  min-width: 72px;
-  min-height: 36px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 700;
-  border-radius: 10px;
-  border: 0;
-  background: var(--bs-accent-grad);
-  color: #FFFFFF !important;
-  cursor: pointer;
-}
-
 .byte-board-tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -7165,6 +7254,19 @@ $board-cell-max: 200px;
     border-color: transparent;
     background: var(--bs-accent-grad);
     color: #FFFFFF !important;
+  }
+}
+
+.ctr-byte .byte-app .byte-board-hidden {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-border);
+
+  .byte-board-tag-label {
+    margin-bottom: 0;
   }
 }
 
@@ -7255,14 +7357,32 @@ $board-cell-max: 200px;
   }
 }
 
-// The form is a `.byte-msg-form`, so it already lays its rows out and styles its
-// inputs/selects; it only needs its own top border dropped, since it already sits
-// under the section's divider. Both classes in the selector so it out-specifies
-// the `.byte-msg-form` base that sets the border and comes later in the file.
-.ctr-byte .byte-app .byte-msg-form.byte-board-button-form {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+// The credit-button dialog: orange while it holds changes not yet saved. A ring
+// in the shadow, since the modal base pins `border: none`.
+.ctr-byte dialog.byte-modal[data-dirty="true"] {
+  box-shadow: 0 0 0 1px rgba(245, 165, 36, 0.7), 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.byte-board-buttons-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  .byte-board-tag-label {
+    margin-bottom: 0;
+  }
+}
+
+.ctr-byte .byte-app .byte-board-bb-new {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: transparent;
+  color: var(--bs-text) !important;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 // Completes is a type-to-find field: the dropdown of matches hangs under the
@@ -7310,26 +7430,17 @@ $board-cell-max: 200px;
 }
 
 // The native colour well, kept small and tidy rather than the big default box.
-.ctr-byte .byte-app input.byte-msg-form-input[type="color"] {
+.ctr-byte .byte-modal input.byte-modal-input[type="color"] {
   width: 56px;
   min-height: 40px;
   padding: 3px;
 }
 
-.byte-board-button-form-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.ctr-byte .byte-app .byte-board-bb-save {
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 0;
-  background: var(--bs-accent-grad);
-  color: #FFFFFF !important;
-  font-size: 13px;
-  font-weight: 600;
+// The board's name heads the panel, with the groups below its divider.
+.byte-board-name {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bs-border);
 }
 
 // ---- this board's name and sharing, owner-only, inside the group picker ----
