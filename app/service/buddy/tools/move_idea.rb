@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :move_idea,
+  summary:     "Refile a stashed idea into another bucket (me / home / work).",
   description: <<~TXT,
     Refile a stashed brain-dump idea into a different bucket. Use when the
     person says to move one of their stashed ideas (from `stashed_ideas` in the

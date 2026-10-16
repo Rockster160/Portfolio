@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :check_travel_time,
+  summary:     "Drive time for something on the calendar: how long it takes, when to leave, when " \
+               "they'll be back.",
   description: <<~TXT,
     Work out the drive for something on the calendar: how long it takes to get
     there, what time to walk out of the door, and what time they are back home

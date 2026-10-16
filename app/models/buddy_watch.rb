@@ -21,8 +21,6 @@
 #  user_id              :bigint           not null
 #
 class BuddyWatch < ApplicationRecord
-  include DistanceHelper
-
   belongs_to :user
   belongs_to :byte_conversation
   # When present, the watch delivers to this person's companion instead of the
@@ -126,6 +124,7 @@ class BuddyWatch < ApplicationRecord
   validates :body,          presence: true, length: { maximum: 500 }
   validates :kind,          inclusion: { in: KINDS }
   validates :trigger_scope, presence: true
+  validates :listener,      presence: true
   validate  :listener_parses
 
   # WatchMatcher bails on any scope nothing is watching, off a cached set. A new
@@ -133,46 +132,19 @@ class BuddyWatch < ApplicationRecord
   # fire until the TTL rolls over.
   after_commit :bust_watch_scope_cache
 
-  # Written in Jil listener syntax rather than assembled from a named trigger.
+  # Has a condition at all. A row from before every watch carried a listener
+  # has none, and can't be edited as one.
   def custom?
     listener.present?
   end
 
-  # Same physical spot even after a rename: ~0.0015° ≈ 165m, forgiving enough
-  # for a parking lot / large complex. `action` is also checked, so this only
-  # ever compares arrivals-to-arrivals.
-  PLACE_NEAR_THRESHOLD = 0.0015
-
-  # How far a `not_place` reaches. Wider than a match on purpose: the car
-  # reports leaving home from past the home boundary, so "anywhere but home"
-  # has to keep excluding a departure a few hundred metres up the street.
-  NOT_PLACE_THRESHOLD = 0.005
-
-  # True when EVERY key in `match` is satisfied by the trigger payload.
-  # An empty `match` (e.g. deploy: "next deploy, no filter") matches any
-  # payload for the scope. Scalar keys (action, chore_name, event name) are
-  # compared exact-but-case-insensitive - the tool stores canonical names and
-  # the payload carries the same, so equality is both sufficient and safe.
-  # Substring matching is deliberately NOT used: it would make "uncompleted"
-  # match a "completed" watch. The `place` key is special: a location is
-  # matched by COORDINATE proximity (address identity) so a renamed place, or
-  # a second contact at the same address, still matches - see #place_matches?.
+  # Every watch is a Jil listener, matched by the same code a Jil task is -
+  # nested keys, regex, exclusions, `near()` - so a named trigger and a
+  # hand-written one can't disagree about what fired.
   def matches?(payload)
-    # A custom watch is a Jil listener, so it's matched by the same code a Jil
-    # task is - including dot-paths into nested payload keys, regex, and
-    # multi-term listeners, none of which the `match` hash below can express.
-    return ::Jil::ListenerMatch.call(listener, trigger_scope, payload) if custom?
+    return false if listener.blank?
 
-    data = payload.respond_to?(:with_indifferent_access) ? payload.with_indifferent_access : {}
-    (match || {}).all? { |key, want|
-      next place_matches?(want, data) if key.to_s == "place"
-      next !place_matches?(want, data, threshold: NOT_PLACE_THRESHOLD) if key.to_s == "not_place"
-
-      want = want.to_s.downcase.strip
-      next true if want.blank?
-
-      data[key].to_s.downcase.strip == want
-    }
+    ::Jil::ListenerMatch.call(listener, trigger_scope, payload)
   end
 
   private
@@ -197,22 +169,5 @@ class BuddyWatch < ApplicationRecord
     return if ::Jil::ListenerMatch.valid?(listener, user: user) && ::Jil::ListenerMatch.scope_of(listener) == trigger_scope
 
     errors.add(:listener, "isn't a listener that would ever fire")
-  end
-
-  # A place matches by coordinate proximity FIRST - two differently-named
-  # contacts at the same address share coordinates and cross-match, and a
-  # renamed place keeps matching. Falls back to name equality when either
-  # side lacks real coordinates (e.g. a non-GPS travel trigger).
-  def place_matches?(want, data, threshold: PLACE_NEAR_THRESHOLD)
-    want     = want.respond_to?(:with_indifferent_access) ? want.with_indifferent_access : {}
-    want_loc = Array(want[:loc]).map(&:to_f)
-    here_loc = [data[:lat].to_f, data[:lng].to_f]
-    both_have_coords = want_loc.length == 2 && want_loc.all?(&:nonzero?) && here_loc.all?(&:nonzero?)
-    return true if both_have_coords && near?(here_loc, want_loc, threshold)
-
-    want_name = want[:name].to_s.downcase.strip
-    return false if want_name.blank?
-
-    data[:location].to_s.downcase.strip == want_name
   end
 end

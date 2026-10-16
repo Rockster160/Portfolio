@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :unlink_records,
+  summary:     "Break a pairing made with link_records.",
   description: <<~TXT,
     Break a pairing, so one thing stops following another - "logging coffee
     shouldn't tick off the chore any more", "unlink those two".

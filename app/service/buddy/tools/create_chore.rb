@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :create_chore,
+  summary:     "Create a NEW repeating or one-off chore. Marking one done is complete_chore; " \
+               "changing one is edit_chore.",
   description: <<~TXT,
     Create a NEW chore in the user's household. Use when the user wants a task
     they haven't been tracking yet to become a repeating (or one-off) chore.

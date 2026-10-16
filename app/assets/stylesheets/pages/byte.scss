@@ -7257,6 +7257,7 @@ $board-cell-max: 200px;
   }
 }
 
+// Scoped up past the app's form reset, like the name above.
 .ctr-byte .byte-app .byte-board-hidden {
   display: flex;
   flex-direction: column;
@@ -7436,8 +7437,10 @@ $board-cell-max: 200px;
   padding: 3px;
 }
 
-// The board's name heads the panel, with the groups below its divider.
-.byte-board-name {
+// The board's name heads the panel, with the groups below its divider. Scoped
+// up past `.ctr-byte .byte-app form`, which zeroes every form's margin, padding
+// and border inside the app.
+.ctr-byte .byte-app .byte-board-name {
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--bs-border);

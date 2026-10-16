@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :withdraw_pebbles,
+  summary:     "Take pebbles out of their chore balance for something they spent them on.",
   description: <<~TXT,
     Take pebbles OUT of their chore balance - what they cashed in and what
     they spent it on. Use when they say they've spent some: "withdraw 50",

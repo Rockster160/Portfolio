@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :undo_chore_completion,
+  summary:     "Remove a chore completion made by mistake. Fixing its note or time is " \
+               "edit_chore_completion.",
   description: <<~TXT,
     Undo a chore completion - remove a record that a chore was done. Use
     when the user says they marked something by mistake, or wants to

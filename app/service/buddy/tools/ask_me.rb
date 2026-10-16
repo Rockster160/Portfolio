@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :ask_me,
+  summary:     "Mid-sequence only: ask the PERSON something and hold the remaining steps until " \
+               "they answer. An ordinary question is just asked in your reply.",
   description: <<~TXT,
     Put a question to the PERSON and hold the rest of the sequence until they
     answer it, keeping what they say for a later step to use.

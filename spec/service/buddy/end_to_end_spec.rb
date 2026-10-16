@@ -17,6 +17,7 @@ RSpec.describe "Buddy end-to-end" do
     side_effects  = @side_effects
     Buddy::Tools.register(
       name:        :e2e_log,
+      summary:     "spec-only",
       description: "spec-only",
       args:        { name: { type: :string, required: true } },
       confirm:     ->(p, _) { { summary: "Log #{p[:name]}?", resolved: {} } },

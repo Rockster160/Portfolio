@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_routine,
+  summary:     "Change ONE step of a saved routine and keep the rest. Replacing the whole thing " \
+               "is save_routine.",
   description: <<~TXT,
     Change ONE step of a routine they already saved, leaving every other step
     exactly as it is. "The lockdown script was supposed to be darkness, not

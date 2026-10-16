@@ -164,7 +164,8 @@ module Buddy
         File.read(GUIDE_PATH)
       rescue StandardError
         "Listener syntax: scope:key:value, whitespace-separated terms all match, " \
-        "values are case-insensitive substrings, /regex/ and ANY(a b) supported."
+        "values are case-insensitive substrings, /regex/ and ANY(a b) supported, " \
+          "a leading - excludes a term, near(lat lng 200m) matches a payload's lat/lng."
       end
 
       # Every listening task the person can reach. Function tasks are dropped -

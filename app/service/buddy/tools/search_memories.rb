@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :search_memories,
+  summary:     "Search what you've kept about them beyond standing preferences - things they told " \
+               "you, what happened to them.",
   description: <<~TXT,
     Everything you've kept about this person that isn't a standing preference.
 

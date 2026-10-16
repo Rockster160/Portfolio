@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :search_inventory,
+  summary:     "Find where a physical thing is, or what's in a box.",
   description: <<~TXT,
     Find a PHYSICAL thing, or find out what's in a box. The inventory is the
     labelled boxes and bins around the house and everything filed inside them,

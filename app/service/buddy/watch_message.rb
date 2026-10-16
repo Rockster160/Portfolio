@@ -104,18 +104,18 @@ module Buddy
     # is the same word on every firing. The condition restated, not news.
     #
     # An `event` watch is always in that shape - the payload's name IS the
-    # event name in `match`, so there was nothing the append could ever add,
-    # and a watch pointed at another person sent them the internal name of the
-    # event as though it were part of the message.
+    # event name its listener names, so there was nothing the append could
+    # ever add, and a watch pointed at another person sent them the internal
+    # name of the event as though it were part of the message.
     #
-    # Checked against the match rather than the scope, because the same watch
-    # on a free-form key is carrying real news: a shared-agenda watch matches
-    # only on the action, and what landed on the calendar is the whole point.
+    # Checked against the listener rather than the scope, because the same
+    # watch on a free-form key is carrying real news: a shared-agenda watch
+    # matches only on the action, and what landed on the calendar is the point.
     def restates_match?(watch, payload)
       name = detail_name(payload).to_s.downcase.strip
       return false if name.blank?
 
-      (watch.match || {}).any? { |_key, want| want.to_s.downcase.strip == name }
+      ::Jil::ListenerMatch.required_values(watch.listener).any? { |want| want.downcase == name }
     end
 
     # What actually changed, when the trigger carries it.

@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
+  summary:     "A nudge at a clock time or after a delay (\"remind me at 3\", \"in an hour\"), once " \
+               "or repeating. On a condition is remind_when; something that rings is alarm.",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
@@ -490,7 +492,6 @@ Buddy::Tools.register(
         notify_user_id: notify_user&.id,
         recipient_name: notify_user&.first_name,
         stop_scope:     stop_condition&.scope,
-        stop_match:     stop_condition&.match,
         stop_listener:  stop_condition&.listener,
         stop_human:     stop_condition&.human,
         stop_past:      stop_condition&.past,
@@ -542,7 +543,6 @@ Buddy::Tools.register(
         kind:              :cancel,
         trigger_scope:     payload[:stop_scope],
         listener:          payload[:stop_listener],
-        match:             payload[:stop_match] || {},
         body:              payload[:stop_human].to_s.presence || "That's done",
         one_shot:          true,
         metadata:          {

@@ -15,6 +15,7 @@
 # everybody with the owner's position.
 Buddy::Tools.register(
   name:        :check_location,
+  summary:     "Where they are right now, or whether they're at a given place.",
   description: <<~TXT,
     Where they are right now. Use for "where am I", "am I home yet", "am I
     still at the office", and whenever you need to know before doing something

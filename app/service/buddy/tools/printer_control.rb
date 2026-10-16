@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :printer_control,
+  summary:     "Preheat, cool down, or home the 3D printer - the machine itself, no file.",
   description: <<~TXT,
     Warm the 3D printer up, cool it down, or send the head home. Nothing is
     printed and no file is chosen - this is the machine itself.

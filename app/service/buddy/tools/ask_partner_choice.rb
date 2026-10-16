@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :ask_partner_choice,
+  summary:     "Ask a household member to PICK ONE of a few options, shown to them as buttons.",
   description: <<~TXT,
     Ask the user's partner (or a household member) a PICK-ONE question through
     their companion. Use for "ask if they'd rather do dishes or mop",

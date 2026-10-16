@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :update_delivery,
+  summary:     "Correct a package already on the delivery list - its date, name or tracking.",
   description: <<~TXT,
     Correct something already on the delivery list. Use when they tell you a
     package has changed or was filed wrong - "the desk is coming Friday now",

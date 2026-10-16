@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :finish_idea,
+  summary:     "Tick off a held idea because they did it or it resolved itself.",
   description: <<~TXT,
     Tick a held item off - they did the thing, or it resolved itself, so it
     stops coming back up. Use this when they report doing something you're

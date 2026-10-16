@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :define_term,
+  summary:     "Teach the household glossary what a word means when they explain it (\"the plunge " \
+               "is the trailhead in Alpine\").",
   description: <<~TXT,
     Teach the household glossary a word. Use it when they explain what something
     means ("muti is medicine", "when I say the plunge I mean the trailhead in

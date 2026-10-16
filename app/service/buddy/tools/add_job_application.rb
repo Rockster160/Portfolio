@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :add_job_application,
+  summary:     "Start tracking a company that isn't on their job board yet, with its first beat. " \
+               "A company already on the board is add_job_note.",
   feature:     :job_search,
   description: <<~TXT,
     Start tracking a company that isn't on their board yet, with the first beat

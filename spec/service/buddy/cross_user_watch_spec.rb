@@ -29,7 +29,7 @@ RSpec.describe "Buddy cross-user watches" do
       watch = BuddyWatch.create!(
         user: chelsea, notify_user: rocco, byte_conversation: convo,
         kind: "prompt", body: "something landed on the shared agenda",
-        trigger_scope: "agenda_item", match: { "action" => "created" }, one_shot: false
+        trigger_scope: "agenda_item", listener: "agenda_item:action::created", one_shot: false
       )
       Buddy::WatchMatcher.fire!(watch, { name: "Vet appt" })
       watch
@@ -60,15 +60,15 @@ RSpec.describe "Buddy cross-user watches" do
     end
 
     # ...but only the detail that is actually news. An `event` watch matches on
-    # the event NAME, so the name the payload carries is the one in `match` on
-    # every firing - a constant, and the internal one at that. "I'm on my way
+    # the event NAME, so the name the payload carries is the one its listener
+    # names on every firing - a constant, and the internal one at that. "I'm on my way
     # home" reached a partner with the name of the charge that tripped it
     # stapled to the end.
     it "doesn't staple on a detail that only restates what the watch matched" do
       watch = BuddyWatch.create!(
         user: rocco, notify_user: chelsea, byte_conversation: rocco_convo,
         kind: "prompt", body: "I'm on my way home.",
-        trigger_scope: "event", match: { "name" => "Transaction", "action" => "added" },
+        trigger_scope: "event", listener: "event:name::Transaction action::added",
         one_shot: true
       )
       Buddy::WatchMatcher.fire!(watch, { "name" => "Transaction", "action" => "added" })
@@ -93,7 +93,7 @@ RSpec.describe "Buddy cross-user watches" do
       expect(watch.trigger_scope).to eq("agenda_item")
       expect(watch.user).to eq(chelsea)            # owner, so the trigger reaches it
       expect(watch.notify_user).to eq(rocco)       # requester still gets told
-      expect(watch.match["agenda_id"]).to eq(agenda.id)
+      expect(watch.listener).to eq("agenda_item:action::created agenda_id::#{agenda.id}")
     end
 
     it "sends a household member a heads-up on their own trigger (notify arg)" do
@@ -112,7 +112,7 @@ RSpec.describe "Buddy cross-user watches" do
 
   describe "agenda_item is a watchable scope" do
     it "matches on agenda_id + created action" do
-      watch = BuddyWatch.new(trigger_scope: "agenda_item", match: { "action" => "created", "agenda_id" => 42 })
+      watch = BuddyWatch.new(trigger_scope: "agenda_item", listener: "agenda_item:action::created agenda_id::42")
       expect(watch.matches?({ action: "created", agenda_id: 42, name: "x" })).to be(true)
       expect(watch.matches?({ action: "created", agenda_id: 99 })).to be(false)
       expect(watch.matches?({ action: "updated", agenda_id: 42 })).to be(false)

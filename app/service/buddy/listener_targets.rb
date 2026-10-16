@@ -39,7 +39,9 @@ module Buddy
       return nil if listener.blank? || user.nil?
 
       scope = Jil::ListenerMatch.scope_of(listener)
-      terms = Jil::ListenerMatch.terms(listener)
+      # An excluded term names something the event must NOT be, so a list or
+      # value that doesn't exist only makes it trivially true, never dead.
+      terms = Jil::ListenerMatch.terms(listener).reject { |term| Jil::ListenerMatch.negated?(term) }
       terms.filter_map { |term| gap_in(term, user) || dead_value(term, scope, user) }.first
     rescue StandardError => e
       Rails.logger.warn("[Buddy::ListenerTargets] check failed: #{e.class}: #{e.message}")
@@ -80,7 +82,7 @@ module Buddy
       parts.shift if parts.first.to_s.casecmp?(scope.to_s)
       return [nil, nil] if parts.length < 2
 
-      [parts[0..-2].join("."), parts.last]
+      [parts[0..-2].join("."), Tokenizing::Breaker.unwrap(parts.last)]
     end
 
     def matchable?(seen, value)

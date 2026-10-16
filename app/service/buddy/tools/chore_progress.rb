@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :chore_progress,
+  summary:     "How they did on their DAILY chores over recent days. A lookup - marking one done " \
+               "is complete_chore.",
   description: <<~TXT,
     Look up how the person did on their DAILY chores over recent days, then tell
     them. Use when they ask "did I get everything done yesterday", "how'd my

@@ -34,12 +34,12 @@ RSpec.describe Buddy::WatchMatcher do
       kind:              "prompt",
       body:              "floss",
       trigger_scope:     "chore_completion",
-      match:             { "action" => "completed", "chore_name" => "Brush Teeth" },
+      listener:          "chore_completion:action::completed chore_name::\"Brush Teeth\"",
     }.merge(attrs))
   end
 
   describe "#matches?" do
-    it "requires every match key, case-insensitive, indifferent keys, substring ok" do
+    it "requires every term, case-insensitive, indifferent keys" do
       w = make_watch
       expect(w.matches?("action" => "completed", "chore_name" => "Brush Teeth")).to be(true)
       expect(w.matches?(action: "completed", chore_name: "brush teeth")).to be(true)
@@ -47,8 +47,8 @@ RSpec.describe Buddy::WatchMatcher do
       expect(w.matches?("action" => "uncompleted", "chore_name" => "Brush Teeth")).to be(false)
     end
 
-    it "treats an empty match as 'any payload' (deploy)" do
-      w = make_watch(trigger_scope: "deploy", match: {})
+    it "treats a bare scope as 'any payload' (deploy)" do
+      w = make_watch(trigger_scope: "deploy", listener: "deploy")
       expect(w.matches?("sha" => "abc123")).to be(true)
     end
   end
@@ -59,7 +59,7 @@ RSpec.describe Buddy::WatchMatcher do
   # watch 4 sat unfired for two days across multiple deploys while Buddy had
   # already told the person it would let them know.
   describe "the deploy signal" do
-    let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "let you know the deploy finished") }
+    let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "let you know the deploy finished") }
 
     it "fires a deploy watch off the monitor broadcast that actually carries it" do
       described_class.dispatch(user, :monitor, { channel: "deploy:success", sha: "abc123" })
@@ -151,7 +151,7 @@ RSpec.describe Buddy::WatchMatcher do
 
     # "Ping me on EVERY deploy" — the standing form.
     it "keeps a repeating deploy watch alive across deploys, either outcome" do
-      repeating = make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+      repeating = make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy's done", one_shot: false)
 
       described_class.dispatch(user, :monitor, { channel: "deploy:success" })
       # Far enough apart to be two deploys rather than one deploy talking twice.
@@ -177,7 +177,7 @@ RSpec.describe Buddy::WatchMatcher do
     # workflow posts them at deploy=start, which is what creates the Deploy
     # ActionEvent, minutes before any of this fires.
     describe "the commit behind the deploy" do
-      let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "deploy news", one_shot: false) }
+      let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy news", one_shot: false) }
 
       def deploy_event!(**data)
         ActionEvent.create!(
@@ -238,7 +238,7 @@ RSpec.describe Buddy::WatchMatcher do
 
       it "does not go looking on a scope that isn't a deploy" do
         deploy_event!
-        make_watch(trigger_scope: "item", match: {}, body: "🔔 item news", one_shot: false)
+        make_watch(trigger_scope: "item", listener: "item", body: "🔔 item news", one_shot: false)
 
         described_class.dispatch(user, :item, { "name" => "Milk" })
 
@@ -259,7 +259,7 @@ RSpec.describe Buddy::WatchMatcher do
     # signal. What the debounce is FOR is three voices saying the same thing;
     # two voices disagreeing is the one case that has to get through.
     describe "when the outcome changes after the first signal" do
-      let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "deploy news", one_shot: false) }
+      let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy news", one_shot: false) }
 
       it "reports a failure that lands seconds after a premature success" do
         described_class.dispatch(user, :monitor, { deploy: "success" })
@@ -316,7 +316,7 @@ RSpec.describe Buddy::WatchMatcher do
     # is how close together they are.
     describe "one deploy announcing itself more than once" do
       let!(:repeating) {
-        make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+        make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy's done", one_shot: false)
       }
 
       # The enclosing one-shot would fire on the first signal and go terminal,
@@ -371,7 +371,7 @@ RSpec.describe Buddy::WatchMatcher do
       let(:watch) do
         make_watch(
           trigger_scope: "travel",
-          match: { "action" => "arrived", "place" => { "name" => "Serenity", "loc" => [40.5, -111.9] } },
+          listener: "travel:action::arrived near(40.5 -111.9 165m)",
         )
       end
 
@@ -391,11 +391,23 @@ RSpec.describe Buddy::WatchMatcher do
         expect(watch.matches?(payload)).to be(false)
       end
 
-      it "falls back to name equality when the trigger carries no coordinates" do
-        name_watch = make_watch(
-          trigger_scope: "travel",
-          match: { "action" => "arrived", "place" => { "name" => "Costco" } },
-        )
+      it "never matches a trigger that carries no coordinates, excluded or not" do
+        expect(watch.matches?("action" => "arrived", "location" => "Serenity")).to be(false)
+
+        elsewhere = make_watch(trigger_scope: "travel", listener: "travel:action::arrived -near(40.5 -111.9)")
+        expect(elsewhere.matches?("action" => "arrived", "location" => "Costco")).to be(false)
+      end
+
+      it "matches anywhere but a place by excluding it" do
+        elsewhere = make_watch(trigger_scope: "travel", listener: "travel:action::departed -near(40.5 -111.9 550m)")
+
+        expect(elsewhere.matches?("action" => "departed", "lat" => 40.503, "lng" => -111.9)).to be(false)
+        expect(elsewhere.matches?("action" => "departed", "lat" => 40.7, "lng" => -111.7)).to be(true)
+        expect(elsewhere.matches?("action" => "arrived", "lat" => 40.7, "lng" => -111.7)).to be(false)
+      end
+
+      it "names a contact without coordinates by its location" do
+        name_watch = make_watch(trigger_scope: "travel", listener: "travel:action::arrived location::Costco")
         expect(name_watch.matches?("action" => "arrived", "location" => "costco")).to be(true)
         expect(name_watch.matches?("action" => "arrived", "location" => "Target")).to be(false)
       end
@@ -410,7 +422,7 @@ RSpec.describe Buddy::WatchMatcher do
     let!(:feed) {
       make_watch(
         trigger_scope: "item",
-        match:         { "action" => "added" },
+        listener:      "item:action::added",
         body:          "🔔 Claude list got a new item in Ocs-Backend.",
         one_shot:      false,
       )
@@ -450,7 +462,7 @@ RSpec.describe Buddy::WatchMatcher do
     # been through on the way, and which of two things to say.
     describe "when the body is written as a template" do
       def announce(body, payload, scope: :event)
-        make_watch(trigger_scope: scope.to_s, match: {}, body: body, one_shot: false)
+        make_watch(trigger_scope: scope.to_s, listener: scope.to_s, body: body, one_shot: false)
         described_class.dispatch(user, scope, payload)
         lines.last
       end
@@ -509,7 +521,7 @@ RSpec.describe Buddy::WatchMatcher do
     end
 
     it "keeps composing the one-shot kind, which fires once and is worth a turn" do
-      one_off = make_watch(trigger_scope: "item", match: { "action" => "added" }, body: "grab the thing")
+      one_off = make_watch(trigger_scope: "item", listener: "item:action::added", body: "grab the thing")
 
       described_class.dispatch(user, :item, { "action" => "added", "name" => "whatever" })
 
@@ -518,7 +530,7 @@ RSpec.describe Buddy::WatchMatcher do
     end
 
     it "builds the deploy line from the outcome rather than the stored body" do
-      make_watch(trigger_scope: "deploy", match: {}, body: "Ping me when a deploy finishes.", one_shot: false)
+      make_watch(trigger_scope: "deploy", listener: "deploy", body: "Ping me when a deploy finishes.", one_shot: false)
 
       described_class.dispatch(user, :deploy, { deploy: "failed", sha: "bc271e0abc", message: "relay fixes" })
 
@@ -529,7 +541,7 @@ RSpec.describe Buddy::WatchMatcher do
     # The one place a glyph is doing real work: which outcome it was, legible
     # before you've read a word of it.
     it "marks the two deploy outcomes apart at a glance" do
-      make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+      make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy's done", one_shot: false)
 
       described_class.dispatch(user, :deploy, { deploy: "finished" })
       travel(10.minutes) { described_class.dispatch(user, :deploy, { deploy: "failed" }) }
@@ -587,7 +599,7 @@ RSpec.describe Buddy::WatchMatcher do
 
       BuddyWatch.create!(
         user: user, byte_conversation: convo, body: "milk landed",
-        trigger_scope: "item", listener: "item:action:added", match: {},
+        trigger_scope: "item", listener: "item:action:added",
       )
 
       expect(described_class.watched_scopes).to include("item")
@@ -614,7 +626,7 @@ RSpec.describe Buddy::WatchMatcher do
 
   describe "wired into Jil::Executor.trigger" do
     it "fires a deploy watch through the real trigger chokepoint" do
-      w = make_watch(trigger_scope: "deploy", match: {}, body: "deploy's live")
+      w = make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy's live")
       Jil::Executor.trigger(user, :deploy, { "id" => "deploy", "deploy" => "finished", "sha" => "abc" })
       expect(w.reload.fired_at).to be_present
     end

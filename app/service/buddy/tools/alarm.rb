@@ -1,5 +1,8 @@
 Buddy::Tools.register(
   name:        :alarm,
+  summary:     "An ALARM that rings out loud until acknowledged - at a time, after a delay, or " \
+               "when something happens. A quiet nudge is schedule_reminder; a countdown is " \
+               "set_timer.",
   description: <<~TXT,
     Set an ALARM: it rings out loud and keeps ringing until they acknowledge it,
     and pushes to their phone the same moment. "Wake me at 6:30", "alarm in 20
@@ -135,7 +138,7 @@ Buddy::Tools.register(
     # Two alarms on one condition is one alarm they can't switch off, since
     # acknowledging is a single tap and the second one starts again underneath
     # it. Worth saying out loud before a duplicate is added silently.
-    twin    = ctx.existing_watch_twin(condition.scope, condition.match, owner: condition.owner, listener: condition.listener)
+    twin    = ctx.existing_watch_twin(condition.scope, condition.listener, owner: condition.owner)
     warning = twin && "One is ALREADY listening for this: #{twin.body.to_s.truncate(60).inspect}. " \
                       "Setting this leaves both. Say that plainly and offer to retire the old one " \
                       "(cancel_reminder) - don't add a second one silently."
@@ -144,7 +147,6 @@ Buddy::Tools.register(
       summary:  ["#{framed}?", warning].compact.join(" "),
       resolved: {
         trigger_scope:  condition.scope,
-        match:          condition.match,
         listener:       condition.listener,
         human_when:     human,
         one_shot:       !every,
@@ -187,7 +189,6 @@ Buddy::Tools.register(
       body:              payload[:label].to_s.strip.first(500),
       trigger_scope:     payload[:trigger_scope].to_s,
       listener:          payload[:listener].presence,
-      match:             payload[:match] || {},
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
       expires_at:        (Time.zone.parse(payload[:expires_at_iso].to_s) if payload[:expires_at_iso].present?),
       metadata:          { "human_when" => payload[:human_when].to_s },

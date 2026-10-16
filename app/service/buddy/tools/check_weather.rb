@@ -11,6 +11,7 @@
 # kept by hand.
 Buddy::Tools.register(
   name:        :check_weather,
+  summary:     "Current weather and today's high/low, at home or another place.",
   description: <<~TXT,
     Look up the current weather + today's high/low for a place, then tell the
     person about it in your own words. Use whenever they ask about the weather,

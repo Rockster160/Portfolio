@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :forget_routine,
+  summary:     "Delete a saved routine.",
   description: <<~TXT,
     Delete one of their saved routines. Use when they say to drop it, forget it,
     or that they don't use it anymore. `name` is fuzzy - match it against the

@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :elaborate_idea,
+  summary:     "Add to an idea you're already holding instead of starting a second one.",
   description: <<~TXT,
     Add to something you're already holding, instead of starting a second pile
     for the same thought. Use it whenever they come back to an idea that's

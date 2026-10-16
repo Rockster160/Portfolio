@@ -1013,6 +1013,7 @@ module Buddy
         spoken    = previous&.dig(:text).presence
         proposals = []
         rounds    = 0
+        loads     = 0
         @failed   = Set.new
         @seen     = Set.new
         @acted    = false
@@ -1108,6 +1109,14 @@ module Buddy
           # count as a proposal would trip the all-discarded fallback and replace
           # a perfectly good "I couldn't find that one, which did you mean?".
           proposals.concat(calls.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) })
+
+          # A round that only opened tools gave the person nothing, so it
+          # doesn't use up one of theirs.
+          only_loaded = calls.all? { |c| Buddy::ToolIndex.handles?(c[:name]) }
+          if only_loaded && loads < Buddy::ToolIndex::MAX_LOAD_ROUNDS
+            loads  += 1
+            rounds -= 1
+          end
 
           break if rounds >= MAX_ROUNDS
           # Out of budget: another round would just abort on arrival. Take what
@@ -1262,9 +1271,17 @@ module Buddy
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
         return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
+        if Buddy::ToolIndex.handles?(name)
+          return JSON.generate(Buddy::ToolIndex.load(call[:arguments], user: @user, loaded: loaded_tools))
+        end
 
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+        # Called off its index line without loading it first. It runs as any
+        # call does; if it fails for want of the instructions, the instructions
+        # are there on the next round and the failure says so.
+        unread = Buddy::ToolIndex.called(name, loaded: loaded_tools)
 
         # THE gate, and it has to be HERE: an acting answering tool runs inside
         # `resolve_call` (see its `answers?` branch), so anywhere downstream is
@@ -1299,6 +1316,7 @@ module Buddy
           result = result.except(:asked_choice)
         end
         @failed << call[:call_id] if result[:status].to_s == "failed"
+        result = result.merge(how: Buddy::ToolIndex::UNREAD_RETRY) if unread && result[:status].to_s == "failed"
         # "Do this now and that at 11" is a real sentence. Once the model has
         # actually put something on the clock this turn, it has understood the
         # time, and an immediate call after that is a second request rather than
@@ -2841,21 +2859,27 @@ module Buddy
       # Buddy::Tools made this argument for `today_briefing` alone, and it holds
       # word for word for the rest: prose telling a model not to call a tool is
       # advice, and not offering it is the enforcement.
+      #
+      # Asked every round rather than once a turn: a round that called
+      # `load_tools` changes what the next one is offered (see Buddy::ToolIndex).
       def tools
         return [] if today_briefing?
 
-        @tools ||= (
-          all = [
-            ContextTool.schema(user: @user, briefing: false),
-            PromptTool.schema,
-            ImageTool.schema,
-            ListenerTool.schema,
-            *Buddy::SideEffects.function_schemas,
-            *Buddy::Tools.function_schemas(user: @user),
-          ].compact
-          named = seed_tools
-          named.empty? ? all : all.select { |schema| named.include?(schema[:name].to_s) }
-        )
+        named = seed_tools
+        if named.any?
+          @seeded_tools ||= Buddy::ToolIndex.everything(user: @user).select { |schema|
+            named.include?(schema[:name].to_s)
+          }
+          return @seeded_tools
+        end
+
+        Buddy::ToolIndex.schemas(user: @user, loaded: loaded_tools)
+      end
+
+      # The indexed tools this turn has opened. Kept across a retried attempt:
+      # the second try is the same request and needs the same tools.
+      def loaded_tools
+        @loaded_tools ||= Set.new
       end
 
       # A seed that came to have ONE thing done is offered the tools for that

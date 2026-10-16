@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :read_idea,
+  summary:     "Open one held thought in full, with every note added to it.",
   description: <<~TXT,
     Open one held thought in full - the seed they started with and every note
     added since, oldest first, each stamped with how long ago it landed. The

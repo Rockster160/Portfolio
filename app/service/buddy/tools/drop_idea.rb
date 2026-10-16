@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :drop_idea,
+  summary:     "Forget a stashed idea entirely. If they DID it, that's finish_idea.",
   description: <<~TXT,
     Forget / drop a stashed brain-dump idea. Use when the person says to forget
     it, drop it, or never mind about one of their `stashed_ideas`. `id` is the

@@ -552,21 +552,14 @@ module Buddy
     # existing_agenda_twin: surface it before Buddy speaks, so a second one is a
     # choice rather than a surprise.
     #
-    # It's the invisible ones that hurt. A "deploy" watch carries an empty match,
-    # so every deploy watch is identical by construction and there is nothing in
-    # the request to tell one from another - prod had a two-day-old one-shot
-    # nobody remembered sitting behind a fresh repeating one, and a single deploy
-    # pinged twice. Two reminders for arriving home ("shower", "do laundry") hit
-    # this too and are perfectly legitimate; the point is to mention it, never to
-    # refuse.
-    # Two watches are twins when they'd fire on the same thing. For a named
-    # trigger that's the match hash; for a hand-written one it's the listener,
-    # because every custom watch carries an empty match and comparing those
-    # would call any two watches on the same scope duplicates.
-    def existing_watch_twin(scope, match, owner: user, listener: nil)
-      scoped = BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s)
-      scoped = listener.present? ? scoped.where(listener: listener) : scoped.where(listener: nil, match: (match || {}))
-      scoped.order(:id).last
+    # It's the invisible ones that hurt. Every deploy watch listens on the same
+    # bare `deploy`, so there is nothing in the request to tell one from another
+    # - a forgotten one-shot behind a fresh repeating one pings twice for one
+    # deploy. Two reminders for arriving home ("shower", "do laundry") hit this
+    # too and are perfectly legitimate; the point is to mention it, never to
+    # refuse. Two watches are twins when their listeners are the same.
+    def existing_watch_twin(scope, listener, owner: user)
+      BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s, listener: listener).order(:id).last
     rescue StandardError => e
       Rails.logger.warn("[Buddy::ToolContext] watch twin lookup failed: #{e.class}: #{e.message}")
       nil

@@ -198,7 +198,6 @@ module Buddy
         kind:              :cancel,
         trigger_scope:     condition.scope,
         listener:          condition.listener,
-        match:             condition.match || {},
         body:              condition.human.to_s.presence || "That's done",
         one_shot:          true,
         metadata:          {

@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :check_deliveries,
+  summary:     "Look up packages on the way or already arrived - what, when, which carrier.",
   description: <<~TXT,
     Look up the packages on their way: what's coming, when it's due, who's
     carrying it, and what's already turned up. Built from the shipping emails

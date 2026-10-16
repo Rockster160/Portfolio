@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :skip_prompt,
+  summary:     "Skip or dismiss one of the app's pending prompts.",
   description: <<~TXT,
     Skip / dismiss one of the app's pending prompts on the person's behalf.
     These are the surveys/questions in the `pending_prompts` section of

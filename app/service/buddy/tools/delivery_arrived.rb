@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :delivery_arrived,
+  summary:     "Mark a package on the delivery list as arrived.",
   description: <<~TXT,
     Mark something on the delivery list as turned up. Use when they say a
     package came - "the desk got here", "my light sockets arrived", "it came

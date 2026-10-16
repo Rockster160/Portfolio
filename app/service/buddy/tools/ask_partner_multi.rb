@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :ask_partner_multi,
+  summary:     "Ask a household member a SELECT-ALL question - several options, they tick any " \
+               "number.",
   description: <<~TXT,
     Ask the user's partner (or a household member) a SELECT-ALL / pick-any
     question through their companion. Use for "ask which love languages

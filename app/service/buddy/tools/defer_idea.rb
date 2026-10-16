@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :defer_idea,
+  summary:     "Push a stashed idea off to bring up again later.",
   description: <<~TXT,
     Push a stashed brain-dump idea off to bring up later. Use when the person
     says "not now, bring that one up later" about one of their `stashed_ideas`.

@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :request_feature,
+  summary:     "Write down something they asked for that you CAN'T do yet, the moment you hit the " \
+               "edge of your tools.",
   description: <<~TXT,
     Write down something you were asked for and CAN'T DO. Use it the moment you
     hit the edge of your tools.

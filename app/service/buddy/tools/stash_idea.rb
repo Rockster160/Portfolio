@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :stash_idea,
+  summary:     "Hold onto a passing thought - an idea, a worry, a follow-up - so it can't get " \
+               "lost. A durable fact about them is remember.",
   description: <<~TXT,
     Hold onto a THOUGHT that came up in passing so it can't get lost - an idea,
     a worry, a question to look into, a follow-up they'd be annoyed to have

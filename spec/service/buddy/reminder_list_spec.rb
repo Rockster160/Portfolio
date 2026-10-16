@@ -16,7 +16,7 @@ RSpec.describe Buddy::ReminderList do
   def watch!(body:, scope: "travel", human: nil)
     BuddyWatch.create!(
       user: user, byte_conversation: convo, kind: "prompt", body: body,
-      trigger_scope: scope, match: {}, metadata: { "human_when" => human }.compact
+      trigger_scope: scope, listener: scope, metadata: { "human_when" => human }.compact
     )
   end
 

@@ -292,7 +292,7 @@ module Buddy
       return unless record.is_a?(BuddyWatch) && edits.key?(:listener)
 
       listener = edits[:listener].to_s.strip
-      return fail_with("a named trigger has no condition to type") unless record.custom?
+      return fail_with("this watch has no condition to type") unless record.custom?
       return fail_with("it needs a condition") if listener.empty?
 
       record.listener      = listener

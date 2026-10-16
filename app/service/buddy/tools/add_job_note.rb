@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :add_job_note,
+  summary:     "Log a beat on a job application already on the board - a reply, a call, an " \
+               "interview booked, an offer or a rejection.",
   feature:     :job_search,
   description: <<~TXT,
     Log a beat on one of their job applications - a reply came in, a call

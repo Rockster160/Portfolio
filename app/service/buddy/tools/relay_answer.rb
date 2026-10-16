@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :relay_answer,
+  summary:     "Send their answer back to whoever asked them an open question through you.",
   description: <<~TXT,
     Send the user's answer back to whoever asked them an open question through
     you. You'll see any open questions in your context ("Passing along" /

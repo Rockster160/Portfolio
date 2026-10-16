@@ -1,5 +1,8 @@
 Buddy::Tools.register(
   name:        :set_timer,
+  summary:     "Start a countdown (\"5 minute timer\"), or a wait the rest of the request queues " \
+               "behind (then_continue).",
+  always:      true,
   description: <<~TXT,
     Start a countdown timer that shows in your window and alarms when it's up.
     Use for "set a timer for 5 minutes", "10 minute timer for the pasta", "ping

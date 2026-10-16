@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :search_ideas,
+  summary:     "Search everything they've handed you to hold, including finished or dropped " \
+               "ideas.",
   description: <<~TXT,
     Look back through everything they've ever handed you to hold, including
     threads that were finished or dropped. The results come straight back to you

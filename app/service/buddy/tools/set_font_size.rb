@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :set_font_size,
+  summary:     "Make the chat text bigger, smaller, or back to normal.",
   description: <<~TXT,
     Change how big the text in this chat renders for them. Use it when they
     say the text is too small or too hard to read, ask you to make it bigger,

@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :schedule_trigger,
+  summary:     "Fire a raw Jil trigger at a time, optionally only if a check passes. A task by " \
+               "name, now, is trigger_jil_task.",
   description: <<~TXT,
     Put a raw Jil TRIGGER on the clock, optionally behind a check.
 

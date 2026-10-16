@@ -11,8 +11,8 @@
 <div class="byte-board-index">
   <header class="byte-board-index-head">
     <h1>Boards</h1>
-    <%= form_with url: byte_create_board_path, method: :post, class: "byte-board-new" do %>
-      <input type="text" name="name" class="byte-board-new-name" placeholder="New board name…"
+    <%= form_with url: byte_create_board_path, method: :post, class: "basic byte-board-new" do %>
+      <input type="text" name="name" class="basic byte-board-new-name" placeholder="New board name…"
              autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
       <button type="submit" class="byte-board-new-btn">+ New board</button>
     <% end %>

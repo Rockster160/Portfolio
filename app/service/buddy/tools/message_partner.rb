@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :message_partner,
+  summary:     "Pass a message along to a household member through their companion (\"tell Chelsea " \
+               "I'm running late\").",
   description: <<~TXT,
     Relay a message to the user's partner (or another household member)
     THROUGH their companion. Use whenever the user wants to tell / let / pass

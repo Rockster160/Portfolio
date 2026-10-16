@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :trigger_jil_task,
+  summary:     "Fire one of the automations in `jil_triggers` by name, now - scenes, fans, " \
+               "lights.",
   description: <<~TXT,
     Fire a Jil automation by name. Use this when the person asks for
     something that maps to one of the tasks in the `jil_triggers`

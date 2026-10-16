@@ -21,7 +21,7 @@ RSpec.describe Buddy::RemindersController, type: :controller do
   def watch!(body: "Grab prescription", scope: "travel", **attrs)
     BuddyWatch.create!(
       user: user, byte_conversation: convo, kind: "prompt", body: body,
-      trigger_scope: scope, match: {}, **attrs
+      trigger_scope: scope, listener: scope, **attrs
     )
   end
 
@@ -39,7 +39,7 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(response).to be_successful
       expect(rows.pluck("label")).to contain_exactly("Vet appt", "Grab prescription")
       expect(rows.pluck("type")).to contain_exactly("reminder", "watch")
-      expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to eq("when you get to Costco")
+      expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to eq("when you get to Costco\ntravel")
     end
 
     it "keeps a turned-off one listed, marked off" do
@@ -550,19 +550,19 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       end
     end
 
-    # A named trigger's condition is a structured match hash, not a line of
-    # text - there's nothing to type into, so the editor shows it read-only.
-    it "offers nothing to type on a named trigger" do
-      w = watch!(scope: "travel", body: "Grab prescription")
+    # A named trigger writes a listener too, so its condition is editable
+    # like any other watch's.
+    it "lets a named trigger's condition be retyped" do
+      w = watch!(scope: "travel", body: "Grab prescription", listener: "travel:action::arrived near(40.5 -111.9)")
 
       get :index
       row = rows.find { |r| r["type"] == "watch" }
-      expect(row["custom"]).to be(false)
-      expect(row["listener"]).to be_nil
+      expect(row["custom"]).to be(true)
+      expect(row["listener"]).to eq("travel:action::arrived near(40.5 -111.9)")
 
-      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "event:add" } }
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(w.reload.listener).to be_nil
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "travel:action::arrived -near(40.5 -111.9)" } }
+      expect(response).to be_successful
+      expect(w.reload.listener).to eq("travel:action::arrived -near(40.5 -111.9)")
     end
   end
 

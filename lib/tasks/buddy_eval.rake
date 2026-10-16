@@ -2018,10 +2018,7 @@ BUDDY_EDGE_PROBES = [
         body:              "Tell Chelsea I'm on the way home.",
         trigger_scope:     "travel",
         one_shot:          true,
-        match:             {
-          "action" => "departed",
-          "place"  => { "name" => "Salt City Tacos", "loc" => [40.48457, -111.98545] },
-        },
+        listener:          "travel:action::departed near(40.48457 -111.98545 165m)",
         metadata:          { "human_when" => "when you leave Salt City Tacos" },
       )
     },
@@ -2555,15 +2552,12 @@ namespace :buddy do
   def evaluate(text, user: User.me, theme: "byte", probe: nil)
     convo  = eval_conversation(user, theme)
     client = Buddy::GPT::Client.new
-    tools  = [
-      Buddy::GPT::ContextTool.schema,
-      Buddy::GPT::PromptTool.schema,
-      Buddy::GPT::ImageTool.schema,
-      *Buddy::SideEffects.function_schemas(theme: theme),
-      # Scoped to the acting user, so an eval run as someone with a feature
-      # switched off scores what they'd actually get.
-      *Buddy::Tools.function_schemas(user: user),
-    ]
+    # The same two stages production offers (Buddy::ToolIndex): the index
+    # first, and a tool's full schema only once the model has loaded it - so a
+    # probe is scored on whether the tool can be FOUND from its summary, which
+    # is the whole question. Scoped to the acting user, so an eval run as
+    # someone with a feature switched off scores what they'd actually get.
+    loaded = Set.new
     # The conversation's theme carries its own voice now, so a Moss run gets
     # Chelsea's regardless of which user is acting.
     instructions = Buddy::Personality.for(
@@ -2575,6 +2569,7 @@ namespace :buddy do
       Buddy::GPT::ContextTool::NAME => Buddy::GPT::ContextTool.new(user, convo),
       Buddy::GPT::PromptTool::NAME  => Buddy::GPT::PromptTool.new(user, convo),
       Buddy::GPT::ImageTool::NAME   => Buddy::GPT::ImageTool.new(user, convo),
+      Buddy::GPT::ListenerTool::NAME => Buddy::GPT::ListenerTool.new(user, convo),
     }
 
     # Each scenario is judged on its own, so the model only ever sees this one
@@ -2592,10 +2587,12 @@ namespace :buddy do
     # the round after. A turn that needs no tool ends in one call.
     spoken = nil
     rounds = 0
+    loads  = 0
     nudged = false
     seen   = Set.new
     loop do
       rounds += 1
+      tools  = Buddy::ToolIndex.schemas(user: user, loaded: loaded)
       result = client.stream(instructions: instructions, input: input, tools: tools)
       # Before the ok check: a failed or truncated response still consumed
       # tokens and still bills.
@@ -2608,7 +2605,10 @@ namespace :buddy do
       round_text = result[:text].to_s.strip
       # Last round wins, and a discarded lead-in is not fed back - same as Turn.
       spoken = round_text if round_text.present?
-      calls.concat(result[:tool_calls])
+      # Loading is how a tool gets reached, not a tool being reached: a probe
+      # wants the call made AFTER it, and `avoid:` / `once:` would otherwise
+      # count the load as a call of its own.
+      calls.concat(result[:tool_calls].reject { |call| Buddy::ToolIndex.handles?(call[:name]) })
 
       if result[:tool_calls].empty?
         # Mirrors Turn: a reply claiming an action nothing backs up buys exactly
@@ -2621,6 +2621,12 @@ namespace :buddy do
         nudged = true
         input += [{ role: :developer, content: nudge }]
         next
+      end
+      # Same allowance as Turn: a round that only loaded tools isn't one of the six.
+      only_loaded = result[:tool_calls].all? { |call| Buddy::ToolIndex.handles?(call[:name]) }
+      if only_loaded && loads < Buddy::ToolIndex::MAX_LOAD_ROUNDS
+        loads  += 1
+        rounds -= 1
       end
       break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
 
@@ -2636,7 +2642,7 @@ namespace :buddy do
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  eval_tool_output(call, readers, user, convo, prior, seen),
+            output:  eval_tool_output(call, readers, user, convo, prior, seen, loaded),
           },
         ]
       end
@@ -2726,14 +2732,17 @@ namespace :buddy do
   # (Buddy::GPT::Turn.resolve_tool), so an eval sees the real "no chore matches
   # that" errors. Resolving stops short of executing, so an eval still never
   # logs a chore or messages a partner for real.
-  def eval_tool_output(call, readers, user, conversation, prior, seen)
+  def eval_tool_output(call, readers, user, conversation, prior, seen, loaded)
     name = call[:name].to_sym
     reader = readers[name]
     return reader.call(call[:arguments]) if reader
     return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
+    return JSON.generate(Buddy::ToolIndex.load(call[:arguments], user: user, loaded: loaded)) if Buddy::ToolIndex.handles?(name)
 
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+    Buddy::ToolIndex.called(name, loaded: loaded)
 
     # An ANSWERING tool runs inside resolve_call - that's what makes it an
     # answer - and the handful that also `act` really do the thing: print_again

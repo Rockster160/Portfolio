@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :find_photo,
+  summary:     "Find a picture they sent before, by what's IN it.",
   description: <<~TXT,
     Find a picture they sent before, by what is IN it. Every photo gets a
     description written when it arrives, and this searches those. The results

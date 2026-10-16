@@ -1,5 +1,8 @@
 Buddy::Tools.register(
   name:        :add_list_item,
+  summary:     "Add an item to one of their lists (groceries, todo, anything), right now. Later " \
+               "or on a repeat is schedule_list_items.",
+  always:      true,
   description: <<~TXT,
     Add an item to one of the user's lists. Use for grocery items, todos,
     anything they want tracked as a list entry. If the list doesn't exist,

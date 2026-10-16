@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :move_reminder,
+  summary:     "Change WHEN a reminder fires, or reword it - including snoozing one that just " \
+               "went off.",
   description: <<~TXT,
     Change WHEN a reminder fires, and optionally reword it. Use for "move the
     tomato reminder to 3", "make that an hour later", "change the dryer one to

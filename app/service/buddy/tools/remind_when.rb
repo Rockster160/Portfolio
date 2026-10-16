@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :remind_when,
+  summary:     "A reminder that fires when something HAPPENS - arriving or leaving a place, a " \
+               "chore, an event, a deploy, any Jil listener. A clock time is schedule_reminder.",
   description: <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /
@@ -34,7 +36,9 @@ Buddy::Tools.register(
                  `except: "home"` with no `target`, for either arrive or
                  depart: "tell Chelsea I'm on my way the next time I leave
                  somewhere that isn't home". It is a real watch, never a
-                 `request_feature`.
+                 `request_feature`. `except` works the same on chore and
+                 event ("any chore but the dishes"), and a `custom`
+                 listener excludes with a leading `-` on any term.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
                  me to floss".
@@ -220,7 +224,7 @@ Buddy::Tools.register(
     text:        { type: :string,  required: true,  description: "What to remind them of" },
     trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
-    except:      { type: :string,  required: false, description: "arrive/depart only, with no target: the one place it must NOT fire for (\"home\" for \"anywhere but home\")" },
+    except:      { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },
     listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
     past_phrase: { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
@@ -243,7 +247,6 @@ Buddy::Tools.register(
     # does with it.
     condition   = Buddy::WatchCondition.resolve(payload, ctx)
     scope       = condition.scope
-    match       = condition.match
     human       = condition.human
     owner       = condition.owner
     place_known = condition.place_known
@@ -332,7 +335,7 @@ Buddy::Tools.register(
     # that hurts is the one they forgot - a stale deploy watch nobody remembered
     # sat behind a fresh one and a single deploy pinged twice. This runs before
     # the model writes a word, so it can mention it in the same turn.
-    twin    = ctx.existing_watch_twin(scope, match, owner: owner, listener: condition.listener)
+    twin    = ctx.existing_watch_twin(scope, condition.listener, owner: owner)
     warning = twin && "One is ALREADY listening for this: #{twin.body.to_s.truncate(60).inspect}. " \
                       "Setting this leaves both, so both will fire. Say that plainly and offer to " \
                       "retire the old one (cancel_reminder) - don't add a second one silently."
@@ -353,7 +356,6 @@ Buddy::Tools.register(
       summary:  ["#{framed}?", warning].compact.join(" "),
       resolved: {
         trigger_scope:  scope,
-        match:          match,
         listener:       condition.listener,
         human_when:     human,
         recipient_name: (to_self ? nil : recipient.first_name),
@@ -403,7 +405,6 @@ Buddy::Tools.register(
       body:              payload[:text].to_s.first(500),
       trigger_scope:     payload[:trigger_scope].to_s,
       listener:          payload[:listener].presence,
-      match:             payload[:match] || {},
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
       expires_at:        (Time.zone.parse(payload[:expires_at_iso].to_s) if payload[:expires_at_iso].present?),
       metadata:          {

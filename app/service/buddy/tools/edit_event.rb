@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :edit_event,
+  summary:     "Change a logged event's name, notes or time.",
   description: <<~TXT,
     Edit a recently-logged event - change name, notes, or timestamp. Pass a
     specific `id` (e.g. from search_events), or `event` as a fuzzy name with

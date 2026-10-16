@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :attach_inventory_image,
+  summary:     "Put a photo they sent onto a box or thing in the inventory.",
   description: <<~TXT,
     Put a photo they've sent onto a thing in the inventory, so next time the
     answer to "what's in that tote" is a picture of what's in it.

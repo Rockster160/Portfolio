@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :search_agenda,
+  summary:     "Find something on the calendar BY NAME, anywhere in time - context only covers " \
+               "the next eight days.",
   description: <<~TXT,
     Look up something on the calendar BY NAME, anywhere in time. Your context
     only carries today plus the next eight days, so the moment they ask about

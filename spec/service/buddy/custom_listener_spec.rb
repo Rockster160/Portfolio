@@ -238,14 +238,14 @@ RSpec.describe "Buddy custom listeners" do
     end
   end
 
-  # Named triggers are still resolved against real chores, places and calendars,
-  # which a hand-written listener is not - so they must not regress into it.
+  # A named trigger is resolved against real chores, places and calendars,
+  # and then written as an ordinary listener - matched by the same code.
   describe "the named triggers" do
-    it "still builds a match hash rather than a listener" do
+    it "write a listener like any other watch" do
       confirm = tool[:confirm].call({ text: "floss", trigger: "deploy" }, ctx)
 
       expect(confirm[:resolved][:trigger_scope]).to eq("deploy")
-      expect(confirm[:resolved][:listener]).to be_nil
+      expect(confirm[:resolved][:listener]).to eq("deploy")
     end
   end
 end

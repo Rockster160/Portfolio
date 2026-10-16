@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :edit_inventory_item,
+  summary:     "Rename or annotate a thing in the inventory, or MOVE it into another box.",
   description: <<~TXT,
     Change something in the inventory: rename it, put a note on it, or MOVE it
     into a different box. Only pass the fields that are changing.

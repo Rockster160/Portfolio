@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :search_conversations,
+  summary:     "Search what was actually SAID in past messages. What you chose to keep is " \
+               "search_memories.",
   description: <<~TXT,
     Look back through what was actually SAID — this thread, or every thread they
     have with any of their companions.

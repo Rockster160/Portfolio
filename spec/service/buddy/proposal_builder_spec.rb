@@ -13,6 +13,7 @@ RSpec.describe Buddy::ProposalBuilder do
         # the real tool files (their resolvers hit Chore/Agenda models).
         Buddy::Tools.register(
           name:        :spec_noop,
+          summary:     "spec-only",
           description: "no-op used in specs",
           args:        { thing: { type: :string, required: true } },
           confirm:     ->(p, _) { { summary: "Do #{p[:thing]}?", resolved: {} } },
@@ -75,6 +76,7 @@ RSpec.describe Buddy::ProposalBuilder do
         before do
           Buddy::Tools.register(
             name:        :spec_auto,
+            summary:     "spec-only",
             description: "auto tool used in specs",
             args:        { thing: { type: :string, required: true } },
             confirm:     ->(p, _) { { summary: "x", resolved: {} } },
@@ -200,6 +202,7 @@ RSpec.describe Buddy::ProposalBuilder do
       it "carries a tool's hint onto the row" do
         Buddy::Tools.register(
           name:        :spec_hinted,
+          summary:     "spec-only",
           description: "hint plumbing",
           args:        { thing: { type: :string, required: true } },
           confirm:     ->(p, _) { { summary: "Do #{p[:thing]}?", resolved: {} } },

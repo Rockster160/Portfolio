@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :add_inventory_item,
+  summary:     "File a physical thing into a labelled box or bin so it's findable later. Finding " \
+               "one is search_inventory; moving one is edit_inventory_item.",
   description: <<~TXT,
     File a physical thing into the inventory - the labelled boxes and bins
     around the house. Use it when they've just put something away and want it

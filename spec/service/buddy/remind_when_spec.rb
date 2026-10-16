@@ -24,7 +24,7 @@ RSpec.describe "remind_when tool" do
 
     w = BuddyWatch.last
     expect(w.trigger_scope).to eq("chore_completion")
-    expect(w.match).to eq("action" => "completed", "chore_name" => "Brush Teeth")
+    expect(w.listener).to eq("chore_completion:action::completed chore_name::\"Brush Teeth\"")
     expect(w.kind).to eq("prompt")
     expect(w.one_shot).to be(true)
 
@@ -174,8 +174,7 @@ RSpec.describe "remind_when tool" do
     expect { run(text: "grab my RX", trigger: "arrive", target: "the Plunge in Alpine") }
       .to change(BuddyWatch, :count).by(1)
     w = BuddyWatch.last
-    expect(w.match["action"]).to eq("arrived")
-    expect(w.match["place"]).to eq("name" => "the Plunge in Alpine", "loc" => [40.45, -111.77])
+    expect(w.listener).to eq("travel:action::arrived near(40.45 -111.77 165m)")
   end
 
   # Prod watch 31, 2 Oct: "Next time I'm here can you remind me that I like the
@@ -207,7 +206,7 @@ RSpec.describe "remind_when tool" do
 
       expect { run(text: "I like the strawberry lemonade", trigger: "arrive", target: "Slackwater") }
         .to change(BuddyWatch, :count).by(1)
-      expect(BuddyWatch.last.match["place"]).to eq("name" => "Slackwater", "loc" => [40.76, -111.89])
+      expect(BuddyWatch.last.listener).to eq("travel:action::arrived near(40.76 -111.89 165m)")
     end
   end
 
@@ -217,9 +216,8 @@ RSpec.describe "remind_when tool" do
 
     run(text: "grab my RX", trigger: "arrive", target: "serenity")
     w = BuddyWatch.last
-    expect(w.match["place"]["name"]).to eq("Serenity")
-    expect(w.match["place"]["address"]).to eq("123 Calm Way")
-    expect(w.match["place"]["loc"]).to eq([40.5, -111.9])
+    expect(w.listener).to eq("travel:action::arrived near(40.5 -111.9 165m)")
+    expect(w.metadata["human_when"]).to eq("when you get to Serenity")
   end
 
   it "cross-matches a place name via the agenda (TMS -> Serenity's coords)" do
@@ -238,9 +236,7 @@ RSpec.describe "remind_when tool" do
 
     run(text: "grab your Loops", trigger: "arrive", target: "TMS")
     w = BuddyWatch.last
-    expect(w.match["place"]["name"]).to eq("TMS")
-    expect(w.match["place"]["address"]).to eq("3300 N Triumph Blvd")
-    expect(w.match["place"]["loc"]).to eq([40.43, -111.88])
+    expect(w.listener).to eq("travel:action::arrived near(40.43 -111.88 165m)")
   end
 
   describe "leaving anywhere but home" do
@@ -254,8 +250,7 @@ RSpec.describe "remind_when tool" do
 
     it "sets a real watch that names the place it skips" do
       expect(watch.trigger_scope).to eq("travel")
-      expect(watch.match["action"]).to eq("departed")
-      expect(watch.match["not_place"]["loc"]).to eq([40.4805, -111.9982])
+      expect(watch.listener).to eq("travel:action::departed -near(40.4805 -111.9982 550m)")
       expect(watch.metadata["human_when"]).to eq("when you leave anywhere but Home")
     end
 
@@ -277,7 +272,19 @@ RSpec.describe "remind_when tool" do
     run(text: "the deploy's done", trigger: "deploy")
     w = BuddyWatch.last
     expect(w.trigger_scope).to eq("deploy")
-    expect(w.match).to eq({})
+    expect(w.listener).to eq("deploy")
+  end
+
+  # `except` is the trigger's own narrowing term, negated, so it works for
+  # any trigger that narrows by name - not only places.
+  it "excludes a chore the same way it excludes a place" do
+    run(text: "nice work", trigger: "chore", except: "Dishes")
+    w = BuddyWatch.last
+
+    expect(w.listener).to eq("chore_completion:action::completed -chore_name::Dishes")
+    expect(w.metadata["human_when"]).to eq("next time you finish a chore other than Dishes")
+    expect(w.matches?(action: "completed", chore_name: "Laundry")).to be(true)
+    expect(w.matches?(action: "completed", chore_name: "dishes")).to be(false)
   end
 
   it "makes a repeating watch when repeat=true" do

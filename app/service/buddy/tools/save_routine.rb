@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :save_routine,
+  summary:     "Save a named sequence of tool calls so one phrase runs all of it later.",
   description: <<~TXT,
     Save a named sequence of your own tool calls so one phrase runs all of it
     later. "When I say prep my printer, turn it on, wait a minute, then preheat

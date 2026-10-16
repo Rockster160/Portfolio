@@ -10,6 +10,7 @@ RSpec.describe Buddy::ProposalExecutor do
     executed = @executed
     Buddy::Tools.register(
       name:        :spec_track,
+      summary:     "spec-only",
       description: "tracks executions",
       args:        { tag: { type: :string, required: true } },
       confirm:     ->(p, _) { { summary: "Do #{p[:tag]}?", resolved: {} } },
@@ -151,6 +152,7 @@ RSpec.describe Buddy::ProposalExecutor do
     it "leaves the row bare when the tool declines a receipt - the ✓ is the whole story" do
       Buddy::Tools.register(
         name:        :spec_quiet,
+        summary:     "spec-only",
         description: "no receipt",
         args:        {},
         confirm:     ->(_p, _) { { summary: "Quiet?", resolved: {} } },
@@ -184,6 +186,7 @@ RSpec.describe Buddy::ProposalExecutor do
     it "posts nothing for a failure either" do
       Buddy::Tools.register(
         name:        :spec_boom,
+        summary:     "spec-only",
         description: "always fails",
         args:        {},
         confirm:     ->(_p, _) { { summary: "Boom?", resolved: {} } },
@@ -244,6 +247,7 @@ RSpec.describe Buddy::ProposalExecutor do
       executed = @executed
       Buddy::Tools.register(
         name:        :spec_undo,
+        summary:     "spec-only",
         description: "takes something away",
         args:        { tag: { type: :string, required: true } },
         confirm:     ->(p, _) { { summary: "Undo #{p[:tag]}?", resolved: {} } },

@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :answer_prompt,
+  summary:     "Submit one of the app's pending prompts (a survey or form) for them. read_prompt " \
+               "first; dismissing one is skip_prompt.",
   description: <<~TXT,
     Submit one of the app's pending prompts on the person's behalf - the whole
     form at once, however many fields it has.

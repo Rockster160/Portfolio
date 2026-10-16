@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :undo,
+  summary:     "Undo the last thing you did in this conversation - an add, an edit or a delete.",
   description: <<~TXT,
     Undo the most recent thing you did for the person in THIS conversation:
     reverses your last create (removes what you added), edit (restores the

@@ -19,7 +19,7 @@ RSpec.describe BuddyReminderSweepWorker do
         kind:              "prompt",
         body:              "x",
         trigger_scope:     "item",
-        match:             {},
+        listener:          "item",
         one_shot:          false,
       }.merge(attrs),
     )

@@ -21,6 +21,10 @@ class Jil
     # listed.
     #
     # This is HALF the picture - see `wired_scopes` for the other half.
+    #
+    # `travel` is announced by a Jil task rather than app code, and `deploy` is
+    # the monitor broadcast Buddy::WatchMatcher reads as a finished deploy; a
+    # named watch listens on both, whoever's account it's on.
     KNOWN_SCOPES = %w[
       agenda_event
       agenda_item
@@ -33,6 +37,7 @@ class Jil
       chore_withdrawal
       climbing
       delivery
+      deploy
       email
       event
       item
@@ -56,14 +61,16 @@ class Jil
       tesla_trip_ended
       tesla_trip_started
       tesla_trip_updated
+      travel
       trytravel
       websocket
     ].freeze
 
-    # A listener answers to exactly one scope: the segment before the first
-    # colon. `item:list:name:Claude` listens on `item`.
+    # A listener answers to exactly one scope: the first term, up to its first
+    # colon. `item:list:name:Claude` listens on `item`, and so does
+    # `item list:name:Claude`.
     def scope_of(listener)
-      listener.to_s.strip.downcase.split(":").first.presence
+      listener.to_s.strip.downcase.split(/[\s:]/).first.presence
     end
 
     # Anything OUTSIDE the app can trigger a scope too. `/jil/webhook` and
@@ -106,9 +113,52 @@ class Jil
 
     # A listener is a whitespace-separated set of terms that must ALL match
     # ("email:from:hunter body:challenge"), tokenized so a quoted term with a
-    # space in it stays one term.
+    # space in it stays one term. A bare `NOT` folds into the term after it, so
+    # `NOT departed::Home` and `-departed::Home` are the same term.
     def terms(listener)
-      Tokenizer.split(listener)
+      Tokenizer.split(listener).slice_after { |term| !term.casecmp?("NOT") }.map { |group|
+        group.length > 1 ? "-#{group.last}" : group.first
+      }
+    end
+
+    # A leading `-` or `!` EXCLUDES: the listener only matches an event the rest
+    # of the term does not. Checked here, around the whole term, because the
+    # tokenizer reads a leading `-` per value - "some value in the payload isn't
+    # this one" - which is true of nearly every payload, home included.
+    NEGATED_RX = /\A[-!](?=[^\s!-])/
+
+    def negated?(term)
+      term.to_s.match?(NEGATED_RX)
+    end
+
+    def positive(term)
+      negated?(term) ? term.to_s[1..] : term.to_s
+    end
+
+    # The values an event must carry to match: the right-hand side of each
+    # exact (`::`) term that isn't excluded. `name::Coffee` requires "Coffee";
+    # `-name::Coffee`, a regex or a contains-match doesn't pin one.
+    def required_values(listener)
+      terms(listener).reject { |term| negated?(term) || function_call(term) }.filter_map { |term|
+        value = term.to_s.split("::", 2)[1]
+        value && ::Tokenizing::Breaker.unwrap(value.strip).presence
+      }
+    end
+
+    # Terms that COMPUTE rather than compare, written `name(args)` and
+    # optionally under a key path (`phone:near(...)`). Each returns true, false,
+    # or nil when the payload doesn't carry what it needs - and nil never
+    # matches, excluded or not, since "can't tell" is not "somewhere else".
+    #
+    # New ones go here; Jil::ListenerFunctions holds them.
+    FUNCTION_RX = /\A(?:(?<path>[\w-]+(?::[\w-]+)*):)?(?<name>[a-z_]+)\((?<args>[^()]*)\)\z/i
+
+    def function_call(term)
+      found = FUNCTION_RX.match(positive(term))
+      return nil if found.nil?
+
+      fn = ::Jil::ListenerFunctions[found[:name]]
+      fn && { fn: fn, path: found[:path].to_s.split(":"), args: found[:args] }
     end
 
     # True when every term matches. `first_match` (out-param style, matching
@@ -133,17 +183,36 @@ class Jil
       matched = terms(listener).all? { |term|
         next true if term == scope.to_s
 
-        # A monitor listener names a channel rather than a payload key, so it's
-        # matched against the channel directly instead of the stream.
-        if scope.to_s == "monitor" && data.is_a?(::Hash) && data[:channel].present?
-          next true if term.match?(/\A\s*monitor::?#{Regexp.escape(data[:channel].to_s)}\s*\z/)
-        end
+        hit = term_hit(positive(term), scope, data, payload)
+        next false if hit.nil?
+        next !hit if negated?(term)
 
-        matcher = ::Tokenizing::Matcher.new(term, { scope => payload })
-        matcher.match?.tap { |m| first ||= matcher if m }
+        first ||= hit if hit.is_a?(::Tokenizing::Matcher)
+        hit.present?
       }
 
       [matched, first]
+    end
+
+    # True/false, nil when the term can't be answered from this payload, or
+    # the Matcher itself when it matched (Task reads captures off it).
+    def term_hit(term, scope, data, payload)
+      if (call = function_call(term))
+        path = call[:path]
+        path = path.drop(1) if path.first.to_s.casecmp?(scope.to_s)
+        node = data.respond_to?(:with_indifferent_access) ? data.with_indifferent_access : {}
+        node = node.dig(*path) if path.any?
+        return call[:fn].call(call[:args], node.respond_to?(:with_indifferent_access) ? node.with_indifferent_access : {})
+      end
+
+      # A monitor listener names a channel rather than a payload key, so it's
+      # matched against the channel directly instead of the stream.
+      if scope.to_s == "monitor" && data.is_a?(::Hash) && data[:channel].present?
+        return true if term.match?(/\A\s*monitor::?#{Regexp.escape(data[:channel].to_s)}\s*\z/)
+      end
+
+      matcher = ::Tokenizing::Matcher.new(term, { scope => payload })
+      matcher.match? ? matcher : false
     end
 
     # Whether a string could ever match anything: it names a scope something
@@ -186,14 +255,21 @@ class Jil
     # to Buddy::ListenerTargets.missing, which answers the same question about
     # the things a listener NAMES rather than the way it is written.
     def fault(listener)
-      terms(listener).filter_map { |term| dotted_key(term) }.first
+      terms(listener).filter_map { |term| function_fault(term) || dotted_key(term) }.first
     rescue StandardError => e
       Rails.logger.warn("[ListenerMatch] fault check failed: #{e.class}: #{e.message}")
       nil
     end
 
+    def function_fault(term)
+      call = function_call(term)
+      call && call[:fn].fault(call[:args])
+    end
+
     def dotted_key(term)
-      key = key_names(::Tokenizing::Breaker.call(term.to_s)).find { |name| name.match?(DOTTED_KEY_RX) }
+      return nil if function_call(term)
+
+      key = key_names(::Tokenizing::Breaker.call(positive(term))).find { |name| name.match?(DOTTED_KEY_RX) }
       return nil if key.nil?
 
       "`#{key}` separates its keys with dots, and a listener uses colons - write " \

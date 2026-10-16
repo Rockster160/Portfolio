@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :list_reminders,
+  summary:     "Show their reminders and watches so they can review or remove them.",
   description: <<~TXT,
     Show the person their reminders so they can see and remove them. Use when
     they ask to see / list / review / manage / check what reminders they have

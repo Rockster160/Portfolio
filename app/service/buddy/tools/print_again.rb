@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :print_again,
+  summary:     "Put a file back on the 3D printer - \"print that again\", \"print another X\".",
   description: <<~TXT,
     Put a file back on the 3D printer. This is the tool for any "print that
     again" / "print another X" / "run the vase again" request.

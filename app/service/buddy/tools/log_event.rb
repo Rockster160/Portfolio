@@ -1,5 +1,8 @@
 Buddy::Tools.register(
   name:        :log_event,
+  summary:     "Log something that happened - a drink, meal, workout, feeling, check-in. A " \
+               "household chore is complete_chore.",
+  always:      true,
   description: <<~TXT,
     Log an ActionEvent - meals, drinks, workouts, water intake, feelings,
     check-ins, whatever the user wants tracked. `name` is what happened

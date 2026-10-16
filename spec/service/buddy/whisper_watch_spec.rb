@@ -48,7 +48,7 @@ RSpec.describe "Buddy watching Whisper" do
       expect(watch.user).to eq(rocco)          # so the trigger actually reaches it
       expect(watch.notify_user).to eq(eve)     # and she's still the one told
       expect(watch.trigger_scope).to eq("event")
-      expect(watch.match).to eq("action" => "added", "name" => "Whisper", "notes" => "Up")
+      expect(watch.listener).to eq("event:action::added name::Whisper notes::Up")
     end
 
     it "is an ordinary self-watch when the owner sets it himself" do
@@ -77,19 +77,19 @@ RSpec.describe "Buddy watching Whisper" do
     }.each { |target, notes|
       it "watches the #{notes} event for #{target.inspect}" do
         watch, = set_watch(eve, eve_convo, target)
-        expect(watch.match["notes"]).to eq(notes)
+        expect(watch.listener).to end_with("notes::#{notes}")
       end
     }
 
     it "takes the words people actually use" do
-      expect(set_watch(eve, eve_convo, "wakes up").first.match["notes"]).to eq("Up")
-      expect(set_watch(eve, eve_convo, "naptime").first.match["notes"]).to eq("Nap")
-      expect(set_watch(eve, eve_convo, "comes home").first.match["notes"]).to eq("Home")
+      expect(set_watch(eve, eve_convo, "wakes up").first.listener).to end_with("notes::Up")
+      expect(set_watch(eve, eve_convo, "naptime").first.listener).to end_with("notes::Nap")
+      expect(set_watch(eve, eve_convo, "comes home").first.listener).to end_with("notes::Home")
     end
 
     it "reads the words that can only be the night" do
-      expect(set_watch(eve, eve_convo, "for the night").first.match["notes"]).to eq("Sleep")
-      expect(set_watch(eve, eve_convo, "overnight").first.match["notes"]).to eq("Sleep")
+      expect(set_watch(eve, eve_convo, "for the night").first.listener).to end_with("notes::Sleep")
+      expect(set_watch(eve, eve_convo, "overnight").first.listener).to end_with("notes::Sleep")
     end
 
     # She goes "down" for a nap at two and "down" for the night at nine, and
@@ -110,8 +110,8 @@ RSpec.describe "Buddy watching Whisper" do
     # the ones that resolve. An ambiguity check that rejected its own remedy
     # would loop the conversation forever.
     it "accepts the two answers it asks for" do
-      expect(set_watch(eve, eve_convo, "nap").first.match["notes"]).to eq("Nap")
-      expect(set_watch(eve, eve_convo, "bedtime").first.match["notes"]).to eq("Sleep")
+      expect(set_watch(eve, eve_convo, "nap").first.listener).to end_with("notes::Nap")
+      expect(set_watch(eve, eve_convo, "bedtime").first.listener).to end_with("notes::Sleep")
     end
 
     it "lists the real states when handed something else" do
@@ -171,7 +171,7 @@ RSpec.describe "Buddy watching Whisper" do
       )
 
       expect(confirm[:resolved][:trigger_scope]).to eq("event")
-      expect(confirm[:resolved][:match]["notes"]).to eq("Up")
+      expect(confirm[:resolved][:listener]).to eq("event:action::added name::Whisper notes::Up")
     end
   end
 end

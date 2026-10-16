@@ -17,8 +17,9 @@ module Buddy
     # Housekeeping the model does alongside the real work — jotting a fact down,
     # filing a stashed idea. A line reading "Adding a note" every time it kept
     # something is precisely the noise this is meant to replace, so these pass
-    # without a word (see Buddy::SideEffects).
-    SILENT = Buddy::SideEffects::NAMES.to_set.freeze
+    # without a word (see Buddy::SideEffects). Opening a tool's instructions
+    # is the same kind of thing (see Buddy::ToolIndex).
+    SILENT = [*Buddy::SideEffects::NAMES, Buddy::ToolIndex::NAME].to_set.freeze
 
     # `get_context` fronts two dozen unrelated sections, so naming it after any
     # one of them is wrong most of the time - "Checking your day" showed up

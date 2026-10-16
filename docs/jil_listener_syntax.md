@@ -19,6 +19,21 @@ item:action:added item:list:name:Groceries    both, on the same event
 
 Terms separated by whitespace must **all** match the same event. There is no `OR` between terms - use a regex or `ANY(...)` for that.
 
+## Excluding: `-`, `!`, `NOT`
+
+A term with `-` (or `!`) in front, or a bare `NOT` before it, EXCLUDES: the listener only fires on an event that term does **not** match. Any term can be excluded - a key, a nested path, a regex, a function.
+
+```
+travel:action::departed -departed::Home              leaving anywhere but Home
+chore_completion:action::completed -chore_name::Dishes   any chore except the dishes
+item:action::added NOT list:name::Groceries         added to any list but Groceries
+travel:action::arrived -near(40.4804 -111.9982 550m)   arriving anywhere not within 550m of that point
+```
+
+An excluded key the payload doesn't carry is excluded trivially: `-departed::Home` fires on an event with no `departed` at all. Pin the action (or another key) alongside it so the listener still means one kind of event.
+
+Inside a term, `key:!value` and `key::!value` are the per-value forms - "has this key, and its value isn't that". Prefer the leading `-`: it reads the way it's meant and doesn't require the key.
+
 ## Values are substrings, and this will bite you
 
 A value matches if it appears **anywhere** in the field, case-insensitively.
@@ -111,6 +126,16 @@ chore_completion:chore_name:/^8oz Water$/
 
 Captures from the first matching term are available to a Jil task's code. A Buddy watch ignores them.
 
+## Functions
+
+A term written `name(args)` computes its answer instead of comparing text. Put a key path in front to point it at part of the payload (`phone:near(...)`); with none it reads the payload's top level. A function that can't answer from the payload - no coordinates, say - never matches, excluded or not: "can't tell" is not "somewhere else".
+
+| Function | Matches when | Example |
+|---|---|---|
+| `near(lat lng radius)` | the payload's `lat`/`lng` are within `radius` of that point. Metres by default, or `km`/`mi`; left off, 165m (a building and its lot) | `travel:action::arrived near(40.5308 -112.0156 200m)` |
+
+Coordinates beat a place name: a place gets renamed, two contacts share one address, and the phone reports the town. Every arrive/depart watch Buddy sets is one of these.
+
 ## ANY
 
 Matches when the field equals any one of the listed values:
@@ -157,6 +182,7 @@ These fire per user, carrying that user's own data.
 | `chore_withdrawal` | pebbles are withdrawn | `action`, `amount_pebbles`, `note` |
 | `chore_transfer` | pebbles move between people | `action`, `amount_pebbles` |
 | `event` | an ActionEvent is logged, edited, or deleted | `action`, `name` |
+| `deploy` | a deploy finishes, success or failure (Buddy reads it off the deploy's monitor broadcast) | varies by emitter; `sha`, `message`, `author` once the commit is known |
 | `delivery` | a package is added, changed, arrives, or slips | `action` (`created`/`updated`/`delivered`/`delayed`), `name`, `carrier` (`amazon`/`ups`/`usps`/`fedex`/`manual`), `tracking_number`, `delivery_date`, `previous_date` (on `delayed` only), `delivered`, `amount`, `order_id`, `item_id`, `url` |
 | `agenda_item` | a calendar item is created or changed | `action` (`created`/`updated`), `agenda_id`, `name` |
 | `agenda_event` | an event reaches its START or END time. The start only fires while the item is still INCOMPLETE, so "when X is due and not done yet" needs no condition of its own | `action` (`started`/`ended`), `name`, `agenda_name`, `start_at`, `end_at`, `location` |

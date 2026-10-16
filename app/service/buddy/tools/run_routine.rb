@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :run_routine,
+  summary:     "Run a saved routine when what they said IS its name. Rarely the right call.",
   description: <<~TXT,
     Run one of the person's saved routines - a sequence they named once so they
     never have to spell it out again.

@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :ask_partner,
+  summary:     "Ask a household member an OPEN question through their companion and bring the " \
+               "answer back. Pick-one is ask_partner_choice; pick-any is ask_partner_multi.",
   description: <<~TXT,
     Ask the user's partner (or a household member) an OPEN-ENDED question
     through their companion, and bring back whatever they say. Use for "ask

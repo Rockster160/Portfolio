@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :track_delivery,
+  summary:     "Add a package to the delivery list by hand when no email has.",
   description: <<~TXT,
     Put something on the delivery list by hand. Use when they mention a package
     nothing has emailed about yet - "I ordered a desk, should be here Friday",

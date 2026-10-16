@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :add_agenda_item,
+  summary:     "Put a NEW appointment, event or task on their calendar. A nudge at a time is " \
+               "schedule_reminder; changing an existing item is edit_agenda_item.",
   description: <<~TXT,
     Add a new item to the user's calendar/agenda. Use for appointments,
     events, or tasks. `at` is an ISO datetime. `duration` is in minutes.

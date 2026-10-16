@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :remove_inventory_item,
+  summary:     "Take something out of the inventory - used up, thrown out, given away.",
   description: <<~TXT,
     Take something out of the inventory - it's been used up, thrown out, given
     away, or it was never really in there. "We finished the AA batteries",

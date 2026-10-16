@@ -19,7 +19,7 @@ module Buddy
     # not settable, so the tool reports it and asks where the place is rather
     # than storing a name-only match that matches nothing.
     Resolved = Struct.new(
-      :scope, :match, :listener, :human, :past, :owner, :place_known, :place_name,
+      :scope, :listener, :human, :past, :owner, :place_known, :place_name,
       keyword_init: true
     )
 
@@ -70,15 +70,20 @@ module Buddy
     # Raises with a sentence the model can act on when the condition can't be
     # resolved - every raise here reaches the person as Buddy explaining what it
     # needs, so they read as questions rather than error text.
+    #
+    # Every trigger resolves to a Jil listener, matched by the same code a Jil
+    # task is. A named trigger is only a shorthand for writing one: `except`
+    # is that trigger's own narrowing term, negated, so "anywhere but home" and
+    # "any chore but the dishes" are the same rule and neither is a special case.
     def resolve(payload, ctx)
       trigger = payload[:trigger].to_s
       target  = payload[:target].to_s.strip
+      except  = payload[:except].to_s.strip
+
+      return narrowed(ctx, trigger, target, except) if NARROWED.key?(trigger.to_sym)
+      raise "`except` only narrows #{NARROWED.keys.join("/")}" if except.present?
 
       case trigger
-      when "arrive"  then place(ctx, target, payload[:except], action: "arrived", phrase: "when you get to", past: "You got to")
-      when "depart"  then place(ctx, target, payload[:except], action: "departed", phrase: "when you leave", past: "You left")
-      when "chore"   then chore(ctx, target)
-      when "event"   then event(ctx, target)
       when "agenda"  then agenda(ctx, target)
       when "whisper" then whisper(ctx, target)
       when "deploy"  then deploy(ctx)
@@ -87,66 +92,106 @@ module Buddy
       end
     end
 
-    def place(ctx, target, except, action:, phrase:, past:)
-      except = except.to_s.strip
-      return anywhere_but(ctx, except, action: action, phrase: phrase, past: past) if target.blank? && except.present?
+    # The triggers a name narrows: the scope and terms every firing carries,
+    # what a name resolves to (`term`), and how each reads - for one thing,
+    # and for anything but one.
+    NARROWED = {
+      arrive: {
+        listener:  "travel:action::arrived",
+        term:      :place_term,
+        needs:     "a place",
+        human:     "when you get to %s",
+        past:      "You got to %s",
+        human_any: "when you get anywhere but %s",
+        past_any:  "You got somewhere other than %s",
+      },
+      depart: {
+        listener:  "travel:action::departed",
+        term:      :place_term,
+        needs:     "a place",
+        human:     "when you leave %s",
+        past:      "You left %s",
+        human_any: "when you leave anywhere but %s",
+        past_any:  "You left somewhere other than %s",
+      },
+      chore:  {
+        listener:  "chore_completion:action::completed",
+        term:      :chore_term,
+        needs:     "a chore name",
+        human:     "next time you finish %s",
+        past:      "You finished %s",
+        human_any: "next time you finish a chore other than %s",
+        past_any:  "You finished a chore other than %s",
+      },
+      event:  {
+        listener:  "event:action::added",
+        term:      :event_term,
+        needs:     "an event name",
+        human:     "next time you log %s",
+        past:      "You logged %s",
+        human_any: "next time you log anything but %s",
+        past_any:  "You logged something other than %s",
+      },
+    }.freeze
 
-      resolved = ctx.resolve_place_location(target)
-      raise "#{action == "arrived" ? "arrive" : "depart"} needs a place (target)" if resolved["name"].blank?
+    def narrowed(ctx, trigger, target, except)
+      shape = NARROWED.fetch(trigger.to_sym)
+      raise "#{trigger} needs #{shape[:needs]} (target)" if target.blank? && except.blank?
+
+      want = target.present? ? send(shape[:term], ctx, target) : nil
+      skip = except.present? ? send(shape[:term], ctx, except, excluding: true) : nil
+      name = want ? want[:name] : skip[:name]
+      key  = want ? :human : :human_any
+      human = shape[key].sub("%s", name)
+      human = "#{human}, except #{skip[:name]}" if want && skip
 
       Resolved.new(
-        scope:       "travel",
-        match:       { "action" => action, "place" => resolved.except("known") },
-        human:       "#{phrase} #{resolved["name"]}",
-        past:        "#{past} #{resolved["name"]}",
+        scope:       ::Jil::ListenerMatch.scope_of(shape[:listener]),
+        listener:    [shape[:listener], want&.dig(:term), skip && "-#{skip[:term]}"].compact.join(" "),
+        human:       human,
+        past:        shape[want ? :past : :past_any].sub("%s", name),
         owner:       ctx.user,
-        place_known: resolved["known"],
-        place_name:  resolved["name"],
-      )
-    end
-
-    # Any place at all except one: "the next time I leave somewhere that isn't
-    # home". A watch with no place would match every departure, home included.
-    def anywhere_but(ctx, except, action:, phrase:, past:)
-      resolved = ctx.resolve_place_location(except)
-      name = resolved["name"].presence || except
-
-      Resolved.new(
-        scope:       "travel",
-        match:       { "action" => action, "not_place" => resolved.except("known") },
-        human:       "#{phrase} anywhere but #{name}",
-        past:        "#{past} somewhere other than #{name}",
-        owner:       ctx.user,
-        place_known: resolved["known"],
+        place_known: [want, skip].compact.all? { |part| part.fetch(:known, true) },
         place_name:  name,
       )
     end
 
-    def chore(ctx, target)
-      raise "chore needs a chore name (target)" if target.blank?
+    # How far "anywhere but" a place reaches. Wider than arriving there: the car
+    # reports leaving home from past the home boundary, so the exclusion has to
+    # keep holding for a departure a few hundred metres up the street.
+    EXCLUDE_RADIUS_M = 550
 
-      name = ctx.resolve_chore(target)&.name || target
-      Resolved.new(
-        scope:      "chore_completion",
-        match:      { "action" => "completed", "chore_name" => name },
-        human:      "next time you finish #{name}",
-        past:       "You finished #{name}",
-        owner:      ctx.user,
-        place_name: name,
+    # A place by its coordinates, so a renamed place or a second contact at the
+    # same address still matches. A contact with no coordinates is still known
+    # by name, and the arrival trigger names the same contact.
+    def place_term(ctx, name, excluding: false)
+      resolved = ctx.resolve_place_location(name)
+      place    = resolved["name"].presence || name
+      loc      = Array(resolved["loc"]).map(&:to_f)
+      term     = (
+        if loc.length == 2 && loc.all?(&:nonzero?)
+          ::Jil::ListenerFunctions::Near.term(loc, excluding ? EXCLUDE_RADIUS_M : ::Jil::ListenerFunctions::Near::NEAR_DEFAULT_M)
+        else
+          exact_term(:location, place)
+        end
       )
+      { term: term, name: place, known: resolved["known"] != false }
     end
 
-    def event(ctx, target)
-      raise "event needs an event name (target)" if target.blank?
+    def chore_term(ctx, name, **)
+      chore = ctx.resolve_chore(name)&.name || name
+      { term: exact_term(:chore_name, chore), name: chore }
+    end
 
-      Resolved.new(
-        scope:      "event",
-        match:      { "action" => "added", "name" => target },
-        human:      "next time you log #{target}",
-        past:       "You logged #{target}",
-        owner:      ctx.user,
-        place_name: target,
-      )
+    def event_term(_ctx, name, **)
+      { term: exact_term(:name, name), name: name }
+    end
+
+    # `key::value`, quoted when the value has a space in it. Exact, because a
+    # contains-match would let "uncompleted" satisfy a "completed" watch.
+    def exact_term(key, value)
+      value = value.to_s.delete("\"").strip
+      "#{key}::#{value.match?(/[\s()]/) ? "\"#{value}\"" : value}"
     end
 
     def agenda(ctx, target)
@@ -160,7 +205,7 @@ module Buddy
 
       Resolved.new(
         scope:      "agenda_item",
-        match:      { "action" => "created", "agenda_id" => found.id },
+        listener:   "agenda_item:action::created agenda_id::#{found.id}",
         human:      "when something's added to #{found.name}",
         past:       "Something was added to #{found.name}",
         owner:      found.user,
@@ -248,7 +293,7 @@ module Buddy
 
       Resolved.new(
         scope:      "event",
-        match:      { "action" => "added", "name" => "Whisper", "notes" => state[:notes] },
+        listener:   "event:action::added name::Whisper #{exact_term(:notes, state[:notes])}",
         human:      state[:human],
         past:       state[:past],
         owner:      owner,
@@ -266,7 +311,7 @@ module Buddy
       # Phrased without "next" so the repeating form reads "every time a deploy
       # finishes" rather than "every time the NEXT deploy finishes".
       Resolved.new(
-        scope: "deploy", match: {}, human: "when a deploy finishes",
+        scope: "deploy", listener: "deploy", human: "when a deploy finishes",
         past: "A deploy finished", owner: ctx.user
       )
     end
@@ -286,7 +331,6 @@ module Buddy
 
       Resolved.new(
         scope:    ::Jil::ListenerMatch.scope_of(listener),
-        match:    {},
         listener: listener,
         human:    phrase.sub(/\A(when|whenever)\s+/i, "when "),
         past:     payload[:past_phrase].to_s.strip.presence,

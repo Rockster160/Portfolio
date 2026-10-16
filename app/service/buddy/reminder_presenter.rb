@@ -169,10 +169,9 @@ module Buddy
           at:         nil,
           recurring:  false,
           anchored:   false,
-          # The condition, when it's a hand-written one. A named trigger
-          # (deploy, arriving somewhere, finishing a chore) was assembled from
-          # structured pieces rather than written, so there's no line to hand
-          # back and the editor shows it as read-only instead.
+          # The condition as a Jil listener. A named trigger (deploy, arriving
+          # somewhere, finishing a chore) writes one too, so every watch can
+          # be edited the same way.
           listener:   w.listener.presence,
           custom:     w.custom?,
           # A repeating watch's body is a TEMPLATE (see Buddy::WatchMatcher),

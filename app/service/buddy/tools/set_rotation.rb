@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :set_rotation,
+  summary:     "Repeating check-ins around a job until it's done (\"rotate the laundry every 75 " \
+               "minutes until it's done\").",
   description: <<~TXT,
     A loop around a job that isn't finished in one go, where each round ends by
     ASKING them. "Remind me to rotate the laundry every 75 minutes until it's

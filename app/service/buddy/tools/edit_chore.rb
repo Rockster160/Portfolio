@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_chore,
+  summary:     "Change an existing chore - rename, schedule, assignee, next due date, urgency, " \
+               "archive.",
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
     when it's next due, change how urgent it is, or archive/unarchive a chore

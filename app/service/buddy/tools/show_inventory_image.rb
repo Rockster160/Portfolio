@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :show_inventory_image,
+  summary:     "Show a box's photos in the conversation.",
   description: <<~TXT,
     Put a box's photos in front of them, in this conversation. Use it when the
     picture IS the answer: "show me what's in the camping tote", "what does

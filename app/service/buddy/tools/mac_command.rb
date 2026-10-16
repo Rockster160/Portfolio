@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :mac_command,
+  summary:     "Do something on the desk Mac itself - its screens and state. House automations " \
+               "are call_jil_function / trigger_jil_task.",
   description: <<~TXT,
     Do something on the Mac at the desk. This is the machine itself - its
     screens, its state - not the house automations, which live in

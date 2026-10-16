@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :cancel_reminder,
+  summary:     "Delete a pending reminder or a condition watch (\"stop watching for the " \
+               "doorbell\"). Changing when one fires is move_reminder.",
   description: <<~TXT,
     Remove a pending reminder OR a condition-based watch. Use when the person
     says "nevermind that reminder", "don't remind me about X anymore", "cancel

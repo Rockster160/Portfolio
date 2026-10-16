@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :delete_event,
+  summary:     "Delete a logged event (a drink, a meal...), including ones logged elsewhere. Find " \
+               "its id with search_events.",
   description: <<~TXT,
     Delete a previously-logged event (an ActionEvent) - including ones logged
     outside of you. Use when the person says they logged something by mistake or

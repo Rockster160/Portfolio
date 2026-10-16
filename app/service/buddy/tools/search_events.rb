@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :search_events,
+  summary:     "Search logged events over any span - when did I last, how many, how MUCH (sums " \
+               "logged numbers like caffeine). Also finds one to edit or delete.",
   description: <<~TXT,
     Search the person's LOGGED events (ActionEvents) - the whole record, going
     back years, including what they logged elsewhere. `recent_events` in your

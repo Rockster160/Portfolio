@@ -7,7 +7,12 @@ require "shellwords"
 #
 # Each tool declares:
 #   name        — symbol
-#   description — plain-english, teaches the LLM when to reach for it
+#   summary     — one or two lines saying WHEN to reach for it. This is all the
+#                 model sees of an indexed tool until it loads it (see
+#                 Buddy::ToolIndex), so it has to tell the tool apart from the
+#                 neighbor it gets confused with.
+#   description — plain-english, the full instructions: what loading delivers
+#   always      — optional; offered in full on every turn instead of indexed
 #   args        — arg schema (validated before proposal creation)
 #   confirm     — proc(payload, ctx) → { summary:, resolved: } — resolves fuzzy refs
 #   label       — proc(payload, ctx) → per-row string, ONLY relevant details
@@ -23,6 +28,10 @@ module Buddy
     module_function
 
     COUNT_ARG = :count
+
+    # Long enough to name the job and the neighbor it isn't; short enough that
+    # eighty of them stay a few thousand tokens.
+    SUMMARY_MAX = 240
 
     # How long after a reminder fires it can still be snoozed by name (see
     # move_reminder). Long enough to cover "remind me about this after dinner"
@@ -123,7 +132,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -149,10 +158,20 @@ module Buddy
       # the tool has already run and reported by the time the reply exists. One
       # that still wants a receipt posts its own (see Buddy::ActivityChip).
       raise ArgumentError, "receipt: is required unless the tool answers in-turn" if receipt.nil? && !answers
+      # The index line is the only thing that gets an unloaded tool chosen, so a
+      # blank one is a tool nobody can reach, and a long one is a description
+      # that has crept back into the index everyone pays for on every call.
+      if summary.to_s.strip.empty? || summary.to_s.length > SUMMARY_MAX
+        raise ArgumentError, "summary: is required, at most #{SUMMARY_MAX} characters"
+      end
 
       spec = {
         name:             name.to_sym,
+        summary:          summary.to_s.strip.gsub(/\s+/, " "),
         description:      description.to_s,
+        # Offered in full every turn, skipping the index. For the handful of
+        # everyday actions where a load round would cost more than the schema.
+        always:           always == true,
         args:             normalize_args(args),
         confirm:          confirm,
         label:            label,
@@ -288,6 +307,11 @@ module Buddy
       tool.is_a?(Hash) && tool[:form].present?
     end
 
+    # Offered in full on every turn rather than through the index.
+    def always?(tool)
+      tool.is_a?(Hash) && tool[:always] == true
+    end
+
     # A tool that settles inside the turn and reports back to the model.
     def answers?(tool)
       tool.is_a?(Hash) && tool[:answers].present?
@@ -390,8 +414,11 @@ module Buddy
     # cover every tool on the registry, not one of them, so the list went away
     # rather than growing.
     def function_schemas(user: nil)
-      offered = user ? all.select { |tool| Buddy::Features.allows_tool?(user, tool) } : all
-      offered.map { |tool| function_schema(tool, user: user) }
+      offered(user: user).map { |tool| function_schema(tool, user: user) }
+    end
+
+    def offered(user: nil)
+      user ? all.select { |tool| Buddy::Features.allows_tool?(user, tool) } : all
     end
 
     def function_schema(tool, user: nil)

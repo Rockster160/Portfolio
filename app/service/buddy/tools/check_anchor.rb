@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :check_anchor,
+  summary:     "When a named recurring moment happens next - sunset, sunrise, trash pickup, or " \
+               "another anchor they set up.",
   description: <<~TXT,
     Look up when a named recurring moment happens next - sunset, sunrise, trash
     pickup, or anything else they've set up as an "anchor". Use when they ask

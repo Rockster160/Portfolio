@@ -1,5 +1,6 @@
 Buddy::Tools.register(
   name:        :show_list,
+  summary:     "Show one of their lists as tickable boxes.",
   description: <<~TXT,
     Put one of their lists in front of them as tickable boxes - one box per
     item, and ticking it checks that item off exactly the way ticking it in the

@@ -1,5 +1,8 @@
 Buddy::Tools.register(
   name:        :complete_chore,
+  summary:     "Mark a household chore done (count for repeats, e.g. waters). A drink or meal to " \
+               "track is log_event.",
+  always:      true,
   description: <<~TXT,
     Mark a chore as done. Use this whenever the user says they finished a
     household task. `chore` is a fuzzy name and will match against the

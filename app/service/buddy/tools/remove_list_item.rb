@@ -1,5 +1,7 @@
 Buddy::Tools.register(
   name:        :remove_list_item,
+  summary:     "Take an item off a list - done, or no longer wanted.",
+  always:      true,
   description: <<~TXT,
     Remove an item from a list (soft-delete - matches the app's "check off"
     behavior). Use when the user says they finished something on a list or
