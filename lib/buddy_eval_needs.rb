@@ -166,6 +166,7 @@ module BuddyEvalNeeds
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
+    thermostat_reading:   { label: "a thermostat reading beside the function that sets it", check: ->(u) { jil(u, /thermostat/i) && Buddy::DeviceStates.for_user(u).any? { |r| r[:device].match?(/thermostat/i) && r[:state].to_s.include?("°") } } },
     blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
     car_fn:               { label: "the car function",             check: ->(u) { jil(u, /tesla/i) } },
     # BOTH, because the probe is about choosing between them. With only one

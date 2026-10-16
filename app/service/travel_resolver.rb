@@ -20,6 +20,8 @@
 # The caller decides what to do with `announce` — see task 54, which is the
 # single Jil funnel every source arrives through.
 class TravelResolver
+  extend DistanceHelper
+
   # Long enough for a phone geofence and the car to disagree about when the
   # leg started — the geofence trips at its radius, the car when it rolls —
   # and short enough that two real legs never collapse into one.
@@ -41,6 +43,13 @@ class TravelResolver
   }.freeze
 
   ANNOUNCING_SOURCES = %i[phone].freeze
+
+  # How far apart two of the PERSON's reports can be and still be one leg. The
+  # car's copy at the home boundary and the geofence inside it land within
+  # about 0.0011 of each other. A report further off than this, inside the merge
+  # window, is a leg from somewhere else, and folding it into the earlier row
+  # would leave it unannounced - nothing listening on `travel:` would hear it.
+  LEG_RADIUS = 0.003
 
   # How the report reached us, which is a different question from who it is
   # about. The geofence and the Bluetooth radio both speak for the person, and
@@ -83,7 +92,7 @@ class TravelResolver
       # opens the row and the phone arrives second. Announcing on creation
       # would hand the leg to the one source that must never announce, and
       # silence the one that must.
-      spoken_for = announced_already?(user, action)
+      spoken_for = announced_already?(user, action, source, coord)
       event = merge_or_create(user, action, source, coord, name)
 
       {
@@ -98,8 +107,8 @@ class TravelResolver
       }
     end
 
-    def announced_already?(user, action)
-      event = recent_event(user, action)
+    def announced_already?(user, action, source=nil, coord=nil)
+      event = recent_event(user, action, source, coord)
       return false if event.blank?
 
       event.data.keys.any? { |key| ANNOUNCING_SOURCES.include?(key.to_sym) }
@@ -168,7 +177,7 @@ class TravelResolver
     # event, and the car's reverse-geocode is the coarser of the two.
     def merge_or_create(user, action, source, coord, name)
       details = { lat: coord&.first, lng: coord&.last, name: name }.compact
-      existing = recent_event(user, action)
+      existing = recent_event(user, action, source, coord)
 
       if existing
         existing.update!(
@@ -183,10 +192,26 @@ class TravelResolver
       end
     end
 
-    def recent_event(user, action)
+    def recent_event(user, action, source=nil, coord=nil)
       scope = user.action_events.where(name: action)
       scope = scope.where(timestamp: MERGE_WINDOW.ago..)
-      scope.order(timestamp: :desc).first
+      event = scope.order(timestamp: :desc).first
+      return nil if event && elsewhere?(event, source, coord)
+
+      event
+    end
+
+    # Only the person's own reports are compared. The car and the phone are
+    # routinely apart on one leg — it is the car's crossing that the phone's
+    # report is joining.
+    def elsewhere?(event, source, coord)
+      return false unless ANNOUNCING_SOURCES.include?(source&.to_sym) && coord.present?
+
+      there = event.data.to_h[source.to_s].to_h
+      there_loc = [there["lat"], there["lng"]]
+      return false if there_loc.compact.length < 2
+
+      !near?(there_loc.map(&:to_f), coord.map(&:to_f), LEG_RADIUS)
     end
   end
 end

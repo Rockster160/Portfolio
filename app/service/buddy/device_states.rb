@@ -25,6 +25,10 @@ module Buddy
     module_function
 
     KEY = :hass
+    # The thermostats keep their own cache, keyed by zone, because two HASS
+    # streams fill it. The `hass` rows for the same units only say which
+    # stream spoke last ("temperature"), so these replace them.
+    THERMOSTAT_KEY = :thermostat
 
     # Past this, a reading is history rather than a state. Still reported — the
     # last thing a sensor said is usually the answer — but the phrasing has to
@@ -39,10 +43,10 @@ module Buddy
       owner.chore_household_id.present? && user.chore_household_id == owner.chore_household_id
     end
 
-    def raw(user)
+    def raw(user, key=KEY)
       return {} unless available?(user)
 
-      cached = ::User.me.caches.get(KEY)
+      cached = ::User.me.caches.get(key)
       cached.is_a?(Hash) ? cached : {}
     rescue StandardError => e
       Rails.logger.warn("[Buddy::DeviceStates] #{e.class}: #{e.message}")
@@ -57,8 +61,11 @@ module Buddy
     # write strings — so reading `info["state"]` works right up until the value
     # has been through the cache once, which is always.
     def for_user(user, now: Time.current)
-      raw(user).filter_map { |device, info|
+      thermostats = thermostat_rows(user, now)
+      replaced = thermostats.map { |row| row[:device].downcase }
+      sensors = raw(user).filter_map { |device, info|
         next unless info.is_a?(Hash)
+        next if replaced.include?(device.to_s.downcase)
 
         row = info.with_indifferent_access
         at  = seen_at(row)
@@ -69,7 +76,30 @@ module Buddy
           stale:   (at.nil? || at < now - STALE_AFTER),
           battery: row[:battery],
         }.compact
-      }.sort_by { |row| [row[:stale] ? 1 : 0, row[:device]] }
+      }
+      (sensors + thermostats).sort_by { |row| [row[:stale] ? 1 : 0, row[:device]] }
+    end
+
+    # One row per zone: the room temperature as the state, and what it's set
+    # to beside it. `running` is what the unit is doing this minute (idle,
+    # cooling, heating), which is a different fact from the mode it's set to.
+    def thermostat_rows(user, now)
+      raw(user, THERMOSTAT_KEY).filter_map { |zone, info|
+        next unless info.is_a?(Hash)
+
+        row = info.with_indifferent_access
+        at  = seen_at(row)
+        {
+          device:   "#{zone.to_s.titleize} Thermostat",
+          state:    ("#{row[:temp]}°F" if row[:temp].present?),
+          humidity: row[:humidity].presence,
+          mode:     row[:mode].presence,
+          setpoint: row[:setpoint].presence,
+          running:  row[:action].presence,
+          ago:      (ago_phrase(at, now) if at),
+          stale:    (at.nil? || at < now - STALE_AFTER),
+        }.compact
+      }
     end
 
     # The reading for one device, by name or by anything the household glossary

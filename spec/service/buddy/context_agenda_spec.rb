@@ -197,6 +197,58 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(today[:all_day]).to be(true)
   end
 
+  describe "an interview's two rows" do
+    let(:at) { Time.current + 2.hours }
+    let(:invites) { create(:agenda, user: user) }
+
+    def note_row(company, start_at: at)
+      row = item(name: "Interview: #{company}", start_at: start_at)
+      job = JobApplication.create!(user: user, company: company, color: "#388bfd", status: :active)
+      note = job.notes.create!(body: "Booked", occurred_at: Time.current)
+      note.update_columns(agenda_item_id: row.id)
+      row
+    end
+
+    def invite(name, start_at: at)
+      create(:agenda_item, agenda: invites, name: name, start_at: start_at, external_uid: SecureRandom.hex(6))
+    end
+
+    def titles(key=:today_agenda)
+      described_class.build(user, conversation)[key].pluck(:title)
+    end
+
+    it "names it once, by the job note's row" do
+      note_row("Neighbor")
+      invite("Onsite Interview with Neighbor")
+
+      expect(titles).to eq(["Interview: Neighbor"])
+    end
+
+    it "folds it later in the week too" do
+      note_row("Neighbor", start_at: at + 2.days)
+      invite("Onsite Interview with Neighbor", start_at: at + 2.days)
+
+      expect(titles(:upcoming_agenda)).to eq(["Interview: Neighbor"])
+    end
+
+    it "keeps an invite at another minute, or from another company" do
+      note_row("Neighbor")
+      invite("Onsite Interview with Neighbor", start_at: at + 30.minutes)
+      invite("Call with iCapital")
+
+      expect(titles).to contain_exactly(
+        "Interview: Neighbor", "Onsite Interview with Neighbor", "Call with iCapital"
+      )
+    end
+
+    it "keeps an unsynced row that merely shares the minute" do
+      note_row("Neighbor")
+      item(name: "Neighbor prep", start_at: at)
+
+      expect(titles).to contain_exactly("Interview: Neighbor", "Neighbor prep")
+    end
+  end
+
   it "tags a partner's shared PERSONAL item as not-mine, but treats an owned item as mine" do
     partner = create(:user)  # first_name falls back to username for a non-mapped id
 

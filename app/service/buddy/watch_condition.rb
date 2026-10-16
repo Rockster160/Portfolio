@@ -75,8 +75,8 @@ module Buddy
       target  = payload[:target].to_s.strip
 
       case trigger
-      when "arrive"  then place(ctx, target, action: "arrived", phrase: "when you get to", past: "You got to")
-      when "depart"  then place(ctx, target, action: "departed", phrase: "when you leave", past: "You left")
+      when "arrive"  then place(ctx, target, payload[:except], action: "arrived", phrase: "when you get to", past: "You got to")
+      when "depart"  then place(ctx, target, payload[:except], action: "departed", phrase: "when you leave", past: "You left")
       when "chore"   then chore(ctx, target)
       when "event"   then event(ctx, target)
       when "agenda"  then agenda(ctx, target)
@@ -87,7 +87,10 @@ module Buddy
       end
     end
 
-    def place(ctx, target, action:, phrase:, past:)
+    def place(ctx, target, except, action:, phrase:, past:)
+      except = except.to_s.strip
+      return anywhere_but(ctx, except, action: action, phrase: phrase, past: past) if target.blank? && except.present?
+
       resolved = ctx.resolve_place_location(target)
       raise "#{action == "arrived" ? "arrive" : "depart"} needs a place (target)" if resolved["name"].blank?
 
@@ -99,6 +102,23 @@ module Buddy
         owner:       ctx.user,
         place_known: resolved["known"],
         place_name:  resolved["name"],
+      )
+    end
+
+    # Any place at all except one: "the next time I leave somewhere that isn't
+    # home". A watch with no place would match every departure, home included.
+    def anywhere_but(ctx, except, action:, phrase:, past:)
+      resolved = ctx.resolve_place_location(except)
+      name = resolved["name"].presence || except
+
+      Resolved.new(
+        scope:       "travel",
+        match:       { "action" => action, "not_place" => resolved.except("known") },
+        human:       "#{phrase} anywhere but #{name}",
+        past:        "#{past} somewhere other than #{name}",
+        owner:       ctx.user,
+        place_known: resolved["known"],
+        place_name:  name,
       )
     end
 

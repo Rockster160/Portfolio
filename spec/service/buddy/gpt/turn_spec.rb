@@ -2070,6 +2070,9 @@ RSpec.describe Buddy::GPT::Turn do
         "`Recycling` is done.",
         "**Take out the bins** is added.",
         "`Water the plants` is now scheduled.",
+        # A watch reported as fired on the person's word that they'd left.
+        "The depart watch fired and Chelsea got the message: I'm on the way home.",
+        "Your reminder went off.",
       ].each do |faked|
         it "catches #{faked.inspect}" do
           run([{ text: faked }])
@@ -2122,6 +2125,8 @@ RSpec.describe Buddy::GPT::Turn do
         "The laundry is done.",
         "The heater is on for another hour.",
         "Whisper quiet is something I can turn on.",
+        "It'll fire when you leave Salt City Tacos.",
+        "The watch is still waiting for you to leave.",
       ].each do |honest|
         it "leaves #{honest.inspect} alone" do
           run([{ text: honest }])
@@ -2170,6 +2175,12 @@ RSpec.describe Buddy::GPT::Turn do
         run([{ text: "Whisper quiet is on for 2 hours." }], text: "how long is quiet on for?")
 
         expect(reply.body).to eq("Whisper quiet is on for 2 hours.")
+      end
+
+      it "leaves a watch reported back to them alone" do
+        run([{ text: "Yep, the depart watch fired at 7:57." }], text: "did the watch fire?")
+
+        expect(reply.body).to eq("Yep, the depart watch fired at 7:57.")
       end
     end
 

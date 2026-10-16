@@ -243,6 +243,36 @@ RSpec.describe "remind_when tool" do
     expect(w.match["place"]["loc"]).to eq([40.43, -111.88])
   end
 
+  describe "leaving anywhere but home" do
+    before {
+      home = user.contacts.create!(name: "Home")
+      home.addresses.create!(user: user, street: "1 Home St", lat: 40.4805, lng: -111.9982, primary: true)
+      run(text: "Tell Chelsea I'm on the way home.", trigger: "depart", except: "home")
+    }
+
+    let(:watch) { BuddyWatch.last }
+
+    it "sets a real watch that names the place it skips" do
+      expect(watch.trigger_scope).to eq("travel")
+      expect(watch.match["action"]).to eq("departed")
+      expect(watch.match["not_place"]["loc"]).to eq([40.4805, -111.9982])
+      expect(watch.metadata["human_when"]).to eq("when you leave anywhere but Home")
+    end
+
+    it "fires on a departure from somewhere else" do
+      expect(watch.matches?(action: "departed", lat: 40.48449, lng: -111.98563, location: "Herriman")).to be(true)
+    end
+
+    it "stays quiet leaving home, even reported from up the street" do
+      expect(watch.matches?(action: "departed", lat: 40.4805, lng: -111.9982, location: "Home")).to be(false)
+      expect(watch.matches?(action: "departed", lat: 40.4815, lng: -111.9960, location: "Herriman")).to be(false)
+    end
+
+    it "does not fire on an arrival" do
+      expect(watch.matches?(action: "arrived", lat: 40.48449, lng: -111.98563)).to be(false)
+    end
+  end
+
   it "builds a deploy watch with an empty match" do
     run(text: "the deploy's done", trigger: "deploy")
     w = BuddyWatch.last

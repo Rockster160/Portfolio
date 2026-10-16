@@ -25,6 +25,16 @@ Buddy::Tools.register(
                  nothing does, that is a real `request_feature`, and saying so
                  is the honest answer rather than a failure.
       "depart" - when they leave a place. `target` = the place name.
+                 With no place named - "when I leave", "the next time I
+                 head out", "set the depart check" - the place is where they
+                 are NOW: call `check_location` for it. Never take one off
+                 their calendar; an event later in the week is not where they
+                 are standing.
+                 "Anywhere but home" (or anywhere but some other place) is
+                 `except: "home"` with no `target`, for either arrive or
+                 depart: "tell Chelsea I'm on my way the next time I leave
+                 somewhere that isn't home". It is a real watch, never a
+                 `request_feature`.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
                  me to floss".
@@ -202,6 +212,7 @@ Buddy::Tools.register(
     text:        { type: :string,  required: true,  description: "What to remind them of" },
     trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
+    except:      { type: :string,  required: false, description: "arrive/depart only, with no target: the one place it must NOT fire for (\"home\" for \"anywhere but home\")" },
     listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
     past_phrase: { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },

@@ -1981,6 +1981,53 @@ BUDDY_EDGE_PROBES = [
           "that fires at the wrong end of the day, or eight hours late, and " \
           "from outside that looks exactly like a dog who didn't sleep",
   },
+  {
+    case:  "prod 8279-8280",
+    say:   "What's the house temp right now?",
+    tool:  :get_context,
+    avoid: %i[call_jil_function],
+    needs: :thermostat_reading,
+    note:  "called HASS Thermostat with keep/0 to read it, which re-sent the " \
+           "mode to the house, and answered \"Set the main thermostat to cool.\"",
+  },
+  {
+    case:  "prod 8299",
+    say:   "Tell Chelsea I'm on the way home the next time I depart a non-home location.",
+    tool:  :remind_when,
+    avoid: %i[request_feature],
+    args:  { remind_when: { trigger: "depart", except: /home/i, notify: /chelsea/i } },
+    note:  "filed a feature request for a watch that only needed a place to skip",
+  },
+  {
+    case:       "prod 8302",
+    say:        "Set a depart check to tell Chelsea I'm on my way home when I leave.",
+    tool:       :check_location,
+    order:      %i[check_location remind_when],
+    never_args: { remind_when: { target: /slackwater/i } },
+    note:       "no place named; took Slackwater off tomorrow's calendar instead of " \
+                "where he was standing",
+  },
+  {
+    case:        "prod 8309",
+    say:         "I just left.",
+    tool:        :none,
+    seed:        ->(user, convo) {
+      BuddyWatch.create!(
+        user:              user,
+        byte_conversation: convo,
+        body:              "Tell Chelsea I'm on the way home.",
+        trigger_scope:     "travel",
+        one_shot:          true,
+        match:             {
+          "action" => "departed",
+          "place"  => { "name" => "Salt City Tacos", "loc" => [40.48457, -111.98545] },
+        },
+        metadata:          { "human_when" => "when you leave Salt City Tacos" },
+      )
+    },
+    never_reply: /\bfired\b|got the message|went out/i,
+    note:        "said the depart watch fired and Chelsea got the message, on his word alone",
+  },
 ].freeze
 
 namespace :buddy do

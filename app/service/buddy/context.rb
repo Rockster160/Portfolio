@@ -289,6 +289,35 @@ module Buddy
         }
       end
 
+      # One interview is two rows, on purpose: the job note writes its own, and
+      # the company's invite syncs in beside it (see JobNote#follow_up_item).
+      # The day view keeps both; what gets SAID keeps one, or a briefing reads
+      # "Onsite Interview with Neighbor at 10am, Interview: Neighbor at 10am"
+      # as two interviews.
+      #
+      # The note's row is the one kept - it carries the application link and
+      # the real address, where the invite's location is often a meeting link.
+      # The invite goes only when it starts the same minute, has the same
+      # ownership, and names the note's company in its title.
+      def fold_interview_twins(items, sources)
+        job_notes = JobNote.where(agenda_item_id: items.map(&:id)).includes(:job_application)
+        companies = job_notes.to_h { |n| [n.agenda_item_id, title_words(n.job_application&.company)] }
+        companies = companies.reject { |_id, words| words.empty? }
+        return items if companies.empty?
+
+        notes = items.select { |i| companies.key?(i.id) }
+        items.reject { |item|
+          item.external_uid.present? && notes.any? { |n| interview_twin?(n, item, companies[n.id], sources) }
+        }
+      end
+
+      def interview_twin?(note_item, item, company_words, sources)
+        return false unless note_item.start_at == item.start_at
+        return false unless sources[note_item.agenda_id]&.dig(:mine) == sources[item.agenda_id]&.dig(:mine)
+
+        company_words.subset?(title_words(item.name))
+      end
+
       def same_occasion?(a, b, sources)
         return false unless a.all_day && b.all_day
         return false if a.start_at.blank? || b.start_at.blank?
@@ -336,6 +365,7 @@ module Buddy
           .order(:start_at, :id)
         items = visible_only(scope, user).limit(20).to_a
         items    = fold_duplicate_all_days(items, sources)
+        items    = fold_interview_twins(items, sources)
         collides = collisions(items, sources)
 
         items.map { |i|
@@ -404,6 +434,7 @@ module Buddy
           .order(:start_at, :id)
         items = visible_only(scope, user).limit(25).to_a
         items             = fold_duplicate_all_days(items, sources)
+        items             = fold_interview_twins(items, sources)
         upcoming_collides = collisions(items, sources)
 
         items.map { |i|

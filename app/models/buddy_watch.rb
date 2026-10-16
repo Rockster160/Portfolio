@@ -134,6 +134,11 @@ class BuddyWatch < ApplicationRecord
   # ever compares arrivals-to-arrivals.
   PLACE_NEAR_THRESHOLD = 0.0015
 
+  # How far a `not_place` reaches. Wider than a match on purpose: the car
+  # reports leaving home from past the home boundary, so "anywhere but home"
+  # has to keep excluding a departure a few hundred metres up the street.
+  NOT_PLACE_THRESHOLD = 0.005
+
   # True when EVERY key in `match` is satisfied by the trigger payload.
   # An empty `match` (e.g. deploy: "next deploy, no filter") matches any
   # payload for the scope. Scalar keys (action, chore_name, event name) are
@@ -152,6 +157,7 @@ class BuddyWatch < ApplicationRecord
     data = payload.respond_to?(:with_indifferent_access) ? payload.with_indifferent_access : {}
     (match || {}).all? { |key, want|
       next place_matches?(want, data) if key.to_s == "place"
+      next !place_matches?(want, data, threshold: NOT_PLACE_THRESHOLD) if key.to_s == "not_place"
 
       want = want.to_s.downcase.strip
       next true if want.blank?
@@ -188,12 +194,12 @@ class BuddyWatch < ApplicationRecord
   # contacts at the same address share coordinates and cross-match, and a
   # renamed place keeps matching. Falls back to name equality when either
   # side lacks real coordinates (e.g. a non-GPS travel trigger).
-  def place_matches?(want, data)
+  def place_matches?(want, data, threshold: PLACE_NEAR_THRESHOLD)
     want     = want.respond_to?(:with_indifferent_access) ? want.with_indifferent_access : {}
     want_loc = Array(want[:loc]).map(&:to_f)
     here_loc = [data[:lat].to_f, data[:lng].to_f]
     both_have_coords = want_loc.length == 2 && want_loc.all?(&:nonzero?) && here_loc.all?(&:nonzero?)
-    return true if both_have_coords && near?(here_loc, want_loc, PLACE_NEAR_THRESHOLD)
+    return true if both_have_coords && near?(here_loc, want_loc, threshold)
 
     want_name = want[:name].to_s.downcase.strip
     return false if want_name.blank?

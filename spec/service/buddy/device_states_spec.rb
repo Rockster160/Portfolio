@@ -79,6 +79,33 @@ RSpec.describe Buddy::DeviceStates do
       expect(rows.pluck(:device)).to eq(["Fine"])
     end
 
+    # The `hass` row for a thermostat only says which stream spoke last; the
+    # temperature lives in its own cache. Without it the only thermostat thing
+    # in reach was the function that SETS one.
+    it "reports each thermostat zone from its own cache, in place of the bare hass row" do
+      cache!({ "Main Thermostat" => sensor("temperature", 60) })
+      owner.caches.set(described_class::THERMOSTAT_KEY, {
+        main: {
+          temp:     65,
+          humidity: 46,
+          mode:     "cool",
+          setpoint: 68,
+          action:   "idle",
+          fan:      false,
+          at:       (now - 60).to_i,
+        },
+      })
+
+      rows = described_class.for_user(owner, now: now)
+      main = rows.select { |r| r[:device] == "Main Thermostat" }
+
+      expect(main.length).to eq(1)
+      expect(main.first).to include(
+        state: "65°F", humidity: 46, mode: "cool", setpoint: 68, running: "idle",
+        ago: "just now", stale: false
+      )
+    end
+
     it "is empty rather than raising when nothing has ever been cached" do
       owner.caches.set(described_class::KEY, {})
 

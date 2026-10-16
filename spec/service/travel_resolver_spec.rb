@@ -143,6 +143,23 @@ RSpec.describe TravelResolver do
       expect(record(source: :phone)[:announce]).to be(false)
     end
 
+    it "announces a second leg the person reports from somewhere else inside the window" do
+      record(source: :phone, lat: 40.480958, lng: -111.98846)
+
+      later = record(source: :phone, lat: 40.48449, lng: -111.98563)
+
+      expect(later[:announce]).to be(true)
+      expect(user.action_events.where(name: :departed).count).to eq(2)
+    end
+
+    it "still merges the car's copy of a leg into the person's, however far apart" do
+      record(source: :phone, lat: 40.48449, lng: -111.98563)
+
+      record(source: :tesla, lat: 40.480958, lng: -111.98846)
+
+      expect(user.action_events.where(name: :departed).count).to eq(1)
+    end
+
     it "defaults an unnamed reporter to the phone" do
       expect(record[:source]).to eq(:phone)
     end

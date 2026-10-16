@@ -298,6 +298,14 @@ module Buddy
         | \b\w+(?:\s+\w+){0,2}
             (?:(?:'|\u2019)s|\s+(?:is|are))\s+
             (?:on|off)\s+for\s+\d
+        # A watch or a message reported as having GONE. Watches fire on their
+        # own signal, never inside a turn, so on a turn that touched nothing
+        # and was asked nothing, "the depart watch fired" or "Chelsea got the
+        # message" is the person's word being repeated back as the system's.
+        | \b(?:watch|reminder|check|trigger|message|text|note|heads[\s-]up)\s+
+            (?:\w+\s+){0,2}
+            (?:fired|went\s+off|tripped|went\s+out|went\s+through|(?:was|got)\s+sent)\b
+        | \bgot\s+(?:the|your|my)\s+(?:message|text|note|heads[\s-]up)\b
       /xi
 
       # A reply on a turn that touched nothing, written as though it had.
