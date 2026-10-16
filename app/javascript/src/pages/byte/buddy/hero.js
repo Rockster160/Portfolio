@@ -15,6 +15,13 @@ import { quickOrder, NO_ROUTINES } from "./routine_order.js";
 
 const ROUTINES_URL = "/buddy/routines";
 
+// Who wins when several standing states want the face at once (see
+// `holdExpression`). Asleep outranks everything — a capped/unreachable Byte is
+// out cold whatever else is true; the Whisper's own state is next; a board
+// alert's "up to no good" face sits under both, so an open gate shows only
+// while the pet is actually awake to look guilty about it.
+export const HOLD_PRIORITY = { sleep: 30, whisper: 20, alert: 10 };
+
 function csrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
   return meta ? meta.getAttribute("content") : "";
@@ -94,12 +101,39 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     if (!isBuddy) closeMenu();
   };
 
-  // The pet has two layers: a persistent MOOD and a transient "thinking"
-  // overlay shown while a turn is in flight. `restingExpression` remembers the
-  // mood so that when thinking clears we fall back to exactly the face Buddy
-  // was wearing — never a hardcoded default. A transient paint never updates
-  // it; a real one does.
+  // The pet wears up to three layers, strongest last:
+  //
+  //   1. MOOD (`restingExpression`) — the sentiment / [[mood:]] face, the
+  //      resting default. A new mood or the idle reset changes it. A transient
+  //      paint never updates it; a real one does.
+  //   2. a HELD STATE — a condition that is TRUE RIGHT NOW and has to show
+  //      until it stops being true: asleep, the Whisper hiding, the laundry
+  //      gate open ("up to no good"). Keyed, so several can stand at once; the
+  //      strongest wins and the mood underneath is remembered, not shown. The
+  //      whole point is that a held state SURVIVES a mood change, the idle
+  //      reset, and a transient overlay clearing — the things that used to
+  //      revert it when state faces were painted transiently.
+  //   3. a TRANSIENT overlay — "thinking" while a turn runs, the alarm flip —
+  //      shown on top for a moment, then gone, falling back to the state or
+  //      the mood beneath it.
   let restingExpression = hero.dataset.buddyAwakeExpression || "neutral";
+
+  // key → { expression, priority }. Highest priority showing; a later hold at
+  // equal priority wins the tie (Map keeps insertion order). Empty = no state
+  // stands and the mood shows.
+  const holds = new Map();
+
+  const topHold = () => {
+    let best = null;
+    holds.forEach((h) => {
+      if (!best || h.priority >= best.priority) best = h;
+    });
+    return best;
+  };
+
+  // What SHOULD show when nothing transient is over it: the strongest standing
+  // state, or the resting mood when none stands.
+  const effectiveExpression = () => topHold()?.expression || restingExpression;
 
   const paint = (expression) => {
     hero.dataset.buddyExpression = String(expression);
@@ -118,21 +152,45 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
 
   const setExpression = (expression, opts = {}) => {
     if (!expression) return;
-    if (!opts.transient) restingExpression = String(expression);
+    // A real (non-transient) paint sets the MOOD. It is remembered underneath a
+    // standing state but NOT shown over it — a cheer or a sentiment broadcast
+    // mustn't wipe "asleep" or the open-gate face off the board. A transient
+    // paint is a momentary overlay and changes neither layer.
+    if (!opts.transient) {
+      restingExpression = String(expression);
+      if (holds.size) return;
+    }
     paint(expression);
   };
 
-  // Drop the "thinking" overlay and fall back to the remembered mood. No-op
-  // unless the pet is actually mid-thought, so a real mood already showing is
-  // left alone. Called the instant reply text starts streaming.
-  const clearThinking = () => {
-    if (hero.dataset.buddyExpression === "thinking") paint(restingExpression);
+  // Raise a standing state the pet must wear until it's cleared — asleep, the
+  // Whisper hiding, a board alert's held face. `key` names the condition so it
+  // can be lifted again; `priority` decides who wins when several stand at once
+  // (sleep over an open gate, say). Re-raising the same key updates it.
+  const holdExpression = (key, expression, priority = 0) => {
+    if (!key || !expression) return;
+    holds.set(String(key), { expression: String(expression), priority });
+    paint(effectiveExpression());
   };
 
-  // Force the face back to the remembered mood, whatever it's currently
-  // showing. Used to end a transient takeover (e.g. the timer-alarm face loop)
-  // that left a non-"thinking" face on screen, which clearThinking won't undo.
-  const restExpression = () => paint(restingExpression);
+  // The condition passed — drop its hold and fall back to whatever still
+  // stands, or the resting mood when nothing does.
+  const releaseExpression = (key) => {
+    if (!holds.delete(String(key))) return;
+    paint(effectiveExpression());
+  };
+
+  // Drop the "thinking" overlay and fall back to the standing state, or the
+  // remembered mood when none stands. No-op unless the pet is actually
+  // mid-thought, so a real face already showing is left alone.
+  const clearThinking = () => {
+    if (hero.dataset.buddyExpression === "thinking") paint(effectiveExpression());
+  };
+
+  // Force the face back to what should be showing, whatever it currently is.
+  // Used to end a transient takeover (e.g. the timer-alarm face loop) that left
+  // a non-"thinking" face on screen, which clearThinking won't undo.
+  const restExpression = () => paint(effectiveExpression());
 
   const quickButton = (routine) => {
     const btn = document.createElement("button");
@@ -353,6 +411,8 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   return {
     setActive,
     setExpression,
+    holdExpression,
+    releaseExpression,
     setTheme,
     clearThinking,
     restExpression,

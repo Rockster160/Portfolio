@@ -1,9 +1,11 @@
 // A standing alert on the board, in the pet's own chat bubble. The same
 // Buddy::Alerts the chat surfaces in the strip (the laundry gate is open, the
 // Whisper is hungry) show HERE as a bubble that holds while the condition
-// stands, and the pet does its alarm shuffle beside it — the back-and-forth a
+// stands. Beside it the pet does its alarm shuffle — the back-and-forth a
 // ringing timer does, but SILENT, because a standing condition is noticed, not
-// silenced.
+// silenced — UNLESS the alert names a face of its own, in which case the pet
+// HOLDS that face (the laundry gate's "up to no good" look) through the hero's
+// held-state layer, so it reads as a mood that stays until the gate shuts.
 //
 // Fed the same alert list the strip gets (bootstrap + the :alerts broadcast +
 // the /buddy/alerts refresh). Board only: with no bubble element this is a
@@ -11,10 +13,15 @@
 // the board.
 
 import { startAlertFlip, stopAlertFlip } from "./alarm";
+import { HOLD_PRIORITY } from "./hero";
 import { alertRowText } from "../alert_strip";
 import { groupsOverlap } from "./board_scope";
 
 const CYCLE_MS = 5000;
+
+// The hold key the board alert owns on the hero (see hero.holdExpression). One
+// key, re-pointed as the showing alert changes, released when none stands.
+const ALERT_HOLD = "board-alert";
 
 export function initBoardAlert({ bubble, hero, tags }) {
   if (!bubble) return { setAlerts: () => {}, setTags: () => {} };
@@ -50,11 +57,19 @@ export function initBoardAlert({ bubble, hero, tags }) {
       bubble.removeAttribute("title");
     }
 
-    // The pet's face follows whichever alert is showing. One that names a face
-    // (the laundry gate's "up to no good" look) holds it steady; everything
-    // else gets the generic alarm shuffle. Passed every paint — including each
+    // The pet's face follows whichever alert is showing. One that NAMES a face
+    // (the laundry gate's "up to no good" look) HOLDS it steady through the
+    // hero's state layer, so it survives a mood broadcast or the idle reset
+    // rather than being a transient the next repaint wipes; everything else
+    // gets the generic alarm shuffle. Re-evaluated every paint — including each
     // rotation tick — so the face tracks the alert on screen.
-    startAlertFlip({ hero, expression: alert?.expression });
+    if (alert?.expression) {
+      stopAlertFlip({ hero });
+      hero?.holdExpression?.(ALERT_HOLD, alert.expression, HOLD_PRIORITY.alert);
+    } else {
+      hero?.releaseExpression?.(ALERT_HOLD);
+      startAlertFlip({ hero });
+    }
   }
 
   function setAlerts(next) {
@@ -68,6 +83,9 @@ export function initBoardAlert({ bubble, hero, tags }) {
       stopCycle();
       bubble.hidden = true;
       bubble.textContent = "";
+      // Nothing stands: drop both the shuffle and any held face so the pet
+      // falls back to its mood.
+      hero?.releaseExpression?.(ALERT_HOLD);
       stopAlertFlip({ hero });
       return;
     }

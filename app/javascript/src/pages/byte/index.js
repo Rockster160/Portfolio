@@ -72,7 +72,7 @@ import {
   repaintInlineIcons,
 } from "../../icon_picker";
 import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
-import { initBuddyHero } from "./buddy/hero";
+import { initBuddyHero, HOLD_PRIORITY } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBoardDurations } from "./buddy/durations";
 import { initBuddyProcesses } from "./buddy/processes";
@@ -2404,30 +2404,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The board's pet mirrors Whisper: it sleeps when she sleeps or naps, and
   // hides when she's gone. Driven off the same whisper-durations status the
   // rings read, and ONLY on a board that watches the feed (the status arrives
-  // null otherwise), so no other board's pet reacts. A transient paint, so it
-  // never overwrites the pet's remembered mood — clearing the state restores it.
+  // null otherwise), so no other board's pet reacts. A HELD state, so it holds
+  // until the status clears and the remembered mood underneath returns then —
+  // never wiped by a mood broadcast or the idle reset in the meantime.
   const buddyCharEl = app.querySelector(".byte-buddy-char");
-  let whisperOverride = false;
   function applyWhisperState(state) {
     if (!buddyCharEl) return;
     if (!state) {
-      if (whisperOverride) {
-        delete buddyCharEl.dataset.whisperState;
-        buddyHero?.setExpression(buddyWakeExpr || DEFAULT_WAKE_EXPRESSION, { transient: true });
-        whisperOverride = false;
-      }
+      delete buddyCharEl.dataset.whisperState;
+      buddyHero?.releaseExpression?.("whisper");
       return;
     }
-    whisperOverride = true;
     buddyCharEl.dataset.whisperState = state;
     // The pet wears the matching FACE — asleep the sleeping one, gone the hiding
-    // one — while staying right where it is. (A pet with no art for one falls
-    // back to neutral in the hero.) Awake restores its normal mood.
-    const face =
-      state === "asleep" ? "sleeping"
-      : state === "gone" ? "hiding"
-      : (buddyWakeExpr || DEFAULT_WAKE_EXPRESSION);
-    buddyHero?.setExpression(face, { transient: true });
+    // one — while staying right where it is, as a HELD STATE so a cheer or a
+    // sentiment broadcast doesn't wipe it off the wall; it holds until the state
+    // clears. (A pet with no art for one falls back to neutral in the hero.) Any
+    // other state is no face override, so the pet's own mood shows.
+    if (state === "asleep")
+      buddyHero?.holdExpression?.("whisper", "sleeping", HOLD_PRIORITY.whisper);
+    else if (state === "gone")
+      buddyHero?.holdExpression?.("whisper", "hiding", HOLD_PRIORITY.whisper);
+    else buddyHero?.releaseExpression?.("whisper");
   }
 
   // Board-only Whisper status rings (out / nap / quiet / kennel), off the
@@ -2803,13 +2801,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       buddySleep();
       return;
     }
+    // Put the remembered mood back underneath, then lift the sleep state — the
+    // pet falls to its mood, or to any OTHER state still standing (a hiding
+    // Whisper, an open gate).
     buddyHero?.setExpression(buddyWakeExpr);
+    buddyHero?.releaseExpression?.("sleep");
     armIdleFaceReset();
   };
-  // Sleeping repaints the pet, which also drops any transient "thinking"
-  // overlay — so a turn that fails (Mac unreachable) doesn't leave Byte stuck
-  // mid-thought. The stored mood lives in buddyWakeExpr and is restored on wake.
-  const buddySleep = () => buddyHero?.setExpression("sleeping");
+  // Asleep is a HELD STATE, not a transient: it stays until Byte wakes, outranks
+  // every other standing face, and drops the "thinking" overlay — so a turn that
+  // fails (Mac unreachable) doesn't leave Byte stuck mid-thought. The stored
+  // mood lives in buddyWakeExpr and under the hold, restored on wake.
+  const buddySleep = () =>
+    buddyHero?.holdExpression?.("sleep", "sleeping", HOLD_PRIORITY.sleep);
   armIdleFaceReset(); // start the idle clock on load
 
   // ---------- sleeping chip + queue-while-asleep ----------

@@ -119,53 +119,31 @@ export function startAlarm({ hero }) {
 // timer always wins the face, so this yields whenever one is going and picks
 // back up on its next tick once that stops.
 //
-// An alert may instead name ONE face to HOLD (the laundry gate's "up to no
-// good" look) — `expression`. Then the pet wears that steady rather than
-// flipping: it reads as a mood, not an alarm. The loop still ticks so the held
-// face re-asserts after a ringing timer that stole it ends, exactly as the
-// flip does. Whichever alert is showing drives it, so a caller re-points the
-// face by calling again with a new (or no) expression.
+// This is the GENERIC attention animation, for an alert with no face of its
+// own. An alert that names a face (the laundry gate's "up to no good" look)
+// doesn't flip — board_alert HOLDS that face through the hero's held-state
+// layer instead, so it stands steady and survives a mood change rather than
+// being a transient the next repaint wipes.
 let alertFlipInterval = 0;
 let alertFlipRunning = false;
-let alertHoldExpression = null;
 
-// Paint the face for one tick: the held mood if the showing alert named one,
-// otherwise the two-frame alarm flip. Yields entirely while a timer rings —
-// its own loop owns the face then.
-function paintAlertFace(hero, flip) {
-  if (running) return;
-  if (alertHoldExpression) {
-    hero?.setExpression(alertHoldExpression, { transient: true });
-    return;
-  }
-  const [faceA, faceB] = alarmFaces();
-  hero?.setExpression(flip ? faceB : faceA, { transient: true });
-}
-
-export function startAlertFlip({ hero, expression = null } = {}) {
-  alertHoldExpression = expression || null;
-
-  // Already going: just adopt the new mode (a different held face, or back to
-  // the flip) and paint it now rather than waiting up to a tick for it, so a
-  // rotation between alerts changes the face at once.
-  if (alertFlipRunning) {
-    paintAlertFace(hero, false);
-    return;
-  }
-
+export function startAlertFlip({ hero }) {
+  if (alertFlipRunning) return;
   alertFlipRunning = true;
+
+  const [faceA, faceB] = alarmFaces();
   let flip = false;
-  paintAlertFace(hero, flip);
+  if (!running) hero?.setExpression(faceA, { transient: true });
   alertFlipInterval = window.setInterval(() => {
+    if (running) return; // a ringing timer owns the face while it rings
     flip = !flip;
-    paintAlertFace(hero, flip);
+    hero?.setExpression(flip ? faceB : faceA, { transient: true });
   }, 600);
 }
 
 export function stopAlertFlip({ hero } = {}) {
   if (!alertFlipRunning) return;
   alertFlipRunning = false;
-  alertHoldExpression = null;
   if (alertFlipInterval) {
     clearInterval(alertFlipInterval);
     alertFlipInterval = 0;
