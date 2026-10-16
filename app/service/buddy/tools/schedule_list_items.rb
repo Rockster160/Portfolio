@@ -14,7 +14,8 @@
 # automation engine to reach a tool sitting right there.
 Buddy::Tools.register(
   name:        :schedule_list_items,
-  summary:     "Put items onto a list LATER, once or on a repeat.",
+  summary:     "Add items to a list LATER or on a repeat: \"add these to Before Bed every day at " \
+               "9pm\", \"put bin bags on the shopping list every Sunday\".",
   description: <<~TXT,
     Put items onto a list LATER, once or on a repeat. "Add these to Before Bed
     every night at 9", "put the bin bags on the shopping list every Sunday

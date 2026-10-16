@@ -136,7 +136,13 @@
         chats, so this leads to the board index rather than the chat. Hung off
         the one control that is already here rather than adding a second piece
         of chrome over the circles. %>
-    <a class="byte-board-leave" href="<%= byte_board_path %>">← All boards</a>
+    <%# Beside it, faintly, which build this screen is running - a number that
+        climbs with every deploy, so a wall that hasn't taken one reads as
+        behind at a glance. %>
+    <div class="byte-board-foot">
+      <a class="byte-board-leave" href="<%= byte_board_path %>">← All boards</a>
+      <span class="byte-board-version" title="Build this screen is running">#<%= BUILD_NUMBER %></span>
+    </div>
   </div>
 
   <%# Adding or editing a credit button: its own dialog, like Byte's other

@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :today_briefing,
-  summary:     "Deliver the full Today briefing as its own message. Almost never: \"what's on " \
-               "today\" is an ordinary answer.",
+  summary:     "Only when they ask for the Today briefing BY NAME (\"give me my Today briefing\"): " \
+               "posts the whole briefing as its own message. \"What's on today\" is an ordinary " \
+               "answer.",
   description: <<~TXT,
     Deliver the "Today" briefing. It composes and posts a whole message of its
     own, so calling it is handing the turn over rather than getting an answer

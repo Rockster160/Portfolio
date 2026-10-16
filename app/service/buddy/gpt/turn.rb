@@ -1077,6 +1077,13 @@ module Buddy
             next
           end
 
+          # A call naming a tool that hasn't been opened yet is the model PICKING
+          # it (see Buddy::ToolIndex): it opens the tool and nothing runs, so it
+          # is no evidence of anything the round asked for - not a routine, not a
+          # time on the clock, not a checklist row.
+          @opening = calls.select { |c| Buddy::ToolIndex.opening?(c[:name], c[:arguments], loaded: loaded_tools) }.to_set { |c| c[:call_id] }
+          acting   = calls.reject { |c| @opening.include?(c[:call_id]) }
+
           # Resolve every call ONCE, here: the output goes back to the model, and
           # resolving is also what tells us whether the call is still viable.
           #
@@ -1088,7 +1095,7 @@ module Buddy
           # question from whether one ended up in `proposals`: a call that
           # failed to resolve is dropped from those, and that failure is the
           # all-or-nothing guarantee doing its job rather than a gap to fill.
-          @asked_routine ||= calls.any? { |c| Buddy::Routines.runner?(Buddy::Tools[c[:name]]) }
+          @asked_routine ||= acting.any? { |c| Buddy::Routines.runner?(Buddy::Tools[c[:name]]) }
 
           # Whether anything in this round PUT SOMETHING ON THE CLOCK, asked
           # before any of it runs. "Remind me at 5 to call mom, and add milk to
@@ -1096,8 +1103,8 @@ module Buddy
           # the two calls the model emits first is arbitrary — read one at a
           # time, the reminder only covered the milk when it happened to come
           # first. Reading the whole round covers it either way.
-          @scheduled ||= calls.any? { |c| self.class.puts_on_clock?(c[:name], c[:arguments]) }
-          @queued    ||= calls.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
+          @scheduled ||= acting.any? { |c| self.class.puts_on_clock?(c[:name], c[:arguments]) }
+          @queued    ||= acting.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
 
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
@@ -1108,11 +1115,11 @@ module Buddy
           # again, and the model has already been told it failed, so letting it
           # count as a proposal would trip the all-discarded fallback and replace
           # a perfectly good "I couldn't find that one, which did you mean?".
-          proposals.concat(calls.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) })
+          proposals.concat(acting.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) })
 
           # A round that only opened tools gave the person nothing, so it
           # doesn't use up one of theirs.
-          only_loaded = calls.all? { |c| Buddy::ToolIndex.handles?(c[:name]) }
+          only_loaded = acting.empty?
           if only_loaded && loads < Buddy::ToolIndex::MAX_LOAD_ROUNDS
             loads  += 1
             rounds -= 1
@@ -1260,6 +1267,9 @@ module Buddy
 
       def tool_output(call)
         name = call[:name].to_sym
+        # Before the progress line: opening a tool does nothing they'd see.
+        return JSON.generate(Buddy::ToolIndex.open(name, loaded: loaded_tools)) if @opening&.include?(call[:call_id])
+
         # Announced BEFORE the work, not after: an answering tool runs inside
         # this method, so a line posted afterwards would describe something
         # already finished and the slowest part of the turn would still look
@@ -1271,17 +1281,8 @@ module Buddy
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
         return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
-        if Buddy::ToolIndex.handles?(name)
-          return JSON.generate(Buddy::ToolIndex.load(call[:arguments], user: @user, loaded: loaded_tools))
-        end
-
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
-
-        # Called off its index line without loading it first. It runs as any
-        # call does; if it fails for want of the instructions, the instructions
-        # are there on the next round and the failure says so.
-        unread = Buddy::ToolIndex.called(name, loaded: loaded_tools)
 
         # THE gate, and it has to be HERE: an acting answering tool runs inside
         # `resolve_call` (see its `answers?` branch), so anywhere downstream is
@@ -1316,7 +1317,6 @@ module Buddy
           result = result.except(:asked_choice)
         end
         @failed << call[:call_id] if result[:status].to_s == "failed"
-        result = result.merge(how: Buddy::ToolIndex::UNREAD_RETRY) if unread && result[:status].to_s == "failed"
         # "Do this now and that at 11" is a real sentence. Once the model has
         # actually put something on the clock this turn, it has understood the
         # time, and an immediate call after that is a second request rather than
@@ -2860,8 +2860,8 @@ module Buddy
       # word for word for the rest: prose telling a model not to call a tool is
       # advice, and not offering it is the enforcement.
       #
-      # Asked every round rather than once a turn: a round that called
-      # `load_tools` changes what the next one is offered (see Buddy::ToolIndex).
+      # Asked every round rather than once a turn: a round that opened a tool
+      # changes what the next one is offered (see Buddy::ToolIndex).
       def tools
         return [] if today_briefing?
 
@@ -2870,6 +2870,8 @@ module Buddy
           @seeded_tools ||= Buddy::ToolIndex.everything(user: @user).select { |schema|
             named.include?(schema[:name].to_s)
           }
+          # Offered in full, so they're open: a call to one is never a pick.
+          loaded_tools.merge(@seeded_tools.map { |schema| schema[:name].to_sym })
           return @seeded_tools
         end
 

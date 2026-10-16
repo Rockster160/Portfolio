@@ -1,6 +1,6 @@
 class ByteController < ApplicationController
-  before_action :authorize_user, except: [:csrf]
-  before_action :authorize_owner, except: [:csrf]
+  before_action :authorize_user, except: [:csrf, :board_manifest]
+  before_action :authorize_owner, except: [:csrf, :board_manifest]
 
   # The presence heartbeat is pure telemetry (a 30s "looking at Byte" cache key),
   # fired on a 15s interval from a long-lived PWA. CSRF is skipped for a
@@ -116,9 +116,14 @@ class ByteController < ApplicationController
   # icon. Generated from the board's live buddy_theme, so re-theming the board
   # re-skins the installed icon the next time it is added. Mirrors
   # TimersController#page_manifest.
+  #
+  # Served without a session: a browser fetches a manifest with no cookies, so
+  # behind the login it was a redirect to /login, and iOS, finding no manifest,
+  # saved a bookmark instead of an app. The page links it with a signed `key`,
+  # which is what stands in for the session - an id alone opens nothing.
   def board_manifest
-    convo = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
-    return head(:not_found) if convo.nil?
+    convo = ByteConversation.find_signed(params[:key].to_s, purpose: :board_manifest)
+    return head(:not_found) if convo.nil? || convo.id != params[:conversation_id].to_i || !convo.board?
 
     theme = convo.buddy_theme.to_s
     chrome = Buddy::Themes.for(theme)
@@ -1120,7 +1125,6 @@ class ByteController < ApplicationController
       chore_items = chore_items.reject { |item| hidden_ids.include?(item[:id]) }
     end
     chore_items = board_hot_weighted(chore_items, day)
-    chore_items = board_pinned_order(convo, chore_items, day)
 
     # Routines and buttons come from the NAMED groups only — "All" is a chores-only
     # wildcard, so an all-chores board doesn't also sweep in every routine.
@@ -1171,7 +1175,7 @@ class ByteController < ApplicationController
       items += ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
     end
 
-    board_chores_ordered(items)
+    board_chores_ordered(owner, items)
   end
 
   # The default chore set: the owner's accessible chores, serialized as the owner.
@@ -1179,7 +1183,7 @@ class ByteController < ApplicationController
     scope = wants_all ? owner.accessible_chores : owner.accessible_chores.tagged(tags)
     chores = scope.order(BOARD_CHORE_ORDER).to_a
     ctx = ChoreSerializerContext.for_user(owner, day: day)
-    board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
+    board_chores_ordered(owner, ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
   end
 
   # Which members' assigned chores a board shows, or nil when it's never been set
@@ -1195,19 +1199,27 @@ class ByteController < ApplicationController
   end
 
   # Chores on a board read in the Today page's order, so a chore sits in the same
-  # place out here as everywhere else it appears. Due-today first, then the
-  # carryovers; within each, higher priority wins and the manual Grid order
-  # (sort_order, which is the order they arrive in) breaks ties, so chores grouped
-  # together stay together. Carryovers then fall by how recently they were due,
-  # the ones with no derived due date last.
-  def board_chores_ordered(items)
+  # place out here as everywhere else it appears: the owner's Dailies in their
+  # own order (shown whether or not they're due, as Today shows them), then the chores due today, then the carryovers. Due today ranks
+  # by priority, ties kept in the Grid order (sort_order); carryovers by
+  # priority, then most recently due, the ones with no derived due date last.
+  # Computed fresh every time, so a reorder, a due date settling or a chore
+  # coming or going moves the board exactly as it moves Today.
+  def board_chores_ordered(owner, items)
+    items = items.sort_by { |c| [c[:sort_order] || Float::INFINITY, c[:id]] }
+    daily_ids = ChoreDaily.for_user(owner).pluck(:chore_id)
+    dailies, items = items.partition { |c| daily_ids.include?(c[:id]) }
+    # On the board because they're the owner's Dailies, schedule or not - the
+    # way Today shows them - whoever the chore was serialized as.
+    dailies = dailies.sort_by { |c| daily_ids.index(c[:id]) }.map { |c| c.merge(on_dailies: true) }
+    items = items.map { |c| c.merge(on_dailies: false) }
     due, rest = items.partition { |c| c[:due_today] }
     sorted_due = due.sort_by.with_index { |c, i| [-board_priority_rank(c), i] }
     sorted_rest = rest.sort_by.with_index { |c, i|
       date = c[:scheduled_due_on]
       [-board_priority_rank(c), date.present? ? 0 : 1, date.present? ? -Date.iso8601(date).jd : 0, i]
     }
-    sorted_due + sorted_rest
+    dailies + sorted_due + sorted_rest
   end
 
   # A hot chore carries the weight the morning hot-pick draw gives it, so the
@@ -1219,36 +1231,6 @@ class ByteController < ApplicationController
 
     weights = ChoreDailyResetWorker.new.selection_weights(Chore.where(id: hot_ids).to_a, day)
     items.map { |item| weights.key?(item[:id]) ? item.merge(hot_weight: weights[item[:id]]) : item }
-  end
-
-  # The chores keep the order they first took on the board for the rest of the
-  # chore day. The sort leans on things that move as the day goes - a
-  # completion settles a follower's due date, a mark-due is cleared - and a
-  # circle that jumps places under a finger is pressed by mistake. A chore
-  # arriving mid-day goes in after the one it follows in the sort; the next
-  # day starts from the sort again.
-  def board_pinned_order(convo, items, day)
-    pinned = convo.metadata.is_a?(Hash) ? convo.metadata["board_order"] : nil
-    order = pinned.is_a?(Hash) && pinned["day"] == day.iso8601 ? Array(pinned["ids"]).dup : []
-
-    previous = nil
-    items.each do |item|
-      id = item[:id]
-      unless order.include?(id)
-        at = previous.nil? ? 0 : order.index(previous) + 1
-        order.insert(at, id)
-      end
-      previous = id
-    end
-
-    stored = { "day" => day.iso8601, "ids" => order }
-    if stored != pinned
-      ByteConversation.where(id: convo.id).update_all([
-        "metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{board_order}', ?::jsonb)",
-        stored.to_json,
-      ])
-    end
-    items.sort_by.with_index { |item, i| [order.index(item[:id]) || order.size, i] }
   end
 
   # none → 0 … critical → 4, the same ladder the Today page ranks priority by.

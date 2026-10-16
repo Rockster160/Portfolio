@@ -105,35 +105,46 @@ RSpec.describe "Byte chore board", type: :request do
       expect(board_chores.pluck("name")).to eq(["Alpha", "Zeta", "MidCarry"])
     end
 
-    # The sort leans on things that move during the day (a mark-due cleared, a
-    # follower's due date settling), so a board keeps the order its chores took
-    # when the day began and only a NEW chore finds its place in it.
-    it "keeps the day's order when the sort would shuffle it, fitting new chores in" do
+    # Computed fresh on every load, the way Today is: a hand reorder or a due
+    # date moving shows on the very next fetch.
+    it "follows a reorder and a due date change straight away" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
-      older = create(:chore, created_by_user: user, name: "Older", tags: ["Home"], marked_due_at: 3.days.ago)
-      create(:chore, created_by_user: user, name: "Today", tags: ["Home"], marked_due_at: Time.current)
-      create(:chore, created_by_user: user, name: "Yesterday", tags: ["Home"], marked_due_at: 1.day.ago)
+      first = create(:chore, created_by_user: user, name: "First", tags: ["Home"], sort_order: 1, marked_due_at: Time.current)
+      second = create(:chore, created_by_user: user, name: "Second", tags: ["Home"], sort_order: 2, marked_due_at: Time.current)
+      older = create(:chore, created_by_user: user, name: "Older", tags: ["Home"], sort_order: 3, marked_due_at: 3.days.ago)
       get "/byte/board/items", params: { conversation_id: thread.id }
 
+      first.update!(sort_order: 4)
+      second.update!(sort_order: 0)
       older.update!(marked_due_at: Time.current)
-      create(:chore, created_by_user: user, name: "Newer", tags: ["Home"], marked_due_at: 2.days.ago)
       get "/byte/board/items", params: { conversation_id: thread.id }
 
-      expect(response.parsed_body["items"].pluck("name")).to eq(["Today", "Yesterday", "Newer", "Older"])
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Second", "Older", "First"])
     end
 
-    it "sorts afresh on a new chore day" do
+    # Today leads with the person's Dailies, in the order they keep them in.
+    it "puts the owner's Dailies first, in their own order" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
-      older = create(:chore, created_by_user: user, name: "Older", tags: ["Home"], marked_due_at: 3.days.ago)
-      create(:chore, created_by_user: user, name: "Yesterday", tags: ["Home"], marked_due_at: 1.day.ago)
+      create(:chore, created_by_user: user, name: "Plain", tags: ["Home"], sort_order: 1, marked_due_at: Time.current)
+      late = create(:chore, created_by_user: user, name: "Late", tags: ["Home"], sort_order: 2, marked_due_at: Time.current)
+      early = create(:chore, created_by_user: user, name: "Early", tags: ["Home"], sort_order: 3, marked_due_at: Time.current)
+      ChoreDaily.create!(user: user, chore: early, sort_order: 0)
+      ChoreDaily.create!(user: user, chore: late, sort_order: 1)
+
       get "/byte/board/items", params: { conversation_id: thread.id }
 
-      older.update!(marked_due_at: Time.current)
-      stale = thread.reload.metadata["board_order"].merge("day" => (Date.current - 1).iso8601)
-      thread.update!(metadata: thread.metadata.merge("board_order" => stale))
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Early", "Late", "Plain"])
+    end
+
+    it "marks the owner's Dailies, even one that isn't due" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      pinned = create(:chore, created_by_user: user, name: "Pinned", tags: ["Home"])
+      ChoreDaily.create!(user: user, chore: pinned, sort_order: 0)
+
       get "/byte/board/items", params: { conversation_id: thread.id }
 
-      expect(response.parsed_body["items"].pluck("name")).to eq(["Older", "Yesterday"])
+      item = response.parsed_body["items"].find { |i| i["name"] == "Pinned" }
+      expect(item.slice("on_dailies", "today_visible")).to eq("on_dailies" => true, "today_visible" => false)
     end
 
     # The board draws its pet's chore dreams the way the morning hot picks are
@@ -687,13 +698,28 @@ RSpec.describe "Byte chore board", type: :request do
     it "names the board, carries its pet's icon, and starts at this board" do
       thread.update!(name: "Desk", buddy_theme: "bloom")
 
-      get "/board/#{thread.id}/manifest.webmanifest"
+      get "/board/#{thread.id}/manifest.webmanifest", params: { key: thread.signed_id(purpose: :board_manifest) }
 
       expect(response).to have_http_status(:ok)
       manifest = JSON.parse(response.body)
       expect(manifest["name"]).to eq("Desk")
       expect(manifest["start_url"]).to eq("/board/#{thread.id}?source=pwa")
       expect(manifest["icons"].first["src"]).to eq("/bloom_favicon/web-app-manifest-192x192.png")
+    end
+
+    # A browser asks for the manifest with no cookies at all.
+    it "loads without a session from the link the page carries, and not without its key" do
+      get "/board/#{thread.id}"
+      href = CGI.unescapeHTML(response.body[/<link rel="manifest" href="([^"]+)"/, 1])
+      reset!
+      host! "byte.example.com"
+
+      get href
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("application/manifest+json")
+
+      get "/board/#{thread.id}/manifest.webmanifest"
+      expect(response).to have_http_status(:not_found)
     end
   end
 

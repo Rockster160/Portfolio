@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :edit_list_item,
-  summary:     "Change a list item - rename, flag important, make permanent, move to another " \
-               "section.",
+  summary:     "Change an item already on a list: flag it important, rename it, make it " \
+               "permanent, move its section (\"flag the oat milk as important\"). add_list_item " \
+               "would add a second copy.",
   description: <<~TXT,
     Edit a list item - rename it, flag it important, mark it permanent, or
     change where it sits. Only include the fields that are changing.

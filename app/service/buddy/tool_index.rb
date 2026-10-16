@@ -8,28 +8,27 @@ module Buddy
   # in the pile.
   #
   # So a turn starts with the FRAME (the read tools and silent side effects the
-  # Turn answers itself), the registry tools marked `always:`, and one more
-  # function, `load_tools`, whose description is the index: every other tool's
-  # name and its one-line `summary`. Calling it puts those tools' full schemas
-  # into the tool list for the rest of the turn, and the model makes the real
-  # call on the next round with the whole instructions in front of it.
+  # Turn answers itself), the registry tools marked `always:`, and every other
+  # tool under its own name with only its one-line `summary` and no arguments.
+  # The model picks from that list the way it picks any tool - by name - and
+  # calling one OPENS it: nothing runs, its full schema takes the summary's
+  # place for the rest of the turn, and the model makes the real call next.
+  #
+  # The summaries used to sit inside the description of a single `load_tools`
+  # function instead. The model reads a tool list by its names, so it saw one
+  # vague "load" tool beside `get_context` and reached for `get_context`: a
+  # third of the eval probes never selected anything at all.
   #
   # Nothing here knows any tool by name. Which side of the line a tool sits on
-  # is the `always:` it registered with, and what the index says about it is
-  # its own `summary:`.
+  # is the `always:` it registered with, and what its entry says is its own
+  # `summary:`.
   module ToolIndex
     module_function
 
-    NAME = :load_tools
-
-    # A round spent only loading doesn't count toward Turn::MAX_ROUNDS - it
-    # bought nothing the person can see. Capped, so a model that keeps asking
-    # for more can't spend the turn reading manuals.
+    # A round spent only opening tools doesn't count toward Turn::MAX_ROUNDS -
+    # it bought nothing the person can see. Capped, so a model that keeps
+    # opening more can't spend the turn reading manuals.
     MAX_LOAD_ROUNDS = 2
-
-    INTRO = <<~TXT.freeze
-      Load the full instructions for the tools you need, before calling them. Only the tools already in your list can be called straight away; everything below is listed by name and when to reach for it, and its arguments and rules arrive when you load it. Pick by what they asked for, load every tool the request needs in ONE call (an action and the lookup it depends on, or two tools you're torn between), then call them on the next round. Loading is silent and costs nothing they see, so never tell them you're looking something up. Don't load a tool for something you can answer from what you already have.
-    TXT
 
     # Everything a turn can be offered, in full - the shape before the index,
     # and still the shape a seed that names its tools gets (see
@@ -38,20 +37,20 @@ module Buddy
       [*frame(user), *Buddy::Tools.function_schemas(user: user)]
     end
 
-    # The first stage, plus whatever has been loaded since. Loaded tools come
-    # after the fixed part and in name order, so the prefix every turn starts
-    # with is byte-identical and stays cached.
+    # The first stage, with whatever has been opened since in full. Each tool
+    # keeps its place in the list whether it's a summary or a schema, so the
+    # list only changes from the first one opened onward.
     def schemas(user:, loaded: [])
-      offered = Buddy::Tools.offered(user: user)
-      always, indexed = offered.partition { |tool| Buddy::Tools.always?(tool) }
       wanted = loaded.to_set(&:to_sym)
-      opened = indexed.select { |tool| wanted.include?(tool[:name]) }
       [
         *frame(user),
-        *always.map { |tool| Buddy::Tools.function_schema(tool, user: user) },
-        (schema(indexed) if indexed.any?),
-        *opened.map { |tool| Buddy::Tools.function_schema(tool, user: user) },
-      ].compact
+        *Buddy::Tools.offered(user: user).map { |tool|
+          next Buddy::Tools.function_schema(tool, user: user) if Buddy::Tools.always?(tool)
+          next Buddy::Tools.function_schema(tool, user: user) if wanted.include?(tool[:name])
+
+          entry(tool)
+        },
+      ]
     end
 
     # The tools the Turn answers itself. Small, and needed on turns that never
@@ -70,75 +69,40 @@ module Buddy
       Buddy::Tools.offered(user: user).reject { |tool| Buddy::Tools.always?(tool) }
     end
 
-    def schema(indexed)
-      lines = indexed.map { |tool| "- #{tool[:name]}: #{tool[:summary]}" }
+    # A tool before it's opened: its name and when to reach for it. No
+    # arguments, so a call can only ever mean "this one" and never runs.
+    def entry(tool)
       {
         type:        :function,
-        name:        NAME,
-        description: "#{INTRO.strip}\n\n#{lines.join("\n")}",
+        name:        tool[:name],
+        description: tool[:summary].to_s,
         strict:      true,
-        parameters:  {
-          type:                 :object,
-          properties:           {
-            names: {
-              type:        :array,
-              items:       { type: :string, enum: indexed.map { |tool| tool[:name].to_s } },
-              description: "Every tool this request needs, by name from the list",
-            },
-          },
-          required:             [:names],
-          additionalProperties: false,
-        },
+        parameters:  { type: :object, properties: {}, required: [], additionalProperties: false },
       }
     end
 
-    def handles?(name)
-      name.to_s.to_sym == NAME
-    end
-
-    # Adds the named tools to `loaded` (a Set the caller keeps for the turn)
-    # and says what happened. A name that isn't on this person's index is
-    # reported rather than dropped, so the model can pick again instead of
-    # calling something that will never arrive.
-    def load(args, user:, loaded:)
-      names     = Array((args || {})[:names] || (args || {})["names"]).map { |name| name.to_s.strip.to_sym }.uniq
-      available = indexed(user: user).pluck(:name)
-      found, unknown = names.partition { |name| available.include?(name) }
-      loaded.merge(found)
-
-      {
-        ok:      found.any?,
-        loaded:  found,
-        unknown: unknown.presence,
-        how:     (
-          if found.any?
-            "Their full instructions and arguments are in your tool list now. Read them and make the " \
-              "call on this round - don't tell them you're looking."
-          else
-            "None of those are on the list. Pick from the names in load_tools' description, or answer " \
-              "without a tool."
-          end
-        ),
-      }.compact
-    end
-
-    # A registry tool that was called without being loaded first. The model
-    # can only name a tool it has seen, so this is one it picked off the index
-    # and called on the summary alone. It runs as normal - the arguments are
-    # validated the same either way, and a bad call comes back as the usual
-    # error - and it's loaded so the next round holds its real schema.
-    #
-    # True when this call is what loaded it, which is what tells the caller a
-    # failure may only be for want of the instructions.
-    def called(name, loaded:) # rubocop:disable Naming/PredicateMethod -- it loads; `?` would imply a query
+    # Whether this call is a tool being picked rather than used: one on the
+    # index, not opened yet this turn, and called with nothing - which is all
+    # its entry lets it carry. A call that does arrive with arguments is the
+    # tool being used, and runs.
+    def opening?(name, args, loaded:)
       tool = Buddy::Tools[name]
       return false if tool.nil? || Buddy::Tools.always?(tool) || loaded.include?(tool[:name])
 
-      loaded << tool[:name]
-      true
+      args.blank? || (args.respond_to?(:values) && args.values.all?(&:blank?))
     end
 
-    UNREAD_RETRY = "You called this without loading it, so you hadn't seen its instructions. " \
-                   "They're in your tool list now - read them and call it again.".freeze
+    # Opens it for the rest of the turn (`loaded` is a Set the caller keeps)
+    # and says so. "Nothing has happened" is the half that matters: the model
+    # called the thing it wanted, and must not tell them it's done.
+    def open(name, loaded:)
+      loaded << name.to_s.to_sym
+      {
+        opened: name.to_s,
+        how:    "Nothing has happened yet - this only opened it. Its full instructions and arguments " \
+                "are in your tool list now: read them and call #{name} again with its arguments, on " \
+                "this round. Don't tell them you're looking.",
+      }
+    end
   end
 end

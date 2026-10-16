@@ -28,9 +28,14 @@ class ChoreBroadcaster
       },
     }
 
-    User.where(id: recipient_ids).find_each do |r|
-      MonitorChannel.broadcast_to(r, payload)
-    end
+    # Held for the commit: a board re-reads its chores the moment this lands,
+    # and a press made inside a transaction (a Buddy form submits under a lock)
+    # would otherwise be read back as the state before it.
+    AfterCommit.run {
+      User.where(id: recipient_ids).find_each do |r|
+        MonitorChannel.broadcast_to(r, payload)
+      end
+    }
   end
 
   # `:after_chore` followers own no completion row and get no `updated_at`

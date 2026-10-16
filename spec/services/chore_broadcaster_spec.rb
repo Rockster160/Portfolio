@@ -19,6 +19,24 @@ RSpec.describe ChoreBroadcaster do
       expect(payload[:data][:chore_ids]).to eq([chore.id])
     end
 
+    it "waits for the open transaction to commit, and says nothing on a rollback" do
+      chore = create(:chore, created_by_user: user)
+      sent = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_, payload| sent << payload }
+
+      Chore.transaction do
+        described_class.broadcast_changes!(user, chore)
+        expect(sent).to be_empty
+      end
+      expect(sent.size).to eq(1)
+
+      Chore.transaction do
+        described_class.broadcast_changes!(user, chore)
+        raise ActiveRecord::Rollback
+      end
+      expect(sent.size).to eq(1)
+    end
+
     it "coalesces sub-chore taps into ONE broadcast carrying both ids in chore_ids" do
       parent = create(:chore, created_by_user: user)
       sub    = create(:chore, created_by_user: user, parent_chore: parent, one_off: true)

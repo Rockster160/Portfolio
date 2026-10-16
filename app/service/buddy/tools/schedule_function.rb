@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:             :schedule_function,
-  summary:          "Run a `jil_functions` automation LATER, at a time - call_jil_function with a " \
-                    "clock on it.",
+  summary:          "Run a house or car automation at a later time or after a delay: \"play the " \
+                    "nap sound in 2 minutes\", \"start the car at 7:40\". A timer only counts down - " \
+                    "this does the thing.",
   description:      <<~TXT,
     Put a Jil FUNCTION call on the clock. Same function, same arguments as
     `call_jil_function` - this one just happens later.

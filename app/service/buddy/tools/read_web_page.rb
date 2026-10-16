@@ -3,7 +3,8 @@
 # for what is fetched and what is refused.
 Buddy::Tools.register(
   name:        :read_web_page,
-  summary:     "Open a link and answer from what's actually on the page.",
+  summary:     "A message with a link: open and read the page FIRST, then act on what it actually " \
+               "says. The words in a URL are only a guess at the page's dates, times and place.",
   description: <<~TXT,
     Open a link and read the page, then answer from what is actually on it.
 

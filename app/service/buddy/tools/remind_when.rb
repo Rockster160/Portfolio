@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :remind_when,
-  summary:     "A reminder that fires when something HAPPENS - arriving or leaving a place, a " \
-               "chore, an event, a deploy, any Jil listener. A clock time is schedule_reminder.",
+  summary:     "Do something when a thing HAPPENS - arriving or leaving, a chore, an event, a " \
+               "deploy, any listener: a nudge, or RUN an automation (\"once I leave, navigate me " \
+               "to Petsmart\"). A clock time is schedule_reminder.",
   description: <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /

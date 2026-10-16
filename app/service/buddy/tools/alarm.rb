@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:        :alarm,
-  summary:     "An ALARM that rings out loud until acknowledged - at a time, after a delay, or " \
-               "when something happens. A quiet nudge is schedule_reminder; a countdown is " \
-               "set_timer.",
+  summary:     "Rings OUT LOUD until acknowledged: \"wake me at 6:30\", \"alarm in 20 minutes\", \"an " \
+               "alarm when the washer's done\". Any wake-up is this. A silent nudge in the thread " \
+               "is schedule_reminder.",
   description: <<~TXT,
     Set an ALARM: it rings out loud and keeps ringing until they acknowledge it,
     and pushes to their phone the same moment. "Wake me at 6:30", "alarm in 20

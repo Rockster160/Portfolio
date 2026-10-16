@@ -15,11 +15,12 @@
 <% board = local_assigns[:board] %>
 <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path chrome[:touch_icon] %>">
 <link rel="icon" type="image/png" href="<%= asset_path chrome[:favicon] %>" sizes="96x96">
-<link rel="manifest" href="<%= board ? byte_board_manifest_path(board) : (kiosk ? chrome[:kiosk_manifest] : chrome[:manifest]) %>">
+<%# The board's manifest is fetched without the session, so its link carries
+    the signed key that opens it (see ByteController#board_manifest). %>
+<% manifest = board ? byte_board_manifest_path(board, key: board.signed_id(purpose: :board_manifest)) : (kiosk ? chrome[:kiosk_manifest] : chrome[:manifest]) %>
+<link rel="manifest" href="<%= manifest %>">
 <meta name="theme-color" content="<%= chrome[:color] %>">
 <meta name="apple-mobile-web-app-title" content="<%= board ? board.display_name : (kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name]) %>">
 <meta name="mobile-web-app-capable" content="yes">
-<%# iOS fetches the manifest without the session, so a board's (which needs
-    one) never loads there; this is what makes the icon open standalone. %>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

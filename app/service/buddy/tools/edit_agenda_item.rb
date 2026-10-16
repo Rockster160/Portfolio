@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :edit_agenda_item,
-  summary:     "Change or cancel an existing calendar item - title, time, duration, place, or " \
-               "which calendar it's on.",
+  summary:     "Change an event already on the calendar, by its name: \"move the plunge to the " \
+               "14th\", \"put it on the shared calendar\", \"we want to leave at 4\". search_agenda " \
+               "only reads - this makes the change.",
   description: <<~TXT,
     Edit an existing agenda item - change its title, time, duration, place, or
     which CALENDAR it sits on, or cancel it. Only include the fields that are

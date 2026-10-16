@@ -100,7 +100,9 @@ class BuddyEvalWorld
         record = model.find_by(model.primary_key => id)
         return false if record.nil?
 
-        record.destroy!
+        # A blob's `destroy` drops the row and leaves its file in storage;
+        # `purge` takes both.
+        record.is_a?(ActiveStorage::Blob) ? record.purge : record.destroy!
       end
       true
     rescue StandardError => e
@@ -557,7 +559,7 @@ class BuddyEvalWorld
       BuddyRoutine.create!(
         user: user, name: "Wind-down", description: "The evening one",
         steps: [
-          { "tool_name" => "set_font_size", "payload" => { "size" => "normal" } },
+          { "tool_name" => "set_font_size", "payload" => { "direction" => "reset" } },
           { "tool_name" => "set_timer", "payload" => { "minutes" => 10, "label" => "wind down" } },
         ]
       )

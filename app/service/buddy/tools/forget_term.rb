@@ -1,6 +1,7 @@
 Buddy::Tools.register(
   name:        :forget_term,
-  summary:     "Drop a word from the household glossary.",
+  summary:     "Take a word out of the household glossary (\"bakkie doesn't mean that any more\"). " \
+               "`forget` is for facts about them, never glossary words.",
   description: <<~TXT,
     Drop a word from the household glossary. Use when they say a word doesn't
     mean that any more, or that they never say it, or that it was wrong.

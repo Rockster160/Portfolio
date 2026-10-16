@@ -1,6 +1,8 @@
 Buddy::Tools.register(
   name:        :elaborate_idea,
-  summary:     "Add to an idea you're already holding instead of starting a second one.",
+  summary:     "They add to an idea you're already holding (\"about that greenhouse - it should " \
+               "probably be solar\"): appends it there. sort_stash only files; stash_idea would " \
+               "start a duplicate.",
   description: <<~TXT,
     Add to something you're already holding, instead of starting a second pile
     for the same thought. Use it whenever they come back to an idea that's

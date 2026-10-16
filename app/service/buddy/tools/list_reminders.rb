@@ -1,6 +1,8 @@
 Buddy::Tools.register(
   name:        :list_reminders,
-  summary:     "Show their reminders and watches so they can review or remove them.",
+  summary:     "\"What reminders do I have?\", \"show my reminders\": draws their reminders and " \
+               "watches as tappable rows under your reply. Nothing else shows them - don't read " \
+               "them out from context.",
   description: <<~TXT,
     Show the person their reminders so they can see and remove them. Use when
     they ask to see / list / review / manage / check what reminders they have

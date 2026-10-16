@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :edit_chore_completion,
-  summary:     "Fix a chore completion that already landed - its note or its time - without " \
-               "removing it.",
+  summary:     "Add a note to, or retime, a chore already marked done: \"put 'hint raspberry' on " \
+               "the water I ticked off\", \"that one was actually at 3\". Finds it by the chore's " \
+               "name; nothing is undone.",
   description: <<~TXT,
     Change a chore completion that has ALREADY landed - its note, or the time it
     was done. This is the tool for "put 'Hint Raspberry' on those waters", "that

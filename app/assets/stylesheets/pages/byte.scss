@@ -7501,14 +7501,27 @@ $board-cell-max: 200px;
   color: var(--bs-danger, #e5484d);
 }
 
-.byte-board-leave {
-  display: block;
+.byte-board-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--bs-border);
+}
+
+.byte-board-leave {
   font-size: 12px;
   color: var(--bs-muted);
   text-decoration: none;
+}
+
+.byte-board-version {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--bs-muted);
+  opacity: 0.6;
 }
 
 // -------- Editable form inside a bubble (Buddy::FormAction) --------------

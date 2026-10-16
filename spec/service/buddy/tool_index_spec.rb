@@ -7,12 +7,8 @@ RSpec.describe Buddy::ToolIndex do
     schemas.pluck(:name).map(&:to_sym)
   end
 
-  def index_of(schemas)
-    schemas.find { |schema| schema[:name] == described_class::NAME }
-  end
-
   describe "summaries" do
-    # The index line is all the model sees of an unloaded tool, so a tool
+    # The summary is all the model sees of an unopened tool, so a tool
     # without one is a tool nothing can choose.
     it "gives every registered tool a short one" do
       Buddy::Tools.all.each { |tool| # rubocop:disable Rails/FindEach -- an Array, not a relation
@@ -43,26 +39,32 @@ RSpec.describe Buddy::ToolIndex do
     let(:indexed)   { described_class.indexed(user: user) }
     let(:always)    { Buddy::Tools.offered(user: user).select { |tool| Buddy::Tools.always?(tool) } }
 
-    it "offers the frame, the always tools and the index, and no indexed tool in full" do
-      expect(names(stage_one)).to include(:get_context, :read_listener_guide, :remember, described_class::NAME)
-      expect(names(stage_one)).to include(*always.pluck(:name))
-      expect(names(stage_one) & indexed.pluck(:name)).to be_empty
+    def schema_for(schemas, name)
+      schemas.find { |schema| schema[:name].to_s == name.to_s }
     end
 
-    it "lists every indexed tool by name and summary, and lets load_tools name only those" do
-      index = index_of(stage_one)
-
-      indexed.each { |tool| expect(index[:description]).to include("- #{tool[:name]}: #{tool[:summary]}") }
-      expect(index[:parameters][:properties][:names][:items][:enum]).to match_array(indexed.map { |t| t[:name].to_s })
-      expect(index[:description]).not_to include("- #{always.first[:name]}:")
+    it "offers the frame and the always tools in full" do
+      expect(names(stage_one)).to include(:get_context, :read_listener_guide, :remember)
+      always.each { |tool| expect(schema_for(stage_one, tool[:name])).to eq(Buddy::Tools.function_schema(tool, user: user)) }
     end
 
-    it "adds a loaded tool's full schema after the fixed part, which never moves" do
+    # The model picks a tool by its name in the list, so every tool is in the
+    # list by name - only what it says, and what it takes, waits to be opened.
+    it "lists every other tool by name with only its summary and no arguments" do
+      indexed.each { |tool|
+        entry = schema_for(stage_one, tool[:name])
+
+        expect(entry[:description]).to eq(tool[:summary])
+        expect(entry[:parameters][:properties]).to be_empty
+      }
+    end
+
+    it "swaps an opened tool's summary for its full schema, in the same place" do
       tool   = indexed.first
-      loaded = described_class.schemas(user: user, loaded: [tool[:name]])
+      opened = described_class.schemas(user: user, loaded: [tool[:name]])
 
-      expect(loaded.first(stage_one.length)).to eq(stage_one)
-      expect(loaded.last).to eq(Buddy::Tools.function_schema(tool, user: user))
+      expect(names(opened)).to eq(names(stage_one))
+      expect(schema_for(opened, tool[:name])).to eq(Buddy::Tools.function_schema(tool, user: user))
     end
 
     it "is far smaller than every schema in full" do
@@ -70,21 +72,25 @@ RSpec.describe Buddy::ToolIndex do
     end
   end
 
-  describe ".load" do
-    it "opens the named tools and reports a name that isn't on the index" do
-      loaded = Set.new
-      tool   = described_class.indexed(user: user).first
+  describe ".opening?" do
+    it "is a tool on the index that hasn't been opened yet" do
+      tool = described_class.indexed(user: user).first
 
-      result = described_class.load({ "names" => [tool[:name].to_s, "made_up_tool"] }, user: user, loaded: loaded)
-
-      expect(loaded).to contain_exactly(tool[:name])
-      expect(result).to include(ok: true, loaded: [tool[:name]], unknown: [:made_up_tool])
+      expect(described_class.opening?(tool[:name], {}, loaded: Set.new)).to be(true)
+      expect(described_class.opening?(tool[:name], {}, loaded: Set[tool[:name]])).to be(false)
+      expect(described_class.opening?(:get_context, {}, loaded: Set.new)).to be(false)
     end
 
-    it "answers not-ok when nothing it named exists" do
-      result = described_class.load({ "names" => ["made_up_tool"] }, user: user, loaded: Set.new)
+    it "is never a call that carries arguments, which is the tool being used" do
+      tool = described_class.indexed(user: user).first
 
-      expect(result[:ok]).to be(false)
+      expect(described_class.opening?(tool[:name], { "query" => "x" }, loaded: Set.new)).to be(false)
+    end
+
+    it "never counts an always tool, which arrives in full" do
+      tool = Buddy::Tools.offered(user: user).find { |t| Buddy::Tools.always?(t) }
+
+      expect(described_class.opening?(tool[:name], {}, loaded: Set.new)).to be(false)
     end
   end
 
@@ -109,45 +115,40 @@ RSpec.describe Buddy::ToolIndex do
       client
     end
 
-    it "offers a tool in full from the round after it was loaded, to the end of the turn" do
+    let(:pick) { { name: :search_memories, arguments: {} } }
+
+    it "opens a picked tool without running it, and offers it in full to the end of the turn" do
       client = run([
-        { tool_calls: [{ name: :load_tools, arguments: { "names" => ["search_memories"] } }] },
+        { tool_calls: [pick] },
         { tool_calls: [lookup] },
         { tool_calls: [{ name: :get_context, arguments: { "sections" => nil } }] },
         { text: "Nothing about camping yet." },
       ])
 
-      offered = client.calls.map { |request| names(request.tools) }
-      expect(offered[0]).not_to include(:search_memories)
-      expect(offered[1..]).to all(include(:search_memories))
+      offered = client.calls.map { |request| request.tools.find { |t| t[:name].to_s == "search_memories" } }
+      expect(offered[0][:parameters][:properties]).to be_empty
+      expect(offered[1..]).to all(eq(Buddy::Tools.function_schema(Buddy::Tools[:search_memories], user: user)))
+
+      opened = client.calls[1].input.find { |item| item[:type] == :function_call_output }
+      expect(JSON.parse(opened[:output])["how"]).to start_with("Nothing has happened yet")
     end
 
-    it "doesn't count a round that only loaded tools toward the cap" do
-      rounds = [{ tool_calls: [{ name: :load_tools, arguments: { "names" => ["search_memories"] } }] }]
+    it "doesn't count a round that only opened tools toward the cap" do
+      rounds = [{ tool_calls: [pick] }]
       rounds += Array.new(8) { { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] } }
       client = run(rounds)
 
       expect(client.calls.length).to eq(Buddy::GPT::Turn::MAX_ROUNDS + 1)
     end
 
-    # The model can only name what it has seen, so a call it makes straight off
-    # the index line is honored rather than refused - and the next round holds
-    # the schema it skipped.
-    it "runs a tool called off the index without loading it, and loads it for the next round" do
-      client = run([{ tool_calls: [lookup] }, { text: "Nothing about camping yet." }])
+    # A pick has no arguments, so it must never reach the tool: "cancel my
+    # timers" picking cancel_timer would otherwise run it with nothing to go on.
+    it "never runs an acting tool on its pick" do
+      expect(Buddy::Tools[:cancel_timer][:execute]).not_to receive(:call)
+      client = run([{ tool_calls: [{ name: :cancel_timer, arguments: {} }] }, { text: "Which one?" }])
 
-      expect(names(client.calls.first.tools)).not_to include(:search_memories)
-      expect(names(client.calls.last.tools)).to include(:search_memories)
-      output = client.calls.last.input.find { |item| item[:type] == :function_call_output }
-      expect(JSON.parse(output[:output])["status"]).not_to eq("failed")
-    end
-
-    it "points a failed unloaded call at the instructions it skipped" do
-      bad    = { name: :search_memories, arguments: { "min_severity" => "lots" } }
-      client = run([{ tool_calls: [bad] }, { text: "Hmm." }])
-
-      output = client.calls.last.input.find { |item| item[:type] == :function_call_output }
-      expect(JSON.parse(output[:output])["how"]).to eq(described_class::UNREAD_RETRY)
+      expect(names(client.calls.last.tools)).to include(:cancel_timer)
+      expect(convo.byte_messages.where("metadata ? 'buddy_action'").count).to eq(0)
     end
 
     it "leaves a seed's named tools in full, with no index" do

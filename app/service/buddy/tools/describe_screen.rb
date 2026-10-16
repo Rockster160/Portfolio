@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :describe_screen,
-  summary:     "Read what's on their screen to explain HOW to do something in the app - where a " \
-               "button or setting is, what it does.",
+  summary:     "They ask HOW to do something in the app: \"how do I make these notifications " \
+               "stop\", \"what's this number for\", \"where do I find X\". Reads their actual screen " \
+               "so the answer matches what they see.",
   description: <<~TXT,
     Read what is actually on their screen, so you can tell them where a control
     is and what it does. Call it whenever somebody asks HOW to do something in

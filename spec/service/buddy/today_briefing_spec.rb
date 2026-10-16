@@ -287,9 +287,8 @@ RSpec.describe "Buddy Today briefing" do
       client  = FakeBuddyClient.new([{ text: "Sure." }])
       Buddy::GPT::Turn.run!(inbound, client: client)
 
-      # Reachable is enough: on the index, to be loaded (see Buddy::ToolIndex).
-      index = client.calls.first.tools.find { |tool| tool[:name] == Buddy::ToolIndex::NAME }
-      expect(index[:parameters][:properties][:names][:items][:enum]).to include("today_briefing")
+      # Reachable is enough: listed by name, to be opened (see Buddy::ToolIndex).
+      expect(client.calls.first.tools.pluck(:name).map(&:to_s)).to include("today_briefing")
     end
   end
 end

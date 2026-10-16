@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :stash_idea,
-  summary:     "Hold onto a passing thought - an idea, a worry, a follow-up - so it can't get " \
-               "lost. A durable fact about them is remember.",
+  summary:     "A passing thought to hold onto - \"I keep meaning to redo the pantry\", an idea, a " \
+               "worry, a follow-up. Saves it as a NEW held idea; sort_stash only files ones " \
+               "already held. A lasting fact is remember.",
   description: <<~TXT,
     Hold onto a THOUGHT that came up in passing so it can't get lost - an idea,
     a worry, a question to look into, a follow-up they'd be annoyed to have

@@ -1,6 +1,8 @@
 Buddy::Tools.register(
   name:        :cancel_timer,
-  summary:     "Stop a countdown timer that's running, paused or ringing.",
+  summary:     "Cancel countdowns: \"cancel my timer\", \"kill all the timers\", \"stop the pasta " \
+               "timer\" (`all` for every one). Call it rather than reading running_timers - it " \
+               "says so when nothing is running.",
   description: <<~TXT,
     Stop a countdown that's currently running, paused, or ringing. Use for
     "cancel my timer", "stop the pasta timer", "kill all the timers", "never

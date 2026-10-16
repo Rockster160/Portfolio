@@ -18,6 +18,22 @@ function splitMs(ms) {
   return { days, hours, minutes, seconds }
 }
 
+function parseMs(value) {
+  if (value == undefined || value === "") return undefined
+  const ms = Date.parse(value)
+  return isNaN(ms) ? undefined : ms
+}
+
+// 3:41p
+function clockTime(ms) {
+  const date = new Date(ms)
+  let hours = date.getHours()
+  const ampm = hours >= 12 ? "p" : "a"
+  hours = hours % 12 || 12
+
+  return `${hours}:${String(date.getMinutes()).padStart(2, "0")}${ampm}`
+}
+
 export class Timer {
   constructor(obj = {}) {
     // :local (typed into the omnibar), :deploy (the deploy monitor), :buddy (Byte's)
@@ -26,8 +42,11 @@ export class Timer {
     this.completed = obj.completed || false
     this.acknowledged = obj.acknowledged || false
     this.errored = obj.errored || false
+    this.wait = obj.wait || false
     this.sha = obj.sha || undefined
     this.message = obj.message || undefined
+    // Shown in place of the duration once it's finished — a deploy's real run time.
+    this.note = obj.note || undefined
     this.start = obj.start || {
       seconds: 0,
       minutes: 0,
@@ -43,6 +62,7 @@ export class Timer {
       days: 0,
     }
     this.end_time = obj.end_time || undefined
+    this.completed_at = obj.completed_at || undefined
     // A paused timer counts nothing down: this is what it will have left when resumed.
     this.paused_ms = obj.paused_ms ?? undefined
     this.name = obj.name || undefined
@@ -56,7 +76,7 @@ export class Timer {
     return this.completed && !this.acknowledged
   }
 
-  complete(acknowledge) {
+  complete(acknowledge, at) {
     this.left_ms = 0
     this.left = {
       seconds: 0,
@@ -65,11 +85,12 @@ export class Timer {
       days: 0,
     }
     this.completed = true
+    this.completed_at = at || this.completed_at || Time.msSinceEpoch()
     this.acknowledged = !!acknowledge
   }
 
-  error(acknowledge) {
-    this.complete(acknowledge)
+  error(acknowledge, at) {
+    this.complete(acknowledge, at)
     this.errored = true
   }
 
@@ -83,6 +104,12 @@ export class Timer {
     this.end_time = ms + Time.msSinceEpoch()
   }
 
+  // Finished, by the moment it finished. Timers saved before that was tracked
+  // fall back to when they were due.
+  finishedAt() {
+    return this.completed_at || this.end_time || 0
+  }
+
   tick() {
     if (this.completed) return
 
@@ -91,7 +118,11 @@ export class Timer {
     this.left_ms = this.left_ms <= 0 ? 0 : this.left_ms
     let left = end_time - Time.msSinceEpoch() + Time.second() // Add a second to floor final second
     if (left <= 0) {
-      return this.complete()
+      this.left = splitMs(0)
+      // A deploy's countdown is only an estimate — it's finished when the deploy says so.
+      if (this.kind === "deploy") return
+
+      return this.complete(false, end_time)
     }
 
     this.left = splitMs(left)
@@ -129,7 +160,11 @@ export class Timer {
   render() {
     this.tick()
     const name = this.name ? this.name + ":" : ""
-    const timer = this.remaining() + " / " + this.human()
+    const timer = (
+      this.completed
+        ? [this.note || this.human(), clockTime(this.finishedAt())].join(" ")
+        : this.remaining() + " / " + this.human()
+    )
     const text = Text.justify(
       "  " + Text.trunc(name, cell_width - 5 - timer.length),
       timer + "   "
@@ -149,8 +184,8 @@ export class Timer {
 
 (function() {
   var cell = undefined
-  // Deploys come and go on their own; only the last few are worth a line.
-  const deploy_limit = 5
+  // Finished timers are kept as a history, newest first; this many are worth keeping.
+  const history_limit = 10
 
   function blankCanvas() {
     return Array.from({ length: cell_height }, function() {
@@ -158,17 +193,30 @@ export class Timer {
     })
   }
 
-  function saveLocal() {
+  // Running first, the one closest to done on top; then everything finished,
+  // most recently finished first. Every kind of timer shares the one list.
+  function sorted() {
+    const running = cell.data.timers.filter((t) => !t.completed)
+    const finished = cell.data.timers.filter((t) => t.completed)
+    const leftOf = (t) => (t.paused_ms != undefined ? t.paused_ms : t.left_ms)
+
+    running.sort((a, b) => leftOf(a) - leftOf(b))
+    finished.sort((a, b) => b.finishedAt() - a.finishedAt())
+
+    return running.concat(finished)
+  }
+
+  function save() {
+    const list = sorted()
+    const running = list.filter((t) => !t.completed)
+    const finished = list.filter((t) => t.completed).slice(0, history_limit)
+    cell.data.timers = running.concat(finished)
     localStorage.setItem("timers", JSON.stringify(cell.data.timers))
   }
 
-  function saveDeploys() {
-    localStorage.setItem("deploy_timers", JSON.stringify(cell.data.deploy_timers))
-  }
-
-  // Every timer on screen, in the order they're drawn — line N+1 is rows[N].
-  function rows() {
-    return [].concat(cell.data.buddy_timers, cell.data.timers, cell.data.deploy_timers)
+  function remove(timer) {
+    cell.data.timers = cell.data.timers.filter((t) => t !== timer)
+    save()
   }
 
   // ---- deploys ------------------------------------------------------------
@@ -189,47 +237,52 @@ export class Timer {
     ])
   }
 
-  function findOrCreateDeploy(sha, message) {
-    let existing = cell.data.deploy_timers.find((t) => t.sha === sha)
+  // A deploy runs about 2m50s, measured from when it actually started rather
+  // than when this page heard about it.
+  function findOrCreateDeploy(json) {
+    let existing = cell.data.timers.find((t) => t.kind === "deploy" && t.sha === json.sha)
     if (existing) { return existing }
 
     let timer = new Timer({
       kind: "deploy",
-      name: (message || sha.slice(0, 7)).slice(0, 24),
-      sha: sha,
-      message: message,
+      name: (json.message || json.sha.slice(0, 7)).slice(0, 24),
+      sha: json.sha,
+      message: json.message,
     })
     timer.start.minutes += 2
     timer.start.seconds += 50
     timer.go()
-    cell.data.deploy_timers.unshift(timer)
-    cell.data.deploy_timers = cell.data.deploy_timers.slice(0, deploy_limit)
+    const started = parseMs(json.start_time)
+    if (started) { timer.end_time = started + timer.total_ms }
+    cell.data.timers.push(timer)
     return timer
   }
 
   function subscribeToDeploys() {
-    const monitor = Monitor.subscribe(cell.config.deploy_uuid || "deploy", {
+    Monitor.subscribe(cell.config.deploy_uuid || "deploy", {
       connected: function() {
-        monitor?.resync()
+        this.resync()
       },
       received: function(data) {
         let json = data.data || {}
-        let sha = json.sha
-        if (!sha) { return }
+        if (!json.sha) { return }
 
         cell.flash()
-        let timer = findOrCreateDeploy(sha, json.message)
+        let timer = findOrCreateDeploy(json)
         let wasCompleted = timer.completed
+        let finished = parseMs(json.finish_time)
 
         if (json.status === "success") {
-          timer.complete(true)
+          timer.note = json.duration || timer.note
+          timer.complete(true, finished)
           if (!wasCompleted) { victoryBeep() }
         } else if (json.status === "failed") {
-          timer.error(true)
+          timer.note = "failed"
+          timer.error(true, finished)
           if (!wasCompleted) { failureBeep() }
         }
 
-        saveDeploys()
+        save()
       },
     })
   }
@@ -267,58 +320,62 @@ export class Timer {
       name: t.name || "Byte",
       total_ms: t.duration_ms || 0,
       start: splitMs(t.duration_ms || 0),
+      wait: !!t.wait,
     })
-    timer.wait = !!t.wait
     if (t.paused_at) {
       timer.paused_ms = t.paused_remaining_ms || 0
     } else if (t.end_at) {
-      timer.end_time = Date.parse(t.end_at)
+      timer.end_time = parseMs(t.end_at)
     }
-    if (t.fired_at || (timer.end_time && timer.end_time <= Time.msSinceEpoch())) {
-      timer.complete(true)
+    const fired = parseMs(t.fired_at)
+    if (fired || (timer.end_time && timer.end_time <= Time.msSinceEpoch())) {
+      timer.complete(true, fired || timer.end_time)
     }
     return timer
   }
 
-  // The countdown just reached zero while on screen: one chime, no alarm. A
-  // WAIT is Byte holding the middle of a sequence, not something to announce.
-  function tickBuddy() {
-    cell.data.buddy_timers.forEach(function(timer) {
-      if (timer.completed) { return }
-
-      timer.tick()
-      if (timer.completed) {
-        timer.acknowledged = true
-        if (!timer.wait) { buddyChime() }
-      }
-    })
+  function findBuddy(id) {
+    return cell.data.timers.find((t) => t.kind === "buddy" && t.id === id)
   }
 
-  function upsertBuddy(t) {
-    const idx = cell.data.buddy_timers.findIndex((timer) => timer.id === t.id)
-    // Confirmed (acknowledged in Byte) or archived (cancelled) — it's done.
-    const done = t.archived_at || (t.confirmed_at && !t.started_at && !t.fired_at)
-    if (done) {
-      if (idx >= 0) { cell.data.buddy_timers.splice(idx, 1) }
-      return
-    }
-
+  // Acknowledging it in Byte or cancelling it once it's rung both leave it in
+  // the history; cancelling one still counting down takes it off.
+  function applyBuddy(t, reason) {
+    const existing = findBuddy(t.id)
     const timer = buddyTimer(t)
-    if (idx >= 0) {
-      const prev = cell.data.buddy_timers[idx]
-      // Its own tick already rang it — the server's fire is the same moment, late.
-      if (prev.completed && timer.completed) { return }
-      cell.data.buddy_timers[idx] = timer
-    } else {
-      cell.data.buddy_timers.push(timer)
+    const ended = reason === "archived" || (t.confirmed_at && !t.started_at && !t.fired_at)
+
+    if (ended) {
+      if (!existing) { return }
+      if (existing.completed) { return save() }
+      if (existing.end_time && existing.end_time <= Time.msSinceEpoch()) {
+        existing.complete(true, existing.end_time)
+        return save()
+      }
+      return remove(existing)
     }
+    if (existing) {
+      // Its own tick already rang it — the server's fire is the same moment, late.
+      if (existing.completed && timer.completed) { return }
+      cell.data.timers[cell.data.timers.indexOf(existing)] = timer
+    } else {
+      cell.data.timers.push(timer)
+    }
+    save()
   }
 
+  // The server is the truth for what's still running; the history is ours.
   async function hydrateBuddy() {
     try {
       const data = await buddyApi("/buddy/timers", "GET")
       cell.data.buddy_page_id = data.page_id
-      cell.data.buddy_timers = (data.timers || []).map(buddyTimer)
+      const live = (data.timers || []).map(buddyTimer)
+      const ids = live.map((t) => t.id)
+      cell.data.timers = cell.data.timers.filter((t) => {
+        if (t.kind !== "buddy") return true
+        return t.completed && !ids.includes(t.id)
+      }).concat(live)
+      save()
     } catch (e) {
       console.warn("[dashboard] Byte timers hydrate failed", e)
     }
@@ -336,34 +393,45 @@ export class Timer {
         // The person's other timer pages ride the same stream.
         if (cell.data.buddy_page_id == null || t.timer_page_id !== cell.data.buddy_page_id) { return }
 
-        if (data.reason === "archived") { t.archived_at = t.archived_at || true }
-        upsertBuddy(t)
+        applyBuddy(t, data.reason)
       },
     })
   }
 
-  // The DELETE is a request: the line stays until the server says it's gone.
-  async function cancelBuddy(timer) {
-    try {
-      await buddyApi(`/buddy/timers/${timer.id}`, "DELETE")
-      upsertBuddy({ id: timer.id, archived_at: true })
-    } catch (e) {
-      console.warn("[dashboard] Byte timer cancel failed", e)
-    }
+  // ---- ticking --------------------------------------------------------------
+
+  // A typed timer alarms until it's looked at; a Byte timer chimes once.
+  function tickAll() {
+    let changed = false
+    cell.data.timers.forEach(function(timer) {
+      if (timer.completed) { return }
+
+      timer.tick()
+      if (!timer.completed) { return }
+
+      changed = true
+      if (timer.kind === "buddy") {
+        timer.acknowledged = true
+        if (!timer.wait) { buddyChime() }
+      }
+    })
+    if (changed) { save() }
   }
 
   // ---- cancel ---------------------------------------------------------------
 
-  function cancel(timer) {
-    if (timer.kind === "buddy") {
-      return cancelBuddy(timer)
+  // A Byte timer's DELETE is a request: the line stays until the server agrees,
+  // unless it has already finished and is only history here.
+  async function cancel(timer) {
+    if (timer.kind !== "buddy") { return remove(timer) }
+
+    try {
+      await buddyApi(`/buddy/timers/${timer.id}`, "DELETE")
+      remove(timer)
+    } catch (e) {
+      if (timer.completed) { return remove(timer) }
+      console.warn("[dashboard] Byte timer cancel failed", e)
     }
-    if (timer.kind === "deploy") {
-      cell.data.deploy_timers = cell.data.deploy_timers.filter((t) => t !== timer)
-      return saveDeploys()
-    }
-    cell.data.timers = cell.data.timers.filter((t) => t !== timer)
-    saveLocal()
   }
 
   cell = Cell.register({
@@ -372,15 +440,13 @@ export class Timer {
     flash: false,
     data: {
       timers: [],
-      deploy_timers: [],
-      buddy_timers: [],
       buddy_page_id: null,
       on: true,
     },
     commands: {
       clear: function() {
-        cell.data.timers = []
-        localStorage.removeItem("timers")
+        cell.data.timers = cell.data.timers.filter((t) => !t.completed)
+        save()
       },
     },
     onlook: function() {
@@ -393,35 +459,36 @@ export class Timer {
         }
       })
 
-      if (should_save) { saveLocal() }
+      if (should_save) { save() }
     },
     oncontextmenu: function(evt, ctx) {
       if (ctx.lineIndex == null) { return }
 
-      const timer = rows()[ctx.lineIndex - 1]
+      const timer = sorted()[ctx.lineIndex - 1]
       if (!timer) { return }
 
       evt.preventDefault()
-      cancel(timer)
-      cell.reload()
+      cancel(timer).then(() => cell.reload())
     },
     onload: function() {
-      this.data.timers = Timer.loadFromJSON(JSON.parse(localStorage.getItem("timers") || "[]"))
+      const stored = JSON.parse(localStorage.getItem("timers") || "[]")
+      // Deploys used to be kept apart, by the Github cell.
       const deploys = JSON.parse(localStorage.getItem("deploy_timers") || "[]").filter((t) => t.sha)
-      this.data.deploy_timers = Timer.loadFromJSON(deploys).map((timer) => {
-        timer.kind = "deploy"
-        return timer
-      })
+      deploys.forEach((t) => { t.kind = "deploy" })
+      localStorage.removeItem("deploy_timers")
+
+      this.data.timers = Timer.loadFromJSON(stored.concat(deploys))
+      save()
       subscribeToDeploys()
       subscribeToBuddy()
     },
     reloader: function() {
       cell.data.on = !cell.data.on
-      tickBuddy()
+      tickAll()
       var should_beep = false
       var lines = blankCanvas()
 
-      rows().slice(0, cell_height-2).forEach(function(timer, idx) {
+      sorted().slice(0, cell_height-2).forEach(function(timer, idx) {
         if (timer.notify()) { should_beep = true }
         lines[idx + 1] = timer.render()
       })
@@ -465,8 +532,8 @@ export class Timer {
       if (name.length > 0) { new_timer.name = name }
 
       new_timer.go()
-      cell.data.timers.unshift(new_timer)
-      saveLocal()
+      cell.data.timers.push(new_timer)
+      save()
     },
   })
 })()

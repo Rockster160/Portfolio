@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
-  summary:     "A nudge at a clock time or after a delay (\"remind me at 3\", \"in an hour\"), once " \
-               "or repeating. On a condition is remind_when; something that rings is alarm.",
+  summary:     "A message at a clock time, after a delay, before events, or when a chore or task " \
+               "comes due - for them or a partner (\"remind me at 12:50\", \"10 days before " \
+               "birthdays\", \"remind Chelsea tomorrow\"). alarm rings.",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",

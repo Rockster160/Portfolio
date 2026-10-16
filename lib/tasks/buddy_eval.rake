@@ -2132,6 +2132,44 @@ namespace :buddy do
     finish_report
   end
 
+  # Re-asks only what failed in a previous run, so a fix can be checked
+  # without paying for the whole sweep again. `count` is how many to take
+  # (default 20, `all` for every one), spread evenly across the KINDS of miss -
+  # never picked a tool, only looked, picked the wrong one, wrong arguments,
+  # wrong words - so a sample can't be twenty of one failure and none of the
+  # rest. `from` is the run to read, by default the last report.
+  #
+  #   bx rails buddy:eval_failures
+  #   bx rails "buddy:eval_failures[all]"
+  #   bx rails "buddy:eval_failures[10,tmp/buddy_eval/runs/20261016-202150.json]"
+  desc "Re-ask a spread sample of the probes that failed last run (REAL API CALLS)"
+  task :eval_failures, %i[count from] => :environment do |_t, args|
+    from = Pathname(args[:from].presence || BuddyEvalReport.dir.join("report.json"))
+    abort "no report at #{from}" unless from.exist?
+
+    failures = JSON.parse(from.read)["failures"].to_a
+    abort "#{from} has no failures to re-check" if failures.empty?
+
+    probes = failures.filter_map { |row| failed_probe(row) }.uniq { |p| p[:case] || p[:say] }
+    lost   = failures.length - probes.length
+    puts "\e[33m#{lost} failures no longer match a probe, skipped\e[0m" if lost.positive?
+
+    count  = args[:count].to_s == "all" ? probes.length : (args[:count].presence || 20).to_i
+    sample = spread_sample(probes, count)
+
+    reset_run!
+    user = User.me
+    stats[:probe_total] = sample.sum { |p| p[:steps]&.length || 1 }
+    with_world(user) {
+      puts banner("Re-asking #{sample.length} of #{probes.length} failures from #{from.basename}")
+      sample.each { |probe|
+        puts "\n\e[90m#{probe[:case] || probe[:tool]} · was: #{probe[:was]}\e[0m"
+        run_probe(user, probe.except(:was, :kind))
+      }
+    }
+    finish_report
+  end
+
   desc "Build the eval world and leave it standing, to poke at Buddy by hand"
   task eval_world: :environment do
     world = BuddyEvalWorld.build!(User.me)
@@ -2498,6 +2536,43 @@ namespace :buddy do
     }
   end
 
+  # The probe a report row came from: an edge probe by its case, a tool probe
+  # by the sentence it says. Carries the old verdict and its kind for the
+  # sample to spread over.
+  def failed_probe(row)
+    found = (
+      if row["case"].present?
+        # A step of a multi-turn probe is reported as "case · 2 of 3", and the
+        # whole probe is what gets re-asked.
+        BUDDY_EDGE_PROBES.find { |p| p[:case] == row["case"].sub(/ · \d+ of \d+\z/, "") }
+      else
+        name, entry = BUDDY_TOOL_PROBES.find { |_, e| (e.is_a?(Hash) ? e[:say] : e) == row["said"] }
+        name && (entry.is_a?(Hash) ? entry.merge(tool: name) : { say: entry, tool: name })
+      end
+    )
+    found && found.merge(was: row["detail"].to_s.truncate(90), kind: failure_kind(row["detail"].to_s))
+  end
+
+  def failure_kind(detail)
+    case detail
+    when /no tool at all/       then :picked_nothing
+    when /only looked/          then :only_looked
+    when /called |; called/     then :wrong_tool
+    when /\) — |came back|nothing landed/ then :wrong_arguments
+    else :wrong_words
+    end
+  end
+
+  # Round-robin across kinds, each kind's own order kept, until `count`.
+  def spread_sample(probes, count)
+    queues = probes.group_by { |p| p[:kind] }.values
+    out = []
+    while out.length < count && queues.any?(&:any?)
+      queues.each { |queue| out << queue.shift if queue.any? && out.length < count }
+    end
+    out
+  end
+
   # One probe, however many turns it takes.
   #
   # Most are a single message against the standing world. A probe that seeds
@@ -2552,8 +2627,9 @@ namespace :buddy do
   def evaluate(text, user: User.me, theme: "byte", probe: nil)
     convo  = eval_conversation(user, theme)
     client = Buddy::GPT::Client.new
-    # The same two stages production offers (Buddy::ToolIndex): the index
-    # first, and a tool's full schema only once the model has loaded it - so a
+    # The same two stages production offers (Buddy::ToolIndex): every tool by
+    # name and summary first, and its full schema only once the model has
+    # opened it - so a
     # probe is scored on whether the tool can be FOUND from its summary, which
     # is the whole question. Scoped to the acting user, so an eval run as
     # someone with a feature switched off scores what they'd actually get.
@@ -2605,10 +2681,12 @@ namespace :buddy do
       round_text = result[:text].to_s.strip
       # Last round wins, and a discarded lead-in is not fed back - same as Turn.
       spoken = round_text if round_text.present?
-      # Loading is how a tool gets reached, not a tool being reached: a probe
-      # wants the call made AFTER it, and `avoid:` / `once:` would otherwise
-      # count the load as a call of its own.
-      calls.concat(result[:tool_calls].reject { |call| Buddy::ToolIndex.handles?(call[:name]) })
+      # Opening a tool is the model PICKING it, and a probe is scored on the
+      # real call made after - otherwise `avoid:` and `once:` would count the
+      # pick as a call of its own, and picking the right tool and then never
+      # using it would pass.
+      opening = result[:tool_calls].select { |call| Buddy::ToolIndex.opening?(call[:name], call[:arguments], loaded: loaded) }
+      calls.concat(result[:tool_calls] - opening)
 
       if result[:tool_calls].empty?
         # Mirrors Turn: a reply claiming an action nothing backs up buys exactly
@@ -2622,8 +2700,8 @@ namespace :buddy do
         input += [{ role: :developer, content: nudge }]
         next
       end
-      # Same allowance as Turn: a round that only loaded tools isn't one of the six.
-      only_loaded = result[:tool_calls].all? { |call| Buddy::ToolIndex.handles?(call[:name]) }
+      # Same allowance as Turn: a round that only opened tools isn't one of the six.
+      only_loaded = opening.length == result[:tool_calls].length
       if only_loaded && loads < Buddy::ToolIndex::MAX_LOAD_ROUNDS
         loads  += 1
         rounds -= 1
@@ -2642,7 +2720,13 @@ namespace :buddy do
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  eval_tool_output(call, readers, user, convo, prior, seen, loaded),
+            output:  (
+              if opening.include?(call)
+                JSON.generate(Buddy::ToolIndex.open(call[:name], loaded: loaded))
+              else
+                eval_tool_output(call, readers, user, convo, prior, seen)
+              end
+            ),
           },
         ]
       end
@@ -2732,17 +2816,14 @@ namespace :buddy do
   # (Buddy::GPT::Turn.resolve_tool), so an eval sees the real "no chore matches
   # that" errors. Resolving stops short of executing, so an eval still never
   # logs a chore or messages a partner for real.
-  def eval_tool_output(call, readers, user, conversation, prior, seen, loaded)
+  def eval_tool_output(call, readers, user, conversation, prior, seen)
     name = call[:name].to_sym
     reader = readers[name]
     return reader.call(call[:arguments]) if reader
     return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
-    return JSON.generate(Buddy::ToolIndex.load(call[:arguments], user: user, loaded: loaded)) if Buddy::ToolIndex.handles?(name)
 
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
-
-    Buddy::ToolIndex.called(name, loaded: loaded)
 
     # An ANSWERING tool runs inside resolve_call - that's what makes it an
     # answer - and the handful that also `act` really do the thing: print_again
@@ -3148,7 +3229,12 @@ namespace :buddy do
         call = calls.find { |c| c[:name].to_sym == tool.to_sym }
         next [] if call.nil?
 
-        args = (call[:arguments] || {}).transform_keys(&:to_s)
+        # Read as the tool reads them: a pass-through tool's `args` object is
+        # folded flat before it ever sees them.
+        registered = Buddy::Tools[tool]
+        args = call[:arguments] || {}
+        args = Buddy::Tools.normalize_function_arguments(registered, args) if registered
+        args = args.transform_keys(&:to_s)
         wanted.filter_map { |arg, want|
           got = args[arg.to_s]
           hit = want.is_a?(Regexp) ? want.match?(got.to_s) : got.to_s == want.to_s

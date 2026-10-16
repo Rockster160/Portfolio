@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :define_term,
-  summary:     "Teach the household glossary what a word means when they explain it (\"the plunge " \
-               "is the trailhead in Alpine\").",
+  summary:     "They explain or correct what a word means (\"muti is medicine\", \"that's Afrikaans, " \
+               "not Dutch\"): saves it to the household glossary. Saying you'll remember it " \
+               "doesn't teach anyone - this does.",
   description: <<~TXT,
     Teach the household glossary a word. Use it when they explain what something
     means ("muti is medicine", "when I say the plunge I mean the trailhead in

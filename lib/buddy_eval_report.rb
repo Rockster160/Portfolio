@@ -118,6 +118,9 @@ class BuddyEvalReport
     stamped = dir.join("runs")
     stamped.mkpath
     stamped.join("#{at.strftime("%Y%m%d-%H%M%S")}.md").write(md)
+    # Kept beside the markdown so a later run can re-ask this one's failures
+    # (`buddy:eval_failures`) after report.json has moved on.
+    stamped.join("#{at.strftime("%Y%m%d-%H%M%S")}.json").write(json)
 
     [dir.join("report.md"), dir.join("report.json")]
   end
