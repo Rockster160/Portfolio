@@ -5,6 +5,8 @@
 <% page_theme = ByteConversation.default_theme_for(current_user) %>
 <%= meta_title "Boards", include_name: false %>
 <%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: page_theme, kiosk: false } %>
+<%# Already dark — keeps Android Chrome's auto dark mode off it, as on show. %>
+<%= content_for(:meta) { tag.meta(name: "color-scheme", content: "dark") } %>
 
 <div class="byte-board-index">
   <header class="byte-board-index-head">

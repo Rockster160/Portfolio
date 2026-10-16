@@ -14,6 +14,10 @@
   <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
   <%# both react. iOS Safari 16+ does this on its own via dvh units. %>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <%# The page is already dark. Saying so stops Android Chrome's auto dark %>
+  <%# mode from re-darkening it, which inverts small dark images (the %>
+  <%# custom chore icons) into white silhouettes. %>
+  <meta name="color-scheme" content="dark">
   <%# Shell validation marker for the service worker. Only pages that %>
   <%# carry this meta are cached as the Byte shell — a stray error page %>
   <%# or auth interstitial without it never poisons the SW cache. %>
