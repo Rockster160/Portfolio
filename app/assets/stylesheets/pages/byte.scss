@@ -6990,11 +6990,20 @@ $board-cell-max: 200px;
   }
 }
 
+// Done gets its own row with a divider under it, so it doesn't read as one more
+// group pill or sit close enough to the groups to be hit for one.
 .byte-board-tag-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bs-border);
+
+  .byte-board-tag-label {
+    margin-bottom: 0;
+  }
 }
 .byte-board-tag-label {
   display: block;
@@ -7004,15 +7013,19 @@ $board-cell-max: 200px;
   text-transform: uppercase;
   color: var(--bs-muted);
 }
+// A filled, square-cornered button: the group options are outlined pills, so
+// the way out must look nothing like them.
 .ctr-byte .byte-app .byte-board-tag-done {
   flex: none;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-them-bg);
-  color: var(--bs-text) !important;
+  min-width: 72px;
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 0;
+  background: var(--bs-accent-grad);
+  color: #FFFFFF !important;
   cursor: pointer;
 }
 
@@ -7223,13 +7236,53 @@ $board-cell-max: 200px;
   font-weight: 600;
 }
 
-.ctr-byte .byte-app .byte-board-bb-cancel {
-  padding: 8px 12px;
+// ---- this board's name and sharing, owner-only, inside the group picker ----
+
+.byte-board-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-border);
+
+  .byte-board-tag-label {
+    margin-bottom: 0;
+  }
+}
+
+.byte-board-rename {
+  display: flex;
+  gap: 6px;
+}
+
+.ctr-byte .byte-app .byte-board-rename input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  box-sizing: border-box;
   border-radius: 10px;
   border: 1px solid var(--bs-border);
   background: transparent;
-  color: var(--bs-text) !important;
+  color: var(--bs-text);
+  // 16px so iOS Safari doesn't zoom the layout on focus.
+  font-size: 16px;
+}
+
+.ctr-byte .byte-app .byte-board-rename-save {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--bs-accent-grad);
+  color: #FFFFFF !important;
   font-size: 13px;
+  font-weight: 600;
+
+  &:disabled {
+    opacity: 0.4;
+  }
 }
 
 .byte-board-bb-error {
@@ -8316,8 +8369,7 @@ $board-cell-max: 200px;
   }
 }
 
-// The grid cell is the wrapper now, so the rename control and its field can be
-// positioned against the card without sitting inside the link that opens it.
+// The grid cell, so the card's link fills it.
 .byte-board-card-wrap {
   position: relative;
   display: flex;
@@ -8326,101 +8378,9 @@ $board-cell-max: 200px;
   width: 100%;
   box-sizing: border-box;
 }
-// A quiet pencil in the corner - dim so it doesn't fight the pet, but drawn and
-// reachable on touch rather than hidden behind a hover nobody on a wall has.
-.byte-board-card-rename {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-panel-soft);
-  color: var(--bs-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.55;
-  transition: opacity 140ms ease, color 140ms ease;
-
-  &[hidden] { display: none; }
-}
-.byte-board-card-wrap:hover .byte-board-card-rename,
-.byte-board-card-rename:focus-visible {
-  opacity: 1;
-  color: var(--bs-text);
-}
-// Renaming takes over the card face-on, so the name is edited where it is read.
-.byte-board-card-rename-form {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--bs-accent);
-  background: var(--bs-panel);
-
-  &[hidden] { display: none; }
-}
-.byte-board-card-rename-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-panel-soft);
-  color: var(--bs-text);
-  font-size: 14px;
-}
-.byte-board-card-rename-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.byte-board-card-rename-save,
-.byte-board-card-rename-cancel {
-  padding: 6px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.byte-board-card-rename-save {
-  border: 1px solid var(--bs-accent);
-  background: var(--bs-accent);
-  color: #06101f;
-}
-.byte-board-card-rename-cancel {
-  border: 1px solid var(--bs-border);
-  background: transparent;
-  color: var(--bs-text);
-}
 // A board a housemate shared - theirs to manage, so a plain line saying whose.
 .byte-board-card-shared-by {
   font-size: 11px;
   font-style: italic;
   color: var(--bs-muted);
-}
-// Owner-only, tucked into the opposite corner from the rename pencil.
-.byte-board-card-share {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--bs-muted);
-  cursor: pointer;
-
-  input { cursor: pointer; }
 }

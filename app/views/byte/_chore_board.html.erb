@@ -112,15 +112,37 @@
         </div>
 
         <%# Carries the id being edited, empty for a new one. The form is reused
-            for both so there is one set of fields to get right. %>
+            for both so there is one set of fields to get right; closing the
+            panel drops an edit, since every open starts the form fresh. %>
         <input type="hidden" data-bb-id value="">
         <div class="byte-board-button-form-actions">
-          <button type="button" class="byte-board-bb-cancel" data-bb-cancel hidden>Cancel</button>
           <button type="submit" class="byte-board-bb-save" data-bb-save>Add button</button>
         </div>
         <p class="byte-board-bb-error" data-bb-error hidden></p>
       </form>
     </div>
+
+    <%# The board's own name and who can open it. Owner-only, like the rest of
+        the knobs, and here rather than on the index card: a board is managed
+        from the board. Each saves on its own, like the groups above. %>
+    <% if @board_owned %>
+      <div class="byte-board-settings" data-board-settings
+           data-rename-url="<%= byte_conversation_path(@conversation) %>"
+           data-share-url="<%= byte_board_shared_path %>">
+        <span class="byte-board-tag-label">This board</span>
+        <form class="byte-board-rename" data-board-rename-form>
+          <input type="text" class="byte-msg-form-input" data-board-rename-input
+                 value="<%= @conversation.display_name %>" maxlength="60"
+                 autocomplete="off" autocorrect="off" autocapitalize="words"
+                 spellcheck="false" aria-label="Board name">
+          <button type="submit" class="byte-board-rename-save" data-board-rename-save>Rename</button>
+        </form>
+        <label class="byte-board-member">
+          <input type="checkbox" data-board-share <%= "checked" if @conversation.shared? %>>
+          <span>Shared with the household</span>
+        </label>
+      </div>
+    <% end %>
 
     <%# The way back. A board has no header and no composer - that is the point
         on a wall - and a screen you can walk into with no way out is a screen

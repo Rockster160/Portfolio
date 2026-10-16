@@ -117,6 +117,8 @@ module Buddy
         channel: :byte,
         data:    { kind: :alerts, alerts: outstanding_wire(user) },
       })
+      # An alert can name the face a board's pet holds; the index cards follow.
+      ::Buddy::BoardFace.broadcast!(user)
     end
 
     def open!(user, conversation, key, body, groups = [], icon = nil, expression = nil)

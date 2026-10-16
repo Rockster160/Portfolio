@@ -1,21 +1,14 @@
 // The board index (/board) is a plain server-rendered gallery, not the byte
-// SPA, so it mounts no socket of its own. Two small jobs it still wants:
-//
-//   * Keep each card's pet face on the board's CURRENT mood. The page paints
-//     the stored expression, then this follows the live expression broadcast so
-//     a card is never staler than the board it stands for.
-//   * Rename a board in place, without opening it. The endpoint already exists
-//     (PATCH the conversation); this only surfaces it on the card.
+// SPA, so it mounts no socket of its own. One small job it still wants: keep
+// each card's pet on the face its board is wearing. The page paints it, then
+// this follows the live broadcasts so a card is never staler than its board.
+// A held face (Whisper asleep, an alert's look — see Buddy::BoardFace) wins
+// over the mood, exactly as on the board.
 //
 // Bundled into application.js like every src/ module, so it has to no-op on
 // every other page — it boots only when the index grid is on the page.
 
 import { Monitor } from "../dashboard/cells/monitor";
-
-function csrfToken() {
-  const meta = document.querySelector('meta[name="csrf-token"]');
-  return meta ? meta.getAttribute("content") : "";
-}
 
 function boot() {
   const grid = document.querySelector("[data-board-index]");
@@ -30,114 +23,42 @@ function boot() {
     themes = {};
   }
 
-  const shareUrl = grid.dataset.shareUrl;
-
   const cards = new Map(); // conversation id (string) → card wrapper
   grid.querySelectorAll("[data-board-card]").forEach((card) => {
     cards.set(String(card.dataset.conversationId), card);
-    wireRename(card);
-    wireShare(card);
   });
 
-  // ---- live mood ------------------------------------------------------------
-  // Expression broadcasts ride the per-user `byte` channel (see
-  // Buddy::ExpressionState.broadcast); each names the conversation it belongs
-  // to, so a card updates only when its own board's pet changes.
+  const paint = (card) => {
+    const pet = card.querySelector("[data-board-card-pet]");
+    if (!pet) return;
+
+    const faces = themes[card.dataset.buddyTheme]?.faces || {};
+    const expression = card.dataset.heldExpression || card.dataset.moodExpression;
+    const url = faces[expression] || faces.neutral;
+    if (url) pet.style.backgroundImage = `url('${url}')`;
+  };
+
+  // ---- live face ------------------------------------------------------------
+  // Both ride the per-user `byte` channel and name the conversation they belong
+  // to: `buddy_expression` moves the mood (Buddy::ExpressionState), and
+  // `board_face` the held face (Buddy::BoardFace). A transient overlay
+  // ("thinking") is a moment on the board itself, not something to mirror here.
   Monitor.subscribe("byte", {
     received(env) {
       const data = env?.data || {};
-      if (data.kind !== "buddy_expression") return;
-
       const card = cards.get(String(data.conversation_id));
       if (!card) return;
-      const pet = card.querySelector("[data-board-card-pet]");
-      if (!pet) return;
 
-      const faces = themes[card.dataset.buddyTheme]?.faces || {};
-      const url = faces[data.expression] || faces.neutral;
-      if (url) pet.style.backgroundImage = `url('${url}')`;
+      if (data.kind === "buddy_expression" && !data.transient) {
+        card.dataset.moodExpression = data.expression || "";
+      } else if (data.kind === "board_face") {
+        card.dataset.heldExpression = data.expression || "";
+      } else {
+        return;
+      }
+      paint(card);
     },
   });
-
-  // ---- rename ---------------------------------------------------------------
-  function wireRename(card) {
-    const btn = card.querySelector("[data-board-rename]");
-    const form = card.querySelector("[data-board-rename-form]");
-    const input = card.querySelector("[data-board-rename-input]");
-    const cancel = card.querySelector("[data-board-rename-cancel]");
-    const nameEl = card.querySelector("[data-board-card-name]");
-    if (!btn || !form || !input) return;
-
-    const open = () => {
-      form.hidden = false;
-      btn.hidden = true;
-      input.focus();
-      input.select();
-    };
-    const close = () => {
-      form.hidden = true;
-      btn.hidden = false;
-    };
-
-    btn.addEventListener("click", open);
-    if (cancel) cancel.addEventListener("click", close);
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = input.value.trim();
-      if (!name) return;
-
-      try {
-        const res = await fetch(card.dataset.renameUrl, {
-          method: "PATCH",
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "X-CSRF-Token": csrfToken(),
-          },
-          body: JSON.stringify({ name }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (nameEl) nameEl.textContent = name;
-        close();
-      } catch (err) {
-        console.warn("[board] rename failed", err);
-      }
-    });
-  }
-
-  // ---- share with household -------------------------------------------------
-  // Owner-only, so it's only on your own cards. The checkbox reflects the stored
-  // state; a flip posts it, and reverts itself if the request doesn't land so
-  // the switch never lies about what the household can see.
-  function wireShare(card) {
-    const box = card.querySelector("[data-board-share]");
-    if (!box || !shareUrl) return;
-
-    box.addEventListener("change", async () => {
-      const shared = box.checked;
-      try {
-        const res = await fetch(shareUrl, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "X-CSRF-Token": csrfToken(),
-          },
-          body: JSON.stringify({
-            conversation_id: card.dataset.conversationId,
-            shared,
-          }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      } catch (err) {
-        box.checked = !shared;
-        console.warn("[board] share toggle failed", err);
-      }
-    });
-  }
 }
 
 if (document.readyState === "loading") {

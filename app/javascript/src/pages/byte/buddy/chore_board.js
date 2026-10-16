@@ -198,7 +198,6 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   const bbCreditEl = root.querySelector("[data-bb-credit]");
   const bbColorEl = root.querySelector("[data-bb-color]");
   const bbIdEl = root.querySelector("[data-bb-id]");
-  const bbCancelEl = root.querySelector("[data-bb-cancel]");
   const bbSaveEl = root.querySelector("[data-bb-save]");
   const bbErrorEl = root.querySelector("[data-bb-error]");
 
@@ -1055,7 +1054,6 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     // Cleared so the next paint re-applies the "credit me" default; editing sets
     // an explicit value after this and isn't repainted, so it keeps its own.
     if (bbCreditEl) bbCreditEl.value = "";
-    if (bbCancelEl) bbCancelEl.hidden = true;
     if (bbSaveEl) bbSaveEl.textContent = "Add button";
     if (bbErrorEl) {
       bbErrorEl.hidden = true;
@@ -1074,7 +1072,6 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
     if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
     hideChoreResults();
     if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id);
-    if (bbCancelEl) bbCancelEl.hidden = false;
     if (bbSaveEl) bbSaveEl.textContent = "Save";
   }
 
@@ -1392,6 +1389,53 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   }
   memberBoxes.forEach((box) => box.addEventListener("change", saveMembers));
 
+  // This board's name and household sharing — owner-only, so the section is
+  // only rendered for the owner.
+  const settingsEl = root.querySelector("[data-board-settings]");
+  const renameFormEl = root.querySelector("[data-board-rename-form]");
+  const renameInputEl = root.querySelector("[data-board-rename-input]");
+  const renameSaveEl = root.querySelector("[data-board-rename-save]");
+  const shareBoxEl = root.querySelector("[data-board-share]");
+
+  if (settingsEl && renameFormEl && renameInputEl) {
+    let savedName = renameInputEl.value;
+    const syncRenameSave = () => {
+      const name = renameInputEl.value.trim();
+      if (renameSaveEl) renameSaveEl.disabled = !name || name === savedName;
+    };
+    syncRenameSave();
+    renameInputEl.addEventListener("input", syncRenameSave);
+
+    renameFormEl.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = renameInputEl.value.trim();
+      if (!name || name === savedName) return;
+
+      try {
+        await apiCall(settingsEl.dataset.renameUrl, "PATCH", { name });
+        savedName = name;
+        renameInputEl.blur();
+      } catch (err) {
+        renameInputEl.value = savedName;
+      }
+      syncRenameSave();
+    });
+  }
+
+  // The box reflects what's stored; a flip that doesn't land reverts, so the
+  // switch never lies about what the household can see.
+  if (settingsEl && shareBoxEl) {
+    shareBoxEl.addEventListener("change", async () => {
+      const shared = shareBoxEl.checked;
+      const conversationId = conversationIdFn ? conversationIdFn() : null;
+      try {
+        await apiCall(settingsEl.dataset.shareUrl, "POST", { conversation_id: conversationId, shared });
+      } catch (err) {
+        shareBoxEl.checked = !shared;
+      }
+    });
+  }
+
   if (tagListEl) {
     tagListEl.addEventListener("click", (e) => {
       const pick = e.target.closest("[data-board-pick-tag]");
@@ -1400,7 +1444,6 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   }
 
   if (bbFormEl) bbFormEl.addEventListener("submit", submitButton);
-  if (bbCancelEl) bbCancelEl.addEventListener("click", resetButtonForm);
 
   if (bbChoreSearchEl) {
     bbChoreSearchEl.addEventListener("input", onChoreInput);

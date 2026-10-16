@@ -2436,6 +2436,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     app,
     onStatus: applyWhisperState,
   });
+  // Hold the state the server already knows, so the pet doesn't sit on its mood
+  // until the feed's first broadcast arrives. That broadcast re-asserts it.
+  if (app.dataset.boardWhisperState) applyWhisperState(app.dataset.boardWhisperState);
 
   // The board shows a standing alert in the pet's bubble (no strip out here) and
   // has the pet shuffle beside it. No-op off the board (no bubble element). Fed

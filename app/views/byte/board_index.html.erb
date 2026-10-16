@@ -23,20 +23,23 @@
   <% else %>
     <%# data-buddy-themes is the pet→faces table the live-mood script reads to
         swap a card's face when its board's expression changes; see
-        ByteHelper#buddy_themes_json and pages/byte/board_index.js. data-share-url
-        is where the owner-only "Shared" toggle posts. %>
+        ByteHelper#buddy_themes_json and pages/byte/board_index.js. Renaming and
+        sharing live on the board itself. %>
     <div class="byte-board-index-grid" data-board-index
-         data-buddy-themes="<%= buddy_themes_json %>"
-         data-share-url="<%= byte_board_shared_path %>">
+         data-buddy-themes="<%= buddy_themes_json %>">
       <% @boards.each do |b| %>
-        <% mine = b.user_id == current_user.id %>
+        <%# The pet wears what its board's pet is wearing: a held face (Whisper
+            asleep, an alert's look) over the mood. Both kept on the card so the
+            live script can move either and still paint the right one. %>
+        <% held = Buddy::BoardFace.held(b) %>
         <div class="byte-board-card-wrap" data-board-card
              data-conversation-id="<%= b.id %>"
              data-buddy-theme="<%= b.buddy_theme %>"
-             <%= "data-rename-url=#{byte_conversation_path(b).inspect}".html_safe if mine %>>
+             data-mood-expression="<%= b.buddy_expression %>"
+             data-held-expression="<%= held %>">
           <%= link_to byte_board_thread_path(b), class: "byte-board-card" do %>
             <div class="byte-board-card-pet" data-board-card-pet
-                 style="background-image: url('<%= buddy_face_url(b.buddy_theme, b.buddy_expression) %>')"
+                 style="background-image: url('<%= buddy_face_url(b.buddy_theme, held || b.buddy_expression) %>')"
                  aria-hidden="true"></div>
             <div class="byte-board-card-name" data-board-card-name><%= b.display_name %></div>
             <div class="byte-board-card-groups">
@@ -48,33 +51,11 @@
                 <span class="byte-board-card-group is-empty">No groups yet</span>
               <% end %>
             </div>
-            <%# A board someone else in the house shared. It's theirs - their pet,
-                their chores - so it's view-and-use only here, no owner controls. %>
-            <% unless mine %>
+            <%# A board someone else in the house shared: theirs, their pet and
+                their chores. %>
+            <% unless b.user_id == current_user.id %>
               <span class="byte-board-card-shared-by">Shared by <%= b.user.username %></span>
             <% end %>
-          <% end %>
-          <% if mine %>
-            <%# Rename and share sit OUTSIDE the link so a tap on them doesn't open
-                the board. Only the owner manages a board, so only own cards carry
-                these; a shared board shows the badge above instead. %>
-            <button type="button" class="byte-board-card-rename" data-board-rename
-                    title="Rename" aria-label="Rename <%= b.display_name %>">✎</button>
-            <form class="byte-board-card-rename-form" data-board-rename-form hidden>
-              <input type="text" class="byte-board-card-rename-input" data-board-rename-input
-                     value="<%= b.display_name %>" maxlength="60" autocomplete="off"
-                     autocorrect="off" autocapitalize="words" spellcheck="false"
-                     aria-label="Board name">
-              <div class="byte-board-card-rename-actions">
-                <button type="button" class="byte-board-card-rename-cancel"
-                        data-board-rename-cancel>Cancel</button>
-                <button type="submit" class="byte-board-card-rename-save">Save</button>
-              </div>
-            </form>
-            <label class="byte-board-card-share" title="Let the household open this board">
-              <input type="checkbox" data-board-share <%= "checked" if b.shared? %>>
-              <span>Shared</span>
-            </label>
           <% end %>
         </div>
       <% end %>

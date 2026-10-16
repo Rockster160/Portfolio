@@ -92,6 +92,8 @@ class ByteController < ApplicationController
     @board_tags = convo.chore_tags
     @board_day = ChoreDay.current(convo.user)
     @board_items_json = board_items_for(convo)
+    @board_whisper_state = Buddy::BoardFace.whisper_state(convo)
+    @board_held_face = Buddy::BoardFace.held(convo)
     # Only the owner configures a board, so the settings the picker offers are
     # theirs alone; a member looking at a shared board gets the pad, not the
     # knobs. board_assignees is nil until it's been set, which the picker shows

@@ -555,11 +555,19 @@ RSpec.describe "Byte chore board", type: :request do
     end
   end
 
-  # The gallery of boards. Each card can be renamed in place and keeps its pet
-  # on the board's current mood; both are wired client-side, so the page only
-  # has to carry the hooks they read.
+  # A standing alert on the board's group that names the face its pet holds.
+  def gate_alert!
+    BuddyAlert.create!(
+      user: user, byte_conversation: thread, key: "laundry_gate", body: "The gate is open",
+      raised_at: Time.current, last_raised_at: Time.current,
+      metadata: { "groups" => ["Laundry"], "expression" => "pounce" },
+    )
+  end
+
+  # The gallery of boards. Each card wears the face its board's pet is wearing,
+  # and is only a way in: naming and sharing a board are done on the board.
   describe "GET /board (index)" do
-    it "offers each board a rename control and the data its face-swap reads" do
+    it "carries the data its face-swap reads and no management controls" do
       thread.update!(name: "Desk", buddy_theme: "bloom")
 
       get byte_board_path
@@ -567,9 +575,41 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("data-board-index")
       expect(response.body).to include("data-buddy-themes")
-      expect(response.body).to include("data-rename-url=\"#{byte_conversation_path(thread)}\"")
-      expect(response.body).to include("data-board-rename")
       expect(response.body).to include("data-conversation-id=\"#{thread.id}\"")
+      expect(response.body).not_to include("data-board-rename")
+      expect(response.body).not_to include("data-board-share")
+    end
+
+    it "paints the face the board is holding over its mood" do
+      thread.update!(
+        buddy_theme: "bloom", buddy_expression: "neutral",
+        metadata: thread.metadata.merge("chore_tags" => ["Laundry"]),
+      )
+      gate_alert!
+
+      get byte_board_path
+
+      expect(response.body).to include('data-held-expression="pounce"')
+      expect(response.body).to include("face_pounce")
+    end
+  end
+
+  describe "board settings on the board" do
+    it "offers the owner rename and sharing" do
+      get "/board/#{thread.id}"
+
+      expect(response.body).to include("data-board-settings")
+      expect(response.body).to include("data-rename-url=\"#{byte_conversation_path(thread)}\"")
+      expect(response.body).to include("data-board-share")
+    end
+
+    it "opens holding the face a standing alert names" do
+      thread.update!(buddy_theme: "bloom", metadata: thread.metadata.merge("chore_tags" => ["Laundry"]))
+      gate_alert!
+
+      get "/board/#{thread.id}"
+
+      expect(response.body).to include('data-buddy-expression="pounce"')
     end
   end
 
