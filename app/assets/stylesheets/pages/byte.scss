@@ -6168,14 +6168,13 @@ dialog.byte-modal {
   z-index: 3;
   width: max-content;
   max-width: calc(100% - 24px);
-  // The tail and its clearance mustn't push the bubble past the hero's floor,
-  // so it never grows taller than the head's share of the band.
-  max-height: 42%;
-  overflow-y: auto;
+  // Never a scroll box: the tail hangs past the bottom edge, so any overflow
+  // setting clips it and counts it as content to scroll to.
   padding: 12px 16px;
   border-radius: 16px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-panel);
+  // The thread's own buddy bubble, so a reply on the wall reads as the same
+  // message it is in the chat.
+  background: var(--bs-them-bg);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   // Buddy speaking, so the same tint their bubbles get in the thread — this is
   // the wall tablet's ONLY rendering of a reply.
@@ -6198,8 +6197,8 @@ dialog.byte-modal {
     transform: translateX(-50%);
     border: 10px solid transparent;
     border-bottom: 0;
-    border-top-color: var(--bs-panel);
-    // A hair of drop so the panel seam under the border reads as one piece.
+    border-top-color: var(--bs-them-bg);
+    // A hair of drop so the seam under the bubble reads as one piece.
     margin-top: -1px;
     filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.2));
   }

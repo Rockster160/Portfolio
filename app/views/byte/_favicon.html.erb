@@ -19,4 +19,7 @@
 <meta name="theme-color" content="<%= chrome[:color] %>">
 <meta name="apple-mobile-web-app-title" content="<%= board ? board.display_name : (kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name]) %>">
 <meta name="mobile-web-app-capable" content="yes">
+<%# iOS fetches the manifest without the session, so a board's (which needs
+    one) never loads there; this is what makes the icon open standalone. %>
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
