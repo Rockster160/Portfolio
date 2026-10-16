@@ -781,7 +781,11 @@ export function initChoreBoard({
 
     return (async () => {
       try {
-        const payload = await apiCall(PRESS_URL(id), "POST", {});
+        // The board it was pressed on decides what a "whoever did it" button
+        // does: on one that asks, the owner is asked who it was.
+        const payload = await apiCall(PRESS_URL(id), "POST", {
+          board_id: conversationIdFn ? conversationIdFn() : null,
+        });
         const at = failed.findIndex((f) => f.key === String(id));
         if (at >= 0) failed.splice(at, 1);
         absorb(payload);
@@ -1026,6 +1030,9 @@ export function initChoreBoard({
   let choreOptions = [];
   // The current user's id, so a new button credits them by default.
   let meId = null;
+  // A button crediting nobody in particular: a board that asks who did each
+  // chore asks, any other credits whoever pressed it.
+  const WHOEVER = "Whoever did it";
 
   function fillOptions(select, options, selectedId) {
     if (!select) return;
@@ -1112,9 +1119,9 @@ export function initChoreBoard({
     if (bbChoreSearchEl) bbChoreSearchEl.value = "";
     if (bbChoreIdEl) bbChoreIdEl.value = "";
     hideChoreResults();
-    // Cleared so the next paint re-applies the "credit me" default; editing sets
-    // an explicit value after this and isn't repainted, so it keeps its own.
-    if (bbCreditEl) bbCreditEl.value = "";
+    // The next paint re-applies the "credit me" default; editing sets an
+    // explicit value after this and keeps its own.
+    if (bbCreditEl && meId != null) bbCreditEl.value = String(meId);
     if (bbSaveEl) bbSaveEl.textContent = "Add button";
     if (bbErrorEl) {
       bbErrorEl.hidden = true;
@@ -1132,7 +1139,7 @@ export function initChoreBoard({
     if (bbChoreSearchEl) bbChoreSearchEl.value = button.chore_name || "";
     if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
     hideChoreResults();
-    if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id);
+    if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id ?? "");
     if (bbSaveEl) bbSaveEl.textContent = "Save";
     if (bbTitleEl) bbTitleEl.textContent = "Edit credit button";
     showButtonForm(true);
@@ -1151,8 +1158,13 @@ export function initChoreBoard({
       const data = await apiCall(`${BUTTONS_URL}?tags=${encodeURIComponent(tags.join(","))}`, "GET");
       choreOptions = Array.isArray(data?.chores) ? data.chores : [];
       if (data?.me != null) meId = data.me;
-      // Keep an editing selection; otherwise default a fresh form to crediting me.
-      fillOptions(bbCreditEl, data?.members, bbCreditEl?.value || meId);
+      // Keep an editing or changed selection; otherwise default a fresh form to
+      // crediting me. ("" is a real choice now - whoever did it.)
+      fillOptions(
+        bbCreditEl,
+        [{ id: "", name: WHOEVER }, ...(data?.members || [])],
+        bbIdEl?.value || bbDirty ? bbCreditEl?.value : meId,
+      );
 
       if (!bbListEl) return;
       bbListEl.innerHTML = "";
@@ -1184,7 +1196,7 @@ export function initChoreBoard({
         text.textContent = button.label;
         const who = document.createElement("span");
         who.className = "byte-board-button-who";
-        who.textContent = `${button.chore_name} → ${button.credit_user_name}`;
+        who.textContent = `${button.chore_name} → ${button.credit_user_name || WHOEVER}`;
         edit.append(swatch, text, who);
 
         const del = document.createElement("button");

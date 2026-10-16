@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_16_013124) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_16_224912) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -813,7 +813,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_16_013124) do
     t.bigint "chore_household_id", null: false
     t.bigint "created_by_user_id", null: false
     t.bigint "chore_id", null: false
-    t.bigint "credit_user_id", null: false
+    t.bigint "credit_user_id"
     t.text "label", null: false
     t.text "color"
     t.integer "sort_order"

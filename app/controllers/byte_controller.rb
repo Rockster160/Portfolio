@@ -245,15 +245,22 @@ class ByteController < ApplicationController
     return head(:not_found) if button.nil?
 
     chore = button.chore
-    credited = button.credit_user
-    return head(:unprocessable_entity) if chore.nil? || credited.nil? || chore.archived?
+    return head(:unprocessable_entity) if chore.nil? || chore.archived?
 
-    ChoreCompleter.new(chore, credited, recorded_by: current_user).call
+    # A button for whoever did it asks the board's owner, the way a chore pressed
+    # on that board does; anywhere else it credits whoever pressed it.
+    credited = button.credit_user
+    board = ByteConversation.asking_board_for(current_user, params[:board_id]) if credited.nil?
+    asked = board && ChoreWhoDidIt.ask!(board.user, chore, at: Time.current)
+    unless asked
+      credited ||= current_user
+      ChoreCompleter.new(chore, credited, recorded_by: current_user).call
+    end
 
     ctx = ChoreSerializerContext.for_user(current_user, day: ChoreDay.current(current_user))
     render json: {
       chore:    ChoreSerializer.new(chore, viewer: current_user, ctx: ctx).as_json,
-      credited: credited.username,
+      credited: credited&.username,
     }
   end
 

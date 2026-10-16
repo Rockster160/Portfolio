@@ -323,10 +323,7 @@ class ChoreCompletionsController < ApplicationController
 
   # The board this press was made on, when it's one that asks who did it.
   def asking_board
-    return nil if params[:board_id].blank?
-
-    board = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:board_id])
-    board if board&.asks_who?
+    ByteConversation.asking_board_for(current_user, params[:board_id])
   end
 
   # Today's newest stand-in for the chore or any of its halves.

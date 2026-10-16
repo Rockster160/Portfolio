@@ -1020,5 +1020,42 @@ RSpec.describe "Byte chore board", type: :request do
       expect(chore.chore_completions).to be_empty
       expect(prompts).to be_empty
     end
+
+    describe "a button for whoever did it" do
+      let!(:button) {
+        ChoreCreditButton.create!(
+          chore_household: household, created_by_user: user, chore: chore, label: "Dishes", tags: ["Home"],
+        )
+      }
+
+      def press_button! = post "/byte/board/buttons/#{button.id}/press", params: { board_id: thread.id }
+
+      it "marks it done by nobody and asks the owner, on a board that asks" do
+        ask_who!
+        press_button!
+
+        expect(response).to have_http_status(:ok), response.body
+        stand_in = chore.chore_completions.sole
+        expect(stand_in).to have_attributes(anonymous: true, skipped_reason: ChoreWhoDidIt::WAITING)
+        expect(prompts.sole.params).to include("completion_id" => stand_in.id)
+      end
+
+      it "credits whoever pressed it, on a board that doesn't" do
+        ask_who!(false)
+        press_button!
+
+        expect(chore.chore_completions.sole).to have_attributes(user_id: user.id, anonymous: false)
+        expect(prompts).to be_empty
+      end
+
+      it "still credits its own person when it names one" do
+        button.update!(credit_user: housemate)
+        ask_who!
+        press_button!
+
+        expect(chore.chore_completions.sole).to have_attributes(user_id: housemate.id, anonymous: false)
+        expect(prompts).to be_empty
+      end
+    end
   end
 end

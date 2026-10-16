@@ -12,7 +12,7 @@
 #  chore_household_id :bigint           not null
 #  chore_id           :bigint           not null
 #  created_by_user_id :bigint           not null
-#  credit_user_id     :bigint           not null
+#  credit_user_id     :bigint
 #
 
 # A custom board button that, on a press, marks one chore done and credits a
@@ -22,6 +22,10 @@
 # this only has to say WHICH chore and WHO: the press records a completion for
 # `credit_user`, recorded_by whoever tapped.
 #
+# A button with no `credit_user` is for whoever did it: on a board that asks
+# who did each chore it's marked done by nobody and the board's owner is asked
+# (ChoreWhoDidIt), anywhere else it credits whoever pressed it.
+#
 # Household-scoped and grouped by `tag`, exactly like the chores it completes, so
 # a shared board shows the same buttons to everyone in the house. It touches
 # nothing about the thread it is pressed on — not the pet, not the pinned/primary
@@ -30,7 +34,7 @@ class ChoreCreditButton < ApplicationRecord
   belongs_to :chore_household
   belongs_to :created_by_user, class_name: "User"
   belongs_to :chore
-  belongs_to :credit_user, class_name: "User"
+  belongs_to :credit_user, class_name: "User", optional: true
 
   validates :label, presence: true
   validate  :chore_in_household

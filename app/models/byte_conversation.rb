@@ -133,6 +133,15 @@ class ByteConversation < ApplicationRecord
     where(id: own).or(where(id: shared))
   end
 
+  # The board a press came from, when it's one `user` may open and it asks who
+  # did each chore; nil otherwise.
+  def self.asking_board_for(user, id)
+    return nil if id.blank?
+
+    board = accessible_boards_for(user).find_by(id: id)
+    board if board&.asks_who?
+  end
+
   # THE thread. Everything nobody asked for lands here — the morning briefing, a
   # reminder firing, a watch tripping, a relay from the other person — rather
   # than in whichever one happens to have been touched most recently.
