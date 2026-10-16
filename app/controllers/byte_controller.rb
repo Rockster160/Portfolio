@@ -356,6 +356,20 @@ class ByteController < ApplicationController
     render json: { ok: true, chore_dreams: convo.chore_dreams? }
   end
 
+  # POST /byte/board/ask_who — whether a chore pressed on this board is credited
+  # to whoever's signed in, or marked done by nobody yet with the owner asked
+  # who it was. Owner-only, broadcast like the other switches.
+  def set_board_ask_who
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    on = ActiveModel::Type::Boolean.new.cast(params[:on])
+    convo.metadata = convo.metadata.to_h.merge("ask_who" => on)
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, ask_who: convo.asks_who? }
+  end
+
   # POST /byte/board/members — which household members' chores this board shows.
   # Owner-only (own boards), ids confined to the household, broadcast like the
   # tag change so the board re-scopes its chores live. An empty set is valid: the

@@ -3506,6 +3506,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const dreamsOn = String(boardMeta.chore_dreams) !== "false";
             choreBoard?.setChoreDreams(dreamsOn);
             boardDream?.setChoreDreams(dreamsOn);
+            choreBoard?.setAskWho(String(boardMeta.ask_who) === "true");
           }
         }
         return;

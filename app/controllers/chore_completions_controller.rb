@@ -127,6 +127,15 @@ class ChoreCompletionsController < ApplicationController
     chore = tapped.completion_leaf_for(current_user)
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
 
+    # Pressed on a board in a shared room: whoever's signed in there isn't
+    # necessarily who did it, so it's done by nobody yet and the board's owner
+    # is asked. The tapped chore, not this person's half of it - nobody is named.
+    if (board = asking_board) && (prompt = ChoreWhoDidIt.ask!(board.user, tapped, at: completed_at))
+      stand_in = ChoreCompletion.find(prompt.params["completion_id"])
+      render json: response_payload(tapped, stand_in).merge(anonymous: true), status: :created
+      return
+    end
+
     # Queue-first replays POST the same body twice if the response of
     # the first attempt never made it back. Dedupe by client_mutation_id:
     # if we already have a completion for this user with that id, return
@@ -291,6 +300,16 @@ class ChoreCompletionsController < ApplicationController
       .where(chore_id: target.id, day_key: day)
       .order(completed_at: :desc).first
 
+    # A stand-in still waiting to hear who did it is nobody's yet, so anyone
+    # who can see the chore can take back the press that made it - the newer
+    # of the two goes. Its question goes with it (ChoreCompletion callback).
+    stand_in = waiting_stand_in(tapped, day)
+    if stand_in && (completion.nil? || stand_in.completed_at >= completion.completed_at)
+      ChoreCompletionUndoer.call(current_user, stand_in, actor_tab_id: params[:tab_id])
+      render json: response_payload(stand_in.chore, nil)
+      return
+    end
+
     if completion
       completion.destroy!
       ChoreStreak.rebuild_for!(current_user, target)
@@ -300,6 +319,25 @@ class ChoreCompletionsController < ApplicationController
     else
       render json: { error: "no completion to undo" }, status: :not_found
     end
+  end
+
+  # The board this press was made on, when it's one that asks who did it.
+  def asking_board
+    return nil if params[:board_id].blank?
+
+    board = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:board_id])
+    board if board&.asks_who?
+  end
+
+  # Today's newest stand-in for the chore or any of its halves.
+  def waiting_stand_in(chore, day)
+    ChoreCompletion.where(
+      anonymous:      true,
+      skipped_reason: ChoreWhoDidIt::WAITING,
+      day_key:        day,
+    ).where(
+      "chore_id = :id OR parent_chore_id = :id", id: chore.id,
+    ).order(completed_at: :desc).first
   end
 
   def destroy_by_id

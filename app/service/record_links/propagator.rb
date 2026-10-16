@@ -133,7 +133,7 @@ module RecordLinks
         # A stand-in from an earlier question attributes nothing.
         leaf = chore.completion_leaf_for(user)
         partner = completion_partner(user, leaf, parse_time(event.timestamp))
-        return nil if partner && partner.skipped_reason != WAITING_FOR_WHO
+        return nil if partner && partner.skipped_reason != ::ChoreWhoDidIt::WAITING
 
         return ask_who(user, link, event)
       end
@@ -500,81 +500,32 @@ module RecordLinks
 
     # ---- ask who ----
 
-    WHO_QUESTION  = "Who did it?".freeze
-    WHEN_QUESTION = "When?".freeze
-
     # Only a person can say who did it - the button that logged it may be on a
-    # wall everybody uses. The chore is marked done straight away, credited to
-    # nobody (anonymous), so every board shows it done; the answer then hands
-    # that completion to whoever was named.
+    # wall everybody uses. See ChoreWhoDidIt, which every such question goes
+    # through.
     def ask_who(user, link, event)
-      names = household_names(user)
-      return false if names.empty?
       # The bus can deliver `added` twice for one row (a retried job, a fan-out),
       # and a second identical prompt is a second thing to dismiss.
       return false if asked_about?(user, event)
       return false if open_question_about?(user, link, event)
 
-      placeholder = done_by_nobody_yet(user, link, event)
-      prompt = user.prompts.create!(
-        question: "Who did: #{link.target_name}?",
-        # `scope` is what the question is later compared on: which of the links
-        # into this chore the doing arrived through. Kept on the prompt rather
-        # than re-derived, because the event behind it can be deleted.
-        params:   {
-          source:        "ambiguous_chore",
-          chore_name:    link.target_name,
-          event_id:      event.id,
-          scope:         link.source_scope,
-          completion_id: placeholder&.id,
-        },
-        options:  [
-          { type: :select, question: WHO_QUESTION, choices: names, default: "" },
-          { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, event.timestamp) },
-        ],
+      chore = find_chore(user, link.target_name)
+      return false if chore.nil?
+
+      # `scope` is what the question is later compared on: which of the links
+      # into this chore the doing arrived through. Kept on the prompt rather
+      # than re-derived, because the event behind it can be deleted.
+      prompt = ::ChoreWhoDidIt.ask!(
+        user,
+        chore,
+        at:          parse_time(event.timestamp) || Time.current,
+        stand_in_on: chore.completion_leaf_for(user),
+        extra:       { event_id: event.id, scope: link.source_scope },
       )
-      ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
-      # Also ask it where they already are. The whole question is one dropdown
-      # over a timestamp that's already correct, and routing that through a
-      # notification into /prompts costs four steps to collect one word.
-      ::Buddy::PromptDelivery.post!(user, prompt)
-      true
+      prompt.present?
     rescue StandardError => e
       Rails.logger.warn("[RecordLinks] ask_who #{link.target_name.inspect}: #{e.class}: #{e.message}")
       false
-    end
-
-    # The anonymous completion that stands until the question is answered.
-    def done_by_nobody_yet(user, link, event)
-      chore = find_chore(user, link.target_name)&.completion_leaf_for(user)
-      at = parse_time(event.timestamp) || Time.current
-      return nil if chore.nil?
-
-      completion = ::ChoreCompletion.create!(
-        chore:          chore,
-        user:           user,
-        completed_at:   at,
-        day_key:        ::ChoreDay.current(user, at: at),
-        payout_skipped: true,
-        skipped_reason: WAITING_FOR_WHO,
-        anonymous:      true,
-      )
-      related = (chore.parent_chore if chore.sub_chore?)
-      ::ChoreBroadcaster.broadcast_changes!(user, chore, related: related)
-      completion
-    end
-
-    WAITING_FOR_WHO = "Waiting to hear who did it".freeze
-
-    # The field this lands in is `<input type="datetime-local">`, which accepts a
-    # local date and time and NOTHING else. `iso8601` ends in an offset, which
-    # makes the value invalid, and an invalid value renders as an EMPTY box —
-    # no error, just a question with the answer rubbed off it. Task 365 wrote
-    # minutes-precision local time and that is what has to come back.
-    def local_datetime(user, time)
-      return nil if time.blank?
-
-      time.in_time_zone(user.timezone).strftime("%Y-%m-%dT%H:%M")
     end
 
     def asked_about?(user, event)
@@ -651,80 +602,21 @@ module RecordLinks
 
     def on_prompt(user, prompt, attrs)
       return unless (attrs[:status] || attrs["status"]).to_s == "complete"
+      return unless ::ChoreWhoDidIt.ours?(prompt)
 
-      params = (prompt.try(:params) || {}).to_h.with_indifferent_access
-      return unless params[:source].to_s == "ambiguous_chore"
-
-      response = (prompt.try(:response) || {}).to_h.with_indifferent_access
       # Guarded on the PROMPT, not on the chore it's about. Guarding the chore
       # here looked right and was exactly wrong: it claimed that endpoint before
       # the completion existed, so the completion's own cascade — tick off the
       # agenda task, take the item off the list — found it already visited and
       # did nothing. The chore rung guards itself in `on_completion`.
       Guard.visiting([:prompt, prompt.try(:id)]) {
-        answered(
-          user,
-          chore_name:    params[:chore_name],
-          event_id:      params[:event_id],
-          completer:     response[WHO_QUESTION],
-          at:            parse_time(response[WHEN_QUESTION]),
-          completion_id: params[:completion_id],
-        )
+        at = ::ChoreWhoDidIt.answer!(user, prompt)
+        # The event keeps its row and takes the answered time. One link per
+        # pairing means there's no earlier completion of it to undo.
+        event_id = prompt.params.to_h.with_indifferent_access[:event_id]
+        event = user.action_events.find_by(id: event_id) if event_id.present?
+        event&.update!(timestamp: at) if at.present?
       }
-    end
-
-    def answered(user, chore_name:, event_id:, completer:, at:, completion_id: nil)
-      chore = find_chore(user, chore_name)
-      return false if chore.nil?
-
-      who = ::User.find_by(username: completer) || user
-      # The anonymous stand-in made when the question was asked gives way to the
-      # real, credited completion - paid and streaked for whoever did it.
-      placeholder = ::ChoreCompletion.find_by(id: completion_id, anonymous: true) if completion_id.present?
-      ::ChoreCompletionUndoer.call(user, placeholder) if placeholder
-      # For WHO did it, not for whose links these are - the whole point of the
-      # question is that it wasn't necessarily the person who logged it.
-      complete_once(chore.completion_leaf_for(who), who, at || Time.current)
-      # The event keeps its row and takes the answered time. Under Jil this
-      # branch sometimes DESTROYED it, to undo a completion task 362 had already
-      # made from the same log. One link per pairing means there's nothing to
-      # undo.
-      event = user.action_events.find_by(id: event_id)
-      event&.update!(timestamp: at) if at.present?
-      true
-    end
-
-    # The one completion write with no partner to find first, so it has to look
-    # for itself. An answer reaches the bus more than once often enough to
-    # matter — a retried job, the app and Buddy both submitting the same form —
-    # and a second ChoreCompleter call is a second row in the history and a
-    # second payout for one puppy. A re-answer that names someone ELSE is left
-    # alone rather than moved: the payout was already computed for whoever is
-    # on the row, and reassigning credit is what editing the completion is for.
-    def complete_once(chore, who, at)
-      return false if completed_in_window?(chore, at)
-
-      ::ChoreCompleter.new(chore, who, at: at).call
-      true
-    end
-
-    # Not `user.chore_completions` like `completion_partner` — the person named
-    # in the answer is usually NOT the person whose links these are, so a
-    # user-scoped lookup never sees the row it just made.
-    # A stand-in still waiting on its own question is not the doing being
-    # recorded already.
-    def completed_in_window?(chore, at)
-      ::ChoreCompletion.where(
-        chore_id:     chore.id,
-        completed_at: (at - WINDOW)..(at + WINDOW),
-      ).exists?(["skipped_reason IS DISTINCT FROM ?", WAITING_FOR_WHO])
-    end
-
-    def household_names(user)
-      ids = Array(user.chore_household&.member_user_ids)
-      return [] if ids.empty?
-
-      ::User.where(id: ids).order(:id).pluck(:username).compact_blank
     end
 
     # ---- shared ----

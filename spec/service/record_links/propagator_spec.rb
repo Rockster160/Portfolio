@@ -714,6 +714,26 @@ RSpec.describe RecordLinks::Propagator do
       expect(completion.completed_at).to eq(at)
     end
 
+    # Undone before anyone answered: there's no doing left to ask about.
+    it "takes the question back when the stand-in is undone" do
+      log_event!("Whisper", notes: "Down")
+      stand_in = chore.chore_completions.sole
+
+      ChoreCompletionUndoer.call(user, stand_in)
+
+      expect(Prompt.where(user_id: user.id).where("params->>'completion_id' = ?", stand_in.id.to_s)).to be_empty
+    end
+
+    # The answer replaces the stand-in, and that mustn't count as an undo.
+    it "keeps the answered question when its stand-in gives way" do
+      log_event!("Whisper", notes: "Down")
+      prompt = user.prompts.last
+
+      answer!(prompt, partner.username, 1.hour.ago.change(usec: 0))
+
+      expect(Prompt.exists?(prompt.id)).to be(true)
+    end
+
     it "leaves it done for nobody when the question is never answered" do
       log_event!("Whisper", notes: "Down")
       user.prompts.last.destroy!

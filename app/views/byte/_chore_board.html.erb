@@ -112,13 +112,15 @@
       <div class="byte-board-buttons-list" data-board-buttons-list></div>
     </div>
 
-    <%# Who can open the board, and whether its pet dreams of chores. Owner-only,
+    <%# Who can open the board, whether its pet dreams of chores, and whether a
+        press credits whoever's signed in or asks the owner who it was. Owner-only,
         like the rest of the knobs, and here rather than on the index card: a
         board is managed from the board. Each saves on its own. %>
     <% if @board_owned %>
       <div class="byte-board-settings" data-board-settings
            data-share-url="<%= byte_board_shared_path %>"
-           data-chore-dreams-url="<%= byte_board_chore_dreams_path %>">
+           data-chore-dreams-url="<%= byte_board_chore_dreams_path %>"
+           data-ask-who-url="<%= byte_board_ask_who_path %>">
         <label class="byte-board-member">
           <input type="checkbox" data-board-share <%= "checked" if @conversation.shared? %>>
           <span>Shared with the household</span>
@@ -126,6 +128,10 @@
         <label class="byte-board-member">
           <input type="checkbox" data-board-chore-dreams <%= "checked" if @conversation.chore_dreams? %>>
           <span>Dream of hot chores now and then</span>
+        </label>
+        <label class="byte-board-member">
+          <input type="checkbox" data-board-ask-who <%= "checked" if @conversation.asks_who? %>>
+          <span>Ask me who did each chore</span>
         </label>
       </div>
     <% end %>

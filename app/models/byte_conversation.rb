@@ -172,6 +172,13 @@ class ByteConversation < ApplicationRecord
     !(metadata.is_a?(Hash) && metadata["chore_dreams"].to_s == "false")
   end
 
+  # A board somewhere everybody walks past: a chore pressed on it is done by
+  # nobody yet, and the owner is asked who it was (see ChoreWhoDidIt). Off
+  # unless switched on - a personal board credits whoever is signed in.
+  def asks_who?
+    metadata.is_a?(Hash) && metadata["ask_who"].to_s == "true"
+  end
+
   def primary?
     primary_at.present?
   end

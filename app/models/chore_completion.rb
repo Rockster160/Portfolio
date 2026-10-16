@@ -50,6 +50,9 @@ class ChoreCompletion < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  # A stand-in waiting to hear who did it, undone before anyone answered: the
+  # question about it goes with it, wherever the undo came from.
+  after_destroy_commit :retract_who_question
   # Every completion moves a chore in or out of the due set, so the "Chores"
   # list has to be redrawn. Deliberately NOT on the Jil bus like the trigger
   # above: an anonymous completion (and a skip, which is one) fires no trigger
@@ -210,6 +213,10 @@ class ChoreCompletion < ApplicationRecord
     return if anonymous
 
     fan_out_trigger(jil_attrs(action: :uncompleted))
+  end
+
+  def retract_who_question
+    ChoreWhoDidIt.retract!(self)
   end
 
   # Household-shared chores fire the trigger against every household

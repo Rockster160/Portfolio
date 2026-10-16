@@ -729,8 +729,11 @@ export function initChoreBoard({
         progress_count: Math.min(c.progress_count + 1, c.target_count),
       }),
       send: async () => {
+        // The board goes along so the server can tell a press on a board that
+        // asks who did it from one that credits whoever's signed in.
         const payload = await apiCall(COMPLETE_URL(id), "POST", {
           client_completed_at: new Date().toISOString(),
+          board_id: conversationIdFn ? conversationIdFn() : null,
         });
         absorb(payload);
         cheer(find(id, "chore") || chore, "chore_done");
@@ -878,7 +881,9 @@ export function initChoreBoard({
       change: (c) => ({ progress_count: Math.max(c.progress_count - 1, 0) }),
       send: async () => {
         try {
-          absorb(await apiCall(COMPLETE_URL(id), "DELETE"));
+          absorb(await apiCall(COMPLETE_URL(id), "DELETE", {
+            board_id: conversationIdFn ? conversationIdFn() : null,
+          }));
         } catch (err) {
           if (String(err.message) === "http_404") return resync();
           throw err;
@@ -1515,6 +1520,7 @@ export function initChoreBoard({
   const renameSaveEl = root.querySelector("[data-board-rename-save]");
   const shareBoxEl = root.querySelector("[data-board-share]");
   const choreDreamsBoxEl = root.querySelector("[data-board-chore-dreams]");
+  const askWhoBoxEl = root.querySelector("[data-board-ask-who]");
 
   if (renameFormEl && renameInputEl) {
     let savedName = renameInputEl.value;
@@ -1570,6 +1576,19 @@ export function initChoreBoard({
         flashSaved();
       } catch (err) {
         choreDreamsBoxEl.checked = !on;
+      }
+    });
+  }
+
+  if (settingsEl && askWhoBoxEl) {
+    askWhoBoxEl.addEventListener("change", async () => {
+      const on = askWhoBoxEl.checked;
+      const conversationId = conversationIdFn ? conversationIdFn() : null;
+      try {
+        await apiCall(settingsEl.dataset.askWhoUrl, "POST", { conversation_id: conversationId, on });
+        flashSaved();
+      } catch (err) {
+        askWhoBoxEl.checked = !on;
       }
     });
   }
@@ -1727,6 +1746,11 @@ export function initChoreBoard({
     setChoreDreams(on) {
       app.dataset.boardChoreDreams = String(on);
       if (choreDreamsBoxEl) choreDreamsBoxEl.checked = on;
+    },
+
+    // The server decides who a press credits, so this only keeps the box honest.
+    setAskWho(on) {
+      if (askWhoBoxEl) askWhoBoxEl.checked = on;
     },
 
     // Changed on another device: follow it without saving it back, and leave

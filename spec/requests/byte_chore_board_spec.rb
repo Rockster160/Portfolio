@@ -926,4 +926,99 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).to include("value=\"#{housemate.id}\"")
     end
   end
+  # A board in a shared room can't know who pressed it, so a press there is done
+  # by nobody yet and the board's owner is asked who it was.
+  describe "asking who did it" do
+    let(:household) { user.chore_household }
+    let!(:housemate) {
+      create(:user, username: "Mate").tap { |u| ChoreHouseholdMembership.create!(chore_household: household, user: u) }
+    }
+    let!(:chore) {
+      create(:chore, created_by_user: user, name: "Dishes", chore_household: household, show_on_today_view: :always)
+    }
+    let(:pressed_at) { 2.hours.ago.change(sec: 42, usec: 0) }
+
+    before do
+      ChoreHouseholdMembership.find_or_create_by!(chore_household: household, user: user)
+      allow(Buddy::PromptDelivery).to receive(:post!)
+      prompts.delete_all
+    end
+
+    # A fresh query each time: `user` is memoized process-wide, and its
+    # association would answer from what it loaded first.
+    def prompts = Prompt.where(user_id: user.id)
+
+    def ask_who!(on = true)
+      thread.update!(metadata: thread.metadata.merge("ask_who" => on))
+    end
+
+    def press!
+      post "/chores/items/#{chore.id}/completion", params: {
+        client_completed_at: pressed_at.iso8601, board_id: thread.id,
+      }
+    end
+
+    it "is switched on and off from the popup" do
+      post "/byte/board/ask_who", params: { conversation_id: thread.id, on: true }
+
+      expect(thread.reload).to be_asks_who
+      get "/board/#{thread.id}"
+      expect(response.body).to match(/data-board-ask-who checked/)
+    end
+
+    it "credits whoever is signed in on a board that doesn't ask" do
+      ask_who!(false)
+      press!
+
+      expect(chore.chore_completions.sole).to have_attributes(user_id: user.id, anonymous: false)
+      expect(prompts).to be_empty
+    end
+
+    it "marks it done by nobody, at the time it was pressed, and asks the owner" do
+      ask_who!
+      press!
+
+      expect(response).to have_http_status(:created), response.body
+      stand_in = chore.chore_completions.sole
+      expect(stand_in).to have_attributes(anonymous: true, skipped_reason: ChoreWhoDidIt::WAITING)
+      expect(stand_in.completed_at).to eq(pressed_at)
+      prompt = prompts.sole
+      expect(prompt.params).to include("chore_id" => chore.id, "completion_id" => stand_in.id)
+      expect(Buddy::PromptDelivery).to have_received(:post!).with(user, prompt)
+    end
+
+    it "offers the chore's assignee first" do
+      chore.update!(assigned_to_user: housemate, sharing_mode: :household)
+      ask_who!
+      press!
+
+      who = prompts.sole.options.find { |o| o["question"] == ChoreWhoDidIt::WHO_QUESTION }
+      expect(who["default"]).to eq("Mate")
+    end
+
+    it "credits the person named, at the second it was pressed" do
+      ask_who!
+      press!
+      prompt = prompts.sole
+      when_value = prompt.options.find { |o| o["question"] == ChoreWhoDidIt::WHEN_QUESTION }["default"]
+
+      prompt.update!(response: { ChoreWhoDidIt::WHO_QUESTION => "Mate", ChoreWhoDidIt::WHEN_QUESTION => when_value })
+      Jil::Executor.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
+
+      done = chore.chore_completions.sole
+      expect(done).to have_attributes(user_id: housemate.id, anonymous: false)
+      expect(done.completed_at).to eq(pressed_at)
+    end
+
+    it "takes the press back, and the question with it" do
+      ask_who!
+      press!
+
+      delete "/chores/items/#{chore.id}/completion", params: { board_id: thread.id }
+
+      expect(response).to have_http_status(:ok)
+      expect(chore.chore_completions).to be_empty
+      expect(prompts).to be_empty
+    end
+  end
 end
