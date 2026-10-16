@@ -11,11 +11,10 @@ import { snapshotGate } from "../../../lists/snapshot_order";
   const birthDateMs = 1760432400000; // October 14, 2025 at 3am Denver (MDT = UTC-6)
 
   const buttonMonitors = [
-    "whisper-btn-1",
-    "whisper-btn-2",
+    "whisper-btn-home-toggle",
+    "whisper-btn-quiet",
     "whisper-btn-fed",
     "whisper-btn-nap-toggle",
-    // "whisper-btn-home-toggle",
     // "whisper-btn-sleep",
   ];
 
