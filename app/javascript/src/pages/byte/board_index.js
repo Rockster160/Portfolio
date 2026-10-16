@@ -3,12 +3,13 @@
 // each card's pet on the face its board is wearing. The page paints it, then
 // this follows the live broadcasts so a card is never staler than its board.
 // A held face (Whisper asleep, an alert's look — see Buddy::BoardFace) wins
-// over the mood, exactly as on the board.
+// over the mood, and a dream's face over an idle mood, exactly as on the board.
 //
 // Bundled into application.js like every src/ module, so it has to no-op on
 // every other page — it boots only when the index grid is on the page.
 
 import { Monitor } from "../dashboard/cells/monitor";
+import { faceUrlFor, IDLE_FACE } from "./buddy/face_url";
 
 function boot() {
   const grid = document.querySelector("[data-board-index]");
@@ -32,9 +33,11 @@ function boot() {
     const pet = card.querySelector("[data-board-card-pet]");
     if (!pet) return;
 
-    const faces = themes[card.dataset.buddyTheme]?.faces || {};
-    const expression = card.dataset.heldExpression || card.dataset.moodExpression;
-    const url = faces[expression] || faces.neutral;
+    // Held over everything; a dream's face only over an idle mood.
+    const mood = card.dataset.moodExpression || IDLE_FACE;
+    const dream = mood === IDLE_FACE ? card.dataset.dreamExpression : "";
+    const expression = card.dataset.heldExpression || dream || mood;
+    const url = faceUrlFor(themes[card.dataset.buddyTheme], expression);
     if (url) pet.style.backgroundImage = `url('${url}')`;
   };
 
@@ -53,6 +56,7 @@ function boot() {
         card.dataset.moodExpression = data.expression || "";
       } else if (data.kind === "board_face") {
         card.dataset.heldExpression = data.expression || "";
+        card.dataset.dreamExpression = data.dream || "";
       } else {
         return;
       }

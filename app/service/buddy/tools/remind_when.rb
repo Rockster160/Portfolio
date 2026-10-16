@@ -181,6 +181,14 @@ Buddy::Tools.register(
     anyone. "Trigger whisper-quiet the next time the doggy door opens" is
     `trigger: "custom"` with the sensor's listener and `run: "Whisper Quiet"`.
 
+    `run` can also name a FUNCTION from `jil_functions`, with its arguments in
+    `run_args` - the same arguments `call_jil_function` takes. "Once I leave
+    the event, navigate me to Petsmart" is `trigger: "depart"` with
+    `run: "Tesla Navigate"`, `run_args: { destination: "Petsmart" }`. That is
+    the shape whenever the thing should happen when they GET somewhere or LEAVE
+    somewhere, not at a time: `schedule_function` guesses a clock time off the
+    calendar, and the event never ends on the minute it was booked to.
+
     `delay` (seconds, up to 900) waits that long after the condition before
     running it - "ten seconds after the doggy door" is `delay: 10`. It only
     applies with `run`.
@@ -218,7 +226,8 @@ Buddy::Tools.register(
     past_phrase: { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
     repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
-    run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
+    run:         { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
+    run_args:    { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as call_jil_function takes them ({\"destination\": \"Petsmart\"})." },
     delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
     timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
     expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
@@ -250,12 +259,26 @@ Buddy::Tools.register(
       raise "running an automation needs Jil access" unless Buddy::Features.enabled?(ctx.user, :jil)
       raise "a watch either tells someone or runs something, not both" if payload[:notify].to_s.strip.present?
 
-      run_task = ctx.resolve_jil_trigger(run_name)
-      raise "no Jil task matches #{run_name.inspect}" if run_task.nil?
+      run_args = payload[:run_args].is_a?(Hash) ? payload[:run_args].to_h : {}
+      run_task = ctx.resolve_jil_trigger(run_name) if run_args.empty?
       # Nothing fills in a payload when a sensor trips, so a listener with data
       # filters on it would be wired up and then never fire.
-      unless run_task[:plain]
+      if run_task && !run_task[:plain]
         raise "#{run_task[:name]} needs data to fire (`#{run_task[:listener]}`), so it can't hang off a watch"
+      end
+
+      # A function carries its arguments with it. Resolved through
+      # call_jil_function's own confirm, as schedule_function does, so a name or
+      # an argument that won't run fails here rather than when the car leaves.
+      if run_task.nil?
+        fn = Buddy::Tools[:call_jil_function][:confirm].call(
+          { name: run_name }.merge(run_args.transform_keys(&:to_sym)),
+          ctx,
+        )[:resolved]
+        run_task = {
+          name: fn[:task_name],
+          call: { "tool" => "call_jil_function", "payload" => { "name" => fn[:task_name] }.merge(fn[:fn_args]) },
+        }
       end
     end
     delay = payload[:delay].to_i.clamp(0, BuddyWatch::MAX_ACTION_DELAY)
@@ -340,6 +363,7 @@ Buddy::Tools.register(
         notify_user_id: notify_user&.id,
         watch_owner_id: owner.id,
         run_scope:      run_task&.dig(:scope),
+        run_call:       run_task&.dig(:call),
         run_task_name:  run_task&.dig(:name),
         run_delay:      delay,
         timer_seconds:  timer_seconds,
@@ -368,7 +392,7 @@ Buddy::Tools.register(
       byte_conversation: conversation,
       notify_user_id:    payload[:notify_user_id],
       kind:              (
-        if payload[:run_scope].present?
+        if payload[:run_scope].present? || payload[:run_call].present?
           "action"
         elsif payload[:timer_seconds].to_i.positive?
           "timer"
@@ -385,6 +409,7 @@ Buddy::Tools.register(
       metadata:          {
         "human_when"    => payload[:human_when].to_s,
         "run_scope"     => payload[:run_scope].presence,
+        "run_call"      => payload[:run_call].presence,
         "run_task_name" => payload[:run_task_name].presence,
         "run_delay"     => payload[:run_delay].to_i,
         "timer_seconds" => payload[:timer_seconds].to_i.positive? ? payload[:timer_seconds].to_i : nil,

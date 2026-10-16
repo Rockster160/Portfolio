@@ -105,6 +105,69 @@ RSpec.describe "Byte chore board", type: :request do
       expect(board_chores.pluck("name")).to eq(["Alpha", "Zeta", "MidCarry"])
     end
 
+    # The sort leans on things that move during the day (a mark-due cleared, a
+    # follower's due date settling), so a board keeps the order its chores took
+    # when the day began and only a NEW chore finds its place in it.
+    it "keeps the day's order when the sort would shuffle it, fitting new chores in" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      older = create(:chore, created_by_user: user, name: "Older", tags: ["Home"], marked_due_at: 3.days.ago)
+      create(:chore, created_by_user: user, name: "Today", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Yesterday", tags: ["Home"], marked_due_at: 1.day.ago)
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      older.update!(marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Newer", tags: ["Home"], marked_due_at: 2.days.ago)
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Today", "Yesterday", "Newer", "Older"])
+    end
+
+    it "sorts afresh on a new chore day" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      older = create(:chore, created_by_user: user, name: "Older", tags: ["Home"], marked_due_at: 3.days.ago)
+      create(:chore, created_by_user: user, name: "Yesterday", tags: ["Home"], marked_due_at: 1.day.ago)
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      older.update!(marked_due_at: Time.current)
+      stale = thread.reload.metadata["board_order"].merge("day" => (Date.current - 1).iso8601)
+      thread.update!(metadata: thread.metadata.merge("board_order" => stale))
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Older", "Yesterday"])
+    end
+
+    # The board draws its pet's chore dreams the way the morning hot picks are
+    # drawn, so a hot chore carries the weight that draw would give it.
+    it "weights a hot chore the way the hot-pick draw does" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      hot = create(:chore, created_by_user: user, name: "Hot", tags: ["Home"], priority: :high, marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Cold", tags: ["Home"], marked_due_at: Time.current)
+      ChoreHotPick.create!(day_key: ChoreDay.current(user), chore_id: hot.id, multiplier: 2.0)
+
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      by_name = response.parsed_body["items"].index_by { |item| item["name"] }
+      expected = ChoreDailyResetWorker.new.selection_weights([hot], ChoreDay.current(user))[hot.id]
+      expect(by_name["Hot"]["hot_weight"]).to eq(expected)
+      expect(by_name["Hot"]["hot_weight"]).to be_positive
+      expect(by_name["Cold"]).not_to have_key("hot_weight")
+    end
+
+    # A wall screen asks this after its socket comes back, and reloads itself
+    # when a fresh page would carry a different version from its own.
+    it "answers the version a fresh page would carry" do
+      get "/byte/version"
+
+      expect(response.parsed_body["version"]).to eq(ByteShellVersion.current)
+    end
+
+    it "carries a thought bubble for the pet's dreams" do
+      get "/board/#{thread.id}"
+
+      expect(response.body).to include("data-board-dream")
+      expect(response.body).to include('data-version-url="/byte/version"')
+    end
+
     # A board set before groups went plural keeps watching what it did, read off
     # the old single `chore_tag` key until it is next changed.
     it "still honours a board pointed at a group the old way" do

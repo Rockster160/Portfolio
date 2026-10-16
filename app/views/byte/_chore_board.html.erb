@@ -40,6 +40,18 @@
         goes inside it. %>
     <div class="byte-board-tag-list" data-board-tag-list></div>
 
+    <%# How big the circles are drawn on THIS screen - a phone and a wall tablet
+        showing the same board want different sizes, so it is kept on the
+        device rather than the board. %>
+    <div class="byte-board-scale">
+      <span class="byte-board-tag-label">Circle size on this screen</span>
+      <div class="byte-setting-control">
+        <button type="button" class="byte-drawer-step" data-board-scale-smaller aria-label="Smaller circles">−</button>
+        <span class="byte-setting-value" data-board-scale-value>100%</span>
+        <button type="button" class="byte-drawer-step" data-board-scale-bigger aria-label="Bigger circles">+</button>
+      </div>
+    </div>
+
     <%# Whose chores this board shows. Owner-only (set in #board), so a member
         looking at a shared board doesn't get it. Default is just the owner; the
         owner can add a housemate's chores - even ones they wouldn't normally see

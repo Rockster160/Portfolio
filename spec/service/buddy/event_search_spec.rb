@@ -157,6 +157,27 @@ RSpec.describe Buddy::EventSearch do
 
         expect(described_class.rows([event], user).first).to include("· Coffee ·")
       end
+
+      it "carries the numbers logged with it, so a total can be summed" do
+        event = event!("Drink", notes: "Celsius Peach Vibe")
+        event.update!(data: { Caffeine: 200, Calories: "10" })
+
+        expect(described_class.rows([event], user).first).to end_with(" · Caffeine 200, Calories 10")
+      end
+
+      it "leaves out blanks and structure that nobody totals" do
+        event = event!("departed", notes: "Lehi")
+        event.update!(
+          data: {
+            phone:    { lat: 40.4, lng: -111.9 },
+            Caffeine: "",
+            sha:      "f9448ff91f54d1499496fc8fa79a3ec0265c27f4",
+            status:   "success",
+          },
+        )
+
+        expect(described_class.data_phrase(event)).to eq("status success")
+      end
     end
   end
 

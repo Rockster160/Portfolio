@@ -17,6 +17,9 @@ Buddy::Tools.register(
       schedule_reminder  - a message for them to READ, or `text: "run <name>"`
                            for a whole saved routine.
       alarm              - it has to interrupt them, out loud, until stopped.
+      remind_when        - on a CONDITION, not a clock: "once I leave",
+                           "when I get home". `run` + `run_args` call the
+                           same function when it happens.
 
     ## Arguments
 

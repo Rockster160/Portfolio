@@ -16,6 +16,7 @@ module ByteHelper
         touch_icon: asset_path(chrome[:touch_icon]),
         favicon:    asset_path(chrome[:favicon]),
         faces:      buddy_face_paths(theme),
+        aliases:    buddy_face_aliases(theme),
       }]
     }.to_json
   end
@@ -31,23 +32,25 @@ module ByteHelper
     faces = Rails.root.glob("app/assets/images/buddy/#{theme}/face_*.{png,svg}").sort.to_h { |path|
       [File.basename(path, ".*").delete_prefix("face_"), image_path("buddy/#{theme}/#{File.basename(path)}")]
     }
-    # A pet with no `thinking` pose of its own borrows a stand-in, so the
-    # in-flight overlay is a visible change rather than its resting face
-    # repainted. Buddy::Faces.thinking returns a face this pet DOES have art for,
-    # so the lookup can't miss. A dedicated `face_thinking.png` means the key is
-    # already here and this no-ops.
-    faces["thinking"] ||= faces[Buddy::Faces.thinking(theme).to_s]
     faces
   end
 
-  # The URL for one expression, falling back to the pet's neutral when it has no
-  # art for that one — so a stale stored mood from a pet that once had the face
-  # still renders something. (`thinking` resolves to a stand-in in
-  # buddy_face_paths, so it never reaches this fallback.) Used for the hero's
-  # first paint, before the client takes over.
+  # `{ expression => face it has art for }` for every expression name this pet
+  # was never drawn with - `pounce`, `thinking`, another pet's mood - pointing at
+  # its nearest drawing on the mood axes (Buddy::Faces.resolve). Sent beside the
+  # art rather than as more URLs, so the page carries each image once.
+  def buddy_face_aliases(theme)
+    Buddy::Faces.resolved_names(theme).filter_map { |name, drawn|
+      [name.to_s, drawn.to_s] if name != drawn
+    }.to_h
+  end
+
+  # The URL for one expression: its own art, else the nearest drawing this pet
+  # has (Buddy::Faces.resolve), else neutral for a name no pet has ever had.
+  # Used for the hero's first paint, before the client takes over.
   def buddy_face_url(theme, expression)
     faces = buddy_face_paths(theme)
-    faces[expression.to_s] || faces["neutral"]
+    faces[expression.to_s] || faces[Buddy::Faces.resolve(theme, expression).to_s] || faces["neutral"]
   end
 
   # Compact form of an absolute filesystem path — swaps `/Users/zoro`

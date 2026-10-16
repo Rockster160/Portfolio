@@ -141,6 +141,27 @@ RSpec.describe Buddy::ExpressionState do
       expect(Buddy::Faces.thinking(:cobalt)).not_to eq(:neutral)   # and not its resting face
     end
 
+    # Asking a pet for a face it was never drawn with lands on the nearest one it
+    # has on the mood axes, never on nothing.
+    it "resolves every face any pet knows to art each pet actually has" do
+      Buddy::Themes.all.each_key do |theme|
+        Buddy::Faces.known_names.each do |name|
+          drawn = Buddy::Faces.resolve(theme, name)
+          expect(Buddy::Faces.valid?(theme, drawn)).to be(true), "#{theme} #{name} → #{drawn}"
+        end
+      end
+    end
+
+    it "keeps a pet's own drawing when it has one" do
+      expect(Buddy::Faces.resolve(:bloom, :pounce)).to eq(:pounce)
+      expect(Buddy::Faces.resolve(:kumoko, :hiding)).to eq(:hiding)
+    end
+
+    it "lands a missing face on the nearest by mood, not neutral" do
+      expect(Buddy::Faces.resolve(:moss, :pounce)).not_to eq(:neutral)
+      expect(Buddy::Faces.resolve(:bloom, :thinking)).to eq(:focused)
+    end
+
     # The check-in is the one expression change with no model turn behind it: the
     # person taps how they're doing and the pet's face answers. The companions
     # drawn with a full set carry both halves of that directly; the ones with

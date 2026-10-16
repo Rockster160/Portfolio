@@ -97,6 +97,15 @@ class BuddyWatch < ApplicationRecord
   def run_task_name  = metadata.to_h["run_task_name"].to_s.presence
   def run_delay      = metadata.to_h["run_delay"].to_i.clamp(0, MAX_ACTION_DELAY)
 
+  # A function call with its arguments, run instead of a bare scope. Same
+  # shape as a reminder's `action`, and run the same way.
+  def run_calls
+    row = metadata.to_h["run_call"]
+    return [] unless row.is_a?(Hash) && row["tool"].present? && Buddy::Tools[row["tool"]]
+
+    [{ tool_name: row["tool"].to_sym, payload: (row["payload"] || {}).transform_keys(&:to_sym) }]
+  end
+
   # How long the countdown runs each time this trips.
   def timer_seconds  = metadata.to_h["timer_seconds"].to_i
 

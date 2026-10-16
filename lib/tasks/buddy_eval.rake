@@ -2028,6 +2028,36 @@ BUDDY_EDGE_PROBES = [
     never_reply: /\bfired\b|got the message|went out/i,
     note:        "said the depart watch fired and Chelsea got the message, on his word alone",
   },
+  {
+    case:         "prod 8286",
+    say:          "What's my caffeine for the day?",
+    tool:         :get_context,
+    # Just past midnight, so the drinks are already today whenever this runs.
+    seed:         ->(user, _convo) {
+      day = user.timezone ? Time.current.in_time_zone(user.timezone) : Time.current
+      drinks = [[0, "Celsius Peach Vibe", 200], [1, "Celsius Peach Vibe", 200], [2, "Sunkist Zero", 19]]
+      drinks.each { |hour, notes, mg|
+        ActionEvent.create!(
+          user: user, name: "Drink", notes: notes, data: { Caffeine: mg },
+          timestamp: day.change(hour: hour, min: 5),
+        )
+      }
+    },
+    expect_reply: /\b419\b/,
+    note:         "said three drinks and gave no total; recent_events was the newest 15 of the " \
+                  "day, which had already dropped the 9:34am Celsius, and no event's data was " \
+                  "in context",
+  },
+  {
+    case:  "prod 8101",
+    say:   "Once I leave here, navigate me to Petsmart.",
+    tool:  :remind_when,
+    avoid: %i[schedule_function],
+    args:  { remind_when: { trigger: "depart", run: /navigate/i, run_args: /petsmart/i } },
+    needs: :navigate_fn,
+    note:  "scheduled Tesla Navigate at the event's booked end (5:59pm) because " \
+           "remind_when's run couldn't carry a destination",
+  },
 ].freeze
 
 namespace :buddy do

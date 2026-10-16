@@ -93,7 +93,10 @@ class ByteController < ApplicationController
     @board_day = ChoreDay.current(convo.user)
     @board_items_json = board_items_for(convo)
     @board_whisper_state = Buddy::BoardFace.whisper_state(convo)
-    @board_held_face = Buddy::BoardFace.held(convo)
+    # The face it opens on, including a hot chore it is dreaming of this half
+    # hour: the script makes the same draw, so nothing flips once it runs.
+    chore_dream = Buddy::BoardDream.pick(@board_items_json, convo.id).present?
+    @board_held_face = Buddy::BoardFace.showing(convo, chore_dream:)
     # Only the owner configures a board, so the settings the picker offers are
     # theirs alone; a member looking at a shared board gets the pad, not the
     # knobs. board_assignees is nil until it's been set, which the picker shows
@@ -150,6 +153,13 @@ class ByteController < ApplicationController
 
     @board_day = ChoreDay.current(convo.user)
     render json: { items: board_items_for(convo) }
+  end
+
+  # GET /byte/version — the shell version a fresh page would carry. A wall
+  # screen asks after its socket comes back (a deploy restarts the server) and
+  # reloads itself when its own page is older.
+  def version
+    render json: { version: ByteShellVersion.current }
   end
 
   # GET /byte/board/tags — every group a board can be pointed at. The union of
@@ -1070,6 +1080,8 @@ class ByteController < ApplicationController
     # "All" is every chore, whatever it is tagged; any other groups narrow by tag.
     wants_all = tags.any? { |t| t.casecmp?(BOARD_ALL_TAG) }
     chore_items = board_chore_items(convo, owner, tags, wants_all, day)
+    chore_items = board_hot_weighted(chore_items, day)
+    chore_items = board_pinned_order(convo, chore_items, day)
 
     # Routines and buttons come from the NAMED groups only — "All" is a chores-only
     # wildcard, so an all-chores board doesn't also sweep in every routine.
@@ -1157,6 +1169,47 @@ class ByteController < ApplicationController
       [-board_priority_rank(c), date.present? ? 0 : 1, date.present? ? -Date.iso8601(date).jd : 0, i]
     }
     sorted_due + sorted_rest
+  end
+
+  # A hot chore carries the weight the morning hot-pick draw gives it, so the
+  # board can draw among them the same way for its pet's dreams (see
+  # Buddy::BoardDream).
+  def board_hot_weighted(items, day)
+    hot_ids = items.filter_map { |item| item[:id] if item[:hot_multiplier].present? }
+    return items if hot_ids.empty?
+
+    weights = ChoreDailyResetWorker.new.selection_weights(Chore.where(id: hot_ids).to_a, day)
+    items.map { |item| weights.key?(item[:id]) ? item.merge(hot_weight: weights[item[:id]]) : item }
+  end
+
+  # The chores keep the order they first took on the board for the rest of the
+  # chore day. The sort leans on things that move as the day goes - a
+  # completion settles a follower's due date, a mark-due is cleared - and a
+  # circle that jumps places under a finger is pressed by mistake. A chore
+  # arriving mid-day goes in after the one it follows in the sort; the next
+  # day starts from the sort again.
+  def board_pinned_order(convo, items, day)
+    pinned = convo.metadata.is_a?(Hash) ? convo.metadata["board_order"] : nil
+    order = pinned.is_a?(Hash) && pinned["day"] == day.iso8601 ? Array(pinned["ids"]).dup : []
+
+    previous = nil
+    items.each do |item|
+      id = item[:id]
+      unless order.include?(id)
+        at = previous.nil? ? 0 : order.index(previous) + 1
+        order.insert(at, id)
+      end
+      previous = id
+    end
+
+    stored = { "day" => day.iso8601, "ids" => order }
+    if stored != pinned
+      ByteConversation.where(id: convo.id).update_all([
+        "metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{board_order}', ?::jsonb)",
+        stored.to_json,
+      ])
+    end
+    items.sort_by.with_index { |item, i| [order.index(item[:id]) || order.size, i] }
   end
 
   # none → 0 … critical → 4, the same ladder the Today page ranks priority by.

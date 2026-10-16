@@ -182,4 +182,80 @@ RSpec.describe "Buddy watch actions" do
       expect(convo.byte_messages.where("metadata->>'source' = 'watch'").where("body LIKE '%Reminder%'")).to be_empty
     end
   end
+
+  # Prod 8101: "Once I leave the event today, navigate me to Petsmart" got a
+  # schedule_function at the event's booked end, because `run` could only name
+  # a bare trigger and a destination had nowhere to go.
+  describe "running a function with its arguments" do
+    let!(:navigate) {
+      Task.create!(
+        user: user, name: "Tesla Navigate", buddy_enabled: true, enabled: true,
+        listener: 'function("Destination" TAB String)::String', code: ""
+      )
+    }
+
+    def depart_watch!(**extra)
+      run(doorbell(text: "Heading to Petsmart.", run: "Tesla Navigate", run_args: { destination: "Petsmart" }, **extra))
+      BuddyWatch.last
+    end
+
+    it "stores the call, arguments and all" do
+      w = depart_watch!
+
+      expect(w.kind).to eq("action")
+      expect(w.run_task_name).to eq("Tesla Navigate")
+      expect(w.run_calls).to eq(
+        [{ tool_name: :call_jil_function, payload: { name: "Tesla Navigate", destination: "Petsmart" } }],
+      )
+    end
+
+    it "refuses a function that matches nothing" do
+      run(doorbell(run: "Teleport", run_args: { destination: "Petsmart" }))
+
+      expect(BuddyWatch.count).to eq(0)
+    end
+
+    it "runs the call when the watch fires, with no model turn" do
+      w = depart_watch!
+      ran = nil
+      allow(Buddy::ProposalBuilder).to receive(:run_markers!) { |args| ran = args }
+
+      Buddy::WatchMatcher.fire!(w)
+
+      expect(ran[:markers]).to eq(w.run_calls)
+      expect(ran[:body]).to eq("Heading to Petsmart.")
+      expect(::Jil).not_to have_received(:trigger)
+    end
+
+    it "reaches the function with the destination it was set with" do
+      w = depart_watch!
+      called = nil
+      allow_any_instance_of(Task).to receive(:execute) { |task, *args, **kw|
+        called = [task.name, args, kw]
+        nil
+      }
+
+      Buddy::WatchMatcher.fire!(w)
+
+      expect(called&.first).to eq("Tesla Navigate")
+      expect(called.inspect).to include("Petsmart")
+    end
+
+    it "waits out a delay the same way a trigger does" do
+      w = depart_watch!(delay: 10)
+      allow(Buddy::ProposalBuilder).to receive(:run_markers!)
+
+      Sidekiq::Testing.fake! {
+        BuddyWatchActionWorker.clear
+        Buddy::WatchMatcher.fire!(w)
+
+        expect(BuddyWatchActionWorker.jobs.size).to eq(1)
+      }
+      expect(Buddy::ProposalBuilder).not_to have_received(:run_markers!)
+
+      BuddyWatchActionWorker.new.perform(w.id)
+
+      expect(Buddy::ProposalBuilder).to have_received(:run_markers!)
+    end
+  end
 end

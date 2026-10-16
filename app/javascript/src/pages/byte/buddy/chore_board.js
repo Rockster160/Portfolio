@@ -143,7 +143,7 @@ function formatMultiplier(n) {
 // The icon, in whatever shape it arrived. Mirrors the four kinds the chore
 // serializer resolves (`icon_kind`) rather than guessing from the string, so a
 // glyph that happens to look like a path can't be read as one.
-function iconNode(chore) {
+export function iconNode(chore) {
   // The BOX is what the container query measures, so the glyph always goes
   // inside one even when it is a single character - that is what makes an
   // emoji and an uploaded image render at the same visual size, and it is how
@@ -173,7 +173,15 @@ function iconNode(chore) {
   return box;
 }
 
-export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsChanged } = {}) {
+// How big this screen draws the circles, as a share of the default. Per screen
+// rather than per board, so it lives on the device; keyed by the board so one
+// tablet can show two boards at different sizes.
+const SCALE_KEY = (id) => `byte.board.circleScale.${id}`;
+const SCALE_MIN = 70;
+const SCALE_MAX = 150;
+const SCALE_STEP = 10;
+
+export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsChanged, onItems } = {}) {
   if (!root || !app) return null;
 
   const padEl = root.querySelector("[data-board-pad]");
@@ -548,6 +556,7 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       });
     }
     paintEmpty();
+    onItems?.(items);
   }
 
   // By id AND kind: the three kinds come from different tables and can collide
@@ -1188,6 +1197,43 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       // Leave it; a failed delete just means the row is still there to try again.
     }
   }
+
+  // ---- circle size ----
+
+  const scaleValueEl = root.querySelector("[data-board-scale-value]");
+
+  function readScale() {
+    try {
+      return Number(window.localStorage.getItem(SCALE_KEY(conversationIdFn?.()))) || 100;
+    } catch (e) {
+      return 100;
+    }
+  }
+
+  function applyScale(pct) {
+    const next = Math.min(SCALE_MAX, Math.max(SCALE_MIN, Number(pct) || 100));
+    root.style.setProperty("--board-circle-scale", String(next / 100));
+    if (scaleValueEl) scaleValueEl.textContent = `${next}%`;
+    return next;
+  }
+
+  function nudgeScale(delta) {
+    const next = applyScale(readScale() + delta);
+    try {
+      window.localStorage.setItem(SCALE_KEY(conversationIdFn?.()), String(next));
+    } catch (e) {
+      // Blocked storage: it still changed on screen, it just won't be
+      // remembered past a reload.
+    }
+  }
+
+  applyScale(readScale());
+  root
+    .querySelector("[data-board-scale-smaller]")
+    ?.addEventListener("click", () => nudgeScale(-SCALE_STEP));
+  root
+    .querySelector("[data-board-scale-bigger]")
+    ?.addEventListener("click", () => nudgeScale(SCALE_STEP));
 
   // ---- waking up ----
 

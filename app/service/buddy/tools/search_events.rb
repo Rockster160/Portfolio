@@ -3,8 +3,8 @@ Buddy::Tools.register(
   description: <<~TXT,
     Search the person's LOGGED events (ActionEvents) - the whole record, going
     back years, including what they logged elsewhere. `recent_events` in your
-    context is only TODAY's handful, so an earlier day, a count, or a "when did
-    I last..." comes from here, as does finding the one they want removed or
+    context is only TODAY, so an earlier day, a count across days, or a "when
+    did I last..." comes from here, as does finding the one they want removed or
     changed.
 
     `query` takes the app's search syntax. Bare words match the NAME or the

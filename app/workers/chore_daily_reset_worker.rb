@@ -150,6 +150,13 @@ class ChoreDailyResetWorker
       pick_replacement(day: day, band: :any, multiplier: multiplier, excluded_id: excluded_chore_id)
   end
 
+  # { chore id => the weight the morning draw would give it }, for anything
+  # else that draws among chores the same way (the board's hot-chore dreams).
+  def selection_weights(chores, day)
+    today_ids, overdue_ids = schedule_weight_sets(chores, day)
+    chores.to_h { |chore| [chore.id, weight_for(chore, today_ids, overdue_ids)] }
+  end
+
   private
 
   # Weighted random pick using cumulative-sum sampling. Every eligible

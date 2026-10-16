@@ -149,6 +149,23 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     held.positive?
   end
 
+  # A want or an idea, shown in the thought bubble of the boards `groups` aims
+  # it at - Whisper wanting food, something worth doing today. Board-only like
+  # `boardAlert`: nothing in the thread, no push. The newest one sent is the one
+  # a board shows, and the pet wears `expression` (thinking when blank) only
+  # while it has no other face to show. Cleared with `resolve`.
+  def dream(key, message, who=nil, groups=nil, icon=nil, expression=nil)
+    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
+    groups = groups.map(&:strip).compact_blank
+    held = recipients_for(who).count { |user|
+      ::Buddy::Alerts.hold!(
+        user: user, key: key, body: message,
+        groups: groups, icon: icon, expression: expression, dream: true
+      ).present?
+    }
+    held.positive?
+  end
+
   # It's been dealt with. The message `alert` left in the thread is rewritten
   # where it stands, so the thing that was outstanding now reads as handled -
   # no second message, and nothing left saying a condition that has passed.

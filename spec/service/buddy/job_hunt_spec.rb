@@ -273,6 +273,26 @@ RSpec.describe "Buddy job hunt tools" do
       expect(result[:settled]).to be(false)
     end
 
+    it "keeps the mail's own words when it revises the row the mail filed" do
+      job = application!("Neighbor")
+      filed = job.notes.create!(
+        tag: :note, occurred_at: 1.hour.ago, source: "Email",
+        body: "Hey Rocco, could you send two professional references?"
+      )
+      email = job_mail!(subject: "Next steps", company: "Neighbor", logged: filed.id)
+
+      run(:add_job_note, {
+        company:  "Neighbor",
+        note:     "Neighbor asked me to submit two professional references",
+        tag:      :availability,
+        email_id: email.id,
+      })
+
+      expect(filed.reload.body).to eq("Hey Rocco, could you send two professional references?")
+      expect(filed.tag).to eq("availability")
+      expect(job.notes.count).to eq(1)
+    end
+
     it "refuses an email id that isn't theirs" do
       application!("Netflix")
 

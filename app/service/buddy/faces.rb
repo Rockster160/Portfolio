@@ -22,22 +22,68 @@ module Buddy
     # picker can't land on it — `valid?` sees it, `selectable` doesn't.
     GESTURES = %i[wave].freeze
 
-    # When a pet has its own `thinking` pose it uses it; when it doesn't, it
-    # borrows the nearest "working on it" face it DOES have, in this order. The
-    # point is that the in-flight overlay is a VISIBLE change the moment you talk
-    # to it — a pet with no thinking art used to repaint its resting face, so it
-    # looked like nothing happened at all. Add a real `face_thinking.png` later
-    # and it takes over on its own; nothing here has to change.
-    THINKING_STANDINS = %i[focused peeking eager nerd confused cool content happy grin].freeze
+    # Where the faces that are STATES rather than moods sit on the mood axes, so
+    # a pet with no art for one wears the nearest face it does have instead of
+    # going blank or snapping to neutral. Every other name takes its numbers
+    # from the companions that declare it.
+    STATE_POINTS = {
+      thinking: { warmth: 0.45, play: 0.15, weight: 0.60, strain: 0.20 },
+      pounce:   { warmth: 0.70, play: 0.90, weight: 0.25, strain: 0.25 },
+      sleeping: { warmth: 0.55, play: 0.05, weight: 0.20, strain: 0.00 },
+      wave:     { warmth: 0.85, play: 0.50, weight: 0.20, strain: 0.05 },
+      clock:    { warmth: 0.45, play: 0.20, weight: 0.50, strain: 0.35 },
+    }.freeze
 
     # The face whose ART stands in for "thinking" on this pet. The expression
     # NAME stays `thinking` everywhere (so the client's transient/settle logic is
     # untouched); only which drawing it resolves to changes.
     def thinking(theme)
-      drawn = all(theme)
-      return :thinking if drawn.include?(:thinking)
+      resolve(theme, :thinking)
+    end
 
-      (THINKING_STANDINS & drawn).first || default
+    # The drawing this pet wears for an expression name: its own art when it has
+    # some, else the drawn face nearest that name on the mood axes, else neutral.
+    def resolve(theme, name)
+      resolved_names(theme)[name.to_s.to_sym] || default
+    end
+
+    # { name => drawn face } for every expression name any pet knows, resolved
+    # for this one. One disk read, so a page can resolve the whole set at once.
+    def resolved_names(theme)
+      drawn = all(theme)
+      known_names.index_with { |name|
+        drawn.include?(name) ? name : nearest_drawn(theme, drawn, name)
+      }.compact
+    end
+
+    # Every expression name worth resolving: each pet's declared moods, each
+    # pet's art, and the states above. Held per process outside development,
+    # where the art can change under a running server.
+    def known_names
+      return @known_names if @known_names && !Rails.env.development?
+
+      declared = index.values.flat_map(&:keys)
+      art = Buddy::Themes.all.keys.flat_map { |theme| all(theme) }
+      @known_names = (declared + art + STATE_POINTS.keys).uniq
+    end
+
+    # Where a name sits on the axes: a state's own numbers, else the average of
+    # every companion that declares it. Nil for a name nobody has placed.
+    def point_for(name)
+      return STATE_POINTS[name] if STATE_POINTS.key?(name)
+
+      rows = index.values.filter_map { |faces| faces[name] }
+      return nil if rows.empty?
+
+      AXES.index_with { |axis| rows.sum { |row| row[axis].to_f } / rows.size }
+    end
+
+    def nearest_drawn(theme, drawn, name)
+      point = point_for(name)
+      return nil if point.nil?
+
+      pet = Buddy::Companion.find(theme).faces
+      (pet.keys & drawn).min_by { |face| [distance(pet[face], point), face] }
     end
 
     def dir(theme)

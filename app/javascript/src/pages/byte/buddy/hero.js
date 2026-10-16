@@ -12,6 +12,7 @@
 // Extension spelled out so node can load this module directly — esbuild is
 // happy either way, and the actions-menu runner imports it unbundled.
 import { quickOrder, NO_ROUTINES } from "./routine_order.js";
+import { IDLE_FACE } from "./face_url.js";
 
 const ROUTINES_URL = "/buddy/routines";
 
@@ -19,8 +20,10 @@ const ROUTINES_URL = "/buddy/routines";
 // `holdExpression`). Asleep outranks everything — a capped/unreachable Byte is
 // out cold whatever else is true; the Whisper's own state is next; a board
 // alert's "up to no good" face sits under both, so an open gate shows only
-// while the pet is actually awake to look guilty about it.
-export const HOLD_PRIORITY = { sleep: 30, whisper: 20, alert: 10 };
+// while the pet is actually awake to look guilty about it. A dream is the
+// weakest: its face is SOFT (see holdExpression), showing only while nothing
+// else is held and the pet is resting on its idle face.
+export const HOLD_PRIORITY = { sleep: 30, whisper: 20, alert: 10, dream: 0 };
 
 function csrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
@@ -118,22 +121,29 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   //      the mood beneath it.
   let restingExpression = hero.dataset.buddyAwakeExpression || "neutral";
 
-  // key → { expression, priority }. Highest priority showing; a later hold at
-  // equal priority wins the tie (Map keeps insertion order). Empty = no state
-  // stands and the mood shows.
+  // key → { expression, priority, soft }. Highest priority showing; a later
+  // hold at equal priority wins the tie (Map keeps insertion order). Empty = no
+  // state stands and the mood shows.
   const holds = new Map();
 
-  const topHold = () => {
+  const topHold = (soft) => {
     let best = null;
     holds.forEach((h) => {
+      if (h.soft !== soft) return;
       if (!best || h.priority >= best.priority) best = h;
     });
     return best;
   };
 
   // What SHOULD show when nothing transient is over it: the strongest standing
-  // state, or the resting mood when none stands.
-  const effectiveExpression = () => topHold()?.expression || restingExpression;
+  // state, else a soft one (a dream's) while the mood is only idle, else the
+  // resting mood. Any real mood beats a soft hold.
+  const effectiveExpression = () => {
+    const hard = topHold(false);
+    if (hard) return hard.expression;
+    const soft = restingExpression === IDLE_FACE ? topHold(true) : null;
+    return soft?.expression || restingExpression;
+  };
 
   const paint = (expression) => {
     hero.dataset.buddyExpression = String(expression);
@@ -158,7 +168,8 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     // paint is a momentary overlay and changes neither layer.
     if (!opts.transient) {
       restingExpression = String(expression);
-      if (holds.size) return;
+      // Whatever is held (or soft-held over an idle mood) decides the face.
+      return paint(effectiveExpression());
     }
     paint(expression);
   };
@@ -167,9 +178,12 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   // Whisper hiding, a board alert's held face. `key` names the condition so it
   // can be lifted again; `priority` decides who wins when several stand at once
   // (sleep over an open gate, say). Re-raising the same key updates it.
-  const holdExpression = (key, expression, priority = 0) => {
+  //
+  // `soft` is a face that yields to everything: it shows only while no other
+  // state is held and the mood is idle (a dream's thinking face).
+  const holdExpression = (key, expression, priority = 0, { soft = false } = {}) => {
     if (!key || !expression) return;
-    holds.set(String(key), { expression: String(expression), priority });
+    holds.set(String(key), { expression: String(expression), priority, soft });
     paint(effectiveExpression());
   };
 

@@ -62,7 +62,11 @@ module Buddy
     #
     # Its key must not be one a `raise!` uses: a loud alert already standing
     # under the key is left exactly as it is.
-    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil)
+    #
+    # `dream:` makes it a want or an idea rather than a condition: the board
+    # shows it in the pet's thought bubble instead of its speech bubble, newest
+    # first, and its face only shows while the pet is otherwise idle.
+    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, dream: false)
       key  = key.to_s.strip
       body = body.to_s.strip
       return nil if key.empty? || body.empty?
@@ -72,6 +76,7 @@ module Buddy
       meta["groups"]     = groups if groups.present?
       meta["icon"]       = icon.to_s.strip if icon.present?
       meta["expression"] = expression.to_s.strip if expression.present?
+      meta["dream"]      = true if dream
 
       open = ::BuddyAlert.open_for(user, key)
       return open if open && !open.board_only?
@@ -80,7 +85,8 @@ module Buddy
         merged = open.metadata.merge(meta)
         return open if open.body == body && merged == open.metadata
 
-        open.update!(body: body, metadata: merged)
+        # Changed is sent again, so it is the newest dream once more.
+        open.update!(body: body, metadata: merged, last_raised_at: Time.current)
         broadcast_outstanding!(user)
         return open
       end
@@ -156,6 +162,12 @@ module Buddy
     # scrolled past.
     def outstanding(user)
       ::BuddyAlert.outstanding.where(user_id: user.id).to_a
+    end
+
+    # The dreams standing open, newest first: the one a board shows is the most
+    # recently sent.
+    def dreams(user)
+      outstanding(user).select(&:dream?).sort_by(&:last_raised_at).reverse
     end
 
     def outstanding_wire(user)

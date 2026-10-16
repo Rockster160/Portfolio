@@ -339,4 +339,42 @@ RSpec.describe Buddy::Alerts do
       expect(loud.reload.board_only?).to be(false)
     end
   end
+
+  describe "holding a dream" do
+    def dream!(key, body, **opts)
+      described_class.hold!(user: user, key: key, body: body, groups: ["Whisper"], dream: true, **opts)
+    end
+
+    it "is a quiet board-only hold the wire marks as a dream" do
+      dream = dream!("food", "Foodies!", icon: "🍖")
+
+      expect(dream.byte_message).to be_nil
+      expect(WebPushNotifications).not_to have_received(:send_to_byte)
+      expect(dream.strip_wire).to include("board_only" => true, "dream" => true, "icon" => "🍖")
+    end
+
+    it "lists the most recently sent first" do
+      travel_to(2.minutes.ago) { dream!("food", "Foodies!") }
+      dream!("walk", "Walkies!")
+
+      expect(described_class.dreams(user).map(&:key)).to eq(%w[walk food])
+    end
+
+    it "moves to the front when it is sent again with new words, not when re-sent unchanged" do
+      travel_to(4.minutes.ago) { dream!("food", "Foodies!") }
+      travel_to(2.minutes.ago) { dream!("walk", "Walkies!") }
+
+      dream!("food", "Foodies!")
+      expect(described_class.dreams(user).map(&:key)).to eq(%w[walk food])
+
+      dream!("food", "Foodies, now!")
+      expect(described_class.dreams(user).map(&:key)).to eq(%w[food walk])
+    end
+
+    it "leaves ordinary alerts out of the dreams" do
+      described_class.hold!(user: user, key: "gate", body: "Gate open", groups: ["Whisper"])
+
+      expect(described_class.dreams(user)).to be_empty
+    end
+  end
 end

@@ -79,8 +79,10 @@ import { initBuddyProcesses } from "./buddy/processes";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
-import { initChoreBoard } from "./buddy/chore_board";
+import { initChoreBoard, iconNode } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
+import { initBoardDream } from "./buddy/dream";
+import { faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import { playBoardSound } from "./buddy/sound";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
@@ -181,6 +183,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The board's standing-alert bubble + pet shuffle. Null until it is wired
   // after the hero exists; the alert handlers below guard with `?.`.
   let boardAlert = null;
+  // The pet's thought bubble on a board (buddy/dream.js). Fed alongside
+  // boardAlert, so declared beside it for the same reason.
+  let boardDream = null;
   // Same reason: hydrateForConversation runs during init and feeds this, well
   // before the mount point below exists. Null on every page but the kiosk.
   let buddyKiosk = null;
@@ -2367,13 +2372,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     menuToggle: app.querySelector("[data-byte-actions-toggle]"),
     conversationIdFn: () => currentConversationId,
     // The pet's face image for a given theme + expression, resolved off the
-    // server-provided face map (fingerprinted paths read from disk), with a
-    // neutral fallback for an expression a pet has no art for. This is what lets
-    // the hero paint any companion with no per-theme CSS behind it.
-    faceUrl: (theme, expression) => {
-      const faces = buddyThemes[theme]?.faces || {};
-      return faces[expression] || faces.neutral || null;
-    },
+    // server-provided face map (fingerprinted paths read from disk), falling back
+    // to the nearest face the pet has. This is what lets the hero paint any
+    // companion with no per-theme CSS behind it.
+    faceUrl: (theme, expression) => faceUrlFor(buddyThemes[theme], expression),
     // Brain-dump: after a bucket is picked, hint in the composer that the next
     // message is the idea being stashed. Reset on send (see handleSend).
     onStashArmed: (category) => {
@@ -2449,6 +2451,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     tags: boardTags(app),
   });
   boardAlert.setAlerts(bootstrap.alerts || []);
+
+  // The thought bubble: a dream from Jil, else a hot chore now and then. Mounted
+  // before the chore board, which hands it the board's items on every paint.
+  boardDream = initBoardDream({
+    bubble: app.querySelector("[data-board-dream]"),
+    hero: buddyHero,
+    tags: boardTags(app),
+    boardIdFn: () => currentConversationId,
+    iconFor: iconNode,
+  });
+  boardDream.setAlerts(bootstrap.alerts || []);
 
   // What Byte is doing in the background (top-right, opposite the timers).
   // Reported by whoever is doing the work - the Mac filling in applications, a
@@ -2617,7 +2630,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     onTagsChanged: (tags) => {
       boardDurations?.setTags(tags);
       boardAlert?.setTags(tags);
+      boardDream?.setTags(tags);
     },
+    onItems: (items) => boardDream?.setItems(items),
   });
 
   // Chore broadcasts carry `id: :chores` and the Monitor dispatcher routes by
@@ -3419,6 +3434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Cost on a first connect: one GET immediately after bootstrap asked the
       // same question. `refetchHistory` has always paid it.
       refetchAlerts();
+      reloadIfDeployed();
       convoManager.refresh().catch(() => {});
       if (hasBeenConnected && wasDisconnected) {
         requestShellRefresh();
@@ -3474,6 +3490,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             choreBoard?.setTags(nextTags);
             boardDurations?.setTags(nextTags);
             boardAlert?.setTags(nextTags);
+            boardDream?.setTags(nextTags);
           }
         }
         return;
@@ -3545,6 +3562,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.kind === "alerts") {
         alertStrip.setAlerts(data.alerts);
         boardAlert?.setAlerts(data.alerts);
+        boardDream?.setAlerts(data.alerts);
         return;
       }
       if (data.kind === "font_scale") {
@@ -3703,6 +3721,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const payload = await res.json();
       alertStrip.setAlerts(payload?.alerts);
       boardAlert?.setAlerts(payload?.alerts);
+      boardDream?.setAlerts(payload?.alerts);
     } catch (_) {}
   }
 
@@ -3775,6 +3794,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       markCurrentReadIfCaughtUp();
       requestShellRefresh();
       checkForServiceWorkerUpdate();
+      reloadIfDeployed();
       // Re-validate push on every return-to-app (mirrors whisper.js): recovers
       // a subscription iOS silently dropped while backgrounded, re-syncs the
       // (possibly rotated) endpoint to the server, and repaints the Settings
@@ -3850,6 +3870,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   //       to activate, so the reload could beat the swap;
   //   (c) `location.reload()` on iOS PWA standalone doesn't always bypass
   //       HTTP-layer caches — a URL cache-buster param does.
+  // A wall screen nobody navigates never re-fetches its own shell, so it can't
+  // hear about a deploy the way a phone does. It asks instead, whenever its
+  // socket connects (a deploy restarts the server) or the screen wakes, and
+  // hard-reloads when a fresh page would carry a different version from its
+  // own. Once per version per tab, so a reload that still lands on the old page
+  // can't loop.
+  async function reloadIfDeployed() {
+    if (!isKiosk || !app.dataset.versionUrl) return;
+    const mine = document.querySelector('meta[name="byte-version"]')?.content;
+    if (!mine) return;
+
+    let version = null;
+    try {
+      const res = await fetch(app.dataset.versionUrl, {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      version = (await res.json())?.version;
+    } catch (_) {
+      return;
+    }
+    if (!version || version === mine) return;
+
+    try {
+      if (window.sessionStorage.getItem("byte.reloadedFor") === version) return;
+      window.sessionStorage.setItem("byte.reloadedFor", version);
+    } catch (_) {}
+    hardReload();
+  }
+
   async function hardReload() {
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");

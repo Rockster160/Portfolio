@@ -6,6 +6,9 @@ module Buddy
     module_function
 
     RECENT_EVENT_WINDOW = 24.hours
+    # A whole day's log, not a sample: a day's total is summed from it, and a
+    # cap that drops the morning still reads as the whole day.
+    RECENT_EVENTS_LIMIT = 60
     # Rest-of-week lookahead (past today). 8 days so "exactly a week from now"
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
@@ -1089,7 +1092,7 @@ module Buddy
         user.action_events
           .where(timestamp: start_of_today..)
           .order(timestamp: :desc)
-          .limit(15)
+          .limit(RECENT_EVENTS_LIMIT)
           .map { |e|
             age_min = ((now - e.timestamp) / 60).to_i
             {
@@ -1101,7 +1104,8 @@ module Buddy
               # No hard cutoff - Buddy decides based on the label.
               age:   age_label(age_min),
               notes: e.notes.to_s.first(60),
-            }
+              data:  Buddy::EventSearch.data_phrase(e).presence,
+            }.compact
           }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.recent_events", exception: e, user: user)

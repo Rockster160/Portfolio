@@ -117,6 +117,7 @@
      <%# the cached shell paints before the first fetch lands. %>
      data-board-items="<%= Array(@board_items_json).to_json %>"
      data-board-items-url="<%= byte_board_items_path %>"
+     data-version-url="<%= byte_version_path %>"
      data-chore-cheer-url="<%= byte_chore_cheer_path %>"
      data-board-tag-url="<%= byte_board_tag_path %>"
      data-board-tags-url="<%= byte_board_tags_path %>"
@@ -296,6 +297,13 @@
         pointing down at it. Filled and cleared by buddy/kiosk.js; only the
         kiosk/board surfaces show it. %>
     <div class="byte-kiosk-say" data-kiosk-say aria-live="polite" hidden></div>
+    <%# Board-only: the pet's THOUGHT bubble - what it wants or is mulling over
+        (a dream sent from Jil, else one of the board's hot chores now and
+        then), as opposed to the speech bubble's alerts. Off to the side of its
+        head with a trail of dots. Filled by buddy/dream.js. %>
+    <% if @board %>
+      <div class="byte-board-dream" data-board-dream aria-live="polite" hidden></div>
+    <% end %>
     <div class="byte-buddy-char" aria-label="<%= buddy_page_chrome[:name] %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <%# The face is a single background image — this pet's resolved art for the %>

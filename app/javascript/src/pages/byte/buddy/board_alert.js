@@ -78,10 +78,12 @@ export function initBoardAlert({ bubble, hero, tags }) {
     // groups belongs to no board — it still stands in the chat strip, just not
     // out here — so an unrelated condition never lights up the Whisper wall.
     // The same words twice (a board-only alert and a loud one saying the same
-    // thing) are one bubble, not a rotation between two identical ones.
+    // thing) are one bubble, not a rotation between two identical ones. A
+    // dream is a want, not a condition - it goes in the thought bubble
+    // (buddy/dream.js), never here.
     const seen = new Set();
     alerts = lastAlerts.filter((a) => {
-      if (!a || !a.body || !groupsOverlap(a.groups, watched)) return false;
+      if (!a || !a.body || a.dream || !groupsOverlap(a.groups, watched)) return false;
       if (seen.has(a.body)) return false;
       seen.add(a.body);
       return true;

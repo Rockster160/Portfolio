@@ -8,20 +8,44 @@ module Buddy
   # until the browser has caught up.
   #
   # Priority matches the hero's HOLD_PRIORITY: Whisper's state over an alert's.
+  # A dream's face is the weakest of all: it shows only while the pet would
+  # otherwise be resting on its idle face.
   module BoardFace
     module_function
 
     WHISPER_CHANNEL = :"whisper-durations"
     WHISPER_CACHE = :board_whisper
     WHISPER_FACES = { asleep: :sleeping, gone: :hiding }.freeze
+    DREAM_FACE = :thinking
 
-    # What the board's pet should show: the held face, else its mood.
+    # What the board's pet should show: the held face, else a dream's over an
+    # idle mood, else its mood.
     def for(board)
-      held(board) || board.buddy_expression
+      showing(board) || board.buddy_expression
     end
 
     def held(board)
       whisper_face(board) || alert_face(board)
+    end
+
+    # The held face, or a dream's when nothing is held and the mood is idle.
+    # `chore_dream` is a hot chore the board itself is dreaming of (see
+    # Buddy::BoardDream), which only the board's own page knows.
+    def showing(board, chore_dream: false)
+      held(board) || (idle?(board.buddy_expression) ? dream_face(board, chore_dream:) : nil)
+    end
+
+    def idle?(expression)
+      expression.blank? || expression.to_s == Buddy::Faces.default.to_s
+    end
+
+    # The face of the dream this board shows: the newest one aimed at it, else
+    # thinking over a hot chore it is dreaming of.
+    def dream_face(board, chore_dream: false)
+      dream = Buddy::Alerts.dreams(board.user).find { |a| overlap?(a.groups, board.chore_tags) }
+      return dream.expression || DREAM_FACE.to_s if dream
+
+      DREAM_FACE.to_s if chore_dream
     end
 
     # Whisper's state as this board should wear it, or nil when the feed isn't
@@ -42,7 +66,7 @@ module Buddy
     # the board's bubble opens on.
     def alert_face(board)
       alert = Buddy::Alerts.outstanding(board.user).find { |a|
-        a.expression.present? && overlap?(a.groups, board.chore_tags)
+        !a.dream? && a.expression.present? && overlap?(a.groups, board.chore_tags)
       }
       alert&.expression
     end
@@ -79,7 +103,12 @@ module Buddy
     # The index cards follow this; the board itself works it out live.
     def broadcast!(owner)
       ::ByteConversation.active.buddy.board.where(user_id: owner.id).find_each do |board|
-        data = { kind: :board_face, conversation_id: board.id, expression: held(board) }
+        data = {
+          kind:            :board_face,
+          conversation_id: board.id,
+          expression:      held(board),
+          dream:           dream_face(board),
+        }
         viewers = board.shared? ? owner.chore_household_user_ids : [owner.id]
         ::User.where(id: viewers).find_each do |viewer|
           ::MonitorChannel.broadcast_to(viewer, { id: :byte, channel: :byte, data: data })

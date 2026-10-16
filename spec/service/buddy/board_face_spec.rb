@@ -53,6 +53,55 @@ RSpec.describe Buddy::BoardFace do
     end
   end
 
+  describe "a dream's face" do
+    def dream!(expression: nil, groups: ["Whisper"])
+      Buddy::Alerts.hold!(
+        user: user, key: "food-#{SecureRandom.hex(3)}", body: "Foodies!",
+        groups: groups, expression: expression, dream: true, conversation: board,
+      )
+    end
+
+    before { board.update!(buddy_expression: "neutral") }
+
+    it "thinks over an idle mood" do
+      dream!
+
+      expect(described_class.for(board)).to eq("thinking")
+    end
+
+    it "wears the face the dream names" do
+      dream!(expression: "eager")
+
+      expect(described_class.for(board)).to eq("eager")
+    end
+
+    it "gives way to any real mood" do
+      dream!
+      board.update!(buddy_expression: "happy")
+
+      expect(described_class.for(board)).to eq("happy")
+    end
+
+    it "gives way to a held face, and is no alert face itself" do
+      dream!(expression: "eager")
+      expect(described_class.held(board)).to be_nil
+
+      alert!(groups: ["Whisper"], expression: "pounce")
+      expect(described_class.for(board)).to eq("pounce")
+    end
+
+    it "ignores a dream aimed at another group" do
+      dream!(groups: ["Garage"])
+
+      expect(described_class.for(board)).to eq("neutral")
+    end
+
+    it "thinks over a hot chore the board is dreaming of" do
+      expect(described_class.showing(board, chore_dream: true)).to eq("thinking")
+      expect(described_class.showing(board)).to be_nil
+    end
+  end
+
   describe ".record_whisper!" do
     it "tells the board's viewers its face only when the state moved" do
       described_class.record_whisper!(user, { status: "Napping", groups: ["Whisper"] })

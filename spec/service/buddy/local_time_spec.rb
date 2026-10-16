@@ -120,6 +120,19 @@ RSpec.describe "Buddy and local time" do
       expect(names).to include("this morning")
       expect(names).not_to include("yesterday evening")
     end
+
+    it "keeps the whole day on a busy one, with each row's numbers" do
+      first = log!(zone.local(2026, 8, 2, 6, 0), "Drink")
+      first.update!(data: { Caffeine: 200 })
+      30.times { |i| log!(zone.local(2026, 8, 2, 7, i), "Whisper") }
+
+      rows = Timecop.freeze(morning + 1.hour) {
+        Buddy::Context.build(user, convo)[:recent_events]
+      }
+
+      expect(rows.length).to eq(31)
+      expect(rows.find { |row| row[:id] == first.id }[:data]).to eq("Caffeine 200")
+    end
   end
 
   describe "resolving something they did \"today\"" do

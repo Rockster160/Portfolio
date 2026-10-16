@@ -262,11 +262,28 @@ module Buddy
     # Fires the scope and leaves a trace. Shared with the delayed worker, which
     # re-checks the watch is still live before calling it.
     def run_action_now!(watch)
+      calls = watch.run_calls
+      return run_calls!(watch, calls) if calls.any?
+
       scope = watch.run_scope
       return if scope.blank?
 
       ::Jil.trigger(watch.user, scope.to_sym, {}, auth: :buddy, auth_id: watch.user_id)
       action_chip(watch)
+    end
+
+    # A function with its arguments: the same no-model path a scheduled
+    # function takes, which posts its own receipt and any answer it gives.
+    def run_calls!(watch, calls)
+      conversation = watch.byte_conversation
+      return if conversation.nil?
+
+      Buddy::ProposalBuilder.run_markers!(
+        user:         watch.user,
+        conversation: conversation,
+        markers:      calls,
+        body:         watch.body.to_s.presence || "Running #{watch.run_task_name}.",
+      )
     end
 
     # A countdown instead of a sentence. The alarm at the end IS the message,

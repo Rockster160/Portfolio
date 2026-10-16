@@ -149,8 +149,8 @@
     .row .sm { max-width: 130px }
     @media (max-width: 600px) { .wrap { padding: 8px 0 20px } }
 
-    /* The native picker sits invisibly over its label, so a tap anywhere on
-       the label opens it on every platform without showPicker(). */
+    /* The native picker sits invisibly over its label so a tap lands on it;
+       the click handler opens it where a tap would only focus the field. */
     .meal-time { position: relative; flex: 1 }
     .meal-time button { width: 100% }
     .meal-time input {
@@ -435,6 +435,9 @@
       if (prefilledTime && elMealTime.value === prefilledTime) elMealTime.value = ""
       prefilledTime = ""
       updateMealTime()
+    })
+    elMealTime.addEventListener("click", () => {
+      try { elMealTime.showPicker() } catch { /* already open, or unsupported */ }
     })
     elMealTime.addEventListener("change", () => {
       prefilledTime = ""

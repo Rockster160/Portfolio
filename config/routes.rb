@@ -72,6 +72,7 @@ Rails.application.routes.draw do
   post  "/byte/board/shared" => "byte#set_board_shared", as: :byte_board_shared
   post  "/byte/board/members" => "byte#set_board_members", as: :byte_board_members
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
+  get   "/byte/version" => "byte#version", as: :byte_version
   get   "/byte/board/tags"  => "byte#board_tags",  as: :byte_board_tags
   # Credit buttons: custom board buttons that complete a chore crediting a chosen
   # household member. Managed from the board's settings; pressed from the board.

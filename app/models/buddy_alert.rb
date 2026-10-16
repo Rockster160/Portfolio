@@ -102,6 +102,8 @@ class BuddyAlert < ApplicationRecord
       "icon"            => icon,
       "expression"      => expression,
       "board_only"      => board_only?,
+      "dream"           => dream?,
+      "last_raised_at"  => last_raised_at&.iso8601,
     }
   end
 
@@ -109,6 +111,12 @@ class BuddyAlert < ApplicationRecord
   # chat strip. See Buddy::Alerts.hold!.
   def board_only?
     metadata["board_only"] == true
+  end
+
+  # A want or an idea rather than a condition: shown in the board pet's thought
+  # bubble, not its speech bubble. Always board-only.
+  def dream?
+    metadata["dream"] == true
   end
 
   # The groups this alert is aimed at, which a board matches against the ones it

@@ -394,8 +394,11 @@ Buddy::Tools.register(
     before   = existing&.slice(:tag, :body, :spoke_to, :follow_up_at, :duration_minutes)
 
     note = (existing || job.notes.new)
+    # A row the mail filed already holds the mail's own words. Reading it sets
+    # the tag, time and who; it never gets to rewrite what the mail said.
+    kept_body = existing.body if existing&.source == "Email" && existing.body.present?
     note.assign_attributes(
-      body:             payload[:note].presence,
+      body:             kept_body || payload[:note].presence,
       tag:              payload[:tag],
       # The mail's own clock, so the timeline reads in the order things
       # actually happened rather than in the order they were logged. Mail that

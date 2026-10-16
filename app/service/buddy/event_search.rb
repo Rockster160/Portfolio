@@ -99,7 +99,31 @@ module Buddy
     def row(event, user)
       notes = event.notes.to_s.strip
       named = notes.present? ? "#{event.name} (#{notes.truncate(40)})" : event.name.to_s
-      "##{event.id} · #{named} · #{when_phrase(event.timestamp, user)}"
+      data  = data_phrase(event)
+      [
+        "##{event.id}",
+        named,
+        when_phrase(event.timestamp, user),
+        data.presence,
+      ].compact.join(" · ")
+    end
+
+    # The numbers logged WITH an event ("Caffeine 200, Calories 10"), which is
+    # what a "how much caffeine today" sums. Only short scalar values: travel
+    # coordinates, deploy messages and shas are structure, not something
+    # anyone totals, and would bury the row.
+    DATA_VALUE_MAX = 24
+
+    def data_phrase(event)
+      data = event.data
+      return "" unless data.is_a?(Hash)
+
+      data.filter_map { |key, value|
+        next if value.is_a?(Hash) || value.is_a?(Array)
+        next if value.to_s.strip.blank? || value.to_s.length > DATA_VALUE_MAX
+
+        "#{key} #{value}"
+      }.join(", ")
     end
 
     def when_phrase(time, user)
