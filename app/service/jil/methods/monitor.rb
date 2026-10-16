@@ -70,6 +70,13 @@ class Jil::Methods::Monitor < Jil::Methods::Base
   def broadcast_to_all_users(data)
     task = @jil.broadcast_task
     users = task.present? ? task.broadcast_users.to_a : [@jil.user]
-    users.each { |user| ::MonitorChannel.broadcast_to(user, data) }
+    # Who the broadcast BELONGS to — the task's owner, or the running user behind
+    # a bare broadcast. A board decides a Whisper feed belongs on it by matching
+    # this against its OWN owner, not its viewer: a shared board keeps showing the
+    # owner's feeds to whoever opens it, while a different person's board that
+    # merely watches a "Whisper" group never picks them up. See buddy/board_scope.js.
+    owner_id = task&.user_id || @jil.user&.id
+    stamped = data.merge(owner_id: owner_id)
+    users.each { |user| ::MonitorChannel.broadcast_to(user, stamped) }
   end
 end

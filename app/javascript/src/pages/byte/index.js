@@ -83,7 +83,7 @@ import { initChoreBoard } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import { playBoardSound } from "./buddy/sound";
-import { boardTags, groupsOverlap } from "./buddy/board_scope";
+import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
 import {
   UnreadTracker,
   countsAsUnread,
@@ -3434,11 +3434,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       //   Monitor.broadcast("byte", { ...sound: "wake", groups: [...] })
       // — the board's own channel, alongside the whisper-durations one the
       // rings ride. Board only, and only when the sound's groups overlap what
-      // this board watches, so one board's sound doesn't play on all of them.
+      // this board watches AND the feed is this board's owner's, so one board's
+      // sound doesn't play on all of them, nor a housemate's on the owner's.
+      // owner_id rides the envelope (payload), beside id/channel.
       if (
         data.sound &&
         app.dataset.board === "true" &&
-        groupsOverlap(data.groups, boardTags(app))
+        groupsOverlap(data.groups, boardTags(app)) &&
+        feedOwnerMatches(payload?.owner_id, boardOwnerId(app))
       ) {
         playBoardSound(data.sound);
       }

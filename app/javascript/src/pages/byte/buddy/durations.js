@@ -21,7 +21,7 @@
 import { Monitor } from "../../dashboard/cells/monitor";
 import { Time } from "../../dashboard/cells/_time";
 import { playBoardSound } from "./sound";
-import { boardTags, groupsOverlap } from "./board_scope";
+import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./board_scope";
 
 const CIRCUMFERENCE = 2 * Math.PI * 45;
 
@@ -41,17 +41,29 @@ export function initBoardDurations({ container, app, onStatus }) {
   // Read fresh on every use, not captured once: the watched groups can change
   // live (another device repoints the board), and setTags re-runs the match.
   let tags = boardTags(app);
+  // Fixed for the life of the board: who it belongs to. A feed only shows here
+  // if it's this owner's, so a shared board stays the owner's while a housemate's
+  // own "Whisper" board never picks the owner's feeds up.
+  const boardOwner = boardOwnerId(app);
   let timers = [];
   let wasQuietActive = false;
-  // Whether the feed's most recent groups overlap what this board watches. The
-  // sound-only broadcasts carry no groups, so they ride this last-known verdict
-  // from the duration broadcasts (229), which run on every whisper event.
+  // Whether the feed's most recent groups overlap what this board watches AND it
+  // belongs to this board's owner. The sound-only broadcasts carry no groups, so
+  // they ride this last-known verdict from the duration broadcasts (229), which
+  // run on every whisper event.
   let channelMatches = false;
-  // The last broadcast's groups, timers and status, kept so a live tag change
-  // can re-decide the match and repaint without waiting for the next broadcast.
+  // The last broadcast's groups, owner, timers and status, kept so a live tag
+  // change can re-decide the match and repaint without waiting for the next one.
   let lastGroups;
+  let lastOwnerId;
   let lastTimers = [];
   let lastStatus;
+
+  // Groups overlap AND the feed is this board's owner's — the whole gate, in one
+  // place so the broadcast path and a live tag change decide it identically.
+  function decideMatch() {
+    return groupsOverlap(lastGroups, tags) && feedOwnerMatches(lastOwnerId, boardOwner);
+  }
 
   // Whisper's own state, parsed from the broadcast status string ("Awake ☀️",
   // "Napping 💤", "🛏️ Sleeping", "Gone 👋"), so the board's pet can mirror it.
@@ -177,14 +189,16 @@ export function initBoardDurations({ container, app, onStatus }) {
     received(data) {
       const monitorData = data?.data;
       if (!monitorData) return;
+      // owner_id rides the envelope (stamped server-side for every broadcast),
+      // beside the id/channel, not inside the MonitorData payload.
+      if (data.owner_id !== undefined) lastOwnerId = data.owner_id;
       // A broadcast that names its groups re-decides whether this board is one
       // the feed is aimed at. The board only shows the rings and plays the
-      // sounds when its watched groups overlap — otherwise it stays dark, even
-      // though every board on the account hears the same channel.
-      if (monitorData.groups !== undefined) {
-        lastGroups = monitorData.groups;
-        channelMatches = groupsOverlap(lastGroups, tags);
-      }
+      // sounds when its watched groups overlap AND the feed is its owner's —
+      // otherwise it stays dark, even though every board on the account hears
+      // the same channel.
+      if (monitorData.groups !== undefined) lastGroups = monitorData.groups;
+      channelMatches = decideMatch();
       if (monitorData.status !== undefined) lastStatus = monitorData.status;
       if (Array.isArray(monitorData.timers)) lastTimers = monitorData.timers;
       if (monitorData.sound && channelMatches) playBoardSound(monitorData.sound);
@@ -203,7 +217,7 @@ export function initBoardDurations({ container, app, onStatus }) {
     // repaint — no need to wait for the feed to speak again.
     setTags(next) {
       tags = Array.isArray(next) ? next.map((t) => String(t).toLowerCase()) : [];
-      if (lastGroups !== undefined) channelMatches = groupsOverlap(lastGroups, tags);
+      if (lastGroups !== undefined) channelMatches = decideMatch();
       reconcile();
     },
   };

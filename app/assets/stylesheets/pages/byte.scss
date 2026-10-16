@@ -7021,6 +7021,27 @@ $board-cell-max: 200px;
   flex-wrap: wrap;
   gap: 6px;
 }
+.byte-board-members {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-border);
+}
+.byte-board-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.byte-board-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bs-text);
+  cursor: pointer;
+
+  input { cursor: pointer; }
+}
 
 .ctr-byte .byte-app .byte-board-tag-option {
   padding: 8px 12px;
@@ -8382,4 +8403,24 @@ $board-cell-max: 200px;
   border: 1px solid var(--bs-border);
   background: transparent;
   color: var(--bs-text);
+}
+// A board a housemate shared - theirs to manage, so a plain line saying whose.
+.byte-board-card-shared-by {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--bs-muted);
+}
+// Owner-only, tucked into the opposite corner from the rename pencil.
+.byte-board-card-share {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--bs-muted);
+  cursor: pointer;
+
+  input { cursor: pointer; }
 }

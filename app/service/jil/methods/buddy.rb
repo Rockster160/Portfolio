@@ -116,11 +116,18 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # `icon` is an optional glyph (an emoji like "🍖") the BOARD shows in place of
   # the sentence, read from across the room where words can't be; the chat strip
   # keeps the words. Blank means text everywhere, as before.
-  def alert(key, message, who=nil, groups=nil, icon=nil)
+  # `expression` is a FACE the board's pet holds while the condition stands — the
+  # laundry gate's "up to no good" look. It's a pet expression name (e.g.
+  # "playful"), resolved against each pet's own art, so a theme with no such face
+  # shows neutral rather than nothing. Blank keeps the generic alarm shuffle.
+  def alert(key, message, who=nil, groups=nil, icon=nil, expression=nil)
     groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
     groups = groups.map(&:strip).compact_blank
     delivered = recipients_for(who).count { |user|
-      ::Buddy::Alerts.raise!(user: user, key: key, body: message, groups: groups, icon: icon).present?
+      ::Buddy::Alerts.raise!(
+        user: user, key: key, body: message,
+        groups: groups, icon: icon, expression: expression
+      ).present?
     }
     delivered.positive?
   end

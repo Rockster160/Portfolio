@@ -113,6 +113,26 @@ class ByteConversation < ApplicationRecord
   scope :board, -> { where("metadata->>'board' = 'true'") }
   scope :not_board, -> { where("metadata->>'board' IS DISTINCT FROM 'true'") }
 
+  # A board its owner has opened up to the household. A shared board stays its
+  # owner's — its pet, its routines, the groups it watches, the chores it shows
+  # are all the owner's — but a household member can open it and act on it, their
+  # tap crediting them while the work runs with the owner's reach. Unshared is
+  # the default, so a board is private until the owner says otherwise.
+  scope :shared, -> { where("metadata->>'shared' = 'true'") }
+
+  # Boards a user may open: their own, plus the ones a household member has
+  # shared. The owner still owns what's on it; the viewer only brings who gets
+  # the credit for a press (see ByteController#board_items_for and the press
+  # endpoints). One definition so every surface — the index, a board's wall, its
+  # live items, its manifest, a routine run — admits exactly the same set.
+  def self.accessible_boards_for(user)
+    own = active.buddy.board.where(user_id: user.id)
+    return own if user.chore_household_id.nil?
+
+    shared = active.buddy.board.shared.where(user_id: user.chore_household_user_ids)
+    where(id: own).or(where(id: shared))
+  end
+
   # THE thread. Everything nobody asked for lands here — the morning briefing, a
   # reminder firing, a watch tripping, a relay from the other person — rather
   # than in whichever one happens to have been touched most recently.
@@ -140,6 +160,10 @@ class ByteConversation < ApplicationRecord
 
   def board?
     metadata.is_a?(Hash) && metadata["board"].to_s == "true"
+  end
+
+  def shared?
+    metadata.is_a?(Hash) && metadata["shared"].to_s == "true"
   end
 
   def primary?

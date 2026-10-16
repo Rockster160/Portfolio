@@ -33,3 +33,21 @@ export function groupsOverlap(feedGroups, tags) {
   const watched = new Set(tags);
   return groups.some((g) => watched.has(g));
 }
+
+// The user who OWNS this board, which is who its feeds have to belong to — not
+// whoever is looking at it. A shared board stays its owner's, so it keeps the
+// owner's Whisper feeds when a housemate opens it; a board the housemate owns,
+// watching the same group name, never picks the owner's feeds up. [] off a board.
+export function boardOwnerId(app) {
+  const raw = app?.dataset?.boardOwnerId;
+  const n = raw == null || raw === "" ? NaN : parseInt(raw, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+// Does a feed stamped with `feedOwnerId` belong on a board owned by `boardOwner`?
+// An unstamped feed (no owner) and a board with no known owner both fall back to
+// the group match alone, so nothing that isn't about ownership changes.
+export function feedOwnerMatches(feedOwnerId, boardOwner) {
+  if (feedOwnerId == null || boardOwner == null) return true;
+  return Number(feedOwnerId) === Number(boardOwner);
+}

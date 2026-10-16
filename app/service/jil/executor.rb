@@ -19,6 +19,35 @@ class Jil::Executor
   # end
 
   def self.trigger(user, trigger, raw_trigger_data={}, auth: :trigger, auth_id: nil)
+    # A monitor refresh (an Upcoming recompute, a status-ring rebroadcast, …) is
+    # idempotent — it recomputes from current state — so inside a running chain it
+    # is deferred and deduped by payload, then flushed once at the end from the
+    # FINAL state (RefreshCoalescer). Outside a chain nothing is active and it runs
+    # inline. Everything else triggers inline as always.
+    if trigger.to_s == "monitor" && ::Jil::RefreshCoalescer.active? &&
+        !immediate_monitor?(raw_trigger_data)
+      ::Jil::RefreshCoalescer.register([user&.id, raw_trigger_data]) {
+        run_trigger(user, trigger, raw_trigger_data, auth: auth, auth_id: auth_id)
+      }
+      return []
+    end
+
+    run_trigger(user, trigger, raw_trigger_data, auth: auth, auth_id: auth_id)
+  end
+
+  # Live status feeds a person is watching change in real time — the Whisper
+  # nap/awake rings are the one that matters. They are cheap to recompute and must
+  # flip the moment the state does, so they broadcast immediately rather than wait
+  # for the end of a chain that is busy arming a run of schedules. The expensive
+  # aggregate views (Upcoming and the like) are what coalescing is for.
+  IMMEDIATE_MONITOR_CHANNELS = %w[whisper-durations].freeze
+
+  def self.immediate_monitor?(data)
+    channel = data[:channel] || data["channel"] || data[:id] || data["id"]
+    IMMEDIATE_MONITOR_CHANNELS.include?(channel.to_s)
+  end
+
+  def self.run_trigger(user, trigger, raw_trigger_data={}, auth: :trigger, auth_id: nil)
     if trigger.blank?
       lines = caller.select { |line|
         line.include?(Rails.root.to_s) || line.include?("_scripts")
@@ -186,30 +215,33 @@ class Jil::Executor
     ::TasksChannel.send_to(@user, @execution&.task&.uuid || :new, data)
   end
 
+  # Every execution is one coalescing unit (RefreshCoalescer): the OUTERMOST call
+  # owns the buffer, so a view-refresh raised anywhere in the chain this execution
+  # spawns is deduped and flushed once when it finishes, rather than recomputed on
+  # every schedule write.
   def execute_all
-    Time.use_zone(@user.timezone) {
-      @execution.task&.update(last_trigger_at: Time.current)
-      broadcast!
-      @ctx[:time_start] = Time.current
-      state = :started
-      begin
-        execute_block(@lines)
-        state = :success
-      # rescue ::Jil::ExecutionError => e
-      #   @ctx[:error] = e.message
-      #   state = :failed
-      rescue StandardError => e
-        @ctx[:error] = "[#{@ctx[:line]}] [#{e.class}] #{e.message}"
-        @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
-        state = :failed
-      ensure
-        @ctx[:state] = :complete
-        @ctx[:time_complete] = Time.current
-        store_progress(finished_at: @ctx[:time_complete], status: state)
-        @execution.task&.update(last_status: state)
-      end
-      broadcast!
-      self
+    ::Jil::RefreshCoalescer.coalesce {
+      Time.use_zone(@user.timezone) {
+        @execution.task&.update(last_trigger_at: Time.current)
+        broadcast!
+        @ctx[:time_start] = Time.current
+        state = :started
+        begin
+          execute_block(@lines)
+          state = :success
+        rescue StandardError => e
+          @ctx[:error] = "[#{@ctx[:line]}] [#{e.class}] #{e.message}"
+          @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
+          state = :failed
+        ensure
+          @ctx[:state] = :complete
+          @ctx[:time_complete] = Time.current
+          store_progress(finished_at: @ctx[:time_complete], status: state)
+          @execution.task&.update(last_status: state)
+        end
+        broadcast!
+        self
+      }
     }
   end
 

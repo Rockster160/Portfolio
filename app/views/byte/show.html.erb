@@ -98,6 +98,11 @@
      <%# value on `data-kiosk`, because everything the kiosk hides this hides %>
      <%# too - the board IS a kiosk, with a different pad. %>
      data-board="<%= @board ? "true" : "false" %>"
+     <%# Who the board belongs to. A board's Whisper feeds have to match its %>
+     <%# OWNER, not whoever is looking - that's what keeps a shared board %>
+     <%# showing the owner's feeds while a housemate's own "Whisper" board %>
+     <%# stays dark. See buddy/board_scope.js#feedOwnerMatches. %>
+     data-board-owner-id="<%= @conversation.user_id %>"
      data-board-tags="<%= Array(@board_tags).to_json %>"
      data-chore-day="<%= @board_day&.iso8601 %>"
      <%# The board's own set — chores AND triggers of its groups, each tagged %>
@@ -108,6 +113,7 @@
      data-chore-cheer-url="<%= byte_chore_cheer_path %>"
      data-board-tag-url="<%= byte_board_tag_path %>"
      data-board-tags-url="<%= byte_board_tags_path %>"
+     data-board-members-url="<%= byte_board_members_path %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>

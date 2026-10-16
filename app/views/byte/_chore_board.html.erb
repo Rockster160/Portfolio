@@ -40,6 +40,26 @@
         goes inside it. %>
     <div class="byte-board-tag-list" data-board-tag-list></div>
 
+    <%# Whose chores this board shows. Owner-only (set in #board), so a member
+        looking at a shared board doesn't get it. Default is just the owner; the
+        owner can add a housemate's chores - even ones they wouldn't normally see
+        - or drop their own, to make a board that's all about someone else. A tick
+        saves straightaway and the pad re-scopes, like the groups above. %>
+    <% if @board_owned && Array(@board_members_options).size > 1 %>
+      <div class="byte-board-members" data-board-members-section>
+        <span class="byte-board-tag-label">Whose chores</span>
+        <div class="byte-board-members-list">
+          <% @board_members_options.each do |m| %>
+            <label class="byte-board-member">
+              <input type="checkbox" data-board-member value="<%= m[:id] %>"
+                     <%= "checked" if Array(@board_member_ids).include?(m[:id]) %>>
+              <span><%= m[:name] %></span>
+            </label>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
     <%# Credit buttons for THIS group: custom circles that mark a chore done and
         credit a chosen person. Managed here, in the one control the board already
         has, rather than behind new chrome over the circles. The whole section

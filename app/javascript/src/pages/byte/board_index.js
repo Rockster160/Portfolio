@@ -30,10 +30,13 @@ function boot() {
     themes = {};
   }
 
+  const shareUrl = grid.dataset.shareUrl;
+
   const cards = new Map(); // conversation id (string) → card wrapper
   grid.querySelectorAll("[data-board-card]").forEach((card) => {
     cards.set(String(card.dataset.conversationId), card);
     wireRename(card);
+    wireShare(card);
   });
 
   // ---- live mood ------------------------------------------------------------
@@ -100,6 +103,38 @@ function boot() {
         close();
       } catch (err) {
         console.warn("[board] rename failed", err);
+      }
+    });
+  }
+
+  // ---- share with household -------------------------------------------------
+  // Owner-only, so it's only on your own cards. The checkbox reflects the stored
+  // state; a flip posts it, and reverts itself if the request doesn't land so
+  // the switch never lies about what the household can see.
+  function wireShare(card) {
+    const box = card.querySelector("[data-board-share]");
+    if (!box || !shareUrl) return;
+
+    box.addEventListener("change", async () => {
+      const shared = box.checked;
+      try {
+        const res = await fetch(shareUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-CSRF-Token": csrfToken(),
+          },
+          body: JSON.stringify({
+            conversation_id: card.dataset.conversationId,
+            shared,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch (err) {
+        box.checked = !shared;
+        console.warn("[board] share toggle failed", err);
       }
     });
   }

@@ -209,6 +209,9 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
   const itemsUrl = app.dataset.boardItemsUrl;
   const tagUrl = app.dataset.boardTagUrl;
   const tagsUrl = app.dataset.boardTagsUrl;
+  // Whose chores the board shows — owner-only, server-rendered into the picker.
+  const membersUrl = app.dataset.boardMembersUrl;
+  const memberBoxes = Array.from(root.querySelectorAll("[data-board-member]"));
 
   // The groups this board watches. Several, matched as "any": a chore, routine
   // or button in ANY of them appears here.
@@ -1371,6 +1374,23 @@ export function initChoreBoard({ root, app, conversationIdFn, sayText, onTagsCha
       if (tagToggleEl) tagToggleEl.setAttribute("aria-expanded", "false");
     });
   }
+
+  // Whose chores: save the ticked members and re-scope the pad. Like the group
+  // toggles, each change saves on its own and the board reflects it at once.
+  async function saveMembers() {
+    const conversationId = conversationIdFn ? conversationIdFn() : null;
+    if (!membersUrl || !conversationId) return;
+
+    const ids = memberBoxes.filter((b) => b.checked).map((b) => parseInt(b.value, 10));
+    try {
+      await apiCall(membersUrl, "POST", { conversation_id: conversationId, member_ids: ids });
+      items = [];
+      resync();
+    } catch (e) {
+      // Leave the board showing whatever it showed; the ticks are the request.
+    }
+  }
+  memberBoxes.forEach((box) => box.addEventListener("change", saveMembers));
 
   if (tagListEl) {
     tagListEl.addEventListener("click", (e) => {

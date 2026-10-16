@@ -49,6 +49,12 @@ export function initBoardAlert({ bubble, hero, tags }) {
       delete bubble.dataset.icon;
       bubble.removeAttribute("title");
     }
+
+    // The pet's face follows whichever alert is showing. One that names a face
+    // (the laundry gate's "up to no good" look) holds it steady; everything
+    // else gets the generic alarm shuffle. Passed every paint — including each
+    // rotation tick — so the face tracks the alert on screen.
+    startAlertFlip({ hero, expression: alert?.expression });
   }
 
   function setAlerts(next) {
@@ -67,9 +73,10 @@ export function initBoardAlert({ bubble, hero, tags }) {
     }
 
     index = 0;
+    // paint() drives the pet's face (hold a named face, else the shuffle) as
+    // well as the bubble, so there's no separate startAlertFlip here.
     paint();
     bubble.hidden = false;
-    startAlertFlip({ hero });
 
     // More than one standing at once: rotate through them so none is hidden
     // behind the first. One alert holds steady.

@@ -32,5 +32,16 @@ RSpec.describe Jil::Methods::Monitor do
 
       expect(ctx[:output]).to eq([])
     end
+
+    # Every broadcast carries who it belongs to, so a board can tell a feed meant
+    # for its owner from one that merely shares a group name with a housemate's.
+    it "stamps the broadcast with its owner" do
+      allow(MonitorChannel).to receive(:broadcast_to)
+
+      execute
+
+      expect(MonitorChannel).to have_received(:broadcast_to)
+        .with(user, hash_including(owner_id: user.id)).at_least(:once)
+    end
   end
 end

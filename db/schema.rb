@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_15_150953) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_16_013124) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1721,6 +1721,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_15_150953) do
     t.index ["anchor_occurrence_id"], name: "index_scheduled_triggers_on_anchor_occurrence_id"
     t.index ["execute_at"], name: "index_scheduled_triggers_on_pending_execute_at", where: "(jid IS NULL)"
     t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"
+    t.index ["user_id", "trigger"], name: "index_scheduled_triggers_on_not_started", where: "(started_at IS NULL)"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 

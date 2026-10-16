@@ -58,7 +58,7 @@ class ByteController < ApplicationController
   # kind of thread (metadata "board"), so it stays out of the chat drawer and
   # off the path anything self-initiated takes.
   def board_index
-    @boards = current_user.byte_conversations.active.buddy.board.ordered.to_a
+    @boards = ByteConversation.accessible_boards_for(current_user).ordered.to_a
     render :board_index
   end
 
@@ -81,7 +81,7 @@ class ByteController < ApplicationController
   # Loaded directly rather than through load_thread, because a board is kept out
   # of that list. Buddy-only, like the kiosk — there is no composer.
   def board
-    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    convo = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
     return redirect_to byte_board_path if convo.nil?
 
     @kiosk = true
@@ -90,8 +90,17 @@ class ByteController < ApplicationController
     @conversations = [convo]
     @messages      = convo.visible_messages.chronological.last(HISTORY_LIMIT)
     @board_tags = convo.chore_tags
-    @board_day = ChoreDay.current(current_user)
+    @board_day = ChoreDay.current(convo.user)
     @board_items_json = board_items_for(convo)
+    # Only the owner configures a board, so the settings the picker offers are
+    # theirs alone; a member looking at a shared board gets the pad, not the
+    # knobs. board_assignees is nil until it's been set, which the picker shows
+    # as "just me".
+    @board_owned = convo.user_id == current_user.id
+    if @board_owned
+      @board_members_options = household_member_options
+      @board_member_ids = board_assignees(convo) || [convo.user_id]
+    end
     render :show
   end
 
@@ -103,7 +112,7 @@ class ByteController < ApplicationController
   # re-skins the installed icon the next time it is added. Mirrors
   # TimersController#page_manifest.
   def board_manifest
-    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    convo = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
     theme = convo.buddy_theme.to_s
@@ -134,10 +143,10 @@ class ByteController < ApplicationController
   # client's resync hits this rather than /chores/sync, because /chores/sync
   # knows nothing about triggers and would drop them from the board every time.
   def board_items
-    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    convo = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
-    @board_day = ChoreDay.current(current_user)
+    @board_day = ChoreDay.current(convo.user)
     render json: { items: board_items_for(convo) }
   end
 
@@ -238,12 +247,15 @@ class ByteController < ApplicationController
   # its own feedback (the rings, a monitor relabel, a sound) through the board's
   # live feeds, not through this response.
   def press_board_task
-    button = current_user.board_task_buttons.find_by(id: params[:id])
+    button = board_task_buttons_scope.find_by(id: params[:id])
     return head(:not_found) if button.nil?
 
     task = button.task
     return head(:unprocessable_entity) if task.nil?
 
+    # Runs as the task's own owner (a shared button is a household member's, and
+    # it keeps that account's reach), while auth_id records the person who
+    # actually tapped — the same split the whole board uses.
     ::Jil::Executor.async_call(
       task.user, task.code, { "execute" => true },
       task: task, auth: :run, auth_id: current_user.id
@@ -276,6 +288,36 @@ class ByteController < ApplicationController
     # rings, sounds and alerts live instead of drifting until a reload.
     broadcast_convo_change(convo, :updated)
     render json: { ok: true, chore_tags: convo.chore_tags }
+  end
+
+  # POST /byte/board/shared — open a board to the household, or close it again.
+  # Scoped to the viewer's OWN boards, so only the owner manages sharing: a
+  # member looking at a shared board carries no control to un-share it. Broadcasts
+  # like the tag change so an open index redraws the badge live.
+  def set_board_shared
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    shared = ActiveModel::Type::Boolean.new.cast(params[:shared])
+    convo.metadata = convo.metadata.to_h.merge("shared" => shared)
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, shared: convo.shared? }
+  end
+
+  # POST /byte/board/members — which household members' chores this board shows.
+  # Owner-only (own boards), ids confined to the household, broadcast like the
+  # tag change so the board re-scopes its chores live. An empty set is valid: the
+  # board then shows only the general household chores.
+  def set_board_members
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    wanted = Array(params[:member_ids]).map(&:to_i).uniq & current_user.chore_household_user_ids
+    convo.metadata = convo.metadata.to_h.merge("board_members" => wanted)
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, member_ids: wanted }
   end
 
   # POST /byte/chore_cheer — the small encouraging line over a chore just
@@ -1012,28 +1054,91 @@ class ByteController < ApplicationController
   # No groups loads NOTHING rather than everything. A board nobody has
   # pointed at a group yet is empty and says so; filling it with every chore in
   # the house would look deliberate and be wrong.
+  # The board's content is the OWNER's, shown to whoever opens it. On a board you
+  # own that's just you; on a household member's shared board it's them — their
+  # routines, their task buttons, the chores their board is set to show. Who's
+  # looking (current_user) decides only who gets credit for a press, and that's
+  # settled in the press endpoints, not here.
   def board_items_for(convo)
     tags = convo&.chore_tags || []
     return [] if tags.empty?
 
-    day = @board_day || ChoreDay.current(current_user)
+    owner = convo.user
+    day = @board_day || ChoreDay.current(owner)
     # "All" is every chore, whatever it is tagged; any other groups narrow by tag.
     wants_all = tags.any? { |t| t.casecmp?(BOARD_ALL_TAG) }
-    chore_scope = wants_all ? current_user.accessible_chores : current_user.accessible_chores.tagged(tags)
-    chores = chore_scope.order(Arel.sql("sort_order ASC NULLS LAST, id ASC")).to_a
-    ctx = ChoreSerializerContext.for_user(current_user, day: day)
-    chore_items = board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
+    chore_items = board_chore_items(convo, owner, tags, wants_all, day)
 
     # Routines and buttons come from the NAMED groups only — "All" is a chores-only
     # wildcard, so an all-chores board doesn't also sweep in every routine.
     named = tags.reject { |t| t.casecmp?(BOARD_ALL_TAG) }
-    trigger_items = named.any? ? current_user.buddy_routines.for_board(named).map(&:board_item) : []
-    credit_items  = named.any? ? board_credit_buttons.for_board(named).map(&:board_item) : []
+    trigger_items = named.any? ? owner.buddy_routines.for_board(named).map(&:board_item) : []
+    credit_items  = named.any? ? board_credit_buttons_for(owner).for_board(named).map(&:board_item) : []
     # "Run this Jil task" buttons (the Whisper fed/quiet/nap/gone controls). Own
     # kind, run on a press as the task's owner — see BoardTaskButton.
-    task_items = named.any? ? current_user.board_task_buttons.for_board(named).map(&:board_item) : []
+    task_items = named.any? ? owner.board_task_buttons.for_board(named).map(&:board_item) : []
 
     trigger_items + credit_items + task_items + chore_items
+  end
+
+  BOARD_CHORE_ORDER = Arel.sql("sort_order ASC NULLS LAST, id ASC").freeze
+
+  # The chores a board shows, serialized and ordered.
+  #
+  # By default a board shows its OWNER's chores: the household chores they can
+  # see, their own assigned ones (the long-standing behaviour, untouched). A
+  # board can instead be set to show chosen members' chores — "the general
+  # household chores plus the ones assigned to Chelsea, not mine". That reaches
+  # past the owner's normal visibility (a member's personal chore the owner would
+  # never see on their own), so it's deliberate, set per board, and serialized AS
+  # each member — the Today-visible gate keys on the assignee, so a chore has to
+  # be serialized by the person it's assigned to for it to count as theirs.
+  def board_chore_items(convo, owner, tags, wants_all, day)
+    assignees = board_assignees(convo)
+    return board_owner_chore_items(owner, tags, wants_all, day) if assignees.nil?
+
+    base = Chore.where(chore_household_id: owner.chore_household_id).active
+    base = base.tagged(tags) unless wants_all
+
+    # General household chores (assigned to nobody) show whoever the board is
+    # set to; serialize them once, as the owner.
+    unassigned = base.where(assigned_to_user_id: nil).order(BOARD_CHORE_ORDER).to_a
+    items = ChoreSerializerContext.for_user(owner, day: day)
+      .serialize_all(unassigned).map { |c| c.merge(kind: :chore) }
+
+    # Each chosen member's assigned chores, serialized as that member so the
+    # assignee gate keeps them rather than dropping them as "someone else's".
+    members = User.where(id: assignees).index_by(&:id)
+    assignees.each do |mid|
+      member = members[mid]
+      next if member.nil?
+
+      chores = base.where(assigned_to_user_id: mid).order(BOARD_CHORE_ORDER).to_a
+      ctx = ChoreSerializerContext.for_user(member, day: day)
+      items += ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
+    end
+
+    board_chores_ordered(items)
+  end
+
+  # The default chore set: the owner's accessible chores, serialized as the owner.
+  def board_owner_chore_items(owner, tags, wants_all, day)
+    scope = wants_all ? owner.accessible_chores : owner.accessible_chores.tagged(tags)
+    chores = scope.order(BOARD_CHORE_ORDER).to_a
+    ctx = ChoreSerializerContext.for_user(owner, day: day)
+    board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
+  end
+
+  # Which members' assigned chores a board shows, or nil when it's never been set
+  # (the default-to-owner path). An explicit empty list is a real answer — show
+  # only the general household chores — so absent and empty aren't the same. Ids
+  # are confined to the owner's household, so a stale or hand-written one can't
+  # reach another house's chores.
+  def board_assignees(convo)
+    raw = convo.metadata.is_a?(Hash) ? convo.metadata["board_members"] : nil
+    return nil if raw.nil?
+
+    (Array(raw).map(&:to_i).uniq & convo.user.chore_household_user_ids)
   end
 
   # Chores on a board read in the Today page's order, so a chore sits in the same
@@ -1075,9 +1180,27 @@ class ByteController < ApplicationController
   # board shows the same buttons to everyone in the house. Empty when the viewer
   # has no household rather than raising, so a board still loads.
   def board_credit_buttons
-    return ChoreCreditButton.none if current_user.chore_household_id.nil?
+    board_credit_buttons_for(current_user)
+  end
 
-    ChoreCreditButton.where(chore_household_id: current_user.chore_household_id)
+  # Credit buttons belong to a household, not a person, so a board shows the same
+  # ones to everyone in the house. Scoped by the board OWNER's household when
+  # building a board's items (a shared board is the owner's), by the viewer's
+  # when managing buttons — the same household in both cases, since a board is
+  # only ever shared within one.
+  def board_credit_buttons_for(user)
+    return ChoreCreditButton.none if user.chore_household_id.nil?
+
+    ChoreCreditButton.where(chore_household_id: user.chore_household_id)
+  end
+
+  # Task buttons a press may run: your own, plus a household member's, so a
+  # shared board's buttons work. The run is still as the task's owner; the
+  # board's own view gate is what keeps a stranger from ever reaching here.
+  def board_task_buttons_scope
+    return current_user.board_task_buttons if current_user.chore_household_id.nil?
+
+    BoardTaskButton.where(user_id: current_user.chore_household_user_ids)
   end
 
   def credit_button_params

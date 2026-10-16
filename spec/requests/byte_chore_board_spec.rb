@@ -572,4 +572,149 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).to include("data-conversation-id=\"#{thread.id}\"")
     end
   end
+
+  # Shared boards: a board its owner has opened to the household. A member can
+  # open it and act on it - their tap crediting them, the work running with the
+  # owner's reach - but it stays the owner's to manage, and an unshared board is
+  # nobody else's business.
+  describe "sharing with the household" do
+    let!(:housemate) { create(:user, chore_household_id: user.chore_household_id) }
+
+    # Byte access is a separate, id-based gate (me/Chelsea/Eve) from household
+    # membership; the people who actually share boards all have it. Granting it
+    # here keeps these examples about sharing rather than that gate.
+    before { allow_any_instance_of(User).to receive(:byte_access?).and_return(true) }
+
+    # The file-level `before` already signed the owner in, and you can't log in
+    # over a live session (unauthorize_user blocks it), so drop it first.
+    def sign_in_as(account)
+      delete logout_path
+      account.update!(password: "password123", password_confirmation: "password123")
+      host! "byte.example.com"
+      post login_path, params: { user: { username: account.username, password: "password123" } }
+    end
+
+    it "lets a housemate open a shared board" do
+      thread.update!(metadata: thread.metadata.merge("shared" => true))
+      sign_in_as(housemate)
+
+      get "/board/#{thread.id}"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('data-board="true"')
+    end
+
+    it "keeps a housemate out of an unshared board" do
+      sign_in_as(housemate)
+
+      get "/board/#{thread.id}"
+
+      expect(response).to redirect_to(byte_board_path)
+    end
+
+    it "lists a shared board on a housemate's index, not an unshared one" do
+      shared = user.byte_conversations.create!(
+        mode: :buddy, name: "Kitchen", last_message_at: Time.current,
+        metadata: { "board" => true, "shared" => true },
+      )
+      sign_in_as(housemate)
+
+      get byte_board_path
+
+      expect(response.body).to include("data-conversation-id=\"#{shared.id}\"")
+      expect(response.body).not_to include("data-conversation-id=\"#{thread.id}\"")
+    end
+
+    it "shows the OWNER's content on a shared board, whoever opens it" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"], "shared" => true))
+      task = Task.create!(user: user, name: "Fed", listener: "monitor::x", code: "// noop", enabled: true)
+      BoardTaskButton.create!(user: user, task: task, label: "Fed", tags: ["Whisper"])
+      sign_in_as(housemate)
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.find { |i| i["kind"] == "task" }&.dig("name")).to eq("Fed")
+    end
+
+    it "runs a shared board's task button as the owner, crediting the presser" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"], "shared" => true))
+      task = Task.create!(user: user, name: "Fed", listener: "monitor::x", code: "// noop", enabled: true)
+      button = BoardTaskButton.create!(user: user, task: task, label: "Fed", tags: ["Whisper"])
+      sign_in_as(housemate)
+      allow(Jil::Executor).to receive(:async_call)
+
+      post "/byte/board/tasks/#{button.id}/press"
+
+      expect(response).to have_http_status(:ok)
+      expect(Jil::Executor).to have_received(:async_call).with(
+        user, task.code, { "execute" => true },
+        hash_including(task: task, auth: :run, auth_id: housemate.id)
+      )
+    end
+
+    it "lets only the owner toggle sharing" do
+      post "/byte/board/shared", params: { conversation_id: thread.id, shared: true }
+      expect(response).to have_http_status(:ok)
+      expect(thread.reload.shared?).to be(true)
+
+      sign_in_as(housemate)
+      post "/byte/board/shared", params: { conversation_id: thread.id, shared: false }
+      expect(response).to have_http_status(:not_found)
+      expect(thread.reload.shared?).to be(true)
+    end
+  end
+
+  # Whose chores a board shows. The default is the owner's own; a board can be
+  # set to show chosen members' chores instead — "the general household chores
+  # and the ones assigned to Chelsea, not mine" — reaching past what the owner
+  # would normally see.
+  describe "whose chores a board shows" do
+    let!(:housemate) { create(:user, chore_household_id: user.chore_household_id) }
+
+    before { thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Chores"])) }
+
+    def chore_for(assignee, name, **attrs)
+      create(
+        :chore, created_by_user: user, chore_household_id: user.chore_household_id,
+        name: name, tags: ["Chores"], marked_due_at: Time.current,
+        assigned_to_user: assignee, **attrs
+      )
+    end
+
+    def board_chore_names
+      get "/board/#{thread.id}"
+      board_items.select { |i| i["kind"] == "chore" }.pluck("name")
+    end
+
+    it "defaults to the owner's own, not a housemate's" do
+      chore_for(user, "Mine")
+      chore_for(housemate, "Theirs", sharing_mode: :personal)
+
+      names = board_chore_names
+      expect(names).to include("Mine")
+      expect(names).not_to include("Theirs")
+    end
+
+    it "can show a housemate's chores and the general ones, not your own" do
+      thread.update!(metadata: thread.metadata.merge("board_members" => [housemate.id]))
+      chore_for(user, "Mine")
+      chore_for(housemate, "Theirs", sharing_mode: :personal)
+      create(
+        :chore, created_by_user: user, chore_household_id: user.chore_household_id,
+        name: "General", tags: ["Chores"], marked_due_at: Time.current
+      )
+
+      names = board_chore_names
+      expect(names).to include("Theirs") # the housemate's, though it's personal
+      expect(names).to include("General") # unassigned, shown whoever the board is for
+      expect(names).not_to include("Mine") # the owner's own, dropped
+    end
+
+    it "offers the owner a member picker, confined to the household" do
+      get "/board/#{thread.id}"
+
+      expect(response.body).to include("data-board-members-section")
+      expect(response.body).to include("value=\"#{housemate.id}\"")
+    end
+  end
 end

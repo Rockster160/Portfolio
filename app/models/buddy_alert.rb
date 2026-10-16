@@ -100,6 +100,7 @@ class BuddyAlert < ApplicationRecord
       "message_id"      => byte_message_id,
       "groups"          => groups,
       "icon"            => icon,
+      "expression"      => expression,
     }
   end
 
@@ -115,6 +116,15 @@ class BuddyAlert < ApplicationRecord
   # strip ignores it and keeps the words; it is the wall that wants the icon.
   def icon
     metadata["icon"].to_s.strip.presence
+  end
+
+  # The face the board's pet HOLDS while this condition stands — the laundry
+  # gate's "up to no good" look, say. An expression name resolved against the
+  # pet's own art (see the hero's faceUrl); a theme with no such face falls back
+  # to neutral rather than going blank. Blank means the generic alarm shuffle,
+  # as before — only an alert that names a mood takes the face over.
+  def expression
+    metadata["expression"].to_s.strip.presence
   end
 
   # When it last buzzed. Held in metadata rather than a column of its own: it is

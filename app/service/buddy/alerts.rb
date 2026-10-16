@@ -34,11 +34,12 @@ module Buddy
     # Open one, or tell an open one that it happened again. Returns the
     # BuddyAlert, or nil when there was nothing to say it to - no key, no words,
     # or nobody with a companion thread to put it in.
-    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil)
-      key    = key.to_s.strip
-      body   = body.to_s.strip
-      groups = Array(groups).map { |g| g.to_s.strip }.compact_blank
-      icon   = icon.to_s.strip.presence
+    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil)
+      key        = key.to_s.strip
+      body       = body.to_s.strip
+      groups     = Array(groups).map { |g| g.to_s.strip }.compact_blank
+      icon       = icon.to_s.strip.presence
+      expression = expression.to_s.strip.presence
       return nil if key.empty? || body.empty?
 
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
@@ -46,9 +47,9 @@ module Buddy
 
       open = ::BuddyAlert.open_for(user, key)
       if open
-        seen_again!(open, body, groups, icon)
+        seen_again!(open, body, groups, icon, expression)
       else
-        open!(user, conversation, key, body, groups, icon)
+        open!(user, conversation, key, body, groups, icon, expression)
       end
     end
 
@@ -118,11 +119,12 @@ module Buddy
       })
     end
 
-    def open!(user, conversation, key, body, groups = [], icon = nil)
+    def open!(user, conversation, key, body, groups = [], icon = nil, expression = nil)
       now   = Time.current
       meta  = {}
-      meta["groups"] = groups if groups.present?
-      meta["icon"]   = icon if icon.present?
+      meta["groups"]     = groups if groups.present?
+      meta["icon"]       = icon if icon.present?
+      meta["expression"] = expression if expression.present?
       alert = ::BuddyAlert.create!(
         user:              user,
         byte_conversation: conversation,
@@ -150,7 +152,7 @@ module Buddy
     # - a caller that puts a reading in the sentence ("garage open 40 minutes")
     # means the new one - and the count and the clock are what make the bubble
     # say that this is not simply the same moment still on screen.
-    def seen_again!(alert, body, groups = [], icon = nil)
+    def seen_again!(alert, body, groups = [], icon = nil, expression = nil)
       now   = Time.current
       buzz  = alert.push_again?
       attrs = { body: body, raised_count: alert.raised_count + 1, last_raised_at: now }
@@ -160,6 +162,7 @@ module Buddy
       # them current so the board it belongs to never drifts from the raiser.
       meta  = meta.merge("groups" => groups) if groups.present?
       meta  = meta.merge("icon" => icon) if icon.present?
+      meta  = meta.merge("expression" => expression) if expression.present?
       attrs[:metadata] = meta unless meta.equal?(alert.metadata)
       alert.update!(attrs)
 

@@ -73,6 +73,20 @@ RSpec.describe Buddy::Alerts do
       described_class.raise!(user: user, key: "whisper-hungry", body: "Still hungry", icon: "🥩")
       expect(alert.reload.icon).to eq("🥩")
     end
+
+    # The board's pet holds this face while the condition stands (the laundry
+    # gate's "up to no good" look); a re-raise can set or change it.
+    it "carries an optional face through to the board wire" do
+      alert = described_class.raise!(
+        user: user, key: "laundry-gate", body: "Laundry gate is open!", expression: "playful",
+      )
+
+      expect(alert.expression).to eq("playful")
+      expect(alert.strip_wire["expression"]).to eq("playful")
+
+      described_class.raise!(user: user, key: "laundry-gate", body: "Still open", expression: "grin")
+      expect(alert.reload.expression).to eq("grin")
+    end
   end
 
   describe "the same condition, seen again" do

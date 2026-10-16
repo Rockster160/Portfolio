@@ -132,13 +132,17 @@ module Buddy
     # Tap on the Quick grid. Runs deterministically with no model turn - see
     # Buddy::Routines.run! - so it costs nothing and does the same thing twice.
     def run
-      return render(json: { error: "that routine is turned off" }, status: :unprocessable_entity) unless routine.enabled?
+      run_routine = runnable_routine
+      return render(json: { error: "routine not found" }, status: :not_found) if run_routine.nil?
+      unless run_routine.enabled?
+        return render(json: { error: "that routine is turned off" }, status: :unprocessable_entity)
+      end
 
-      conversation = current_user.byte_conversations.buddy.active.find_by(id: params[:conversation_id])
+      conversation = runnable_conversation
       return render(json: { error: "conversation not found" }, status: :not_found) if conversation.nil?
 
-      Buddy::Routines.run!(routine, conversation: conversation)
-      render json: routine.serialize_for_client
+      Buddy::Routines.run!(run_routine, conversation: conversation)
+      render json: run_routine.serialize_for_client
     end
 
     # Whole-grid reorder in one request. The client sends the pinned ids in the
@@ -175,6 +179,26 @@ module Buddy
 
     def routine
       @routine ||= current_user.buddy_routines.find(params[:id])
+    end
+
+    # The routine a press may run: your own, or a household member's reached from
+    # their shared board. Buddy::Routines.run! fires routine.user's markers, so a
+    # shared trigger keeps the OWNER's reach by construction, with no acting-user
+    # to thread. Kept apart from `routine` above, which stays owner-only — destroy
+    # and update must never widen to the household.
+    def runnable_routine
+      own = current_user.buddy_routines.find_by(id: params[:id])
+      return own if own
+      return nil if current_user.chore_household_id.nil?
+
+      BuddyRoutine.where(user_id: current_user.chore_household_user_ids).find_by(id: params[:id])
+    end
+
+    # The board or thread the run happens on: your own, or a household member's
+    # shared board. It only sets which pet the cheer lands on.
+    def runnable_conversation
+      current_user.byte_conversations.buddy.active.find_by(id: params[:conversation_id]) ||
+        ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
     end
 
     def firable_tasks
