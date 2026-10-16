@@ -132,6 +132,23 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     delivered.positive?
   end
 
+  # The same condition as `alert`, shown ONLY on the boards `groups` aims it at:
+  # the pet's bubble and the face it holds, with no message in the thread, no
+  # push and nothing in the chat strip. Re-asserting it while it stands changes
+  # nothing, so a task can call it on every pass. Cleared with `resolve`. Use a
+  # key of its own - one an `alert` also uses stays that alert.
+  def boardAlert(key, message, who=nil, groups=nil, icon=nil, expression=nil)
+    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
+    groups = groups.map(&:strip).compact_blank
+    held = recipients_for(who).count { |user|
+      ::Buddy::Alerts.hold!(
+        user: user, key: key, body: message,
+        groups: groups, icon: icon, expression: expression
+      ).present?
+    }
+    held.positive?
+  end
+
   # It's been dealt with. The message `alert` left in the thread is rewritten
   # where it stands, so the thing that was outstanding now reads as handled -
   # no second message, and nothing left saying a condition that has passed.

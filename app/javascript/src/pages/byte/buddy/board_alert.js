@@ -77,7 +77,15 @@ export function initBoardAlert({ bubble, hero, tags }) {
     // Only the alerts aimed at a group this board watches. An alert with no
     // groups belongs to no board — it still stands in the chat strip, just not
     // out here — so an unrelated condition never lights up the Whisper wall.
-    alerts = lastAlerts.filter((a) => a && a.body && groupsOverlap(a.groups, watched));
+    // The same words twice (a board-only alert and a loud one saying the same
+    // thing) are one bubble, not a rotation between two identical ones.
+    const seen = new Set();
+    alerts = lastAlerts.filter((a) => {
+      if (!a || !a.body || !groupsOverlap(a.groups, watched)) return false;
+      if (seen.has(a.body)) return false;
+      seen.add(a.body);
+      return true;
+    });
 
     if (alerts.length === 0) {
       stopCycle();

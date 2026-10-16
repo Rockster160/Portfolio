@@ -292,4 +292,51 @@ RSpec.describe Buddy::Alerts do
     expect { described_class.resolve!(user: user, key: "gate") }.not_to raise_error
     expect(BuddyAlert.for_key("gate").first).to be_status_resolved
   end
+
+  # A state a wall shows without anyone being told: the bubble and face on the
+  # board, nothing in the thread, no push, not in the chat strip.
+  describe "holding one on the board only" do
+    def hold!(**opts)
+      described_class.hold!(
+        user: user, key: "gate-board", body: "The gate is open",
+        groups: ["Whisper"], expression: "pounce", **opts,
+      )
+    end
+
+    it "posts nothing and pushes nothing" do
+      alert = hold!
+
+      expect(alert).to be_status_open
+      expect(alert.byte_message).to be_nil
+      expect(alert.board_only?).to be(true)
+      expect(alert.strip_wire).to include("board_only" => true, "expression" => "pounce")
+      expect(WebPushNotifications).not_to have_received(:send_to_byte)
+      expect(conversation.byte_messages.count).to eq(0)
+    end
+
+    it "changes nothing when held again while it stands" do
+      first = hold!
+      sent = frames
+      again = hold!
+
+      expect(again.id).to eq(first.id)
+      expect(again.reload.raised_count).to eq(1)
+      expect(sent).to be_empty
+    end
+
+    it "is cleared by resolve, and opens fresh after" do
+      first = hold!
+      described_class.resolve!(user: user, key: "gate-board")
+
+      expect(first.reload).to be_status_resolved
+      expect(hold!.id).not_to eq(first.id)
+    end
+
+    it "leaves a loud alert under the same key alone" do
+      loud = described_class.raise!(user: user, key: "gate-board", body: "The gate is open")
+
+      expect(hold!.id).to eq(loud.id)
+      expect(loud.reload.board_only?).to be(false)
+    end
+  end
 end

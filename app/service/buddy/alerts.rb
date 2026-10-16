@@ -53,6 +53,57 @@ module Buddy
       end
     end
 
+    # A condition shown ONLY on the boards its groups aim it at: the pet's bubble
+    # and the face it holds. No message in the thread, no push, nothing in the
+    # chat strip - for a state a wall should show without anyone being told.
+    # Holding it again while it stands is the state being re-asserted, not a
+    # repeat, so it changes nothing unless the words, groups, icon or face did.
+    # Cleared with `resolve!` like any other.
+    #
+    # Its key must not be one a `raise!` uses: a loud alert already standing
+    # under the key is left exactly as it is.
+    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil)
+      key  = key.to_s.strip
+      body = body.to_s.strip
+      return nil if key.empty? || body.empty?
+
+      meta = { "board_only" => true }
+      groups = Array(groups).map { |g| g.to_s.strip }.compact_blank
+      meta["groups"]     = groups if groups.present?
+      meta["icon"]       = icon.to_s.strip if icon.present?
+      meta["expression"] = expression.to_s.strip if expression.present?
+
+      open = ::BuddyAlert.open_for(user, key)
+      return open if open && !open.board_only?
+
+      if open
+        merged = open.metadata.merge(meta)
+        return open if open.body == body && merged == open.metadata
+
+        open.update!(body: body, metadata: merged)
+        broadcast_outstanding!(user)
+        return open
+      end
+
+      conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
+      return nil if conversation.nil?
+
+      now   = Time.current
+      alert = ::BuddyAlert.create!(
+        user:              user,
+        byte_conversation: conversation,
+        key:               key,
+        body:              body,
+        status:            :open,
+        raised_at:         now,
+        last_raised_at:    now,
+        raised_count:      1,
+        metadata:          meta,
+      )
+      broadcast_outstanding!(user)
+      alert
+    end
+
     # It's been dealt with. `body` is what the bubble should say now; without
     # one it keeps its own words and simply stops reading as outstanding.
     #

@@ -101,7 +101,14 @@ class BuddyAlert < ApplicationRecord
       "groups"          => groups,
       "icon"            => icon,
       "expression"      => expression,
+      "board_only"      => board_only?,
     }
+  end
+
+  # Shown on its boards only - no bubble in the thread, no push, no row in the
+  # chat strip. See Buddy::Alerts.hold!.
+  def board_only?
+    metadata["board_only"] == true
   end
 
   # The groups this alert is aimed at, which a board matches against the ones it

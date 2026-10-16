@@ -134,7 +134,8 @@ export function initAlertStrip({ root, onJump }) {
   }
 
   function setAlerts(next) {
-    alerts = Array.isArray(next) ? next : [];
+    // A board-only alert stands on its boards and nowhere else.
+    alerts = Array.isArray(next) ? next.filter((a) => a && !a.board_only) : [];
     render();
   }
 
