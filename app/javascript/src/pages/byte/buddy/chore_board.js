@@ -17,6 +17,9 @@
 // an ordinary ChoreCompletion through the ordinary controller; the encouraging
 // line is a second, separate call that is allowed to fail.
 
+import { Monitor } from "../../dashboard/cells/monitor";
+import { boardOwnerId, feedOwnerMatches } from "./board_scope";
+
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
 // `skip` lets the OCCURRENCE go, which settles it until the schedule brings it
@@ -151,6 +154,16 @@ function formatMultiplier(n) {
 // The icon, in whatever shape it arrived. Mirrors the four kinds the chore
 // serializer resolves (`icon_kind`) rather than guessing from the string, so a
 // glyph that happens to look like a path can't be read as one.
+// How a glyph string draws, the same rule as the server's Buddy::BoardIcon.
+function iconKindFor(icon) {
+  const v = String(icon || "").trim();
+  if (!v) return "empty";
+  if (/^(data:image\/|https?:\/\/)/.test(v)) return "image";
+  if (v.startsWith("<svg")) return "svg";
+  if (v.startsWith("ti-")) return "ti_icon";
+  return "emoji";
+}
+
 export function iconNode(chore) {
   // The BOX is what the container query measures, so the glyph always goes
   // inside one even when it is a single character - that is what makes an
@@ -263,6 +276,57 @@ export function initChoreBoard({
     items = [];
   }
 
+  // ---- task buttons that follow their tile ----
+  //
+  // A task button whose Jil task answers on a monitor tile wears what that tile
+  // says it is right now - the PWA's Gone button reads 🏠 Home while she's out -
+  // so a toggle shows what pressing it will do. The task broadcasts `icon` and
+  // `label` alongside the PWA's own fields; a tile that sends neither leaves the
+  // button as it was configured. Only the board owner's broadcasts count.
+  const tileFaces = new Map();
+  const tileMonitors = new Map();
+  const ownerId = boardOwnerId(app);
+
+  function followTiles() {
+    items.forEach((item) => {
+      const channel = isTask(item) ? item.monitor : null;
+      if (!channel || tileMonitors.has(channel)) return;
+
+      tileMonitors.set(channel, Monitor.subscribe(channel, {
+        connected() {
+          this.refresh();
+        },
+        received(data) {
+          const face = data?.data;
+          if (!face || (face.icon == null && face.label == null)) return;
+          if (!feedOwnerMatches(data.owner_id, ownerId)) return;
+
+          tileFaces.set(channel, { icon: face.icon, label: face.label });
+          paint();
+        },
+      }));
+    });
+  }
+
+  // Repaints only when the face changed, so a broadcast that says the same
+  // thing again leaves the disc alone.
+  function paintTileFace(cell, item) {
+    const face = item.monitor ? tileFaces.get(item.monitor) : null;
+    const icon = face?.icon || item.icon;
+    const label = face?.label || item.short_name;
+    const key = `${icon}|${label}`;
+    if (cell.dataset.face === key) return;
+
+    const kind = face?.icon ? iconKindFor(face.icon) : item.icon_kind;
+    cell.dataset.face = key;
+    cell.querySelector(".byte-board-icon")?.replaceWith(
+      iconNode({ icon, icon_kind: kind, short_name: label }),
+    );
+    const title = cell.querySelector(".byte-board-title");
+    if (title) title.textContent = label;
+    cell.querySelector(".byte-board-circle")?.setAttribute("aria-label", `Start: ${label}`);
+  }
+
   // ---- painting ----
 
   function paintEmpty() {
@@ -299,12 +363,13 @@ export function initChoreBoard({
     // sending/failed dot honest.
     if (isAction(chore)) {
       markPending(cell, chore.id);
+      if (isTask(chore)) paintTileFace(cell, chore);
       return;
     }
 
     // Who the done disc belongs to. Same `--actor-color` the chores page keys
     // its finished state off, carried here on data-actor so a chore I finished
-    // reads in my colour rather than the board's flat default green. Anonymous
+    // reads in my colour rather than the board's flat default grey. Anonymous
     // completions stay colourless (the grey the chores page uses); an unfinished
     // or never-completed chore clears both so it falls back to the default.
     if (chore.last_actor_anonymous) {
@@ -569,6 +634,7 @@ export function initChoreBoard({
       });
     }
     paintEmpty();
+    followTiles();
     onItems?.(items);
   }
 
@@ -724,9 +790,12 @@ export function initChoreBoard({
 
     return press(id, {
       // One more of today's target, capped - the ring fills tap by tap on a
-      // chore asked for several times a day.
+      // chore asked for several times a day. Nobody's colour until the server
+      // says who it was: on a board that asks, it isn't whoever's signed in.
       change: (c) => ({
         progress_count: Math.min(c.progress_count + 1, c.target_count),
+        last_actor_username: null,
+        last_actor_anonymous: false,
       }),
       send: async () => {
         // The board goes along so the server can tell a press on a board that
@@ -1115,7 +1184,7 @@ export function initChoreBoard({
     // A new button defaults to the groups the board is watching — the common
     // case is a button for the board you're on.
     if (bbTagsEl) bbTagsEl.value = tags.join(", ");
-    if (bbColorEl) bbColorEl.value = "#16A34A";
+    if (bbColorEl) bbColorEl.value = "#94A3B8";
     if (bbChoreSearchEl) bbChoreSearchEl.value = "";
     if (bbChoreIdEl) bbChoreIdEl.value = "";
     hideChoreResults();
@@ -1135,7 +1204,7 @@ export function initChoreBoard({
     if (bbIdEl) bbIdEl.value = String(button.id);
     if (bbLabelEl) bbLabelEl.value = button.label || "";
     if (bbTagsEl) bbTagsEl.value = (button.tags || []).join(", ");
-    if (bbColorEl) bbColorEl.value = button.color || "#16A34A";
+    if (bbColorEl) bbColorEl.value = button.color || "#94A3B8";
     if (bbChoreSearchEl) bbChoreSearchEl.value = button.chore_name || "";
     if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
     hideChoreResults();

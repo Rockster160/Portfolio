@@ -1151,10 +1151,10 @@ class ByteController < ApplicationController
     # wildcard, so an all-chores board doesn't also sweep in every routine.
     named = tags.reject { |t| t.casecmp?(BOARD_ALL_TAG) }
     trigger_items = named.any? ? owner.buddy_routines.for_board(named).map(&:board_item) : []
-    credit_items  = named.any? ? board_credit_buttons_for(owner).for_board(named).map(&:board_item) : []
+    credit_items  = named.any? ? board_credit_buttons_for(owner).for_board(named).includes(:chore).map(&:board_item) : []
     # "Run this Jil task" buttons (the Whisper fed/quiet/nap/gone controls). Own
     # kind, run on a press as the task's owner — see BoardTaskButton.
-    task_items = named.any? ? owner.board_task_buttons.for_board(named).map(&:board_item) : []
+    task_items = named.any? ? owner.board_task_buttons.for_board(named).includes(:task).map(&:board_item) : []
 
     trigger_items + credit_items + task_items + chore_items
   end

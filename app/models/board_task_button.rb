@@ -45,7 +45,10 @@ class BoardTaskButton < ApplicationRecord
 
   # How the board draws it: a stateless "tap to run" circle, with its own icon
   # and colour. `short_name` mirrors the field a chore cell reads for its title
-  # and first-letter fallback, so the client paints it the same way.
+  # and first-letter fallback, so the client paints it the same way. `monitor`
+  # is the tile its task answers on, when it has one: the board listens there
+  # and wears the `icon` and `label` the task says it has right now (a toggle
+  # showing what pressing it will do), the way the PWA's tile does.
   def board_item
     {
       kind:       :task,
@@ -55,6 +58,12 @@ class BoardTaskButton < ApplicationRecord
       color:      color.presence,
       icon:       icon.presence,
       icon_kind:  Buddy::BoardIcon.kind_for(icon),
+      monitor:    monitor_channel,
     }
+  end
+
+  # `monitor::whisper-btn-home-toggle` answers on `whisper-btn-home-toggle`.
+  def monitor_channel
+    task&.listener.to_s[/\Amonitor::?([\w-]+)\z/, 1]
   end
 end

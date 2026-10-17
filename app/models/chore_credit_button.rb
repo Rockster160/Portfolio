@@ -48,10 +48,10 @@ class ChoreCreditButton < ApplicationRecord
   # A board's buttons: those in ANY of its groups, in the order they were added.
   scope :for_board, ->(tags) { tagged(tags).order(Arel.sql("sort_order ASC NULLS LAST, id ASC")) }
 
-  # How the board draws it: a stateless "tap to credit" circle. Carries its own
-  # colour and the ids a press needs; `short_name` mirrors the field a chore cell
-  # reads for its title and first-letter fallback, so the client paints it the
-  # same way without a special case.
+  # How the board draws it: a stateless "tap to credit" circle wearing its
+  # chore's icon. Carries its own colour and the ids a press needs; `short_name`
+  # mirrors the field a chore cell reads for its title and first-letter
+  # fallback, so the client paints it the same way without a special case.
   def board_item
     {
       kind:           :credit,
@@ -59,11 +59,9 @@ class ChoreCreditButton < ApplicationRecord
       name:           label,
       short_name:     label,
       color:          color.presence,
-      icon:           nil,
-      icon_kind:      :empty,
       chore_id:       chore_id,
       credit_user_id: credit_user_id,
-    }
+    }.merge(ChoreSerializer.new(chore, viewer: nil).icon_fields)
   end
 
   private

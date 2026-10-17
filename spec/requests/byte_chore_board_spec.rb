@@ -671,6 +671,20 @@ RSpec.describe "Byte chore board", type: :request do
       expect(item["icon_kind"]).to eq("emoji")
     end
 
+    it "names the tile its task answers on, so the board can wear what it says" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"]))
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.find { |i| i["kind"] == "task" }["monitor"]).to eq("whisper-btn-fed")
+    end
+
+    it "has no tile when its task isn't a monitor" do
+      task.update!(listener: "tell:fed")
+
+      expect(button.reload.board_item[:monitor]).to be_nil
+    end
+
     it "runs its task with execute:true as the task's owner on a press" do
       allow(Jil::Executor).to receive(:async_call)
 

@@ -51,12 +51,12 @@
 class ChoreSerializer
   HICON_PREFIX = "hicon:"
 
-  attr_reader :chore, :viewer, :day, :ctx
+  attr_reader :chore, :viewer, :ctx
 
   def initialize(chore, viewer:, ctx: nil, day: nil)
     @chore = chore
     @viewer = viewer
-    @day = day || (ctx&.day) || ChoreDay.current(viewer)
+    @day = day
     @ctx = ctx
   end
 
@@ -177,6 +177,17 @@ class ChoreSerializer
     return nil if chore.marked_due_at.nil?
 
     ChoreDay.current(viewer, at: chore.marked_due_at).iso8601
+  end
+
+  # Looked up on first use, so the icon alone needs no viewer.
+  def day
+    @day ||= ctx&.day || ChoreDay.current(viewer)
+  end
+
+  # The chore's icon as it's drawn, for something standing in for the chore on
+  # a board (a credit button) - needs no viewer.
+  def icon_fields
+    { icon: display_icon, icon_kind: icon_kind }
   end
 
   private

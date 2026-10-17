@@ -63,5 +63,20 @@ RSpec.describe ChoreCreditButton do
       expect(item[:credit_user_id]).to eq(mate.id)
       expect(item).not_to have_key(:progress_count)
     end
+
+    it "wears its chore's icon" do
+      icon = HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: owner, name: "Litter", image_data: "data:image/png;base64,AAAA",
+      )
+      chore.update!(icon: "hicon:#{icon.id}")
+
+      expect(button.board_item).to include(icon: "data:image/png;base64,AAAA", icon_kind: :image)
+    end
+
+    it "falls back to its label's first letter when the chore has no icon" do
+      chore.update!(icon: nil)
+
+      expect(button.board_item).to include(icon: nil, icon_kind: :empty)
+    end
   end
 end

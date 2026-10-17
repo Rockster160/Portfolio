@@ -6759,11 +6759,12 @@ $board-cell-max: 200px;
   width: 100%;
   max-width: calc(#{$board-cell-max} * var(--board-circle-scale, 1));
   margin-inline: auto;
-  // The per-actor accent the chores page keys its done state off, defaulting
-  // to the same green (`--chores-done`). Written out rather than referenced:
+  // The per-actor accent the chores page keys its done state off. Until the
+  // server says who did it - a press in flight, a board that's asking - it's
+  // the neutral grey that credits nobody. Written out rather than referenced:
   // the chores stylesheet isn't loaded on this page, and a var() pointing at
   // nothing would leave every finished chore with no ring at all.
-  --actor-color: #16A34A;
+  --actor-color: #94A3B8;
 }
 
 // The disc and its corner controls, in a square of their own. The pills
@@ -6993,7 +6994,7 @@ $board-cell-max: 200px;
 // Per-actor accent on a finished chore, the same hues the chores page keys its
 // done state off (chores.scss). Written out here rather than referenced: that
 // stylesheet isn't loaded on this page, so a chore I finished would read in the
-// board's flat default green instead of my own colour. data-actor is set by
+// board's neutral default grey instead of my own colour. data-actor is set by
 // paintCell from the serialized chore's last completer; anonymous completions
 // take the neutral grey, crediting nobody.
 .byte-board-cell[data-actor="Rockster160"]   { --actor-color: #0160FF; }
@@ -7048,12 +7049,12 @@ $board-cell-max: 200px;
 // rather than the chores' flat dark disc waiting on a ring, so "set this off" /
 // "credit this" and "check this off" don't look identical from across the room.
 //
-// A trigger gets the indigo default; a credit button defaults to the done-green;
+// A trigger gets the indigo default; a credit button the neutral chore grey;
 // a task button a sky default — each usually carries its own colour inline (set
 // from the button's config), which overrides the default here and drives both
 // the disc tint and the flash.
 .byte-board-cell[data-kind="trigger"] { --actor-color: #6366F1; }
-.byte-board-cell[data-kind="credit"]  { --actor-color: #16A34A; }
+.byte-board-cell[data-kind="credit"]  { --actor-color: #94A3B8; }
 .byte-board-cell[data-kind="task"]    { --actor-color: #0EA5E9; }
 
 .byte-board-cell[data-kind="trigger"],
