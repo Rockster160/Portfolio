@@ -551,6 +551,7 @@
   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
+  #timer(Numeric ["seconds" "minutes" "hours"] BR "Label" String BR "Board" String BR "Groups" String)::Boolean
 [Interview]@me
   #prep(Numeric:"Agenda Item")::Hash // Starts the pre-interview brief for the interview on that agenda row. Returns at once; the brief arrives on its own.
   #headsUp(Numeric:"Agenda Item")::Hash // Sends the join link for the interview on that agenda row, or a heads-up to watch the phone when it is a call.

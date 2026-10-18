@@ -119,6 +119,18 @@ Buddy::Tools.register(
     stop_target:   { type: :string, required: false, description: "Place / chore / event / calendar name the stop condition is about. With stop_when." },
     stop_listener: { type: :string, required: false, description: "Jil listener string, for stop_when=custom. Read read_listener_guide first." },
     stop_phrase:   { type: :string, required: false, description: "Plain-language meaning of the stop listener. Required for stop_when=custom." },
+    board:         {
+      type:        :string,
+      required:    false,
+      description: "The board screen to show it on, only when they named one (\"on the Kitchen board\"). " \
+                   "A board only shows its own timers; leave it out and it shows in the chat alone",
+    },
+    groups:        {
+      type:        :string,
+      required:    false,
+      description: "Board groups to show it on, comma-separated, only when they named some (\"on the Home " \
+                   "boards\"). Every board watching one of them shows it",
+    },
     then_continue: {
       type:        :boolean,
       required:    false,
@@ -135,10 +147,11 @@ Buddy::Tools.register(
   # Seconds OR minutes, and a length is the one thing this can't be called
   # without. Raising here drops the proposal, which is better than a one-second
   # countdown standing in for a thirty-minute one.
-  confirm:     ->(payload, _ctx) {
+  confirm:     ->(payload, ctx) {
     raise "a timer needs a length - give seconds or minutes" if Buddy::Tools::SetTimer.seconds(payload).zero?
 
-    { summary: "Set a timer", resolved: {} }
+    board = (Buddy::Timers.find_board!(ctx.user, payload[:board]) if payload[:board].present?)
+    { summary: "Set a timer", resolved: { board_id: board&.id }.compact }
   },
   label:       ->(payload, _ctx) { "Timer · #{Buddy::Timers.humanize_seconds(Buddy::Tools::SetTimer.seconds(payload))}" },
   execute:     ->(payload, ctx) {
@@ -159,6 +172,7 @@ Buddy::Tools.register(
         label:        payload[:label],
         conversation: ctx.conversation,
         anchor:       :message,
+        place:        Buddy::Tools::SetTimer.place(payload, ctx),
       )
       next { timer_id: plain.id, seconds: seconds, label: payload[:label].to_s, waiting: payload[Buddy::Tools::WAIT_ARG].present? }
     end
@@ -166,6 +180,7 @@ Buddy::Tools.register(
     timer = Buddy::TimerCycle.start!(
       user:          ctx.user,
       conversation:  ctx.conversation,
+      place:         Buddy::Tools::SetTimer.place(payload, ctx),
       seconds:       seconds,
       label:         payload[:label],
       anchor:        :message,
@@ -237,6 +252,12 @@ module Buddy
         return payload[:seconds].to_i if payload[:seconds].present?
 
         payload[:minutes].to_i * 60
+      end
+
+      # The board it was named for (resolved by confirm) and any groups, else
+      # the board it was started from.
+      def place(payload, ctx)
+        Buddy::Timers.placement(ctx.conversation, board_id: payload[:board_id], groups: payload[:groups])
       end
 
       # "until 6:30" as a real moment in their zone. Nil - rather than a

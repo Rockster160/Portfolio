@@ -696,6 +696,16 @@ RSpec.describe "Byte chore board", type: :request do
       )
     end
 
+    it "tells the task which board it was pressed on" do
+      allow(Jil::Executor).to receive(:async_call)
+
+      post "/byte/board/tasks/#{button.id}/press", params: { conversation_id: thread.id }
+
+      expect(Jil::Executor).to have_received(:async_call).with(
+        user, task.code, { "execute" => true, "board_id" => thread.id }, anything
+      )
+    end
+
     it "404s pressing someone else's button" do
       theirs = create(:user)
       their_task = Task.create!(user: theirs, name: "T", listener: "tell:x", code: "// noop")
@@ -704,6 +714,24 @@ RSpec.describe "Byte chore board", type: :request do
       post "/byte/board/tasks/#{their_button.id}/press"
 
       expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  # A board's wall shows only the timers attached to it.
+  describe "GET /buddy/timers?board_id=" do
+    around { |example| Sidekiq::Testing.fake! { example.run } }
+    before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+    it "returns only that board's timers, while the chat still gets them all" do
+      chat = user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current)
+      mine = Buddy::Timers.create!(user: user, seconds: 300, label: "Board one", conversation: thread)
+      Buddy::Timers.create!(user: user, seconds: 300, label: "Chat one", conversation: chat)
+
+      get "/buddy/timers", params: { board_id: thread.id }
+      expect(response.parsed_body["timers"].pluck("id")).to eq([mine.id])
+
+      get "/buddy/timers"
+      expect(response.parsed_body["timers"].size).to eq(2)
     end
   end
 

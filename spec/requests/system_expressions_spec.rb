@@ -32,6 +32,14 @@ RSpec.describe "Expression Lab", type: :request do
     expect(response.body).to include("no pose")
   end
 
+  it "shows a pose a pet only has art for, with no mood values" do
+    get system_expressions_path
+
+    bloom = response.body[%r{data-exlab-pet="bloom".*?</section>}m]
+    expect(bloom).to include("Bloom — hiding")
+    expect(bloom).to include("Worn on cue, never picked as a mood.")
+  end
+
   it "shows each expression's label and its mood values, read from the constants" do
     get system_expressions_path
 

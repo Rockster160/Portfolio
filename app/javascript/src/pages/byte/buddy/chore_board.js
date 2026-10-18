@@ -881,7 +881,9 @@ export function initChoreBoard({
 
     return (async () => {
       try {
-        await apiCall(TASK_PRESS_URL(id), "POST", {});
+        await apiCall(TASK_PRESS_URL(id), "POST", {
+          conversation_id: conversationIdFn ? conversationIdFn() : null,
+        });
         const at = failed.findIndex((f) => f.key === String(id));
         if (at >= 0) failed.splice(at, 1);
         flashCell(id, "task");
@@ -1074,6 +1076,8 @@ export function initChoreBoard({
   function applyTags(next, { broadcast } = {}) {
     tags = Array.isArray(next) ? next : [];
     try { app.dataset.boardTags = JSON.stringify(tags); } catch (e) {}
+    // The timers placed on this board follow its groups.
+    app.dispatchEvent(new CustomEvent("board:placement-changed"));
     if (tagToggleEl) tagToggleEl.textContent = tagLabel();
     items = [];
     paint();
@@ -1638,6 +1642,9 @@ export function initChoreBoard({
       const conversationId = conversationIdFn ? conversationIdFn() : null;
       try {
         await apiCall(settingsEl.dataset.shareUrl, "POST", { conversation_id: conversationId, shared });
+        // Shared, it shows the household's timers too.
+        app.dataset.timerBoardShared = String(shared);
+        app.dispatchEvent(new CustomEvent("board:placement-changed"));
         flashSaved();
       } catch (err) {
         shareBoxEl.checked = !shared;

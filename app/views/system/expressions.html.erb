@@ -68,8 +68,9 @@
         theme     = pet.theme
         faces     = pet.faces
         # Every system slot is shown for every pet (a missing one draws blank),
-        # then every mood it chooses, minus any already shown above.
-        moods     = faces.keys.map(&:to_sym).sort_by(&:to_s) - system_order
+        # then every mood it chooses and every other pose it has art for (a held
+        # state like hiding), minus any already shown above.
+        moods     = (faces.keys.map(&:to_sym) | Buddy::Faces.all(theme)).sort_by(&:to_s) - system_order
       %>
       <section class="exlab-pet" data-exlab-pet="<%= theme %>"<%= " hidden".html_safe unless i.zero? %>>
         <header class="exlab-pet-head">
@@ -123,11 +124,18 @@
                 <div class="exlab-face">
                   <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
                 </div>
-                <div class="exlab-name"><%= name.to_s.tr("_", " ") %></div>
+                <div class="exlab-name">
+                  <%= name.to_s.tr("_", " ") %>
+                  <% unless vals %><span class="exlab-tag">pose</span><% end %>
+                </div>
                 <% if pet.summaries[name] %>
                   <p class="exlab-say"><%= pet.summaries[name] %></p>
+                <% elsif vals.nil? %>
+                  <p class="exlab-say">Worn on cue, never picked as a mood.</p>
                 <% end %>
-                <%= render "system/expression_axes", vals: vals, axes: axes %>
+                <% if vals %>
+                  <%= render "system/expression_axes", vals: vals, axes: axes %>
+                <% end %>
               </article>
             <% end %>
           </div>

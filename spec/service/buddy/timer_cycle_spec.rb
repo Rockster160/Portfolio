@@ -52,6 +52,26 @@ RSpec.describe Buddy::TimerCycle do
       ByteAction.where(tool_name: described_class::TOOL_NAME).order(:id).last
     end
 
+    # The later blocks and breaks start from the chat, so the board has to
+    # travel in the cycle or they'd fall off the board after the first block.
+    describe "on a board" do
+      let(:board) { user.byte_conversations.create!(mode: :buddy, name: "Kitchen", metadata: { "board" => true }) }
+
+      it "keeps the break and the next block on the board" do
+        timer = described_class.start!(
+          user: user, conversation: board, seconds: 1800, label: "Cupboards", break_seconds: 600,
+        )
+        described_class.on_fired(timer, convo)
+
+        expect(Buddy::Timers.board_id(timers.last)).to eq(board.id)
+        expect(card.tool_input[described_class::KEY]["place"]).to eq(Buddy::Timers::BOARD => board.id)
+
+        card.apply_decision!(value: "start", source: :user)
+        resumed = described_class.resume!(card)
+        expect(Buddy::Timers.board_id(resumed)).to eq(board.id)
+      end
+    end
+
     describe "a block ending" do
       it "starts the break on its own, because that half is theirs to not count" do
         timer = start!

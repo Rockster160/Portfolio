@@ -101,7 +101,12 @@ function isDue(t) {
   return Date.parse(t.end_at) <= Date.now();
 }
 
-export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = true, banner = null }) {
+// `boardId` is set on a board's wall, which shows only the timers placed on it
+// (`onBoardFn` says which); the chat and the kiosk leave both null and show all
+// of the person's own.
+export function initBuddyTimers({
+  container, hero, isBuddyActiveFn, enabled = true, banner = null, boardId = null, onBoardFn = null,
+}) {
   if (!container) return null;
 
   // A wall surface (board / kiosk) can turn its timer alerts off, and off means
@@ -616,7 +621,8 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
     async hydrate() {
       if (!active) return;
       try {
-        const data = await apiCall("/buddy/timers", "GET");
+        const url = boardId == null ? "/buddy/timers" : `/buddy/timers?board_id=${encodeURIComponent(boardId)}`;
+        const data = await apiCall(url, "GET");
         pageId = data.page_id;
         timers.clear();
         (data.timers || []).forEach((t) => timers.set(t.id, t));
@@ -645,7 +651,19 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn, enabled = tr
       const data = payload?.data || {};
       const t = data.timer;
       if (!t) return;
-      if (pageId != null && t.timer_page_id !== pageId) return;
+      // A board also shows household timers, which live on their own pages.
+      if (onBoardFn) {
+        if (!onBoardFn(t)) {
+          if (timers.has(t.id)) {
+            timers.delete(t.id);
+            render();
+            syncAlarm();
+          }
+          return;
+        }
+      } else if (pageId != null && t.timer_page_id !== pageId) {
+        return;
+      }
       if (data.reason === "archived") {
         // Whoever archived it, the tap that asked for it is answered.
         cancelling.delete(t.id);

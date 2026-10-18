@@ -423,6 +423,97 @@ RSpec.describe Buddy::Timers do
       end
     end
 
+    # A board shows only the timers attached to it; the chat shows them all.
+    describe "boards" do
+      let(:chat)  { user.byte_conversations.create!(mode: :buddy) }
+      let(:board) { user.byte_conversations.create!(mode: :buddy, name: "Kitchen", metadata: { "board" => true }) }
+      let(:other) { user.byte_conversations.create!(mode: :buddy, name: "Office", metadata: { "board" => true }) }
+
+      it "attaches a timer started from a board to that board, and one from the chat to none" do
+        on_board = described_class.create!(user: user, seconds: 60, conversation: board)
+        in_chat  = described_class.create!(user: user, seconds: 60, conversation: chat)
+
+        expect(described_class.board_id(on_board)).to eq(board.id)
+        expect(described_class.board_id(in_chat)).to be_nil
+        expect(described_class.live_for_board(board)).to eq([on_board])
+        expect(described_class.live_for_board(other)).to be_empty
+        expect(described_class.live_for(user)).to contain_exactly(on_board, in_chat)
+      end
+
+      it "lets set_timer name a board from the chat" do
+        board
+        tool    = Buddy::Tools[:set_timer]
+        ctx     = Buddy::ToolContext.new(user, conversation: chat)
+        payload = { minutes: 5, board: "kitchen board" }
+        resolved = tool[:confirm].call(payload, ctx)[:resolved]
+        result = Buddy::Tools.dispatch(tool, payload.merge(resolved), ctx)
+
+        expect(described_class.board_id(Timer.find(result[:data][:timer_id]))).to eq(board.id)
+      end
+
+      it "shows a timer on every board watching one of its groups" do
+        board.update!(chore_tags: ["Home"])
+        grouped = described_class.create!(user: user, seconds: 60, place: described_class.placement(chat, groups: "home"))
+
+        expect(described_class.groups(grouped)).to eq(["home"])
+        expect(described_class.live_for_board(board)).to eq([grouped])
+        expect(described_class.live_for_board(other)).to be_empty
+      end
+
+      describe "in a household" do
+        let(:house) { create(:chore_household) }
+        let!(:housemate) { create(:user, chore_household_id: house.id) }
+        let(:theirs) {
+          housemate.byte_conversations.create!(
+            mode: :buddy, name: "Living Room", metadata: { "board" => true, "chore_tags" => ["Home"] },
+          )
+        }
+
+        before { user.update!(chore_household_id: house.id) }
+
+        it "puts a timer on a housemate's board once it's shared" do
+          mine = described_class.create!(user: user, seconds: 60, place: described_class.placement(chat, groups: "Home"))
+          expect(described_class.live_for_board(theirs)).to be_empty
+
+          theirs.update!(metadata: theirs.metadata.merge("shared" => true))
+          expect(described_class.live_for_board(theirs)).to eq([mine])
+        end
+
+        it "lets set_timer name a housemate's shared board" do
+          theirs.update!(metadata: theirs.metadata.merge("shared" => true))
+          ctx = Buddy::ToolContext.new(user, conversation: chat)
+
+          resolved = Buddy::Tools[:set_timer][:confirm].call({ minutes: 5, board: "Living Room" }, ctx)[:resolved]
+          expect(resolved[:board_id]).to eq(theirs.id)
+        end
+
+        it "tells the household about a placed timer, and only its owner about one in the chat" do
+          placed = described_class.create!(user: user, seconds: 60, place: described_class.placement(chat, groups: "Home"))
+          alone  = described_class.create!(user: user, seconds: 60, conversation: chat)
+
+          expect(described_class.audience(placed)).to include(user, housemate)
+          expect(described_class.audience(alone)).to eq([user])
+        end
+
+        it "lets a housemate reach a placed timer from the board, but not one in the chat" do
+          placed = described_class.create!(user: user, seconds: 60, place: described_class.placement(chat, groups: "Home"))
+          alone  = described_class.create!(user: user, seconds: 60, conversation: chat)
+
+          expect(described_class.reachable(housemate, placed.id)).to eq(placed)
+          expect(described_class.reachable(housemate, alone.id)).to be_nil
+          expect(described_class.reachable(user, alone.id)).to eq(alone)
+        end
+      end
+
+      it "says which boards there are when the name matches none" do
+        board
+        ctx = Buddy::ToolContext.new(user, conversation: chat)
+
+        expect { Buddy::Tools[:set_timer][:confirm].call({ minutes: 5, board: "Garage" }, ctx) }
+          .to raise_error(/no board called "Garage".*Kitchen/)
+      end
+    end
+
     # Prod 2276: "Cancel my timers" got "I can't stop a running countdown from
     # here", one minute after Buddy had set one itself. There was no tool, and
     # timers weren't in context either, so it was a true statement about a

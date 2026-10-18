@@ -96,7 +96,8 @@ module Buddy
     # `follow_up` is `{ item:, list: }` — the two travel together because
     # neither means anything alone: an item with no list is a follow-up that
     # silently never lands, and a list with no item is nothing at all.
-    def start!(user:, key:, label:, seconds:, again: nil, follow_up: nil, conversation: nil, anchor: :now)
+    def start!(user:, key:, label:, seconds:, again: nil, follow_up: nil, conversation: nil, anchor: :now, place: nil)
+      place          = place.presence || Buddy::Timers.placement(conversation)
       conversation ||= Buddy::CompanionRelay.conversation_for(user)
       return nil if conversation.nil?
 
@@ -116,6 +117,7 @@ module Buddy
       again = again.presence || before["again"]
       item  = item.presence  || before["item"]
       list  = list.presence  || before["list"]
+      place = place.presence || before["place"]
 
       retire_cards!(user, key, value: AGAIN)
       Buddy::Timers.stop!(previous) if previous
@@ -126,6 +128,7 @@ module Buddy
         label:        label,
         conversation: conversation,
         anchor:       anchor,
+        place:        place,
         metadata:     {
           KEY => {
             "key"     => key.to_s,
@@ -135,6 +138,7 @@ module Buddy
             "item"    => item.presence,
             "list"    => list.presence,
             "round"   => round,
+            "place"   => place.presence,
           }.compact,
         },
       )

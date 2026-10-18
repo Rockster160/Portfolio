@@ -153,6 +153,7 @@ module Buddy
         break_seconds: cycle["break_seconds"],
         until_at:      cycle["until_at"],
         cycle_id:      cycle_id,
+        place:         cycle["place"],
       )
     end
 
@@ -163,13 +164,17 @@ module Buddy
     # they start on a TAP, and the last thing typed was however long ago the
     # previous block ran. Only the opening one, created inside the turn that
     # asked for the rhythm, backdates.
-    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil, cycle_id: nil, anchor: :now)
+    # Where it shows rides in the cycle itself, so every later block and break
+    # lands on the same boards even though they start from the chat.
+    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil, cycle_id: nil, anchor: :now, place: nil)
+      place = place.presence || Buddy::Timers.placement(conversation)
       Buddy::Timers.create!(
         user:         user,
         seconds:      seconds,
         label:        label,
         conversation: conversation,
         anchor:       anchor,
+        place:        place,
         metadata:     {
           KEY => {
             "cycle_id"      => cycle_id.presence || SecureRandom.uuid,
@@ -177,6 +182,7 @@ module Buddy
             "break_seconds" => break_seconds.presence&.to_i,
             "until_at"      => until_at.presence&.then { |at| at.to_time.iso8601 },
             "label"         => label.to_s,
+            "place"         => place.presence,
           }.compact,
         },
       )
@@ -256,6 +262,7 @@ module Buddy
         seconds:      seconds,
         label:        "Break",
         conversation: conversation,
+        place:        cycle["place"],
       )
     rescue StandardError => e
       # A break that couldn't start is not a reason to withhold the button —
@@ -374,6 +381,7 @@ module Buddy
         # Carried, not regenerated. A watch armed on the first block has to be
         # able to find the fifth one.
         cycle_id:      id_for(cycle),
+        place:         cycle["place"],
       )
       chip!(user, conversation, cycle, timer)
       timer

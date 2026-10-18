@@ -2403,7 +2403,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     hero: buddyHero,
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
     enabled: app.dataset.timerAlerts !== "false",
+    // On a board, which timers it shows: those placed on it or on one of its
+    // groups, from its owner, or the household's once it's shared. Read live,
+    // since the groups and the share switch change in place.
+    onBoardFn: app.dataset.timerBoardId ? (t) => {
+      if (String(t.board_id ?? "") === app.dataset.timerBoardId) return true;
+      if (String(t.user_id) !== app.dataset.timerBoardOwnerId && app.dataset.timerBoardShared !== "true") return false;
+      let tags = [];
+      try { tags = JSON.parse(app.dataset.boardTags || "[]").map((g) => String(g).toLowerCase()); } catch (e) {}
+      return (t.board_groups || []).some((g) => tags.includes(String(g).toLowerCase()));
+    } : null,
+    boardId: app.dataset.timerBoardId || null,
   });
+  app.addEventListener("board:placement-changed", () => buddyTimers?.hydrate());
 
   // The board's pet mirrors Whisper: it sleeps when she sleeps or naps, and
   // hides when she's gone. Driven off the same whisper-durations status the

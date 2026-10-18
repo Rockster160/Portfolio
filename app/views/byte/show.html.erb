@@ -67,6 +67,11 @@
      <%# always on, so it reports true and never offers the toggle. %>
      data-timer-alerts="<%= @kiosk ? current_user.byte_timer_alerts?(@board ? :board : :kiosk) : true %>"
      data-timer-alerts-url="<%= byte_timer_alerts_path %>"
+     <%# A board shows only the timers placed on it or its groups: its owner's, %>
+     <%# and the household's once it's shared. %>
+     data-timer-board-id="<%= @conversation.id if @board %>"
+     data-timer-board-owner-id="<%= @conversation.user_id if @board %>"
+     data-timer-board-shared="<%= @board && @conversation.shared? %>"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
      data-send-url="<%= byte_messages_path %>"

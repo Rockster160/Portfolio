@@ -261,6 +261,25 @@ class Jil::Methods::Buddy < Jil::Methods::Base
       seconds:   seconds,
       again:     again.to_s.strip.presence,
       follow_up: { item: item.to_s.strip.presence, list: list.to_s.strip.presence },
+      place:     ::Buddy::Timers.placement(nil, board_id: pressed_board_id),
+    ).present?
+  end
+
+  # A countdown on the hero, placed on boards: `board` names one (a shared one of
+  # the household's counts), `groups` reaches every board watching one of them,
+  # and a task run from a board's button lands on that board when neither is
+  # given. Rings like any other Buddy timer. Returns false for a length under a
+  # second; raises when the board named isn't one this account can reach.
+  def timer(number, interval, label=nil, board=nil, groups=nil)
+    seconds = duration_seconds(number, interval)
+    return false if seconds < 1
+
+    named = (::Buddy::Timers.find_board!(recipient, board).id if board.to_s.strip.present?)
+    ::Buddy::Timers.create!(
+      user:    recipient,
+      seconds: seconds,
+      label:   label.to_s.strip.presence,
+      place:   ::Buddy::Timers.placement(nil, board_id: named || pressed_board_id, groups: groups),
     ).present?
   end
 
@@ -380,6 +399,12 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #
   # Anything NOT fired through Buddy — cron, a trigger, a `tell:` — has no asker
   # and the owner is the right answer.
+  # The board whose button ran this task, so a timer it starts shows there.
+  def pressed_board_id
+    input = @jil.input_data
+    input.is_a?(::Hash) ? input[:board_id].presence : nil
+  end
+
   def recipient
     execution = @jil.execution
     return @jil.user unless execution&.auth_type.to_s == "buddy"

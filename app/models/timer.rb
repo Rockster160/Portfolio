@@ -589,8 +589,10 @@ class Timer < ApplicationRecord
   # Includes the timer's serialized state inline so receivers can apply
   # it directly without a follow-up /sync round-trip — same payload
   # shape as the controller's `broadcast_timer` helper.
+  # A Buddy timer placed on a board also reaches the household, whose shared
+  # boards may be showing it.
   def broadcast(reason:, extra: {})
-    MonitorChannel.broadcast_to(user, {
+    payload = {
       id:        :timers,
       channel:   :timers,
       timestamp: Time.current.to_i,
@@ -600,7 +602,8 @@ class Timer < ApplicationRecord
         timer:     TimerSerializer.new(self, viewer: user).as_json,
         server_ts: Time.current.iso8601(3),
       }.merge(extra),
-    })
+    }
+    Buddy::Timers.audience(self).each { |member| MonitorChannel.broadcast_to(member, payload) }
   end
 
   private

@@ -26,6 +26,13 @@ module Buddy
     # can never be on a timer with nothing behind it.
     WAIT = "wait".freeze
 
+    # Where a timer shows besides the chat, which shows all of them: the board it
+    # was named for or started from (a board button runs in that board's thread),
+    # and any board watching one of its groups. A board shows its owner's timers
+    # and, once shared, the household's too.
+    BOARD  = "board_id".freeze
+    GROUPS = "board_groups".freeze
+
     # ---- the fast path -------------------------------------------------------
     #
     # "5m" and "5m pasta" are unambiguous enough to serve from Rails without
@@ -215,10 +222,13 @@ module Buddy
     # "5 minute timer" ends five minutes after it was asked for, and trimming
     # that would make every timer end at a slightly different offset than the
     # one requested.
-    def create!(user:, seconds:, label: nil, conversation: nil, metadata: {}, anchor: :now)
+    # `place` is where it shows (see `placement`); left out, a timer started
+    # from a board lands on that board.
+    def create!(user:, seconds:, label: nil, conversation: nil, metadata: {}, anchor: :now, place: nil)
       secs  = seconds.to_i.clamp(1, MAX_SECONDS)
       clean = label.to_s.strip.first(60)
       page  = page_for(user)
+      meta  = metadata.to_h.merge((place.presence || placement(conversation)).to_h.slice(BOARD, GROUPS))
       timer = nil
 
       # Create + start ATOMICALLY. Timer#start! schedules the Sidekiq fire inside
@@ -233,7 +243,7 @@ module Buddy
           duration_ms: secs * 1000,
           name:        clean,
           timer_page:  page,
-          metadata:    metadata.to_h,
+          metadata:    meta,
         )
         timer.start!(at: anchor_time(conversation, anchor))
         raise ActiveRecord::Rollback unless timer.running?
@@ -260,6 +270,75 @@ module Buddy
         .where(timer_page_id: page.id, kind: :countdown)
         .where("started_at IS NOT NULL OR paused_at IS NOT NULL")
         .ordered
+    end
+
+    # The live timers one board shows: those attached to it or to one of the
+    # groups it watches, from its owner and, when it's shared, the household.
+    def live_for_board(board)
+      owners = board.shared? ? board.user.chore_household_user_ids : [board.user_id]
+      pages  = TimerPage.where(user_id: owners, slug: PAGE_SLUG).select(:id)
+      tags   = board.chore_tags.map(&:downcase)
+      scope  = Timer.live.where(user_id: owners, timer_page_id: pages, kind: :countdown)
+      scope  = scope.where("started_at IS NOT NULL OR paused_at IS NOT NULL")
+      scope.where(
+        "timers.metadata->>:board = :id OR EXISTS (" \
+        "SELECT 1 FROM jsonb_array_elements_text(COALESCE(timers.metadata->:groups, '[]'::jsonb)) g " \
+        "WHERE LOWER(g) IN (:tags))",
+        board: BOARD, groups: GROUPS, id: board.id.to_s, tags: tags.presence || [""],
+      ).ordered
+    end
+
+    # Where a new timer shows: the board it was named for, else the board it was
+    # started from, plus any groups. Empty when it's for the chat alone.
+    def placement(conversation, board_id: nil, groups: nil)
+      board = board_id.present? ? board_id.to_i : (conversation.id if conversation&.board?)
+      tags  = GroupTaggable.normalize(groups)
+      { BOARD => board, GROUPS => tags.presence }.compact
+    end
+
+    def board_id(timer)
+      timer&.metadata.to_h[BOARD].presence&.to_i
+    end
+
+    def groups(timer)
+      Array(timer&.metadata.to_h[GROUPS])
+    end
+
+    # Who hears about a change to it: its owner, and the household too once it
+    # is placed on a board, since a shared board shows it on their screens.
+    def audience(timer)
+      return [timer.user] unless buddy_timer?(timer.user, timer)
+      return [timer.user] if board_id(timer).nil? && groups(timer).empty?
+      return [timer.user] if timer.user.chore_household_id.nil?
+
+      User.where(chore_household_id: timer.user.chore_household_id).to_a
+    end
+
+    # A household timer a viewer may pause, cancel or acknowledge: their own, or
+    # one placed on a board, which a household member is looking at.
+    def reachable(user, id)
+      timer = Timer.unscope(where: :archived_at).find_by(id: id, user_id: user.chore_household_user_ids)
+      return nil if timer.nil? || !buddy_timer?(timer.user, timer)
+      return timer if timer.user_id == user.id
+
+      timer if board_id(timer) || groups(timer).any?
+    end
+
+    # The board a spoken name points at, among the boards this person can open.
+    # Raises a readable reason when it matches none, so the tool says which
+    # boards there are instead of quietly attaching to nothing.
+    def find_board!(user, name)
+      wanted = name.to_s.strip.downcase.sub(/\s+board\z/, "")
+      boards = ByteConversation.accessible_boards_for(user).to_a
+      found = (
+        boards.find { |b| b.display_name.to_s.downcase == wanted } ||
+          boards.find { |b| b.display_name.to_s.downcase.sub(/\s+board\z/, "") == wanted } ||
+          boards.find { |b| b.display_name.to_s.downcase.include?(wanted) }
+      )
+      return found if found && wanted.present?
+
+      names = boards.map(&:display_name).compact_blank
+      raise "no board called \"#{name}\" — the boards are: #{names.any? ? names.join(", ") : "none"}"
     end
 
     # Stop a countdown for good: kill the scheduled fire and the mid-countdown

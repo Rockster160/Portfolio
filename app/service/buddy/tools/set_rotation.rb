@@ -71,6 +71,18 @@ Buddy::Tools.register(
       required:    false,
       description: "Which list done_item goes on. Needs done_item",
     },
+    board:       {
+      type:        :string,
+      required:    false,
+      description: "The board screen to show it on, only when they named one (\"on the Kitchen board\"). " \
+                   "A board only shows its own timers; leave it out and it shows in the chat alone",
+    },
+    groups:      {
+      type:        :string,
+      required:    false,
+      description: "Board groups to show it on, comma-separated, only when they named some (\"on the Home " \
+                   "boards\"). Every board watching one of them shows it",
+    },
   },
   # Level 1 (auto), same as set_timer: a countdown they can swipe away, and the
   # loop asks before it does anything else.
@@ -94,7 +106,10 @@ Buddy::Tools.register(
       # A loop already going round for this thing is THE loop, whatever they
       # called it the second time — reusing its key is what makes a later call
       # restart it instead of running a second countdown alongside the first.
-      resolved: { key: Buddy::Tools::SetRotation.key_for(ctx.user, label) },
+      resolved: {
+        key:      Buddy::Tools::SetRotation.key_for(ctx.user, label),
+        board_id: (Buddy::Timers.find_board!(ctx.user, payload[:board]).id if payload[:board].present?),
+      }.compact,
     }
   },
   label:       ->(payload, _ctx) {
@@ -113,6 +128,7 @@ Buddy::Tools.register(
       # Measured from the message that asked, same as set_timer — a slow turn
       # shouldn't quietly shave seconds off the interval they named.
       anchor:       :message,
+      place:        Buddy::Tools::SetTimer.place(payload, ctx),
     )
     raise "couldn't start that loop" if timer.nil?
 

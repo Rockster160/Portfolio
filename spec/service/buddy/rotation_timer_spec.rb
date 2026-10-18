@@ -124,6 +124,23 @@ RSpec.describe Buddy::RotationTimer do
     end
   end
 
+  describe "on a board" do
+    it "stays on the board it was pressed on when it goes round again" do
+      first = described_class.start!(
+        user:         user,
+        key:          "laundry",
+        label:        "Rotate Laundry",
+        seconds:      4500,
+        conversation: convo,
+        place:        { Buddy::Timers::BOARD => 42 },
+      )
+      again = start!
+
+      expect(Buddy::Timers.board_id(first)).to eq(42)
+      expect(Buddy::Timers.board_id(again)).to eq(42)
+    end
+  end
+
   describe "the fire" do
     it "asks instead of announcing, with the three answers on screen" do
       described_class.on_fired(start!, convo)

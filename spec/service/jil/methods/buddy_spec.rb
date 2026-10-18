@@ -629,5 +629,42 @@ RSpec.describe Jil::Methods::Buddy do
       expect(BackgroundProcess.live_find(asker, "laundry-gate")).to be_present
       expect(BackgroundProcess.live_find(owner, "laundry-gate")).to be_nil
     end
+
+    # A board's task button passes the board it was pressed on, so the loop the
+    # task starts shows on that board and no other.
+    it "puts a rotation on the board whose button ran the task" do
+      code = <<~JIL
+        r = Buddy.rotate("laundry", "Rotate Laundry", 75, "minutes", "Rotated", "", "")::Boolean
+      JIL
+      Sidekiq::Testing.fake! { Jil::Executor.call(owner, code, { "execute" => true, "board_id" => 42 }) }
+
+      timer = Buddy::RotationTimer.live_timer(owner, "laundry")
+      expect(Buddy::Timers.board_id(timer)).to eq(42)
+    end
+
+    it "starts a timer on a named board, or on any board watching its groups" do
+      board = owner.byte_conversations.create!(mode: :buddy, name: "Kitchen", metadata: { "board" => true })
+      code = <<~JIL
+        a = Buddy.timer(10, "minutes", "Pasta", "Kitchen", "")::Boolean
+        b = Buddy.timer(5, "minutes", "Tea", "", "Home, Whisper")::Boolean
+      JIL
+      Sidekiq::Testing.fake! { Jil::Executor.call(owner, code) }
+
+      pasta = owner.timers.find_by(name: "Pasta")
+      tea   = owner.timers.find_by(name: "Tea")
+      expect(pasta.duration_ms).to eq(600_000)
+      expect(Buddy::Timers.board_id(pasta)).to eq(board.id)
+      expect(Buddy::Timers.groups(tea)).to eq(%w[Home Whisper])
+    end
+
+    it "validates Buddy.timer Jil" do
+      expect {
+        Jil::Validator.validate!(
+          <<~JIL,
+            a = Buddy.timer(10, "minutes", "Pasta", "Kitchen", "Home")::Boolean
+          JIL
+        )
+      }.not_to raise_error
+    end
   end
 end

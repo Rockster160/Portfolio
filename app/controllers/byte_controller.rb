@@ -279,9 +279,11 @@ class ByteController < ApplicationController
 
     # Runs as the task's own owner (a shared button is a household member's, and
     # it keeps that account's reach), while auth_id records the person who
-    # actually tapped — the same split the whole board uses.
+    # actually tapped — the same split the whole board uses. `board_id` is the
+    # board it was pressed on, so a timer the task starts shows there.
+    board = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
     ::Jil::Executor.async_call(
-      task.user, task.code, { "execute" => true },
+      task.user, task.code, { "execute" => true, "board_id" => board&.id }.compact,
       task: task, auth: :run, auth_id: current_user.id
     )
     head :ok
