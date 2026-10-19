@@ -248,6 +248,33 @@ function buildControl(field, value, locked) {
     return wrap;
   }
 
+  // One of a few short options as a row of chips: radios underneath, so the
+  // browser keeps it to one, and grey until picked, then the chip's own color.
+  if (type === "chips") {
+    const wrap = document.createElement("div");
+    wrap.className = "byte-msg-form-chips";
+    wrap.setAttribute("role", "radiogroup");
+    const group = `chips-${field.key}-${Math.random().toString(36).slice(2)}`;
+    const colors = field.colors || {};
+    (field.choices || []).forEach((choice) => {
+      const chip = document.createElement("label");
+      chip.className = "byte-msg-form-chip";
+      if (colors[choice]) chip.style.setProperty("--chip-color", colors[choice]);
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = group;
+      radio.value = choice;
+      radio.checked = value != null && String(value) === choice;
+      radio.disabled = locked;
+      chip.appendChild(radio);
+      const text = document.createElement("span");
+      text.textContent = choice;
+      chip.appendChild(text);
+      wrap.appendChild(chip);
+    });
+    return wrap;
+  }
+
   if (type === "select") {
     const sel = document.createElement("select");
     sel.className = "byte-msg-form-input";
@@ -340,6 +367,9 @@ function readRow(row) {
     return Array.from(
       row.querySelectorAll('input[type="checkbox"]:checked'),
     ).map((cb) => cb.value);
+  }
+  if (type === "chips") {
+    return row.querySelector('input[type="radio"]:checked')?.value ?? "";
   }
   if (type === "checkbox") {
     return row.querySelector('input[type="checkbox"]')?.checked

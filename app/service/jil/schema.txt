@@ -430,6 +430,8 @@
 [Icon]
   #suggest(String:Title)::String
   #search(String:Query)::Array
+[MealBuilder]
+  #add(String:Category String:Name Numeric:Calories)::Boolean // Puts it on the Meal Builder named for its category, else Food. One already there is left alone.
 [TransactionCategory]
   #all::Array
   #colors::Hash
@@ -456,6 +458,7 @@
   #checkbox(String:"Question Text" BR "Default" Boolean)
   #choices(String:"Question Text" content(String))
   #select(String:"Question Text" content(String) "Default" String?)
+  #chips(String:"Question Text" content(String) "Default" String? BR "Colors" Hash?) // One of a few short options, as tappable chips. Colors maps a choice to its color; household names get their own.
   #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default")
   #date(String:"Question Text" BR "Default" Date?)
   #datetime(String:"Question Text" BR "Default" Date?)

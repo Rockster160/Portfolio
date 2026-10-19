@@ -26,6 +26,9 @@ module SpendingHealth
   # the stretch it has to last. From the layoff to the end of the year. `from`
   # and `through` are both whole perceived days, so the range runs from 3am on
   # the first to 3am after the last.
+  # What the OpenAI account is allowed to spend in a month, which is every
+  # model call the app makes, wherever it was made.
+  GPT_MONTHLY_MICROS = 20_000_000
   BALANCE_GOAL = {
     cents:   4_000_000,
     from:    "2026-09-11",
@@ -74,7 +77,24 @@ module SpendingHealth
       }.merge(
         buckets(user),
         ::CaffeineIntake.payload(user),
+        gpt: gpt_month,
       )
+    end
+
+    # This month's model spend against its limit. The month is a UTC calendar
+    # month because that is how OpenAI bills it. Evals and localhost count:
+    # they arrive here from the laptop and cost the same money. A Jil GPT call
+    # made on someone else's key is their bill, not this one.
+    def gpt_month(now: ::Time.current)
+      from = now.utc.beginning_of_month
+      scope = ::BuddyUsage.billed.since(from)
+      scope = scope.where.not(kind: :jil).or(scope.where(kind: :jil, user: ::User.me))
+
+      {
+        spent_micros:  scope.spend_micros,
+        budget_micros: GPT_MONTHLY_MICROS,
+        resets_at:     from.next_month.to_i,
+      }
     end
 
     # Grouped in Ruby rather than SQL: a perceived day is local-3am to

@@ -702,6 +702,15 @@ RSpec.describe RecordLinks::Propagator do
       expect(user.prompts.last.params["completion_id"]).to eq(completion.id)
     end
 
+    it "asks with a chip per person, each in their own color" do
+      log_event!("Whisper", notes: "Down")
+
+      who = user.prompts.last.options.first
+      expect(who).to include("type" => "chips", "question" => "Who did it?")
+      expect(who["choices"]).to contain_exactly(user.username, partner.username)
+      expect(who["colors"]).to eq(PromptChips.colors(who["choices"]))
+    end
+
     it "hands the stand-in to whoever is named, paid like any other" do
       log_event!("Whisper", notes: "Down")
       at = 1.hour.ago.change(usec: 0)

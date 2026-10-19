@@ -121,6 +121,31 @@ RSpec.describe BuddyUsage do
     end
   end
 
+  describe "the dashboard's month bar" do
+    let(:store) { ActiveSupport::Cache::MemoryStore.new }
+
+    before do
+      allow(Rails).to receive(:cache).and_return(store)
+      allow(Rails.env).to receive(:production?).and_return(true)
+      allow(SpendingRefreshWorker).to receive(:perform_in)
+    end
+
+    def row = BuddyUsage.create!(user: user, model: "gpt-5.4-mini", cost_micros: 10)
+
+    it "repaints once for everything written inside the minute" do
+      3.times { row }
+
+      expect(SpendingRefreshWorker).to have_received(:perform_in).once.with(BuddyUsage::REFRESH_EVERY)
+    end
+
+    it "is left alone away from production, which has no Spending cell to feed" do
+      allow(Rails.env).to receive(:production?).and_return(false)
+      row
+
+      expect(SpendingRefreshWorker).not_to have_received(:perform_in)
+    end
+  end
+
   describe "#cache_hit_rate" do
     it "reports the share of input served from the prompt cache" do
       row = described_class.record!(result, user: user, message: message)

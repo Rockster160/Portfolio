@@ -38,7 +38,7 @@ class Jil::Methods::GPT < Jil::Methods::Base
   private
 
   def request(gpt, text, instructions: nil, json: false)
-    ::GPTRequest.call(key_for(gpt), text, instructions: instructions, json: json)
+    ::GPTRequest.call(key_for(gpt), text, instructions: instructions, json: json, user: @jil.user)
   rescue ::GPTRequest::Error => e
     raise ::Jil::ExecutionError, e.message
   end

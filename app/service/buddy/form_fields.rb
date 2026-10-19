@@ -22,7 +22,7 @@ module Buddy
     module_function
 
     TYPES = %i[
-      text textarea number scale select choices checkbox date datetime time color hidden
+      text textarea number scale select chips choices checkbox date datetime time color hidden
     ].freeze
 
     # The one type whose value is a list rather than a scalar.
@@ -72,6 +72,7 @@ module Buddy
           type:     type,
           value:    field[:value],
           choices:  Array(field[:choices]).map(&:to_s).presence,
+          colors:   (field[:colors].to_h.transform_keys(&:to_s).presence if field[:colors].respond_to?(:to_h)),
           min:      field[:min],
           max:      field[:max],
           step:     field[:step],
@@ -130,7 +131,7 @@ module Buddy
     def coerce(field, raw)
       case field[:type]
       when MULTI              then multi(field, raw)
-      when :select            then one_of(field, raw)
+      when :select, :chips    then one_of(field, raw)
       when :checkbox          then [truthy?(raw) ? "true" : "false", nil]
       when :number, :scale    then number(field, raw)
       when :datetime          then time(field, raw, "%Y-%m-%dT%H:%M")

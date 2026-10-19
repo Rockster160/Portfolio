@@ -129,6 +129,7 @@ module Buddy
           type:     field[:type],
           value:    field[:value],
           choices:  field[:choices],
+          colors:   field[:colors],
           min:      field[:min],
           max:      field[:max],
           hint:     field[:hint],
@@ -189,6 +190,7 @@ module Buddy
         # actually stated look identical, and the first one gets trusted.
         from:     from,
         choices:  Array(option[:choices]).presence,
+        colors:   option[:colors].presence,
         min:      option[:min],
         max:      option[:max],
         hint:     hint_for(option),
@@ -258,7 +260,7 @@ module Buddy
     def coerce(option, answer)
       case type_of(option)
       when :choices  then match_all(option, answer)
-      when :select   then match_one(option, answer)
+      when :select, :chips then match_one(option, answer)
       when :checkbox then truthy?(answer) ? "true" : "false"
       when :scale, :number then number(option, answer)
       when :datetime then time(answer, "%Y-%m-%dT%H:%M")

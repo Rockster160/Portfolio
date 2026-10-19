@@ -316,7 +316,10 @@ class Agenda < ApplicationRecord
   # after `@item.destroy`. Cancelled items are NOT included here; they
   # come through delta with `status: "cancelled"` and the store prunes
   # them in `upsertItem`.
-  def self.broadcast_changes!(agendas, destroyed_item_ids: [])
+  #
+  # `only_user_ids` narrows the fan-out to those people, for a signal that is
+  # only true for some of the agenda's viewers.
+  def self.broadcast_changes!(agendas, destroyed_item_ids: [], only_user_ids: nil)
     agendas = Array(agendas).compact.uniq
     return if agendas.empty?
 
@@ -341,7 +344,9 @@ class Agenda < ApplicationRecord
       user_ids_by_agenda[a.id].uniq.each { |uid| per_user_ids[uid] << a }
     end
 
-    User.where(id: per_user_ids.keys).find_each do |user|
+    recipient_ids = per_user_ids.keys
+    recipient_ids &= Array(only_user_ids) if only_user_ids
+    User.where(id: recipient_ids).find_each do |user|
       accessible = per_user_ids[user.id]
       MonitorChannel.broadcast_to(user, {
         id:        :agenda,

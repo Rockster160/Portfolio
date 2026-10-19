@@ -7,8 +7,8 @@ module Buddy
   # database the laptop is pointed at, so `buddy:cost` in production has always
   # under-reported the real number. Nothing local can write to the production
   # database directly, and nothing should have to: each call appends a line
-  # here, and `bx rails buddy:usage_sync` hands the file over when there is a
-  # connection to hand it over on.
+  # here and sends it straight away (UsageSync.now!). A line that couldn't be
+  # sent waits here for the next call, or for `bx rails buddy:usage_sync`.
   #
   # The line carries where it came from — the machine, the environment, and the
   # kind of call — so the merged total can still be taken apart afterwards.
@@ -17,6 +17,7 @@ module Buddy
 
     DIR     = "log/buddy_usage".freeze
     PENDING = "pending.jsonl".freeze
+    SENDING = "sending.jsonl".freeze
     ORIGIN  = "origin".freeze
 
     def dir
@@ -25,6 +26,13 @@ module Buddy
 
     def path
       dir.join(PENDING)
+    end
+
+    # What a sync has taken out of `pending` and not yet seen land. A send that
+    # fails leaves it here, and the next one sends it again with whatever has
+    # been written since.
+    def sending_path
+      dir.join(SENDING)
     end
 
     # Production writes straight to the database everything else is trying to
@@ -46,7 +54,7 @@ module Buddy
       return nil if usage.nil? || !spool?
       return nil if usage.origin_uid.present? # already someone else's row
 
-      write(line(usage))
+      write(line(usage)).tap { UsageSync.now! }
     rescue StandardError => e
       Rails.logger.warn("[Buddy::UsageSpool] append failed: #{e.class}: #{e.message}")
       nil
@@ -93,13 +101,38 @@ module Buddy
     end
 
     def pending
-      return [] unless path.exist?
+      read(sending_path) + read(path)
+    end
 
-      path.readlines.filter_map { |raw|
+    def sending
+      read(sending_path)
+    end
+
+    def read(file)
+      return [] unless file.exist?
+
+      file.readlines.filter_map { |raw|
         next if raw.blank?
 
         JSON.parse(raw, symbolize_names: true)
       }
+    end
+
+    # Moves everything in `pending` onto the end of `sending`. Done under the
+    # same lock `write` takes, and by emptying the file rather than moving it,
+    # so a call recorded while a sync is out can't be filed away unsent.
+    def claim!
+      return sending unless path.exist?
+
+      File.open(path, File::RDWR) { |file|
+        file.flock(File::LOCK_EX)
+        lines = file.read
+        if lines.present?
+          File.open(sending_path, File::WRONLY | File::APPEND | File::CREAT) { |out| out.write(lines) }
+        end
+        file.truncate(0)
+      }
+      sending
     end
 
     def pending_count
@@ -112,6 +145,7 @@ module Buddy
     def spooled_uids
       files = Dir[dir.join("synced", "*.jsonl").to_s].map { |name| Pathname.new(name) }
       files.unshift(path) if path.exist?
+      files.unshift(sending_path) if sending_path.exist?
       files.flat_map { |file|
         file.readlines.filter_map { |raw|
           next if raw.blank?
@@ -123,12 +157,16 @@ module Buddy
 
     # Called once the whole file is known to have landed. Kept rather than
     # deleted: it is the only local record of what was handed over.
+    # A sync has always claimed before it sends, so `sending` is exactly what
+    # landed. Claiming here when it already exists would file away calls that
+    # were written while the batches were out.
     def archive!(stamp)
-      return nil unless path.exist?
+      claim! unless sending_path.exist?
+      return nil unless sending_path.exist?
 
       target = dir.join("synced", "#{stamp}.jsonl")
       FileUtils.mkdir_p(target.dirname)
-      FileUtils.mv(path.to_s, target.to_s)
+      FileUtils.mv(sending_path.to_s, target.to_s)
       target
     end
 

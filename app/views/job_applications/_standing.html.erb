@@ -1,0 +1,76 @@
+<%# Where this ONE application stands, at the top of its own page.
+
+   The index answers this for the whole search in three strips, and the page
+   actually open while something is being written down answered none of it:
+   whose move it is, how deep this went, how many times it has been round and
+   whether there is an interview to turn up to all had to be reconstructed by
+   reading the timeline underneath.
+
+   Lines first, figures second. A booking to attend and a thing owed are tasks;
+   the rest is a read, and it wears the quiet panel the standings table on the
+   index wears for the same reason. %>
+<%
+  latest = job.notes.max_by { |note| [note.occurred_at, note.id] }
+  # Nothing is owed on an application that is over, and nothing is booked on
+  # one either - a rejection clears the calendar (JobNote#withdraw_booking) but
+  # the note it cleared is still on the row.
+  owed = latest&.owed unless job.dead?
+  booked = job.next_interview_at unless job.dead?
+  unreported = job.unreported_interview_at unless job.dead?
+  # The frame goes to the appointment ahead of the errand, the way the index
+  # orders its strips: one of these is a room to be in at a time.
+  frame = (booked || unreported ? "is-booked" : ("is-waiting" if owed.present?))
+%>
+<div class="job-standing <%= frame %>">
+  <% if unreported.present? %>
+    <div class="standing-step">
+      <span class="note-tag note-tag-scheduled">Interview</span>
+      <%= interview_day(unreported) %>
+      <span class="field-hint">how did it go? Write it up below.</span>
+    </div>
+  <% elsif booked.present? %>
+    <div class="standing-step">
+      <span class="note-tag note-tag-scheduled">Interview</span>
+      <%= interview_day(booked) %>
+    </div>
+  <% end %>
+
+  <%# What is owed leads its own line, as it does on the index — the verb is
+     the part being scanned for. %>
+  <% if owed.present? %>
+    <div class="standing-step">
+      <span class="standing-owed"><%= owed %></span>
+      <span class="field-hint">
+        waiting on you &middot; <%= waiting_age(latest.occurred_at) %>
+      </span>
+    </div>
+  <% end %>
+
+  <dl class="standing-facts">
+    <div>
+      <dt>Reached</dt>
+      <dd><%= job.engagement_label || "No reply yet" %></dd>
+    </div>
+
+    <div>
+      <dt>Interactions</dt>
+      <dd><%= job.interaction_count %></dd>
+    </div>
+
+    <%# Over is neither move. The status control directly below says which way
+       it went, so repeating it here would be the second copy of one fact. %>
+    <% unless job.dead? %>
+      <div>
+        <dt>Move</dt>
+        <dd class="<%= "is-yours" if owed.present? %>">
+          <%= owed.present? ? "Yours" : "Theirs" %>
+        </dd>
+      </div>
+    <% end %>
+
+    <div>
+      <dt>Last beat</dt>
+      <dd><%= standing_age(job.engaged_at) %></dd>
+    </div>
+  </dl>
+</div>

@@ -142,6 +142,23 @@ RSpec.describe AgendaItem do
       end
     end
 
+    describe "moving to another agenda" do
+      let(:other) { create(:agenda, user: agenda.user, color: "#00D431") }
+
+      it "drops the old agenda's color so the new one shows" do
+        item = create(:agenda_item, agenda: agenda, color: agenda.color.downcase)
+        item.update!(agenda: other)
+        expect(item.reload.color).to be_nil
+        expect(item.display_color).to eq("#00D431")
+      end
+
+      it "keeps a color picked to differ from the old agenda" do
+        item = create(:agenda_item, agenda: agenda, color: "#FF0000")
+        item.update!(agenda: other)
+        expect(item.reload.color).to eq("#FF0000")
+      end
+    end
+
     describe "#crossed_out?" do
       let(:now) { Time.zone.local(2026, 5, 13, 12, 0) }
 
@@ -498,6 +515,21 @@ RSpec.describe AgendaItem do
         sent = agenda_payloads { item.update!(start_at: 3.hours.from_now) }
 
         expect(sent.size).to eq(1)
+      end
+
+      it "tells someone who can't see where it went to drop it" do
+        viewer = create(:user)
+        AgendaShare.create!(agenda: agenda, user: viewer)
+        hidden = create(:agenda, user: agenda.user)
+        item = create(:agenda_item, agenda: agenda)
+        sent = []
+        allow(MonitorChannel).to receive(:broadcast_to) { |u, payload| sent << [u.id, payload] }
+
+        item.update!(agenda: hidden)
+
+        drops = sent.select { |_, p| p[:data][:destroyed_item_ids].present? }
+        expect(drops.map(&:first)).to eq([viewer.id])
+        expect(drops.sole.last[:data][:destroyed_item_ids]).to eq([item.id.to_s])
       end
 
       it "carries the id of a destroyed row, which no delta can return" do

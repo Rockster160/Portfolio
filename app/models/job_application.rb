@@ -90,6 +90,11 @@ class JobApplication < ApplicationRecord
   MERGE_RECEIPT_WINDOW = 1.hour
   MERGE_APPLIED_LEAD = 5.minutes
 
+  # How far AHEAD of its slot a conversation beat may be stamped and still be
+  # read as that meeting's write-up. See `reports_interview?` - a call is logged
+  # from the moment it starts, and the clock on the booking is only a plan.
+  WRITE_UP_LEAD = 1.hour
+
   # Two rows for ONE application, folded into one. It keeps happening the same
   # way: jobhunt writes its row the moment it submits, the ATS receipt is
   # proposed as a new row off the mail, and the two land seconds apart with half
@@ -290,12 +295,55 @@ class JobApplication < ApplicationRecord
     return nil if held.empty?
 
     last = held.max
-    return nil if notes.any? { |note| note.occurred_at.present? && note.occurred_at > last }
+    return nil if notes.any? { |note| reports_interview?(note, last) }
 
     last
   end
 
+  # The beat most likely to be written next, for the Type dropdown on the page
+  # where notes get written. A guess with a default behind it, never a decision:
+  # it is the one field on the form already in view when the body is being
+  # typed, so a wrong guess costs a glance.
+  #
+  # Only the three states where the answer is not in doubt. A booking whose slot
+  # has passed is the clearest of them - that is what the page is open FOR - and
+  # `heard_back` is the other half of a documented pair: they wrote, and the
+  # thing being written down is the reply. Everything else stays `note`, which
+  # is a correct answer rather than a failure to guess.
+  def expected_next_tag
+    return :applied if notes.empty?
+    return conversation_tag if unreported_interview_at.present?
+
+    latest = notes.max_by { |note| [note.occurred_at, note.id] }
+    latest&.heard_back? ? :responded : :note
+  end
+
   protected
+
+  # Whether this beat says a passed booking has been WRITTEN UP.
+  #
+  # Anything filed after the slot does, which is the plain reading and was the
+  # whole of the rule. A conversation beat is the write-up itself, though, and
+  # it is stamped when the call STARTED - so it lands ON the slot rather than
+  # after it, and sometimes just ahead of it. brightwheel's recruiter call and
+  # the booking it came from both read 11:00, and River's call was logged
+  # fifteen minutes before the slot it was booked for. Both rows were held in
+  # the booked strip asking how it went, directly above the answer.
+  def reports_interview?(note, slot)
+    return false if note.occurred_at.blank?
+    return true if note.occurred_at >= slot
+    return false unless note.recruiter_call? || note.interview?
+
+    note.occurred_at >= slot - WRITE_UP_LEAD
+  end
+
+  # Which conversation a passed booking was. Not a guess: the first one with a
+  # company is a recruiter call and every one after it is an interview, so the
+  # answer is the rung this row has already reached.
+  def conversation_tag
+    spoken = JobNote::ENGAGEMENT_DEPTH["recruiter_call"]
+    engagement_depth.to_i >= spoken ? :interview : :recruiter_call
+  end
 
   # The notes move by `update_all` so nothing re-fires - a note's callbacks are
   # about the moment it was WRITTEN, and moving it is not that. Their ids don't

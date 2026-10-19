@@ -75,6 +75,7 @@ class AgendaItem < ApplicationRecord
   validate :end_at_required_for_event
 
   before_save :clear_notified_at_on_future_reschedule
+  before_save :drop_color_of_previous_agenda
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
   after_update_commit :propagate_to_derived_triggers, if: :times_changed?
   after_update_commit :purge_pending_derived_triggers, if: :saved_change_to_status?
@@ -885,6 +886,17 @@ class AgendaItem < ApplicationRecord
     old_id = saved_changes[:agenda_id].first
     old_agenda = Agenda.find_by(id: old_id)
     Agenda.broadcast_changes!([old_agenda, agenda].compact)
+    return if old_agenda.nil?
+
+    # Someone who could see the old agenda and can't see the new one would
+    # otherwise keep it: their delta only returns items they can still see,
+    # so nothing ever says this one left. Told to drop it, like a destroy.
+    lost = viewer_ids(old_agenda) - viewer_ids(agenda)
+    Agenda.broadcast_changes!([old_agenda], destroyed_item_ids: [display_id], only_user_ids: lost) if lost.any?
+  end
+
+  def viewer_ids(of_agenda)
+    [of_agenda.user_id] + AgendaShare.where(agenda_id: of_agenda.id).pluck(:user_id)
   end
 
   # Every open Agenda repaints off this one broadcast, so it belongs to the
@@ -937,6 +949,17 @@ class AgendaItem < ApplicationRecord
     return if start_at.nil? || start_at <= Time.current
 
     self.notified_at = nil
+  end
+
+  # A new item is stamped with its agenda's color, so after a move that stamp
+  # would keep painting it as the agenda it left. Only the stamp goes - a color
+  # picked to differ from the old agenda stays with the item.
+  def drop_color_of_previous_agenda
+    return unless persisted? && will_save_change_to_agenda_id?
+    return if color.blank?
+
+    previous = Agenda.find_by(id: agenda_id_in_database)&.color
+    self.color = nil if previous.present? && color.casecmp?(previous)
   end
 
   def end_at_after_start_at

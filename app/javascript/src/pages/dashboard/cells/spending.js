@@ -23,6 +23,10 @@ import { dash_colors, clamp } from "../vars";
 // Bills and loan payments never reach it — the server leaves them out — so
 // every purchase, large or small, counts on the day it landed.
 //
+// GPT month, between the money and Claude, is every model call the app made
+// this month — production, evals and localhost alike — against the account's
+// monthly limit. It rides the payload as `gpt`.
+//
 // The Claude bars are the same reading for the plan's rate limits: what is
 // left of the 5-hour session and of the week, against how much of each window
 // is left. The local status line reports them (see
@@ -53,13 +57,13 @@ import { dash_colors, clamp } from "../vars";
   // A blank line, not "": the renderer measures line height off content.
   const blank = " ".repeat(cell_width);
   // Where the bars sit in the rendered lines — `hover` reports a line index,
-  // and only these answer to it. Bars that are one reading stack with nothing
-  // between them; the gaps made them look like unrelated ones. The one blank
-  // left separates the money from Claude. There used to be a second, before
-  // the caffeine, and the two-line week strip took its place.
-  const balance_row = 0;
-  const month_row = 1;
-  const today_row = 2;
+  // and only these answer to it. The two-line week strip leads, so the bars
+  // start at line 2. Bars that are one reading stack with nothing between
+  // them; the gaps made them look like unrelated ones.
+  const balance_row = 2;
+  const month_row = 3;
+  const today_row = 4;
+  const gpt_row = 5;
   const session_row = 6;
   const claude_week_row = 7;
   const caffeine_row = 8;
@@ -401,6 +405,40 @@ import { dash_colors, clamp } from "../vars";
     return bar(row, text, left / 100, mark, left <= 0, false, wall);
   }
 
+  // The month's model spend against what the OpenAI account may spend, drained
+  // like the money and with the month's ☼. Its month is the UTC one OpenAI
+  // bills by, so it is read off `resets_at` rather than the 3am days above.
+  // Cents on hover: a whole-dollar figure would sit at $0 for days.
+  function gptBar(row, now_ms) {
+    const gpt = cell.data.gpt || {};
+    if (!(gpt.budget_micros > 0) || !gpt.resets_at) {
+      return blank;
+    }
+
+    const spent = gpt.spent_micros || 0;
+    const left = (gpt.budget_micros - spent) / gpt.budget_micros;
+    const reset_ms = gpt.resets_at * 1000;
+    const start = new Date(reset_ms);
+    start.setUTCMonth(start.getUTCMonth() - 1);
+    const dollars = function (micros) {
+      return "$" + (micros / 1000000).toFixed(2);
+    };
+    const figure =
+      dollars(spent) + " / $" + Math.round(gpt.budget_micros / 1000000) + "  ";
+    const text =
+      cell.data.hover === row
+        ? Text.justify(bar_width, "  GPT month", figure)
+        : "  GPT month";
+
+    return bar(
+      row,
+      text,
+      left,
+      remainingOf(start.getTime(), reset_ms, now_ms),
+      left <= 0,
+    );
+  }
+
   // Counts UP: it fills as the day's caffeine lands, where the bars above it
   // drain as the money goes. No ☼: how much of the day has gone says nothing
   // about how much caffeine is fine. Green, yellow from three quarters of the
@@ -516,7 +554,7 @@ import { dash_colors, clamp } from "../vars";
         month_left,
       ),
       spendBar(today_row, "Today", spentOver(today, 1), day_budget, today_left),
-      blank,
+      gptBar(gpt_row, now_ms),
       claudeBar(session_row, "Claude session", "five_hour", now),
       claudeBar(claude_week_row, "Claude week", "seven_day", now),
       caffeineBar(
@@ -540,6 +578,7 @@ import { dash_colors, clamp } from "../vars";
       caffeine_limit_mg: 0,
       caffeine: {},
       claude: {},
+      gpt: {},
       day_key: undefined,
       hover: -1,
     },
@@ -588,6 +627,7 @@ import { dash_colors, clamp } from "../vars";
           cell.data.caffeine_limit_mg = data.caffeine_limit_mg || 0;
           cell.data.caffeine = data.caffeine || {};
           cell.data.claude = data.claude || {};
+          cell.data.gpt = data.gpt || {};
           render();
         },
       });

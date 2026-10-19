@@ -51,7 +51,16 @@ class JobApplicationsController < ApplicationController
     @notes = @job.notes.recent.to_a
     @transcripts = @job.transcripts.to_a
     @preps = @job.preps.to_a
-    @note = @job.notes.new(occurred_at: Time.current)
+    # NOT through `@job.notes`. An unsaved note built into the association joins
+    # the collection every reading on this page takes: it is the newest beat on
+    # the row, it carries no tag, and the banner above the form read whose move
+    # it was off it - so an application waiting on a reply said the ball was in
+    # their court, under a form that had not been filled in yet.
+    #
+    # The dropdown opens on the beat the row is actually waiting for, which is
+    # overwhelmingly the write-up of an interview that has just happened - that
+    # is why the page is open. See `expected_next_tag`.
+    @note = JobNote.new(occurred_at: Time.current, tag: @job.expected_next_tag)
     @merge_candidates = merge_candidates
   end
 

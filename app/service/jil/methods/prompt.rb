@@ -154,6 +154,19 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     }
   end
 
+  # A select for a few short options, drawn as tappable chips. `colors` maps a
+  # choice to the color it lights up in; see PromptChips for the ones it knows
+  # without being told.
+  def chips(text, options, default=nil, colors={})
+    {
+      type:     :chips,
+      question: text,
+      choices:  options,
+      default:  default,
+      colors:   ::PromptChips.colors(options, colors),
+    }
+  end
+
   # A minutes value the person may type in whatever shape it comes out of their
   # head — "52", "1:32", "97m", "1h 32". It posts as a plain string and the
   # `Parse Duration` Jil function turns it into minutes on submit; the widget's

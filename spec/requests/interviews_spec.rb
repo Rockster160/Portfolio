@@ -817,4 +817,73 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body.index("+ Add a note")).to be < response.body.index("Timeline")
     end
   end
+
+  # The index answers this for the whole board. This page is the one open while
+  # something is being written down, and it used to answer none of it.
+  describe "the standing banner on one application" do
+    # Which option the Type dropdown opens on.
+    def selected_tag
+      block = response.body[/<select[^>]*name="job_note\[tag\]".*?<\/select>/m]
+      block[/<option selected="selected" value="(\w+)"/, 1]
+    end
+
+    it "says whose move it is, how deep it got and how many rounds" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :heard_back, occurred_at: 2.days.ago, body: "Keen to talk")
+
+      get interview_path(job)
+
+      expect(response.body).to include("job-standing is-waiting")
+      expect(response.body).to include("Reply to them")
+      expect(response.body).to include("Heard back")
+      expect(response.body).to include("Yours")
+    end
+
+    # Both at once - homework arriving before an interview already booked. The
+    # frame goes to the appointment, the way the index orders its strips, and
+    # the errand still gets its own line.
+    it "leads on a booked interview and keeps the thing owed beside it" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 2.days.from_now)
+      job.notes.create!(tag: :take_home, occurred_at: 1.hour.ago)
+
+      get interview_path(job)
+
+      expect(response.body).to include("job-standing is-booked")
+      expect(response.body).to include("Take-home to do")
+      expect(response.body).to include("Yours")
+    end
+
+    it "asks for the write-up of a slot that has passed" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 1.hour.ago)
+
+      get interview_path(job)
+
+      expect(response.body).to include("how did it go?")
+      expect(selected_tag).to eq("recruiter_call")
+    end
+
+    # Nothing is owed on a row that is over, and the status control below the
+    # banner already says which way it went.
+    it "claims no move on a rejected application" do
+      job = user.job_applications.create!(company: "Acme", status: :rejected)
+      job.notes.create!(tag: :heard_back, occurred_at: 2.days.ago, body: "Keen to talk")
+
+      get interview_path(job)
+
+      expect(response.body).to include("job-standing")
+      expect(response.body).not_to include("Reply to them")
+      expect(response.body).not_to include(">Move<")
+    end
+
+    it "stays off a row with nothing on its timeline" do
+      job = user.job_applications.create!(company: "Acme")
+
+      get interview_path(job)
+
+      expect(response.body).not_to include("job-standing")
+      expect(selected_tag).to eq("applied")
+    end
+  end
 end

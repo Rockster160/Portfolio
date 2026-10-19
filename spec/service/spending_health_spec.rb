@@ -88,6 +88,34 @@ RSpec.describe SpendingHealth do
     end
   end
 
+  describe ".gpt_month" do
+    def usage(at, micros, **attrs)
+      BuddyUsage.create!({
+        user: user, model: "gpt-5.4-mini", env: :production, cost_micros: micros, created_at: at,
+      }.merge(attrs))
+    end
+
+    it "adds up every billed call since the start of the UTC month" do
+      usage(Time.utc(2026, 9, 30, 23), 9_000_000)
+      usage(Time.utc(2026, 10, 1, 1), 1_000_000)
+      usage(Time.utc(2026, 10, 2), 500_000, env: :development, kind: :eval)
+      usage(Time.utc(2026, 10, 2), 700_000, env: :test)
+
+      month = described_class.gpt_month(now: Time.utc(2026, 10, 19))
+
+      expect(month).to eq(
+        spent_micros: 1_500_000, budget_micros: 20_000_000, resets_at: Time.utc(2026, 11, 1).to_i,
+      )
+    end
+
+    it "leaves out a Jil call made on someone else's key" do
+      usage(Time.utc(2026, 10, 2), 300_000, kind: :jil)
+      usage(Time.utc(2026, 10, 2), 200_000, kind: :jil, user: User.me)
+
+      expect(described_class.gpt_month(now: Time.utc(2026, 10, 19))[:spent_micros]).to eq(200_000)
+    end
+  end
+
   describe ".refresh!" do
     it "stores the budget with the buckets and asks the cell to redraw" do
       travel_to(zone.local(2026, 9, 13, 10)) do
@@ -105,6 +133,11 @@ RSpec.describe SpendingHealth do
           days:              { "2026-09-13": 500 },
           caffeine_limit_mg: ::CaffeineIntake::DAILY_LIMIT_MG,
           caffeine:          { "2026-09-13": 200 },
+          gpt:               {
+            spent_micros:  0,
+            budget_micros: described_class::GPT_MONTHLY_MICROS,
+            resets_at:     Time.utc(2026, 10, 1).to_i,
+          },
         }))
         expect(::Jil).to have_received(:trigger).with(
           user, :monitor, { channel: :spending, refresh: true }, auth: :trigger

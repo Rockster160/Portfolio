@@ -143,6 +143,20 @@
       ),
       class: "prompt-select-input"
     %>
+  <% when :chips %>
+    <%# Radios, so only one can be picked; the chip is grey until it is. %>
+    <% picked = (response&.dig(question).presence || default).to_s %>
+    <% colors = (option[:colors] || {}).transform_keys(&:to_s) %>
+    <div class="prompt-chips" role="radiogroup">
+      <% option[:choices].each_with_index do |choice, idx| %>
+        <% id = "#{base_key}chip#{idx}".gsub(/[^\w]/, "") %>
+        <% color = colors[choice.to_s] %>
+        <label class="prompt-chip" for="<%= id %>" <%= "style=\"--chip-color: #{color}\"".html_safe if color.to_s.match?(PromptChips::HEX) %>>
+          <%= radio_button_tag base_key, choice, picked == choice.to_s, id: id, required: idx.zero? %>
+          <span><%= choice %></span>
+        </label>
+      <% end %>
+    </div>
   <% when :duration %>
     <%# A plain text box on purpose: `number` drops "1:32" and "1h 32" as you %>
     <%# type them. What it was read as goes in the hint underneath, live. %>

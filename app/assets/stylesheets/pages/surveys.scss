@@ -31,6 +31,39 @@
     }
   }
 
+  // One of a few, as pills: grey until picked, then the chip's own color.
+  .prompt-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0 8px;
+
+    .prompt-chip {
+      cursor: pointer;
+    }
+
+    input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    span {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    input:checked + span {
+      background: var(--chip-color, #{$base-blue});
+      color: #fff;
+    }
+  }
+
   .prompt-hint {
     margin: 0;
     padding: 2px 4px 0;

@@ -38,6 +38,12 @@
       <div class="app-card-inner">
         <%= render "logo_picker", save_label: "Use this crop" %>
 
+        <%# Nothing to stand on with an empty timeline, and the page already
+           says so where the notes would be. %>
+        <% if @notes.any? %>
+          <%= render "standing", job: @job %>
+        <% end %>
+
         <div class="job-header">
           <%= form_with model: @job, url: interview_path(@job), method: :patch, local: true,
                 class: "basic job-status-form" do |f| %>

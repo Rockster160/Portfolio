@@ -17,8 +17,45 @@ module Buddy
     BATCH = 200
     PATH  = :buddy_usages
 
-    def call(batch: BATCH)
-      rows = UsageSpool.pending
+    LOCK = "sync.lock".freeze
+
+    def call(batch: BATCH, &block)
+      exclusively { send_claimed(batch, &block) }
+    end
+
+    # Sent in the call that spent it, the moment its line is written, so a call
+    # made off production can't go unreported. Nothing in between - no thread,
+    # no queue - that could be not running. A send that fails leaves the line in
+    # the spool, and the next call's send carries it along with its own.
+    def now!
+      return unless automatic?
+
+      call
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::UsageSync] send failed, left in the spool: #{e.class}: #{e.message}")
+      nil
+    end
+
+    def automatic?
+      flag = ENV["BUDDY_USAGE_AUTOSYNC"]
+      return flag != "0" if flag.present?
+
+      UsageSpool.spool? && !Rails.env.test?
+    end
+
+    # One send at a time across every process on the machine: the server and an
+    # eval both writing calls would otherwise both send `sending`, and the
+    # second would find nothing to archive.
+    def exclusively(&block)
+      FileUtils.mkdir_p(UsageSpool.dir)
+      File.open(UsageSpool.dir.join(LOCK), File::RDWR | File::CREAT) { |lock|
+        lock.flock(File::LOCK_EX)
+        block.call
+      }
+    end
+
+    def send_claimed(batch)
+      rows = UsageSpool.claim!
       return { rows: 0, created: 0, duplicate: 0, skipped: 0 } if rows.empty?
 
       counts = Hash.new(0)

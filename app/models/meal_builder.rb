@@ -41,6 +41,27 @@ class MealBuilder < ApplicationRecord
     }.compact
   end
 
+  # The builder a logged thing of `category` belongs on: the one named for it
+  # (a Drink builder for drinks), else Food, else whichever came first.
+  def self.for_category(category)
+    builders = order(:id).to_a
+    builders.detect { |b| b.name.casecmp?(category.to_s) } ||
+      builders.detect { |b| b.name.casecmp?("Food") } ||
+      builders.first
+  end
+
+  # One more thing to pick. A name already on it, in any case, is left as it
+  # is rather than listed twice. Returns whether it is on the builder now.
+  def add_item!(category:, name:, cal:)
+    name = name.to_s.squish
+    return false if name.blank?
+    return true if items.any? { |item| item[:name].to_s.casecmp?(name) }
+
+    item = { category: category.to_s.squish.capitalize.presence || "Food", name: name, cal: cal.to_i, img: emoji_for(name), tag: "" }
+    update!(items: items + [item])
+    true
+  end
+
   def listify_items
     items.map { |item|
       [
@@ -51,5 +72,14 @@ class MealBuilder < ApplicationRecord
         item[:tag].present? ? " | #{item[:tag]}" : nil,
       ].map { |part| part.to_s.squish }.compact_blank.join(" ")
     }.join("\n")
+  end
+
+  private
+
+  # The builder draws `img` as text, so only an emoji will do - not a Tabler
+  # class name or an uploaded icon.
+  def emoji_for(name)
+    values = ::IconPool.search(name, limit: 10).pluck(:c)
+    values.find { |value| value.present? && !value.start_with?("ti-", "data:") }.to_s
   end
 end

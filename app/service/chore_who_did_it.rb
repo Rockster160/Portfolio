@@ -40,7 +40,13 @@ module ChoreWhoDidIt
         completion_id: stand_in.id,
       ),
       options:  [
-        { type: :select, question: WHO_QUESTION, choices: names, default: likely_doer(chore, names) },
+        {
+          type:     :chips,
+          question: WHO_QUESTION,
+          choices:  names,
+          default:  likely_doer(chore, names),
+          colors:   ::PromptChips.colors(names),
+        },
         { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, at) },
       ],
     )

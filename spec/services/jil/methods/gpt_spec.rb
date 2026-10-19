@@ -14,7 +14,7 @@ RSpec.describe Jil::Methods::GPT do
   end
 
   it "asks through a connection paid for by the named secret" do
-    allow(GPTRequest).to receive(:call).with("sk-test", "Hello?", instructions: nil, json: false).and_return("Hi!")
+    allow(GPTRequest).to receive(:call).with("sk-test", "Hello?", instructions: nil, json: false, user: user).and_return("Hi!")
 
     exe = run(<<~'JIL')
       gpt = GPT.connection("openai")::GPT
@@ -42,6 +42,7 @@ RSpec.describe Jil::Methods::GPT do
       "Food: Betos Burrito",
       instructions: "Estimate calories as JSON.",
       json:         true,
+      user:         user,
     ).and_return({ "calories" => 850, "explanation" => "Full burrito" })
 
     exe = run(<<~'JIL')

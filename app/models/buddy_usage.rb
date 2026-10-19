@@ -50,6 +50,10 @@ class BuddyUsage < ApplicationRecord
   # beat in the job search. Separable because it scales with the INBOX rather
   # than with anything anyone did: a week of heavy spam and no conversation at
   # all still bills, and folded in it would read as turns nobody took.
+  # `announce` is Buddy::Announce writing a message the app asked to pass on.
+  # `jil` is a GPT.ask from a Jil task, made through GPTRequest on the key the
+  # task names. That key is usually the account owner's, but it is whoever's
+  # secret it is, so it bills to them rather than to the shared total.
   enum :kind, {
     turn:           0,
     compaction:     1,
@@ -59,6 +63,8 @@ class BuddyUsage < ApplicationRecord
     image_describe: 5,
     job_triage:     6,
     sentiment:      7,
+    announce:       8,
+    jil:            9,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend
@@ -74,7 +80,13 @@ class BuddyUsage < ApplicationRecord
   # `origin_uid` is set only on rows that arrived from somewhere else. It names
   # the machine and the row that spent the money, and it is what the prod copy
   # dedupes on, so re-sending a spool file is harmless.
-  scope :billed,   -> { where.not(env: :test) }
+  # The dashboard's month bar. A turn writes several rows in a few seconds and
+  # an eval sync lands hundreds at once, so the first row claims the next
+  # minute and one refresh covers everything written in it.
+  REFRESH_EVERY = 1.minute
+  after_create_commit :schedule_spend_refresh, if: -> { Rails.env.production? }
+
+    scope :billed,   -> { where.not(env: :test) }
   scope :synced,   -> { where.not(origin_uid: nil) }
   scope :unsynced, -> { where(origin_uid: nil) }
 
@@ -107,7 +119,13 @@ class BuddyUsage < ApplicationRecord
     ).tap { |row| Buddy::UsageSpool.append!(row) }
   end
 
-  # Total spend for a scope, in micro-dollars.
+  def schedule_spend_refresh
+    return unless Rails.cache.write(:gpt_spend_refresh, true, expires_in: REFRESH_EVERY, unless_exist: true)
+
+    SpendingRefreshWorker.perform_in(REFRESH_EVERY)
+  end
+
+    # Total spend for a scope, in micro-dollars.
   def self.spend_micros
     sum(:cost_micros)
   end

@@ -13,7 +13,7 @@ Buddy::Tools.register(
 
     `id` is the prompt's id. `answers` is keyed by the exact question texts
     read_prompt returned, with the person's answers as values - a number for a
-    scale, one of the listed `choices` for a select, an array (or a
+    scale, one of the listed `choices` for a select or chips, an array (or a
     comma-separated string) for a multi-select, yes/no for a checkbox.
 
     A field you leave out keeps whatever the form loaded it with, so leave one

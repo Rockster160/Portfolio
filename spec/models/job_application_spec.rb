@@ -257,6 +257,77 @@ RSpec.describe JobApplication do
 
       expect(job.reload.unreported_interview_at).to be_within(1.second).of(2.days.ago)
     end
+
+    # The call is logged from the moment it STARTED, so the write-up lands on
+    # the booked time rather than after it. brightwheel's booking and the
+    # recruiter call written up from it both read 11:00.
+    it "lets go of a booking written up at exactly its slot" do
+      slot = 3.hours.ago
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: slot)
+      job.notes.create!(tag: :recruiter_call, occurred_at: slot, body: "Sounded keen")
+
+      expect(job.reload.unreported_interview_at).to be_nil
+    end
+
+    # River's was stamped fifteen minutes ahead of the slot it was booked for.
+    it "lets go of one written up in the hour before its slot" do
+      slot = 3.hours.ago
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: slot)
+      job.notes.create!(tag: :interview, occurred_at: slot - 15.minutes, body: "Went well")
+
+      expect(job.reload.unreported_interview_at).to be_nil
+    end
+
+    # The leniency is for a write-up arriving around its own meeting, not for
+    # one belonging to the round before it.
+    it "still asks when the only conversation on the row predates the booking" do
+      slot = 3.hours.ago
+      job.notes.create!(tag: :interview, occurred_at: 9.days.ago, body: "Round one")
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: slot)
+
+      expect(job.reload.unreported_interview_at).to be_within(1.second).of(slot)
+    end
+  end
+
+  describe "the beat it expects next" do
+    let(:job) { user.job_applications.create!(company: "Reserv") }
+
+    it "opens on Applied with an empty timeline" do
+      expect(job.expected_next_tag).to eq(:applied)
+    end
+
+    it "opens on the write-up once a booked slot has passed" do
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 1.hour.ago)
+
+      expect(job.reload.expected_next_tag).to eq(:recruiter_call)
+    end
+
+    # Every conversation after the first one is an interview, and the rung the
+    # row has reached already says which this is.
+    it "opens on Interview once a recruiter call is behind it" do
+      job.notes.create!(tag: :recruiter_call, occurred_at: 9.days.ago)
+      job.notes.create!(tag: :scheduled, occurred_at: 2.days.ago, follow_up_at: 1.hour.ago)
+
+      expect(job.reload.expected_next_tag).to eq(:interview)
+    end
+
+    it "does not reach for a conversation while the slot is still ahead" do
+      job.notes.create!(tag: :scheduled, occurred_at: 1.day.ago, follow_up_at: 2.days.from_now)
+
+      expect(job.reload.expected_next_tag).to eq(:note)
+    end
+
+    it "opens on Responded when a person on their side wrote last" do
+      job.notes.create!(tag: :heard_back, occurred_at: 1.day.ago, body: "Are you still keen?")
+
+      expect(job.reload.expected_next_tag).to eq(:responded)
+    end
+
+    it "falls back to a plain note" do
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+
+      expect(job.reload.expected_next_tag).to eq(:note)
+    end
   end
 
   describe "where you stand" do

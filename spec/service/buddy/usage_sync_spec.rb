@@ -81,11 +81,69 @@ RSpec.describe Buddy::UsageSync do
       expect(Buddy::UsageSpool.pending.length).to eq(1)
     end
 
+    it "keeps a call written while the batches were out" do
+      Buddy::UsageSpool.append!(usage)
+      allow(ProdApi).to receive(:post) {
+        Buddy::UsageSpool.write(Buddy::UsageSpool.line(usage))
+        answer(created: 1)
+      }
+
+      result = described_class.call
+
+      expect(result[:archived].read.lines.length).to eq(1)
+      expect(Buddy::UsageSpool.pending.length).to eq(1)
+    end
+
+    it "sends again what a failed send left behind, with what came after" do
+      Buddy::UsageSpool.append!(usage)
+      allow(ProdApi).to receive(:post).and_raise(RestClient::BadGateway)
+      expect { described_class.call }.to raise_error(RestClient::BadGateway)
+
+      Buddy::UsageSpool.append!(usage)
+      allow(ProdApi).to receive(:post).and_return(answer(created: 2))
+
+      expect(described_class.call).to include(rows: 2)
+      expect(Buddy::UsageSpool.pending).to be_empty
+    end
+
     it "does nothing at all with an empty spool" do
       allow(ProdApi).to receive(:post)
 
       expect(described_class.call).to include(rows: 0)
       expect(ProdApi).not_to have_received(:post)
+    end
+  end
+
+  describe ".now!" do
+    before { allow(ENV).to receive(:[]).with("BUDDY_USAGE_AUTOSYNC").and_return("1") }
+
+    it "sends each call as it is written, before the call returns" do
+      allow(ProdApi).to receive(:post).and_return(answer(created: 1))
+
+      Buddy::UsageSpool.append!(usage)
+
+      expect(ProdApi).to have_received(:post).once
+      expect(Buddy::UsageSpool.pending).to be_empty
+    end
+
+    it "keeps a call production couldn't take, and sends it with the next one" do
+      allow(ProdApi).to receive(:post).and_raise(RestClient::BadGateway)
+      Buddy::UsageSpool.append!(usage)
+      expect(Buddy::UsageSpool.pending.length).to eq(1)
+
+      allow(ProdApi).to receive(:post).and_return(answer(created: 2))
+      Buddy::UsageSpool.append!(usage)
+
+      expect(ProdApi).to have_received(:post).with(
+        :buddy_usages, hash_including(usages: satisfy { |rows| rows.length == 2 }), content_type: "application/json",
+      )
+      expect(Buddy::UsageSpool.pending).to be_empty
+    end
+
+    it "is off for the suite" do
+      allow(ENV).to receive(:[]).with("BUDDY_USAGE_AUTOSYNC").and_return(nil)
+
+      expect(described_class.automatic?).to be(false)
     end
   end
 

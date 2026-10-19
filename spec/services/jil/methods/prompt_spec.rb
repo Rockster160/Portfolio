@@ -55,6 +55,33 @@ RSpec.describe Jil::Methods::Prompt do
     end
   end
 
+  describe "#chips" do
+    let(:code) {
+      <<-JIL
+        colors = Hash.new({
+          yesColor = Keyval.new("Yes", "#16A34A")::Keyval
+          badColor = Keyval.new("No", "red")::Keyval
+        })::Hash
+        q = PromptQuestion.chips("Washed it?", {
+          a = String.new("Yes")::String
+          b = String.new("No")::String
+          c = String.new("Rockster160")::String
+        }, "Yes", colors)::PromptQuestion
+      JIL
+    }
+
+    it "carries a color for each chip that has one" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :q, :value).to_h.symbolize_keys).to eq(
+        type:     :chips,
+        question: "Washed it?",
+        choices:  ["Yes", "No", "Rockster160"],
+        default:  "Yes",
+        colors:   { "Yes" => "#16A34A", "Rockster160" => "#0160FF" },
+      )
+    end
+  end
+
   describe "#hint" do
     let(:code) {
       <<-JIL

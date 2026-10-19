@@ -128,6 +128,7 @@ module Buddy
         instructions: Buddy::Personality.for(user, conversation: convo),
         input:        [{ role: :user, content: [{ type: :input_text, text: seed(user, briefing, notes) }] }],
       )
+      record_usage(result, user, convo)
       return nil unless result[:ok]
 
       # Strip the mood marker — this goes out as a plain message, and the face
@@ -136,6 +137,12 @@ module Buddy
     rescue StandardError => e
       io.puts("  model call failed: #{e.class}: #{e.message}")
       nil
+    end
+
+    def record_usage(result, user, convo)
+      BuddyUsage.record!(result, user: user, kind: :announce, conversation: convo)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::Announce] usage record failed: #{e.class}: #{e.message}")
     end
 
     def seed(user, briefing, notes)

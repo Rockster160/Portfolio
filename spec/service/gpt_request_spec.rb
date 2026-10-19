@@ -34,6 +34,25 @@ RSpec.describe GPTRequest do
     )
   end
 
+  it "writes down what the call spent against the person it was made for" do
+    user = create(:user)
+    body = JSON.parse(reply("Scattering.")[:body]).merge(
+      "usage" => {
+        "prompt_tokens" => 1_000, "completion_tokens" => 200,
+        "prompt_tokens_details" => { "cached_tokens" => 400 },
+        "completion_tokens_details" => { "reasoning_tokens" => 50 },
+      },
+    )
+    stub_request(:post, endpoint).to_return(reply("x").merge(body: body.to_json))
+
+    described_class.call("sk-x", "Why is the sky blue?", user: user)
+
+    expect(BuddyUsage.where(user: user).sole).to have_attributes(
+      kind: "jil", model: GPTRequest::MODEL, input_tokens: 1_000, cached_input_tokens: 400,
+      output_tokens: 200, reasoning_tokens: 50, cost_micros: be_positive,
+    )
+  end
+
   it "refuses without a key rather than falling back to the server's" do
     expect { described_class.call("", "hi") }.to raise_error(GPTRequest::Error, /No OpenAI key/)
   end

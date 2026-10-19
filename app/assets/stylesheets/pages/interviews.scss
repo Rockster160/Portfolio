@@ -617,6 +617,87 @@
     }
   }
 
+  // ---- Where this one stands -------------------------------------------
+  // The index's strips, answered for one application and put where the
+  // question gets asked. Quiet panel by default, because most rows have
+  // nothing outstanding; it takes the booked amber or the waiting red and a
+  // 4px spine only when it has something to say, which is the same weight and
+  // the same two colours the strips on the index use.
+  .job-standing {
+    margin-bottom: 14px;
+    border: 1px solid var(--iv-line);
+    border-radius: 10px;
+    background: var(--iv-surface);
+    padding: 10px 14px;
+
+    &.is-booked {
+      border-color: var(--iv-booked);
+      border-left-width: 4px;
+      background: var(--iv-booked-soft);
+    }
+
+    &.is-waiting {
+      border-color: var(--iv-waiting);
+      border-left-width: 4px;
+      background: var(--iv-waiting-soft);
+    }
+
+    .standing-step {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 15px;
+
+      & + .standing-step {
+        margin-top: 4px;
+      }
+    }
+
+    .standing-owed {
+      color: var(--iv-waiting);
+      font-weight: bold;
+    }
+
+    // Ruled off the lines above, because those are tasks and these are a read.
+    .standing-step + .standing-facts {
+      margin-top: 9px;
+      border-top: 1px solid var(--iv-line);
+      padding-top: 9px;
+    }
+
+    .standing-facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 24px;
+      margin: 0;
+
+      > div {
+        display: flex;
+        flex-direction: column;
+      }
+
+      dt {
+        color: var(--iv-muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      dd {
+        margin: 0;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      // The same red the waiting strip uses, because it is the same fact.
+      .is-yours {
+        color: var(--iv-waiting);
+        font-weight: bold;
+      }
+    }
+  }
+
   // Status control and the facts beside it. The logo used to live here; it
   // moved up into the title, which is where a logo goes.
   .job-header {

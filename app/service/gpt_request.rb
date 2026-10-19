@@ -10,12 +10,15 @@ class GPTRequest
 
   Error = Class.new(StandardError)
 
-  def self.call(key, input, instructions: nil, json: false)
-    new(key).call(input, instructions: instructions, json: json)
+  def self.call(key, input, instructions: nil, json: false, user: nil)
+    new(key, user: user).call(input, instructions: instructions, json: json)
   end
 
-  def initialize(key)
+  # `user` is who the spend is written down against; without one the call is
+  # made but not recorded.
+  def initialize(key, user: nil)
     @key = key
+    @user = user
   end
 
   def call(input, instructions: nil, json: false)
@@ -29,13 +32,34 @@ class GPTRequest
     parameters = { model: MODEL, messages: messages }
     parameters[:response_format] = { type: :json_object } if json
 
-    text = client.chat(parameters: parameters).dig("choices", 0, "message", "content").to_s
+    response = client.chat(parameters: parameters)
+    record_usage(response["usage"])
+    text = response.dig("choices", 0, "message", "content").to_s
     json ? parse(text) : text
   rescue Faraday::Error => e
     raise Error, "OpenAI request failed: #{e.message}"
   end
 
   private
+
+  # Chat completions name the counts differently from the Responses API that
+  # BuddyUsage was written for. Priced on MODEL rather than the reply's model,
+  # which carries a dated suffix the price table doesn't list.
+  def record_usage(usage)
+    return if @user.nil? || usage.blank?
+
+    BuddyUsage.record!({
+      model: MODEL,
+      usage: {
+        input_tokens:        usage["prompt_tokens"],
+        cached_input_tokens: usage.dig("prompt_tokens_details", "cached_tokens"),
+        output_tokens:       usage["completion_tokens"],
+        reasoning_tokens:    usage.dig("completion_tokens_details", "reasoning_tokens"),
+      },
+    }, user: @user, kind: :jil)
+  rescue StandardError => e
+    Rails.logger.warn("[GPTRequest] usage record failed: #{e.class}: #{e.message}")
+  end
 
   def client
     ::OpenAI::Client.new(access_token: @key, request_timeout: TIMEOUT_SECONDS)
