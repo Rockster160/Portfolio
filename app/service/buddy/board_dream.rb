@@ -12,18 +12,35 @@ module Buddy
   module BoardDream
     module_function
 
-    SLOT_MS = 30 * 60 * 1000
+    # How long a dream lasts and how long the pet rests between them, in
+    # minutes: the choices a board offers. The defaults are a fresh draw every
+    # half hour with no set break.
+    DREAM_MINUTES = [15, 30, 60, 120].freeze
+    BREAK_MINUTES = [0, 30, 60, 120, 240].freeze
+    DEFAULT_DREAM_MINUTES = 30
+    DEFAULT_BREAK_MINUTES = 0
     # The weight of dreaming of nothing - one ordinary chore's worth.
     REST_WEIGHT = 1.0
     MASK = 0xFFFFFFFF
 
-    # The chosen item, or nil for nothing this half hour.
-    def pick(items, board_id, at: Time.current)
+    # The chosen item, or nil for nothing right now (a break, or the draw
+    # landing on rest).
+    def pick(
+      items,
+      board_id,
+      at: Time.current,
+      dream_minutes: DEFAULT_DREAM_MINUTES,
+      break_minutes: DEFAULT_BREAK_MINUTES)
       pool = candidates(items)
       return nil if pool.empty?
 
+      ms = (at.to_f * 1000).floor
+      dream_ms = dream_minutes * 60_000
+      cycle_ms = dream_ms + (break_minutes * 60_000)
+      return nil if ms % cycle_ms >= dream_ms
+
       total = pool.sum { |item| item[:hot_weight].to_f } + REST_WEIGHT
-      roll = random(seed(board_id, at)) * total
+      roll = random(seed(board_id, ms / cycle_ms)) * total
       pool.find { |item|
         roll -= item[:hot_weight].to_f
         roll.negative?
@@ -40,9 +57,8 @@ module Buddy
       }.sort_by { |item| item[:id].to_i }
     end
 
-    def seed(board_id, at)
-      slot = (at.to_f * 1000).floor / SLOT_MS
-      ((slot * 31) + board_id.to_i) & MASK
+    def seed(board_id, cycle)
+      ((cycle * 31) + board_id.to_i) & MASK
     end
 
     # mulberry32: a float in [0, 1) from a 32-bit seed, bit for bit the JS one.

@@ -114,6 +114,9 @@
      data-board-owner-id="<%= @conversation.user_id %>"
      data-board-tags="<%= Array(@board_tags).to_json %>"
      data-board-chore-dreams="<%= @conversation.chore_dreams? %>"
+     data-board-dream-minutes="<%= @conversation.dream_minutes %>"
+     data-board-dream-break="<%= @conversation.dream_break_minutes %>"
+     data-board-pins="<%= @conversation.pinned_chore_ids.to_json %>"
      <%# Whisper's state as this board wears it (asleep / gone), known before %>
      <%# the feed speaks, so the pet opens holding it rather than on its mood. %>
      data-board-whisper-state="<%= @board_whisper_state %>"

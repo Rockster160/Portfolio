@@ -74,6 +74,7 @@ Rails.application.routes.draw do
   post  "/byte/board/hidden" => "byte#set_board_hidden", as: :byte_board_hidden
   post  "/byte/board/ask_who" => "byte#set_board_ask_who", as: :byte_board_ask_who
   post  "/byte/board/members" => "byte#set_board_members", as: :byte_board_members
+  post  "/byte/board/pins" => "byte#set_board_pins", as: :byte_board_pins
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
   get   "/byte/version" => "byte#version", as: :byte_version
   get   "/byte/board/tags"  => "byte#board_tags",  as: :byte_board_tags
@@ -111,6 +112,7 @@ Rails.application.routes.draw do
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
   get    "/byte/workspaces"        => "byte#workspaces",           as: :byte_workspaces
   post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
+  post   "/byte/actions/:request_id/dismiss" => "byte#dismiss_action", as: :byte_action_dismiss
   post   "/buddy/quick_action"               => "buddy/quick_actions#create", as: :buddy_quick_action
   # Conditions still standing open (Buddy::Alerts). `dismiss` lets go of one
   # without claiming it cleared - see the controller for why that matters.

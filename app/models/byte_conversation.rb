@@ -23,6 +23,16 @@
 #  user_id             :bigint           not null
 #
 class ByteConversation < ApplicationRecord
+  # Groups a board can watch that no chore, routine or button carries, so they
+  # would never show up in the picker on their own:
+  # - "All" is a wildcard — a board watching it shows every chore (and only
+  #   chores; the one-press routines and buttons belong to the named groups).
+  # - "Whisper" is the feed group the Whisper PWA board watches for its duration
+  #   rings, sounds and alerts, which are broadcast with groups: "Whisper" and
+  #   have no chore behind them.
+  BOARD_ALL_TAG       = "All".freeze
+  BOARD_RESERVED_TAGS = [BOARD_ALL_TAG, "Whisper"].freeze
+
   # Users whose new Buddy threads spin up as a non-default pet. The pet theme is
   # now per-conversation, so these only seed the default at creation — nothing
   # else keys off the id. Everything a theme MEANS (name, voice, icon, colour)
@@ -181,6 +191,30 @@ class ByteConversation < ApplicationRecord
     !(metadata.is_a?(Hash) && metadata["chore_dreams"].to_s == "false")
   end
 
+  # How long each hot-chore dream lasts, and how long the pet rests between
+  # them (Buddy::BoardDream), in minutes. A value outside the offered choices
+  # reads as the default.
+  def dream_minutes
+    board_dream_setting(
+      "dream_minutes",
+      Buddy::BoardDream::DREAM_MINUTES,
+      Buddy::BoardDream::DEFAULT_DREAM_MINUTES,
+    )
+  end
+
+  def dream_break_minutes
+    board_dream_setting(
+      "dream_break_minutes",
+      Buddy::BoardDream::BREAK_MINUTES,
+      Buddy::BoardDream::DEFAULT_BREAK_MINUTES,
+    )
+  end
+
+  def board_dream_setting(key, allowed, default)
+    value = metadata.is_a?(Hash) ? metadata[key].to_i : nil
+    allowed.include?(value) ? value : default
+  end
+
   # A board somewhere everybody walks past: a chore pressed on it is done by
   # nobody yet, and the owner is asked who it was (see ChoreWhoDidIt). Off
   # unless switched on - a personal board credits whoever is signed in.
@@ -216,6 +250,51 @@ class ByteConversation < ApplicationRecord
     tags = GroupTaggable.normalize(values)
     base = metadata.to_h.except("chore_tag") # retire the legacy single-tag key
     self.metadata = (tags.present? ? base.merge("chore_tags" => tags) : base.except("chore_tags"))
+  end
+
+  # The board's REAL groups - the ones chores, routines and buttons are tagged
+  # with - without the reserved ones nothing carries. What a chore or button
+  # made for this board is filed under so that it shows here.
+  def named_board_groups
+    chore_tags.reject { |tag| BOARD_RESERVED_TAGS.any? { |r| r.casecmp?(tag) } }
+  end
+
+  # Chores pinned to this board, in the order they show: on it whatever groups
+  # it watches and whatever the schedule says, the way the Dailies list keeps a
+  # chore on Today. Only ever chores the owner can see.
+  def pinned_chore_ids
+    return [] unless metadata.is_a?(Hash)
+
+    Array(metadata["pinned_chore_ids"]).map(&:to_i).uniq.select(&:positive?)
+  end
+
+  def pinned_chore_ids=(ids)
+    allowed = user.accessible_chores.where(id: ids).pluck(:id).to_set
+    kept = Array(ids).map(&:to_i).uniq.select { |id| allowed.include?(id) }
+    base = metadata.to_h
+    self.metadata = kept.any? ? base.merge("pinned_chore_ids" => kept) : base.except("pinned_chore_ids")
+  end
+
+  def pin_chore!(chore)
+    self.pinned_chore_ids = (pinned_chore_ids | [chore.id])
+    save!
+    broadcast_changed!
+  end
+
+  def unpin_chore!(chore)
+    self.pinned_chore_ids = (pinned_chore_ids - [chore.id])
+    save!
+    broadcast_changed!
+  end
+
+  # Tell the owner's open screens this thread changed, so a board on the wall
+  # follows a setting changed from a phone (or by its Buddy) without a reload.
+  def broadcast_changed!
+    MonitorChannel.broadcast_to(user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :conversation, event: :updated, conversation: as_wire },
+    })
   end
 
   # A search (the chores page's syntax) for what this board keeps OFF, whatever

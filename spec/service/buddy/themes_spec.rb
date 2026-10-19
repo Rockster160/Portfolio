@@ -40,7 +40,7 @@ RSpec.describe Buddy::Themes do
   # stub, which reads as a different (blander) character entirely.
   it "has both files on disk for every pet" do
     described_class.all.each_key { |theme|
-      expect(Buddy::Personality::PERSONA_ROOT.join("#{theme}.md")).to exist
+      expect(Buddy::Companion.find(theme).persona_path).to exist
       expect(Buddy::Personality::TONE_PROFILE_ROOT.join("#{described_class.tone_for(theme)}.md")).to exist
     }
   end

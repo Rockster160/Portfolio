@@ -144,6 +144,8 @@ BUDDY_EVAL_SCENARIOS = [
 #          these is reported apart from the rest, because "no idea to defer"
 #          and "reached for the wrong tool" are different problems and only one
 #          of them is about the description.
+#   board: said in a board's own chat - the board's metadata, e.g.
+#          { "chore_tags" => ["Kitchen"] }. Board-only tools exist only there.
 BUDDY_TOOL_PROBES = {
   # --- logging, chores, lists ---
   log_event:              { say: "ate a sandwich", avoid: %i[complete_chore] },
@@ -158,6 +160,34 @@ BUDDY_TOOL_PROBES = {
   },
   create_chore:           "add a new chore for filling the kitty litter every Sunday",
   edit_chore:             { say: "rename the recycling chore to bins", needs: :recycling_chore },
+  # --- a board's own chat ---
+  pin_chore:              {
+    say:   "put the recycling chore on this board so it's always here",
+    needs: :recycling_chore,
+    board: { "chore_tags" => ["Kitchen"] },
+    avoid: %i[edit_chore create_chore],
+  },
+  unpin_chore:            {
+    say:   "take the recycling off this board",
+    needs: :recycling_chore,
+    board: { "chore_tags" => ["Kitchen"] },
+    seed:  ->(user, convo) {
+      chore = BuddyEvalNeeds.chore(user, /recycl/i)
+      convo.update!(metadata: convo.metadata.merge("pinned_chore_ids" => [chore.id])) if chore
+    },
+    avoid: %i[edit_chore],
+  },
+  add_credit_button:      {
+    say:   "add a button here so I can mark the recycling as done by Chelsea",
+    needs: :recycling_chore,
+    board: { "chore_tags" => ["Kitchen"] },
+    avoid: %i[complete_chore pin_chore],
+  },
+  set_board_groups:       {
+    say:   "this board should show the Pets chores as well as the kitchen ones",
+    board: { "chore_tags" => ["Kitchen"] },
+    avoid: %i[edit_chore pin_chore],
+  },
   edit_chore_completion:  { say: "add a note to the water chore I ticked off earlier - hint raspberry", needs: :water_completion },
   # Runs for real and checks the row is gone. Resolving is not the same as the
   # completion going away, and prod 3171 is what the gap between those looks
@@ -2476,6 +2506,10 @@ namespace :buddy do
 
     defer_usage {
       ActiveRecord::Base.transaction {
+        # A board probe talks to a board's own chat: the eval thread is made a
+        # board, with the settings the probe names, for as long as the
+        # transaction lasts.
+        convo.update!(metadata: convo.metadata.to_h.merge("board" => true).merge(probe[:board].to_h)) if probe[:board]
         steps.each_with_index { |step, i|
           merged = probe.slice(:case, :note, :needs).merge(step)
           merged[:case] = "#{probe[:case]} · #{i + 1} of #{steps.length}" if steps.length > 1
@@ -2489,6 +2523,9 @@ namespace :buddy do
         raise ActiveRecord::Rollback
       }
     }
+  ensure
+    # The rollback put the row back; this puts the loaded copy back with it.
+    convo&.reload if probe[:board] && convo&.persisted?
   end
 
   # Usage rows written after the transaction they were earned in, rather than
@@ -2606,7 +2643,7 @@ namespace :buddy do
   end
 
   def isolated?(probe)
-    probe[:steps].present? || probe[:seed] || probe[:run] || probe[:effect]
+    probe[:steps].present? || probe[:seed] || probe[:run] || probe[:effect] || probe[:board]
   end
 
   # A run's own state, cleared at the top of every task.
@@ -2687,7 +2724,7 @@ namespace :buddy do
     seen   = Set.new
     loop do
       rounds += 1
-      tools  = Buddy::ToolIndex.schemas(user: user, loaded: loaded)
+      tools  = Buddy::ToolIndex.schemas(user: user, loaded: loaded, conversation: convo)
       result = client.stream(instructions: instructions, input: input, tools: tools)
       # Before the ok check: a failed or truncated response still consumed
       # tokens and still bills.

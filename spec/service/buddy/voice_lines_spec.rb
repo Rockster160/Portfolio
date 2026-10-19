@@ -21,7 +21,7 @@ RSpec.describe Buddy::VoiceLines do
   # line asking for one this pet can't render would leave the pet blank — or
   # worse, resting on `thinking`, which is transitional and never a mood.
   describe "the table itself" do
-    Buddy::VoiceLines::LINES.each do |theme, kinds|
+    Buddy::VoiceLines.table.each do |theme, kinds|
       lines = kinds.values.flatten
 
       it "#{theme} only ever asks for a face #{theme} can wear" do
@@ -58,7 +58,7 @@ RSpec.describe Buddy::VoiceLines do
     end
 
     it "gives every theme a line for every kind" do
-      kinds = Buddy::VoiceLines::LINES.values.flat_map(&:keys).uniq
+      kinds = Buddy::VoiceLines.table.values.flat_map(&:keys).uniq
       Buddy::Themes.all.each_key { |theme|
         kinds.each { |kind| expect(described_class.lines_for(theme, kind)).to be_present }
       }
@@ -68,7 +68,7 @@ RSpec.describe Buddy::VoiceLines do
     # greeting the same check can't recognise would get a SECOND hello put in
     # front of it the next time a model happened to write it.
     it "writes greetings that read as greetings" do
-      greetings = Buddy::VoiceLines::LINES.flat_map { |_theme, kinds|
+      greetings = Buddy::VoiceLines.table.flat_map { |_theme, kinds|
         kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
       }
 
@@ -80,7 +80,7 @@ RSpec.describe Buddy::VoiceLines do
     # inherits the flatness - which is the whole reason the prompt spends a
     # paragraph on it.
     it "lands every greeting lifted rather than flat" do
-      greetings = Buddy::VoiceLines::LINES.flat_map { |_theme, kinds|
+      greetings = Buddy::VoiceLines.table.flat_map { |_theme, kinds|
         kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
       }
 
@@ -96,7 +96,7 @@ RSpec.describe Buddy::VoiceLines do
     # that doesn't say WHICH chore is a well done nobody can place. Unlike a
     # greeting, there is no version of this line that works unnamed.
     it "names the chore in every chore_done line" do
-      Buddy::VoiceLines::LINES.each { |theme, kinds|
+      Buddy::VoiceLines.table.each { |theme, kinds|
         unnamed = kinds[:chore_done].reject { |line| line[:say].include?("%<name>s") }
 
         expect(unnamed).to eq([]), "#{theme} has a chore_done line that doesn't say which chore"
@@ -104,7 +104,7 @@ RSpec.describe Buddy::VoiceLines do
     end
 
     it "gives every pet enough to say that it doesn't get predictable" do
-      Buddy::VoiceLines::LINES.each { |theme, kinds|
+      Buddy::VoiceLines.table.each { |theme, kinds|
         expect(kinds[:routine_run].length).to be >= 8, "#{theme} needs more routine_run lines"
         # Read against the pet's OWN set rather than `lines_for`, which falls
         # back to Byte's — a pet that was never given these would otherwise

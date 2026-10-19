@@ -31,6 +31,13 @@ module Portfolio
     # `load`s each file after boot.
     Rails.autoloaders.main.ignore("#{config.root}/app/service/buddy/tools")
 
+    # Each companion is a folder (companions/bloom/) holding its class file
+    # (bloom.rb → Buddy::Companions::Bloom, so the folder is collapsed) and its
+    # voice_lines.rb, which is a DSL file Buddy::Companion reads rather than a
+    # constant.
+    Rails.autoloaders.main.collapse("#{config.root}/app/service/buddy/companions/*")
+    Rails.autoloaders.main.ignore("#{config.root}/app/service/buddy/companions/*/voice_lines.rb")
+
     config.after_initialize do
       require "#{config.root}/app/service/colorize.rb"
       require "#{config.root}/app/service/better_json.rb"

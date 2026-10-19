@@ -91,7 +91,7 @@ class BuddyEvalReport
        sentence didn't have.
     4. **The voice**: warmth over receipt, no fourth wall, no mention of tools
        or context, greeting that matches the hour. `app/service/buddy/personality.rb`
-       and `app/service/buddy/personalities/` own that.
+       and `app/service/buddy/companions/<pet>/persona.md` own that.
 
     A turn worth keeping goes back as a probe — `BUDDY_EDGE_PROBES` in
     `lib/tasks/buddy_eval.rake`, in the words it went wrong in.
@@ -188,7 +188,7 @@ class BuddyEvalReport
 
     out = ["", "## Mechanically wrong", ""]
     out << "These tripped a check rather than a judgement. The wording lives in"
-    out << "`app/service/buddy/personality.rb` and `app/service/buddy/personalities/`."
+    out << "`app/service/buddy/personality.rb` and `app/service/buddy/companions/<pet>/persona.md`."
     @prose.each { |turn|
       out << ""
       out << "### #{turn["said"].inspect}"

@@ -17,6 +17,7 @@ module Buddy
         },
       )
       summary "A quick, chipper slime — upbeat and a bit cheeky, keen to get things done."
+      alarm_face :uwu
 
       emotions(
         neutral:       { summary: "calm little smile, unbothered — your resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

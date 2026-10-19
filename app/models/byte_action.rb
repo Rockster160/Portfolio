@@ -116,6 +116,31 @@ class ByteAction < ApplicationRecord
     action
   end
 
+  # Kinds a hook on the Mac sits waiting on. They carry their own Deny, and a
+  # card put away without one would leave that hook blocked until it times out.
+  UNDISMISSABLE_KINDS = %w[permission plan].freeze
+
+  def dismissable?
+    pending? && UNDISMISSABLE_KINDS.exclude?(kind)
+  end
+
+  # The × on a card: put away without an answer. Nothing runs, and the card
+  # settles into the thread like an answered one instead of holding the bottom
+  # until it expires. A repeat tap, or one after it was answered, does nothing.
+  def dismiss!
+    return false unless dismissable?
+
+    update!(state: :aborted, decided_at: Time.current, decision: { value: nil, source: "dismissed" })
+    byte_message&.tap do |msg|
+      merged = (msg.metadata || {}).merge(
+        "action_state"      => "dismissed",
+        "action_decided_at" => decided_at.iso8601(3),
+      )
+      msg.update!(metadata: merged)
+    end
+    true
+  end
+
   # Record the user's decision. Idempotent — a repeat tap or a race with
   # the timeout marker won't re-write a decided state.
   def apply_decision!(value:, source: :user)

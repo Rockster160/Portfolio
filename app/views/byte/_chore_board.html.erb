@@ -14,6 +14,12 @@
     paints from the page it arrived in and only then goes and asks whether
     anything changed. %>
 <section class="byte-board" data-byte-board>
+  <%# Shown while the live connection is down (index.js stamps
+      data-connection on .byte-app), so a wall that has quietly stopped
+      hearing about presses elsewhere says so instead of looking current. %>
+  <div class="byte-board-offline" role="status">
+    <span class="byte-board-offline-dot" aria-hidden="true"></span>Disconnected · reconnecting…
+  </div>
   <div class="byte-board-pad" data-board-pad role="list"></div>
 
   <%# Two different kinds of nothing, and they want different sentences. No TAG
@@ -25,9 +31,25 @@
   <%# Which group this screen looks after. The control is the tag itself rather
       than a gear, for the same reason the companion picker is the pet's own
       face: what it changes is legible without a label. %>
-  <button type="button" class="byte-board-tag" data-board-tag-toggle
-          aria-label="Choose which chores this screen looks after"
-          title="Choose which chores this screen looks after"><%= Array(@board_tags).join(", ").presence || "Pick groups" %></button>
+  <%# Beside it, the board's own chat: it swaps the pad for this thread and its
+      composer (rendered by show.html.erb, hidden on a kiosk until this is
+      open), so the board can be set up by talking to its pet. Owner-only - the
+      turn runs as the owner, and a message from anyone else would land in
+      their own thread instead. %>
+  <div class="byte-board-corner">
+    <button type="button" class="byte-board-tag" data-board-tag-toggle
+            aria-label="Choose which chores this screen looks after"
+            title="Choose which chores this screen looks after"><%= Array(@board_tags).join(", ").presence || "Pick groups" %></button>
+    <% if @board_owned %>
+      <button type="button" class="byte-board-chat-toggle" data-board-chat-toggle
+              aria-expanded="false"
+              aria-label="Talk to <%= Buddy::Themes.name_for(@conversation.buddy_theme) %> about this board"
+              title="Talk to <%= Buddy::Themes.name_for(@conversation.buddy_theme) %> about this board">
+        <span class="byte-board-chat-open" aria-hidden="true">💬</span>
+        <span class="byte-board-chat-close" aria-hidden="true">← Board</span>
+      </button>
+    <% end %>
+  </div>
   <div class="byte-board-tag-picker" data-board-tag-picker hidden>
     <%# Taps save the moment they're made; typed fields save with their own
         button. The panel's border says which state it's in - orange while
@@ -112,6 +134,21 @@
       <div class="byte-board-buttons-list" data-board-buttons-list></div>
     </div>
 
+    <%# Chores pinned to this board: on it whatever its groups are and whether
+        or not they're due, like the Dailies list keeps a chore on Today. A
+        pinned chore is still an ordinary circle - skip, wave off, the lot.
+        Owner-only, like the other knobs. %>
+    <% if @board_owned %>
+      <div class="byte-board-buttons byte-board-pins" data-board-pins-section
+           data-url="<%= byte_board_pins_path %>">
+        <div class="byte-board-buttons-head">
+          <span class="byte-board-tag-label">Pinned on this board</span>
+          <button type="button" class="byte-board-bb-new" data-board-pin-add>+ Pin</button>
+        </div>
+        <div class="byte-board-buttons-list" data-board-pins-list></div>
+      </div>
+    <% end %>
+
     <%# Who can open the board, whether its pet dreams of chores, and whether a
         press credits whoever's signed in or asks the owner who it was. Owner-only,
         like the rest of the knobs, and here rather than on the index card: a
@@ -129,6 +166,26 @@
           <input type="checkbox" data-board-chore-dreams <%= "checked" if @conversation.chore_dreams? %>>
           <span>Dream of hot chores now and then</span>
         </label>
+        <%# The pace of those dreams: each one shows for a while, then the pet
+            rests with no dream before the next draw. %>
+        <div class="byte-board-dream-pace" data-board-dream-pace>
+          <label>
+            <span>Each dream lasts</span>
+            <select data-board-dream-minutes>
+              <% Buddy::BoardDream::DREAM_MINUTES.each do |m| %>
+                <option value="<%= m %>" <%= "selected" if m == @conversation.dream_minutes %>><%= board_minutes_label(m) %></option>
+              <% end %>
+            </select>
+          </label>
+          <label>
+            <span>Then rests for</span>
+            <select data-board-dream-break>
+              <% Buddy::BoardDream::BREAK_MINUTES.each do |m| %>
+                <option value="<%= m %>" <%= "selected" if m == @conversation.dream_break_minutes %>><%= m.zero? ? "No break" : board_minutes_label(m) %></option>
+              <% end %>
+            </select>
+          </label>
+        </div>
         <label class="byte-board-member">
           <input type="checkbox" data-board-ask-who <%= "checked" if @conversation.asks_who? %>>
           <span>Ask me who did each chore</span>
@@ -168,13 +225,11 @@
           chore in the house - the same "search to narrow it" the chores page
           leans on, so a chore can actually be found. The hidden input carries
           the chosen id; the text field is only for searching. %>
-      <label class="byte-modal-label byte-board-chore-field">
+      <label class="byte-modal-label">
         Completes
-        <input type="text" class="byte-modal-input" data-bb-chore-search
-               placeholder="Search chores…" autocomplete="off" role="combobox"
-               aria-expanded="false" aria-controls="bb-chore-results">
-        <div class="byte-board-chore-results" id="bb-chore-results"
-             data-bb-chore-results role="listbox" hidden></div>
+        <%# The board's chore picker (searches names and aliases, shows icons);
+            the hidden input carries the chosen id. %>
+        <button type="button" class="byte-modal-input byte-board-chore-choice" data-bb-chore-pick>Pick a chore…</button>
         <input type="hidden" data-bb-chore>
       </label>
 
@@ -203,5 +258,22 @@
         <button type="submit" class="byte-modal-btn byte-modal-btn-primary" data-bb-save>Add button</button>
       </div>
     </form>
+  </dialog>
+
+  <%# Picking a chore - a pin, what a credit button completes. The Chores
+      page's search over a grid of each chore's own icon (see
+      buddy/board_chore_picker.js). %>
+  <dialog class="byte-modal byte-board-chore-picker" data-board-chore-picker>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title" data-bcp-title>Pick a chore</h3>
+      <input type="search" class="byte-modal-input" data-bcp-search
+             placeholder="Search chores…" autocomplete="off"
+             data-1p-ignore="true" data-lpignore="true">
+      <div class="byte-board-chore-grid" data-bcp-grid></div>
+      <p class="byte-board-tag-empty" data-bcp-empty hidden>No matches.</p>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-bcp-cancel>Cancel</button>
+      </div>
+    </div>
   </dialog>
 </section>

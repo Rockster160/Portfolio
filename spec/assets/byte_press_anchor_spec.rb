@@ -96,18 +96,20 @@ RSpec.describe "Byte pressed-button anchors" do
     end
   end
 
-  # The reset's whole job is to cancel the app-wide press nudge, and the nudge
-  # is one pixel of `top`. Anything else it touches, it touches for every
-  # button in the app at a specificity almost nothing can answer.
-  it "cancels the press nudge without reaching past the offset" do
+  # The press nudge is a `translate`, which moves only the paint, and the reset
+  # cancels exactly that. Neither may set `top` or `position`: a nudge that did
+  # made a fixed button `relative` under the finger, and a reset that did took
+  # away the `top` it hangs from - either way it jumped and the release missed.
+  it "nudges and cancels a press without touching any button's positioning" do
     reset = CompiledCss.rules.find { |rule|
       rule["selector"].split(",").map(&:strip).include?(".ctr-byte .byte-app button:active")
     }
 
     expect(reset).not_to be_nil, "the app-wide press reset is gone entirely"
-    expect(reset["body"]).to include("top: auto")
+    expect(reset["body"].scan(/([a-z-]+):/).flatten).to eq(["translate"])
 
-    declared = reset["body"].scan(/([a-z-]+):/).flatten
-    expect(declared).to eq(["top"])
+    nudge = Rails.root.join("app/assets/stylesheets/components/forms.scss").read[/&:active \{[^}]*translate[^}]*\}/]
+    expect(nudge).to be_present, "the app-wide press nudge isn't a translate"
+    expect(nudge).not_to match(/\b(?:top|position):/)
   end
 end

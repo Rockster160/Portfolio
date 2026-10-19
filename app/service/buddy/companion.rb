@@ -3,20 +3,22 @@ module Buddy
   # Buddy::Themes (the chrome table), Buddy::Faces::INDEX (per-pet mood numbers)
   # and Buddy::Faces::HINTS (face descriptions) now lives in a single subclass
   # per pet under Buddy::Companions — its name, description, a one-line
-  # personality summary, pointers to its persona and tone files, and the list of
-  # expressions it wears. Buddy::Themes and Buddy::Faces are thin facades over
+  # personality summary, its persona and voice lines, a pointer to its tone file,
+  # and the list of expressions it wears. Buddy::Themes and Buddy::Faces are thin facades over
   # these, so nothing else had to change.
   #
   # A companion sets its emotions individually, each with its own summary (what
   # the drawing is) and axes (the four mood values + reach that decide when the
   # picker reaches for it). They are NOT shared between pets: Byte's `eager` and
   # Suki's `eager` are free to carry different weights, because their art and
-  # their characters differ. Adding a companion is: this class, its expression
-  # images on disk, and its persona + tone files — no edits anywhere else.
+  # their characters differ.
   #
-  # The persona and tone are POINTERS to files (app/service/buddy/personalities
-  # and .../tone_profiles), loaded by Buddy::Personality; everything else is here
-  # in the class.
+  # Each pet is a FOLDER, app/service/buddy/companions/<pet>/, holding everything
+  # that is that pet's alone: this class (<pet>.rb), its persona (persona.md,
+  # loaded by Buddy::Personality) and its voice lines (voice_lines.rb, see
+  # Buddy::VoiceLines). Adding a companion is that folder plus its expression
+  # images on disk — no edits anywhere else. The tone is a POINTER to a file in
+  # app/service/buddy/tone_profiles, which describes the person, not the pet.
   class Companion
     DEFAULT = :byte
 
@@ -30,18 +32,15 @@ module Buddy
     class << self
       # ---- DSL, declared in each companion subclass ------------------------
 
-      # Who the pet is and how the app is dressed for it. `tone` and `persona`
-      # are the stems of the files under tone_profiles/ and personalities/.
-      # `persona` defaults to the theme key (every persona file is theme-named).
-      # `chrome` overrides the conventional asset paths for the odd one out
+      # Who the pet is and how the app is dressed for it. `tone` is the stem of
+      # its file under tone_profiles/. `chrome` overrides the conventional asset paths for the odd one out
       # (Byte, whose icon filenames carry no `byte-` prefix).
-      def identity(key:, name:, description:, color:, tone:, persona: nil, chrome: {})
+      def identity(key:, name:, description:, color:, tone:, chrome: {})
         @theme            = key.to_sym
         @display_name     = name
         @description      = description
         @color            = color
         @tone             = tone.to_sym
-        @persona          = (persona || key).to_sym
         @chrome_overrides = chrome
       end
 
@@ -62,9 +61,36 @@ module Buddy
         }
       end
 
+      # The face the pet flips to while an alarm rings, alternating with its
+      # resting face. Left unset, it is the drawn face nearest the alarm's
+      # point on the mood axes (Buddy::Faces::STATE_POINTS).
+      def alarm_face(name=nil)
+        return @alarm_face || Buddy::Faces.resolve(theme, :alarm) if name.nil?
+
+        @alarm_face = name.to_sym
+      end
+
       # ---- readers ---------------------------------------------------------
 
-      attr_reader :theme, :display_name, :description, :color, :tone, :persona
+      attr_reader :theme, :display_name, :description, :color, :tone
+
+      # This pet's own folder.
+      def dir
+        COMPANION_DIR.join(theme.to_s)
+      end
+
+      def persona_path
+        dir.join("persona.md")
+      end
+
+      # { kind => [{ say:, mood: }, …] } from the pet's voice_lines.rb. Re-read
+      # every call in development, where the file is edited under a running
+      # server and the autoloader doesn't watch it.
+      def voice_lines
+        return Buddy::VoiceLines::Builder.load(dir.join("voice_lines.rb")) if Rails.env.development?
+
+        @voice_lines ||= Buddy::VoiceLines::Builder.load(dir.join("voice_lines.rb"))
+      end
 
       def emotion_table
         @emotions || {}
@@ -102,7 +128,8 @@ module Buddy
       # each call, so editing a companion in development takes effect without a
       # restart.
       def all
-        COMPANION_DIR.glob("*.rb")
+        COMPANION_DIR.glob("*/*.rb")
+          .select { |path| path.basename(".rb").to_s == path.dirname.basename.to_s }
           .map { |path| "Buddy::Companions::#{path.basename(".rb").to_s.camelize}".constantize }
           .sort_by { |pet| [ORDER.index(pet.theme) || ORDER.size, pet.theme.to_s] }
           .index_by(&:theme)

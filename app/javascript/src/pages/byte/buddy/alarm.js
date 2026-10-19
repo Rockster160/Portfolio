@@ -66,18 +66,19 @@ function playGrubOnce() {
 
 // --- Alarm lifecycle -------------------------------------------------------
 
-// Flip between EXCITED and neutral while ringing — [excited, default]. Per
-// theme, because Byte and Moss have different face sets: a name valid for one
-// renders blank on the other (that blank frame was the "flashing in and out").
-// Every name here is verified to exist as a face_<name>.png + a SCSS rule for
-// its theme (byte: uwu/neutral, moss: star/neutral).
-const ALARM_FACES = {
-  byte: ["uwu", "neutral"],
-  moss: ["star", "neutral"],
-};
+// Flip between the pet's alarm face and neutral while ringing. Which face is
+// the companion's own (Buddy::Companion.alarm_face), carried in the themes
+// table, so it is always one this pet has art for — a name from another pet's
+// set renders blank, which reads as the face flashing in and out.
 function alarmFaces() {
   const theme = document.querySelector("[data-buddy-hero]")?.dataset.buddyTheme;
-  return ALARM_FACES[theme] || ALARM_FACES.byte;
+  let themes = {};
+  try {
+    themes = JSON.parse(document.querySelector("[data-buddy-themes]")?.dataset.buddyThemes || "{}");
+  } catch (e) {
+    themes = {};
+  }
+  return [themes[theme]?.alarm_face || "neutral", "neutral"];
 }
 
 let soundInterval = 0;

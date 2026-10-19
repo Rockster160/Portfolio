@@ -3,16 +3,18 @@
 //
 //   1. a dream sent from Jil (`Buddy.dream` — Whisper wanting food), aimed at a
 //      group the board watches. The newest one sent is the one shown.
-//   2. otherwise, now and then, one of the board's hot chores: a fresh draw
-//      every half hour, weighted the way the morning hot picks are (each item
-//      carries its `hot_weight`), with a slot for dreaming of nothing so the
-//      bubble isn't always up. The same chore can win several rounds running.
+//   2. otherwise, now and then, one of the board's hot chores. Time runs in
+//      cycles set per board: a dream lasts `dreamMinutes`, then the pet rests
+//      for `breakMinutes`, and round again. Each cycle is a fresh draw,
+//      weighted the way the morning hot picks are (each item carries its
+//      `hot_weight`), with a slot for dreaming of nothing so the bubble isn't
+//      always up. The same chore can win several rounds running.
 //
 // The pet wears a dream's face (thinking, unless the dream names one) as a SOFT
 // hold on the hero: it shows only while nothing else is held and the pet's mood
 // is idle, so any real face takes over and the dream face returns after.
 //
-// The draw is seeded by the half hour and the board, so every screen showing a
+// The draw is seeded by the cycle and the board, so every screen showing a
 // board agrees, and the server opens the page already wearing the face this is
 // about to pick. Buddy::BoardDream makes the same draw in Ruby; the two must
 // stay identical (spec/javascript/board_dream_spec.rb).
@@ -20,7 +22,7 @@
 import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
 import { groupsOverlap } from "./board_scope.js";
 
-export const SLOT_MS = 30 * 60 * 1000;
+export const DEFAULT_PACE = { dreamMinutes: 30, breakMinutes: 0 };
 // The weight of dreaming of nothing - one ordinary chore's worth.
 export const REST_WEIGHT = 1.0;
 const DREAM_FACE = "thinking";
@@ -35,9 +37,16 @@ export function mulberry32(seed) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-export function dreamSeed(boardId, nowMs) {
-  const slot = Math.floor(nowMs / SLOT_MS);
-  return (slot * 31 + Number(boardId || 0)) >>> 0;
+export function dreamSeed(boardId, cycle) {
+  return (cycle * 31 + Number(boardId || 0)) >>> 0;
+}
+
+// Where `nowMs` sits in the board's dream/break cycle.
+function cycleAt(nowMs, pace) {
+  const dreamMs = pace.dreamMinutes * 60000;
+  const cycleMs = dreamMs + pace.breakMinutes * 60000;
+  const offset = nowMs % cycleMs;
+  return { cycle: Math.floor(nowMs / cycleMs), offset, dreamMs, cycleMs, resting: offset >= dreamMs };
 }
 
 // Hot chores still asking today, in id order so both sides walk them alike.
@@ -56,13 +65,17 @@ export function dreamCandidates(items) {
     .sort((a, b) => Number(a.id) - Number(b.id));
 }
 
-// The hot chore this board dreams of right now, or null for nothing.
-export function pickChoreDream(items, boardId, nowMs) {
+// The hot chore this board dreams of right now, or null for nothing (a break,
+// or the draw landing on rest).
+export function pickChoreDream(items, boardId, nowMs, pace = DEFAULT_PACE) {
   const pool = dreamCandidates(items);
   if (!pool.length) return null;
 
+  const at = cycleAt(nowMs, pace);
+  if (at.resting) return null;
+
   const total = pool.reduce((sum, item) => sum + Number(item.hot_weight), 0) + REST_WEIGHT;
-  let roll = mulberry32(dreamSeed(boardId, nowMs)) * total;
+  let roll = mulberry32(dreamSeed(boardId, at.cycle)) * total;
   for (const item of pool) {
     roll -= Number(item.hot_weight);
     if (roll < 0) return item;
@@ -77,9 +90,13 @@ export function newestDream(alerts, tags) {
     .sort((a, b) => String(b.last_raised_at || "").localeCompare(String(a.last_raised_at || "")))[0] || null;
 }
 
-export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDreams = true }) {
+export function initBoardDream({
+  bubble, hero, tags, boardIdFn, iconFor, choreDreams = true, pace = DEFAULT_PACE,
+}) {
   if (!bubble) {
-    return { setAlerts: () => {}, setItems: () => {}, setTags: () => {}, setChoreDreams: () => {} };
+    return {
+      setAlerts: () => {}, setItems: () => {}, setTags: () => {}, setChoreDreams: () => {}, setPace: () => {},
+    };
   }
 
   let watched = Array.isArray(tags) ? tags : [];
@@ -129,7 +146,7 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
     }
 
     // Hot-chore dreams can be switched off per board; Jil's still show.
-    const chore = choreDreams ? pickChoreDream(items, boardIdFn?.(), Date.now()) : null;
+    const chore = choreDreams ? pickChoreDream(items, boardIdFn?.(), Date.now(), pace) : null;
     if (!chore) return clear();
 
     show(`chore:${chore.id}:${chore.short_name}`, () => {
@@ -142,10 +159,12 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
     });
   }
 
-  // A fresh draw on each half hour, all screens together.
+  // A fresh look at each turn of the cycle (a dream starting or a break
+  // starting), all screens together.
   function scheduleSlot() {
     clearTimeout(slotTimer);
-    const wait = SLOT_MS - (Date.now() % SLOT_MS) + 1000;
+    const at = cycleAt(Date.now(), pace);
+    const wait = (at.resting ? at.cycleMs - at.offset : at.dreamMs - at.offset) + 1000;
     slotTimer = window.setTimeout(() => {
       render();
       scheduleSlot();
@@ -168,6 +187,14 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
     },
     setChoreDreams(on) {
       choreDreams = on !== false;
+      render();
+    },
+    setPace(next) {
+      pace = {
+        dreamMinutes: Number(next?.dreamMinutes) || DEFAULT_PACE.dreamMinutes,
+        breakMinutes: Number(next?.breakMinutes) || 0,
+      };
+      scheduleSlot();
       render();
     },
   };

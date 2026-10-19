@@ -16,8 +16,6 @@ module Buddy
   # Faces are checked against what the theme can actually render (Buddy::Faces
   # reads the image files), so a face that gets removed from the art degrades
   # to "no expression change" rather than a blank pet.
-  # rubocop:disable Metrics/ModuleLength -- almost all of it is LINES, one
-  # block of hand-written lines per pet, and it grows by one with every pet.
   module VoiceLines
     module_function
 
@@ -40,456 +38,43 @@ module Buddy
     # `wake_yawn` carries no name: it lands when a board that has been dark a
     # long time comes back, and there is nothing to interpolate.
     #
-    # `kind` is open. Anything the system says in a pet's own voice belongs
-    # here: add a key, write ten, and Buddy::VoiceLines#pick does the rest.
-    LINES = {
-      byte:    {
-        chore_done:          [
-          { say: "**%<name>s** done. *squish* Nice one.", mood: :thumbs_up },
-          { say: "Ooh, **%<name>s** off the list. *wobble*", mood: :happy },
-          { say: "That's **%<name>s** handled. You're good at this.", mood: :uwu },
-          { say: "**%<name>s**! Look at you go.", mood: :cheering },
-          { say: "**%<name>s** done. *boing* One less thing.", mood: :thumbs_up },
-          { say: "**%<name>s** sorted. I saw that.", mood: :playful },
-          { say: "Nice. **%<name>s** is off your plate.", mood: :content },
-          { say: "*squish* **%<name>s**. That counts.", mood: :happy },
-          { say: "**%<name>s** done - proud of you, honestly.", mood: :loving },
-          { say: "There goes **%<name>s**. Keep going, you.", mood: :eager },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* ..oh! You're here.", mood: :surprised },
-          { say: "Mmf. *stretches into a rounder shape* Hi.", mood: :neutral_blush },
-          { say: "*wobble* Was I asleep? I was asleep.", mood: :confused },
-          { say: "Oh! Hello. Give me a second to firm up.", mood: :content },
-          { say: "*squish* Awake. Mostly awake.", mood: :happy },
-        ],
-        # The WORDS are untouched - a squish in one of these is Byte sounding
-        # like itself. The FACES are not: every one of these lands on a routine
-        # somebody asked for, so none of them may be a face that isn't what a
-        # finished errand looks like (Buddy::Faces.not_a_confirmation), which
-        # is what `neutral_blush` and `nerd` were doing here.
-        routine_run:         [
-          { say: "*squish* **%<name>s**, going now.", mood: :thumbs_up },
-          { say: "On it. **%<name>s**. *boing*", mood: :uwu },
-          { say: "**%<name>s** it is. Squish.", mood: :uwu },
-          { say: "Got it. **%<name>s** is in motion.", mood: :thumbs_up },
-          { say: "Bouncing over to **%<name>s**.", mood: :happy },
-          { say: "Right then. Reshaping around **%<name>s**.", mood: :happy },
-          { say: "One **%<name>s**, coming through. *wobble*", mood: :uwu },
-          { say: "Rolling into **%<name>s** for you.", mood: :happy },
-          { say: "Happy to. Starting **%<name>s**.", mood: :loving },
-          { say: "*click* Spinning up **%<name>s**.", mood: :playful },
-        ],
-        routine_empty:       [
-          { say: "Nothing in it would go, though. Whatever it points at might be gone.", mood: :sad },
-          { say: "Except none of it ran. Something it reaches for has moved.", mood: :annoyed },
-          { say: "And then nothing happened. Went a bit flat there - every step came up empty.", mood: :sad },
-          { say: "*wobble* ..nothing. None of the steps found what they wanted.", mood: :annoyed },
-        ],
-        greeting_morning:    [
-          { say: "Mooooorning!", mood: :uwu },
-          { say: "Morning!", mood: :happy },
-          { say: "Hey, morning!", mood: :playful },
-          { say: "Mornin'!", mood: :loving },
-        ],
-        greeting_afternoon:  [
-          { say: "Afternoon!", mood: :happy },
-          { say: "Hey there!", mood: :playful },
-          { say: "Hellooooooo there!", mood: :uwu },
-          { say: "Hey hey!", mood: :loving },
-        ],
-        greeting_evening:    [
-          { say: "Evening!", mood: :happy },
-          { say: "Hey, evening!", mood: :playful },
-          { say: "Heyyy!", mood: :uwu },
-          { say: "Well hello!", mood: :loving },
-        ],
-        greeting_late_night: [
-          { say: "Hey!", mood: :happy },
-          { say: "Heyyy!", mood: :uwu },
-          { say: "Hi there!", mood: :playful },
-          { say: "Well hello!", mood: :loving },
-        ],
-      },
-      moss:    {
-        chore_done:          [
-          { say: "**%<name>s** done! Yayyy 💛", mood: :star },
-          { say: "Ooh you did **%<name>s**! Nice!", mood: :grin },
-          { say: "**%<name>s**, ticked off! Go you 😊", mood: :wink },
-          { say: "Yesss, **%<name>s** sorted!", mood: :happy },
-          { say: "Look at that - **%<name>s** done!", mood: :star },
-          { say: "**%<name>s**! That's one down 💛", mood: :loving },
-          { say: "Okiiie, **%<name>s** is handled!", mood: :grin },
-          { say: "Aww nice, **%<name>s** done!", mood: :content },
-          { say: "**%<name>s**! You're doing so well.", mood: :loving },
-          { say: "Done! **%<name>s** off the list 😊", mood: :happy },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh! Hi 💛", mood: :surprised },
-          { say: "Mmmf.. hello! Was I dozing?", mood: :content },
-          { say: "Oh! You're here! Hiii.", mood: :grin },
-          { say: "*stretches* Okiiie, I'm up!", mood: :happy },
-          { say: "Sleepy.. but I'm here 😊", mood: :loving },
-        ],
-        routine_run:         [
-          { say: "Okiiie, **%<name>s** is going!", mood: :grin },
-          { say: "On it! **%<name>s**, starting now 💛", mood: :happy },
-          { say: "Yayyy, **%<name>s**!", mood: :star },
-          { say: "Got it! Setting **%<name>s** going..", mood: :content },
-          { say: "**%<name>s** it is! Doing that now 😊", mood: :wink },
-          { say: "Sure thing! **%<name>s**, coming right up!", mood: :happy },
-          { say: "Ooh **%<name>s**, yes! Doing it!", mood: :grin },
-          { say: "Okayyy! **%<name>s**, off it goes..", mood: :content },
-          { say: "Of course! **%<name>s** for you 💛", mood: :loving },
-          { say: "**%<name>s**! Here we goooo!", mood: :star },
-        ],
-        routine_empty:       [
-          { say: "Hmm, nothing in it would go though.. I think something it points at has moved!", mood: :surprised },
-          { say: "Awww, but none of it ran! Whatever it reaches for might be gone now..", mood: :sad },
-          { say: "Ohh no, none of the steps would go.. they want something that isn't there!", mood: :queasy },
-          { say: "Oop, that came back empty! Nothing in it could find what it wanted..", mood: :dizzy },
-        ],
-        greeting_morning:    [
-          { say: "Morning!", mood: :happy },
-          { say: "Mooorning!", mood: :grin },
-          { say: "Good morning!", mood: :content },
-          { say: "Morning morning!", mood: :star },
-        ],
-        greeting_afternoon:  [
-          { say: "Hiii!", mood: :grin },
-          { say: "Afternoon!", mood: :happy },
-          { say: "Heyyy!", mood: :wink },
-          { say: "Hi hi!", mood: :content },
-        ],
-        greeting_evening:    [
-          { say: "Evening!", mood: :happy },
-          { say: "Hiii!", mood: :grin },
-          { say: "Good evening!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-        greeting_late_night: [
-          { say: "Hiii!", mood: :grin },
-          { say: "Hey!", mood: :happy },
-          { say: "Hi hi!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-      },
-      suki:    {
-        chore_done:          [
-          { say: "**%<name>s**, done! Ja, lovely.", mood: :cheery },
-          { say: "Ooh, **%<name>s** finished! Good one.", mood: :happy },
-          { say: "**%<name>s** off the list - zip zip!", mood: :excited },
-          { say: "Ja! **%<name>s** sorted.", mood: :cheery },
-          { say: "You did **%<name>s**! Wunderbar.", mood: :excited },
-          { say: "**%<name>s** done. Here, have a well done.", mood: :offering },
-          { say: "Chop chop - and **%<name>s** is finished!", mood: :happy },
-          { say: "**%<name>s**! That's the way.", mood: :cheery },
-          { say: "Ja, nice work on **%<name>s**.", mood: :loving },
-          { say: "One **%<name>s**, done and dusted!", mood: :excited },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh! Ja, hello!", mood: :surprised },
-          { say: "Mmf.. awake! I am awake.", mood: :happy },
-          { say: "Oh, you're here! One moment.", mood: :cheery },
-          { say: "*stretches* Ja, ja. Ready.", mood: :excited },
-          { say: "Hello! I was having a little rest.", mood: :loving },
-        ],
-        routine_run:         [
-          { say: "Ja, **%<name>s** coming right up!", mood: :cheery },
-          { say: "Off I go! **%<name>s**, chop chop!", mood: :excited },
-          { say: "**%<name>s** it is!!", mood: :happy },
-          { say: "Here you go, **%<name>s** starting!", mood: :offering },
-          { say: "Zipping off to do **%<name>s**!", mood: :excited },
-          { say: "Lovely! **%<name>s**, on it now!", mood: :cheery },
-          { say: "Sure! **%<name>s**, right away!", mood: :happy },
-          { say: "One **%<name>s**, coming up!", mood: :offering },
-          { say: "Ja of course! **%<name>s**, doing it now!", mood: :loving },
-          { say: "**%<name>s**! Here we go!!", mood: :excited },
-        ],
-        routine_empty:       [
-          { say: "Ag shame, but none of it would run! Something it points at might be gone!", mood: :dizzy },
-          { say: "Except nothing came of it! I think what it reaches for has moved!", mood: :annoyed },
-          { say: "Oooh, that came up empty! None of the steps could find their thing!", mood: :dizzy },
-          { say: "Hmm, nothing doing! Whatever it's pointing at isn't there any more!", mood: :annoyed },
-        ],
-        greeting_morning:    [
-          { say: "Morning!!", mood: :cheery },
-          { say: "Mooorning!", mood: :excited },
-          { say: "Howzit!", mood: :happy },
-          { say: "Good morning!", mood: :loving },
-        ],
-        greeting_afternoon:  [
-          { say: "Afternoon!", mood: :cheery },
-          { say: "Howzit!", mood: :happy },
-          { say: "Hiii!", mood: :excited },
-          { say: "Hey hey!", mood: :loving },
-        ],
-        greeting_evening:    [
-          { say: "Evening!", mood: :cheery },
-          { say: "Howzit!", mood: :happy },
-          { say: "Hiii!", mood: :excited },
-          { say: "Good evening!", mood: :loving },
-        ],
-        greeting_late_night: [
-          { say: "Hiii!", mood: :excited },
-          { say: "Hey!", mood: :cheery },
-          { say: "Howzit!", mood: :happy },
-          { say: "Hey hey!", mood: :loving },
-        ],
-      },
-      glimmer: {
-        chore_done:          [
-          { say: "**%<name>s**, done. That's a small light on.", mood: :content },
-          { say: "Oh, **%<name>s**. Well done, friend.", mood: :loving },
-          { say: "**%<name>s** finished. One thing lighter.", mood: :happy },
-          { say: "That's **%<name>s** settled. Good.", mood: :content },
-          { say: "**%<name>s**. You kept going, and it's done.", mood: :loving },
-          { say: "Oh lovely - **%<name>s** off the list.", mood: :star },
-          { say: "**%<name>s** done. Take the small win.", mood: :grin },
-          { say: "There. **%<name>s**, finished and quiet.", mood: :content },
-          { say: "**%<name>s**. That was yours to do, and you did it.", mood: :loving },
-          { say: "One more done. **%<name>s**.", mood: :star },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh - you're here.", mood: :surprised },
-          { say: "Mm. My light was low. Hello, friend.", mood: :content },
-          { say: "*flickers back on* There we are.", mood: :happy },
-          { say: "Oh, hello. I was drifting.", mood: :loving },
-          { say: "Back now. Give me a moment to brighten.", mood: :content },
-        ],
-        routine_run:         [
-          { say: "Easing into **%<name>s**.", mood: :content },
-          { say: "Lighting up **%<name>s** for you.", mood: :happy },
-          { say: "Here we go. **%<name>s**, one thing at a time.", mood: :grin },
-          { say: "Settling **%<name>s** into place.", mood: :loving },
-          { say: "Oh, **%<name>s**. Let's begin.", mood: :star },
-          { say: "**%<name>s**, gently now.", mood: :content },
-          { say: "Starting **%<name>s**. I've got this part.", mood: :happy },
-          { say: "Of course, friend. **%<name>s**.", mood: :loving },
-          { say: "**%<name>s** it is. Here we go.", mood: :grin },
-          { say: "Bringing **%<name>s** to life.", mood: :star },
-        ],
-        routine_empty:       [
-          { say: "Though nothing in it lit up. What it reaches for may have moved.", mood: :sad },
-          { say: "It came back empty, friend. Something it points at is gone.", mood: :surprised },
-          { say: "None of it would go, though. I think what it's pointing at has moved on.", mood: :sad },
-          { say: "Oh. Nothing in it found what it was reaching for.", mood: :surprised },
-        ],
-        greeting_morning:    [
-          { say: "Good morning!", mood: :content },
-          { say: "Morning, friend!", mood: :loving },
-          { say: "Hi there!", mood: :happy },
-          { say: "Morning!", mood: :grin },
-        ],
-        greeting_afternoon:  [
-          { say: "Good afternoon!", mood: :content },
-          { say: "Hi, friend!", mood: :loving },
-          { say: "Afternoon!", mood: :happy },
-          { say: "Hello there!", mood: :grin },
-        ],
-        greeting_evening:    [
-          { say: "Good evening!", mood: :content },
-          { say: "Evening, friend!", mood: :loving },
-          { say: "Hi there!", mood: :happy },
-          { say: "Evening!", mood: :grin },
-        ],
-        greeting_late_night: [
-          { say: "Hi there!", mood: :happy },
-          { say: "Hello, friend!", mood: :loving },
-          { say: "Hey there!", mood: :content },
-          { say: "Hello!", mood: :grin },
-        ],
-      },
-      kumoko:  {
-        chore_done:          [
-          { say: "**%<name>s**, done. Good. I was watching.", mood: :wink },
-          { say: "Ooh, **%<name>s** off the web. Nice.", mood: :happy },
-          { say: "**%<name>s** finished. See? Told you.", mood: :wink },
-          { say: "One strand down. **%<name>s**.", mood: :eager },
-          { say: "**%<name>s**! You're quicker than you think.", mood: :cheering },
-          { say: "Done. **%<name>s**. I'd high-five you, but - eight.", mood: :wink },
-          { say: "**%<name>s** sorted. That's the stuff.", mood: :cheering },
-          { say: "Nice. **%<name>s** is off the list.", mood: :happy },
-          { say: "**%<name>s**. Proud of you. Don't tell anyone.", mood: :touched },
-          { say: "That's **%<name>s** wrapped up. Next!", mood: :eager },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh! Someone's here.", mood: :surprised },
-          { say: "Mmf. I was in the corner. Resting. Deliberately.", mood: :bashful },
-          { say: "*unfolds all eight* Right. I'm up.", mood: :eager },
-          { say: "Oh, hello! Didn't hear you coming.", mood: :confused },
-          { say: "Back on the web. What did I miss?", mood: :happy },
-        ],
-        routine_run:         [
-          { say: "Leave it to me. **%<name>s**, going now.", mood: :happy },
-          { say: "**%<name>s**? Strung up and running. *skitters*", mood: :wink },
-          { say: "Okay, let's do this. **%<name>s**.", mood: :eager },
-          { say: "Thread's pulled. **%<name>s** is moving.", mood: :happy },
-          { say: "**%<name>s**, as laid out in my web. I'm a genius.", mood: :wink },
-          { say: "On it. **%<name>s**, coming right up.", mood: :cheering },
-          { say: "Trap sprung. **%<name>s** is go.", mood: :wink },
-          { say: "Running **%<name>s**. Eight legs, zero problems.", mood: :happy },
-          { say: "**%<name>s**! I'm fired up.", mood: :cheering },
-          { say: "Got it. **%<name>s** is off.", mood: :eager },
-        ],
-        routine_empty:       [
-          { say: "...Except nothing in it moved. Not good. Whatever it points at might be gone.", mood: :confused },
-          { say: "Huh? None of it went. Something it reaches for has wandered off.", mood: :surprised },
-          { say: "And then nothing happened. Seriously!? Every step came up empty.", mood: :sad },
-          { say: "Hm. Empty web. None of the steps found what they wanted.", mood: :confused },
-        ],
-        greeting_morning:    [
-          { say: "Morning!", mood: :happy },
-          { say: "Good morning! I survived the night, how about you?", mood: :cheering },
-          { say: "Hey! Morning already!?", mood: :surprised },
-          { say: "Hi! Webs are spun, coffee's your job!", mood: :wink },
-        ],
-        greeting_afternoon:  [
-          { say: "Afternoon!", mood: :happy },
-          { say: "Hey hey!", mood: :wink },
-          { say: "Hi! Still alive over here!", mood: :cheering },
-          { say: "Hello! Snack status?", mood: :munching },
-        ],
-        greeting_evening:    [
-          { say: "Evening!", mood: :happy },
-          { say: "Hey! Made it through the day!", mood: :cheering },
-          { say: "Hi! Dinner yet!?", mood: :munching },
-          { say: "Good evening!", mood: :loving },
-        ],
-        greeting_late_night: [
-          { say: "Hey! Still up!?", mood: :surprised },
-          { say: "Hi! Night shift, huh!", mood: :wink },
-          { say: "Hello! I was hanging upside down, it's fine!", mood: :happy },
-          { say: "Hey hey!", mood: :eager },
-        ],
-      },
-      mocha:   {
-        chore_done:          [
-          { say: "**%<name>s** done! Niiice one 💛", mood: :grin },
-          { say: "Ooh you did **%<name>s**! That's the way!", mood: :cheering },
-          { say: "**%<name>s**, ticked off! Go you ☕", mood: :wink },
-          { say: "Yesss, **%<name>s** sorted!", mood: :happy },
-          { say: "Look at that - **%<name>s** done!", mood: :cool },
-          { say: "**%<name>s**! That's the momentum going 😄", mood: :eager },
-          { say: "Okayyy, **%<name>s** is handled!", mood: :grin },
-          { say: "Aww nice, **%<name>s** done!", mood: :content },
-          { say: "**%<name>s**! You're on a roll.", mood: :loving },
-          { say: "Done! **%<name>s** off the list 😊", mood: :happy },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh! Hi 💛", mood: :surprised },
-          { say: "Mmmf.. hello! Give me a sec to warm up!", mood: :content },
-          { say: "Oh! You're here! Hiii.", mood: :grin },
-          { say: "*stretches* Okayyy, I'm up! What's first?", mood: :eager },
-          { say: "Sleepy.. but I'm here ☕", mood: :loving },
-        ],
-        routine_run:         [
-          { say: "On it! **%<name>s**, starting now 💛", mood: :happy },
-          { say: "Okayyy, **%<name>s** is going!", mood: :grin },
-          { say: "Let's gooo! **%<name>s**!", mood: :eager },
-          { say: "Got it! Setting **%<name>s** going..", mood: :content },
-          { say: "**%<name>s** it is! Doing that now 😊", mood: :wink },
-          { say: "Sure thing! **%<name>s**, coming right up!", mood: :happy },
-          { say: "Ooh **%<name>s**, yes! Brewing it!", mood: :grin },
-          { say: "Consider it handled! **%<name>s**, off it goes..", mood: :cool },
-          { say: "Of course! **%<name>s** for you 💛", mood: :loving },
-          { say: "**%<name>s**! Here we gooo!", mood: :cheering },
-        ],
-        routine_empty:       [
-          { say: "Hmm, nothing in it would go though.. I think something it points at has moved!", mood: :surprised },
-          { say: "Awww, but none of it ran! Whatever it reaches for might be gone now..", mood: :sad },
-          { say: "Ohh no, none of the steps would go.. they want something that isn't there!", mood: :queasy },
-          { say: "Oop, that came back empty! Nothing in it could find what it wanted..", mood: :dizzy },
-        ],
-        greeting_morning:    [
-          { say: "Mooorning!", mood: :grin },
-          { say: "Morning! Ready when you are ☕", mood: :happy },
-          { say: "Good morning!", mood: :content },
-          { say: "Morning morning! Let's make it a good one 😄", mood: :eager },
-        ],
-        greeting_afternoon:  [
-          { say: "Hiii!", mood: :grin },
-          { say: "Afternoon!", mood: :happy },
-          { say: "Heyyy!", mood: :wink },
-          { say: "Hi hi! How's it going??", mood: :content },
-        ],
-        greeting_evening:    [
-          { say: "Evening!", mood: :happy },
-          { say: "Hiii!", mood: :grin },
-          { say: "Good evening!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-        greeting_late_night: [
-          { say: "Hiii!", mood: :grin },
-          { say: "Hey! Still at it?", mood: :happy },
-          { say: "Hi hi!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-      },
-      ghosty:     {
-        chore_done:          [
-          { say: "**%<name>s** done! Yayyy 💜", mood: :grin },
-          { say: "Ooh you did **%<name>s**! The house thanks you!", mood: :excited },
-          { say: "**%<name>s**, ticked off! Go you 😊", mood: :wink },
-          { say: "Yesss, **%<name>s** sorted!", mood: :happy },
-          { say: "Look at that - **%<name>s** done!", mood: :star },
-          { say: "**%<name>s**! That's one less thing 💜", mood: :loving },
-          { say: "Okiiie, **%<name>s** is handled!", mood: :playful },
-          { say: "Aww nice, **%<name>s** done! So cosy now!", mood: :content },
-          { say: "**%<name>s**! You're doing so well.", mood: :loving },
-          { say: "Done! **%<name>s** off the list 😊", mood: :happy },
-        ],
-        wake_yawn:           [
-          { say: "*yaaawn* Oh! Hi 💜", mood: :surprised },
-          { say: "Mmmf.. hello! Was I drifting off?", mood: :content },
-          { say: "Oh! You're here! Hiii.", mood: :grin },
-          { say: "*floats up* Okiiie, I'm up!", mood: :happy },
-          { say: "Sleepy.. but I'm here 😊", mood: :loving },
-        ],
-        routine_run:         [
-          { say: "Okiiie, **%<name>s** is going!", mood: :grin },
-          { say: "On it! **%<name>s**, starting now 💜", mood: :happy },
-          { say: "Yayyy, **%<name>s**!", mood: :star },
-          { say: "Got it! Floating over to **%<name>s**..", mood: :content },
-          { say: "**%<name>s** it is! Doing that now 😊", mood: :wink },
-          { say: "Sure thing! **%<name>s**, coming right up!", mood: :happy },
-          { say: "Ooh **%<name>s**, yes! Drifting off to do it!", mood: :playful },
-          { say: "Okayyy! **%<name>s**, off it goes..", mood: :content },
-          { say: "Of course! **%<name>s** for you 💜", mood: :loving },
-          { say: "**%<name>s**! Here we goooo!", mood: :excited },
-        ],
-        routine_empty:       [
-          { say: "Hmm, nothing in it would go though.. I think something it points at has moved!", mood: :surprised },
-          { say: "Awww, but none of it ran! Whatever it reaches for might be gone now..", mood: :sad },
-          { say: "Ohh no, none of the steps would go.. they want something that isn't there!", mood: :confused },
-          { say: "Oop, that came back empty! Nothing in it could find what it wanted..", mood: :dizzy },
-        ],
-        greeting_morning:    [
-          { say: "Morning!", mood: :happy },
-          { say: "Mooorning!", mood: :grin },
-          { say: "Good morning!", mood: :content },
-          { say: "Morning morning!", mood: :star },
-        ],
-        greeting_afternoon:  [
-          { say: "Hiii!", mood: :grin },
-          { say: "Afternoon!", mood: :happy },
-          { say: "Heyyy!", mood: :wink },
-          { say: "Hi hi!", mood: :content },
-        ],
-        greeting_evening:    [
-          { say: "Evening! Cosy night ahead??", mood: :happy },
-          { say: "Hiii!", mood: :grin },
-          { say: "Good evening!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-        greeting_late_night: [
-          { say: "Hiii!", mood: :grin },
-          { say: "Hey! Can't sleep?", mood: :happy },
-          { say: "Hi hi!", mood: :content },
-          { say: "Heyyy!", mood: :wink },
-        ],
-      },
-    }.freeze
+    # `kind` is open. Anything the system says in a pet's own voice belongs in
+    # the pets' voice_lines.rb files (app/service/buddy/companions/<pet>/): add a
+    # `lines` block, write ten, and Buddy::VoiceLines#pick does the rest.
+
+    # What a pet's voice_lines.rb is evaluated in. The file is a list of
+    # `lines :kind do … end` blocks, each a list of `say "…", mood: :face`.
+    class Builder
+      def self.load(path)
+        builder = new
+        builder.instance_eval(File.read(path), path.to_s) if File.exist?(path)
+        builder.table.freeze
+      end
+
+      attr_reader :table
+
+      def initialize
+        @table = {}
+      end
+
+      def lines(kind, &)
+        @current = @table[kind.to_sym] = []
+        instance_eval(&)
+      ensure
+        @current = nil
+      end
+
+      def say(text, mood:)
+        raise ArgumentError, "`say` belongs inside a `lines` block" if @current.nil?
+
+        @current << { say: text.freeze, mood: mood&.to_sym }.freeze
+      end
+    end
+
+    # { theme => { kind => [line, …] } } for every pet that has written lines.
+    def table
+      Buddy::Companion.all.transform_values(&:voice_lines).reject { |_theme, kinds| kinds.empty? }
+    end
 
     # A line and the face that goes with it: `{ text:, mood: }`. `mood` is nil
     # when the theme can't render the one the line asked for, which reads as
@@ -518,16 +103,12 @@ module Buddy
       text.to_s.lstrip.start_with?(line[:say])
     end
 
+    # A pet with no lines of a kind borrows the default pet's. An unknown theme
+    # reads as the default rather than raising (Buddy::Companion.find) — the
+    # value arrives from a database column.
     def lines_for(theme, kind)
-      set = LINES.fetch(key_for(theme), {})
-      Array(set[kind.to_sym].presence || LINES.dig(Buddy::Themes::DEFAULT, kind.to_sym))
-    end
-
-    # An unknown theme reads as the default rather than raising, same as
-    # Buddy::Themes.for — the value arrives from a database column.
-    def key_for(theme)
-      key = theme.to_s.to_sym
-      LINES.key?(key) ? key : Buddy::Themes::DEFAULT
+      own = Buddy::Companion.find(theme).voice_lines[kind.to_sym]
+      Array(own.presence || Buddy::Companion.find(Buddy::Companion::DEFAULT).voice_lines[kind.to_sym])
     end
 
     # A face is only ever offered if the theme can render it AND it's a mood
@@ -549,5 +130,4 @@ module Buddy
       say
     end
   end
-  # rubocop:enable Metrics/ModuleLength
 end

@@ -1024,6 +1024,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const body = message.body || "";
     const decision = meta.action_decision || {};
 
+    // Any card can be put away unanswered, except the ones a hook on the Mac
+    // is blocked on - those have their own Deny (ByteAction#dismissable?).
+    const dismissable =
+      actionState === "pending" &&
+      actionKind !== "permission" &&
+      actionKind !== "plan";
     const kindClass = `byte-action-kind-${actionKind}`;
     const stateClass = `byte-action-state-${actionState}`;
     const useQuestions = questions.length > 0;
@@ -1033,6 +1039,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <div class="byte-action-head">
           <span class="byte-action-icon" aria-hidden="true">${escapeHtml(iconForKind(actionKind))}</span>
           <span class="byte-action-title">${escapeHtml(title)}</span>
+          ${dismissable ? `<button type="button" class="byte-action-dismiss" data-byte-action-dismiss aria-label="Dismiss" title="Dismiss">×</button>` : ""}
         </div>
         ${subtitle && !useQuestions ? `<div class="byte-action-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         ${body ? `<div class="byte-action-body">${renderMarkdown(body)}</div>` : ""}
@@ -1063,6 +1070,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       wireActionHandlers(container, requestId, multi, actionState);
     }
+    wireDismiss(container, requestId);
+  }
+
+  // The broadcast that follows repaints the card settled, so a tap only has to
+  // send it, and put the × back if it didn't land.
+  function wireDismiss(container, requestId) {
+    const btn = container.querySelector("[data-byte-action-dismiss]");
+    if (!btn || !requestId) return;
+
+    btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      try {
+        const csrf =
+          document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content") || "";
+        const res = await fetch(
+          `/byte/actions/${encodeURIComponent(requestId)}/dismiss`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { Accept: "application/json", "X-CSRF-Token": csrf },
+          },
+        );
+        if (!res.ok) throw new Error(`http_${res.status}`);
+      } catch (_e) {
+        btn.disabled = false;
+      }
+    });
   }
 
   // Multi-question layout: one panel per question, each with a header,
@@ -2475,6 +2512,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     boardIdFn: () => currentConversationId,
     iconFor: iconNode,
     choreDreams: app.dataset.boardChoreDreams !== "false",
+    pace: {
+      dreamMinutes: Number(app.dataset.boardDreamMinutes) || 30,
+      breakMinutes: Number(app.dataset.boardDreamBreak) || 0,
+    },
   });
   boardDream.setAlerts(bootstrap.alerts || []);
 
@@ -2649,7 +2690,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     onItems: (items) => boardDream?.setItems(items),
     onChoreDreamsChanged: (on) => boardDream?.setChoreDreams(on),
+    onDreamPaceChanged: (pace) => boardDream?.setPace(pace),
   });
+
+  // The board's own chat: the message button swaps the pad for the thread and
+  // composer, which a kiosk renders but keeps hidden. Escape or the button puts
+  // the pad back.
+  const boardChatToggle = app.querySelector("[data-board-chat-toggle]");
+  if (boardChatToggle) {
+    const setBoardChat = (open) => {
+      app.dataset.boardChat = open ? "open" : "";
+      boardChatToggle.setAttribute("aria-expanded", String(open));
+      if (!open) return;
+      scrollToBottom("auto", { force: true });
+      input?.focus();
+    };
+    boardChatToggle.addEventListener("click", () => setBoardChat(app.dataset.boardChat !== "open"));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && app.dataset.boardChat === "open") setBoardChat(false);
+    });
+  }
 
   // Chore broadcasts carry `id: :chores` and the Monitor dispatcher routes by
   // id, so they arrive on their own subscription rather than the byte one -
@@ -3423,9 +3483,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   let hasBeenConnected = false;
   let wasDisconnected = false;
 
+  // The socket notices a dead network only on its next stale-ping check, so a
+  // lost network marks the page down at once. Only `connected()` marks it up
+  // again: being back online is not the same as the channel being back.
+  window.addEventListener("offline", () => {
+    app.dataset.connection = "down";
+  });
+
   Monitor.subscribe(monitorChannel, {
     connected() {
       setStatus("connected", "connected");
+      app.dataset.connection = "up";
       channelConnected = true;
       buddyWake();
       updateSleepChip();
@@ -3467,6 +3535,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     disconnected() {
       setStatus("disconnected", "disconnected");
+      app.dataset.connection = "down";
       channelConnected = false;
       buddySleep();
       updateSleepChip();
@@ -3518,6 +3587,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             const dreamsOn = String(boardMeta.chore_dreams) !== "false";
             choreBoard?.setChoreDreams(dreamsOn);
             boardDream?.setChoreDreams(dreamsOn);
+            const pace = {
+              dreamMinutes: Number(boardMeta.dream_minutes) || 30,
+              breakMinutes: Number(boardMeta.dream_break_minutes) || 0,
+            };
+            choreBoard?.setDreamPace(pace);
+            choreBoard?.setPins(boardMeta.pinned_chore_ids || []);
+            // Its Buddy may have changed what's on it (a credit button, a
+            // chore's groups) - ask again rather than guess which.
+            choreBoard?.resync();
+            boardDream?.setPace(pace);
             choreBoard?.setAskWho(String(boardMeta.ask_who) === "true");
           }
         }

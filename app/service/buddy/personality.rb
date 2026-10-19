@@ -10,7 +10,6 @@ module Buddy
   module Personality
     module_function
 
-    PERSONA_ROOT      = Rails.root.join("app/service/buddy/personalities").freeze
     TONE_PROFILE_ROOT = Rails.root.join("app/service/buddy/tone_profiles").freeze
 
     RULES_APPENDIX = <<~RULES.freeze
@@ -535,6 +534,7 @@ module Buddy
       parts << situation_block(user) unless briefing
       parts << open_loops_block(user)
       parts << conversation_notes_block(conversation)
+      parts << board_block(conversation) if conversation.board?
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
       parts << Buddy::TopicState.block_for(conversation)
       parts << at_glance_block(at_glance) if at_glance.present?
@@ -1166,9 +1166,16 @@ module Buddy
       nil
     end
 
+    def board_block(conversation)
+      Buddy::BoardAdmin.prompt_block(conversation)
+    rescue StandardError => e
+      Buddy::Errors.report(section: "personality.board_block", exception: e, user: conversation.user)
+      nil
+    end
+
     def load_persona(theme)
-      path = PERSONA_ROOT.join("#{theme}.md")
-      return default_persona(theme) unless File.exist?(path)
+      path = Buddy::Companion.all[theme.to_s.to_sym]&.persona_path
+      return default_persona(theme) unless path && File.exist?(path)
 
       File.read(path)
     end

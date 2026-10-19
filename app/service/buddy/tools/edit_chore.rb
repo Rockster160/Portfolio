@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_chore,
   summary:     "Change an existing chore - rename, schedule, assignee, next due date, urgency, " \
-               "archive.",
+               "groups, archive.",
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
     when it's next due, change how urgent it is, or archive/unarchive a chore
@@ -20,6 +20,10 @@ Buddy::Tools.register(
     "bump the vet thing to Friday", "this one's due tomorrow". Pass `due` as a
     date (YYYY-MM-DD) taken from the local date in RIGHT NOW, or a full ISO
     datetime when the hour genuinely matters. Pass "none" to clear it.
+
+    `groups` REPLACES the groups the chore is filed under (comma-separated);
+    a board shows the chores in the groups it watches. To add one, include
+    the ones it already has. Pass "none" to clear them.
   TXT
   feature:     :chores,
   args:        {
@@ -30,6 +34,7 @@ Buddy::Tools.register(
     assignee: { type: :string, required: false, description: "New assignee (household member first name)" },
     priority: { type: :string, required: false, description: "New urgency: critical, high, normal, low, or none" },
     disabled: { type: :string, required: false, description: "'true' to archive, 'false' to unarchive" },
+    groups:   { type: :string, required: false, description: "The FULL comma-separated list of groups, or 'none'" },
   },
   confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
@@ -42,7 +47,7 @@ Buddy::Tools.register(
     # nothing (prod byte_action 493). A phantom confirmation is worse than an
     # error, because the error is the thing that makes the model say what it
     # actually wants changed.
-    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled)
+    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled, :groups)
     if given.all? { |v| v.to_s.strip.blank? }
       raise "nothing to change on #{chore.name} - say what should be different"
     end
@@ -65,6 +70,9 @@ Buddy::Tools.register(
       raise "unknown priority #{payload[:priority].inspect} — use critical, high, normal, low, or none"
     end
 
+    groups = payload[:groups].to_s.strip
+    tags = (groups.casecmp?("none") ? [] : GroupTaggable.normalize(groups)) if groups.present?
+
     {
       summary:  "Edit #{chore.name}?",
       resolved: {
@@ -74,6 +82,8 @@ Buddy::Tools.register(
         priority:    priority,
         # "clear" is the unset-it sentinel; an absent key means "leave it".
         due_at_iso:  (due == :clear ? "clear" : due&.iso8601),
+        # nil leaves the groups alone; [] is "none".
+        tags:        tags,
       },
     }
   },
@@ -89,6 +99,7 @@ Buddy::Tools.register(
       diffs << "due #{ctx.friendly_future(Time.zone.parse(payload[:due_at_iso].to_s))}"
     end
     diffs << "priority → #{payload[:priority]}" if payload[:priority].present?
+    diffs << "groups → #{Array(payload[:tags]).join(", ").presence || "none"}" unless payload[:tags].nil?
     diffs << "assign → #{User.find_by(id: payload[:assignee_id])&.first_name}" if payload[:assignee_id]
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
     { title: base, sub: diffs.join("\n").presence }
@@ -104,6 +115,7 @@ Buddy::Tools.register(
     attrs[:assigned_to_user_id] = payload[:assignee_id] if payload[:assignee_id]
     attrs[:recurrence]          = payload[:recurrence]  if payload[:recurrence].present?
     attrs[:priority]            = payload[:priority]    if payload[:priority].present?
+    attrs[:tags]                = Array(payload[:tags]) unless payload[:tags].nil?
     if payload[:due_at_iso].present?
       attrs[:marked_due_at] = (Time.zone.parse(payload[:due_at_iso].to_s) unless payload[:due_at_iso] == "clear")
     end

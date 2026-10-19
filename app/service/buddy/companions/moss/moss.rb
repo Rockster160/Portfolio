@@ -10,6 +10,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A calm, grounded forest sprite — warm, unhurried, quietly encouraging."
+      alarm_face :star
 
       emotions(
         neutral:    { summary: "calm little smile, unbothered — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

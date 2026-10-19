@@ -35,9 +35,19 @@ RSpec.describe "Expression Lab", type: :request do
   it "shows a pose a pet only has art for, with no mood values" do
     get system_expressions_path
 
-    bloom = response.body[%r{data-exlab-pet="bloom".*?</section>}m]
-    expect(bloom).to include("Bloom — hiding")
-    expect(bloom).to include("Worn on cue, never picked as a mood.")
+    mocha = response.body[%r{data-exlab-pet="mocha".*?</section>}m]
+    expect(mocha).to include("Mocha — clock")
+    expect(mocha).to include("Worn on cue, never picked as a mood.")
+  end
+
+  it "carries every pet's mood table and the picker's tuning for the vibe sliders" do
+    get system_expressions_path
+
+    raw = response.body[/data-exlab-vibe-data="([^"]*)"/, 1]
+    vibe = JSON.parse(CGI.unescapeHTML(raw))
+    expect(vibe["softness"]).to eq(Buddy::Faces::SOFTNESS)
+    expect(vibe["pets"]["bloom"]["pounce"]).to include("play" => 0.85, "reach" => 0.17)
+    expect(vibe["pets"]["bloom"]["hiding"]["url"]).to include("face_hiding")
   end
 
   it "shows each expression's label and its mood values, read from the constants" do

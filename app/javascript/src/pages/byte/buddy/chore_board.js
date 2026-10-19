@@ -19,6 +19,7 @@
 
 import { Monitor } from "../../dashboard/cells/monitor";
 import { boardOwnerId, feedOwnerMatches } from "./board_scope";
+import { initBoardChorePicker } from "./board_chore_picker";
 
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
@@ -132,14 +133,15 @@ function cellState(item) {
 // Only what is being asked for today. `today_visible` is the same field
 // /chores/today sorts on, so the board and the page agree about what the day
 // holds without this knowing anything about recurrence. Dailies show either
-// way, as they do in Today's Dailies section.
+// way, as they do in Today's Dailies section, and so do the chores pinned to
+// this board.
 //
 // A dismissed or skipped chore is KEPT and greyed rather than dropped: it was
 // on the board a moment ago and vanishing on a press reads as a mis-tap, and
 // the grey circle is also the only way back to it.
 function onBoard(items) {
   return items.filter((item) =>
-    isAction(item) ? true : (item.today_visible || item.on_dailies) && !item.archived,
+    isAction(item) ? true : (item.today_visible || item.on_dailies || item.pinned) && !item.archived,
   );
 }
 
@@ -204,6 +206,7 @@ const SCALE_STEP = 10;
 
 export function initChoreBoard({
   root, app, conversationIdFn, sayText, onTagsChanged, onItems, onChoreDreamsChanged,
+  onDreamPaceChanged,
 } = {}) {
   if (!root || !app) return null;
 
@@ -224,16 +227,27 @@ export function initChoreBoard({
   const bbLabelEl = root.querySelector("[data-bb-label]");
   // The groups a new/edited button belongs to, comma-separated.
   const bbTagsEl = root.querySelector("[data-bb-tags]");
-  // Completes: a type-to-find picker. The text field searches; the hidden input
-  // holds the chosen chore id; the results box is the dropdown.
-  const bbChoreSearchEl = root.querySelector("[data-bb-chore-search]");
+  // Completes: a button opening the board's chore picker; the hidden input
+  // holds the chosen chore id.
+  const bbChorePickEl = root.querySelector("[data-bb-chore-pick]");
   const bbChoreIdEl = root.querySelector("[data-bb-chore]");
-  const bbChoreResultsEl = root.querySelector("[data-bb-chore-results]");
   const bbCreditEl = root.querySelector("[data-bb-credit]");
   const bbColorEl = root.querySelector("[data-bb-color]");
   const bbIdEl = root.querySelector("[data-bb-id]");
   const bbSaveEl = root.querySelector("[data-bb-save]");
   const bbErrorEl = root.querySelector("[data-bb-error]");
+
+  // Pinning chores to the board, inside the group picker. Owner-only.
+  const pinsSectionEl = root.querySelector("[data-board-pins-section]");
+  const pinsListEl = root.querySelector("[data-board-pins-list]");
+  const pinAddEl = root.querySelector("[data-board-pin-add]");
+
+  // The one chore picker both of those open: the Chores page's search over
+  // each chore's own icon, in a modal over everything else.
+  const chorePicker = initBoardChorePicker({
+    dialog: root.querySelector("[data-board-chore-picker]"),
+    iconFor: iconNode,
+  });
 
   const cheerUrl = app.dataset.choreCheerUrl;
   // The board's own set endpoint, not /chores/sync: it answers with chores AND
@@ -341,7 +355,7 @@ export function initChoreBoard({
     } else if (items.length === 0) {
       emptyEl.textContent = `Nothing left in ${tags.join(", ")} today.`;
     }
-    emptyEl.hidden = tags.length > 0 && items.length > 0;
+    emptyEl.hidden = items.length > 0;
   }
 
   // Whether a press on this id is still in flight / came back failed. Shared by
@@ -677,7 +691,7 @@ export function initChoreBoard({
   // serializer), so there is nothing to filter here and triggers come back on
   // the set instead of being dropped.
   async function resync() {
-    if (!itemsUrl || !tags.length) return;
+    if (!itemsUrl) return;
 
     const conversationId = conversationIdFn ? conversationIdFn() : null;
     const url = conversationId
@@ -1091,6 +1105,97 @@ export function initChoreBoard({
     if (broadcast) onTagsChanged?.(tags);
   }
 
+  // ---- pinned chores ----
+  //
+  // The chores this board shows whatever its groups and whatever the schedule.
+  // The ids live on the app element (server-rendered, and rewritten by a
+  // broadcast), the names come from the same chore list the credit buttons
+  // search.
+
+  let pinOptions = [];
+
+  function pinnedIds() {
+    try {
+      const ids = JSON.parse(app.dataset.boardPins || "[]");
+      return Array.isArray(ids) ? ids.map(Number) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function savePins(ids) {
+    if (!pinsSectionEl) return;
+    const conversationId = conversationIdFn ? conversationIdFn() : null;
+    try {
+      const data = await apiCall(pinsSectionEl.dataset.url, "POST", {
+        conversation_id: conversationId, chore_ids: ids,
+      });
+      app.dataset.boardPins = JSON.stringify(data?.chore_ids || []);
+      paintPins();
+      resync();
+      flashSaved();
+    } catch (e) {
+      // Nothing stored, so the list stays as it was.
+    }
+  }
+
+  function paintPinList() {
+    if (!pinsListEl) return;
+    pinsListEl.innerHTML = "";
+    const ids = pinnedIds();
+    if (ids.length === 0) {
+      const none = document.createElement("p");
+      none.className = "byte-board-tag-empty";
+      none.textContent = "Nothing pinned yet.";
+      pinsListEl.appendChild(none);
+      return;
+    }
+    // Each pin as the chore it is - its icon and name - from the picker's list,
+    // or the board's own items before that has loaded.
+    const known = new Map(pinOptions.map((c) => [Number(c.id), c]));
+    items.forEach((item) => {
+      if (item.pinned && !known.has(Number(item.id))) known.set(Number(item.id), item);
+    });
+    ids.forEach((id) => {
+      const chore = known.get(id);
+      const row = document.createElement("div");
+      row.className = "byte-board-button-row";
+      const label = document.createElement("span");
+      label.className = "byte-board-button-edit byte-board-pin-name";
+      if (chore?.icon_kind) label.appendChild(iconNode(chore));
+      label.append(document.createTextNode(chore?.name || "A chore you can't see any more"));
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "byte-board-button-del";
+      del.setAttribute("aria-label", `Unpin ${chore?.name || "this chore"}`);
+      del.textContent = "×";
+      del.addEventListener("click", () => savePins(pinnedIds().filter((p) => p !== id)));
+      row.append(label, del);
+      pinsListEl.appendChild(row);
+    });
+  }
+
+  async function paintPins() {
+    if (!pinsSectionEl) return;
+    paintPinList();
+    if (pinOptions.length) return;
+    try {
+      const data = await apiCall(BUTTONS_URL, "GET");
+      pinOptions = Array.isArray(data?.chores) ? data.chores : [];
+      paintPinList();
+    } catch (e) {
+      // The list still shows; only the names of unloaded chores are missing.
+    }
+  }
+
+  pinAddEl?.addEventListener("click", async () => {
+    if (!pinOptions.length) await paintPins();
+    const chore = await chorePicker.open({
+      options: pinOptions, exclude: pinnedIds(), title: "Pin a chore to this board",
+    });
+    if (chore) savePins([...pinnedIds(), Number(chore.id)]);
+  });
+
   // ---- managing credit buttons ----
   //
   // A credit button marks one chore done and credits a chosen person. The whole
@@ -1120,54 +1225,18 @@ export function initChoreBoard({
     });
   }
 
-  function hideChoreResults() {
-    if (!bbChoreResultsEl) return;
-    bbChoreResultsEl.hidden = true;
-    bbChoreResultsEl.innerHTML = "";
-    bbChoreSearchEl?.setAttribute("aria-expanded", "false");
-  }
-
-  // Pick a chore from the dropdown: the id goes to the hidden input (what the
-  // form submits), the name fills the search field so it reads as chosen.
-  function chooseChore(opt) {
-    if (bbChoreIdEl) bbChoreIdEl.value = String(opt.id);
-    if (bbChoreSearchEl) bbChoreSearchEl.value = opt.name;
-    hideChoreResults();
-  }
-
-  // Substring match, capped so the dropdown stays a glanceable short list rather
-  // than the giant select it replaced. A blank query shows the first few.
-  function paintChoreResults(query) {
-    if (!bbChoreResultsEl) return;
-
-    const q = query.trim().toLowerCase();
-    const matches = (q ? choreOptions.filter((c) => c.name.toLowerCase().includes(q)) : choreOptions).slice(0, 10);
-
-    bbChoreResultsEl.innerHTML = "";
-    if (matches.length === 0) {
-      hideChoreResults();
+  // What the Completes button says: the chosen chore, or that one is wanted.
+  function showChosenChore(chore) {
+    if (bbChoreIdEl) bbChoreIdEl.value = chore ? String(chore.id) : "";
+    if (!bbChorePickEl) return;
+    bbChorePickEl.replaceChildren();
+    if (!chore) {
+      bbChorePickEl.textContent = "Pick a chore…";
       return;
     }
-
-    matches.forEach((opt) => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "byte-board-chore-result";
-      row.dataset.bbChoreOption = String(opt.id);
-      row.textContent = opt.name;
-      row._option = opt;
-      bbChoreResultsEl.appendChild(row);
-    });
-    bbChoreResultsEl.hidden = false;
-    bbChoreSearchEl?.setAttribute("aria-expanded", "true");
-  }
-
-  // Typing clears any previous pick: the hidden id only means something while the
-  // field still reads as the chore they chose. Re-choosing from the dropdown sets
-  // it again.
-  function onChoreInput() {
-    if (bbChoreIdEl) bbChoreIdEl.value = "";
-    paintChoreResults(bbChoreSearchEl?.value || "");
+    const full = choreOptions.find((c) => String(c.id) === String(chore.id)) || chore;
+    if (full.icon_kind) bbChorePickEl.appendChild(iconNode(full));
+    bbChorePickEl.append(document.createTextNode(full.name || chore.name || ""));
   }
 
   // The form lives in its own dialog, opened by "+ New" or a row tapped to edit.
@@ -1189,9 +1258,7 @@ export function initChoreBoard({
     // case is a button for the board you're on.
     if (bbTagsEl) bbTagsEl.value = tags.join(", ");
     if (bbColorEl) bbColorEl.value = "#94A3B8";
-    if (bbChoreSearchEl) bbChoreSearchEl.value = "";
-    if (bbChoreIdEl) bbChoreIdEl.value = "";
-    hideChoreResults();
+    showChosenChore(null);
     // The next paint re-applies the "credit me" default; editing sets an
     // explicit value after this and keeps its own.
     if (bbCreditEl && meId != null) bbCreditEl.value = String(meId);
@@ -1209,9 +1276,7 @@ export function initChoreBoard({
     if (bbLabelEl) bbLabelEl.value = button.label || "";
     if (bbTagsEl) bbTagsEl.value = (button.tags || []).join(", ");
     if (bbColorEl) bbColorEl.value = button.color || "#94A3B8";
-    if (bbChoreSearchEl) bbChoreSearchEl.value = button.chore_name || "";
-    if (bbChoreIdEl) bbChoreIdEl.value = String(button.chore_id);
-    hideChoreResults();
+    showChosenChore({ id: button.chore_id, name: button.chore_name });
     if (bbCreditEl) bbCreditEl.value = String(button.credit_user_id ?? "");
     if (bbSaveEl) bbSaveEl.textContent = "Save";
     if (bbTitleEl) bbTitleEl.textContent = "Edit credit button";
@@ -1546,6 +1611,7 @@ export function initChoreBoard({
         paintTagPicker();
         resetButtonForm();
         paintButtons();
+        paintPins();
       }
     });
   }
@@ -1606,6 +1672,8 @@ export function initChoreBoard({
   const shareBoxEl = root.querySelector("[data-board-share]");
   const choreDreamsBoxEl = root.querySelector("[data-board-chore-dreams]");
   const askWhoBoxEl = root.querySelector("[data-board-ask-who]");
+  const dreamMinutesEl = root.querySelector("[data-board-dream-minutes]");
+  const dreamBreakEl = root.querySelector("[data-board-dream-break]");
 
   if (renameFormEl && renameInputEl) {
     let savedName = renameInputEl.value;
@@ -1667,6 +1735,33 @@ export function initChoreBoard({
       }
     });
   }
+
+  // The dream pace: each select saves on its own, and one that doesn't land
+  // goes back to what's stored.
+  const dreamPace = () => ({
+    dreamMinutes: Number(dreamMinutesEl?.value) || 30,
+    breakMinutes: Number(dreamBreakEl?.value) || 0,
+  });
+  const paceControls = [
+    [dreamMinutesEl, "dream_minutes", "boardDreamMinutes"],
+    [dreamBreakEl, "break_minutes", "boardDreamBreak"],
+  ];
+  paceControls.forEach(([el, param, key]) => {
+    if (!settingsEl || !el) return;
+    el.addEventListener("change", async () => {
+      const conversationId = conversationIdFn ? conversationIdFn() : null;
+      try {
+        await apiCall(settingsEl.dataset.choreDreamsUrl, "POST", {
+          conversation_id: conversationId, [param]: Number(el.value),
+        });
+        app.dataset[key] = el.value;
+        onDreamPaceChanged?.(dreamPace());
+        flashSaved();
+      } catch (err) {
+        el.value = app.dataset[key];
+      }
+    });
+  });
 
   if (settingsEl && askWhoBoxEl) {
     askWhoBoxEl.addEventListener("change", async () => {
@@ -1758,28 +1853,13 @@ export function initChoreBoard({
     if (bbDirty || bbIdEl?.value) resetButtonForm();
   });
 
-  if (bbChoreSearchEl) {
-    bbChoreSearchEl.addEventListener("input", onChoreInput);
-    bbChoreSearchEl.addEventListener("focus", () =>
-      paintChoreResults(bbChoreSearchEl.value || ""),
-    );
-    // A click on a result lands before this blur (mousedown fires first and the
-    // handler picks it), so the short delay only matters for a real blur away.
-    bbChoreSearchEl.addEventListener("blur", () =>
-      window.setTimeout(hideChoreResults, 150),
-    );
-  }
-  if (bbChoreResultsEl) {
-    // mousedown, not click: it fires before the input's blur, so the pick lands
-    // instead of the dropdown closing out from under the tap.
-    bbChoreResultsEl.addEventListener("mousedown", (e) => {
-      const opt = e.target.closest("[data-bb-chore-option]");
-      if (opt?._option) {
-        e.preventDefault();
-        chooseChore(opt._option);
-      }
-    });
-  }
+  bbChorePickEl?.addEventListener("click", async () => {
+    const chore = await chorePicker.open({ options: choreOptions, title: "What does it complete?" });
+    if (!chore) return;
+    showChosenChore(chore);
+    bbDirty = true;
+    paintDirty();
+  });
 
   if (bbListEl) {
     bbListEl.addEventListener("click", (e) => {
@@ -1830,7 +1910,22 @@ export function initChoreBoard({
       applyTags(next);
     },
 
-    // Switched on another device: keep the box honest.
+    // Pinned or unpinned elsewhere (another screen, or the board's Buddy):
+    // take the new set. The broadcast that carried it fetches the board again.
+    setPins(ids) {
+      const next = JSON.stringify((Array.isArray(ids) ? ids : []).map(Number));
+      if (next === JSON.stringify(pinnedIds())) return;
+      app.dataset.boardPins = next;
+      paintPins();
+    },
+
+    // Switched on another device: keep the controls honest.
+    setDreamPace(pace) {
+      app.dataset.boardDreamMinutes = String(pace.dreamMinutes);
+      app.dataset.boardDreamBreak = String(pace.breakMinutes);
+      if (dreamMinutesEl) dreamMinutesEl.value = String(pace.dreamMinutes);
+      if (dreamBreakEl) dreamBreakEl.value = String(pace.breakMinutes);
+    },
     setChoreDreams(on) {
       app.dataset.boardChoreDreams = String(on);
       if (choreDreamsBoxEl) choreDreamsBoxEl.checked = on;

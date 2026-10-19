@@ -415,11 +415,19 @@ import { dash_colors, clamp } from "../vars";
       return blank;
     }
 
-    const spent = gpt.spent_micros || 0;
+    // A month that has rolled over since the last push started at nothing,
+    // and nothing is pushed at midnight UTC to say so.
+    const rolled = now_ms >= gpt.resets_at * 1000;
+    const spent = rolled ? 0 : gpt.spent_micros || 0;
     const left = (gpt.budget_micros - spent) / gpt.budget_micros;
-    const reset_ms = gpt.resets_at * 1000;
-    const start = new Date(reset_ms);
-    start.setUTCMonth(start.getUTCMonth() - 1);
+    const now = new Date(now_ms);
+    const start = rolled
+      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+      : new Date(gpt.resets_at * 1000);
+    if (!rolled) start.setUTCMonth(start.getUTCMonth() - 1);
+    const reset = new Date(start.getTime());
+    reset.setUTCMonth(reset.getUTCMonth() + 1);
+    const reset_ms = reset.getTime();
     const dollars = function (micros) {
       return "$" + (micros / 1000000).toFixed(2);
     };

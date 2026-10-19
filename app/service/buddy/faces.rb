@@ -32,6 +32,7 @@ module Buddy
       sleeping: { warmth: 0.55, play: 0.05, weight: 0.20, strain: 0.00 },
       wave:     { warmth: 0.85, play: 0.50, weight: 0.20, strain: 0.05 },
       clock:    { warmth: 0.45, play: 0.20, weight: 0.50, strain: 0.35 },
+      alarm:    { warmth: 0.80, play: 0.65, weight: 0.55, strain: 0.25 },
     }.freeze
 
     # The face whose ART stands in for "thinking" on this pet. The expression

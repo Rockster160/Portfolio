@@ -19,15 +19,9 @@ class ByteController < ApplicationController
   HISTORY_LIMIT = 50
   MAX_LIMIT     = 200
 
-  # Groups a board can watch that no chore, routine or button carries, so they
-  # would never show up in the picker on their own:
-  # - "All" is a wildcard — a board watching it shows every chore (and only
-  #   chores; the one-press routines and buttons belong to the named groups).
-  # - "Whisper" is the feed group the Whisper PWA board watches for its duration
-  #   rings, sounds and alerts, which are broadcast with groups: "Whisper" and
-  #   have no chore behind them.
-  BOARD_ALL_TAG       = "All".freeze
-  BOARD_RESERVED_TAGS = [BOARD_ALL_TAG, "Whisper"].freeze
+  # The groups a board can watch that nothing is tagged with (see ByteConversation).
+  BOARD_ALL_TAG       = ByteConversation::BOARD_ALL_TAG
+  BOARD_RESERVED_TAGS = ByteConversation::BOARD_RESERVED_TAGS
 
   def show
     load_thread
@@ -95,7 +89,12 @@ class ByteController < ApplicationController
     @board_whisper_state = Buddy::BoardFace.whisper_state(convo)
     # The face it opens on, including a hot chore it is dreaming of this half
     # hour: the script makes the same draw, so nothing flips once it runs.
-    chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(@board_items_json, convo.id).present?
+    chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(
+      @board_items_json,
+      convo.id,
+      dream_minutes: convo.dream_minutes,
+      break_minutes: convo.dream_break_minutes,
+    ).present?
     @board_held_face = Buddy::BoardFace.showing(convo, chore_dream:)
     # Only the owner configures a board, so the settings the picker offers are
     # theirs alone; a member looking at a shared board gets the pad, not the
@@ -352,17 +351,36 @@ class ByteController < ApplicationController
   end
 
   # POST /byte/board/chore_dreams — whether the board's pet dreams of its hot
-  # chores now and then. Owner-only like sharing; broadcast so every open copy
-  # of the board follows.
+  # chores now and then, and at what pace: how long a dream lasts and how long
+  # it rests between them. Each is optional, so one control saves one value.
+  # Owner-only like sharing; broadcast so every open copy of the board follows.
   def set_board_chore_dreams
     convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
-    on = ActiveModel::Type::Boolean.new.cast(params[:on])
-    convo.metadata = convo.metadata.to_h.merge("chore_dreams" => on)
+    changes = {}
+    changes["chore_dreams"] = ActiveModel::Type::Boolean.new.cast(params[:on]) if params.key?(:on)
+    if params.key?(:dream_minutes)
+      minutes = params[:dream_minutes].to_i
+      return head(:unprocessable_entity) unless Buddy::BoardDream::DREAM_MINUTES.include?(minutes)
+
+      changes["dream_minutes"] = minutes
+    end
+    if params.key?(:break_minutes)
+      minutes = params[:break_minutes].to_i
+      return head(:unprocessable_entity) unless Buddy::BoardDream::BREAK_MINUTES.include?(minutes)
+
+      changes["dream_break_minutes"] = minutes
+    end
+    convo.metadata = convo.metadata.to_h.merge(changes)
     convo.save!
     broadcast_convo_change(convo, :updated)
-    render json: { ok: true, chore_dreams: convo.chore_dreams? }
+    render json: {
+      ok:            true,
+      chore_dreams:  convo.chore_dreams?,
+      dream_minutes: convo.dream_minutes,
+      break_minutes: convo.dream_break_minutes,
+    }
   end
 
   # POST /byte/board/ask_who — whether a chore pressed on this board is credited
@@ -377,6 +395,19 @@ class ByteController < ApplicationController
     convo.save!
     broadcast_convo_change(convo, :updated)
     render json: { ok: true, ask_who: convo.asks_who? }
+  end
+
+  # POST /byte/board/pins — the chores pinned to this board, as the full ordered
+  # set. Owner-only like the other knobs; a chore the owner can't see is
+  # dropped rather than stored.
+  def set_board_pins
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    convo.pinned_chore_ids = Array(params[:chore_ids])
+    convo.save!
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, chore_ids: convo.pinned_chore_ids }
   end
 
   # POST /byte/board/members — which household members' chores this board shows.
@@ -804,6 +835,17 @@ class ByteController < ApplicationController
     render json: { sessions: result || [] }
   end
 
+  # The × on an action card. Put away without an answer, so nothing runs - the
+  # card stops waiting at the bottom of the thread and settles into it.
+  def dismiss_action
+    action = current_user.byte_actions.find_by(request_id: params[:request_id])
+    return head(:not_found) if action.nil?
+    return head(:conflict) unless action.dismiss!
+
+    broadcast_action_message(action)
+    render json: action.reload.as_wire
+  end
+
   # PWA button tap → records the decision on ByteAction, updates the
   # message state, broadcasts the update, and pings the Mac's decision
   # hook so any waiting Claude Code PreToolUse hook wakes up.
@@ -967,16 +1009,19 @@ class ByteController < ApplicationController
 
     action.apply_decision!(value: chosen, source: :user)
     Buddy::Disambiguation.chose!(action, button)
-
-    if action.byte_message
-      MonitorChannel.broadcast_to(current_user, {
-        id:      MONITOR_CHANNEL,
-        channel: MONITOR_CHANNEL,
-        data:    { kind: :message, message: action.byte_message.reload.as_wire },
-      })
-    end
+    broadcast_action_message(action)
 
     render json: action.reload.as_wire
+  end
+
+  def broadcast_action_message(action)
+    return if action.byte_message.nil?
+
+    MonitorChannel.broadcast_to(current_user, {
+      id:      MONITOR_CHANNEL,
+      channel: MONITOR_CHANNEL,
+      data:    { kind: :message, message: action.byte_message.reload.as_wire },
+    })
   end
 
   # A tap on the reminders management list. `cancel` takes a row off (cancels
@@ -1125,9 +1170,9 @@ class ByteController < ApplicationController
   # `sort_order`, a routine's `position`), so there is no shared order to
   # interleave them by.
   #
-  # No groups loads NOTHING rather than everything. A board nobody has
-  # pointed at a group yet is empty and says so; filling it with every chore in
-  # the house would look deliberate and be wrong.
+  # No groups loads NOTHING rather than everything (bar its pins). A board
+  # nobody has pointed at a group yet is empty and says so; filling it with
+  # every chore in the house would look deliberate and be wrong.
   # The board's content is the OWNER's, shown to whoever opens it. On a board you
   # own that's just you; on a household member's shared board it's them — their
   # routines, their task buttons, the chores their board is set to show. Who's
@@ -1135,18 +1180,20 @@ class ByteController < ApplicationController
   # settled in the press endpoints, not here.
   def board_items_for(convo)
     tags = convo&.chore_tags || []
-    return [] if tags.empty?
+    return [] if tags.empty? && convo&.pinned_chore_ids.blank?
 
     owner = convo.user
     day = @board_day || ChoreDay.current(owner)
     # "All" is every chore, whatever it is tagged; any other groups narrow by tag.
     wants_all = tags.any? { |t| t.casecmp?(BOARD_ALL_TAG) }
-    chore_items = board_chore_items(convo, owner, tags, wants_all, day)
+    # A board with only pins has no groups to draw chores from.
+    chore_items = tags.empty? ? [] : board_chore_items(convo, owner, tags, wants_all, day)
     # The hidden filter wins over the watched groups: a chore it matches stays off.
     if convo.hidden_chore_filter.present?
       hidden_ids = Chore.board_hidden(convo.hidden_chore_filter).pluck(:id).to_set
       chore_items = chore_items.reject { |item| hidden_ids.include?(item[:id]) }
     end
+    chore_items = board_pinned_first(convo, owner, chore_items, day)
     chore_items = board_hot_weighted(chore_items, day)
 
     # Routines and buttons come from the NAMED groups only — "All" is a chores-only
@@ -1245,6 +1292,26 @@ class ByteController < ApplicationController
     dailies + sorted_due + sorted_rest
   end
 
+  # Pinned chores lead the chores, in their pinned order, whatever groups the
+  # board watches and whether or not they're due — `pinned` is what keeps one on
+  # the board when Today wouldn't show it. A pinned chore the groups also bring
+  # shows once, in its pinned place.
+  def board_pinned_first(convo, owner, chore_items, day)
+    ids = convo.pinned_chore_ids
+    return chore_items if ids.empty?
+
+    by_id = chore_items.index_by { |item| item[:id] }
+    missing = ids - by_id.keys
+    if missing.any?
+      found = owner.accessible_chores.active.where(id: missing).to_a
+      ChoreSerializerContext.for_user(owner, day: day).serialize_all(found).each { |item|
+        by_id[item[:id]] = item.merge(kind: :chore, on_dailies: false)
+      }
+    end
+    pinned = ids.filter_map { |id| by_id[id]&.merge(pinned: true) }
+    pinned + chore_items.reject { |item| ids.include?(item[:id]) }
+  end
+
   # A hot chore carries the weight the morning hot-pick draw gives it, so the
   # board can draw among them the same way for its pet's dreams (see
   # Buddy::BoardDream).
@@ -1312,12 +1379,20 @@ class ByteController < ApplicationController
     permitted
   end
 
-  # The chores a button can complete: every chore this person can see, by name.
+  # The chores a board's pickers search (a button's chore, a pin): every active
+  # chore this person can see, with what the shared chore search matches on
+  # (name, short name, aliases) and the icon each is recognized by.
   def household_chore_options
-    current_user.accessible_chores
-      .order(Arel.sql("LOWER(name) ASC"))
-      .pluck(:id, :name)
-      .map { |id, name| { id: id, name: name } }
+    chores = current_user.accessible_chores.active.order(Arel.sql("LOWER(name) ASC")).to_a
+    ctx = ChoreSerializerContext.for_user(current_user, day: ChoreDay.current(current_user))
+    chores.map { |chore|
+      {
+        id:         chore.id,
+        name:       chore.name,
+        short_name: chore.short_name.presence || chore.name,
+        aliases:    Array(chore.aliases),
+      }.merge(ChoreSerializer.new(chore, viewer: current_user, ctx: ctx).icon_fields)
+    }
   end
 
   # Who a button can credit: the members of this person's household.

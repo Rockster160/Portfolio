@@ -368,6 +368,9 @@ module Buddy
         unless Buddy::Features.allows_tool?(user, tool)
           return [resolve_failure("#{tool[:name]} isn't something this person has set up"), nil, nil]
         end
+        if Buddy::Tools.board?(tool) && !conversation&.board?
+          return [resolve_failure("#{tool[:name]} only works from a board's own chat"), nil, nil]
+        end
 
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
         payload, errors = Buddy::Tools.validate_payload(tool, args, zone: Buddy::Day.zone(user))
@@ -2867,7 +2870,7 @@ module Buddy
 
         named = seed_tools
         if named.any?
-          @seeded_tools ||= Buddy::ToolIndex.everything(user: @user).select { |schema|
+          @seeded_tools ||= Buddy::ToolIndex.everything(user: @user, conversation: @conversation).select { |schema|
             named.include?(schema[:name].to_s)
           }
           # Offered in full, so they're open: a call to one is never a pick.
@@ -2875,7 +2878,7 @@ module Buddy
           return @seeded_tools
         end
 
-        Buddy::ToolIndex.schemas(user: @user, loaded: loaded_tools)
+        Buddy::ToolIndex.schemas(user: @user, loaded: loaded_tools, conversation: @conversation)
       end
 
       # The indexed tools this turn has opened. Kept across a retried attempt:

@@ -21,6 +21,10 @@ Buddy::Tools.register(
       priority - how urgent: critical / high / normal / low / none. Only pass
                  it when the user says so ("this one's urgent", "low priority",
                  "don't bother flagging it") - otherwise it defaults to normal.
+      groups   - comma-separated groups to file it under ("Kitchen, Pets").
+                 A board shows the chores in the groups it watches. In a
+                 board's own chat, leaving this out files it under that
+                 board's groups.
     An icon is chosen automatically from the name.
   TXT
   feature:     :chores,
@@ -34,6 +38,7 @@ Buddy::Tools.register(
     due:      { type: :string, required: false, description: "When it's first due - YYYY-MM-DD (from the local date in RIGHT NOW) or an ISO datetime" },
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
     priority: { type: :string, required: false, description: "Urgency: critical, high, normal, low, or none. Omit for normal" },
+    groups:   { type: :string, required: false, description: "Comma-separated groups to file it under" },
   },
   confirm:     ->(payload, ctx) {
     household = ctx.user.chore_household
@@ -83,9 +88,15 @@ Buddy::Tools.register(
     # every Sunday" asked for on a Wednesday must not demand mowing today.
     due_at ||= ChoreDay.starts_at(ChoreDay.current(ctx.user), ctx.user) if recurrence.blank?
 
+    # On a board's own chat a new chore belongs on that board unless they said
+    # otherwise, and a board shows the chores in its groups.
+    tags = GroupTaggable.normalize(payload[:groups])
+    tags = ctx.conversation.named_board_groups if tags.empty? && ctx.conversation&.board?
+
     {
       summary:  "Add new chore: #{payload[:name]}?",
       resolved: {
+        tags:                tags.presence,
         assigned_to_user_id: assignee&.id,
         recurrence:          recurrence,
         reward_pebbles:      reward,
@@ -107,6 +118,7 @@ Buddy::Tools.register(
       subs << "for #{User.find_by(id: payload[:assigned_to_user_id])&.first_name}"
     end
     subs << "#{payload[:priority]} priority" if payload[:priority].present?
+    subs << "in #{Array(payload[:tags]).join(", ")}" if payload[:tags].present?
     subs << "#{payload[:reward_pebbles]}p" if payload[:reward_pebbles].present?
     if payload[:marked_due_at_iso].present?
       subs << "due #{ctx.friendly_future(Time.zone.parse(payload[:marked_due_at_iso].to_s))}"
@@ -138,6 +150,7 @@ Buddy::Tools.register(
       priority:            payload[:priority] || :normal,
       recurrence:          payload[:recurrence],
       parent_chore_id:     payload[:parent_chore_id],
+      tags:                Array(payload[:tags]),
       marked_due_at:       (Time.zone.parse(payload[:marked_due_at_iso].to_s) if payload[:marked_due_at_iso].present?),
     )
     {

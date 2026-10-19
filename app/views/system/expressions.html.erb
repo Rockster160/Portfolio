@@ -33,6 +33,19 @@
   }
 
   pets = Buddy::Companion.all.values.select { |pet| pet.faces.present? }
+
+  # What the vibe sliders need to run the picker in the page: every pet's mood
+  # table and face images, and the picker's own tuning, so the odds shown are
+  # Buddy::Faces.pool + .pick's weights rather than a second guess at them.
+  vibe = {
+    axes:     axes,
+    weights:  Buddy::Faces::AXIS_WEIGHTS,
+    reach:    Buddy::Faces::AXIS_REACH,
+    softness: Buddy::Faces::SOFTNESS,
+    pets:     pets.to_h { |pet|
+      [pet.theme, pet.faces.to_h { |name, vals| [name, vals.merge(url: buddy_face_url(pet.theme, name))] }]
+    },
+  }
 %>
 
 <div class="exlab" data-exlab>
@@ -61,6 +74,22 @@
       </button>
     <% end %>
   </div>
+
+  <section class="exlab-vibe" data-exlab-vibe data-exlab-vibe-data="<%= vibe.to_json %>">
+    <div class="exlab-group-label">Try a vibe</div>
+    <div class="exlab-vibe-body">
+      <div class="exlab-vibe-sliders">
+        <% axes.each do |axis| %>
+          <label class="exlab-vibe-slider">
+            <span><span class="exlab-dot exlab-dot-<%= axis %>"></span><%= axis %></span>
+            <input type="range" min="0" max="1" step="0.01" value="0.5" data-exlab-axis="<%= axis %>">
+            <em data-exlab-axis-value="<%= axis %>">0.50</em>
+          </label>
+        <% end %>
+      </div>
+      <ol class="exlab-vibe-odds" data-exlab-odds></ol>
+    </div>
+  </section>
 
   <div class="exlab-stage">
     <% pets.each_with_index do |pet, i| %>
@@ -92,7 +121,7 @@
               tag, say = system_role[name]
               has_art  = Buddy::Faces.valid?(theme, name)
             %>
-            <article class="exlab-card exlab-card-system<%= " is-blank" unless has_art %>">
+            <article class="exlab-card exlab-card-system<%= " is-blank" unless has_art %>" data-exlab-face="<%= name %>">
               <div class="exlab-face">
                 <% if has_art %>
                   <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
@@ -120,7 +149,7 @@
           <div class="exlab-grid">
             <% moods.each do |name| %>
               <% vals = faces[name] %>
-              <article class="exlab-card">
+              <article class="exlab-card" data-exlab-face="<%= name %>">
                 <div class="exlab-face">
                   <img src="<%= buddy_face_url(theme, name) %>" alt="<%= pet.display_name %> — <%= name %>" loading="lazy">
                 </div>
@@ -152,17 +181,94 @@
     if (!root) return;
     var chips = root.querySelectorAll("[data-exlab-chip]");
     var pets  = root.querySelectorAll("[data-exlab-pet]");
+    var vibeEl = root.querySelector("[data-exlab-vibe]");
+    var vibe = JSON.parse(vibeEl.dataset.exlabVibeData);
+    var oddsEl = root.querySelector("[data-exlab-odds]");
+    var sliders = root.querySelectorAll("[data-exlab-axis]");
+    var theme = chips[0] && chips[0].dataset.exlabChip;
+
+    // The picker, as Buddy::Faces has it: a face answers a reading when the
+    // reading sits inside its reach on every axis (covers?), the nearest face
+    // always answers (pool), and the draw among them is weighted
+    // 1 / (distance + SOFTNESS) (pick).
+    function distance(point, reading) {
+      return vibe.axes.reduce(function (sum, axis) {
+        var d = point[axis] - reading[axis];
+        return sum + vibe.weights[axis] * d * d;
+      }, 0);
+    }
+    function covers(point, reading) {
+      return vibe.axes.every(function (axis) {
+        return Math.abs(point[axis] - reading[axis]) <= point.reach * vibe.reach[axis];
+      });
+    }
+    function odds(faces, reading) {
+      var rows = Object.keys(faces).sort().map(function (name) {
+        return { name: name, gap: distance(faces[name], reading), inRange: covers(faces[name], reading) };
+      });
+      var nearest = rows.reduce(function (best, row) { return !best || row.gap < best.gap ? row : best; }, null);
+      var pool = rows.filter(function (row) { return row.inRange || row === nearest; });
+      pool.sort(function (a, b) { return a.gap - b.gap; });
+      var total = pool.reduce(function (sum, row) { return sum + 1 / (row.gap + vibe.softness); }, 0);
+      pool.forEach(function (row) { row.chance = (1 / (row.gap + vibe.softness)) / total; });
+      return pool;
+    }
+
+    function reading() {
+      var r = {};
+      sliders.forEach(function (input) { r[input.dataset.exlabAxis] = Number(input.value); });
+      return r;
+    }
+
+    function render() {
+      var r = reading();
+      sliders.forEach(function (input) {
+        root.querySelector('[data-exlab-axis-value="' + input.dataset.exlabAxis + '"]').textContent = r[input.dataset.exlabAxis].toFixed(2);
+      });
+      var faces = vibe.pets[theme] || {};
+      var pool = odds(faces, r);
+      oddsEl.replaceChildren.apply(oddsEl, pool.map(function (row) {
+        var li = document.createElement("li");
+        var img = document.createElement("img");
+        img.src = faces[row.name].url;
+        img.alt = "";
+        var name = document.createElement("span");
+        name.className = "exlab-odds-name";
+        name.textContent = row.name.replace(/_/g, " ");
+        var bar = document.createElement("span");
+        bar.className = "exlab-odds-track";
+        var fill = document.createElement("span");
+        fill.className = "exlab-odds-fill";
+        fill.style.width = (row.chance * 100).toFixed(1) + "%";
+        bar.appendChild(fill);
+        var pct = document.createElement("em");
+        pct.textContent = Math.round(row.chance * 100) + "%";
+        li.append(img, name, bar, pct);
+        if (!row.inRange) li.title = "Outside every range — worn as the nearest face";
+        return li;
+      }));
+      var chance = {};
+      pool.forEach(function (row) { chance[row.name] = row.chance; });
+      var petEl = root.querySelector('[data-exlab-pet="' + theme + '"]');
+      petEl.querySelectorAll("[data-exlab-face]").forEach(function (card) {
+        card.classList.toggle("is-picked", chance[card.dataset.exlabFace] != null);
+      });
+    }
+
     root.querySelector(".exlab-chips").addEventListener("click", function (e) {
       var chip = e.target.closest("[data-exlab-chip]");
       if (!chip) return;
-      var theme = chip.dataset.exlabChip;
+      theme = chip.dataset.exlabChip;
       chips.forEach(function (c) {
         var on = c === chip;
         c.classList.toggle("is-active", on);
         c.setAttribute("aria-selected", String(on));
       });
       pets.forEach(function (p) { p.hidden = p.dataset.exlabPet !== theme; });
+      render();
     });
+    sliders.forEach(function (input) { input.addEventListener("input", render); });
+    render();
   })();
 </script>
 
@@ -369,6 +475,51 @@
     font-variant-numeric: tabular-nums;
     min-width: 2.4ch;
     text-align: right;
+  }
+
+  .exlab-vibe {
+    background: var(--exlab-card);
+    border: 1px solid var(--exlab-line);
+    border-radius: 12px;
+    padding: 4px 14px 14px;
+    margin-bottom: 22px;
+  }
+  .exlab-vibe-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .exlab-vibe-sliders { display: flex; flex-direction: column; gap: 10px; }
+  .exlab-vibe-slider {
+    display: grid;
+    grid-template-columns: 76px 1fr 3ch;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--exlab-muted);
+    text-transform: capitalize;
+  }
+  .exlab-vibe-slider > span { display: flex; align-items: center; gap: 6px; }
+  .exlab-vibe-slider input { width: 100%; margin: 0; accent-color: var(--exlab-reach); }
+  .exlab-vibe-slider em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--exlab-text); }
+  .exlab-vibe-odds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .exlab-vibe-odds li {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 8rem) 1fr 4ch;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.84rem;
+  }
+  .exlab-vibe-odds img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; background: #0B0E13; }
+  .exlab-odds-name { text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exlab-odds-track { height: 8px; border-radius: 4px; background: #0B0E13; overflow: hidden; }
+  .exlab-odds-fill { display: block; height: 100%; border-radius: 4px; background: var(--exlab-reach); }
+  .exlab-vibe-odds em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; color: var(--exlab-muted); }
+  .exlab-card.is-picked { border-color: var(--exlab-reach); box-shadow: inset 0 0 0 1px var(--exlab-reach); }
+
+  @media (max-width: 720px) {
+    .exlab-vibe-body { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 480px) {

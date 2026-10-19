@@ -32,8 +32,15 @@ module Buddy
       # is a separate thing), so undo has to be able to put the whole row back.
       "BuddyReminder"         => "BuddyReminder",
       "BuddyWatch"            => "BuddyWatch",
+      # A board's settings (pins, groups) live in its thread's metadata. Only
+      # ever `updated`, and only the keys the change touched are put back, so an
+      # undo never rewinds anything else the thread holds.
+      "ByteConversation"      => "ByteConversation",
       "Chore"                 => "Chore",
       "ChoreCompletion"       => "ChoreCompletion",
+      # A board's credit button. Nothing hangs off one, so undoing it is a
+      # plain destroy.
+      "ChoreCreditButton"     => "ChoreCreditButton",
       "ChoreWithdrawal"       => "ChoreWithdrawal",
       "ListItem"              => "ListItem",
       # One beat on a job application. Notes are append-only the same way idea
@@ -252,6 +259,10 @@ module Buddy
       when "ChoreWithdrawal"
         rec.destroy!
         refresh_balance(rec.user)
+      # The chores rail is what makes every board in the house fetch again.
+      when "ChoreCreditButton"
+        rec.destroy!
+        ChoreBroadcaster.broadcast_changes!(rec.created_by_user)
       end
     end
 
@@ -269,6 +280,8 @@ module Buddy
       raise "no prior values recorded" if before.empty?
 
       rec = find!(r)
+      return revert_metadata(rec, before) if r[:model].to_s == "ByteConversation"
+
       rec.update!(before)
       # AgendaItem and Chore re-broadcast via their own model callbacks; the
       # other two need to be told, or the Chores/Events app keeps showing the
@@ -280,6 +293,16 @@ module Buddy
         ChoreStreak.rebuild_for!(rec.user, rec.chore) if before.key?("day_key") || before.key?(:day_key)
         ChoreBroadcaster.broadcast_changes!(rec.user, rec.chore)
       end
+    end
+
+    # Puts back only the metadata keys the change touched - nil meaning the key
+    # wasn't there - and tells the board's open screens.
+    def revert_metadata(convo, before)
+      restore = before.to_h.with_indifferent_access.fetch(:metadata, {}).to_h
+      meta = convo.metadata.to_h
+      restore.each { |key, value| value.nil? ? meta.delete(key.to_s) : meta[key.to_s] = value }
+      convo.update!(metadata: meta)
+      convo.broadcast_changed!
     end
 
     # Undo a hard delete → recreate from the stored attributes. A removed list

@@ -20,7 +20,7 @@ require "rails_helper"
 # writes, so a time in one of those is a quote of them rather than a reply
 # waiting to be sent.
 RSpec.describe "persona sample replies" do
-  persona_files = Rails.root.glob("app/service/buddy/personalities/*.md")
+  persona_files = Rails.root.glob("app/service/buddy/companions/*/persona.md")
 
   # Shapes that only ever appear as a made-up quantity. A number the person
   # themselves said is fine and common ("set a timer for 10", "remind me to
@@ -40,7 +40,7 @@ RSpec.describe "persona sample replies" do
   end
 
   persona_files.each do |path|
-    name = path.basename.to_s
+    name = path.dirname.basename.to_s
 
     describe name do
       fabricated.each do |label, pattern|
@@ -57,7 +57,7 @@ RSpec.describe "persona sample replies" do
   end
 
   it "covers every companion, so a new one cannot skip the check" do
-    checked = persona_files.map { |p| p.basename(".md").to_s }
+    checked = persona_files.map { |p| p.dirname.basename.to_s }
 
     expect(checked).to match_array(Buddy::Themes.keys.map(&:to_s))
   end

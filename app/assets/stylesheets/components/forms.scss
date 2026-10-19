@@ -217,9 +217,12 @@ input[type="submit"] {
   font-weight: bold;
   text-decoration: none;
 
+  // The press nudge. A `translate` moves only the paint, so it composes with
+  // whatever positioning the button has: a fixed or absolute button stays
+  // anchored where its own rule put it instead of being made `relative` and
+  // offset for as long as a finger is on it.
   &:active {
-    position: relative;
-    top: 1px;
+    translate: 0 1px;
   }
 
   &.wide {

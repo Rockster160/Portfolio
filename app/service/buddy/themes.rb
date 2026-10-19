@@ -9,8 +9,8 @@ module Buddy
   # Buddy::Companions and its asset folder; nothing here.
   #
   # - `tone` is whose voice profile the companion speaks with
-  #   (app/service/buddy/tone_profiles); the persona file is the pet's own name
-  #   in app/service/buddy/personalities. Both are pointers the companion holds.
+  #   (app/service/buddy/tone_profiles); the persona is persona.md in the pet's
+  #   own folder under app/service/buddy/companions.
   # - The chrome keys drive the PWA install: the home-screen name, which icon,
   #   which manifest, and the colour the browser paints around it.
   module Themes

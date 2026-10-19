@@ -135,7 +135,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false, roster: nil)
+    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false, roster: nil, board: false)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -175,6 +175,9 @@ module Buddy
         # Offered in full every turn, skipping the index. For the handful of
         # everyday actions where a load round would cost more than the schema.
         always:           always == true,
+        # Only offered on a board's own chat (Buddy::BoardAdmin), and offered in
+        # full there: a board's thread is about setting the board up.
+        board:            board == true,
         roster:           roster,
         args:             normalize_args(args),
         confirm:          confirm,
@@ -337,7 +340,11 @@ module Buddy
     end
 
     def always?(tool)
-      tool.is_a?(Hash) && tool[:always] == true
+      tool.is_a?(Hash) && (tool[:always] == true || tool[:board] == true)
+    end
+
+    def board?(tool)
+      tool.is_a?(Hash) && tool[:board] == true
     end
 
     # A tool that settles inside the turn and reports back to the model.
@@ -441,12 +448,15 @@ module Buddy
     # turn every four seconds until it was killed. That reasoning turned out to
     # cover every tool on the registry, not one of them, so the list went away
     # rather than growing.
-    def function_schemas(user: nil)
-      offered(user: user).map { |tool| function_schema(tool, user: user) }
+    def function_schemas(user: nil, conversation: nil)
+      offered(user: user, conversation: conversation).map { |tool| function_schema(tool, user: user) }
     end
 
-    def offered(user: nil)
-      user ? all.select { |tool| Buddy::Features.allows_tool?(user, tool) } : all
+    # A board tool only on a board's own thread; everything else wherever the
+    # person holds its feature.
+    def offered(user: nil, conversation: nil)
+      tools = all.reject { |tool| board?(tool) && !conversation&.board? }
+      user ? tools.select { |tool| Buddy::Features.allows_tool?(user, tool) } : tools
     end
 
     def function_schema(tool, user: nil)

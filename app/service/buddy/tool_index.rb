@@ -33,18 +33,18 @@ module Buddy
     # Everything a turn can be offered, in full - the shape before the index,
     # and still the shape a seed that names its tools gets (see
     # Turn#seed_tools), since those are already narrowed to a handful.
-    def everything(user:)
-      [*frame(user), *Buddy::Tools.function_schemas(user: user)]
+    def everything(user:, conversation: nil)
+      [*frame(user), *Buddy::Tools.function_schemas(user: user, conversation: conversation)]
     end
 
     # The first stage, with whatever has been opened since in full. Each tool
     # keeps its place in the list whether it's a summary or a schema, so the
     # list only changes from the first one opened onward.
-    def schemas(user:, loaded: [])
+    def schemas(user:, loaded: [], conversation: nil)
       wanted = loaded.to_set(&:to_sym)
       [
         *frame(user),
-        *Buddy::Tools.offered(user: user).map { |tool|
+        *Buddy::Tools.offered(user: user, conversation: conversation).map { |tool|
           next Buddy::Tools.function_schema(tool, user: user) if Buddy::Tools.always?(tool)
           next Buddy::Tools.function_schema(tool, user: user) if wanted.include?(tool[:name])
 
@@ -65,8 +65,8 @@ module Buddy
       ]
     end
 
-    def indexed(user:)
-      Buddy::Tools.offered(user: user).reject { |tool| Buddy::Tools.always?(tool) }
+    def indexed(user:, conversation: nil)
+      Buddy::Tools.offered(user: user, conversation: conversation).reject { |tool| Buddy::Tools.always?(tool) }
     end
 
     # A tool before it's opened: its name and when to reach for it. No

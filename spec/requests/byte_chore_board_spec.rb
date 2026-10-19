@@ -573,6 +573,73 @@ RSpec.describe "Byte chore board", type: :request do
       get "/board/#{thread.id}"
       expect(response.body).to include('data-board-chore-dreams="false"')
     end
+
+    it "keeps a pace per board, one setting at a time, and refuses a length it doesn't offer" do
+      expect([thread.dream_minutes, thread.dream_break_minutes]).to eq([30, 0])
+
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, dream_minutes: 60 }
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, break_minutes: 120 }
+
+      saved = response.parsed_body.slice("dream_minutes", "break_minutes", "chore_dreams")
+      expect(saved).to eq("dream_minutes" => 60, "break_minutes" => 120, "chore_dreams" => true)
+      get "/board/#{thread.id}"
+      expect(response.body).to include('data-board-dream-minutes="60"', 'data-board-dream-break="120"')
+
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, break_minutes: 7 }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(thread.reload.dream_break_minutes).to eq(120)
+    end
+  end
+
+  # Like a Dailies list for one board: a pinned chore is on it whatever its
+  # groups and schedule say, as an ordinary chore circle.
+  describe "pinned chores" do
+    it "shows a pinned chore outside the board's groups, not due, ahead of the rest" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      litter = create(:chore, created_by_user: user, name: "Litter", tags: ["Pets"])
+
+      post "/byte/board/pins", params: { conversation_id: thread.id, chore_ids: [litter.id] }
+      expect(response.parsed_body["chore_ids"]).to eq([litter.id])
+
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      items = response.parsed_body["items"]
+      expect(items.pluck("name")).to eq(["Litter", "Vacuum"])
+      expect(items.first.slice("pinned", "today_visible", "kind")).to eq("pinned" => true, "today_visible" => false, "kind" => "chore")
+    end
+
+    it "shows a chore the groups also bring once, in its pinned place, in pinned order" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
+      vacuum = create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
+      dishes = create(:chore, created_by_user: user, name: "Dishes", tags: ["Home"], marked_due_at: Time.current)
+      create(:chore, created_by_user: user, name: "Mop", tags: ["Home"], marked_due_at: Time.current)
+      thread.update!(pinned_chore_ids: [dishes.id, vacuum.id])
+
+      get "/byte/board/items", params: { conversation_id: thread.id }
+
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Dishes", "Vacuum", "Mop"])
+    end
+
+    it "shows pins on a board that watches no groups yet" do
+      litter = create(:chore, created_by_user: user, name: "Litter", tags: ["Pets"])
+      thread.update!(pinned_chore_ids: [litter.id])
+
+      get "/board/#{thread.id}"
+
+      expect(board_items.pluck("name")).to eq(["Litter"])
+    end
+
+    it "drops a chore the owner can't see rather than storing it" do
+      stranger = create(:user)
+      theirs = create(:chore, created_by_user: stranger, name: "Not yours")
+
+      post "/byte/board/pins", params: { conversation_id: thread.id, chore_ids: [theirs.id] }
+
+      expect(response.parsed_body["chore_ids"]).to eq([])
+      expect(thread.reload.pinned_chore_ids).to eq([])
+    end
   end
 
   describe "reserved groups" do
@@ -874,6 +941,19 @@ RSpec.describe "Byte chore board", type: :request do
 
       expect(response.body).to include("data-conversation-id=\"#{shared.id}\"")
       expect(response.body).not_to include("data-conversation-id=\"#{thread.id}\"")
+    end
+
+    # The chat runs as the owner, and a message from anyone else would land in
+    # their own thread, so the board's chat is the owner's alone.
+    it "gives the owner the board's chat and a housemate none" do
+      thread.update!(metadata: thread.metadata.merge("shared" => true))
+
+      get "/board/#{thread.id}"
+      expect(response.body).to include("data-board-chat-toggle")
+
+      sign_in_as(housemate)
+      get "/board/#{thread.id}"
+      expect(response.body).not_to include("data-board-chat-toggle")
     end
 
     it "shows the OWNER's content on a shared board, whoever opens it" do

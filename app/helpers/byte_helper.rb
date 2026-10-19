@@ -7,6 +7,14 @@ module ByteHelper
   # a pet per row, and switching into a thread warms that pet's face images. It
   # stays generated from Buddy::Themes, so adding a companion is still one entry
   # there and nothing to remember here.
+  # "15 min", "1 hr", "2 hrs" — a board setting's length, as its picker shows it.
+  def board_minutes_label(minutes)
+    return "#{minutes} min" if minutes < 60
+
+    hours = minutes / 60
+    "#{hours} #{"hr".pluralize(hours)}"
+  end
+
   def buddy_themes_json
     Buddy::Themes.all.to_h { |theme, chrome|
       [theme, {
@@ -17,6 +25,7 @@ module ByteHelper
         favicon:    asset_path(chrome[:favicon]),
         faces:      buddy_face_paths(theme),
         aliases:    buddy_face_aliases(theme),
+        alarm_face: Buddy::Companion.find(theme).alarm_face,
       }]
     }.to_json
   end

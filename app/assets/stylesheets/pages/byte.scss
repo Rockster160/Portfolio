@@ -335,20 +335,16 @@ html.html-ctr-byte body {
       cursor: pointer;
 
       // forms.scss nudges every pressed button down a pixel with
-      // `:active { position: relative; top: 1px }`. Only the OFFSET is
-      // unwanted here: `top: auto` makes the `position: relative` inert,
-      // because a relatively positioned box with no offsets occupies exactly
-      // the same space as a static one.
+      // `:active { translate: 0 1px }`, which is unwanted here. Only the
+      // translate is cancelled: a pressed button keeps its own positioning.
       //
-      // This used to say `position: static` as well, and that WAS the jump.
-      // At (0,3,1) it outranks every anchor in this sheet, so pressing a
-      // button that was a containing block dropped whatever it anchored on
-      // the floor: the unread count flew from the hamburger's corner to the
-      // top-right of the header, and the bell's slash — `left: 8px;
-      // right: 8px` of a 36px button — stretched into a diagonal line across
-      // the whole app. Undoing the nudge must not also undo the positioning.
+      // This used to cancel a `position: relative; top: 1px` nudge with
+      // `top: auto` (and before that `position: static`). At (0,3,1) either
+      // outranked every positioned button in this sheet, so a press took a
+      // fixed button's `top` away - it jumped out from under the finger and
+      // the release missed it - or dropped whatever a button anchored.
       &:active {
-        top: auto;
+        translate: none;
       }
     }
 
@@ -790,19 +786,8 @@ html.html-ctr-byte body {
 // room with `padding-right` instead, and the one rule that matters is that
 // nothing else is drawn under this column.
 //
-// `button.byte-chip-close` rather than the bare class, and pinned again on
-// `:active`, because two rules above this one both outrank a lone class and
-// both land on a PRESS - which moves the × out from under the finger
-// mid-click.
-//
-//   forms.scss     `button:active { position: relative; top: 1px }`  (0,1,1)
-//   this sheet     `.ctr-byte .byte-app button:active { top: auto }` (0,2,1)
-//
-// The first drops this out of its corner into the chip's flow; the second
-// takes away the top anchor, leaving a box hung off `bottom` alone at its own
-// content height. Either way the target moves while the button is being
-// pressed. This is the fifth element in this file to need the pin - see
-// .byte-msg-cancel, .byte-jump-btn, .byte-kiosk-ask-close, .byte-kiosk-who.
+// `button.byte-chip-close` rather than the bare class, so it outranks the
+// app-wide `button` styling from forms.scss.
 .byte-process-chip button.byte-chip-close,
 .byte-timer-chip button.byte-chip-close {
   position: absolute;
@@ -825,13 +810,6 @@ html.html-ctr-byte body {
   &:hover, &:focus-visible {
     opacity: 1;
     background: rgba(255, 255, 255, 0.1);
-  }
-
-  // Nothing here may move on a press: the whole point of the column is that it
-  // is where the finger already is.
-  &:active {
-    position: absolute;
-    inset: 0 0 0 auto;
   }
 }
 
@@ -1142,9 +1120,6 @@ html.html-ctr-byte body {
 // off the bottom AND at least one new message has arrived below the fold.
 // The unread count sits inline; the button hides itself again as soon as
 // the user returns to the bottom.
-// Higher specificity than the app-wide press reset (which lives at
-// `.ctr-byte .byte-app button:active`, specificity (0,3,1)) so `top: auto`
-// can't reach the `bottom` this sits on.
 .ctr-byte .byte-app .byte-jump-btn {
   position: absolute;
   right: 16px;
@@ -1167,11 +1142,6 @@ html.html-ctr-byte body {
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
-
-  &:active {
-    position: absolute;
-    top: auto;
-  }
 
   &.visible {
     opacity: 1;
@@ -1390,7 +1360,6 @@ html.html-ctr-byte body {
     cursor: pointer;
 
     &[hidden] { display: none; } // author `display` beats the hidden attr
-    &:active { top: auto; }      // the global :active nudge would shift the bubble
 
     .byte-msg-quote-author {
       flex: 0 0 auto;
@@ -1489,8 +1458,6 @@ html.html-ctr-byte body {
 
   // Cancel ✕ — sits just left of the (right-aligned) outbound bubble. Hidden
   // by default; JS reveals it only while the message is still cancellable.
-  // Position is pinned on every state to defeat the global `button:active`
-  // position trap that would otherwise jump it on tap.
   .byte-msg-cancel {
     position: absolute;
     left: -30px;
@@ -1512,7 +1479,6 @@ html.html-ctr-byte body {
     user-select: none;
 
     &:hover  { background: rgba(248, 113, 113, 0.30); }
-    &:active { position: absolute; top: 50%; transform: translateY(-50%); }
     &[hidden] { display: none; }
   }
 
@@ -2512,8 +2478,6 @@ html.html-ctr-byte body {
     line-height: 1;
     opacity: 0.75;
     cursor: pointer;
-
-    &:active { top: auto; }
   }
 }
 
@@ -2609,7 +2573,6 @@ html.html-ctr-byte body {
     opacity: 0.75;
     cursor: pointer;
 
-    &:active { top: auto; }
     &:disabled { opacity: 0.35; cursor: default; }
   }
 }
@@ -4122,6 +4085,24 @@ dialog.byte-modal {
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+}
+
+// Put a card away unanswered. Small and quiet: it is rarely the thing to do.
+.byte-action-dismiss {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--bs-muted) !important;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+
+  &:hover:not(:disabled) {
+    opacity: 1;
   }
 }
 
@@ -6408,9 +6389,6 @@ dialog.byte-modal {
 
 // Its own row at the top of the card rather than floated over the text, and
 // sticky so a long form can't scroll the only way out of itself off screen.
-// Carries the extra class for specificity for the same reason .byte-kiosk-who
-// does: the app-wide press reset `button:active { top: auto }` outranks a
-// three-class selector and would drop the `top` this sticks to.
 .ctr-byte .byte-app .byte-kiosk .byte-kiosk-ask-close {
   position: sticky;
   top: 0;
@@ -6429,7 +6407,6 @@ dialog.byte-modal {
   line-height: 1;
 
   &:active {
-    position: sticky;
     background: var(--bs-panel-soft);
   }
 }
@@ -6439,11 +6416,6 @@ dialog.byte-modal {
 // label, and it's dim because it's for whoever set the tablet up rather than
 // whoever walks past it. `fixed` rather than `absolute`: it belongs in the
 // screen's corner, and its parent is the bottom half.
-//
-// Carries the extra `.byte-kiosk` for specificity, same as .byte-jump-btn and
-// for the same reason: the app-wide press reset `.ctr-byte .byte-app
-// button:active { top: auto }` is (0,3,1), so at (0,3,0) this lost the `top`
-// it hangs from the moment it was pressed and fell to the pad below it.
 .ctr-byte .byte-app .byte-kiosk .byte-kiosk-who {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 10px);
@@ -6596,7 +6568,7 @@ dialog.byte-modal {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 56px);
   right: calc(env(safe-area-inset-right) + 12px);
-  z-index: 7;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -7131,6 +7103,137 @@ $board-cell-max: 200px;
   pointer-events: none;
 }
 
+.ctr-byte .byte-app .byte-board-chat-toggle {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bs-muted) !important;
+  opacity: 0.35;
+  transition: opacity 140ms ease;
+
+  &:hover,
+  &:active,
+  &[aria-expanded="true"] {
+    opacity: 1;
+  }
+
+  .byte-board-chat-close { display: none; }
+
+  &[aria-expanded="true"] {
+    .byte-board-chat-open { display: none; }
+    .byte-board-chat-close { display: inline; }
+  }
+}
+
+// The chat open: the pad steps aside and the thread and composer the kiosk
+// keeps hidden take its half. The kiosk section leaves the layout rather than
+// the page, so the controls it holds in the corners (the groups, the chat
+// button, settings, the companion picker) stay exactly where they were.
+// Stacked, the chat follows the pet in DOM order; side by side, a grid puts
+// the pet in its column and the chat in the other.
+.byte-app[data-kiosk="true"][data-board-chat="open"] {
+  .byte-kiosk {
+    position: absolute;
+    width: 0;
+    height: 0;
+    min-height: 0;
+    border: 0;
+    background: none;
+  }
+
+  .byte-board-pad,
+  .byte-board-empty,
+  .byte-board-alert,
+  .byte-kiosk-ask,
+  // The reply is in the thread; the bubble by the pet would say it twice.
+  .byte-kiosk-say {
+    display: none !important;
+  }
+
+  .byte-thread {
+    display: flex !important;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .byte-composer {
+    display: flex !important;
+  }
+}
+
+@media (orientation: landscape) {
+  .byte-app[data-kiosk="true"][data-board-chat="open"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+
+    .byte-buddy-hero {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+    }
+
+    // Starts under the corner controls, so no message sits beneath one.
+    .byte-thread {
+      grid-column: 2;
+      grid-row: 1;
+      padding-top: calc(env(safe-area-inset-top) + 60px);
+      border-left: 1px solid var(--bs-border);
+    }
+
+    .byte-composer {
+      grid-column: 2;
+      grid-row: 2;
+      border-left: 1px solid var(--bs-border);
+    }
+  }
+}
+
+.byte-board-offline {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid var(--bs-danger);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.byte-board-offline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bs-danger);
+  animation: byte-board-offline-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes byte-board-offline-pulse {
+  50% { opacity: 0.3; }
+}
+
+.byte-app[data-connection="down"] .byte-board-offline {
+  display: flex;
+}
+
+.byte-app[data-connection="down"] .byte-board-pad {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
 .byte-board-empty {
   margin: 0;
   padding: 0 24px 16px;
@@ -7139,15 +7242,22 @@ $board-cell-max: 200px;
   color: var(--bs-muted);
 }
 
-// Which group this screen looks after. Mirrors the companion picker across the
-// top-right from it, and sits at the same low opacity for the same reason: it
-// is a setting changed once and then never again, and it must not compete with
-// the circles.
-.ctr-byte .byte-app .byte-board .byte-board-tag {
+// The top-left corner: which group this screen looks after, and the board's
+// chat beside it. Mirrors the companion picker across the top-right, and sits
+// at the same low opacity for the same reason: these are settings, and they
+// must not compete with the circles.
+.byte-board-corner {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 10px);
   left: calc(env(safe-area-inset-left) + 12px);
   z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctr-byte .byte-app .byte-board .byte-board-tag {
+  margin: 0;
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
@@ -7169,7 +7279,8 @@ $board-cell-max: 200px;
   position: fixed;
   top: calc(env(safe-area-inset-top) + 48px);
   left: calc(env(safe-area-inset-left) + 12px);
-  z-index: 6;
+  // Over every corner button: a popover is never drawn under a control.
+  z-index: 8;
   max-width: 76vw;
   // Room for the credit-button manager without the popover running off a phone;
   // it scrolls inside its own box rather than pushing past the screen edge.
@@ -7365,6 +7476,91 @@ $board-cell-max: 200px;
   box-shadow: 0 0 0 1px rgba(245, 165, 36, 0.7), 0 10px 40px rgba(0, 0, 0, 0.5) !important;
 }
 
+// The board's chore picker: the Chores page's own shape - a search over a
+// grid of each chore's icon and short name - so a chore is recognized at a
+// glance rather than read out of a list.
+.ctr-byte dialog.byte-board-chore-picker {
+  width: 560px;
+  max-width: 92vw;
+}
+
+.byte-board-chore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 10px;
+  max-height: 52vh;
+  overflow-y: auto;
+  margin: 12px 0 4px;
+  padding: 2px;
+}
+
+.ctr-byte .byte-app .byte-board-chore-cell,
+.ctr-byte .byte-board-chore-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--bs-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--bs-text) !important;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.byte-board-chore-cell-icon .byte-board-icon {
+  width: 44px;
+  font-size: 30px;
+}
+
+.byte-board-chore-cell-label {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+// A chore named in a row or on a button carries its icon in front of it.
+.byte-board-pin-name,
+.byte-board-chore-choice {
+  .byte-board-icon {
+    flex: none;
+    width: 22px;
+    font-size: 18px;
+  }
+}
+
+.ctr-byte .byte-board-chore-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.byte-board-pins {
+  margin-top: 12px;
+
+  .byte-board-pin-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: default;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
 .byte-board-buttons-head {
   display: flex;
   align-items: center;
@@ -7385,50 +7581,6 @@ $board-cell-max: 200px;
   color: var(--bs-text) !important;
   font-size: 12px;
   font-weight: 600;
-}
-
-// Completes is a type-to-find field: the dropdown of matches hangs under the
-// input, so the field is the positioning context.
-.byte-board-chore-field {
-  position: relative;
-}
-
-.byte-board-chore-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 7;
-  margin-top: 4px;
-  max-height: 220px;
-  overflow-y: auto;
-  border-radius: 10px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-them-bg);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
-
-  &[hidden] {
-    display: none;
-  }
-}
-
-.ctr-byte .byte-app .byte-board-chore-result {
-  display: block;
-  width: 100%;
-  padding: 9px 12px;
-  border: 0;
-  background: transparent;
-  color: var(--bs-text) !important;
-  font-size: 14px;
-  text-align: left;
-
-  & + .byte-board-chore-result {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.07);
-  }
 }
 
 // The native colour well, kept small and tidy rather than the big default box.
@@ -7459,6 +7611,30 @@ $board-cell-max: 200px;
 
   .byte-board-tag-label {
     margin-bottom: 0;
+  }
+}
+
+.byte-board-dream-pace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding-left: 22px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--bs-muted);
+  }
+
+  select {
+    font-size: 12px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--bs-border);
+    background: transparent;
+    color: var(--bs-text);
   }
 }
 
