@@ -43,5 +43,24 @@ RSpec.describe Jil::Methods::Monitor do
       expect(MonitorChannel).to have_received(:broadcast_to)
         .with(user, hash_including(owner_id: user.id)).at_least(:once)
     end
+
+    # A group nothing is tagged with exists for a board only because something
+    # was sent to it, so the picker can offer it.
+    it "remembers the groups it's aimed at as ones a board can watch" do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      Jil::Executor.call(user,
+        <<~JIL,
+          h = Hash.new({
+            c = Keyval.new("sound", "wake")::Keyval
+            d = Keyval.new("groups", "Nursery")::Keyval
+          })::Hash
+          a = Monitor.broadcast("byte", {
+            b = MonitorData.data(h)::MonitorData
+          }, false)::Monitor
+        JIL
+      )
+
+      expect(Buddy::BoardFeedGroups.names(user)).to include("Nursery")
+    end
   end
 end

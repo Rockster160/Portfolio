@@ -267,6 +267,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     opts  = options.to_h
     board = opts[:board].to_s.strip
     named = (::Buddy::Timers.find_board!(recipient, board).id if board.present?)
+    ::Buddy::BoardFeedGroups.remember!(recipient, opts[:groups])
     ::Buddy::Timers.create!(
       user:    recipient,
       seconds: seconds,

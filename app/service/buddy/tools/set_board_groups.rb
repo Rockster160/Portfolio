@@ -7,8 +7,7 @@ Buddy::Tools.register(
     or credit button shows on the board when it's tagged with ANY of them.
     Pass the FULL list the board should watch afterwards, comma-separated -
     to add one, include the ones it already watches (they're listed under
-    "This board"). "All" shows every chore in the house. "Whisper" is the
-    feed group for the Whisper controls.
+    "This board"). "All" shows every chore in the house.
   TXT
   feature:     :chores,
   board:       true,

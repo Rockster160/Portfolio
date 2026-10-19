@@ -48,6 +48,7 @@ module Buddy
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
       return nil if conversation.nil?
 
+      ::Buddy::BoardFeedGroups.remember!(user, groups)
       open = ::BuddyAlert.open_for(user, key)
       if open
         seen_again!(open, body, groups, icon, expression, strength)
@@ -81,6 +82,7 @@ module Buddy
       meta["expression"] = expression.to_s.strip if expression.present?
       meta["dream"]      = true if dream
       meta["strength"]   = strength_meta(strength) if strength_meta(strength)
+      ::Buddy::BoardFeedGroups.remember!(user, groups)
 
       open = ::BuddyAlert.open_for(user, key)
       return open if open && !open.board_only?

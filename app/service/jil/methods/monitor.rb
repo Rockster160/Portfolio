@@ -78,12 +78,14 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     owner_id = task&.user_id || @jil.user&.id
     stamped = data.merge(owner_id: owner_id)
     users.each { |user| ::MonitorChannel.broadcast_to(user, stamped) }
+    # A group a feed is aimed at becomes one a board can be pointed at.
+    owner = task&.user || @jil.user
+    ::Buddy::BoardFeedGroups.remember!(owner, data[:data][:groups]) if data[:data].is_a?(Hash)
     # The Whisper feed is also what a board's pet holds its face on, and that has
     # to be known server-side too: a board opening fresh and the board index
     # both paint it before any socket has spoken.
     return unless data[:channel].to_s == ::Buddy::BoardFace::WHISPER_CHANNEL.to_s
 
-    owner = task&.user || @jil.user
     ::Buddy::BoardFace.record_whisper!(owner, data[:data])
   end
 end

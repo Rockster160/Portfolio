@@ -23,15 +23,10 @@
 #  user_id             :bigint           not null
 #
 class ByteConversation < ApplicationRecord
-  # Groups a board can watch that no chore, routine or button carries, so they
-  # would never show up in the picker on their own:
-  # - "All" is a wildcard — a board watching it shows every chore (and only
-  #   chores; the one-press routines and buttons belong to the named groups).
-  # - "Whisper" is the feed group the Whisper PWA board watches for its duration
-  #   rings, sounds and alerts, which are broadcast with groups: "Whisper" and
-  #   have no chore behind them.
-  BOARD_ALL_TAG       = "All".freeze
-  BOARD_RESERVED_TAGS = [BOARD_ALL_TAG, "Whisper"].freeze
+  # A wildcard group no chore, routine or button carries: a board watching it
+  # shows every chore (and only chores; the one-press routines and buttons
+  # belong to the named groups).
+  BOARD_ALL_TAG = "All".freeze
 
   # Users whose new Buddy threads spin up as a non-default pet. The pet theme is
   # now per-conversation, so these only seed the default at creation — nothing
@@ -252,11 +247,10 @@ class ByteConversation < ApplicationRecord
     self.metadata = (tags.present? ? base.merge("chore_tags" => tags) : base.except("chore_tags"))
   end
 
-  # The board's REAL groups - the ones chores, routines and buttons are tagged
-  # with - without the reserved ones nothing carries. What a chore or button
-  # made for this board is filed under so that it shows here.
+  # The board's REAL groups - everything it watches but the "All" wildcard. What
+  # a chore or button made for this board is filed under so that it shows here.
   def named_board_groups
-    chore_tags.reject { |tag| BOARD_RESERVED_TAGS.any? { |r| r.casecmp?(tag) } }
+    chore_tags.reject { |tag| tag.casecmp?(BOARD_ALL_TAG) }
   end
 
   # Chores pinned to this board, in the order they show: on it whatever groups

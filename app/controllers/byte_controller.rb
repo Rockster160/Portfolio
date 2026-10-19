@@ -19,9 +19,7 @@ class ByteController < ApplicationController
   HISTORY_LIMIT = 50
   MAX_LIMIT     = 200
 
-  # The groups a board can watch that nothing is tagged with (see ByteConversation).
-  BOARD_ALL_TAG       = ByteConversation::BOARD_ALL_TAG
-  BOARD_RESERVED_TAGS = ByteConversation::BOARD_RESERVED_TAGS
+  BOARD_ALL_TAG = ByteConversation::BOARD_ALL_TAG
 
   def show
     load_thread
@@ -167,8 +165,9 @@ class ByteController < ApplicationController
   end
 
   # GET /byte/board/tags — every group a board can be pointed at. The union of
-  # the household's chore tags and the viewer's routine tags, so a group that
-  # holds only triggers is offered just the same as one that holds only chores.
+  # the household's chore tags, the viewer's routine tags and the groups their
+  # broadcasts are aimed at, so a group that holds only triggers or only a feed
+  # is offered just the same as one that holds only chores.
   def board_tags
     render json: { tags: board_tag_names }
   end
@@ -300,7 +299,9 @@ class ByteController < ApplicationController
     # Accepts the full set the board should watch (`tags`), and a lone `tag` still
     # for anything that speaks the old single-group language.
     wanted = GroupTaggable.normalize(params[:tags].presence || params[:tag])
-    known = board_tag_names
+    # A group the board already watches stays settable, even one nothing has
+    # been sent to since.
+    known = board_tag_names | convo.chore_tags
     unknown = wanted.reject { |t| known.any? { |k| k.casecmp?(t) } }
     if unknown.any?
       return render(json: { error: "unknown_tag", tags: known }, status: :unprocessable_entity)
@@ -1330,16 +1331,15 @@ class ByteController < ApplicationController
   end
 
   # The groups a board can watch: chore and credit-button tags are household-wide,
-  # routine tags are the viewer's own, unioned and de-duped case-insensitively so
-  # "Work" is offered once however it was typed on any of them.
+  # routine tags and broadcast groups are the viewer's own, unioned and de-duped
+  # case-insensitively so "Work" is offered once however it was typed.
   def board_tag_names
     names = (current_user.accessible_chores.tag_names +
       current_user.buddy_routines.tag_names +
-      board_credit_buttons.tag_names).uniq(&:downcase).sort_by(&:downcase)
-    # Reserved groups lead, and drop any real tag that happens to collide with one
-    # so it isn't offered twice.
-    real = names.reject { |n| BOARD_RESERVED_TAGS.any? { |r| r.casecmp?(n) } }
-    BOARD_RESERVED_TAGS + real
+      board_credit_buttons.tag_names +
+      Buddy::BoardFeedGroups.names(current_user)).uniq(&:downcase).sort_by(&:downcase)
+    # "All" leads, and drops any real tag that happens to collide with it.
+    [BOARD_ALL_TAG] + names.reject { |n| n.casecmp?(BOARD_ALL_TAG) }
   end
 
   # Credit buttons the viewer can see — their whole household's, since a shared

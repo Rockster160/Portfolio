@@ -405,15 +405,14 @@ RSpec.describe "Byte chore board", type: :request do
   end
 
   describe "GET /byte/board/tags" do
-    it "unions the household's chore groups with the viewer's routine groups, reserved groups first" do
+    it "unions the household's chore groups, the viewer's routine groups and their feed groups, All first" do
       create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"])
       routine!(name: "Focus mode", tag: "Work")
+      Buddy::BoardFeedGroups.remember!(user, "Nursery")
 
       get "/byte/board/tags"
 
-      # "All" and "Whisper" lead: no chore or routine carries them, so they would
-      # never appear on their own, but a board has to be able to watch them.
-      expect(response.parsed_body["tags"]).to eq(["All", "Whisper", "Home", "Work"])
+      expect(response.parsed_body["tags"]).to eq(["All", "Home", "Nursery", "Work"])
     end
   end
 
@@ -451,7 +450,7 @@ RSpec.describe "Byte chore board", type: :request do
       patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Workshp" }
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["tags"]).to eq(["All", "Whisper", "Home"])
+      expect(response.parsed_body["tags"]).to eq(["All", "Home"])
       expect(thread.reload.chore_tags).to eq([])
     end
 
@@ -643,11 +642,21 @@ RSpec.describe "Byte chore board", type: :request do
   end
 
   describe "reserved groups" do
-    it "settles the Whisper feed group even though nothing is tagged with it" do
-      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Whisper" }
+    it "settles a group only a broadcast has been aimed at" do
+      Buddy::BoardFeedGroups.remember!(user, "Nursery")
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Nursery" }
 
       expect(response).to have_http_status(:ok)
-      expect(thread.reload.chore_tags).to eq(["Whisper"])
+      expect(thread.reload.chore_tags).to eq(["Nursery"])
+    end
+
+    it "keeps a group the board already watches settable" do
+      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Nursery"]))
+
+      patch "/byte/board/tag", params: { conversation_id: thread.id, tags: ["Nursery", "All"] }
+
+      expect(response).to have_http_status(:ok)
     end
 
     it "shows every chore for an All board, and no routines or buttons" do
