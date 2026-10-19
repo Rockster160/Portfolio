@@ -186,28 +186,22 @@ class ByteConversation < ApplicationRecord
     !(metadata.is_a?(Hash) && metadata["chore_dreams"].to_s == "false")
   end
 
-  # How long each hot-chore dream lasts, and how long the pet rests between
-  # them (Buddy::BoardDream), in minutes. A value outside the offered choices
-  # reads as the default.
-  def dream_minutes
-    board_dream_setting(
-      "dream_minutes",
-      Buddy::BoardDream::DREAM_MINUTES,
-      Buddy::BoardDream::DEFAULT_DREAM_MINUTES,
-    )
-  end
+  # The pace of its hot-chore dreams (Buddy::BoardDream), keyed as the metadata
+  # it's stored in. A value outside the offered choices reads as the default.
+  DREAM_PACE_KEYS = {
+    every:      ["dream_minutes", Buddy::BoardDream::EVERY_MINUTES],
+    blank:      ["dream_blank_percent", Buddy::BoardDream::BLANK_PERCENT],
+    rest:       ["dream_rest_minutes", Buddy::BoardDream::REST_MINUTES],
+    quiet_from: ["dream_quiet_from", Buddy::BoardDream::HOURS],
+    quiet_to:   ["dream_quiet_to", Buddy::BoardDream::HOURS],
+  }.freeze
 
-  def dream_break_minutes
-    board_dream_setting(
-      "dream_break_minutes",
-      Buddy::BoardDream::BREAK_MINUTES,
-      Buddy::BoardDream::DEFAULT_BREAK_MINUTES,
-    )
-  end
-
-  def board_dream_setting(key, allowed, default)
-    value = metadata.is_a?(Hash) ? metadata[key].to_i : nil
-    allowed.include?(value) ? value : default
+  def dream_pace
+    meta = metadata.to_h
+    DREAM_PACE_KEYS.to_h { |name, (key, allowed)|
+      value = meta[key]
+      [name, value.present? && allowed.include?(value.to_i) ? value.to_i : Buddy::BoardDream::DEFAULTS[name]]
+    }
   end
 
   # A board somewhere everybody walks past: a chore pressed on it is done by
@@ -215,6 +209,16 @@ class ByteConversation < ApplicationRecord
   # unless switched on - a personal board credits whoever is signed in.
   def asks_who?
     metadata.is_a?(Hash) && metadata["ask_who"].to_s == "true"
+  end
+
+  # The person who uses this board, so a press on it is done BY them whoever's
+  # account it's signed in to. Nil when it's set to whoever's signed in, or to
+  # someone no longer in the owner's household.
+  def doer
+    id = metadata.to_h["doer_id"].to_i
+    return nil if asks_who? || id.zero? || user.chore_household_user_ids.exclude?(id)
+
+    User.find_by(id: id)
   end
 
   def primary?

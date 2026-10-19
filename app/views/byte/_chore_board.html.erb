@@ -149,46 +149,37 @@
       </div>
     <% end %>
 
-    <%# Who can open the board, whether its pet dreams of chores, and whether a
-        press credits whoever's signed in or asks the owner who it was. Owner-only,
+    <%# Who can open the board, whether its pet dreams of chores, and who a
+        press is done by: whoever's signed in, the person who uses the board,
+        or nobody yet with the owner asked who it was. Owner-only,
         like the rest of the knobs, and here rather than on the index card: a
         board is managed from the board. Each saves on its own. %>
     <% if @board_owned %>
       <div class="byte-board-settings" data-board-settings
            data-share-url="<%= byte_board_shared_path %>"
            data-chore-dreams-url="<%= byte_board_chore_dreams_path %>"
-           data-ask-who-url="<%= byte_board_ask_who_path %>">
+           data-doer-url="<%= byte_board_doer_path %>">
         <label class="byte-board-member">
           <input type="checkbox" data-board-share <%= "checked" if @conversation.shared? %>>
           <span>Shared with the household</span>
         </label>
-        <label class="byte-board-member">
-          <input type="checkbox" data-board-chore-dreams <%= "checked" if @conversation.chore_dreams? %>>
-          <span>Dream of hot chores now and then</span>
-        </label>
-        <%# The pace of those dreams: each one shows for a while, then the pet
-            rests with no dream before the next draw. %>
-        <div class="byte-board-dream-pace" data-board-dream-pace>
-          <label>
-            <span>Each dream lasts</span>
-            <select data-board-dream-minutes>
-              <% Buddy::BoardDream::DREAM_MINUTES.each do |m| %>
-                <option value="<%= m %>" <%= "selected" if m == @conversation.dream_minutes %>><%= board_minutes_label(m) %></option>
-              <% end %>
-            </select>
-          </label>
-          <label>
-            <span>Then rests for</span>
-            <select data-board-dream-break>
-              <% Buddy::BoardDream::BREAK_MINUTES.each do |m| %>
-                <option value="<%= m %>" <%= "selected" if m == @conversation.dream_break_minutes %>><%= m.zero? ? "No break" : board_minutes_label(m) %></option>
-              <% end %>
-            </select>
-          </label>
+        <%# Hot-chore dreams have several knobs, so they live in their own dialog;
+            this row says how they're set and opens it. %>
+        <div class="byte-modal-label">
+          Hot-chore dreams
+          <button type="button" class="byte-modal-input byte-board-setting-open" data-board-dream-open>
+            <span data-board-dream-summary></span>
+          </button>
         </div>
-        <label class="byte-board-member">
-          <input type="checkbox" data-board-ask-who <%= "checked" if @conversation.asks_who? %>>
-          <span>Ask me who did each chore</span>
+        <label class="byte-modal-label">
+          Chores done here are done by
+          <select class="byte-modal-input" data-board-doer>
+            <option value="" <%= "selected" if @board_doer.blank? %>>Whoever's signed in</option>
+            <% Array(@board_members_options).each do |m| %>
+              <option value="<%= m[:id] %>" <%= "selected" if @board_doer == m[:id].to_s %>><%= m[:name] %></option>
+            <% end %>
+            <option value="ask" <%= "selected" if @board_doer == "ask" %>>Ask me each time</option>
+          </select>
         </label>
       </div>
     <% end %>
@@ -204,7 +195,7 @@
         behind at a glance. %>
     <div class="byte-board-foot">
       <a class="byte-board-leave" href="<%= byte_board_path %>">← All boards</a>
-      <span class="byte-board-version" title="Build this screen is running">#<%= BUILD_NUMBER %></span>
+      <span class="byte-board-version" title="Board id # build this screen is running"><%= @conversation.id %>#<%= BUILD_NUMBER %></span>
     </div>
   </div>
 
@@ -212,6 +203,73 @@
       forms, opened by "+ New" or a tap on a button in the list. The form is
       reused for both, so there is one set of fields to get right; closing it
       drops the draft, since every open starts fresh. %>
+  <%# The pace of the pet's hot-chore dreams (Buddy::BoardDream). Saved as a
+      whole; closing it unsaved puts the fields back. %>
+  <% if @board_owned %>
+    <% pace = @conversation.dream_pace %>
+    <dialog class="byte-modal" data-board-dream-dialog>
+      <form class="byte-modal-form basic" data-board-dream-form autocomplete="off">
+        <h3 class="byte-modal-title">Hot-chore dreams</h3>
+        <p class="byte-modal-hint">Now and then the pet thinks of a hot chore that still needs doing.</p>
+        <label class="byte-modal-label">
+          Dreams
+          <select class="byte-modal-input" name="on">
+            <option value="true" <%= "selected" if @conversation.chore_dreams? %>>On</option>
+            <option value="false" <%= "selected" unless @conversation.chore_dreams? %>>Off</option>
+          </select>
+        </label>
+        <label class="byte-modal-label">
+          A new draw every
+          <select class="byte-modal-input" name="every">
+            <% Buddy::BoardDream::EVERY_MINUTES.each do |m| %>
+              <option value="<%= m %>" <%= "selected" if m == pace[:every] %>><%= board_minutes_label(m) %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="byte-modal-label">
+          Chance a draw shows nothing
+          <select class="byte-modal-input" name="blank">
+            <% Buddy::BoardDream::BLANK_PERCENT.each do |pct| %>
+              <option value="<%= pct %>" <%= "selected" if pct == pace[:blank] %>><%= pct.zero? ? "Never" : "#{pct}%" %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="byte-modal-label">
+          After a dream, rest for
+          <select class="byte-modal-input" name="rest">
+            <% Buddy::BoardDream::REST_MINUTES.each do |m| %>
+              <option value="<%= m %>" <%= "selected" if m == pace[:rest] %>><%= m.zero? ? "No rest" : board_minutes_label(m) %></option>
+            <% end %>
+          </select>
+        </label>
+        <div class="byte-board-quiet">
+          <label class="byte-modal-label">
+            Quiet from
+            <select class="byte-modal-input" name="quiet_from">
+              <option value="" <%= "selected" if pace[:quiet_from].nil? %>>Off</option>
+              <% Buddy::BoardDream::HOURS.each do |h| %>
+                <option value="<%= h %>" <%= "selected" if h == pace[:quiet_from] %>><%= board_hour_label(h) %></option>
+              <% end %>
+            </select>
+          </label>
+          <label class="byte-modal-label">
+            Until
+            <select class="byte-modal-input" name="quiet_to">
+              <option value="" <%= "selected" if pace[:quiet_to].nil? %>>Off</option>
+              <% Buddy::BoardDream::HOURS.each do |h| %>
+                <option value="<%= h %>" <%= "selected" if h == pace[:quiet_to] %>><%= board_hour_label(h) %></option>
+              <% end %>
+            </select>
+          </label>
+        </div>
+        <div class="byte-modal-actions">
+          <button type="button" class="byte-modal-btn" data-board-dream-cancel>Cancel</button>
+          <button type="submit" class="byte-modal-btn byte-modal-btn-primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+  <% end %>
+
   <dialog class="byte-modal" data-bb-dialog>
     <form class="byte-modal-form basic byte-board-button-form" data-board-button-form autocomplete="off">
       <h3 class="byte-modal-title" data-bb-title>New credit button</h3>

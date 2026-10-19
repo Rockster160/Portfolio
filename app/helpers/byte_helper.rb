@@ -15,6 +15,11 @@ module ByteHelper
     "#{hours} #{"hr".pluralize(hours)}"
   end
 
+  # 0-23 as the clock reads it: "12 AM", "9 PM".
+  def board_hour_label(hour)
+    "#{((hour - 1) % 12) + 1} #{hour < 12 ? "AM" : "PM"}"
+  end
+
   def buddy_themes_json
     Buddy::Themes.all.to_h { |theme, chrome|
       [theme, {

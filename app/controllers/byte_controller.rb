@@ -90,8 +90,8 @@ class ByteController < ApplicationController
     chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(
       @board_items_json,
       convo.id,
-      dream_minutes: convo.dream_minutes,
-      break_minutes: convo.dream_break_minutes,
+      pace:       convo.dream_pace,
+      utc_offset: Time.current.in_time_zone(convo.user.timezone).utc_offset / 60,
     ).present?
     @board_held_face = Buddy::BoardFace.showing(convo, chore_dream:)
     # Only the owner configures a board, so the settings the picker offers are
@@ -100,6 +100,7 @@ class ByteController < ApplicationController
     # as "just me".
     @board_owned = convo.user_id == current_user.id
     if @board_owned
+      @board_doer = board_doer_value(convo)
       @board_members_options = household_member_options
       @board_member_ids = board_assignees(convo) || [convo.user_id]
     end
@@ -246,11 +247,13 @@ class ByteController < ApplicationController
     return head(:unprocessable_entity) if chore.nil? || chore.archived?
 
     # A button for whoever did it asks the board's owner, the way a chore pressed
-    # on that board does; anywhere else it credits whoever pressed it.
+    # on that board does; on a board set to the person who uses it, it credits
+    # them; anywhere else it credits whoever pressed it.
     credited = button.credit_user
     board = ByteConversation.asking_board_for(current_user, params[:board_id]) if credited.nil?
     asked = board && ChoreWhoDidIt.ask!(board.user, chore, at: Time.current)
     unless asked
+      credited ||= ByteConversation.accessible_boards_for(current_user).find_by(id: params[:board_id])&.doer
       credited ||= current_user
       ChoreCompleter.new(chore, credited, recorded_by: current_user).call
     end
@@ -352,50 +355,47 @@ class ByteController < ApplicationController
   end
 
   # POST /byte/board/chore_dreams — whether the board's pet dreams of its hot
-  # chores now and then, and at what pace: how long a dream lasts and how long
-  # it rests between them. Each is optional, so one control saves one value.
-  # Owner-only like sharing; broadcast so every open copy of the board follows.
+  # chores now and then, and at what pace (Buddy::BoardDream): how often it
+  # draws, the chance a draw shows nothing, the rest after a dream and its
+  # quiet hours (a blank hour clears them). Each is optional. Owner-only like
+  # sharing; broadcast so every open copy of the board follows.
   def set_board_chore_dreams
     convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
     changes = {}
     changes["chore_dreams"] = ActiveModel::Type::Boolean.new.cast(params[:on]) if params.key?(:on)
-    if params.key?(:dream_minutes)
-      minutes = params[:dream_minutes].to_i
-      return head(:unprocessable_entity) unless Buddy::BoardDream::DREAM_MINUTES.include?(minutes)
+    ByteConversation::DREAM_PACE_KEYS.each do |name, (key, allowed)|
+      next unless params.key?(name)
 
-      changes["dream_minutes"] = minutes
-    end
-    if params.key?(:break_minutes)
-      minutes = params[:break_minutes].to_i
-      return head(:unprocessable_entity) unless Buddy::BoardDream::BREAK_MINUTES.include?(minutes)
+      value = params[name].presence&.to_i
+      quiet = name.to_s.start_with?("quiet")
+      return head(:unprocessable_entity) unless allowed.include?(value) || (quiet && value.nil?)
 
-      changes["dream_break_minutes"] = minutes
+      changes[key] = value
     end
     convo.metadata = convo.metadata.to_h.merge(changes)
     convo.save!
     broadcast_convo_change(convo, :updated)
-    render json: {
-      ok:            true,
-      chore_dreams:  convo.chore_dreams?,
-      dream_minutes: convo.dream_minutes,
-      break_minutes: convo.dream_break_minutes,
-    }
+    render json: { ok: true, chore_dreams: convo.chore_dreams?, pace: convo.dream_pace }
   end
 
-  # POST /byte/board/ask_who — whether a chore pressed on this board is credited
-  # to whoever's signed in, or marked done by nobody yet with the owner asked
-  # who it was. Owner-only, broadcast like the other switches.
-  def set_board_ask_who
+  # POST /byte/board/doer — who a chore pressed on this board is done by:
+  # `doer` is a household member's id (the person who uses the board), "ask"
+  # (nobody yet, and the owner is asked who it was), or blank for whoever's
+  # signed in. Owner-only, broadcast like the other switches.
+  def set_board_doer
     convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
     return head(:not_found) if convo.nil?
 
-    on = ActiveModel::Type::Boolean.new.cast(params[:on])
-    convo.metadata = convo.metadata.to_h.merge("ask_who" => on)
+    ask = params[:doer].to_s == "ask"
+    id = params[:doer].to_i
+    return head(:unprocessable_entity) if id.nonzero? && current_user.chore_household_user_ids.exclude?(id)
+
+    convo.metadata = convo.metadata.to_h.merge("ask_who" => ask, "doer_id" => id.nonzero?)
     convo.save!
     broadcast_convo_change(convo, :updated)
-    render json: { ok: true, ask_who: convo.asks_who? }
+    render json: { ok: true, doer: board_doer_value(convo) }
   end
 
   # POST /byte/board/pins — the chores pinned to this board, as the full ordered
@@ -1396,6 +1396,13 @@ class ByteController < ApplicationController
   end
 
   # Who a button can credit: the members of this person's household.
+  # The board's doer setting as its select spells it.
+  def board_doer_value(convo)
+    return "ask" if convo.asks_who?
+
+    convo.doer&.id.to_s
+  end
+
   def household_member_options
     return [] if current_user.chore_household_id.nil?
 

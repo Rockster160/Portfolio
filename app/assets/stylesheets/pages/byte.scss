@@ -3312,8 +3312,10 @@ dialog.byte-modal {
   color: var(--bs-muted);
 }
 
+// The board's settings popup uses the same fields, so they read as fields.
 .ctr-byte .byte-modal .byte-modal-input,
-.ctr-byte .byte-modal select.byte-modal-input {
+.ctr-byte .byte-modal select.byte-modal-input,
+.ctr-byte .byte-board-settings .byte-modal-input {
   background: var(--bs-panel-soft) !important;
   color: var(--bs-text) !important;
   border: 1px solid var(--bs-border) !important;
@@ -3339,7 +3341,8 @@ dialog.byte-modal {
 // Native caret glyph (arrow) — added ONLY to selects. Positioned so it
 // doesn't overlap the option text. Rendered via CSS gradients since we
 // dropped `appearance` above (which would have given us the OS caret).
-.ctr-byte .byte-modal select.byte-modal-input {
+.ctr-byte .byte-modal select.byte-modal-input,
+.ctr-byte .byte-board-settings select.byte-modal-input {
   padding-right: 36px !important;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--bs-muted) 50%),
@@ -7614,28 +7617,32 @@ $board-cell-max: 200px;
   }
 }
 
-.byte-board-dream-pace {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  padding-left: 22px;
+.byte-board-settings .byte-modal-label {
+  margin-top: 4px;
+}
 
-  label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
+// The row that opens the dreams dialog: a field that reads as one, with a
+// chevron saying it goes somewhere.
+.ctr-byte .byte-board-settings .byte-board-setting-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  cursor: pointer;
+
+  &::after {
+    content: "›";
+    font-size: 20px;
+    line-height: 1;
     color: var(--bs-muted);
   }
+}
 
-  select {
-    font-size: 12px;
-    padding: 3px 6px;
-    border-radius: 6px;
-    border: 1px solid var(--bs-border);
-    background: transparent;
-    color: var(--bs-text);
-  }
+// Quiet hours: from and until side by side.
+.byte-board-quiet {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .byte-board-rename {

@@ -20,6 +20,7 @@
 import { Monitor } from "../../dashboard/cells/monitor";
 import { boardOwnerId, feedOwnerMatches } from "./board_scope";
 import { initBoardChorePicker } from "./board_chore_picker";
+import { paceFromMeta, dreamSummary } from "./dream";
 
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
@@ -1670,10 +1671,11 @@ export function initChoreBoard({
   const renameInputEl = root.querySelector("[data-board-rename-input]");
   const renameSaveEl = root.querySelector("[data-board-rename-save]");
   const shareBoxEl = root.querySelector("[data-board-share]");
-  const choreDreamsBoxEl = root.querySelector("[data-board-chore-dreams]");
-  const askWhoBoxEl = root.querySelector("[data-board-ask-who]");
-  const dreamMinutesEl = root.querySelector("[data-board-dream-minutes]");
-  const dreamBreakEl = root.querySelector("[data-board-dream-break]");
+  const doerEl = root.querySelector("[data-board-doer]");
+  const dreamOpenEl = root.querySelector("[data-board-dream-open]");
+  const dreamSummaryEl = root.querySelector("[data-board-dream-summary]");
+  const dreamDialogEl = root.querySelector("[data-board-dream-dialog]");
+  const dreamFormEl = root.querySelector("[data-board-dream-form]");
 
   if (renameFormEl && renameInputEl) {
     let savedName = renameInputEl.value;
@@ -1720,58 +1722,72 @@ export function initChoreBoard({
     });
   }
 
-  // Same bargain as the share box: a flip that doesn't land reverts.
-  if (settingsEl && choreDreamsBoxEl) {
-    choreDreamsBoxEl.addEventListener("change", async () => {
-      const on = choreDreamsBoxEl.checked;
-      const conversationId = conversationIdFn ? conversationIdFn() : null;
-      try {
-        await apiCall(settingsEl.dataset.choreDreamsUrl, "POST", { conversation_id: conversationId, on });
-        app.dataset.boardChoreDreams = String(on);
-        onChoreDreamsChanged?.(on);
-        flashSaved();
-      } catch (err) {
-        choreDreamsBoxEl.checked = !on;
-      }
-    });
+  // Hot-chore dreams: the row in settings says how they're set and opens the
+  // dialog, which saves as a whole. Closing it unsaved puts the fields back to
+  // what's stored.
+  let dreamsOn = app.dataset.boardChoreDreams !== "false";
+  let dreamPace = paceFromMeta(JSON.parse(app.dataset.boardDreamPace || "{}"));
+
+  function paintDreams() {
+    if (dreamSummaryEl) dreamSummaryEl.textContent = dreamSummary(dreamsOn, dreamPace);
+    if (!dreamFormEl || dreamDialogEl?.open) return;
+    const f = dreamFormEl.elements;
+    f.on.value = String(dreamsOn);
+    f.every.value = String(dreamPace.every);
+    f.blank.value = String(dreamPace.blank);
+    f.rest.value = String(dreamPace.rest);
+    f.quiet_from.value = dreamPace.quietFrom === null ? "" : String(dreamPace.quietFrom);
+    f.quiet_to.value = dreamPace.quietTo === null ? "" : String(dreamPace.quietTo);
   }
+  paintDreams();
 
-  // The dream pace: each select saves on its own, and one that doesn't land
-  // goes back to what's stored.
-  const dreamPace = () => ({
-    dreamMinutes: Number(dreamMinutesEl?.value) || 30,
-    breakMinutes: Number(dreamBreakEl?.value) || 0,
+  dreamOpenEl?.addEventListener("click", () => dreamDialogEl?.showModal());
+  root.querySelector("[data-board-dream-cancel]")?.addEventListener("click", () => dreamDialogEl?.close());
+  dreamDialogEl?.addEventListener("close", paintDreams);
+  dreamFormEl?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = dreamFormEl.elements;
+    const body = {
+      conversation_id: conversationIdFn ? conversationIdFn() : null,
+      on: f.on.value === "true",
+      every: f.every.value,
+      blank: f.blank.value,
+      rest: f.rest.value,
+      quiet_from: f.quiet_from.value,
+      quiet_to: f.quiet_to.value,
+    };
+    try {
+      await apiCall(settingsEl.dataset.choreDreamsUrl, "POST", body);
+      dreamsOn = body.on;
+      dreamPace = paceFromMeta({
+        dream_minutes: body.every,
+        dream_blank_percent: body.blank,
+        dream_rest_minutes: body.rest,
+        dream_quiet_from: body.quiet_from,
+        dream_quiet_to: body.quiet_to,
+      });
+      app.dataset.boardChoreDreams = String(dreamsOn);
+      onChoreDreamsChanged?.(dreamsOn);
+      onDreamPaceChanged?.(dreamPace);
+      dreamDialogEl.close();
+      flashSaved();
+    } catch (err) {
+      // Left open with what they chose, so a retry is one tap.
+    }
   });
-  const paceControls = [
-    [dreamMinutesEl, "dream_minutes", "boardDreamMinutes"],
-    [dreamBreakEl, "break_minutes", "boardDreamBreak"],
-  ];
-  paceControls.forEach(([el, param, key]) => {
-    if (!settingsEl || !el) return;
-    el.addEventListener("change", async () => {
+
+  // Who a press here is done by. One that doesn't land goes back to the last
+  // value that did.
+  let savedDoer = doerEl ? doerEl.value : "";
+  if (settingsEl && doerEl) {
+    doerEl.addEventListener("change", async () => {
       const conversationId = conversationIdFn ? conversationIdFn() : null;
       try {
-        await apiCall(settingsEl.dataset.choreDreamsUrl, "POST", {
-          conversation_id: conversationId, [param]: Number(el.value),
-        });
-        app.dataset[key] = el.value;
-        onDreamPaceChanged?.(dreamPace());
+        await apiCall(settingsEl.dataset.doerUrl, "POST", { conversation_id: conversationId, doer: doerEl.value });
+        savedDoer = doerEl.value;
         flashSaved();
       } catch (err) {
-        el.value = app.dataset[key];
-      }
-    });
-  });
-
-  if (settingsEl && askWhoBoxEl) {
-    askWhoBoxEl.addEventListener("change", async () => {
-      const on = askWhoBoxEl.checked;
-      const conversationId = conversationIdFn ? conversationIdFn() : null;
-      try {
-        await apiCall(settingsEl.dataset.askWhoUrl, "POST", { conversation_id: conversationId, on });
-        flashSaved();
-      } catch (err) {
-        askWhoBoxEl.checked = !on;
+        doerEl.value = savedDoer;
       }
     });
   }
@@ -1921,19 +1937,19 @@ export function initChoreBoard({
 
     // Switched on another device: keep the controls honest.
     setDreamPace(pace) {
-      app.dataset.boardDreamMinutes = String(pace.dreamMinutes);
-      app.dataset.boardDreamBreak = String(pace.breakMinutes);
-      if (dreamMinutesEl) dreamMinutesEl.value = String(pace.dreamMinutes);
-      if (dreamBreakEl) dreamBreakEl.value = String(pace.breakMinutes);
+      dreamPace = pace;
+      paintDreams();
     },
     setChoreDreams(on) {
       app.dataset.boardChoreDreams = String(on);
-      if (choreDreamsBoxEl) choreDreamsBoxEl.checked = on;
+      dreamsOn = on;
+      paintDreams();
     },
 
-    // The server decides who a press credits, so this only keeps the box honest.
-    setAskWho(on) {
-      if (askWhoBoxEl) askWhoBoxEl.checked = on;
+    // The server decides who a press credits, so this only keeps the select honest.
+    setDoer(value) {
+      savedDoer = value;
+      if (doerEl) doerEl.value = value;
     },
 
     // Changed on another device: follow it without saving it back, and leave

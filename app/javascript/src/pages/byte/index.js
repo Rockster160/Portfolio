@@ -81,7 +81,7 @@ import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { initChoreBoard, iconNode } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
-import { initBoardDream } from "./buddy/dream";
+import { initBoardDream, paceFromMeta } from "./buddy/dream";
 import { faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import { initSoundToggle } from "./buddy/sound_toggle";
@@ -2512,10 +2512,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     boardIdFn: () => currentConversationId,
     iconFor: iconNode,
     choreDreams: app.dataset.boardChoreDreams !== "false",
-    pace: {
-      dreamMinutes: Number(app.dataset.boardDreamMinutes) || 30,
-      breakMinutes: Number(app.dataset.boardDreamBreak) || 0,
-    },
+    pace: paceFromMeta(JSON.parse(app.dataset.boardDreamPace || "{}")),
   });
   boardDream.setAlerts(bootstrap.alerts || []);
 
@@ -3587,17 +3584,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             const dreamsOn = String(boardMeta.chore_dreams) !== "false";
             choreBoard?.setChoreDreams(dreamsOn);
             boardDream?.setChoreDreams(dreamsOn);
-            const pace = {
-              dreamMinutes: Number(boardMeta.dream_minutes) || 30,
-              breakMinutes: Number(boardMeta.dream_break_minutes) || 0,
-            };
+            const pace = paceFromMeta(boardMeta);
             choreBoard?.setDreamPace(pace);
             choreBoard?.setPins(boardMeta.pinned_chore_ids || []);
             // Its Buddy may have changed what's on it (a credit button, a
             // chore's groups) - ask again rather than guess which.
             choreBoard?.resync();
             boardDream?.setPace(pace);
-            choreBoard?.setAskWho(String(boardMeta.ask_who) === "true");
+            choreBoard?.setDoer(String(boardMeta.ask_who) === "true" ? "ask" : String(boardMeta.doer_id || ""));
           }
         }
         return;

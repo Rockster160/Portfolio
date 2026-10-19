@@ -41,7 +41,7 @@ module Buddy
         - **Pinned chores** (always shown, due or not, whatever the groups): #{pinned_names.any? ? pinned_names.join(", ") : "none"}.
         - **Credit buttons** (one press marks a chore done for a chosen person): #{buttons.any? ? buttons.join("; ") : "none"}.
         - **Hidden by search:** #{convo.hidden_chore_filter.presence || "nothing"}.
-        - **Hot-chore dreams:** #{convo.chore_dreams? ? "on - each lasts #{convo.dream_minutes} min, then #{convo.dream_break_minutes} min off" : "off"}.
+        - **Hot-chore dreams:** #{convo.chore_dreams? ? dream_line(convo.dream_pace) : "off"}.
 
         Setting it up:
         - To put a NEW chore on this board, create it with `groups` set to one of this board's groups (create_chore files it under this board's groups when you leave `groups` out). Assign it with `assignee`.
@@ -50,6 +50,14 @@ module Buddy
         - Changing which groups the board watches is set_board_groups, with the FULL list it should watch.
         - Anything the board can't do yet - a new kind of button, a layout change, a setting that doesn't exist - is a feature request (request_feature). Say plainly that it isn't something you can do yet and that you've asked for it.
       TXT
+    end
+
+    def dream_line(pace)
+      line = "on - a draw every #{pace[:every]} min, #{pace[:blank]}% of them showing nothing"
+      line += ", then #{pace[:rest]} min of rest after a dream" if pace[:rest].positive?
+      quiet = pace.values_at(:quiet_from, :quiet_to)
+      line += ", quiet #{quiet[0]}:00-#{quiet[1]}:00" if quiet.all? && quiet.uniq.size == 2
+      line
     end
 
     # "Dishes, by Chelsea → Dishes (credits Chelsea)" for each button in the

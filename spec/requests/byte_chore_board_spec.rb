@@ -573,21 +573,29 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).to include('data-board-chore-dreams="false"')
     end
 
-    it "keeps a pace per board, one setting at a time, and refuses a length it doesn't offer" do
-      expect([thread.dream_minutes, thread.dream_break_minutes]).to eq([30, 0])
+    it "keeps a pace per board, and refuses a value it doesn't offer" do
+      expect(thread.dream_pace).to eq(every: 30, blank: 25, rest: 0, quiet_from: nil, quiet_to: nil)
 
-      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, dream_minutes: 60 }
-      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, break_minutes: 120 }
+      post "/byte/board/chore_dreams", params: {
+        conversation_id: thread.id, every: 60, blank: 50, rest: 120, quiet_from: 21, quiet_to: 7,
+      }
 
-      saved = response.parsed_body.slice("dream_minutes", "break_minutes", "chore_dreams")
-      expect(saved).to eq("dream_minutes" => 60, "break_minutes" => 120, "chore_dreams" => true)
-      get "/board/#{thread.id}"
-      expect(response.body).to include('data-board-dream-minutes="60"', 'data-board-dream-break="120"')
+      expect(response.parsed_body["pace"]).to eq(
+        "every" => 60, "blank" => 50, "rest" => 120, "quiet_from" => 21, "quiet_to" => 7,
+      )
 
-      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, break_minutes: 7 }
-
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, rest: 7 }
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(thread.reload.dream_break_minutes).to eq(120)
+      expect(thread.reload.dream_pace[:rest]).to eq(120)
+
+      post "/byte/board/chore_dreams", params: { conversation_id: thread.id, quiet_from: "", quiet_to: "" }
+      expect(thread.reload.dream_pace.values_at(:quiet_from, :quiet_to)).to eq([nil, nil])
+    end
+
+    it "shows the board's id beside the build" do
+      get "/board/#{thread.id}"
+
+      expect(response.body).to include(">#{thread.id}##{BUILD_NUMBER}<")
     end
   end
 
@@ -1083,18 +1091,22 @@ RSpec.describe "Byte chore board", type: :request do
       thread.update!(metadata: thread.metadata.merge("ask_who" => on))
     end
 
+    def set_doer!(person)
+      thread.update!(metadata: thread.metadata.merge("ask_who" => false, "doer_id" => person.id))
+    end
+
     def press!
       post "/chores/items/#{chore.id}/completion", params: {
         client_completed_at: pressed_at.iso8601, board_id: thread.id,
       }
     end
 
-    it "is switched on and off from the popup" do
-      post "/byte/board/ask_who", params: { conversation_id: thread.id, on: true }
+    it "is chosen from the popup" do
+      post "/byte/board/doer", params: { conversation_id: thread.id, doer: "ask" }
 
       expect(thread.reload).to be_asks_who
       get "/board/#{thread.id}"
-      expect(response.body).to match(/data-board-ask-who checked/)
+      expect(response.body).to include(%(<option value="ask" selected>))
     end
 
     it "credits whoever is signed in on a board that doesn't ask" do
@@ -1141,6 +1153,40 @@ RSpec.describe "Byte chore board", type: :request do
       expect(done.completed_at).to eq(pressed_at)
     end
 
+    describe "a board set to the person who uses it" do
+      it "is chosen from the popup, and only from the household" do
+        post "/byte/board/doer", params: { conversation_id: thread.id, doer: housemate.id }
+        expect(thread.reload.doer).to eq(housemate)
+        expect(thread).not_to be_asks_who
+
+        post "/byte/board/doer", params: { conversation_id: thread.id, doer: create(:user).id }
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        post "/byte/board/doer", params: { conversation_id: thread.id, doer: "" }
+        expect(thread.reload.doer).to be_nil
+      end
+
+      it "credits them, recorded by whoever's signed in" do
+        set_doer!(housemate)
+        press!
+
+        expect(chore.chore_completions.sole).to have_attributes(
+          user_id: housemate.id, recorded_by_user_id: user.id, anonymous: false,
+        )
+        expect(prompts).to be_empty
+      end
+
+      it "takes their press back" do
+        set_doer!(housemate)
+        press!
+
+        delete "/chores/items/#{chore.id}/completion", params: { board_id: thread.id }
+
+        expect(response).to have_http_status(:ok)
+        expect(chore.chore_completions).to be_empty
+      end
+    end
+
     it "takes the press back, and the question with it" do
       ask_who!
       press!
@@ -1177,6 +1223,13 @@ RSpec.describe "Byte chore board", type: :request do
 
         expect(chore.chore_completions.sole).to have_attributes(user_id: user.id, anonymous: false)
         expect(prompts).to be_empty
+      end
+
+      it "credits the person who uses the board, on a board set to them" do
+        set_doer!(housemate)
+        press_button!
+
+        expect(chore.chore_completions.sole).to have_attributes(user_id: housemate.id, recorded_by_user_id: user.id)
       end
 
       it "still credits its own person when it names one" do

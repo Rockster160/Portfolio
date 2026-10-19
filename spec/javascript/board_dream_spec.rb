@@ -65,37 +65,56 @@ RSpec.describe "Board dreams" do
     expect(seen).to include(nil, 7, 12)
   end
 
-  # A board's own pace: dreams of a set length with set breaks between them.
-  # Both sides have to agree on where the breaks fall as well as on the draw.
+  # A board's own pace: how often it draws, how often a draw is blank, a rest
+  # after each dream and quiet hours. Both sides have to agree on all of it.
   describe "with a pace" do
-    let(:paces) { [[15, 0], [60, 120], [30, 240], [120, 30]] }
+    let(:paces) {
+      [
+        { every: 15, blank: 0, rest: 0 },
+        { every: 60, blank: 50, rest: 120 },
+        { every: 30, blank: 25, rest: 60, quiet_from: 21, quiet_to: 7 },
+        { every: 120, blank: 75, rest: 240, quiet_from: 9, quiet_to: 17 },
+      ]
+    }
+    let(:offset) { -360 }
     let(:paced) {
       JsRunner.eval_module(<<~JS)
         const { pickChoreDream } = await import(#{Rails.root.join("app/javascript/src/pages/byte/buddy/dream.js").to_s.to_json});
         const items = #{items.to_json};
         const times = #{times.map { |t| (t.to_f * 1000).to_i }.to_json};
-        const paces = #{paces.to_json};
-        const picks = paces.map(([d, b]) => times.map((t) => pickChoreDream(items, 42, t, { dreamMinutes: d, breakMinutes: b })?.id ?? null));
+        const paces = #{paces.map { |p| { every: p[:every], blank: p[:blank], rest: p[:rest], quietFrom: p[:quiet_from], quietTo: p[:quiet_to] } }.to_json};
+        const picks = paces.map((p) => times.map((t) => pickChoreDream(items, 42, t, p, #{offset})?.id ?? null));
         process.stdout.write(JSON.stringify(picks));
       JS
     }
 
-    it "picks the same chore (or nothing) on both sides" do
-      ruby = paces.map { |d, b|
-        times.map { |t| Buddy::BoardDream.pick(items, 42, at: t, dream_minutes: d, break_minutes: b)&.dig(:id) }
-      }
-
-      expect(paced).to eq(ruby)
+    def ruby_picks(pace)
+      times.map { |t| Buddy::BoardDream.pick(items, 42, at: t, pace: pace, utc_offset: offset)&.dig(:id) }
     end
 
-    it "dreams of nothing through a break" do
-      start = Time.utc(2026, 10, 16, 0)
-      # An hour's dream then two hours off: 1:00-3:00 is the break.
-      during = [70, 120, 179].map { |m|
-        Buddy::BoardDream.pick(items, 42, at: start + m.minutes, dream_minutes: 60, break_minutes: 120)
-      }
+    it "picks the same chore (or nothing) on both sides" do
+      expect(paced).to eq(paces.map { |pace| ruby_picks(pace) })
+    end
 
-      expect(during.compact).to be_empty
+    it "never draws a blank when the chance is none" do
+      expect(ruby_picks(every: 30, blank: 0, rest: 0)).not_to include(nil)
+    end
+
+    it "rests after a dream" do
+      picks = ruby_picks(every: 30, blank: 0, rest: 60)
+
+      # Each dream is followed by two half hours of nothing, then the next.
+      shown = picks.each_index.select { |i| picks[i] }
+      expect(shown.each_cons(2).map { |a, b| b - a }.uniq).to eq([3])
+    end
+
+    it "dreams of nothing in quiet hours, in the board's own time" do
+      # 9 PM-7 AM at UTC-6 is 03:00-13:00 UTC.
+      picks = times.zip(ruby_picks(every: 30, blank: 0, rest: 0, quiet_from: 21, quiet_to: 7))
+      quiet, awake = picks.partition { |t, _| (3...13).cover?(t.utc.hour) }
+
+      expect(quiet.map(&:last).compact).to be_empty
+      expect(awake.map(&:last)).not_to include(nil)
     end
   end
 

@@ -124,7 +124,10 @@ class ChoreCompletionsController < ApplicationController
     # Chore#completion_leaf_for). The payout is unchanged: ChoreCompleter
     # still credits the parent's streak and falls back to the parent's hot
     # multiplier.
-    chore = tapped.completion_leaf_for(current_user)
+    # Pressed on a board set to the person who uses it: done by them, whoever's
+    # account the board is signed in to.
+    doer = board_doer || current_user
+    chore = tapped.completion_leaf_for(doer)
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
 
     # Pressed on a board in a shared room: whoever's signed in there isn't
@@ -142,7 +145,7 @@ class ChoreCompletionsController < ApplicationController
     # the same shape the original POST returned. No new row, no double
     # payout, no double Jil trigger.
     mutation_id = params[:client_mutation_id].presence
-    if mutation_id && (existing = current_user.chore_completions.find_by(client_mutation_id: mutation_id))
+    if mutation_id && (existing = doer.chore_completions.find_by(client_mutation_id: mutation_id))
       render json: response_payload(existing.chore, existing).merge(
         skipped:        existing.payout_skipped,
         skipped_reason: existing.skipped_reason,
@@ -152,7 +155,13 @@ class ChoreCompletionsController < ApplicationController
       return
     end
 
-    result = ChoreCompleter.new(chore, current_user, at: completed_at).call
+    recorded_by = (current_user unless doer == current_user)
+    result = ChoreCompleter.new(chore, doer, at: completed_at, recorded_by: recorded_by).call
+    # ChoreCompleter broadcasts to the doer; the presser's devices hear it too.
+    if recorded_by
+      related = (chore.parent_chore if chore.sub_chore?)
+      ChoreBroadcaster.broadcast_changes!(current_user, chore, related: related, actor_tab_id: params[:tab_id])
+    end
 
     # When a pending push was edited on the History page before being
     # sent (note, multipliers, hot_pick), the queued POST replays those
@@ -264,9 +273,10 @@ class ChoreCompletionsController < ApplicationController
     # most recent today" — otherwise a replayed undo could delete a
     # later, legitimate completion. When the target is already gone
     # (first undo flushed and we're replaying), return 200 idempotently.
+    doer = board_doer || current_user
     target_id = params[:target_client_mutation_id].presence
     if target_id
-      completion = current_user.chore_completions.find_by(client_mutation_id: target_id)
+      completion = doer.chore_completions.find_by(client_mutation_id: target_id)
       if completion.nil?
         render json: response_payload(tapped, nil).merge(deduped: true)
         return
@@ -275,9 +285,9 @@ class ChoreCompletionsController < ApplicationController
       leaf = completion.chore
       day_at_delete = completion.day_key
       completion.destroy!
-      ChoreStreak.rebuild_for!(current_user, leaf)
+      ChoreStreak.rebuild_for!(doer, leaf)
       related = (leaf.parent_chore if leaf.sub_chore?)
-      ChoreBroadcaster.broadcast_changes!(current_user, leaf, related: related, actor_tab_id: params[:tab_id])
+      broadcast_undo(doer, leaf, related)
       # The leaf, not the tapped chore: a container tap records against the
       # sub-chore, and this broadcast skips the actor's own tab, so the
       # response is the only thing that clears the sub-chore's done state
@@ -294,8 +304,8 @@ class ChoreCompletionsController < ApplicationController
     # Mirror the create-side redirect: a tap on a container was recorded
     # against this person's own sub-chore, so that's the row to undo.
     # Without it, undoing a Hot-strip container tap finds nothing.
-    target = tapped.completion_leaf_for(current_user)
-    completion = current_user.chore_completions
+    target = tapped.completion_leaf_for(doer)
+    completion = doer.chore_completions
       .credited
       .where(chore_id: target.id, day_key: day)
       .order(completed_at: :desc).first
@@ -312,9 +322,9 @@ class ChoreCompletionsController < ApplicationController
 
     if completion
       completion.destroy!
-      ChoreStreak.rebuild_for!(current_user, target)
+      ChoreStreak.rebuild_for!(doer, target)
       related = (target.parent_chore if target.sub_chore?)
-      ChoreBroadcaster.broadcast_changes!(current_user, target, related: related, actor_tab_id: params[:tab_id])
+      broadcast_undo(doer, target, related)
       render json: response_payload(target, nil)
     else
       render json: { error: "no completion to undo" }, status: :not_found
@@ -324,6 +334,22 @@ class ChoreCompletionsController < ApplicationController
   # The board this press was made on, when it's one that asks who did it.
   def asking_board
     ByteConversation.asking_board_for(current_user, params[:board_id])
+  end
+
+  # The person who uses the board this press was made on, when it's set to one.
+  def board_doer
+    return nil if params[:board_id].blank?
+
+    ByteConversation.accessible_boards_for(current_user).find_by(id: params[:board_id])&.doer
+  end
+
+  # An undo reaches the presser's devices and, when it was someone else's
+  # completion, theirs too.
+  def broadcast_undo(doer, chore, related)
+    ChoreBroadcaster.broadcast_changes!(current_user, chore, related: related, actor_tab_id: params[:tab_id])
+    return if doer == current_user
+
+    ChoreBroadcaster.broadcast_changes!(doer, chore, related: related, actor_tab_id: params[:tab_id])
   end
 
   # Today's newest stand-in for the chore or any of its halves.
