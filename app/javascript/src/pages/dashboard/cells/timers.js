@@ -289,11 +289,10 @@ export class Timer {
 
   // ---- Byte (Buddy) timers --------------------------------------------------
 
-  function buddyChime() {
-    beeps([
-      [120, 880, 0.15, "sine"],
-      [220, 1320, 0.15, "sine"],
-    ])
+  // The generic "a timer finished" sound: one soft, low tap. Deliberately
+  // nothing like the deploy chimes, which are the only rising melodies here.
+  function timerChime() {
+    beep(180, 523, 0.08, "triangle")
   }
 
   async function buddyApi(url, method) {
@@ -412,7 +411,7 @@ export class Timer {
       changed = true
       if (timer.kind === "buddy") {
         timer.acknowledged = true
-        if (!timer.wait) { buddyChime() }
+        if (!timer.wait) { timerChime() }
       }
     })
     if (changed) { save() }

@@ -57,31 +57,31 @@ RSpec.describe Buddy::ExpressionState do
 
   it "waves only when the pet has the gesture art, never painting blank" do
     cobalt = buddy_convo(User.me, "cobalt")       # has face_wave.png
-    tiko   = buddy_convo(create(:user), "tiko")   # has none
+    suki   = buddy_convo(create(:user), "suki")   # has none
 
     described_class.wave!(cobalt)
     expect(MonitorChannel).to have_received(:broadcast_to).with(
       cobalt.user, hash_including(data: hash_including(expression: "wave", transient: true))
     )
 
-    described_class.wave!(tiko)   # no art → no wave broadcast at all
+    described_class.wave!(suki)   # no art → no wave broadcast at all
     expect(MonitorChannel).not_to have_received(:broadcast_to).with(
-      tiko.user, hash_including(data: hash_including(expression: "wave"))
+      suki.user, hash_including(data: hash_including(expression: "wave"))
     )
   end
 
   it "greets with a wave when it can and falls back to thinking when it can't" do
     cobalt = buddy_convo(User.me, "cobalt")
-    tiko   = buddy_convo(create(:user), "tiko")
+    suki   = buddy_convo(create(:user), "suki")
 
     described_class.greet!(cobalt)
     expect(MonitorChannel).to have_received(:broadcast_to).with(
       cobalt.user, hash_including(data: hash_including(expression: "wave", transient: true))
     )
 
-    described_class.greet!(tiko)
+    described_class.greet!(suki)
     expect(MonitorChannel).to have_received(:broadcast_to).with(
-      tiko.user, hash_including(data: hash_including(expression: "thinking", transient: true))
+      suki.user, hash_including(data: hash_including(expression: "thinking", transient: true))
     )
   end
 
