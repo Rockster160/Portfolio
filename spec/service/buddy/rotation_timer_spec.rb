@@ -212,6 +212,7 @@ RSpec.describe Buddy::RotationTimer do
     end
 
     it "Done leaves the follow-up on the list and stops the loop" do
+      FactoryBot.create(:list, name: "TODO", user: user)
       tap!(card, described_class::DONE)
 
       list = List.by_name_for_user("TODO", user)

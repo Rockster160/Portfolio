@@ -92,13 +92,20 @@ RSpec.describe "Byte timer alerts setting", type: :request do
   end
 
   describe "the surfaces" do
+    # A board's own page carries its settings; /board is the index of them.
+    let!(:board) {
+      user.byte_conversations.create!(
+        mode: :buddy, name: "Home", last_message_at: Time.current, metadata: { "board" => true },
+      )
+    }
+
     before {
       host! "byte.example.com"
       sign_in
     }
 
     it "offers the toggle on the board, pointed at the board's own switch" do
-      get byte_board_path
+      get byte_board_thread_path(board)
 
       expect(response.body).to include("data-byte-timer-alerts")
       expect(response.body).to include('data-surface="board"')
@@ -108,7 +115,7 @@ RSpec.describe "Byte timer alerts setting", type: :request do
       user.set_byte_timer_alerts(:board, false)
       user.save!
 
-      get byte_board_path
+      get byte_board_thread_path(board)
 
       expect(response.body).to include('data-timer-alerts="false"')
     end

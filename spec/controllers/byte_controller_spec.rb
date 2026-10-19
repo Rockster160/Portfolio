@@ -90,12 +90,13 @@ RSpec.describe ByteController, type: :controller do
         expect(response.body.scan("data-buddy-name-slot").length).to be >= 4
       end
 
-      it "forbids everyone else" do
+      # A page visit is shown Byte's About page; anything else is a bare 403.
+      it "turns everyone else away to the About page" do
         sign_in create(:user)
 
         get :show
 
-        expect(response).to have_http_status(:forbidden)
+        expect(response).to redirect_to(playground_project_path(PlaygroundProject.find(:byte)))
       end
 
       it "lets Chelsea in, scoped to a Buddy conversation" do

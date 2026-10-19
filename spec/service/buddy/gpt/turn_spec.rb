@@ -4373,6 +4373,7 @@ RSpec.describe Buddy::GPT::Turn do
       # A seed naming a tool this person may not use is left with nothing rather
       # than with the run of the house.
       it "never adds one back" do
+        user.update!(buddy_features: Buddy::Features::DEFAULT)
         client = seeded([{ text: "Aura got your application." }], %w[add_job_note])
 
         expect(client.calls.first.tools).to be_empty

@@ -170,6 +170,7 @@ module BuddyEvalNeeds
     thermostat_reading:   { label: "a thermostat reading beside the function that sets it", check: ->(u) { jil(u, /thermostat/i) && Buddy::DeviceStates.for_user(u).any? { |r| r[:device].match?(/thermostat/i) && r[:state].to_s.include?("°") } } },
     blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
     car_fn:               { label: "the car function",             check: ->(u) { jil(u, /tesla/i) } },
+    tv_fn:                { label: "the TV function",              check: ->(u) { jil(u, /\btv\b/i) } },
     # BOTH, because the probe is about choosing between them. With only one
     # reachable there is no wrong answer to give.
     garage_fns:           { label: "the toggle AND state garage functions", check: ->(u) { jil(u, /toggle garage/i) && jil(u, /garage state/i) } },

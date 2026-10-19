@@ -12,6 +12,9 @@ require "shellwords"
 #                 Buddy::ToolIndex), so it has to tell the tool apart from the
 #                 neighbor it gets confused with.
 #   description — plain-english, the full instructions: what loading delivers
+#   roster      — optional proc(user) → names: the person's own things this tool
+#                 reaches (their automations), listed after the summary and the
+#                 description so a request naming one finds the tool unopened
 #   always      — optional; offered in full on every turn instead of indexed
 #   args        — arg schema (validated before proposal creation)
 #   confirm     — proc(payload, ctx) → { summary:, resolved: } — resolves fuzzy refs
@@ -132,7 +135,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false)
+    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false, roster: nil)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -172,6 +175,7 @@ module Buddy
         # Offered in full every turn, skipping the index. For the handful of
         # everyday actions where a load round would cost more than the schema.
         always:           always == true,
+        roster:           roster,
         args:             normalize_args(args),
         confirm:          confirm,
         label:            label,
@@ -308,6 +312,30 @@ module Buddy
     end
 
     # Offered in full on every turn rather than through the index.
+    # The roster as a line for the model: "Theirs: HASS TV, Whisper Sound."
+    # Sorted, so the same set reads the same on every turn. Nil when the tool
+    # has none, there's no person to ask about, or they have nothing on it.
+    def roster_line(tool, user)
+      return nil if tool[:roster].nil? || user.nil?
+
+      names = Array(tool[:roster].call(user)).map { |n| n.to_s.strip }.compact_blank.uniq.sort
+      "Theirs: #{names.join(", ")}." if names.any?
+    rescue StandardError => e
+      Buddy::Errors.report(section: "tools.roster.#{tool[:name]}", exception: e, user: user)
+      nil
+    end
+
+    # Their Jil FUNCTION tasks and their other Jil automations, by name, the
+    # same rows `jil_functions` and `jil_triggers` list in the context.
+    def jil_function_names(user)
+      user.accessible_tasks.buddy_visible.functions.limit(80).pluck(:name)
+    end
+
+    def jil_trigger_names(user)
+      rows = user.accessible_tasks.buddy_visible.where.not(listener: [nil, ""]).limit(60)
+      rows.pluck(:name, :listener).reject { |_, listener| listener.to_s.match?(/(^|\s)function\(/i) }.map(&:first)
+    end
+
     def always?(tool)
       tool.is_a?(Hash) && tool[:always] == true
     end
@@ -437,7 +465,7 @@ module Buddy
       {
         type:        :function,
         name:        tool[:name],
-        description: described(tool),
+        description: [described(tool), roster_line(tool, user)].compact.join(" "),
         strict:      strict?(tool),
         parameters:  {
           type:                 :object,

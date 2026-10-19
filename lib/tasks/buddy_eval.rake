@@ -481,6 +481,9 @@ BUDDY_EVAL_READERS = %i[
 #               home, asking WHICH sensor marks it and filing it as a gap are
 #               both fine; setting a watch on the wrong person is not, and
 #               that's still what `avoid:` is for.
+#   or:         another way to get it right, for a request with two working
+#               paths. The same fields as the probe (tool, with, order, args,
+#               avoid...), laid over it; the turn passes if it meets either.
 BUDDY_EDGE_PROBES = [
   # --- a link, and something to do about it --------------------------------
   # The URL names the event and carries a date, and both are guesses about the
@@ -831,6 +834,22 @@ BUDDY_EDGE_PROBES = [
            "Then only the wait was set, with nothing behind it at all: the reply " \
            "said the sound was queued, the sound never played, and the countdown " \
            "rang like a kitchen timer at the hour it should have happened",
+  },
+  {
+    case:  "prod 8481",
+    say:   "Turn the tv off in an hour",
+    tool:  :schedule_function,
+    avoid: %i[schedule_reminder],
+    args:  { schedule_function: { name: /\bTV\z/i } },
+    or:    {
+      tool:  :set_timer,
+      with:  %i[call_jil_function],
+      order: %i[set_timer call_jil_function],
+      args:  { set_timer: { then_continue: true }, call_jil_function: { name: /\bTV\z/i } },
+    },
+    needs: :tv_fn,
+    note:  "it set a reminder that read \"Turn off the TV\" and replied as if the " \
+           "TV would go off; nothing ever turned it off",
   },
   {
     case:  "prod 3562",
@@ -3043,6 +3062,7 @@ namespace :buddy do
   # person asked for a rhythm is a wrong answer that reads perfectly.
   def verdict(probe, calls, user=nil)
     user  ||= User.me
+    probe   = either(probe, calls, user)
     named   = calls.map { |c| c[:name].to_sym }
     acting  = named - BUDDY_EVAL_READERS
     quiet   = probe[:tool] == :none
@@ -3116,6 +3136,24 @@ namespace :buddy do
     puts "  \e[31m✗ #{detail}\e[0m"
   end
 
+  # The probe as its `or:` reads it when that is the path the turn took, so the
+  # verdict below is scored against the way it actually got it right.
+  def either(probe, calls, user)
+    return probe if probe[:or].nil?
+
+    other = probe.except(:or).merge(probe[:or])
+    clean?(other, calls, user) ? other : probe
+  end
+
+  def clean?(probe, calls, user)
+    named = calls.map { |c| c[:name].to_sym }
+    missed = [probe[:tool], *Array(probe[:with])] - named
+    wrong = Array(probe[:avoid]) & named
+    shape = out_of_order(probe, named) + repeated(probe, named) + bad_args(probe, calls) +
+      broken_calls(probe, calls) + unmatched_reply(probe) + missed_effect(probe, user)
+    missed.empty? && wrong.empty? && shape.empty?
+  end
+
   def wanted_phrase(probe)
     return "no tool at all — the request is ambiguous and the answer is a question" if probe[:tool] == :none
 
@@ -3126,6 +3164,7 @@ namespace :buddy do
       ("carrying #{probe[:args].values.map(&:to_json).join(", ")}" if probe[:args].present?),
       ("never carrying #{probe[:never_args].values.map(&:to_json).join(", ")}" if probe[:never_args].present?),
       ("and never #{Array(probe[:avoid]).join(", ")}" if probe[:avoid].present?),
+      ("or else #{wanted_phrase(probe.except(:or).merge(probe[:or]))}" if probe[:or]),
     ].compact.join(", ")
   end
 

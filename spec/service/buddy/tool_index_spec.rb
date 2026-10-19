@@ -54,9 +54,27 @@ RSpec.describe Buddy::ToolIndex do
       indexed.each { |tool|
         entry = schema_for(stage_one, tool[:name])
 
-        expect(entry[:description]).to eq(tool[:summary])
+        expect(entry[:description]).to start_with(tool[:summary])
         expect(entry[:parameters][:properties]).to be_empty
       }
+    end
+
+    # A request names the thing ("the TV", "Whisper's nap"), and the tool that
+    # reaches it only says "automations" - so the person's own ones are listed
+    # by name on the entry, and stay on it once it's opened.
+    it "lists the person's own automations on the tools that reach them" do
+      Task.create!(user: user, name: "HASS TV", listener: "function(\"Action\" TAB String)::String",
+        code: "// noop", enabled: true, buddy_enabled: true)
+      Task.create!(user: user, name: "Good Morning", listener: "good-morning",
+        code: "// noop", enabled: true, buddy_enabled: true)
+
+      expect(schema_for(stage_one, :call_jil_function)[:description]).to include("Theirs:", "HASS TV")
+      expect(schema_for(stage_one, :call_jil_function)[:description]).not_to include("Good Morning")
+      expect(schema_for(stage_one, :trigger_jil_task)[:description]).to include("Good Morning")
+      expect(schema_for(stage_one, :trigger_jil_task)[:description]).not_to include("HASS TV")
+
+      opened = described_class.schemas(user: user, loaded: [:call_jil_function])
+      expect(schema_for(opened, :call_jil_function)[:description]).to include("HASS TV")
     end
 
     it "swaps an opened tool's summary for its full schema, in the same place" do

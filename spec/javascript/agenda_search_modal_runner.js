@@ -12,6 +12,20 @@
 
 const path = require("path");
 
+// The search reads the wall clock for "next occurrence", so the clock is held
+// at the day the store is seeded on. Without it the answer moves every year.
+const FROZEN_AT = Date.parse("2026-06-22T18:00:00Z");
+const RealDate = Date;
+global.Date = class extends RealDate {
+  constructor(...args) {
+    super(...(args.length ? args : [FROZEN_AT]));
+  }
+
+  static now() {
+    return FROZEN_AT;
+  }
+};
+
 const SRC         = path.resolve(__dirname, "..", "..", "app", "javascript", "src");
 const AgendaStore = require(path.join(SRC, "agenda_store", "store.js"));
 const Recurrence  = require(path.join(SRC, "agenda_store", "recurrence.js"));

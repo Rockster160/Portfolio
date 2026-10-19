@@ -83,7 +83,7 @@ RSpec.describe RecordLinksController, type: :controller do
 
       get :index
 
-      expect(response).to redirect_to(login_path)
+      expect(response).to redirect_to(playground_project_path(PlaygroundProject.find(:chores)))
     end
   end
 

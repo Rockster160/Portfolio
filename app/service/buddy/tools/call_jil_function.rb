@@ -3,6 +3,7 @@ Buddy::Tools.register(
   summary:          "Run one of the automations in `jil_functions` with arguments, right now - " \
                     "lights with a color, the car, the printer, cameras. At a later time is " \
                     "schedule_function.",
+  roster:           ->(user) { Buddy::Tools.jil_function_names(user) },
   description:      <<~TXT,
     Invoke a Jil FUNCTION task with typed args. Use when the person
     asks for something covered by a task in the `jil_functions`

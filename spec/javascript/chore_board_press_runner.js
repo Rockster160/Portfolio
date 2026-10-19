@@ -12,7 +12,41 @@
 // the corner buttons sit on top of the disc, so a press on one is also a press
 // inside it.
 
-import { initChoreBoard } from "../../app/javascript/src/pages/byte/buddy/chore_board.js";
+import esbuild from "esbuild";
+import { fileURLToPath } from "url";
+
+// Bundled rather than imported, like deploy_reload_runner: the board's modules
+// use extensionless specifiers that esbuild resolves and node does not. The
+// socket consumer is stubbed so the board's subscriptions go nowhere.
+const stubConsumer = {
+  name: "stub-consumer",
+  setup(build) {
+    build.onResolve({ filter: /channels\/consumer$/ }, () => ({
+      path: "consumer-stub",
+      namespace: "stub",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
+      contents: `
+        export default {
+          connection: { reopen: () => {} },
+          subscriptions: { create: () => ({ perform: () => {} }) },
+        };
+      `,
+      loader: "js",
+    }));
+  },
+};
+
+const built = await esbuild.build({
+  entryPoints: [
+    fileURLToPath(new URL("../../app/javascript/src/pages/byte/buddy/chore_board.js", import.meta.url)),
+  ],
+  bundle: true,
+  format: "esm",
+  write: false,
+  plugins: [stubConsumer],
+  logLevel: "silent",
+});
 
 // ---- the smallest DOM the board uses ----
 
@@ -188,6 +222,12 @@ globalThis.window = {
   setTimeout: (fn) => fn(),
   clearTimeout: () => {},
 };
+// The socket monitor names the page it subscribes from as it loads.
+globalThis.window.location = { pathname: "/byte", search: "" };
+
+const { initChoreBoard } = await import(
+  "data:text/javascript;base64," + Buffer.from(built.outputFiles[0].text).toString("base64")
+);
 // Only the trigger flash reaches for it, and only to scope a selector.
 globalThis.CSS = { escape: (s) => s };
 

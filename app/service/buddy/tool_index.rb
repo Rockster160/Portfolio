@@ -48,7 +48,7 @@ module Buddy
           next Buddy::Tools.function_schema(tool, user: user) if Buddy::Tools.always?(tool)
           next Buddy::Tools.function_schema(tool, user: user) if wanted.include?(tool[:name])
 
-          entry(tool)
+          entry(tool, user: user)
         },
       ]
     end
@@ -71,11 +71,11 @@ module Buddy
 
     # A tool before it's opened: its name and when to reach for it. No
     # arguments, so a call can only ever mean "this one" and never runs.
-    def entry(tool)
+    def entry(tool, user: nil)
       {
         type:        :function,
         name:        tool[:name],
-        description: tool[:summary].to_s,
+        description: [tool[:summary].to_s, Buddy::Tools.roster_line(tool, user)].compact.join(" "),
         strict:      true,
         parameters:  { type: :object, properties: {}, required: [], additionalProperties: false },
       }

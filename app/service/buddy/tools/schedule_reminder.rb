@@ -8,6 +8,12 @@ Buddy::Tools.register(
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
     "in an hour tell me to check the oven", etc.
 
+    **A device told to do something later is never this.** "Turn the tv off in
+    an hour", "lights off at 11" ask for the thing to HAPPEN then: put the call
+    on the clock (`set_timer` with `then_continue` ahead of it for a delay,
+    `schedule_function` for a clock time). A reminder only posts the words, so
+    the TV stays on while the reply says it's handled.
+
     A reminder arrives once and is gone. If they said "agenda", "calendar",
     or asked for a TASK, they want a row they can see and check off - that's
     `add_agenda_item`, and a reminder is not a substitute for it.

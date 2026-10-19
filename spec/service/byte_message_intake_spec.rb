@@ -155,8 +155,10 @@ RSpec.describe ByteMessageIntake do
     end
 
     describe "the turn that follows" do
+      # Not a bare greeting: the pet waves back at one of those, which is a
+      # broadcast of its own and not a repaint of the message.
       it "leaves an already-sent message alone rather than repainting it" do
-        message = send!("hello")
+        message = send!("add milk to the grocery list")
         allow(Buddy::GPT::Turn).to receive(:run!).and_return(true)
         allow(Buddy::Compactor).to receive(:should_compact?).and_return(false)
 
