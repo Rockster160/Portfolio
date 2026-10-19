@@ -54,10 +54,10 @@ RSpec.describe Buddy::BoardFace do
   end
 
   describe "a dream's face" do
-    def dream!(expression: nil, groups: ["Whisper"])
+    def dream!(expression: nil, groups: ["Whisper"], strength: nil)
       Buddy::Alerts.hold!(
         user: user, key: "food-#{SecureRandom.hex(3)}", body: "Foodies!",
-        groups: groups, expression: expression, dream: true, conversation: board,
+        groups: groups, expression: expression, dream: true, conversation: board, strength: strength,
       )
     end
 
@@ -90,6 +90,15 @@ RSpec.describe Buddy::BoardFace do
       expect(described_class.for(board)).to eq("pounce")
     end
 
+    it "beats a real mood when raised stronger than one, but not Whisper's state" do
+      dream!(expression: "eager", strength: 45)
+      board.update!(buddy_expression: "happy")
+      expect(described_class.for(board)).to eq("eager")
+
+      described_class.record_whisper!(user, { status: "Gone 👋", groups: ["Whisper"] })
+      expect(described_class.for(board)).to eq("hiding")
+    end
+
     it "ignores a dream aimed at another group" do
       dream!(groups: ["Garage"])
 
@@ -99,6 +108,29 @@ RSpec.describe Buddy::BoardFace do
     it "thinks over a hot chore the board is dreaming of" do
       expect(described_class.showing(board, chore_dream: true)).to eq("thinking")
       expect(described_class.showing(board)).to be_nil
+    end
+  end
+
+  describe "an alert's strength" do
+    def strong_alert!(expression:, strength:)
+      Buddy::Alerts.hold!(
+        user: user, key: "gate-#{SecureRandom.hex(3)}", body: "Gate open",
+        groups: ["Whisper"], expression: expression, strength: strength, conversation: board,
+      )
+    end
+
+    it "gives way to a real mood when raised weaker than one" do
+      strong_alert!(expression: "pounce", strength: 20)
+
+      expect(described_class.for(board)).to eq("happy")
+    end
+
+    it "shows the strongest of several alerts, and beats Whisper's state when raised above it" do
+      strong_alert!(expression: "pounce", strength: 55)
+      strong_alert!(expression: "eager", strength: 80)
+      described_class.record_whisper!(user, { status: "Napping", groups: ["Whisper"] })
+
+      expect(described_class.for(board)).to eq("eager")
     end
   end
 

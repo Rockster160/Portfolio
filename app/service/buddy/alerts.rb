@@ -34,12 +34,15 @@ module Buddy
     # Open one, or tell an open one that it happened again. Returns the
     # BuddyAlert, or nil when there was nothing to say it to - no key, no words,
     # or nobody with a companion thread to put it in.
-    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil)
+    # `strength` is how strongly its face wants the pet (see Buddy::FaceStrength);
+    # blank keeps an alert's usual.
+    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, strength: nil)
       key        = key.to_s.strip
       body       = body.to_s.strip
       groups     = Array(groups).map { |g| g.to_s.strip }.compact_blank
       icon       = icon.to_s.strip.presence
       expression = expression.to_s.strip.presence
+      strength   = strength_meta(strength)
       return nil if key.empty? || body.empty?
 
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
@@ -47,9 +50,9 @@ module Buddy
 
       open = ::BuddyAlert.open_for(user, key)
       if open
-        seen_again!(open, body, groups, icon, expression)
+        seen_again!(open, body, groups, icon, expression, strength)
       else
-        open!(user, conversation, key, body, groups, icon, expression)
+        open!(user, conversation, key, body, groups, icon, expression, strength)
       end
     end
 
@@ -66,7 +69,7 @@ module Buddy
     # `dream:` makes it a want or an idea rather than a condition: the board
     # shows it in the pet's thought bubble instead of its speech bubble, newest
     # first, and its face only shows while the pet is otherwise idle.
-    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, dream: false)
+    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, dream: false, strength: nil)
       key  = key.to_s.strip
       body = body.to_s.strip
       return nil if key.empty? || body.empty?
@@ -77,6 +80,7 @@ module Buddy
       meta["icon"]       = icon.to_s.strip if icon.present?
       meta["expression"] = expression.to_s.strip if expression.present?
       meta["dream"]      = true if dream
+      meta["strength"]   = strength_meta(strength) if strength_meta(strength)
 
       open = ::BuddyAlert.open_for(user, key)
       return open if open && !open.board_only?
@@ -174,6 +178,12 @@ module Buddy
       outstanding(user).map(&:strip_wire)
     end
 
+    # A strength worth storing, or nil for the usual one.
+    def strength_meta(value)
+      number = ::Buddy::FaceStrength.named(value, nil)
+      number && (number % 1).zero? ? number.to_i : number
+    end
+
     def broadcast_outstanding!(user)
       MonitorChannel.broadcast_to(user, {
         id:      :byte,
@@ -184,12 +194,13 @@ module Buddy
       ::Buddy::BoardFace.broadcast!(user)
     end
 
-    def open!(user, conversation, key, body, groups = [], icon = nil, expression = nil)
+    def open!(user, conversation, key, body, groups = [], icon = nil, expression = nil, strength = nil)
       now   = Time.current
       meta  = {}
       meta["groups"]     = groups if groups.present?
       meta["icon"]       = icon if icon.present?
       meta["expression"] = expression if expression.present?
+      meta["strength"]   = strength if strength
       alert = ::BuddyAlert.create!(
         user:              user,
         byte_conversation: conversation,
@@ -217,7 +228,7 @@ module Buddy
     # - a caller that puts a reading in the sentence ("garage open 40 minutes")
     # means the new one - and the count and the clock are what make the bubble
     # say that this is not simply the same moment still on screen.
-    def seen_again!(alert, body, groups = [], icon = nil, expression = nil)
+    def seen_again!(alert, body, groups = [], icon = nil, expression = nil, strength = nil)
       now   = Time.current
       buzz  = alert.push_again?
       attrs = { body: body, raised_count: alert.raised_count + 1, last_raised_at: now }
@@ -228,6 +239,7 @@ module Buddy
       meta  = meta.merge("groups" => groups) if groups.present?
       meta  = meta.merge("icon" => icon) if icon.present?
       meta  = meta.merge("expression" => expression) if expression.present?
+      meta  = meta.merge("strength" => strength) if strength
       attrs[:metadata] = meta unless meta.equal?(alert.metadata)
       alert.update!(attrs)
 

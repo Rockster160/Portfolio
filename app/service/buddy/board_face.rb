@@ -7,9 +7,11 @@ module Buddy
   # wearing it and the index card shows it, instead of both painting the mood
   # until the browser has caught up.
   #
-  # Priority matches the hero's HOLD_PRIORITY: Whisper's state over an alert's.
-  # A dream's face is the weakest of all: it shows only while the pet would
-  # otherwise be resting on its idle face.
+  # Every face that wants the pet carries a strength (Buddy::FaceStrength), the
+  # mood included, and the strongest shows - the same rule as the hero's.
+  # Whisper's state outranks an alert's face by default, an alert's outranks a
+  # real mood, and a dream's shows only over an idle one, unless the alert or
+  # dream was raised with a strength of its own.
   module BoardFace
     module_function
 
@@ -18,21 +20,26 @@ module Buddy
     WHISPER_FACES = { asleep: :sleeping, gone: :hiding }.freeze
     DREAM_FACE = :thinking
 
-    # What the board's pet should show: the held face, else a dream's over an
-    # idle mood, else its mood.
+    # What the board's pet should show: the strongest face wanting it, mood
+    # included.
     def for(board)
       showing(board) || board.buddy_expression
     end
 
+    # The strongest standing condition's face (Whisper's state or an alert's),
+    # whatever the mood.
     def held(board)
-      whisper_face(board) || alert_face(board)
+      held_want(board)&.first
     end
 
-    # The held face, or a dream's when nothing is held and the mood is idle.
+    # The face that beats the mood, or nil when the mood is the strongest.
     # `chore_dream` is a hot chore the board itself is dreaming of (see
     # Buddy::BoardDream), which only the board's own page knows.
     def showing(board, chore_dream: false)
-      held(board) || (idle?(board.buddy_expression) ? dream_face(board, chore_dream:) : nil)
+      top = [held_want(board), dream_want(board, chore_dream:)].compact.max_by(&:last)
+      return nil if top.nil? || top.last < Buddy::FaceStrength.mood(board.buddy_expression)
+
+      top.first
     end
 
     def idle?(expression)
@@ -42,10 +49,30 @@ module Buddy
     # The face of the dream this board shows: the newest one aimed at it, else
     # thinking over a hot chore it is dreaming of.
     def dream_face(board, chore_dream: false)
-      dream = Buddy::Alerts.dreams(board.user).find { |a| overlap?(a.groups, board.chore_tags) }
-      return dream.expression || DREAM_FACE.to_s if dream
+      dream_want(board, chore_dream:)&.first
+    end
 
-      DREAM_FACE.to_s if chore_dream
+    # [face, strength] for Whisper's state or the strongest alert naming a face.
+    # Whisper wins a tie: it's the board's own subject.
+    def held_want(board)
+      whisper = whisper_face(board)
+      wants = whisper ? [[whisper, Buddy::FaceStrength::WHISPER]] : []
+      aimed_alerts(board).each { |alert|
+        wants << [alert.expression, alert.strength] if !alert.dream? && alert.expression.present?
+      }
+      wants.max_by.with_index { |(_, strength), i| [strength, -i] }
+    end
+
+    # [face, strength] for the dream the board shows.
+    def dream_want(board, chore_dream: false)
+      dream = Buddy::Alerts.dreams(board.user).find { |a| overlap?(a.groups, board.chore_tags) }
+      return [dream.expression || DREAM_FACE.to_s, dream.strength] if dream
+
+      [DREAM_FACE.to_s, Buddy::FaceStrength::DREAM] if chore_dream
+    end
+
+    def aimed_alerts(board)
+      Buddy::Alerts.outstanding(board.user).select { |a| overlap?(a.groups, board.chore_tags) }
     end
 
     # Whisper's state as this board should wear it, or nil when the feed isn't
@@ -60,15 +87,6 @@ module Buddy
 
     def whisper_face(board)
       WHISPER_FACES[whisper_state(board)]&.to_s
-    end
-
-    # The first standing alert aimed at this board that names a face — the one
-    # the board's bubble opens on.
-    def alert_face(board)
-      alert = Buddy::Alerts.outstanding(board.user).find { |a|
-        !a.dream? && a.expression.present? && overlap?(a.groups, board.chore_tags)
-      }
-      alert&.expression
     end
 
     # Mirrors whisperState in buddy/durations.js — the status is the sentence the
@@ -103,11 +121,15 @@ module Buddy
     # The index cards follow this; the board itself works it out live.
     def broadcast!(owner)
       ::ByteConversation.active.buddy.board.where(user_id: owner.id).find_each do |board|
-        data = {
+        held  = held_want(board)
+        dream = dream_want(board)
+        data  = {
           kind:            :board_face,
           conversation_id: board.id,
-          expression:      held(board),
-          dream:           dream_face(board),
+          expression:      held&.first,
+          strength:        held&.last,
+          dream:           dream&.first,
+          dream_strength:  dream&.last,
         }
         viewers = board.shared? ? owner.chore_household_user_ids : [owner.id]
         ::User.where(id: viewers).find_each do |viewer|

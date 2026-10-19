@@ -17,7 +17,7 @@
 // about to pick. Buddy::BoardDream makes the same draw in Ruby; the two must
 // stay identical (spec/javascript/board_dream_spec.rb).
 
-import { HOLD_PRIORITY } from "./hero.js";
+import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
 import { groupsOverlap } from "./board_scope.js";
 
 export const SLOT_MS = 30 * 60 * 1000;
@@ -98,13 +98,13 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
 
   // Redrawn only when what it says changed: a resync every household tap must
   // not rebuild the bubble under the person reading it.
-  function show(key, build, face) {
+  function show(key, build, face, strength = FACE_STRENGTH.dream) {
     if (shown === key) return;
     shown = key;
     bubble.textContent = "";
     build();
     bubble.hidden = false;
-    hero?.holdExpression?.(DREAM_HOLD, face || DREAM_FACE, HOLD_PRIORITY.dream, { soft: true });
+    hero?.holdExpression?.(DREAM_HOLD, face || DREAM_FACE, strength);
   }
 
   function line(text) {
@@ -117,7 +117,7 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
   function render() {
     const dream = newestDream(alerts, watched);
     if (dream) {
-      return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${dream.expression || ""}`, () => {
+      return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${dream.expression || ""}:${dream.strength || ""}`, () => {
         if (dream.icon) {
           const icon = document.createElement("span");
           icon.className = "byte-board-dream-icon";
@@ -125,7 +125,7 @@ export function initBoardDream({ bubble, hero, tags, boardIdFn, iconFor, choreDr
           bubble.appendChild(icon);
         }
         bubble.appendChild(line(dream.body));
-      }, dream.expression);
+      }, dream.expression, strengthOr(dream.strength, FACE_STRENGTH.dream));
     }
 
     // Hot-chore dreams can be switched off per board; Jil's still show.

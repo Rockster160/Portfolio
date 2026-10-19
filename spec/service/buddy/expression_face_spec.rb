@@ -137,8 +137,8 @@ RSpec.describe Buddy::ExpressionState do
     # so it keeps its own pose.
     it "borrows a thinking stand-in only when a pet lacks its own" do
       expect(Buddy::Faces.thinking(:byte)).to eq(:thinking)        # has face_thinking.png
-      expect(Buddy::Faces.thinking(:cobalt)).not_to eq(:thinking)  # has none → stand-in
-      expect(Buddy::Faces.thinking(:cobalt)).not_to eq(:neutral)   # and not its resting face
+      expect(Buddy::Faces.thinking(:gizmo)).not_to eq(:thinking)  # has none → stand-in
+      expect(Buddy::Faces.thinking(:gizmo)).not_to eq(:neutral)   # and not its resting face
     end
 
     # Asking a pet for a face it was never drawn with lands on the nearest one it

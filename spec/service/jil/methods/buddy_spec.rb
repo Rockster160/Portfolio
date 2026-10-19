@@ -467,7 +467,9 @@ RSpec.describe Jil::Methods::Buddy do
 
       it "gives everyone in the house their own bubble under the same key" do
         ctx = run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("house")::String
+          })::Boolean
         JIL
 
         expect(ctx.ctx[:vars][:opened][:value]).to be(true)
@@ -480,7 +482,9 @@ RSpec.describe Jil::Methods::Buddy do
       # something already dealt with.
       it "clears every one of them at once" do
         ctx = run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("house")::String
+          })::Boolean
           closed = Buddy.resolve("laundry-gate", "Laundry gate is shut", "house")::Boolean
         JIL
 
@@ -500,7 +504,10 @@ RSpec.describe Jil::Methods::Buddy do
         outsider.byte_conversations.create!(mode: :buddy, name: "Glimmer")
 
         run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "me, chelsea")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("me")::String
+            openedChelsea = Keyword.who("Chelsea")::String
+          })::Boolean
         JIL
 
         expect(BuddyAlert.open_for(owner, "laundry-gate")).to be_present
@@ -510,7 +517,9 @@ RSpec.describe Jil::Methods::Buddy do
 
       it "reaches one person by name" do
         run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "chelsea")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("chelsea")::String
+          })::Boolean
         JIL
 
         expect(BuddyAlert.open_for(housemate, "laundry-gate")).to be_present
@@ -521,7 +530,9 @@ RSpec.describe Jil::Methods::Buddy do
       # matches nobody is a false rather than a fallback onto the owner.
       it "reaches nobody at all for a name nobody goes by" do
         ctx = run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "nigel")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("nigel")::String
+          })::Boolean
         JIL
 
         expect(ctx.ctx[:vars][:opened][:value]).to be(false)
@@ -535,7 +546,9 @@ RSpec.describe Jil::Methods::Buddy do
         share_chore_household!(owner, outsider)
 
         run(<<~'JIL')
-          opened = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          opened = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            openedWho = Keyword.who("house")::String
+          })::Boolean
         JIL
 
         expect(BuddyAlert.open_for(outsider, "laundry-gate")).to be_nil
@@ -552,7 +565,9 @@ RSpec.describe Jil::Methods::Buddy do
 
       it "validates with the audience given" do
         code = <<~'JIL'
-          a1 = Buddy.alert("laundry-gate", "The laundry gate is open", "house")::Boolean
+          a1 = Buddy.alert("laundry-gate", "The laundry gate is open", {
+            a1Who = Keyword.who("house")::String
+          })::Boolean
           a2 = Buddy.resolve("laundry-gate", "Laundry gate is shut", "house")::Boolean
         JIL
 
@@ -645,8 +660,15 @@ RSpec.describe Jil::Methods::Buddy do
     it "starts a timer on a named board, or on any board watching its groups" do
       board = owner.byte_conversations.create!(mode: :buddy, name: "Kitchen", metadata: { "board" => true })
       code = <<~JIL
-        a = Buddy.timer(10, "minutes", "Pasta", "Kitchen", "")::Boolean
-        b = Buddy.timer(5, "minutes", "Tea", "", "Home, Whisper")::Boolean
+        a = Buddy.timer(10, "minutes", {
+          aLabel = Keyword.label("Pasta")::String
+          aBoard = Keyword.board("Kitchen")::String
+        })::Boolean
+        b = Buddy.timer(5, "minutes", {
+          bLabel = Keyword.label("Tea")::String
+          bHome = Keyword.groups("Home")::String
+          bWhisper = Keyword.groups("Whisper")::String
+        })::Boolean
       JIL
       Sidekiq::Testing.fake! { Jil::Executor.call(owner, code) }
 
@@ -661,10 +683,43 @@ RSpec.describe Jil::Methods::Buddy do
       expect {
         Jil::Validator.validate!(
           <<~JIL,
-            a = Buddy.timer(10, "minutes", "Pasta", "Kitchen", "Home")::Boolean
+            a = Buddy.timer(10, "minutes", {
+              aLabel = Keyword.label("Pasta")::String
+              aGroups = Keyword.groups("Home")::String
+            })::Boolean
           JIL
         )
       }.not_to raise_error
+    end
+
+    it "takes its optional settings as a block, strength included, and leaves out what it does not use" do
+      Jil::Validator.validate!(
+        <<~JIL,
+          a = Buddy.dream("food", "Foodies!", {
+            aGroups = Keyword.groups("Whisper")::String
+            aFace = Keyword.face("eager")::String
+            aStrength = Keyword.strength(45)::Numeric
+          })::Boolean
+          b = Buddy.boardAlert("gate", "Gate open", {
+            bGroups = Keyword.groups("Whisper")::String
+            bFace = Keyword.face("pounce")::String
+          })::Boolean
+        JIL
+      )
+      run(<<~JIL)
+        a = Buddy.dream("food", "Foodies!", {
+          aGroups = Keyword.groups("Whisper")::String
+          aFace = Keyword.face("eager")::String
+          aStrength = Keyword.strength(45)::Numeric
+        })::Boolean
+        b = Buddy.boardAlert("gate", "Gate open", {
+          bGroups = Keyword.groups("Whisper")::String
+          bFace = Keyword.face("pounce")::String
+        })::Boolean
+      JIL
+
+      expect(BuddyAlert.open_for(owner, "food").strength).to eq(45)
+      expect(BuddyAlert.open_for(owner, "gate").strength).to eq(Buddy::FaceStrength::ALERT)
     end
   end
 end

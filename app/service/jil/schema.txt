@@ -544,14 +544,14 @@
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean
   #checklist("List" String BR "Message" Text)::Numeric
-  #alert("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String BR "Face" String)::Boolean
-  #boardAlert("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String BR "Face" String)::Boolean
-  #dream("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String BR "Face" String)::Boolean
+  #alert("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String face:[%FACES%] strength:Numeric]))::Boolean
+  #boardAlert("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String face:[%FACES%] strength:Numeric]))::Boolean
+  #dream("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String face:[%FACES%] strength:Numeric]))::Boolean
   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
-  #timer(Numeric ["seconds" "minutes" "hours"] BR "Label" String BR "Board" String BR "Groups" String)::Boolean
+  #timer(Numeric ["seconds" "minutes" "hours"] BR content([label:String board:String groups:String]))::Boolean
 [Interview]@me
   #prep(Numeric:"Agenda Item")::Hash // Starts the pre-interview brief for the interview on that agenda row. Returns at once; the brief arrives on its own.
   #headsUp(Numeric:"Agenda Item")::Hash // Sends the join link for the interview on that agenda row, or a heads-up to watch the phone when it is a call.

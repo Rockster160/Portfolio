@@ -30,17 +30,20 @@
     <div class="byte-board-index-grid" data-board-index
          data-buddy-themes="<%= buddy_themes_json %>">
       <% @boards.each do |b| %>
-        <%# The pet wears what its board's pet is wearing: a held face (Whisper
-            asleep, an alert's look) over the mood, and a dream's face over an
-            idle mood. Both kept on the card so the
-            live script can move either and still paint the right one. %>
-        <% held = Buddy::BoardFace.held(b) %>
+        <%# The pet wears what its board's pet is wearing: the strongest of a
+            held face (Whisper asleep, an alert's look), a dream's face and the
+            mood. Each kept on the card with its strength so the live script
+            can move any of them and still paint the right one. %>
+        <% held = Buddy::BoardFace.held_want(b) %>
+        <% dream = Buddy::BoardFace.dream_want(b) %>
         <div class="byte-board-card-wrap" data-board-card
              data-conversation-id="<%= b.id %>"
              data-buddy-theme="<%= b.buddy_theme %>"
              data-mood-expression="<%= b.buddy_expression %>"
-             data-held-expression="<%= held %>"
-             data-dream-expression="<%= Buddy::BoardFace.dream_face(b) %>">
+             data-held-expression="<%= held&.first %>"
+             data-held-strength="<%= held&.last %>"
+             data-dream-expression="<%= dream&.first %>"
+             data-dream-strength="<%= dream&.last %>">
           <%= link_to byte_board_thread_path(b), class: "byte-board-card" do %>
             <div class="byte-board-card-pet" data-board-card-pet
                  style="background-image: url('<%= buddy_face_url(b.buddy_theme, Buddy::BoardFace.for(b)) %>')"

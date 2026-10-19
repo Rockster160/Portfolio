@@ -13,7 +13,7 @@
 // the board.
 
 import { startAlertFlip, stopAlertFlip } from "./alarm";
-import { HOLD_PRIORITY } from "./hero";
+import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
 import { alertRowText } from "../alert_strip";
 import { groupsOverlap } from "./board_scope";
 
@@ -65,7 +65,7 @@ export function initBoardAlert({ bubble, hero, tags }) {
     // rotation tick — so the face tracks the alert on screen.
     if (alert?.expression) {
       stopAlertFlip({ hero });
-      hero?.holdExpression?.(ALERT_HOLD, alert.expression, HOLD_PRIORITY.alert);
+      hero?.holdExpression?.(ALERT_HOLD, alert.expression, strengthOr(alert.strength, FACE_STRENGTH.alert));
     } else {
       hero?.releaseExpression?.(ALERT_HOLD);
       startAlertFlip({ hero });

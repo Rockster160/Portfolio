@@ -10,6 +10,7 @@
 
 import { Monitor } from "../dashboard/cells/monitor";
 import { faceUrlFor, IDLE_FACE } from "./buddy/face_url";
+import { FACE_STRENGTH, strengthOr } from "./buddy/face_strength";
 
 function boot() {
   const grid = document.querySelector("[data-board-index]");
@@ -33,10 +34,19 @@ function boot() {
     const pet = card.querySelector("[data-board-card-pet]");
     if (!pet) return;
 
-    // Held over everything; a dream's face only over an idle mood.
+    // The strongest of the held face, the dream's and the mood (face_strength.js).
     const mood = card.dataset.moodExpression || IDLE_FACE;
-    const dream = mood === IDLE_FACE ? card.dataset.dreamExpression : "";
-    const expression = card.dataset.heldExpression || dream || mood;
+    let expression = mood;
+    let strength = mood === IDLE_FACE ? FACE_STRENGTH.idle : FACE_STRENGTH.mood;
+    [
+      [card.dataset.dreamExpression, strengthOr(card.dataset.dreamStrength, FACE_STRENGTH.dream)],
+      [card.dataset.heldExpression, strengthOr(card.dataset.heldStrength, FACE_STRENGTH.alert)],
+    ].forEach(([face, want]) => {
+      if (face && want >= strength) {
+        expression = face;
+        strength = want;
+      }
+    });
     const url = faceUrlFor(themes[card.dataset.buddyTheme], expression);
     if (url) pet.style.backgroundImage = `url('${url}')`;
   };
@@ -56,7 +66,9 @@ function boot() {
         card.dataset.moodExpression = data.expression || "";
       } else if (data.kind === "board_face") {
         card.dataset.heldExpression = data.expression || "";
+        card.dataset.heldStrength = data.strength ?? "";
         card.dataset.dreamExpression = data.dream || "";
+        card.dataset.dreamStrength = data.dream_strength ?? "";
       } else {
         return;
       }

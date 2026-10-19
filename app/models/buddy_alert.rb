@@ -101,6 +101,7 @@ class BuddyAlert < ApplicationRecord
       "groups"          => groups,
       "icon"            => icon,
       "expression"      => expression,
+      "strength"        => strength,
       "board_only"      => board_only?,
       "dream"           => dream?,
       "last_raised_at"  => last_raised_at&.iso8601,
@@ -140,6 +141,13 @@ class BuddyAlert < ApplicationRecord
   # as before — only an alert that names a mood takes the face over.
   def expression
     metadata["expression"].to_s.strip.presence
+  end
+
+  # How strongly its face wants the pet (see Buddy::FaceStrength): what it was
+  # raised with, else a dream's or an alert's usual.
+  def strength
+    fallback = dream? ? ::Buddy::FaceStrength::DREAM : ::Buddy::FaceStrength::ALERT
+    ::Buddy::FaceStrength.named(metadata["strength"], fallback)
   end
 
   # When it last buzzed. Held in metadata rather than a column of its own: it is

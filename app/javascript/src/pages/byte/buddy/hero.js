@@ -13,17 +13,15 @@
 // happy either way, and the actions-menu runner imports it unbundled.
 import { quickOrder, NO_ROUTINES } from "./routine_order.js";
 import { IDLE_FACE } from "./face_url.js";
+import { FACE_STRENGTH } from "./face_strength.js";
 
 const ROUTINES_URL = "/buddy/routines";
 
-// Who wins when several standing states want the face at once (see
-// `holdExpression`). Asleep outranks everything — a capped/unreachable Byte is
-// out cold whatever else is true; the Whisper's own state is next; a board
-// alert's "up to no good" face sits under both, so an open gate shows only
-// while the pet is actually awake to look guilty about it. A dream is the
-// weakest: its face is SOFT (see holdExpression), showing only while nothing
-// else is held and the pet is resting on its idle face.
-export const HOLD_PRIORITY = { sleep: 30, whisper: 20, alert: 10, dream: 0 };
+// Who wins when several things want the face at once is a matter of strength
+// (see face_strength.js): asleep over Whisper's state over an alert's face over
+// a real mood over a dream's face over an idle mood, unless an alert or dream
+// was raised with a strength of its own.
+export { FACE_STRENGTH } from "./face_strength.js";
 
 function csrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
@@ -121,28 +119,21 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   //      the mood beneath it.
   let restingExpression = hero.dataset.buddyAwakeExpression || "neutral";
 
-  // key → { expression, priority, soft }. Highest priority showing; a later
-  // hold at equal priority wins the tie (Map keeps insertion order). Empty = no
-  // state stands and the mood shows.
+  // key → { expression, strength }. The strongest showing; a later hold at
+  // equal strength wins the tie (Map keeps insertion order). Empty = no state
+  // stands and the mood shows.
   const holds = new Map();
 
-  const topHold = (soft) => {
+  // What SHOULD show when nothing transient is over it: the strongest hold, if
+  // it is at least as strong as the mood, else the mood. A resting mood wants
+  // nothing, so even a dream's face beats it; a real one beats a dream.
+  const effectiveExpression = () => {
     let best = null;
     holds.forEach((h) => {
-      if (h.soft !== soft) return;
-      if (!best || h.priority >= best.priority) best = h;
+      if (!best || h.strength >= best.strength) best = h;
     });
-    return best;
-  };
-
-  // What SHOULD show when nothing transient is over it: the strongest standing
-  // state, else a soft one (a dream's) while the mood is only idle, else the
-  // resting mood. Any real mood beats a soft hold.
-  const effectiveExpression = () => {
-    const hard = topHold(false);
-    if (hard) return hard.expression;
-    const soft = restingExpression === IDLE_FACE ? topHold(true) : null;
-    return soft?.expression || restingExpression;
+    const mood = restingExpression === IDLE_FACE ? FACE_STRENGTH.idle : FACE_STRENGTH.mood;
+    return best && best.strength >= mood ? best.expression : restingExpression;
   };
 
   const paint = (expression) => {
@@ -174,16 +165,13 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     paint(expression);
   };
 
-  // Raise a standing state the pet must wear until it's cleared — asleep, the
-  // Whisper hiding, a board alert's held face. `key` names the condition so it
-  // can be lifted again; `priority` decides who wins when several stand at once
-  // (sleep over an open gate, say). Re-raising the same key updates it.
-  //
-  // `soft` is a face that yields to everything: it shows only while no other
-  // state is held and the mood is idle (a dream's thinking face).
-  const holdExpression = (key, expression, priority = 0, { soft = false } = {}) => {
+  // Raise a face the pet wears until it's cleared — asleep, the Whisper hiding,
+  // a board alert's look, a dream's. `key` names it so it can be lifted again;
+  // `strength` decides who wins against the other holds and the mood (see
+  // FACE_STRENGTH). Re-raising the same key updates it.
+  const holdExpression = (key, expression, strength = FACE_STRENGTH.alert) => {
     if (!key || !expression) return;
-    holds.set(String(key), { expression: String(expression), priority, soft });
+    holds.set(String(key), { expression: String(expression), strength: Number(strength) });
     paint(effectiveExpression());
   };
 

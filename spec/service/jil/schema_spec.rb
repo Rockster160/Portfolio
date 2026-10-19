@@ -82,5 +82,31 @@ RSpec.describe Jil::Schema do
       expect(described_class.for(other)).to eq("[Thing]\n  #open()::Any\n")
       expect(described_class.for(owner)).to include("#secret()::Any")
     end
+
+  # A Buddy alert's `who` and `face` are dropdowns of what's actually there for
+  # the person writing the task, so nobody has to guess what to type.
+  describe "the Buddy alert settings" do
+    def alert_line(user)
+      described_class.for(user).lines.find { |line| line.include?("#alert(") }
+    end
+
+    it "offers me, everyone and each household member by name" do
+      housemate = create(:user, username: "Lodger")
+      share_chore_household!(other, housemate)
+
+      who = alert_line(other)[/who:\[([^\]]*)\]/, 1]
+      expect(who).to start_with(%("me" "everyone"))
+      expect(who).to include(%("#{other.first_name}"), %("Lodger"))
+    end
+
+    it "offers only me and everyone outside a household" do
+      expect(alert_line(other)).to include(%(who:["me" "everyone"]))
+    end
+
+    it "offers every face a pet knows" do
+      expect(alert_line(other)).to include(%("pounce"), %("eager"), %("hiding"))
+      expect(alert_line(other)).not_to include("%")
+    end
+  end
   end
 end

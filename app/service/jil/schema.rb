@@ -58,7 +58,7 @@ class Jil::Schema
   def text
     in_visible_class = true
 
-    File.readlines(PATH).filter_map { |line|
+    File.readlines(PATH).map { |line| fill(line) }.filter_map { |line|
       classname = line[CLASS_LINE, 1]
 
       if classname.present?
@@ -74,6 +74,25 @@ class Jil::Schema
   end
 
   private
+
+  # Dropdowns whose choices depend on who is looking: `%WHO%` is who a Buddy
+  # alert can be for - themselves, everyone, or a household member by name -
+  # and `%FACES%` every face a pet knows.
+  def fill(line)
+    return line unless line.include?("%")
+
+    line.gsub("%WHO%") { quoted(who_choices) }.gsub("%FACES%") { quoted(Buddy::Faces.known_names.sort) }
+  end
+
+  def who_choices
+    house = @user&.chore_household
+    names = house ? house.members.order(:id).map(&:first_name) : []
+    ["me", "everyone", *names]
+  end
+
+  def quoted(names)
+    names.map { |name| "\"#{name}\"" }.join(" ")
+  end
 
   # An unrecognized gate name fails CLOSED, so a typo hides a class from
   # everyone rather than quietly showing a restricted one to the household.

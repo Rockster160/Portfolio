@@ -72,7 +72,7 @@ import {
   repaintInlineIcons,
 } from "../../icon_picker";
 import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
-import { initBuddyHero, HOLD_PRIORITY } from "./buddy/hero";
+import { initBuddyHero, FACE_STRENGTH } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBoardDurations } from "./buddy/durations";
 import { initBuddyProcesses } from "./buddy/processes";
@@ -2438,9 +2438,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // clears. (A pet with no art for one falls back to neutral in the hero.) Any
     // other state is no face override, so the pet's own mood shows.
     if (state === "asleep")
-      buddyHero?.holdExpression?.("whisper", "sleeping", HOLD_PRIORITY.whisper);
+      buddyHero?.holdExpression?.("whisper", "sleeping", FACE_STRENGTH.whisper);
     else if (state === "gone")
-      buddyHero?.holdExpression?.("whisper", "hiding", HOLD_PRIORITY.whisper);
+      buddyHero?.holdExpression?.("whisper", "hiding", FACE_STRENGTH.whisper);
     else buddyHero?.releaseExpression?.("whisper");
   }
 
@@ -2853,7 +2853,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // fails (Mac unreachable) doesn't leave Byte stuck mid-thought. The stored
   // mood lives in buddyWakeExpr and under the hold, restored on wake.
   const buddySleep = () =>
-    buddyHero?.holdExpression?.("sleep", "sleeping", HOLD_PRIORITY.sleep);
+    buddyHero?.holdExpression?.("sleep", "sleeping", FACE_STRENGTH.sleep);
   armIdleFaceReset(); // start the idle clock on load
 
   // ---------- sleeping chip + queue-while-asleep ----------

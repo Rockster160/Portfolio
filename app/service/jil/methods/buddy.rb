@@ -3,6 +3,20 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     @jil.cast(value, :String)
   end
 
+  # Methods whose last argument is a block of named settings - `who`, `face` -
+  # one line each, written as `Keyword.who("me")` and shown as just "who".
+  NAMED_SETTINGS = %i[alert boardAlert dream timer].freeze
+  # Settings a block may give more than once, each line adding to the list.
+  LISTED_SETTINGS = %i[who groups].freeze
+
+  def execute(line)
+    return fallback(line) unless NAMED_SETTINGS.include?(line.methodname.to_sym)
+
+    args = Array.wrap(line.args)
+    block = args.last.is_a?(::Array) ? args.pop : nil
+    send(line.methodname, *evalargs(args), named_settings(block))
+  end
+
   # [Buddy]
   #   #say(Text)::Boolean
   #   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
@@ -101,67 +115,42 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # coupling between the thing that NOTICES and the thing that CLEARS, which are
   # rarely the same sensor or even the same day.
   #
-  # `who` is who it is FOR, and blank is whoever's task this is - nearly always
-  # right, since a condition is usually noticed by somebody's own automation.
-  # A name reaches that person instead; "house" reaches everyone. See
-  # `recipients_for`.
-  #
   # Returns false when it reached nobody - no key, no words, no companion thread
   # yet, or a name nobody in the house goes by - so a task can tell that from a
   # message that landed.
-  # `groups` aims it at a board: a board shows an alert only when these overlap
-  # the groups it watches, the same "any of these" match chores use. Blank means
-  # it belongs to no board and stands in the chat strip alone. A comma string
-  # ("Whisper, Puppy") or an array; split like the chore tag field.
-  # `icon` is an optional glyph (an emoji like "🍖") the BOARD shows in place of
-  # the sentence, read from across the room where words can't be; the chat strip
-  # keeps the words. Blank means text everywhere, as before.
-  # `expression` is a FACE the board's pet holds while the condition stands — the
-  # laundry gate's "up to no good" look. It's a pet expression name (e.g.
-  # "playful"), resolved against each pet's own art, so a theme with no such face
-  # shows neutral rather than nothing. Blank keeps the generic alarm shuffle.
-  def alert(key, message, who=nil, groups=nil, icon=nil, expression=nil)
-    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
-    groups = groups.map(&:strip).compact_blank
-    delivered = recipients_for(who).count { |user|
-      ::Buddy::Alerts.raise!(
-        user: user, key: key, body: message,
-        groups: groups, icon: icon, expression: expression
-      ).present?
+  #
+  # Everything else is optional, one named line each in its block (see
+  # `alert_options`).
+  def alert(key, message, options=nil)
+    opts = alert_options(options)
+    delivered = recipients_for(opts[:who]).count { |user|
+      ::Buddy::Alerts.raise!(user: user, key: key, body: message, **opts.except(:who)).present?
     }
     delivered.positive?
   end
 
-  # The same condition as `alert`, shown ONLY on the boards `groups` aims it at:
+  # The same condition as `alert`, shown ONLY on the boards its groups aim it at:
   # the pet's bubble and the face it holds, with no message in the thread, no
   # push and nothing in the chat strip. Re-asserting it while it stands changes
   # nothing, so a task can call it on every pass. Cleared with `resolve`. Use a
   # key of its own - one an `alert` also uses stays that alert.
-  def boardAlert(key, message, who=nil, groups=nil, icon=nil, expression=nil)
-    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
-    groups = groups.map(&:strip).compact_blank
-    held = recipients_for(who).count { |user|
-      ::Buddy::Alerts.hold!(
-        user: user, key: key, body: message,
-        groups: groups, icon: icon, expression: expression
-      ).present?
+  def boardAlert(key, message, options=nil)
+    opts = alert_options(options)
+    held = recipients_for(opts[:who]).count { |user|
+      ::Buddy::Alerts.hold!(user: user, key: key, body: message, **opts.except(:who)).present?
     }
     held.positive?
   end
 
-  # A want or an idea, shown in the thought bubble of the boards `groups` aims
+  # A want or an idea, shown in the thought bubble of the boards its groups aim
   # it at - Whisper wanting food, something worth doing today. Board-only like
   # `boardAlert`: nothing in the thread, no push. The newest one sent is the one
-  # a board shows, and the pet wears `expression` (thinking when blank) only
-  # while it has no other face to show. Cleared with `resolve`.
-  def dream(key, message, who=nil, groups=nil, icon=nil, expression=nil)
-    groups = groups.is_a?(::Array) ? groups : groups.to_s.split(",")
-    groups = groups.map(&:strip).compact_blank
-    held = recipients_for(who).count { |user|
-      ::Buddy::Alerts.hold!(
-        user: user, key: key, body: message,
-        groups: groups, icon: icon, expression: expression, dream: true
-      ).present?
+  # a board shows, and the pet wears its face (thinking when blank) only while
+  # nothing stronger wants the pet. Cleared with `resolve`.
+  def dream(key, message, options=nil)
+    opts = alert_options(options)
+    held = recipients_for(opts[:who]).count { |user|
+      ::Buddy::Alerts.hold!(user: user, key: key, body: message, dream: true, **opts.except(:who)).present?
     }
     held.positive?
   end
@@ -265,21 +254,24 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     ).present?
   end
 
-  # A countdown on the hero, placed on boards: `board` names one (a shared one of
-  # the household's counts), `groups` reaches every board watching one of them,
-  # and a task run from a board's button lands on that board when neither is
-  # given. Rings like any other Buddy timer. Returns false for a length under a
-  # second; raises when the board named isn't one this account can reach.
-  def timer(number, interval, label=nil, board=nil, groups=nil)
+  # A countdown on the hero. Everything but the length is optional, one named
+  # line each in its block: `label`, `board` (one this account can reach, a
+  # household member's shared board included) and `groups` (every board watching
+  # one of them). A task run from a board's button lands on that board when
+  # neither is given. Rings like any other Buddy timer. Returns false for a
+  # length under a second; raises when the board named isn't one it can reach.
+  def timer(number, interval, options=nil)
     seconds = duration_seconds(number, interval)
     return false if seconds < 1
 
-    named = (::Buddy::Timers.find_board!(recipient, board).id if board.to_s.strip.present?)
+    opts  = options.to_h
+    board = opts[:board].to_s.strip
+    named = (::Buddy::Timers.find_board!(recipient, board).id if board.present?)
     ::Buddy::Timers.create!(
       user:    recipient,
       seconds: seconds,
-      label:   label.to_s.strip.presence,
-      place:   ::Buddy::Timers.placement(nil, board_id: named || pressed_board_id, groups: groups),
+      label:   opts[:label].to_s.strip.presence,
+      place:   ::Buddy::Timers.placement(nil, board_id: named || pressed_board_id, groups: Array(opts[:groups]).join(",")),
     ).present?
   end
 
@@ -302,6 +294,52 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   end
 
   private
+
+  # The settings block, one named line each:
+  #
+  # `who` is who it is FOR, one line per person: "me" (whoever's task this
+  # is, and the default), "everyone" in the household, or a member by name.
+  # The editor offers exactly those (Jil::Schema fills them in). See
+  # `recipients_for`.
+  # `groups` aims it at a board: a board shows it only when these overlap the
+  # groups it watches, the same "any of these" match chores use. Blank means it
+  # belongs to no board and stands in the chat strip alone. One line per group,
+  # or a comma string ("Whisper, Puppy").
+  # `icon` is an optional glyph (an emoji like "🍖") the BOARD shows in place of
+  # the sentence, read from across the room where words can't be; the chat strip
+  # keeps the words.
+  # `face` is the expression the board's pet holds while it stands - the laundry
+  # gate's "up to no good" look - resolved against each pet's own art. Blank
+  # keeps the generic alarm shuffle (a dream thinks).
+  # `strength` is how strongly that face wants the pet, on Buddy::FaceStrength's
+  # 1-100 scale: the strongest face standing shows. Blank keeps the usual - an
+  # alert's sits over a mood, a dream's only over an idle one.
+  def alert_options(options)
+    opts = options.to_h
+    {
+      who:        Array(opts[:who]).join(","),
+      groups:     Array(opts[:groups]).flat_map { |g| g.to_s.split(",") }.map(&:strip).compact_blank,
+      icon:       opts[:icon],
+      expression: opts[:face],
+      strength:   opts[:strength],
+    }
+  end
+
+  # `{ who: ["me", "Chelsea"], face: "eager" }` from the block's named lines.
+  # Anything that isn't a named line is ignored rather than guessed at.
+  def named_settings(block)
+    Array.wrap(block).flatten.each_with_object({}) { |parser, settings|
+      next unless parser.is_a?(::Jil::Parser) && parser.objname == :Keyword
+      next if parser.commented? || parser.inline_comment?
+
+      name = parser.methodname.to_s
+      next unless name.match?(/\A[a-z_]/)
+
+      value = @jil.execute_block(parser)
+      key = name.to_sym
+      settings[key] = LISTED_SETTINGS.include?(key) ? [*settings[key], value] : value
+    }
+  end
 
   def duration_seconds(number, interval)
     unit = ROTATE_UNITS[interval.to_s.downcase.sub(/s?\z/, "s")]
@@ -384,6 +422,12 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     item.agenda.subject_users.where(id: ::ByteConversation.where(mode: :buddy).select(:user_id))
   end
 
+  # The board whose button ran this task, so a timer it starts shows there.
+  def pressed_board_id
+    input = @jil.input_data
+    input.is_a?(::Hash) ? input[:board_id].presence : nil
+  end
+
   # Who the message is actually FOR, which is not always whose task this is.
   #
   # A SHARED task runs as its owner — `@jil.user` is the owner even when
@@ -399,12 +443,6 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #
   # Anything NOT fired through Buddy — cron, a trigger, a `tell:` — has no asker
   # and the owner is the right answer.
-  # The board whose button ran this task, so a timer it starts shows there.
-  def pressed_board_id
-    input = @jil.input_data
-    input.is_a?(::Hash) ? input[:board_id].presence : nil
-  end
-
   def recipient
     execution = @jil.execution
     return @jil.user unless execution&.auth_type.to_s == "buddy"
