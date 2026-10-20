@@ -866,6 +866,25 @@ RSpec.describe "Interview tracker", type: :request do
       expect(note.sentiment).to eq(did_well: 7, liked_them: 9)
     end
 
+    # The sliders post on every save because a range input always does. Editing
+    # the words must not leave a score behind.
+    it "leaves a beat unrated when the sliders were never moved" do
+      job = user.job_applications.create!(company: "Acme")
+      note = job.notes.create!(tag: :interview, body: "Panel with three of them.")
+
+      patch interview_note_path(job, note), params: {
+        job_note: {
+          body:       "Panel with three of them. Two engineers and the manager.",
+          did_well:   JobNote::SENTIMENT_UNRATED,
+          liked_them: JobNote::SENTIMENT_UNRATED,
+        },
+      }
+
+      expect(note.reload.body).to include("Two engineers and the manager")
+      expect(note).not_to be_rated
+      expect(note.sentiment).to eq({})
+    end
+
     # How it went, on the row. Both numbers, because the whole reason there are
     # two of them is that they disagree.
     it "shows what he scored a conversation out of ten" do

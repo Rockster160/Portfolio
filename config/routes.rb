@@ -89,6 +89,12 @@ Rails.application.routes.draw do
   # Task buttons: a board button that RUNS a Jil task on a press (the Whisper
   # fed/quiet/nap/gone controls). See BoardTaskButton.
   post   "/byte/board/tasks/:id/press"   => "byte#press_board_task",     as: :byte_press_board_task
+  # Managing them, from the board's settings: a button is a task attached to it,
+  # plus how it looks until the task's own tile says otherwise.
+  get    "/byte/board/task_buttons"     => "byte#board_task_buttons",       as: :byte_board_task_buttons
+  post   "/byte/board/task_buttons"     => "byte#create_board_task_button"
+  patch  "/byte/board/task_buttons/:id" => "byte#update_board_task_button", as: :byte_board_task_button
+  delete "/byte/board/task_buttons/:id" => "byte#delete_board_task_button"
   post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation

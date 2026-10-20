@@ -90,11 +90,29 @@ RSpec.describe "Chore board presses" do
       expect(result.dig("after_retry", "state")).to eq("dismissed")
     end
 
-    # `findIndex` answers -1 for a press that never failed, and an unguarded
-    # `splice(-1, 1)` drops the LAST remembered press instead of none of them.
-    it "survives a successful press on another chore" do
+    it "is kept while a press on another chore goes out and lands" do
       expect(result["failure_before"]).to eq("true")
       expect(result["failure_survived_other_press"]).to eq("true")
+      expect(result["other_press_landed"]).to be(true)
+    end
+  end
+
+  # Like the Chores page: a press is written down before it is sent, so one
+  # made with no connection shows as done, says it hasn't gone through, and
+  # goes out with the time it was pressed once the server can be reached.
+  describe "a press with no connection" do
+    it "shows as done, with the dot, and keeps it with when it was pressed" do
+      expect(result["offline_press"]).to include("state" => "done", "syncPending" => "true", "sending" => "false")
+      expect(result.dig("offline_press", "kept")).to eq(["complete"])
+      expect(result.dig("offline_press", "pressed_at")).to be(true)
+    end
+
+    it "leaves every circle standing when a refresh can't reach the server" do
+      expect(result["offline_resync_cells"]).to eq(6)
+    end
+
+    it "goes out once the connection is back, and clears the dot" do
+      expect(result["back_online"]).to include("state" => "done", "syncPending" => "false", "server" => 1)
     end
   end
 
@@ -150,6 +168,24 @@ RSpec.describe "Chore board presses" do
     it "takes an empty answer as success" do
       expect(result["task_press"]["requests"]).to eq(["POST /byte/board/tasks/8/press"])
       expect(result["task_press"]["syncPending"]).to eq("false")
+    end
+  end
+
+  # The pad is never emptied and redrawn: a button arriving or leaving moves
+  # cells in and out around the ones already standing.
+  describe "the set changing" do
+    it "adds a new circle in its place and keeps every other node" do
+      expect(result.dig("set_change", "same_node")).to be(true)
+      expect(result.dig("set_change", "keys")).to eq(
+        ["chore:1", "chore:2", "chore:4", "trigger:3", "credit:7", "task:9", "task:8"],
+      )
+    end
+
+    it "takes one out the same way" do
+      expect(result.dig("set_change", "after_removal")).to eq(
+        ["chore:1", "chore:2", "chore:4", "trigger:3", "credit:7", "task:8"],
+      )
+      expect(result.dig("set_change", "same_node_after_removal")).to be(true)
     end
   end
 end

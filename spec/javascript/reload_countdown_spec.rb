@@ -39,4 +39,23 @@ RSpec.describe "Wall screen reload countdown" do
     expect(result["one_short_reloads"]).to eq(0)
     expect(result["at_zero_reloads"]).to eq(1)
   end
+
+  it "takes each new build once, and never goes back to one it has already run" do
+    expect(result.values_at("update_first", "update_again")).to eq([true, false])
+    expect(result["update_back_to_old"]).to be(false)
+    expect(result["update_same"]).to be(false)
+    expect(result["update_next"]).to be(true)
+    expect(result["update_unknown"]).to be(false)
+  end
+
+  it "says it's updating once it reaches zero, instead of sitting on 1" do
+    expect(result["one_short_text"]).to eq("1")
+    expect(result["at_zero_text"]).to eq("Updating…")
+    expect(result["at_zero_reloading"]).to eq("true")
+    expect(result["touched_while_reloading"]).to eq("Updating…")
+  end
+
+  it "tries the reload again when it doesn't land" do
+    expect(result["after_stall_reloads"]).to eq(result["at_zero_reloads"] + 1)
+  end
 end

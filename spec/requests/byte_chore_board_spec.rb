@@ -342,6 +342,22 @@ RSpec.describe "Byte chore board", type: :request do
       expect(completion.recorded_by_user_id).to eq(user.id)
     end
 
+    # A board sends presses from its offline queue: one made without a
+    # connection arrives late with the time it happened, and one whose answer
+    # was lost arrives again with the same mutation id.
+    it "credits a late press at the time it was pressed, and a replayed one once" do
+      btn = credit_button!
+      pressed = 2.hours.ago.change(usec: 0)
+      press = -> {
+        post "/byte/board/buttons/#{btn.id}/press",
+          params: { client_completed_at: pressed.iso8601, client_mutation_id: "m-credit-1" }
+      }
+
+      expect { press.call }.to change { ChoreCompletion.where(chore: chore, user: housemate).count }.by(1)
+      expect { press.call }.not_to change(ChoreCompletion, :count)
+      expect(ChoreCompletion.where(chore: chore, user: housemate).last.completed_at).to eq(pressed)
+    end
+
     # The whole constraint: a board is only ever a board. Pressing a credit
     # button on one thread must not touch which Buddy is the person's primary.
     it "a press leaves the primary Buddy untouched" do
@@ -788,6 +804,58 @@ RSpec.describe "Byte chore board", type: :request do
       expect(Jil::Executor).to have_received(:async_call).with(
         user, task.code, { "execute" => true, "board_id" => thread.id }, anything
       )
+    end
+
+    describe "managing them" do
+      before {
+        thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"]))
+        allow(MonitorChannel).to receive(:broadcast_to)
+      }
+
+      it "lists a group's buttons and the tasks one can run, leaving out functions" do
+        Task.create!(user: user, name: "Ask a thing", listener: "function(name:String)", code: "// noop")
+
+        get "/byte/board/task_buttons", params: { tags: "Whisper" }
+
+        body = response.parsed_body
+        expect(body["buttons"].pluck("label")).to eq(["Fed"])
+        expect(body["buttons"].first).to include("task_name" => "Whisper Fed", "monitor" => "whisper-btn-fed")
+        expect(body["tasks"].pluck("name")).to include("Whisper Fed")
+        expect(body["tasks"].pluck("name")).not_to include("Ask a thing")
+      end
+
+      it "makes one from a task, named after it until given a name, and answers with its circle" do
+        other = Task.create!(user: user, name: "Quiet mode", listener: "monitor::whisper-btn-quiet", code: "// noop")
+
+        post "/byte/board/task_buttons",
+          params: { conversation_id: thread.id, button: { task_id: other.id, label: "", icon: "🤫", tags_csv: "Whisper" } },
+          as: :json
+
+        expect(response).to have_http_status(:created)
+        body = response.parsed_body
+        expect(body.dig("button", "label")).to eq("Quiet mode")
+        expect(body["item"]).to include("kind" => "task", "short_name" => "Quiet mode", "monitor" => "whisper-btn-quiet")
+        expect(MonitorChannel).to have_received(:broadcast_to).with(
+          user, hash_including(data: hash_including(kind: :conversation)),
+        )
+      end
+
+      it "won't attach a task the person can't run" do
+        theirs = Task.create!(user: create(:user), name: "Theirs", listener: "tell:x", code: "// noop")
+
+        post "/byte/board/task_buttons", params: { button: { task_id: theirs.id, tags_csv: "Whisper" } }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "changes and removes one" do
+        patch "/byte/board/task_buttons/#{button.id}", params: { button: { label: "Fed her", color: "#000000" } }, as: :json
+        expect(button.reload).to have_attributes(label: "Fed her", color: "#000000", task_id: task.id)
+
+        delete "/byte/board/task_buttons/#{button.id}"
+        expect(response).to have_http_status(:no_content)
+        expect(BoardTaskButton.exists?(button.id)).to be(false)
+      end
     end
 
     it "404s pressing someone else's button" do

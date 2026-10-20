@@ -31,6 +31,13 @@ globalThis.setInterval = (fn) => {
 globalThis.clearInterval = () => {
   tickFn = null;
 };
+// The stall retry, cranked by hand like the ticks.
+let stallFn = null;
+globalThis.setTimeout = (fn) => {
+  stallFn = fn;
+  return 2;
+};
+globalThis.clearTimeout = () => {};
 
 function fakeEl() {
   const handlers = {};
@@ -53,7 +60,7 @@ const parts = {
 };
 const el = { ...fakeEl(), querySelector: (sel) => parts[sel] };
 
-const { initReloadCountdown, COUNTDOWN_S } = await import(
+const { initReloadCountdown, COUNTDOWN_S, updateWanted } = await import(
   "../../app/javascript/src/pages/byte/reload_countdown.js"
 );
 
@@ -114,7 +121,29 @@ out.next_deploy_reloads = laterReloads;
 parts["[data-reload-pause]"].click();
 tick(COUNTDOWN_S - 1);
 out.one_short_reloads = reloads;
+out.one_short_text = count();
 tick(1);
+await Promise.resolve();
 out.at_zero_reloads = reloads;
+out.at_zero_text = count();
+out.at_zero_reloading = el.dataset.reloading;
+// A touch while it's reloading doesn't put it back to counting.
+touch();
+out.touched_while_reloading = count();
+// The reload never landed: it goes again.
+stallFn?.();
+await Promise.resolve();
+out.after_stall_reloads = reloads;
+
+// Which updates a tab takes: one it has never had, once. The deploy that
+// served old and new pages alternately had a page on B hear A as an update.
+delete session["byte.versionsSeen"];
+out.update_first = updateWanted("B", "A");
+out.update_again = updateWanted("B", "A");
+// Now running B, the old build answering again is not an update.
+out.update_back_to_old = updateWanted("A", "B");
+out.update_same = updateWanted("B", "B");
+out.update_next = updateWanted("C", "B");
+out.update_unknown = updateWanted(undefined, "B");
 
 console.log(JSON.stringify(out));

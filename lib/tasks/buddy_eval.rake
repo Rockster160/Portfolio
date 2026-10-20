@@ -1596,21 +1596,23 @@ BUDDY_EDGE_PROBES = [
   # missing - a search can only see rows, so there is nothing to find on the one
   # day the nudge is wanted.
   #
-  # And the key is `chore:`, however the sentence says "agenda". The shower is a
-  # chore schedule; the handful of Shower calendar items were made by hand on
-  # the day. Set as `agenda:shower` the rule was accepted, read back as waiting,
-  # and went a full day without ever having an occurrence to fire on.
+  # And the key is `agenda:` because the sentence says "agenda". The Shower
+  # items are put on the calendar by hand on the days it matters; the Shower
+  # chore comes due far more often, and a rule set on it nudged on days with no
+  # Shower on the agenda at all.
   {
     case:       "prod 8071",
     say:        "Whenever a Shower task comes up on the agenda, if the task isn't marked " \
                 "complete, please send me a message saying \"Time to shower!\"",
     tool:       :schedule_reminder,
     args:       {
-      schedule_reminder: { anchor: /\Achore:shower\b/i, check: /chore_completions/i, check_expect: /missing/i },
+      schedule_reminder: {
+        anchor: /\Aagenda:shower\b/i, check: /agenda_items/i, check_query: /is:complete/i, check_expect: /missing/i,
+      },
     },
-    never_args: { schedule_reminder: { at: /.+/, anchor: /agenda:/i } },
+    never_args: { schedule_reminder: { at: /.+/, anchor: /chore:/i } },
     note:       "set remind_when trigger=agenda (fires on ADD), one-shot, expiring that night; " \
-                "then agenda:shower, which has nothing to resolve to",
+                "later re-set on the Shower chore, which reminded on days with no Shower on the agenda",
   },
   # --- the row is the record, never the thing you did instead ---------------
   # Prod 8170, 14 Oct. "45 minutes before any Interview event, please send me a

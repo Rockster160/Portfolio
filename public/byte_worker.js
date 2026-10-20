@@ -146,7 +146,7 @@ async function refreshAllShells() {
         // shell_updated fire ONLY when a real deploy has landed.
         const newVersion = extractShellVersion(html);
         if (priorVersion && newVersion && priorVersion !== newVersion) {
-          await broadcastToClients({ kind: "shell_updated", path: p });
+          await broadcastToClients({ kind: "shell_updated", path: p, version: newVersion });
         } else {
           await broadcastToClients({ kind: "shell_synced", path: p });
         }
@@ -439,7 +439,7 @@ self.addEventListener("fetch", (evt) => {
             await cache.put(url.pathname, fresh.clone());
             const newVersion = extractShellVersion(html);
             if (priorVersion && newVersion && priorVersion !== newVersion) {
-              await broadcastToClients({ kind: "shell_updated", path: url.pathname });
+              await broadcastToClients({ kind: "shell_updated", path: url.pathname, version: newVersion });
             } else {
               await broadcastToClients({ kind: "shell_synced", path: url.pathname });
             }

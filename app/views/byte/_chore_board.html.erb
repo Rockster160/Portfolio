@@ -134,6 +134,20 @@
       <div class="byte-board-buttons-list" data-board-buttons-list></div>
     </div>
 
+    <%# Task buttons: a circle that runs one of the owner's Jil tasks. Mostly
+        the task it's attached to; its look is what shows until the task's own
+        tile says otherwise. Owner-only, and hidden until the board watches a
+        group, since a button has to belong to one. %>
+    <% if @board_owned %>
+      <div class="byte-board-buttons" data-board-tasks-section hidden>
+        <div class="byte-board-buttons-head">
+          <span class="byte-board-tag-label">Task buttons on this board</span>
+          <button type="button" class="byte-board-bb-new" data-tb-new>+ New</button>
+        </div>
+        <div class="byte-board-buttons-list" data-board-tasks-list></div>
+      </div>
+    <% end %>
+
     <%# Chores pinned to this board: on it whatever its groups are and whether
         or not they're due, like the Dailies list keeps a chore on Today. A
         pinned chore is still an ordinary circle - skip, wave off, the lot.
@@ -317,6 +331,69 @@
       </div>
     </form>
   </dialog>
+
+  <%# Adding or editing a task button (buddy/board_task_buttons.js). The task
+      is the button; the rest is how it looks until the task's tile says
+      otherwise. %>
+  <% if @board_owned %>
+    <dialog class="byte-modal" data-tb-dialog>
+      <form class="byte-modal-form basic byte-board-button-form" data-tb-form autocomplete="off">
+        <h3 class="byte-modal-title" data-tb-title>New task button</h3>
+        <label class="byte-modal-label">
+          Runs
+          <button type="button" class="byte-modal-input byte-board-chore-choice" data-tb-task-pick>Pick a task…</button>
+          <input type="hidden" data-tb-task>
+        </label>
+        <p class="byte-board-tb-hint" data-tb-hint hidden></p>
+
+        <label class="byte-modal-label">
+          Label
+          <input type="text" class="byte-modal-input" data-tb-label
+                 placeholder="The task's name" maxlength="60">
+        </label>
+
+        <label class="byte-modal-label">
+          Icon
+          <input type="text" class="byte-modal-input" data-tb-icon
+                 placeholder="An emoji, or ti-icon-name" maxlength="60"
+                 autocapitalize="off" spellcheck="false">
+        </label>
+
+        <label class="byte-modal-label">
+          Color
+          <input type="color" class="byte-modal-input" data-tb-color value="#94A3B8">
+        </label>
+
+        <label class="byte-modal-label">
+          Groups
+          <input type="text" class="byte-modal-input" data-tb-tags placeholder="Whisper, Home">
+        </label>
+
+        <input type="hidden" data-tb-id value="">
+        <p class="byte-board-bb-error" data-tb-error hidden></p>
+        <div class="byte-modal-actions">
+          <button type="button" class="byte-modal-btn" data-tb-cancel>Cancel</button>
+          <button type="submit" class="byte-modal-btn byte-modal-btn-primary" data-tb-save>Add button</button>
+        </div>
+      </form>
+    </dialog>
+
+    <%# Picking the task a button runs: every task this person can run, searched
+        by name and by the tile it answers on. %>
+    <dialog class="byte-modal byte-board-task-picker" data-board-task-picker>
+      <div class="byte-modal-form basic">
+        <h3 class="byte-modal-title">Pick a task</h3>
+        <input type="search" class="byte-modal-input" data-btp-search
+               placeholder="Search tasks…" autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true">
+        <div class="byte-board-task-list" data-btp-list></div>
+        <p class="byte-board-tag-empty" data-btp-empty hidden>No tasks match that.</p>
+        <div class="byte-modal-actions">
+          <button type="button" class="byte-modal-btn" data-btp-cancel>Cancel</button>
+        </div>
+      </div>
+    </dialog>
+  <% end %>
 
   <%# Picking a chore - a pin, what a credit button completes. The Chores
       page's search over a grid of each chore's own icon (see

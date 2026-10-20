@@ -127,6 +127,9 @@
      <%# with its `kind` — serialized for the first paint so a cold boot off %>
      <%# the cached shell paints before the first fetch lands. %>
      data-board-items="<%= Array(@board_items_json).to_json %>"
+     <%# When that set was true, so a page served from the offline cache can
+         tell whether the set this device kept since is newer. %>
+     data-board-items-at="<%= Time.current.iso8601(3) %>"
      data-board-items-url="<%= byte_board_items_path %>"
      data-version-url="<%= byte_version_path %>"
      data-chore-cheer-url="<%= byte_chore_cheer_path %>"

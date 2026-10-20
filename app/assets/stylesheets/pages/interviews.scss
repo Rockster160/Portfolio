@@ -952,6 +952,41 @@
     &.is-away { display: none; }
   }
 
+  // The slider and the number it is on, side by side. The readout is what makes
+  // a slider usable at all - a thumb two thirds along says "a bit more than
+  // seven", and the whole point of the scale is which number he picked.
+  .note-scale {
+    .scale-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    // `width: 100%` loses to the flex row's own sizing on a range input, which
+    // carries an intrinsic width; `min-width: 0` is what lets it actually give.
+    input[type="range"] {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .scale-score {
+      min-width: 2ch;
+      color: var(--iv-ink);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      font-weight: bold;
+      text-align: right;
+
+      // Unrated, which is a dash rather than a number - and must not read with
+      // the weight of a score.
+      &.is-unrated {
+        color: var(--iv-muted);
+        font-weight: normal;
+      }
+    }
+  }
+
   // Type chips. Colour carries the shape of an application at a glance — the
   // beats that move it forward read warm, the ones that end it read flat.
   .note-tag {

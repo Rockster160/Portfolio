@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
-  summary:     "A message at a clock time, after a delay, before events, or when a chore or task " \
-               "comes due - for them or a partner (\"remind me at 12:50\", \"10 days before " \
-               "birthdays\", \"remind Chelsea tomorrow\"). alarm rings.",
+  summary:     "A message at a clock time, after a delay, or when an agenda item or chore comes " \
+               "DUE (unless done) - before events, for them or a partner (\"remind me at 12:50\", " \
+               "\"10 days before birthdays\", \"remind Chelsea tomorrow\"). alarm rings.",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
@@ -208,13 +208,13 @@ Buddy::Tools.register(
     appointments. You do not have to ask whether a key exists; writing one
     creates it.
 
-    **`chore:<name>` IS WHERE A RECURRING TASK LIVES, NOT THE CALENDAR.** The
-    shower, the bins, the pills, feeding the dog - anything on a chore schedule
-    comes due as a chore and usually never appears as a calendar item at all.
-    `agenda:shower` looks like it should work and quietly never fires: a rule
-    anchored to it sat on the list for a day and never went off, because six
-    Shower items had been made by hand in five months and none of them that
-    morning. If what they named is a chore, the key is `chore:`.
+    **THE DOMAIN IS THE ONE THEY NAMED.** The shower can be both a chore and an
+    item they put on the calendar by hand on the days it matters, and those are
+    two different rules. "When Shower comes up on the agenda" / "on my
+    calendar" is `agenda:shower` - it fires only on days an item is there, and
+    that is the point. "When the Shower chore is due" / "on the chore list" is
+    `chore:shower`. Never swap one for the other because it would fire more
+    often. Said neither way, and both exist, ask which.
 
     A chore has no clock time - it comes due for the whole DAY - so the hour is
     the offset, counted from 4am when the chore day turns over: `chore:bins+18h`
@@ -263,7 +263,10 @@ Buddy::Tools.register(
     round. A search can only ever see rows that exist, so "is there an
     outstanding shower" has nothing to find on a day nobody has touched it -
     which is precisely the day the nudge is wanted. A completion is always a
-    row when it is there, so its absence is a fact.
+    row when it is there, so its absence is a fact. A chore's done one is in
+    `chore_completions` as `name:"<chore>" is:today`; an agenda item is its
+    own row, so its done one is `agenda_items` with
+    `name:"<item>" is:today is:completed`.
 
     The offset's unit is required - `-30` is rejected rather than guessed at.
   TXT
@@ -284,8 +287,8 @@ Buddy::Tools.register(
       description: "Hang it off something upcoming instead of a clock time: " \
                    "`agenda:interview-30m`, `agenda:birthdays-10d`, `agenda:leave-5m`, " \
                    "`agenda:end[<item id>]+10m`, `chore:shower+7h`, `trigger:start-15m`. " \
-                   "A recurring task is a `chore:` key, not an `agenda:` one, and its " \
-                   "offset counts from 4am. Instead of `at`.",
+                   "Use the domain they named - the agenda/calendar is `agenda:`, a chore " \
+                   "is `chore:`, whose offset counts from 4am. Instead of `at`.",
     },
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },

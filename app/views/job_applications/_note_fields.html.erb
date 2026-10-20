@@ -41,16 +41,32 @@
        data-conversation-tags="<%= JobNote::CONVERSATIONS.join(" ") %>">
     <div class="split-fields">
       <% JobNote::SENTIMENT.each do |field, question| %>
-        <div class="form-field">
+        <%# THE SCALE STARTS BELOW ZERO, AND THAT POSITION IS "NOT RATED".
+           A range input always submits something - left alone it sits at the
+           midpoint and posts a 5 - so with a plain 0-10 slider, editing the
+           BODY of an interview beat would quietly invent a rating for it. The
+           bottom notch is the unrated one and `JobNote` turns it back into nil,
+           which is what keeps an unanswered question out of the average. 0 is a
+           real score and stays one: "that was a disaster". %>
+        <div class="form-field note-scale">
           <%= f.label field, question %>
-          <%= f.number_field field, in: JobNote::SENTIMENT_FLOOR..JobNote::SENTIMENT_CEILING,
-                step: 1, placeholder: "0-10" %>
+          <div class="scale-row">
+            <%= f.range_field field,
+                  in:    JobNote::SENTIMENT_UNRATED..JobNote::SENTIMENT_CEILING,
+                  step:  1,
+                  value: f.object[field] || JobNote::SENTIMENT_UNRATED,
+                  data:  { sentiment_slider: true, unrated: JobNote::SENTIMENT_UNRATED } %>
+            <output class="scale-score" data-sentiment-score>
+              <%= f.object[field] || "–" %>
+            </output>
+          </div>
         </div>
       <% end %>
     </div>
     <span class="field-hint">
-      Out of <%= JobNote::SENTIMENT_CEILING %>, and only if you want to - blank
-      is unrated, not zero. These average across the whole application.
+      Out of <%= JobNote::SENTIMENT_CEILING %>, and only if you want to - all
+      the way left is unrated, which is not the same as a zero. These average
+      across the whole application.
     </span>
   </div>
 

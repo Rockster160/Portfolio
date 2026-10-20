@@ -1018,6 +1018,25 @@ RSpec.describe JobNote do
       expect(call).to be_rated
       expect(call.sentiment_average).to eq(0.0)
     end
+
+    # A range input always submits something, so the form's bottom notch sits
+    # below the scale and means UNRATED. Without this, correcting the BODY of an
+    # interview beat would stamp a score on it that he never gave.
+    it "reads the notch below the scale as no answer at all" do
+      call.update!(did_well: JobNote::SENTIMENT_UNRATED, liked_them: 7)
+
+      expect(call.reload.did_well).to be_nil
+      expect(call.sentiment).to eq(liked_them: 7)
+    end
+
+    # The floor is the test, not that one value: a browser clamping a range to
+    # its own minimum must not land on a score.
+    it "reads anything under the scale the same way" do
+      call.update!(did_well: -4)
+
+      expect(call.reload.did_well).to be_nil
+      expect(call).not_to be_rated
+    end
   end
 
   describe "the dashboard count" do

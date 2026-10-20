@@ -34,6 +34,8 @@ class BoardTaskButton < ApplicationRecord
   belongs_to :user
   belongs_to :task
 
+  # The task's own name until it's given one.
+  before_validation { self.label = task&.name if label.blank? }
   validates :label, presence: true
 
   # Grouping: `tagged`, `tag_names` and write-time normalization of the `tags`

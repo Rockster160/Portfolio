@@ -183,6 +183,15 @@ class JobNote < ApplicationRecord
   SENTIMENT_FLOOR = 0
   SENTIMENT_CEILING = 10
 
+  # The notch below the scale, which the slider sits on until he moves it.
+  #
+  # A range input always submits a value - left alone it posts its midpoint - so
+  # a plain 0-10 slider would stamp a 5 on an interview beat whose BODY was
+  # being corrected. The form's bottom notch is this, and `clear_unrated` turns
+  # it back into nil on the way in, which is what keeps a question he never
+  # answered out of the average. Never stored.
+  SENTIMENT_UNRATED = -1
+
   # The questions, in the order they are asked. `did_well` first because it is
   # the one he will have an answer to the moment the call ends.
   SENTIMENT = {
@@ -213,6 +222,7 @@ class JobNote < ApplicationRecord
   BOOKING_CORRECTION_WINDOW = 1.day
 
   before_validation :normalize_fields
+  before_validation :clear_unrated
   before_validation :settle_applied_before_receipt, on: :create
   # `after_save`, not `after_create`: a note usually becomes a receipt by being
   # RETAGGED, not by being created as one — Buddy::JobMailOffer files arriving
@@ -450,6 +460,17 @@ class JobNote < ApplicationRecord
     self.source   = source.to_s.strip.presence
     self.url      = url.to_s.strip.presence
     self.spoke_to = spoke_to.to_s.strip.presence
+  end
+
+  # The slider's bottom notch means UNRATED, and this is where it stops being a
+  # number - see SENTIMENT_UNRATED. Anything below the scale is the same answer,
+  # so the test is the floor rather than that one value: a browser clamping to
+  # its own minimum must not land on a score.
+  def clear_unrated
+    SENTIMENT.each_key do |field|
+      given = self[field]
+      self[field] = nil if given.present? && given < SENTIMENT_FLOOR
+    end
   end
 
   # THE SUBMISSION HAPPENED BEFORE THE RECEIPT FOR IT. ALWAYS.

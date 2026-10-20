@@ -21,6 +21,8 @@ import { Monitor } from "../../dashboard/cells/monitor";
 import { boardOwnerId, feedOwnerMatches } from "./board_scope";
 import { initBoardChorePicker } from "./board_chore_picker";
 import { paceFromMeta, dreamSummary } from "./dream";
+import { createBoardQueue } from "./board_queue";
+import { initBoardTaskButtons } from "./board_task_buttons";
 
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
@@ -78,10 +80,49 @@ function isAction(item) {
 // past, so a flicker on each one is worse than nothing. What says the touch
 // landed is the ring moving under your finger.
 //
-// A press that FAILS is the case that needs saying out loud, and it gets the
-// same amber dot the chores page paints on a confirmed failure. It is retried
-// on the next foreground or socket reconnect, which is also when the board
-// resyncs anyway.
+// A press that hasn't gone through is the case that needs saying out loud, and
+// it gets the same amber dot the chores page paints on a confirmed failure.
+// Every press is written to this device's queue before it is sent (see
+// board_queue.js), so one made with no connection is kept, shown as done, and
+// sent with the time it was pressed once the board can reach the server.
+
+// A thank-you from the pet is for a press it saw land. One that went out late,
+// after the connection came back, lands quietly.
+const CHEER_WITHIN_MS = 60 * 1000;
+
+function newMutationId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+// What a waiting press does to its chore, laid over the server's last word so
+// the screen shows it until the answer comes back. The answer replaces it.
+const PREDICT = {
+  // One more of today's target, capped. Nobody's colour until the server says
+  // who it was: on a board that asks, it isn't whoever's signed in.
+  complete: (c) => ({
+    progress_count: Math.min(c.progress_count + 1, c.target_count),
+    last_actor_username: null,
+    last_actor_anonymous: false,
+  }),
+  undo: (c) => ({ progress_count: Math.max(c.progress_count - 1, 0) }),
+  dismiss: () => ({ dismissed: true }),
+  // A skip settles the WHOLE occurrence, so the circle reads as finished
+  // rather than one-of-three done - the same clamp the serializer applies
+  // server-side (see ChoreSerializer#progress_count).
+  skip: (c) => ({ skipped_today: true, progress_count: c.target_count }),
+  bring_back: (c, entry) => ({
+    dismissed: false,
+    skipped_today: false,
+    progress_count: entry.was_skipped ? 0 : c.progress_count,
+  }),
+};
+
+// Which cell a queued press belongs to.
+const CELL_KIND = {
+  complete: "chore", undo: "chore", dismiss: "chore", skip: "chore", bring_back: "chore",
+  credit: "credit", trigger: "trigger", task: "task",
+};
 
 // A board dark for longer than this gets a yawn when it comes back. Long
 // enough that walking out of the room and back doesn't trigger one, short
@@ -270,26 +311,66 @@ export function initChoreBoard({
     tags = [];
   }
   const tagLabel = () => (tags.length ? tags.join(", ") : "Pick groups");
-  let items = [];
-  // Presses the server hasn't confirmed, by item id. A count rather than a
-  // flag: a chore with a target of three gets pressed three times in a row and
-  // the first answer back must not clear the other two.
-  const inFlight = new Map();
   // Running flash timers for trigger cells, by id, so a second press restarts
   // the "Done!" rather than letting the first one's timeout clear it early.
   const flashTimers = new Map();
-  // Presses that came back as a failure, kept so they can be tried again. In
-  // memory only - the chores page writes its queue to localStorage before
-  // touching the network, and matching that is a bigger piece of machinery
-  // than this needs. A reload drops them, and the resync that follows shows
-  // the true state rather than a lie.
-  const failed = [];
 
+  // What the server last said is on the board (`base`), and what the screen
+  // shows (`items`): that, with every press still waiting laid over it. The
+  // screen is only ever swapped for a newer answer, never emptied while one is
+  // fetched, so a blip or a dropped connection leaves the circles standing.
+  const boardId = String((conversationIdFn ? conversationIdFn() : null) ?? "");
+  const KEPT_KEY = `byte.board.items.${boardId}`;
+  let base = [];
   try {
-    items = onBoard(JSON.parse(app.dataset.boardItems || "[]"));
+    base = onBoard(JSON.parse(app.dataset.boardItems || "[]"));
   } catch (e) {
-    items = [];
+    base = [];
   }
+  // A page that came out of the offline cache carries the set from when it was
+  // cached; what this device last heard from the server may well be newer.
+  const kept = readKept();
+  if (kept && kept.at > (Date.parse(app.dataset.boardItemsAt || "") || 0)) base = onBoard(kept.items);
+
+  function readKept() {
+    try {
+      const raw = JSON.parse(window.localStorage.getItem(KEPT_KEY) || "null");
+      return raw && Array.isArray(raw.items) ? raw : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function keep() {
+    try {
+      window.localStorage.setItem(KEPT_KEY, JSON.stringify({ at: Date.now(), items: base }));
+    } catch (e) {}
+  }
+
+  const queue = createBoardQueue({
+    key: `byte.board.queue.${boardId}`,
+    send: sendEntry,
+    onDone: landed,
+    onChange: () => {
+      items = withQueued(base);
+      paint();
+    },
+  });
+
+  function withQueued(from) {
+    const out = from.slice();
+    queue.entries().forEach((entry) => {
+      const change = PREDICT[entry.kind];
+      if (!change) return;
+      const at = out.findIndex(
+        (item) => (item.kind || "chore") === "chore" && String(item.id) === entry.item_id,
+      );
+      if (at >= 0) out[at] = { ...out[at], ...change(out[at], entry) };
+    });
+    return out;
+  }
+
+  let items = withQueued(base);
 
   // ---- task buttons that follow their tile ----
   //
@@ -302,10 +383,21 @@ export function initChoreBoard({
   const tileMonitors = new Map();
   const ownerId = boardOwnerId(app);
 
+  //
+  // One listener per tile however many buttons wear it, all on the page's one
+  // Monitor socket, and dropped once no button on the board answers there. A
+  // task may say `label` or `text` (what the list pages' task buttons read),
+  // and `color`.
   function followTiles() {
-    items.forEach((item) => {
-      const channel = isTask(item) ? item.monitor : null;
-      if (!channel || tileMonitors.has(channel)) return;
+    const wanted = new Set(items.filter(isTask).map((item) => item.monitor).filter(Boolean));
+    tileMonitors.forEach((monitor, channel) => {
+      if (wanted.has(channel)) return;
+      monitor.unsubscribe();
+      tileMonitors.delete(channel);
+      tileFaces.delete(channel);
+    });
+    wanted.forEach((channel) => {
+      if (tileMonitors.has(channel)) return;
 
       tileMonitors.set(channel, Monitor.subscribe(channel, {
         connected() {
@@ -313,10 +405,11 @@ export function initChoreBoard({
         },
         received(data) {
           const face = data?.data;
-          if (!face || (face.icon == null && face.label == null)) return;
-          if (!feedOwnerMatches(data.owner_id, ownerId)) return;
+          if (!face || !feedOwnerMatches(data.owner_id, ownerId)) return;
+          const label = face.label ?? face.text;
+          if (face.icon == null && label == null && face.color == null) return;
 
-          tileFaces.set(channel, { icon: face.icon, label: face.label });
+          tileFaces.set(channel, { icon: face.icon, label, color: face.color });
           paint();
         },
       }));
@@ -329,11 +422,14 @@ export function initChoreBoard({
     const face = item.monitor ? tileFaces.get(item.monitor) : null;
     const icon = face?.icon || item.icon;
     const label = face?.label || item.short_name;
-    const key = `${icon}|${label}`;
+    const color = face?.color || item.color;
+    const key = `${icon}|${label}|${color || ""}`;
     if (cell.dataset.face === key) return;
 
     const kind = face?.icon ? iconKindFor(face.icon) : item.icon_kind;
     cell.dataset.face = key;
+    if (color) cell.style.setProperty("--actor-color", color);
+    else cell.style.removeProperty("--actor-color");
     cell.querySelector(".byte-board-icon")?.replaceWith(
       iconNode({ icon, icon_kind: kind, short_name: label }),
     );
@@ -359,14 +455,23 @@ export function initChoreBoard({
     emptyEl.hidden = items.length > 0;
   }
 
-  // Whether a press on this id is still in flight / came back failed. Shared by
-  // both kinds, so a trigger's dim-while-sending reads the same as a chore's.
-  function markPending(cell, id) {
-    const waiting = (inFlight.get(String(id)) || 0) > 0;
-    cell.dataset.sending = waiting ? "true" : "false";
-    cell.dataset.syncPending = failed.some((f) => String(f.id) === String(id))
-      ? "true"
-      : "false";
+  // Whether a press on this item is on its way, or waiting on a connection or
+  // a retry. Shared by every kind, so a trigger's dim-while-sending reads the
+  // same as a chore's. `pending` is worked out once per paint.
+  let pending = new Map();
+  function pendingNow() {
+    const map = new Map();
+    queue.entries().forEach((entry) => {
+      const key = `${CELL_KIND[entry.kind]}:${entry.item_id}`;
+      const was = map.get(key) || { sending: false, loud: false };
+      map.set(key, { sending: was.sending || !entry.loud, loud: was.loud || !!entry.loud });
+    });
+    return map;
+  }
+  function markPending(cell, item) {
+    const state = pending.get(`${item.kind || "chore"}:${item.id}`);
+    cell.dataset.sending = state?.sending ? "true" : "false";
+    cell.dataset.syncPending = state?.loud ? "true" : "false";
   }
 
   function paintCell(cell, chore) {
@@ -377,7 +482,7 @@ export function initChoreBoard({
     // skip/undo corners to show or hide. All a repaint does for one is keep its
     // sending/failed dot honest.
     if (isAction(chore)) {
-      markPending(cell, chore.id);
+      markPending(cell, chore);
       if (isTask(chore)) paintTileFace(cell, chore);
       return;
     }
@@ -457,10 +562,9 @@ export function initChoreBoard({
     hide("[data-board-skip-cycle]", state !== "open");
     hide("[data-board-undo]", !away || state === "done");
 
-    // Derived here rather than left on the node, because `paint` replaces
-    // every cell whenever the set changes and a flag written at press time
-    // would be thrown away by the next household tap.
-    markPending(cell, chore.id);
+    // Derived here rather than left on the node, so it follows the queue
+    // rather than whatever was true when the cell was built.
+    markPending(cell, chore);
   }
 
   function buildCell(item) {
@@ -621,33 +725,47 @@ export function initChoreBoard({
     return cell;
   }
 
-  // Patched in place where the set hasn't changed, rebuilt when it has. A
-  // tablet left on the counter repaints on every household tap, and swapping
-  // every node each time kills the press animation mid-flourish and scrolls
-  // the pad back to the top.
+  // What a cell was BUILT from - its icon, title and colour - as opposed to the
+  // state paintCell keeps up to date. A change here rebuilds that one cell.
+  function cellBuiltFrom(item) {
+    return [item.icon, item.icon_kind, item.short_name, item.color].map((v) => v ?? "").join("|");
+  }
+
+  // Each cell is kept, patched in place, and only moved, added or removed when
+  // the set itself changes - never the whole pad dropped and rebuilt. A tablet
+  // left on the counter repaints on every household tap, and swapping every
+  // node kills the press animation mid-flourish, scrolls the pad back to the
+  // top and flashes an empty board.
   function paint() {
     if (!padEl) return;
 
-    // The three kinds come from different tables and can share an id, so the cell
-    // key carries the kind too — otherwise two items with matching ids would read
-    // as "same set" and paint one into the other's cell.
+    pending = pendingNow();
+    // The kinds come from different tables and can share an id, so the cell
+    // key carries the kind too.
     const key = (item) => `${item.kind || "chore"}:${item.id}`;
-    const wanted = items.map(key);
-    const present = Array.from(padEl.children).map((el) => el.dataset.boardKey);
-    const sameSet =
-      wanted.length === present.length &&
-      wanted.every((id, i) => id === present[i]);
+    const existing = new Map(Array.from(padEl.children).map((el) => [el.dataset.boardKey, el]));
+    let prev = null;
+    items.forEach((item) => {
+      const k = key(item);
+      let cell = existing.get(k);
+      existing.delete(k);
+      if (cell && cell.dataset.boardBuilt !== cellBuiltFrom(item)) {
+        const fresh = buildCell(item);
+        cell.replaceWith(fresh);
+        cell = fresh;
+      } else if (cell) {
+        paintCell(cell, item);
+      } else {
+        cell = buildCell(item);
+      }
+      cell.dataset.boardKey = k;
+      cell.dataset.boardBuilt = cellBuiltFrom(item);
+      const slot = prev ? prev.nextSibling : padEl.firstChild;
+      if (cell !== slot) padEl.insertBefore(cell, slot);
+      prev = cell;
+    });
+    existing.forEach((el) => el.remove());
 
-    if (sameSet) {
-      items.forEach((item, i) => paintCell(padEl.children[i], item));
-    } else {
-      padEl.innerHTML = "";
-      items.forEach((item) => {
-        const cell = buildCell(item);
-        cell.dataset.boardKey = key(item);
-        padEl.appendChild(cell);
-      });
-    }
     paintEmpty();
     followTiles();
     onItems?.(items);
@@ -675,22 +793,32 @@ export function initChoreBoard({
 
     // A completion endpoint only ever answers with a chore, so fold it back into
     // the chore sharing its id - never an action that happens to collide on one.
-    const at = items.findIndex(
+    const at = base.findIndex(
       (item) => (item.kind || "chore") === "chore" && item.id === fresh.id,
     );
-    if (at >= 0) items[at] = { ...fresh, kind: "chore" };
+    if (at >= 0) {
+      base[at] = { ...fresh, kind: "chore" };
+      keep();
+    }
+    items = withQueued(base);
     paint();
 
     // An `after_chore` follower coming due is a chore ARRIVING on the board,
     // which this can't fold in - the set changed rather than one row in it.
-    if (Array.isArray(payload?.chores) && payload.chores.length > 0) resync();
+    if (Array.isArray(payload?.chores) && payload.chores.length > 0) resyncSoon();
   }
+
+  // Counts presses as they land, so a fetch that set out before one did can
+  // tell its answer is already behind and ask again.
+  let landedCount = 0;
 
   // Re-pull the whole board - chores AND triggers of the group - from the
   // board's own endpoint. It already filters to the thread's tag server-side
   // and stays correct across the 4am rollover (it leans on /chores/today's own
   // serializer), so there is nothing to filter here and triggers come back on
-  // the set instead of being dropped.
+  // the set instead of being dropped. What's on screen stays until the answer
+  // is in; a failed fetch leaves it, since a wall tablet that blanks itself on
+  // a blip is worse than a stale one.
   async function resync() {
     if (!itemsUrl) return;
 
@@ -699,55 +827,100 @@ export function initChoreBoard({
       ? `${itemsUrl}?conversation_id=${encodeURIComponent(conversationId)}`
       : itemsUrl;
 
+    const startedAt = landedCount;
     try {
       const data = await apiCall(url, "GET");
-      items = onBoard(Array.isArray(data?.items) ? data.items : []);
+      if (!Array.isArray(data?.items)) return;
+      if (landedCount !== startedAt) return resyncSoon();
+
+      base = onBoard(data.items);
+      keep();
+      items = withQueued(base);
       paint();
+    } catch (e) {}
+  }
+
+  let resyncTimer = 0;
+  function resyncSoon() {
+    window.clearTimeout(resyncTimer);
+    resyncTimer = window.setTimeout(resync, 250);
+  }
+
+  // ---- sending presses ----
+
+  async function refreshCsrf() {
+    if (!app.dataset.csrfUrl) return false;
+    try {
+      const res = await fetch(app.dataset.csrfUrl, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      const token = res.ok ? (await res.json())?.token : null;
+      if (!token) return false;
+      document.querySelector('meta[name="csrf-token"]')?.setAttribute("content", token);
+      return true;
     } catch (e) {
-      // Leave what's on screen. The circles already there still work, and a
-      // wall tablet that blanks itself on a blip is worse than a stale one.
+      return false;
     }
   }
 
-  // ---- pressing things ----
-
-  function hold(id, delta) {
-    const key = String(id);
-    const next = (inFlight.get(key) || 0) + delta;
-    if (next > 0) inFlight.set(key, next);
-    else inFlight.delete(key);
+  function sendOnce(req) {
+    return fetch(req.url, {
+      method: req.method,
+      credentials: "same-origin",
+      redirect: "manual",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken(),
+      },
+      body: req.body ? JSON.stringify(req.body) : undefined,
+    });
   }
 
-  // What the chore WILL look like if the press lands, applied before the
-  // request goes out. The server's answer overwrites it either way, so this is
-  // a prediction and not a second source of truth - but it is what makes the
-  // ring move under a finger instead of a few hundred milliseconds later.
-  function predict(id, change) {
-    // Only chores predict - a trigger has no state to move under a finger - so
-    // the lookup is chore-scoped even where an id collides with a trigger's.
-    const chore = find(id, "chore");
-    if (!chore) return;
-
-    const at = items.indexOf(chore);
-    items[at] = { ...chore, ...change(chore) };
-    paint();
+  // One queued press: its requests in order. Signed out, rate limited or the
+  // server struggling keeps it for later; anything else the server turns down
+  // (the chore archived, nothing left to undo) is dropped, and the resync that
+  // follows shows the board as it really is. A stale CSRF token is renewed once.
+  async function sendEntry(entry) {
+    let data = null;
+    for (const req of entry.requests) {
+      let res = await sendOnce(req);
+      if (res.status === 422 && (await refreshCsrf())) res = await sendOnce(req);
+      if (res.ok) {
+        const text = await res.text();
+        data = text ? JSON.parse(text) : null;
+        continue;
+      }
+      const later =
+        res.type === "opaqueredirect" || res.status === 0 || res.status === 401 ||
+        res.status === 403 || res.status === 429 || res.status >= 500;
+      return { ok: false, retry: later };
+    }
+    return { ok: true, data };
   }
 
-  // Remembered so it can be tried again, and so the cell can say that it
-  // hasn't gone through. Deduplicated by chore and action: pressing a failing
-  // button four times should leave one thing to retry, not four.
-  function remember(id, run) {
-    const key = String(id);
-    if (!failed.some((f) => f.key === key)) failed.push({ id, key, run });
-  }
+  // Mutation ids of completions that reached the server, newest last, so an
+  // undo can name exactly the one it takes back.
+  const landedCompletes = new Map();
 
-  // Tried on the next foreground or socket reconnect - see resync, which both
-  // of those already call. Each one is dropped from the list before it runs,
-  // so a second failure re-adds it rather than stacking.
-  async function drainFailed() {
-    const queued = failed.splice(0, failed.length);
-    paint();
-    for (const item of queued) await item.run();
+  // A queued press is finished: landed with the server's answer, or refused /
+  // expired. The receipt (a cheer, a "Done!") only for one pressed just now.
+  function landed(entry, data, ok) {
+    landedCount += 1;
+    if (ok && entry.kind === "complete" && entry.mutation_id) {
+      const list = landedCompletes.get(entry.item_id) || [];
+      list.push(entry.mutation_id);
+      landedCompletes.set(entry.item_id, list);
+    }
+    if (ok && data && (data.chore || data.id != null)) absorb(data);
+    // A skip or bring-back answers with something other than the chore, and a
+    // refused press leaves the screen showing what it predicted.
+    if (!ok || entry.kind === "skip" || entry.kind === "bring_back") resyncSoon();
+    if (!ok || Date.now() - Date.parse(entry.queued_at) > CHEER_WITHIN_MS) return;
+
+    if (entry.kind === "complete") cheer(find(entry.item_id, "chore"), "chore_done");
+    if (CELL_KIND[entry.kind] !== "chore") flashCell(entry.item_id, entry.kind);
   }
 
   async function cheer(chore, kind) {
@@ -770,145 +943,65 @@ export function initChoreBoard({
     }
   }
 
-  // Every press runs through here: predict, hold, send, and either fold the
-  // answer in or remember it to try again. `send` returns what to do with a
-  // successful answer; the prediction is what the screen shows until then.
+  // ---- pressing things ----
   //
-  // The predicted state is deliberately NOT rolled back on failure. The tap
-  // happened, it is being retried, and flipping the circle back would say the
-  // press was ignored - which is the one thing that isn't true. The amber dot
-  // is what says it hasn't landed yet, and the next resync is what corrects
-  // the screen if the retry never succeeds.
-  async function press(id, { change, send }) {
-    predict(id, change);
-    hold(id, 1);
-    paint();
+  // Every press is queued with the request(s) it makes and what it does to the
+  // screen meanwhile; the queue sends it now, or as soon as it can.
 
-    try {
-      await send();
-      // Guarded: `findIndex` answers -1 for a press that never failed, and
-      // `splice(-1, 1)` would quietly drop the LAST remembered press instead
-      // of none of them.
-      const at = failed.findIndex((f) => f.key === String(id));
-      if (at >= 0) failed.splice(at, 1);
-    } catch (e) {
-      remember(id, () => press(id, { change, send }));
-    } finally {
-      hold(id, -1);
-      paint();
-    }
+  const boardParam = () => (conversationIdFn ? conversationIdFn() : null);
+
+  // Resolves once the press has been tried.
+  function enqueue(kind, id, requests, extra = {}) {
+    return queue.enqueue({ kind, item_id: String(id), requests, ...extra });
+  }
+
+  function waiting(kinds, id) {
+    return queue.entries().filter((e) => kinds.includes(e.kind) && e.item_id === String(id));
   }
 
   function complete(id) {
-    const chore = find(id, "chore");
-    if (!chore) return;
+    if (!find(id, "chore")) return;
 
-    return press(id, {
-      // One more of today's target, capped - the ring fills tap by tap on a
-      // chore asked for several times a day. Nobody's colour until the server
-      // says who it was: on a board that asks, it isn't whoever's signed in.
-      change: (c) => ({
-        progress_count: Math.min(c.progress_count + 1, c.target_count),
-        last_actor_username: null,
-        last_actor_anonymous: false,
-      }),
-      send: async () => {
-        // The board goes along so the server can tell a press on a board that
-        // asks who did it from one that credits whoever's signed in.
-        const payload = await apiCall(COMPLETE_URL(id), "POST", {
-          client_completed_at: new Date().toISOString(),
-          board_id: conversationIdFn ? conversationIdFn() : null,
-        });
-        absorb(payload);
-        cheer(find(id, "chore") || chore, "chore_done");
-      },
-    });
+    // The time it was pressed and an id the server dedupes on, so a press sent
+    // late - or twice, when its answer was lost - is credited once, then.
+    const mid = newMutationId();
+    return enqueue("complete", id, [{
+      url: COMPLETE_URL(id),
+      method: "POST",
+      // The board goes along so the server can tell a press on a board that
+      // asks who did it from one that credits whoever's signed in.
+      body: { client_completed_at: new Date().toISOString(), client_mutation_id: mid, board_id: boardParam() },
+    }], { mutation_id: mid });
   }
 
   // Fire a trigger: run its routine, then flash the "Done!" over the disc. No
-  // predict (nothing to move), and no `cheer` - the flash is the receipt, and a
-  // "nice work" over a thing you set off rather than finished reads wrong. A
-  // failure is remembered and retried on the next foreground/reconnect, same as
-  // a chore press; the sending dot is what says it is on its way meanwhile.
+  // prediction (nothing to move), and no `cheer` - the flash is the receipt, and
+  // a "nice work" over a thing you set off rather than finished reads wrong.
   function fire(id) {
     if (!find(id, "trigger")) return;
-
-    hold(id, 1);
-    paint();
-
-    return (async () => {
-      try {
-        await apiCall(RUN_URL(id), "POST", {
-          conversation_id: conversationIdFn ? conversationIdFn() : null,
-        });
-        const at = failed.findIndex((f) => f.key === String(id));
-        if (at >= 0) failed.splice(at, 1);
-        flashCell(id, "trigger");
-      } catch (e) {
-        remember(id, () => fire(id));
-      } finally {
-        hold(id, -1);
-        paint();
-      }
-    })();
+    return enqueue("trigger", id, [{ url: RUN_URL(id), method: "POST", body: { conversation_id: boardParam() } }]);
   }
 
   // Credit a chore on someone's behalf: complete it crediting the button's
   // chosen member, then flash and fold the fresh chore back in so its own circle
-  // (if it's on this board too) flips to done. Same predict-less, retry-on-fail
-  // shape as a trigger fire.
+  // (if it's on this board too) flips to done. The board it was pressed on
+  // decides what a "whoever did it" button does: on one that asks, the owner is
+  // asked who it was.
   function creditPress(id) {
     if (!find(id, "credit")) return;
-
-    hold(id, 1);
-    paint();
-
-    return (async () => {
-      try {
-        // The board it was pressed on decides what a "whoever did it" button
-        // does: on one that asks, the owner is asked who it was.
-        const payload = await apiCall(PRESS_URL(id), "POST", {
-          board_id: conversationIdFn ? conversationIdFn() : null,
-        });
-        const at = failed.findIndex((f) => f.key === String(id));
-        if (at >= 0) failed.splice(at, 1);
-        absorb(payload);
-        flashCell(id, "credit");
-      } catch (e) {
-        remember(id, () => creditPress(id));
-      } finally {
-        hold(id, -1);
-        paint();
-      }
-    })();
+    return enqueue("credit", id, [{
+      url: PRESS_URL(id),
+      method: "POST",
+      body: { board_id: boardParam(), client_completed_at: new Date().toISOString(), client_mutation_id: newMutationId() },
+    }]);
   }
 
-  // Run a task button's Jil task: fire it, then flash "Done!" over the disc.
-  // Like a trigger fire — no predict (nothing on this board moves), no cheer
-  // (you set it off, you didn't finish a chore); the task's own effect comes
-  // back through the board's live feeds. A failure is remembered and retried on
-  // the next foreground/reconnect.
+  // Run a task button's Jil task, then flash "Done!" over the disc. The task's
+  // own effect comes back through the board's live feeds (its tile, rings, a
+  // sound, an alert).
   function taskPress(id) {
     if (!find(id, "task")) return;
-
-    hold(id, 1);
-    paint();
-
-    return (async () => {
-      try {
-        await apiCall(TASK_PRESS_URL(id), "POST", {
-          conversation_id: conversationIdFn ? conversationIdFn() : null,
-        });
-        const at = failed.findIndex((f) => f.key === String(id));
-        if (at >= 0) failed.splice(at, 1);
-        flashCell(id, "task");
-      } catch (e) {
-        remember(id, () => taskPress(id));
-      } finally {
-        hold(id, -1);
-        paint();
-      }
-    })();
+    return enqueue("task", id, [{ url: TASK_PRESS_URL(id), method: "POST", body: { conversation_id: boardParam() } }]);
   }
 
   // The "Done!" receipt over an action disc. Scoped by board-key so it lands on
@@ -931,78 +1024,50 @@ export function initChoreBoard({
   }
 
   function dismiss(id, span) {
-    return press(id, {
-      change: () => ({ dismissed: true }),
-      send: async () => {
-        absorb(await apiCall(DISMISS_URL(id), "POST", { span }));
-      },
-    });
+    if (!find(id, "chore")) return;
+    return enqueue("dismiss", id, [{ url: DISMISS_URL(id), method: "POST", body: { span } }]);
   }
 
   function skipCycle(id) {
-    return press(id, {
-      // A skip settles the WHOLE occurrence, so the circle reads as finished
-      // rather than one-of-three done - the same clamp the serializer applies
-      // server-side (see ChoreSerializer#progress_count).
-      change: (c) => ({ skipped_today: true, progress_count: c.target_count }),
-      send: async () => {
-        await apiCall(SKIP_URL(id), "POST", {
-          client_completed_at: new Date().toISOString(),
-        });
-        // The skip endpoint answers with a completion rather than a chore, so
-        // there is nothing to fold in - ask for the row instead.
-        await resync();
-      },
-    });
+    if (!find(id, "chore")) return;
+    return enqueue("skip", id, [{
+      url: SKIP_URL(id),
+      method: "POST",
+      body: { client_completed_at: new Date().toISOString() },
+    }]);
   }
 
   // Take the last completion back off - the hold gesture's undo for a chore
-  // that's done (or part-done). The same DELETE the chores page's long-press
-  // sends; the server removes this user's most recent completion today and
-  // answers with the fresh chore, which folds straight back in. A 404 means
-  // there was nothing left to undo (a race with a household tap, say), which is
-  // the state the hold was reaching for anyway - resync rather than remembering
-  // it as a failure to retry forever.
+  // that's done (or part-done). A press still waiting to be sent is simply taken
+  // back off the queue; otherwise the same DELETE the chores page's long-press
+  // sends, naming the completion it takes back when this board sent it.
   function undoComplete(id) {
-    const chore = find(id, "chore");
-    if (!chore) return;
+    if (!find(id, "chore")) return;
 
-    return press(id, {
-      change: (c) => ({ progress_count: Math.max(c.progress_count - 1, 0) }),
-      send: async () => {
-        try {
-          absorb(await apiCall(COMPLETE_URL(id), "DELETE", {
-            board_id: conversationIdFn ? conversationIdFn() : null,
-          }));
-        } catch (err) {
-          if (String(err.message) === "http_404") return resync();
-          throw err;
-        }
-      },
-    });
+    const last = waiting(["complete"], id).pop();
+    if (last && queue.remove(last.qid)) return;
+
+    const target = last?.mutation_id || landedCompletes.get(String(id))?.pop() || null;
+    return enqueue("undo", id, [{
+      url: COMPLETE_URL(id),
+      method: "DELETE",
+      body: { board_id: boardParam(), target_client_mutation_id: target },
+    }]);
   }
 
+  // Put a skipped or waved-off chore back. One still waiting to be sent is just
+  // taken back; otherwise whichever put it away is reversed - "bring it back" is
+  // the same intent either way, and the person pressing it is not thinking
+  // about which mechanism was used.
   function bringBack(id) {
+    waiting(["dismiss", "skip"], id).forEach((e) => queue.remove(e.qid));
     const chore = find(id, "chore");
-    if (!chore) return;
+    if (!chore || !(chore.dismissed || chore.skipped_today)) return;
 
-    const wasDismissed = chore.dismissed;
-    const wasSkipped = chore.skipped_today;
-    return press(id, {
-      change: () => ({
-        dismissed: false,
-        skipped_today: false,
-        progress_count: wasSkipped ? 0 : chore.progress_count,
-      }),
-      send: async () => {
-        // Whichever put it away. Both are reachable from the one control,
-        // because "bring it back" is the same intent either way and the person
-        // pressing it is not thinking about which mechanism was used.
-        if (wasDismissed) await apiCall(DISMISS_URL(id), "DELETE");
-        if (wasSkipped) await apiCall(SKIP_URL(id), "DELETE");
-        await resync();
-      },
-    });
+    const requests = [];
+    if (chore.dismissed) requests.push({ url: DISMISS_URL(id), method: "DELETE" });
+    if (chore.skipped_today) requests.push({ url: SKIP_URL(id), method: "DELETE" });
+    return enqueue("bring_back", id, requests, { was_skipped: !!chore.skipped_today });
   }
 
   // The panel's border says where things stand: a brief flash when a save
@@ -1094,8 +1159,8 @@ export function initChoreBoard({
     // The timers placed on this board follow its groups.
     app.dispatchEvent(new CustomEvent("board:placement-changed"));
     if (tagToggleEl) tagToggleEl.textContent = tagLabel();
-    items = [];
-    paint();
+    // The circles stay until the new set is in, rather than the board going
+    // blank while it's fetched.
     resync();
     // The watched groups just changed, so which buttons the picker shows and the
     // chore a new one files against have too - re-mark and repaint rather than
@@ -1103,6 +1168,8 @@ export function initChoreBoard({
     paintTagPicker();
     resetButtonForm();
     paintButtons();
+    taskButtons.reset();
+    taskButtons.refresh();
     if (broadcast) onTagsChanged?.(tags);
   }
 
@@ -1406,6 +1473,37 @@ export function initChoreBoard({
     }
   }
 
+  // ---- task buttons ----
+  //
+  // Saved from the settings, put straight on the pad (or taken off it) where
+  // the server would have it - after the other buttons, before the chores -
+  // and the resync the save broadcasts confirms it without a flash.
+  function placeAction(item, show) {
+    const at = base.findIndex((i) => i.kind === item.kind && String(i.id) === String(item.id));
+    if (!show) {
+      if (at >= 0) base.splice(at, 1);
+    } else if (at >= 0) {
+      base[at] = item;
+    } else {
+      const firstChore = base.findIndex((i) => (i.kind || "chore") === "chore");
+      base.splice(firstChore < 0 ? base.length : firstChore, 0, item);
+    }
+    keep();
+    items = withQueued(base);
+    paint();
+  }
+
+  const taskButtons = initBoardTaskButtons({
+    root,
+    apiCall,
+    tagsFn: () => tags,
+    conversationIdFn,
+    iconFor: iconNode,
+    flashSaved,
+    onSaved: (item, show) => item && placeAction(item, show),
+    onRemoved: (id) => placeAction({ kind: "task", id }, false),
+  });
+
   // ---- circle size ----
 
   const scaleValueEl = root.querySelector("[data-board-scale-value]");
@@ -1612,6 +1710,7 @@ export function initChoreBoard({
         paintTagPicker();
         resetButtonForm();
         paintButtons();
+        taskButtons.refresh();
         paintPins();
       }
     });
@@ -1656,7 +1755,6 @@ export function initChoreBoard({
     try {
       await apiCall(membersUrl, "POST", { conversation_id: conversationId, member_ids: ids });
       flashSaved();
-      items = [];
       resync();
     } catch (e) {
       // Leave the board showing whatever it showed; the ticks are the request.
@@ -1838,7 +1936,6 @@ export function initChoreBoard({
         hiddenInputEl.value = savedFilter;
         showHiddenError("");
         flashSaved();
-        items = [];
         resync();
       } catch (err) {
         showHiddenError(err.body?.error ? `Couldn't read that: ${err.body.error}` : "Couldn't save that.");
@@ -1891,11 +1988,15 @@ export function initChoreBoard({
     if (document.visibilityState !== "visible") return;
 
     maybeYawn();
-    drainFailed().then(resync);
+    queue.flush().then(resync);
   });
+  // The connection is back: whatever was pressed without it goes out now.
+  window.addEventListener("online", () => queue.flush());
 
   paint();
   maybeYawn();
+  // Anything pressed before the last reload that never made it.
+  queue.flush();
 
   return {
     // A chores broadcast landed. The envelope says only that something
@@ -1905,12 +2006,10 @@ export function initChoreBoard({
       resync();
     },
 
-    // The socket came back. Anything that failed while it was down is worth
-    // one more go now, and it has to finish BEFORE the resync: run together,
-    // the resync can land first and paint the server's old state over the
-    // prediction the retry was in the middle of confirming.
+    // The socket came back. Anything pressed while it was down goes out now,
+    // and it finishes BEFORE the resync, so the fetch answers with them in.
     async onReconnect() {
-      await drainFailed();
+      await queue.flush();
       await resync();
     },
 
@@ -1960,7 +2059,6 @@ export function initChoreBoard({
       savedFilter = filter;
       if (hiddenInputEl && document.activeElement !== hiddenInputEl) hiddenInputEl.value = filter;
       if (hiddenInputEl) syncHiddenSave();
-      items = [];
       resync();
     },
 

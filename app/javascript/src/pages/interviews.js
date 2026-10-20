@@ -57,9 +57,30 @@ $(document).ready(function () {
     // stops being saved.
     const sentiment = fields.querySelector("[data-note-sentiment]")
     const spoken = sentiment ? (sentiment.dataset.conversationTags || "").split(" ") : []
+    const sliders = sentiment
+      ? Array.from(sentiment.querySelectorAll("[data-sentiment-slider]"))
+      : []
+
+    // A slider sitting on its bottom notch is UNRATED, not a zero — the model
+    // turns that position back into nil. So the readout says so in words
+    // rather than showing the number behind it, which would read as a score.
+    const showScore = function (slider) {
+      const score = slider.parentElement.querySelector("[data-sentiment-score]")
+      if (!score) { return }
+
+      const unrated = slider.value === slider.dataset.unrated
+      score.textContent = unrated ? "–" : slider.value
+      score.classList.toggle("is-unrated", unrated)
+    }
+
+    sliders.forEach(function (slider) {
+      slider.addEventListener("input", function () { showScore(slider) })
+      showScore(slider)
+    })
+
     const rated = function () {
-      return Array.from(sentiment.querySelectorAll("input")).some(function (input) {
-        return input.value !== ""
+      return sliders.some(function (slider) {
+        return slider.value !== slider.dataset.unrated
       })
     }
     const syncSentiment = function () {

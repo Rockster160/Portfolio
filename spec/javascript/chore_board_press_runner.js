@@ -78,9 +78,19 @@ function walk(el, out = []) {
   return out;
 }
 
+// Detach a node from wherever it is, so moving one doesn't leave a copy.
+function detach(node) {
+  const parent = node.parentNode;
+  if (!parent) return;
+  const at = parent.children.indexOf(node);
+  if (at >= 0) parent.children.splice(at, 1);
+  node.parentNode = null;
+}
+
 function fakeEl(tag) {
   return {
     tag,
+    parentNode: null,
     attributes: {},
     dataset: {},
     style: { setProperty() {}, removeProperty() {} },
@@ -96,12 +106,39 @@ function fakeEl(tag) {
     get innerHTML() {
       return "";
     },
+    get firstChild() {
+      return this.children[0] || null;
+    },
+    get nextSibling() {
+      const siblings = this.parentNode?.children || [];
+      return siblings[siblings.indexOf(this) + 1] || null;
+    },
     appendChild(child) {
+      detach(child);
       this.children.push(child);
+      child.parentNode = this;
       return child;
     },
     append(...nodes) {
-      nodes.forEach((n) => this.children.push(n));
+      nodes.forEach((n) => this.appendChild(n));
+    },
+    insertBefore(node, ref) {
+      detach(node);
+      const at = ref ? this.children.indexOf(ref) : -1;
+      this.children.splice(at < 0 ? this.children.length : at, 0, node);
+      node.parentNode = this;
+      return node;
+    },
+    remove() {
+      detach(this);
+    },
+    replaceWith(node) {
+      const parent = this.parentNode;
+      if (!parent) return;
+      detach(node);
+      parent.children[parent.children.indexOf(this)] = node;
+      node.parentNode = parent;
+      this.parentNode = null;
     },
     setAttribute(name, value) {
       this.attributes[name] = String(value);
@@ -169,6 +206,21 @@ app.dataset.boardItems = JSON.stringify([
     today_visible: true,
     archived: false,
   },
+  // Pressed with no connection.
+  {
+    id: 4,
+    name: "Plants",
+    short_name: "Plants",
+    icon: "🪴",
+    icon_kind: "emoji",
+    tags: ["Home"],
+    target_count: 1,
+    progress_count: 0,
+    dismissed: false,
+    skipped_today: false,
+    today_visible: true,
+    archived: false,
+  },
   // A trigger (routine) in the same group: tap to fire, no occurrence to settle.
   {
     id: 3,
@@ -221,6 +273,7 @@ globalThis.window = {
   },
   setTimeout: (fn) => fn(),
   clearTimeout: () => {},
+  addEventListener() {},
 };
 // The socket monitor names the page it subscribes from as it loads.
 globalThis.window.location = { pathname: "/byte", search: "" };
@@ -407,14 +460,39 @@ out.controls_away = {
 await click('[data-board-undo="2"]');
 out.after_undo = snapshot(2);
 
-// The guard on the splice: a successful press must not take an unrelated
-// remembered failure down with it.
+// A press still waiting on the server is kept while another one goes out
+// and lands past it.
 failing = new Set(["POST /chores/items/2/dismiss"]);
 await click('[data-board-skip-day="2"]');
 out.failure_before = cellFor(2).dataset.syncPending;
-failing = new Set();
 await click('[data-board-complete="1"]');
 out.failure_survived_other_press = cellFor(2).dataset.syncPending;
+out.other_press_landed = requests.includes("POST /chores/items/1/completion");
+failing = new Set();
+await board.onReconnect();
+
+// ---- no connection at all ----
+//
+// A press with nothing to send it over is kept, shown, and goes out with the
+// time it was pressed once the server can be reached.
+const fetchOnline = globalThis.fetch;
+globalThis.fetch = async (url, opts = {}) => {
+  requests.push(`${opts.method || "GET"} ${url} (offline)`);
+  throw new TypeError("Failed to fetch");
+};
+requests.length = 0;
+await click('[data-board-complete="4"]');
+out.offline_press = {
+  ...snapshot(4),
+  kept: JSON.parse(window.localStorage.getItem("byte.board.queue.21") || "[]").map((e) => e.kind),
+  pressed_at: JSON.parse(window.localStorage.getItem("byte.board.queue.21") || "[]")[0]?.requests?.[0]?.body?.client_completed_at != null,
+};
+// A resync while still offline leaves the board as it was rather than empty.
+await board.resync();
+out.offline_resync_cells = pad.children.length;
+globalThis.fetch = fetchOnline;
+await board.onReconnect();
+out.back_online = { ...snapshot(4), server: entry(4).progress_count };
 
 // ---- a trigger: tap to fire, not tick to finish ----
 //
@@ -459,5 +537,24 @@ out.task_press = {
   syncPending: cellFor(8).dataset.syncPending,
   requests: requests.slice(beforeTask),
 };
+
+// ---- the set changing under the screen ----
+//
+// A new button arriving (and one going) moves cells in and out around the
+// ones already there; nothing standing is torn down and rebuilt.
+const standing = cellFor(1);
+const keys = () => pad.children.map((c) => c.dataset.boardKey);
+world.splice(world.findIndex((c) => c.kind === "task"), 0, {
+  id: 9, kind: "task", name: "Nap", short_name: "Nap", icon: "😴", icon_kind: "emoji",
+});
+await board.resync();
+out.set_change = {
+  same_node: cellFor(1) === standing,
+  keys: keys(),
+};
+world = world.filter((c) => !(c.kind === "task" && c.id === 9));
+await board.resync();
+out.set_change.after_removal = keys();
+out.set_change.same_node_after_removal = cellFor(1) === standing;
 
 process.stdout.write(JSON.stringify(out, null, 2));

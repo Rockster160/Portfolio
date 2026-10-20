@@ -250,13 +250,21 @@ class ByteController < ApplicationController
     # A button for whoever did it asks the board's owner, the way a chore pressed
     # on that board does; on a board set to the person who uses it, it credits
     # them; anywhere else it credits whoever pressed it.
+    #
+    # A board sends its presses from a queue, so one made offline arrives late
+    # carrying when it happened, and one whose answer was lost arrives twice
+    # with the same mutation id - credited once, at the time it was pressed.
+    at = board_press_time(params[:client_completed_at])
+    mutation_id = params[:client_mutation_id].presence
+    repeat = mutation_id && ChoreCompletion.exists?(client_mutation_id: mutation_id)
     credited = button.credit_user
-    board = ByteConversation.asking_board_for(current_user, params[:board_id]) if credited.nil?
-    asked = board && ChoreWhoDidIt.ask!(board.user, chore, at: Time.current)
-    unless asked
+    board = ByteConversation.asking_board_for(current_user, params[:board_id]) if credited.nil? && !repeat
+    asked = board && ChoreWhoDidIt.ask!(board.user, chore, at: at)
+    unless asked || repeat
       credited ||= ByteConversation.accessible_boards_for(current_user).find_by(id: params[:board_id])&.doer
       credited ||= current_user
-      ChoreCompleter.new(chore, credited, recorded_by: current_user).call
+      result = ChoreCompleter.new(chore, credited, at: at, recorded_by: current_user).call
+      result.completion&.update_column(:client_mutation_id, mutation_id) if mutation_id
     end
 
     ctx = ChoreSerializerContext.for_user(current_user, day: ChoreDay.current(current_user))
@@ -264,6 +272,44 @@ class ByteController < ApplicationController
       chore:    ChoreSerializer.new(chore, viewer: current_user, ctx: ctx).as_json,
       credited: credited&.username,
     }
+  end
+
+  # GET /byte/board/task_buttons?tags= — the board owner's task buttons for its
+  # groups, and the tasks one can be pointed at (searched in the picker). A
+  # function task wants arguments a press can't give, so it isn't offered.
+  def board_task_buttons
+    tags = GroupTaggable.normalize(params[:tags].presence || params[:tag])
+    buttons = tags.any? ? current_user.board_task_buttons.for_board(tags).includes(:task) : []
+    tasks = current_user.accessible_tasks.active.to_a.reject(&:function?).sort_by { |t| t.name.to_s.downcase }
+
+    render json: {
+      buttons: buttons.map { |b| task_button_wire(b) },
+      tasks:   tasks.map { |t| { id: t.id, name: t.name, monitor: t.monitor } },
+    }
+  end
+
+  # POST /byte/board/task_buttons — a button that runs a task.
+  def create_board_task_button
+    button = current_user.board_task_buttons.new
+    save_task_button(button, status: :created)
+  end
+
+  # PATCH /byte/board/task_buttons/:id
+  def update_board_task_button
+    button = current_user.board_task_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    save_task_button(button)
+  end
+
+  # DELETE /byte/board/task_buttons/:id
+  def delete_board_task_button
+    button = current_user.board_task_buttons.find_by(id: params[:id])
+    return head(:not_found) if button.nil?
+
+    button.destroy!
+    announce_board_change
+    head :no_content
   end
 
   # POST /byte/board/tasks/:id/press — run a task button's Jil task, the way
@@ -1373,6 +1419,17 @@ class ByteController < ApplicationController
     ChoreCreditButton.where(chore_household_id: user.chore_household_id)
   end
 
+  # When a board press happened, as the board says: never in the future, and
+  # the server's clock when it didn't say.
+  def board_press_time(raw)
+    return Time.current if raw.blank?
+
+    at = Time.iso8601(raw.to_s)
+    [at, Time.current].min
+  rescue ArgumentError
+    Time.current
+  end
+
   # Task buttons a press may run: your own, plus a household member's, so a
   # shared board's buttons work. The run is still as the task's owner; the
   # board's own view gate is what keeps a stranger from ever reaching here.
@@ -1423,6 +1480,44 @@ class ByteController < ApplicationController
       .order(Arel.sql("LOWER(username) ASC"))
       .pluck(:id, :username)
       .map { |id, name| { id: id, name: name } }
+  end
+
+  # Answers with the button as its list row AND as the circle the board draws,
+  # so the board can put it in place without fetching itself again.
+  def save_task_button(button, status: :ok)
+    attrs = params.require(:button).permit(:label, :icon, :color, :task_id)
+    task = current_user.accessible_tasks.find_by(id: attrs[:task_id]) if attrs.key?(:task_id)
+    return render(json: { errors: ["Pick a task"] }, status: :unprocessable_entity) if attrs.key?(:task_id) && task.nil?
+
+    button.assign_attributes(attrs.except(:task_id))
+    button.task = task if task
+    button.tags = params[:button][:tags_csv].to_s.split(",").map(&:strip).compact_blank if params[:button].key?(:tags_csv)
+
+    if button.save
+      announce_board_change
+      render json: { button: task_button_wire(button), item: button.board_item }, status: status
+    else
+      render json: { errors: button.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  # Other screens showing the board it was changed from fetch it again.
+  def announce_board_change
+    board = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    broadcast_convo_change(board, :updated) if board
+  end
+
+  def task_button_wire(button)
+    {
+      id:        button.id,
+      label:     button.label,
+      icon:      button.icon,
+      color:     button.color,
+      tags:      button.tags,
+      task_id:   button.task_id,
+      task_name: button.task&.name,
+      monitor:   button.monitor_channel,
+    }
   end
 
   def credit_button_wire(button)

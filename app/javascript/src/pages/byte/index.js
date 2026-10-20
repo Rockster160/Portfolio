@@ -85,7 +85,7 @@ import { initBoardDream, paceFromMeta } from "./buddy/dream";
 import { faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted, alarmStoppedAt } from "./buddy/alarm";
 import { initSoundToggle } from "./buddy/sound_toggle";
-import { initReloadCountdown } from "./reload_countdown";
+import { initReloadCountdown, updateWanted } from "./reload_countdown";
 import { playBoardSound } from "./buddy/sound";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
 import {
@@ -254,6 +254,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   // it takes the server's, not this browser's last-viewed one, which on a
   // device that also opens the chat would be whatever was read there last.
   const isKiosk = app.dataset.kiosk === "true";
+
+  // The cache-buster a hard reload navigates with has done its job once the
+  // page is up. Left in the address it made every later reload of this screen
+  // skip the offline copy of the board (the worker only serves its shell for
+  // the bare URL), so a wall that had taken an update couldn't open offline.
+  if (new URLSearchParams(location.search).has("_bust")) {
+    const clean = new URL(location.href);
+    clean.searchParams.delete("_bust");
+    history.replaceState(history.state, "", clean.toString());
+    // The reload emptied every cache and arrived by the busted URL, which the
+    // worker doesn't keep, so this screen has no offline copy yet. Asking for
+    // the bare one through the worker stores it.
+    fetch(clean.toString(), { credentials: "same-origin" }).catch(() => {});
+  }
 
   // Who's looking. Both people see the same reaction list, stamped with the
   // reactor's id, so this is the only thing that says which one is theirs.
@@ -3606,9 +3620,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           // another device): re-scope every surface to the new watched set. The
           // chore board rewrites app.dataset.boardTags; the feeds read it fresh.
           if (app.dataset.board === "true") {
+            // A board set before groups went plural keeps its one group under
+            // `chore_tag` (ByteConversation#chore_tags reads both); missing that
+            // read the board as watching nothing on every update.
+            const legacyTag = convo.metadata?.chore_tag;
             const nextTags = Array.isArray(convo.metadata?.chore_tags)
               ? convo.metadata.chore_tags
-              : [];
+              : legacyTag ? [legacyTag] : [];
             choreBoard?.setTags(nextTags);
             boardDurations?.setTags(nextTags);
             boardAlert?.setTags(nextTags);
@@ -4040,13 +4058,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (_) {
       return;
     }
-    if (!version || version === mine) return;
+    takeUpdate(version);
+  }
 
-    try {
-      if (window.sessionStorage.getItem("byte.reloadedFor") === version) return;
-      window.sessionStorage.setItem("byte.reloadedFor", version);
-    } catch (_) {}
-    reloadCountdown.start();
+  // A newer build is waiting: count down to it, once, if it's one this tab
+  // hasn't already run (see reload_countdown.js#updateWanted).
+  function takeUpdate(version) {
+    const mine = document.querySelector('meta[name="byte-version"]')?.content;
+    if (updateWanted(version, mine)) reloadCountdown.start();
   }
 
   async function hardReload() {
@@ -4087,7 +4106,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (_) {}
 
     // (c) Cache-buster forces the navigation itself past any HTTP cache.
-    // Uses `replace` so the buster URL doesn't clutter back-history.
+    // Uses `replace` so the buster URL doesn't clutter back-history, and the
+    // page strips it again once it's up (see the top of this file).
     const url = new URL(location.href);
     url.searchParams.set("_bust", Date.now().toString(36));
     location.replace(url.toString());
@@ -4186,7 +4206,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       // button to press — a wall tablet nobody navigates would otherwise sit on
       // the shell it booted with forever. Anything unanswered on screen comes
       // back: that's what buddyKiosk.sync restores after the load.
-      if (isKiosk) reloadCountdown.start();
+      // An older worker's broadcast doesn't say which build it found, so ask
+      // the server.
+      if (isKiosk) data.version ? takeUpdate(data.version) : reloadIfDeployed();
       else setUpdateAvailable(true);
     } else if (data.kind === "sw_version") {
       const el = document.querySelector("[data-byte-version-sw]");
@@ -4200,7 +4222,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       hadInitialController = true;
       return;
     }
-    setUpdateAvailable(true);
+    // A wall screen asks the server instead: the shell version covers the
+    // worker too, so a new one that matters comes with a new version, and one
+    // that doesn't is no reason to reload the wall.
+    if (isKiosk) reloadIfDeployed();
+    else setUpdateAvailable(true);
   });
 
   await registerServiceWorker();

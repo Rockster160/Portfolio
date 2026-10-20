@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:        :remind_when,
-  summary:     "Do something when a thing HAPPENS - arriving or leaving, a chore, an event, a " \
-               "deploy, any listener: a nudge, or RUN an automation (\"once I leave, navigate me " \
-               "to Petsmart\"). A clock time is schedule_reminder.",
+  summary:     "Do something when a thing HAPPENS - arriving or leaving, a chore getting DONE, an " \
+               "item ADDED, a deploy, any listener: a nudge, or RUN an automation (\"once I leave, " \
+               "navigate me to Petsmart\"). Coming DUE or a clock time is schedule_reminder.",
   description: <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /
@@ -42,7 +42,8 @@ Buddy::Tools.register(
                  listener excludes with a leading `-` on any term.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
-                 me to floss".
+                 me to floss". Never when it comes DUE - that is
+                 `schedule_reminder` with a `chore:` anchor.
       "event"  - when they log an activity/event. `target` = the event name
                  ("Coffee", "Workout").
       "agenda" - when something is ADDED to one of their calendars, and only
@@ -51,16 +52,14 @@ Buddy::Tools.register(
                  e.g. "whenever something's added to our agenda, let me know".
                  It does NOT fire when an item comes due. "Tell me when
                  Shower is due", "message me when a task comes up" belongs to
-                 `schedule_reminder`, hung off the thing itself - and a
-                 recurring task like the shower is a CHORE, so the key is
-                 `anchor: "chore:shower+7h"` rather than an `agenda:` one. "If
-                 it isn't done yet" is a state check on that same call; its
-                 description has both shapes. Asked for exactly that, a
-                 companion set this trigger and then said it was set for the
-                 due time; the receipt underneath read "when something's
-                 added", and the next thing added to that calendar would have
-                 fired it. Set as an `agenda:` anchor instead, it was accepted,
-                 read back as waiting, and never had anything to fire on.
+                 `schedule_reminder`, hung off the thing itself - an
+                 `agenda:` anchor when they said the agenda or calendar, a
+                 `chore:` one when they said the chore. "If it isn't done yet"
+                 is a state check on that same call; its description has both
+                 shapes. Asked for exactly that, a companion set this trigger
+                 and then said it was set for the due time; the receipt
+                 underneath read "when something's added", and the next thing
+                 added to that calendar would have fired it.
       "whisper" - the dog's day changing. `target` is one of `up` (she wakes
                  up), `nap` (she goes down for a nap), `bedtime` (she goes down
                  for the night), `home` (she gets back), `out` (she leaves).
