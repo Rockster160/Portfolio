@@ -66,13 +66,68 @@
   }
 }
 
+.email-search-note {
+  margin-top: 5px;
+  color: $red;
+  font-size: 12px;
+}
+.email-search-help {
+  margin-top: 5px;
+  font-size: 12px;
+
+  summary { cursor: pointer; opacity: 0.6; }
+  ul { margin: 4px 0; padding-left: 20px; }
+}
+
+.email-tag {
+  display: inline-block;
+  margin-right: 4px;
+  border: 1px solid $base-blue;
+  border-radius: 4px;
+  background: rgba($base-blue, 0.15);
+  padding: 0 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.email-tag-form {
+  display: flex;
+  gap: 4px;
+}
+
 .emails-container {
   margin: 0 auto;
   width: 800px;
   max-width: 100%;
 
+  .email-batch-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+
+    select { width: auto; margin: 0; }
+    .email-batch {
+      margin: 0;
+      padding: 2px 8px;
+      min-width: 32px;
+      height: 28px;
+      font-size: 14px;
+    }
+  }
+
   .email-wrapper {
     position: relative;
+
+    .email-select {
+      position: absolute;
+      top: 50%;
+      left: 8px;
+      z-index: 1;
+      transform: translateY(-50%);
+      margin: 0;
+    }
+    .email-container { padding-left: 32px; }
 
     .controls {
       position: absolute;

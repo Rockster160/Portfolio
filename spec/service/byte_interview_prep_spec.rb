@@ -258,6 +258,49 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).to include("Verbatim, as the file has it")
     end
 
+    # 400 characters is a greeting and the first paragraph, so the brief was
+    # written off the top of each mail while the interviewer's name and the
+    # agenda sat below the cut - and the session read the ellipsis as content.
+    it "carries each beat whole rather than the first 400 characters of it" do
+      job.notes.create!(
+        tag:          :scheduled,
+        occurred_at:  1.day.ago,
+        follow_up_at: 2.days.from_now,
+        body:         "Hi Rocco,\n\n#{"Agenda line. " * 60}\n\nJoining you: Erik Brown.",
+      )
+
+      expect(prompt).to include("Joining you: Erik Brown.")
+      expect(prompt).not_to include("\u2026")
+    end
+
+    # The same failure as "Use #3": what was said on the last call with these
+    # people is the most useful thing there is an hour before the next one, and
+    # it was being named and withheld.
+    it "carries what was said on an earlier call, not a note that one exists" do
+      note = job.notes.create!(tag: :recruiter_call, occurred_at: 3.days.ago, body: "Screen.")
+      transcript = job.transcripts.create!(
+        job_note: note,
+        title:    "Recruiter screen",
+        turns:    [
+          { "speaker" => "Speaker 1", "text" => "We pay between 180 and 210." },
+          { "speaker" => "Speaker 2", "text" => "That works for me." },
+        ],
+      )
+      transcript.rename_speakers!(
+        "Speaker 1" => { "name" => "Dana" },
+        "Speaker 2" => { "name" => "Rocco", "me" => "1" },
+      )
+
+      expect(prompt).to include("WHAT WAS SAID ON THE EARLIER CALLS")
+      expect(prompt).to include("Dana: We pay between 180 and 210.")
+      expect(prompt).to include("ME: That works for me.")
+      expect(prompt).not_to include("you cannot open it from here")
+    end
+
+    it "leaves the recordings section out when there are none" do
+      expect(prompt).not_to include("WHAT WAS SAID ON THE EARLIER CALLS")
+    end
+
     it "points at the local posting, which outlives their listing" do
       job.update!(jobhunt_job_id: 412)
 

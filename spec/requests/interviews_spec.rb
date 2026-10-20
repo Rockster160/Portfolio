@@ -793,6 +793,91 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body.index("emails/51703")).to be < response.body.index("Thanks for applying.")
     end
 
+    # A ROW IS ONE LINE. Twelve mails printed in full is a mailbox rather than a
+    # history, so the row says what it was and the message is behind the arrow.
+    it "shows one line per beat and keeps the message behind an arrow" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(
+        tag:          :scheduled,
+        summary:      "Hiring manager round booked for Tue 3pm",
+        body:         "Hi Rocco,\n\nYour video interview is scheduled for Tue at 3:00 PM MDT.",
+        follow_up_at: 2.days.from_now,
+      )
+
+      get interview_path(job)
+
+      expect(response.body).to include("Hiring manager round booked for Tue 3pm")
+      expect(response.body).to include("<summary>The whole of it</summary>")
+      expect(response.body.index("The whole of it"))
+        .to be < response.body.index("Your video interview is scheduled")
+    end
+
+    # An arrow that opens onto the same sentence again is a control that does
+    # nothing.
+    it "gives a one-line beat no arrow to open" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(body: "Left a voicemail.")
+
+      get interview_path(job)
+
+      expect(response.body).to include("Left a voicemail.")
+      expect(response.body).not_to include("The whole of it")
+    end
+
+    # A call and the transcript of that call are one thing that happened. The
+    # transcript was a separate section further down that you had to know to go
+    # and look in.
+    it "carries the recording on the beat it belongs to" do
+      job = user.job_applications.create!(company: "Acme")
+      note = job.notes.create!(tag: :recruiter_call, body: "Spoke to Dana.")
+      transcript = job.transcripts.create!(
+        job_note: note,
+        title:    "Recruiter screen",
+        turns:    [
+          { "speaker" => "Speaker 1", "text" => "Tell me about yourself." },
+          { "speaker" => "Speaker 2", "text" => "I have been writing Rails for ten years." },
+        ],
+      )
+      transcript.rename_speakers!("Speaker 2" => { "name" => "Rocco", "me" => "1" })
+
+      get interview_path(job)
+
+      expect(response.body).to include("Recruiter screen")
+      expect(response.body).to include("I have been writing Rails for ten years.")
+      expect(response.body).to include("is-mine")
+    end
+
+    # The whole path: the form posts it, the controller permits it, the row
+    # shows it. Permitting these is a splat of `JobNote::SENTIMENT.keys`, which
+    # is exactly the sort of thing that silently permits nothing.
+    it "saves a rating and a summary typed on the note itself" do
+      job = user.job_applications.create!(company: "Acme")
+      note = job.notes.create!(tag: :interview, body: "Panel with three of them.")
+
+      patch interview_note_path(job, note), params: {
+        job_note: {
+          summary:    "Panel went long, liked two of the three",
+          did_well:   7,
+          liked_them: 9,
+        },
+      }
+
+      expect(note.reload.summary).to eq("Panel went long, liked two of the three")
+      expect(note.sentiment).to eq(did_well: 7, liked_them: 9)
+    end
+
+    # How it went, on the row. Both numbers, because the whole reason there are
+    # two of them is that they disagree.
+    it "shows what he scored a conversation out of ten" do
+      job = user.job_applications.create!(company: "Acme")
+      job.notes.create!(tag: :interview, body: "Panel.", did_well: 8, liked_them: 4)
+
+      get interview_path(job)
+
+      expect(response.body).to match(%r{did\s*<strong>8</strong>/10})
+      expect(response.body).to match(%r{liked\s*<strong>4</strong>/10})
+    end
+
     # Where the application stands is the last thing that happened, so it goes
     # at the top rather than at the end of a long scroll.
     it "shows the newest note first" do

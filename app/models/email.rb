@@ -12,6 +12,7 @@
 #  outbound_mailboxes :jsonb            not null
 #  read_at            :datetime
 #  subject            :text             not null
+#  tags               :text             default([]), not null, is an Array
 #  timestamp          :datetime         not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
@@ -20,9 +21,43 @@
 #
 
 class Email < ApplicationRecord
-  include ::Memoizable
+  include ::GroupTaggable, ::Memoizable
 
-  search_terms :id, :from, :to, :in, :subject, timestamp: :created_at
+  # `from:`/`to:` are scopes rather than columns, and named `_search` because
+  # `from` is ActiveRecord's own FROM-clause method - calling it with an address
+  # built a query against a table called `rocco@rdjn.com`.
+  search_terms(
+    :id, :subject,
+    from:        :from_search,
+    to:          :to_search,
+    address:     :address_search,
+    in:          :in,
+    is:          :is_search,
+    has:         :has_search,
+    tag:         :tag_search,
+    before:      :before_search,
+    after:       :after_search,
+    timestamp:   :timestamp,
+    read_at:     :read_at,
+    archived_at: :archived_at
+  )
+
+  # Terms that reach outside the inbox, so a search naming one is not also held
+  # to received, unarchived mail. See `query`.
+  DIRECTION_TERMS = {
+    in: [:sent, :all],
+    is: [:sent, :outbound, :inbound, :received],
+  }.freeze
+  ARCHIVE_TERMS = {
+    in: [:archived, :all],
+    is: [:archived, :unarchived],
+  }.freeze
+  ADDRESS_FIELDS = [:from, :to, :address].freeze
+
+  # An address or domain splits on `@` and `.` into operators, so
+  # `to:rocco@rdjn.com` parsed as three nested fields and matched nothing.
+  # Quoted, it is one value.
+  ADDRESS_TOKEN_RX = /(?<=\A|[\s:(])(?!["'])([^\s"'():<>=!]*(?:@|\w\.\w)[^\s"'()<>=!]*)/
 
   belongs_to :user
 
@@ -78,18 +113,115 @@ class Email < ApplicationRecord
     where("outbound_mailboxes @> ?", [{ address: address }].to_json)
   }
 
+  # ---- query-syntax scopes (called by ApplicationRecord#query via search_terms) ----
+
+  # Free text: subject, the snippet, either party's name or address, and tags.
+  # The body lives on S3 and is not searchable.
+  scope :search, ->(word) {
+    like = "%#{sanitize_sql_like(word.to_s)}%"
+    search_scope.where(
+      "emails.subject ILIKE :like OR emails.blurb ILIKE :like " \
+      "OR emails.inbound_mailboxes::text ILIKE :like " \
+      "OR emails.outbound_mailboxes::text ILIKE :like " \
+      "OR array_to_string(emails.tags, ' ') ILIKE :like",
+      like: like,
+    )
+  }
+  # Substring on the name or address, so `from:amazon.com` reaches
+  # `orders@amazon.com` and `from:billy` reaches "Billy Bob".
+  scope :mailbox_search, ->(column, value) {
+    where(
+      "EXISTS (SELECT 1 FROM jsonb_array_elements(emails.#{column}) mbx " \
+      "WHERE mbx->>'address' ILIKE :like OR mbx->>'name' ILIKE :like)",
+      like: "%#{sanitize_sql_like(value.to_s.strip)}%",
+    )
+  }
+  # Direction-aware, the same way the `from`/`to` readers are: our side is
+  # always `inbound_mailboxes`, so the sender is theirs on inbound mail and ours
+  # on outbound.
+  scope :from_search, ->(value) {
+    inbound.mailbox_search(:outbound_mailboxes, value).or(
+      outbound.mailbox_search(:inbound_mailboxes, value),
+    )
+  }
+  scope :to_search, ->(value) {
+    inbound.mailbox_search(:inbound_mailboxes, value).or(
+      outbound.mailbox_search(:outbound_mailboxes, value),
+    )
+  }
+  scope :address_search, ->(value) {
+    mailbox_search(:inbound_mailboxes, value).or(mailbox_search(:outbound_mailboxes, value))
+  }
+  scope :is_search, ->(value) {
+    case value.to_s.downcase.to_sym
+    when :read                 then read
+    when :unread               then unread
+    when :archived             then archived
+    when :unarchived, :inbox   then not_archived
+    when :inbound, :received   then inbound
+    when :outbound, :sent      then outbound
+    when :job                  then job_mail
+    when :tagged               then where.not(tags: [])
+    when :untagged             then where(tags: [])
+    else none
+    end
+  }
+  scope :has_search, ->(value) {
+    case value.to_s.downcase.to_sym
+    when :attachment, :attachments then where(has_attachments: true)
+    when :tag, :tags               then where.not(tags: [])
+    else none
+    end
+  }
+  scope :tag_search, ->(value) { tagged(value) }
+  # `before:` is exclusive and `after:` inclusive, the way a mail client reads
+  # them: `after:2026-10-01 before:2026-10-02` is the whole of the 1st.
+  scope :before_search, ->(value) { date_search(:<, value) }
+  scope :after_search, ->(value) { date_search(:>=, value) }
+  scope :date_search, ->(operator, value) {
+    begin
+      where("emails.timestamp #{operator} ?", parse_date(value.to_s, operator: operator))
+    rescue UnreadableDate => e
+      where(note_search_problem("could not read the date #{e.message}"))
+    end
+  }
+
+  # A blank search is the inbox. A search stays inside it - received and not
+  # archived - unless it names something that reaches past it: a direction or
+  # an address lifts the first, an archive state the second.
+  #
+  # Applied onto `all` rather than returned bare, because the base query
+  # rebuilds from `unscoped` and would otherwise hand back every user's mail.
   def self.query(q)
-    return inbound.not_archived if q.blank?
+    return all.inbound.not_archived if q.blank?
 
-    res = super
+    q = q.to_s.gsub(ADDRESS_TOKEN_RX) { "\"#{Regexp.last_match(1)}\"" }
+    terms = query_terms(q)
+    res = merge(super)
 
-    mailboxes = Tokenizing::Node.parse(q).flatten.filter_map { |node|
-      node.is_a?(Hash) && node[:field] == "in" ? node[:conditions] : nil
-    }.map(&:to_sym)
-    res = res.inbound unless mailboxes.intersect?([:all, :sent])
-    res = res.not_archived unless mailboxes.intersect?([:all, :archived])
-
+    res = res.inbound unless terms_reach?(terms, DIRECTION_TERMS) || terms.keys.intersect?(ADDRESS_FIELDS)
+    res = res.not_archived unless terms_reach?(terms, ARCHIVE_TERMS) || terms.key?(:archived_at)
     res
+  end
+
+  # { field => [values] } for every `field:value` in the search, however deep.
+  # A bare address counts as `address:`, since it is matched on either side.
+  def self.query_terms(q)
+    ::Tokenizing::Node.parse(q).flatten.each_with_object({}) { |node, terms|
+      # A bare word is a plain string beside other terms, and a field with no
+      # operator when it stands alone.
+      node = { field: node } if node.is_a?(::String)
+      next unless node.is_a?(Hash) && node[:field].present?
+
+      field, values = node[:field].to_sym, Array.wrap(node[:conditions]).grep(::String)
+      field, values = :address, [node[:field]] if node[:operator].nil? && node[:field].include?("@")
+
+      (terms[field] ||= []).concat(values.map { |val| val.downcase.to_sym })
+    }
+  end
+
+  def self.terms_reach?(terms, reaching)
+    reaching.any? { |field, values| terms.fetch(field, []).intersect?(values) }
   end
 
   # TODO: SEND emails should also use S3
@@ -199,11 +331,29 @@ class Email < ApplicationRecord
     boolean ? archive! : update!(archived_at: nil)
   end
 
-  def archived=(boolean)
+  # Cast, because these arrive as form params and `"false"` is truthy.
+  def archived=(value)
+    boolean = ::ActiveModel::Type::Boolean.new.cast(value)
     if boolean && archived_at.nil?
       self.archived_at = ::Time.current
     elsif !boolean && archived_at.present?
       self.archived_at = nil
     end
+  end
+
+  def read=(value)
+    boolean = ::ActiveModel::Type::Boolean.new.cast(value)
+    if boolean && read_at.nil?
+      self.read_at = ::Time.current
+    elsif !boolean && read_at.present?
+      self.read_at = nil
+    end
+  end
+
+  # The comma-separated form of `tags`, for a text field.
+  def tag_list = tags.join(", ")
+
+  def tag_list=(value)
+    self.tags = ::GroupTaggable.normalize(value)
   end
 end

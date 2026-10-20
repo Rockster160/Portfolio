@@ -836,7 +836,7 @@ RSpec.describe JobNote do
     def invite(name, start_at: at, uid: "evt-1")
       google.agenda_items.create!(
         name: name, kind: :event, start_at: start_at, end_at: start_at + 1.hour,
-        status: :confirmed, external_uid: uid,
+        status: :confirmed, external_uid: uid
       )
     end
 
@@ -905,6 +905,118 @@ RSpec.describe JobNote do
       note = job.notes.create!(body: "Chase them", tag: :heard_back, follow_up_at: at)
 
       expect(note.reload.follow_up_item.notes).to start_with(job.interview_url)
+    end
+
+    # The half past 500 characters is the half that says who is joining the call
+    # and what it is about. The brief is written off this row, and it reported
+    # the ellipsis as a fact about the interview.
+    it "carries the whole message, however long it is" do
+      said = "Hi Rocco,\n\n#{"Agenda line. " * 80}\n\nJoining you: Erik Brown."
+      note = job.notes.create!(body: said, tag: :scheduled, follow_up_at: at)
+
+      notes = note.reload.follow_up_item.notes
+      expect(notes).to include("Joining you: Erik Brown.")
+      expect(notes).not_to include("...")
+      expect(notes).not_to include("\u2026")
+    end
+  end
+
+  describe "the one line the timeline reads" do
+    it "is the summary when something wrote one" do
+      note = job.notes.create!(
+        tag:          :scheduled,
+        occurred_at:  1.hour.ago,
+        follow_up_at: 2.days.from_now,
+        summary:      "Hiring manager round booked for Tue 3pm with Erik Brown",
+        body:         "Hi Rocco,\n\nThanks for providing your availability!",
+      )
+
+      expect(note.headline).to eq("Hiring manager round booked for Tue 3pm with Erik Brown")
+    end
+
+    # A greeting is the first line about as often as not, and the date is
+    # already beside it on the row.
+    it "skips the greeting and takes the first line that says something" do
+      note = job.notes.create!(
+        tag:         :note,
+        occurred_at: 1.hour.ago,
+        body:        "Hi Rocco,\n\nWe would like to move you to a take-home.\n\nBest,\nDana",
+      )
+
+      expect(note.headline).to eq("We would like to move you to a take-home.")
+    end
+
+    it "falls back to the tag when the beat has no words at all" do
+      note = job.notes.create!(tag: :applied, occurred_at: 1.hour.ago)
+
+      expect(note.headline).to eq("Applied")
+    end
+
+    # An arrow that opens onto the same sentence again is a control that does
+    # nothing, so a one-line note does not get one.
+    it "says there is nothing more to open when the body IS the line" do
+      note = job.notes.create!(tag: :note, occurred_at: 1.hour.ago, body: "Left a voicemail.")
+
+      expect(note.headline).to eq("Left a voicemail.")
+      expect(note.more_to_read?).to be(false)
+    end
+
+    it "says there is more to open when the beat keeps a whole message" do
+      note = job.notes.create!(
+        tag:         :note,
+        occurred_at: 1.hour.ago,
+        body:        "Hi Rocco,\n\nWe would like to move you to a take-home.\n\nBest,\nDana",
+      )
+
+      expect(note.more_to_read?).to be(true)
+    end
+  end
+
+  describe "how it went" do
+    let(:call) {
+      job.notes.create!(tag: :recruiter_call, occurred_at: 1.hour.ago, body: "Spoke to Dana.")
+    }
+
+    it "is only asked about a conversation he was in" do
+      expect(call).to be_conversation
+      expect(job.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)).not_to be_conversation
+    end
+
+    it "takes a rating out of ten on each question" do
+      call.update!(did_well: 8, liked_them: 6)
+
+      expect(call.sentiment).to eq(did_well: 8, liked_them: 6)
+      expect(call.sentiment_average).to eq(7.0)
+    end
+
+    # Half-rated is an ordinary thing: how it went is known immediately, whether
+    # he wants the job sometimes takes a day. The blank must not read as a zero.
+    it "averages only the questions he answered" do
+      call.update!(did_well: 9)
+
+      expect(call).to be_rated
+      expect(call.sentiment).to eq(did_well: 9)
+      expect(call.sentiment_average).to eq(9.0)
+    end
+
+    it "is unrated rather than zero when he never scored it" do
+      expect(call).not_to be_rated
+      expect(call.sentiment).to eq({})
+      expect(call.sentiment_average).to be_nil
+    end
+
+    it "refuses a score off the scale" do
+      call.did_well = 11
+
+      expect(call).not_to be_valid
+      expect(call.errors[:did_well]).to be_present
+    end
+
+    it "takes the bottom of the scale, which is not the same as blank" do
+      call.update!(did_well: 0)
+
+      expect(call).to be_rated
+      expect(call.sentiment_average).to eq(0.0)
     end
   end
 

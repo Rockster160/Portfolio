@@ -29,6 +29,20 @@
       <td>Subject</td>
       <td><%= @email.subject.presence || "<No Subject>" %></td>
     </tr>
+    <tr class="tags">
+      <td>Tags</td>
+      <td>
+        <%= form_with model: @email, method: :patch, class: "email-tag-form" do |f| %>
+          <%= f.text_field :tag_list, placeholder: "receipts, travel", list: "email-tag-names" %>
+          <%= f.submit "Save" %>
+        <% end %>
+        <datalist id="email-tag-names">
+          <% current_user.emails.where.not(tags: []).tag_names.each do |tag| %>
+            <option value="<%= tag %>"></option>
+          <% end %>
+        </datalist>
+      </td>
+    </tr>
   </table>
 </div>
 <div class="skinny-container">

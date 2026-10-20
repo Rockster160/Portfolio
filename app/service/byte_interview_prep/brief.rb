@@ -16,8 +16,16 @@ module ByteInterviewPrep
     # How much of the timeline to hand over. An application with forty beats on
     # it has them because mail keeps arriving; the last dozen are the ones that
     # describe the conversation being prepared for.
+    #
+    # THE COUNT IS THE LIMIT, AND IT IS THE ONLY ONE. Each beat used to be cut
+    # at 400 characters, which is a greeting and the first paragraph - so the
+    # brief was written off the top of each mail and the interviewer's name, the
+    # agenda and what the round is actually about all sat below the cut. Worse,
+    # the session read the ellipsis as content and put it in the brief as a fact
+    # about the conversation. A beat is a mail he was sent and it is capped at
+    # `JobNote::MAX_BODY` where it is stored; twelve of those is a prompt worth
+    # paying for, and the one thing a brief cannot do is be thin.
     MOST_NOTES = 12
-    NOTE_LIMIT = 400
 
     def stamp(time, user)
       return "(no time on the row)" if time.nil?
@@ -68,10 +76,12 @@ module ByteInterviewPrep
           note.tag_label,
           ("with #{note.spoke_to}" if note.spoke_to.present?),
         ].compact.join(" - ")
-        body = note.body.to_s.strip.truncate(NOTE_LIMIT)
+        body = note.body.to_s.strip
 
-        body.empty? ? "- #{head}" : "- #{head}: #{body}"
-      }.join("\n")
+        # Under its own line rather than run onto it. A beat carries the whole
+        # mail now, and a mail on the same line as its date is a wall.
+        body.empty? ? "- #{head}" : "- #{head}:\n\n#{body.indent(2)}"
+      }.join("\n\n")
     end
 
     # Who he has already met, named. Both places it gets written down: the
@@ -96,16 +106,41 @@ module ByteInterviewPrep
         "Say what is known about them where it helps and skip them where it does not."
     end
 
+    # THE CALLS THEMSELVES, not a list of them.
+    #
+    # This named the recordings and said they were on the application's page -
+    # "you cannot open it from here" - which is the same failure as "Use #3".
+    # What was said on the last call with these people is the single most useful
+    # thing there is an hour before the next one, and it was being withheld from
+    # the one session that had a reason to read it.
+    #
+    # Named speakers, because that is what makes it a conversation rather than a
+    # wall: `mine?` is him, and a label nobody has named yet goes in as the
+    # label so the session can see it has not been placed.
     def recordings_block(application)
       found = application.transcripts.to_a
       return nil if found.empty?
 
-      titles = found.map { |transcript|
-        [transcript.label, transcript.occurred_at&.strftime("%b %-d")].compact_blank.join(", ")
-      }
-      "Earlier calls with them have been transcribed (#{titles.join("; ")}). " \
-        "They are on the application's own page - you cannot open it from here, " \
-        "but it is worth saying in the brief if something from one of them matters."
+      found.map { |transcript|
+        head = [transcript.label, transcript.occurred_at&.strftime("%b %-d")].compact_blank.join(", ")
+        said = transcript.turns.map { |turn|
+          label = turn["speaker"].to_s
+          who = transcript.mine?(label) ? "ME" : transcript.name_for(label)
+          "#{who}: #{turn["text"]}"
+        }
+        "#{head}:\n\n#{said.join("\n").indent(2)}"
+      }.join("\n\n")
+    end
+
+    # Its own heading, and only when there is one. Left out entirely rather than
+    # headed with "nothing recorded" - most applications have no call on them,
+    # and an empty section is one more thing in a prompt that has to be read
+    # before it can be dismissed.
+    def recordings_section(application)
+      said = recordings_block(application)
+      return nil if said.blank?
+
+      ["", "WHAT WAS SAID ON THE EARLIER CALLS", "What they actually told me, and what I actually said. `ME` is me.", "", said].join("\n")
     end
 
     def text(application, item, user: nil)
@@ -121,12 +156,12 @@ module ByteInterviewPrep
         #{job_block(application)}
 
         #{people_block(application)}
-        #{recordings_block(application)}
 
         WHAT HAS HAPPENED SO FAR
-        Newest first. This is the whole of what I have written down about them.
+        Newest first, and each beat is the message ITSELF rather than a summary of it - a confirmation mail carries the agenda and the interviewer's name, a rejection carries whatever reason they gave. Read them; this is the whole of what I have written down about them.
 
         #{timeline_block(application, user)}
+        #{recordings_section(application)}
 
         WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST
         Everything else follows from it, and the material above is what decides it - the title on the row, who it is with, how long it is, and what the last beat on the timeline said. A 30 minute first call with a recruiter is not a technical screen, and a brief that prepares me for the wrong one is worse than no brief.

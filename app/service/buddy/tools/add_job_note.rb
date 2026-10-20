@@ -128,7 +128,14 @@ Buddy::Tools.register(
     never has to be shortened. It is what the card shows them; `note` is what
     gets kept. When you are logging a message word for word, the card reading
     "Hi Rocco," tells them nothing - put the gist here and leave the words
-    where they belong. Nothing stores it.
+    where they belong.
+
+    **It is KEPT, and it is what the timeline reads.** Every beat holds the
+    whole message, so the application's page shows this line and keeps the
+    message itself behind an arrow - which makes this the sentence he sees when
+    he looks back at the row in three weeks. Write it as a fact about the
+    application ("hiring manager round booked for Tue 3pm with Erik Brown"),
+    not as a note about mail arriving ("an email from brightwheel").
   TXT
   args:        {
     company:          { type: :string, required: true, description: "Which application - fuzzy, the company name" },
@@ -393,7 +400,7 @@ Buddy::Tools.register(
     # filed against one application onto another. A mail nothing has filed, or
     # a beat mentioned out loud with no email at all, still creates.
     existing = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
-    before   = existing&.slice(:tag, :body, :spoke_to, :follow_up_at, :duration_minutes)
+    before   = existing&.slice(:tag, :body, :summary, :spoke_to, :follow_up_at, :duration_minutes)
 
     note = (existing || job.notes.new)
     # A row the mail filed already holds the mail's own words. Reading it sets
@@ -414,6 +421,15 @@ Buddy::Tools.register(
       spoke_to:         payload[:spoke_to].presence,
       follow_up_at:     payload[:follow_up_at],
       duration_minutes: payload[:duration_minutes],
+      # The line the timeline shows with the message collapsed. It was already
+      # being written for the card and then dropped, so every beat on the board
+      # had to be read whole to find out what it was.
+      #
+      # `||` rather than straight assignment: a revision of a note that already
+      # has one must not blank it, and the common revision is this tool setting
+      # the TAG on a mail `log_arrival!` filed - a second call with no summary
+      # in it.
+      summary:          payload[:summary].presence || note.summary.presence,
     )
     note.save!
     job.touch_activity!

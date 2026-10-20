@@ -15,6 +15,21 @@
     <div title="failed" class="email-filter" data-filter="in:failed"><i class="ti ti-mdi-email_alert"></i></div>
     <div title="all" class="email-filter" data-filter="in:all"><i class="ti ti-oct-mail"></i></div>
   </div>
+  <% @search_notes.each do |note| %>
+    <div class="email-search-note">Search: <%= note %></div>
+  <% end %>
+  <details class="email-search-help">
+    <summary>Search syntax</summary>
+    <ul>
+      <li><code>from:amazon.com</code> <code>to:rocco@rdjn.com</code> <code>address:billy</code> &mdash; name or address, either side</li>
+      <li><code>subject:invoice</code> &mdash; bare words search subject, snippet, addresses, and tags</li>
+      <li><code>tag:receipts</code> <code>is:tagged</code> <code>is:untagged</code></li>
+      <li><code>is:read</code> <code>is:unread</code> <code>is:archived</code> <code>is:sent</code> <code>is:inbound</code> <code>is:job</code> <code>has:attachment</code></li>
+      <li><code>in:inbox</code> <code>in:sent</code> <code>in:archived</code> <code>in:all</code></li>
+      <li><code>after:2026-10-01</code> <code>before:2026-10-15</code> <code>timestamp:2026-10</code> <code>read_at&gt;2026-10-01</code></li>
+      <li><code>-tag:x</code>, <code>OR</code>, and <code>( )</code> combine terms. A search stays in received, unarchived mail unless it names a direction, an address, or an archive state.</li>
+    </ul>
+  </details>
 </div>
 
 <div class="emails-container">
@@ -25,8 +40,24 @@
     <%= page_entries_info @emails %>
   </div>
 
+  <div class="email-batch-bar" data-batch-url="<%= batch_emails_path %>" data-query="<%= params[:q] %>" data-total="<%= @emails.total_count %>">
+    <label title="Select this page"><input type="checkbox" class="email-select-page"></label>
+    <select class="email-batch-target">
+      <option value="selected" class="email-batch-selected-option">Selected (0)</option>
+      <option value="page" selected>This page (<%= @emails.size %>)</option>
+      <option value="all">All <%= @emails.total_count %> matching</option>
+    </select>
+    <button type="button" class="email-batch" data-operation="archive" title="Archive"><i class="ti ti-oct-trashcan"></i></button>
+    <button type="button" class="email-batch" data-operation="unarchive" title="Unarchive"><i class="ti ti-oct-inbox"></i></button>
+    <button type="button" class="email-batch" data-operation="read" title="Mark read"><i class="ti ti-oct-mail_read"></i></button>
+    <button type="button" class="email-batch" data-operation="unread" title="Mark unread"><i class="ti ti-oct-mail"></i></button>
+    <button type="button" class="email-batch" data-operation="add_tags" title="Add tags">+ Tag</button>
+    <button type="button" class="email-batch" data-operation="remove_tags" title="Remove tags">&minus; Tag</button>
+  </div>
+
   <% @emails.each do |email| %>
     <div class="email-wrapper">
+      <input type="checkbox" class="email-select" value="<%= email.id %>">
       <a href="<%= email_path(email) %>" class="email-container <%= :unread unless email.read? %>">
         <div class="timestamp"><%= email.timestamp.in_time_zone("Mountain Time (US & Canada)").to_formatted_s(:simple_with_time) %></div>
         <div class="from">
@@ -42,7 +73,12 @@
           <%= email.show_mailboxes(:outbound) %>
         </div>
         <div class="to"><%= email.show_mailboxes(:inbound) %></div>
-        <div class="subject"><%= email.subject.presence || "<No Subject>" %></div>
+        <div class="subject">
+          <% email.tags.each do |tag| %>
+            <span class="email-tag" data-tag="<%= tag %>"><%= tag %></span>
+          <% end %>
+          <%= email.subject.presence || "<No Subject>" %>
+        </div>
         <div class="body"><%= email.blurb.presence || "<No Content>" %></div>
       </a>
       <div class="controls">

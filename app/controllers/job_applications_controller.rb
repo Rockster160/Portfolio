@@ -304,6 +304,7 @@ class JobApplicationsController < ApplicationController
 
     params.require(:job_note).permit(
       :body,
+      :summary,
       :tag,
       :occurred_at,
       :source,
@@ -311,6 +312,7 @@ class JobApplicationsController < ApplicationController
       :spoke_to,
       :duration_minutes,
       :follow_up_at,
+      *JobNote::SENTIMENT.keys,
     )
   end
 

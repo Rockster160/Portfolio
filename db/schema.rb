@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_16_224912) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_20_210523) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1073,7 +1073,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_16_224912) do
     t.datetime "updated_at", null: false
     t.text "mail_id", null: false
     t.jsonb "job_triage", default: {}, null: false
+    t.text "tags", default: [], null: false, array: true
     t.index ["mail_id", "timestamp"], name: "index_emails_on_mail_id_and_timestamp"
+    t.index ["tags"], name: "index_emails_on_tags", using: :gin
     t.index ["user_id", "timestamp"], name: "index_emails_on_job_mail", where: "((job_triage ->> 'job'::text) = 'true'::text)"
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
@@ -1402,6 +1404,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_16_224912) do
     t.bigint "agenda_item_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "summary"
+    t.integer "did_well"
+    t.integer "liked_them"
     t.index ["agenda_item_id"], name: "index_job_notes_on_agenda_item_id"
     t.index ["job_application_id", "occurred_at"], name: "index_job_notes_on_job_application_id_and_occurred_at"
     t.index ["job_application_id"], name: "index_job_notes_on_job_application_id"

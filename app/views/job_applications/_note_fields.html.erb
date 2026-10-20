@@ -22,6 +22,38 @@
     </div>
   </div>
 
+  <%# The line the timeline shows with the beat collapsed. Above the extras
+     rather than inside them: every beat has one, and a mail filed by Buddy
+     arrives with it already written. %>
+  <div class="form-field">
+    <%= f.label :summary, "In one line" %>
+    <%= f.text_field :summary, maxlength: JobNote::MAX_SUMMARY,
+          placeholder: "Hiring manager round booked for Tue 3pm with Erik Brown" %>
+    <span class="field-hint">Optional. The first line of what happened is used when this is blank.</span>
+  </div>
+
+  <%# RATED, NOT CLASSIFIED. Only shown for a beat he was actually in - see
+     JobNote::CONVERSATIONS - because a slider under an ATS receipt is a number
+     that means nothing. The tag decides, so JS shows and hides it as the Type
+     dropdown moves; with no JS it is simply always there, which is the right
+     way round for a field nobody is obliged to fill in. %>
+  <div class="note-sentiment" data-note-sentiment
+       data-conversation-tags="<%= JobNote::CONVERSATIONS.join(" ") %>">
+    <div class="split-fields">
+      <% JobNote::SENTIMENT.each do |field, question| %>
+        <div class="form-field">
+          <%= f.label field, question %>
+          <%= f.number_field field, in: JobNote::SENTIMENT_FLOOR..JobNote::SENTIMENT_CEILING,
+                step: 1, placeholder: "0-10" %>
+        </div>
+      <% end %>
+    </div>
+    <span class="field-hint">
+      Out of <%= JobNote::SENTIMENT_CEILING %>, and only if you want to - blank
+      is unrated, not zero. These average across the whole application.
+    </span>
+  </div>
+
   <details class="note-extras" <%= "open" if note_extras_open %>>
     <summary>Details &amp; follow-up</summary>
 

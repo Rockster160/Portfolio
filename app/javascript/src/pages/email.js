@@ -66,6 +66,72 @@ $(document).ready(function() {
 
     updateFilters()
   })
+
+  // Clicking a tag on a row searches for it instead of opening the email.
+  $(document).on("click", ".email-tag", function(evt) {
+    evt.preventDefault()
+    evt.stopPropagation()
+    let tag = $(this).attr("data-tag")
+    $(".search").val(/\s/.test(tag) ? "tag:\"" + tag + "\"" : "tag:" + tag)
+    runSearch()
+  })
+
+  let updateSelection = function() {
+    let selected = $(".email-select:checked").length
+    $(".email-batch-selected-option").text("Selected (" + selected + ")")
+    $(".email-batch-target").val(selected > 0 ? "selected" : "page")
+    $(".email-select-page").prop("checked", selected > 0 && selected == $(".email-select").length)
+  }
+
+  $(document).on("change", ".email-select", updateSelection)
+  .on("change", ".email-select-page", function() {
+    $(".email-select").prop("checked", $(this).prop("checked"))
+    updateSelection()
+  })
+
+  $(document).on("click", ".email-batch", function() {
+    let bar = $(".email-batch-bar")
+    let operation = $(this).attr("data-operation")
+    let target = $(".email-batch-target").val()
+    let body = { operation: operation }
+
+    if (target == "all") {
+      body.all = true
+      body.q = bar.attr("data-query")
+    } else {
+      let checkboxes = target == "selected" ? $(".email-select:checked") : $(".email-select")
+      body.ids = checkboxes.map(function() { return $(this).val() }).toArray()
+      if (body.ids.length == 0) { return }
+    }
+
+    if (operation == "add_tags" || operation == "remove_tags") {
+      let tags = window.prompt((operation == "add_tags" ? "Add" : "Remove") + " tags (comma separated)")
+      if (!tags || !tags.trim()) { return }
+      body.tags = tags
+    }
+
+    if (target == "all" && !window.confirm("Apply to all " + bar.attr("data-total") + " matching emails?")) {
+      return
+    }
+
+    let csrf = document.querySelector("meta[name='csrf-token']")
+    fetch(bar.attr("data-batch-url"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRF-Token": csrf ? csrf.content : "",
+      },
+      body: JSON.stringify(body),
+    }).then(function(res) {
+      return res.json().then(function(json) {
+        if (!res.ok) { throw new Error(json.error || "Batch change failed") }
+        window.location.reload()
+      })
+    }).catch(function(err) {
+      window.alert(err.message)
+    })
+  })
 })
 
 $(document).ready(function() {

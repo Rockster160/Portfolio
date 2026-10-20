@@ -4,11 +4,14 @@
 #
 #  id                 :bigint           not null, primary key
 #  body               :text
+#  did_well           :integer
 #  duration_minutes   :integer
 #  follow_up_at       :datetime
+#  liked_them         :integer
 #  occurred_at        :datetime         not null
 #  source             :string
 #  spoke_to           :string
+#  summary            :string
 #  tag                :integer          default("note"), not null
 #  url                :string
 #  created_at         :datetime         not null
@@ -18,6 +21,7 @@
 #
 class JobNote < ApplicationRecord
   belongs_to :job_application
+  has_many :transcripts, class_name: "JobTranscript", dependent: :nullify
 
   # The beats of an application. `note` is the default and carries no meaning
   # beyond "this happened"; the rest read as a status in the timeline, and
@@ -162,6 +166,36 @@ class JobNote < ApplicationRecord
 
   MAX_BODY = 10_000
 
+  # The one line the timeline shows while the beat is collapsed. Short enough to
+  # read at a glance and long enough to carry what a mail actually said; past
+  # this it is the body again, and the body is one click away.
+  MAX_SUMMARY = 300
+
+  # HOW IT WENT, AND HOW THEY WERE. Two numbers rather than one, because they
+  # come apart constantly: a screen he fumbled with somebody he would happily
+  # work for, and a polished hour with a company he came away cold on. Averaged
+  # into one figure they cancel out and the row reads as a 5 either way.
+  #
+  # 0-10 rather than 1-5, in his words, and the ends mean something: 0 is "that
+  # was a disaster" / "I would not take this job", 10 is "could not have gone
+  # better" / "I want to work here". A rating is never required and nil is NOT
+  # zero - see the migration.
+  SENTIMENT_FLOOR = 0
+  SENTIMENT_CEILING = 10
+
+  # The questions, in the order they are asked. `did_well` first because it is
+  # the one he will have an answer to the moment the call ends.
+  SENTIMENT = {
+    did_well:   "How well did I do?",
+    liked_them: "How much did I like them?",
+  }.freeze
+
+  # THE BEATS WORTH RATING: the ones where he was in the room. A mail has no
+  # opinion in it, and offering a slider under an ATS receipt is how a timeline
+  # fills up with numbers that mean nothing. `interview` and `recruiter_call`
+  # are the two tags that say a conversation happened.
+  CONVERSATIONS = %w[recruiter_call interview].freeze
+
   # An event needs a length before the calendar will take it. `duration_minutes`
   # is the answer whenever it was given; this is the slot to book when it
   # wasn't, and it's editable on the agenda like any other event.
@@ -219,9 +253,17 @@ class JobNote < ApplicationRecord
   validates :body, length: { maximum: MAX_BODY }
   validates :occurred_at, presence: true
   validates :source, :spoke_to, length: { maximum: 120 }
+  validates :summary, length: { maximum: MAX_SUMMARY }
   validates :url, length: { maximum: 2_000 }
   validates :duration_minutes,
     numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 24 * 60 },
+    allow_nil:    true
+  validates :did_well, :liked_them,
+    numericality: {
+      only_integer:             true,
+      greater_than_or_equal_to: SENTIMENT_FLOOR,
+      less_than_or_equal_to:    SENTIMENT_CEILING,
+    },
     allow_nil:    true
 
   # Oldest first — the order it happened in, which is what everything that
@@ -305,6 +347,62 @@ class JobNote < ApplicationRecord
 
   def tag_label
     TAG_LABELS[tag] || "Note"
+  end
+
+  # THE ONE LINE, so the timeline can be a timeline.
+  #
+  # Every beat now keeps the whole message, which is the right thing to keep and
+  # the wrong thing to print: twelve mails at full length is not a history of an
+  # application, it is a mailbox. So the row shows this and the message sits
+  # behind the arrow.
+  #
+  # `summary` first, because the model writes one for every mail it files and
+  # that is a sentence about what the mail SAYS. Failing that, the first line of
+  # the body that is not a greeting - which for a mail is reliably the ask, and
+  # for something he typed is the line he led with. Failing even that, the tag,
+  # because "Applied" under a chip reading APPLIED is still better than a blank
+  # row.
+  GREETING = /\A(hi|hey|hello|dear|greetings|good (morning|afternoon|evening))\b[^\n]{0,40}\z/i
+
+  def headline
+    summary.presence || opening_line || tag_label
+  end
+
+  # Is the whole of it already on the row? A one-line note is its own summary,
+  # and an arrow that opens to show the same sentence again is a control that
+  # does nothing.
+  def more_to_read?
+    said = body.to_s.strip
+    return false if said.empty?
+
+    said != headline
+  end
+
+  # A conversation he was part of, and so a beat he can rate. The tag is the
+  # whole test - see CONVERSATIONS.
+  def conversation?
+    CONVERSATIONS.include?(tag.to_s)
+  end
+
+  def rated?
+    SENTIMENT.keys.any? { |field| self[field].present? }
+  end
+
+  # The pair, as `{did_well: 8, liked_them: 6}`, with the ones he never answered
+  # left out rather than zeroed.
+  def sentiment
+    SENTIMENT.keys.index_with { |field| self[field] }.compact
+  end
+
+  # One number for the row, and it is the mean of the answers he GAVE. Rating
+  # only half of them is an ordinary thing to do - "that went well" is known
+  # immediately, "do I want to work here" sometimes takes a day - and reading
+  # the blank as a nil would hide the half he did answer.
+  def sentiment_average
+    given = sentiment.values
+    return nil if given.empty?
+
+    (given.sum.to_f / given.size).round(1)
   end
 
   # What this beat is asking HIM for, or nil when the next move is theirs. One
@@ -472,6 +570,18 @@ class JobNote < ApplicationRecord
     fresh.or(booked.where(follow_up_at: follow_up_at..))
   end
 
+  # The first line that says something, for a beat nothing wrote a summary for.
+  #
+  # A greeting is the first line about as often as not, and `Hi Rocco,` on the
+  # timeline is worth less than the date already beside it - so the search
+  # starts below it. Capped at the summary length, because that is the space
+  # this is standing in for.
+  def opening_line
+    said = body.to_s.split("\n").map(&:strip).reject(&:empty?)
+    found = said.find { |line| !line.match?(GREETING) }
+    found.presence&.truncate(MAX_SUMMARY)
+  end
+
   # Blank lines off the top and bottom, and nothing else. `strip` was doing this
   # job and taking the FIRST line's indentation with it, so a block pasted in
   # already indented came out with line one flush and the rest hanging — ragged
@@ -553,8 +663,16 @@ class JobNote < ApplicationRecord
   # The link to the application's own page FIRST, then whatever the beat said.
   # The row on the calendar is what gets read on the day - and from a notification
   # in the morning there is no board in front of you to find the company on.
+  #
+  # ALL OF IT. The column is `text` and the beat is usually a confirmation mail,
+  # where the half past 500 characters is the half that says who is joining the
+  # call and what it is about. Everything that SHOWS this already clamps for its
+  # own space - 40 characters in an event search result, 60 in Buddy's context -
+  # so the truncation here bought nothing and cost the only full copy the
+  # calendar row had. The brief written off this row then reported the ellipsis
+  # as a fact about the interview.
   def item_notes
-    [job_application.interview_url, body.to_s.truncate(500).presence].compact.join("\n\n")
+    [job_application.interview_url, body.to_s.strip.presence].compact.join("\n\n")
   end
 
   # Somewhere local and writable. A Google-managed calendar is deliberately

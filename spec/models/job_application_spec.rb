@@ -506,4 +506,58 @@ RSpec.describe JobApplication do
       expect(job.reload.owed_now).to be_nil
     end
   end
+
+  describe "how the whole application has felt" do
+    let(:job) { user.job_applications.create!(company: "Reserv") }
+
+    def call(at:, did_well: nil, liked_them: nil)
+      job.notes.create!(
+        tag:         :recruiter_call,
+        occurred_at: at,
+        body:        "Spoke to them.",
+        did_well:    did_well,
+        liked_them:  liked_them,
+      )
+    end
+
+    it "averages each question across every conversation he rated" do
+      call(at: 3.days.ago, did_well: 8, liked_them: 4)
+      call(at: 1.day.ago, did_well: 6, liked_them: 6)
+
+      expect(job.reload.sentiment).to eq(did_well: 7.0, liked_them: 5.0)
+    end
+
+    # The two come apart constantly - a screen he fumbled with people he would
+    # happily work for - and that is the whole reason there are two of them.
+    it "keeps the two apart rather than collapsing them into one number" do
+      call(at: 1.day.ago, did_well: 2, liked_them: 10)
+
+      expect(job.reload.sentiment).to eq(did_well: 2.0, liked_them: 10.0)
+    end
+
+    it "leaves out a question nobody has answered" do
+      call(at: 1.day.ago, did_well: 7)
+
+      expect(job.reload.sentiment).to eq(did_well: 7.0)
+    end
+
+    # The mean of the ANSWERS, not the mean of the two averages: weighting a
+    # single company score to half the row is how one bad afternoon sinks a job
+    # he otherwise likes.
+    it "weighs every answer the same in the single figure" do
+      call(at: 3.days.ago, did_well: 9)
+      call(at: 2.days.ago, did_well: 9)
+      call(at: 1.day.ago, did_well: 9, liked_them: 3)
+
+      expect(job.reload.sentiment_average).to eq(7.5)
+    end
+
+    it "says nothing at all when he has rated nothing" do
+      call(at: 1.day.ago)
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+
+      expect(job.reload.sentiment).to eq({})
+      expect(job.sentiment_average).to be_nil
+    end
+  end
 end

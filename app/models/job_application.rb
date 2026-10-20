@@ -278,6 +278,42 @@ class JobApplication < ApplicationRecord
     booked.map(&:follow_up_at).select(&:future?).min
   end
 
+  # HOW THIS ONE HAS FELT, averaged over the conversations he rated.
+  #
+  # Per question rather than one number, for the reason `JobNote::SENTIMENT`
+  # gives: the two come apart, and the useful reading is a row that says "I did
+  # well, I did not like them" rather than a 5. `{did_well: 7.5, liked_them: 4.0}`,
+  # with a question nobody answered left out entirely.
+  #
+  # In memory, like `next_interview_at` and for the same reason: the board loads
+  # every card's notes already, and a query per row to average two integers is a
+  # query per row.
+  def sentiment
+    rated = notes.select(&:rated?)
+    return {} if rated.empty?
+
+    JobNote::SENTIMENT.keys.index_with { |field|
+      given = rated.filter_map { |note| note[field] }
+      (given.sum.to_f / given.size).round(1) if given.any?
+    }.compact
+  end
+
+  # One figure for the row, over every answer he gave on every conversation.
+  # Deliberately the mean of the ANSWERS and not the mean of the two averages:
+  # three calls rated for how they went and one of those also rated for the
+  # company is four answers, and weighting the single company score to half the
+  # row is how one bad afternoon sinks a job he otherwise likes.
+  def sentiment_average
+    given = notes.select(&:rated?).flat_map { |note| note.sentiment.values }
+    return nil if given.empty?
+
+    (given.sum.to_f / given.size).round(1)
+  end
+
+  def rated_conversations
+    notes.select(&:rated?).sort_by { |note| [note.occurred_at, note.id] }
+  end
+
   # The interview that has already HAPPENED with nothing recorded since.
   #
   # `next_interview_at` empties the instant a slot passes, which drops the job

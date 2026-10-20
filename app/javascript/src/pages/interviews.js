@@ -50,6 +50,25 @@ $(document).ready(function () {
 
     const extras = fields.querySelector(".note-extras")
 
+    // How it went is only a question about a conversation he was IN. The tags
+    // that count come from the server rather than being written out again here,
+    // so there is one list of them. A rating already given keeps the fields in
+    // view whatever the tag says: hiding a number he typed is how it silently
+    // stops being saved.
+    const sentiment = fields.querySelector("[data-note-sentiment]")
+    const spoken = sentiment ? (sentiment.dataset.conversationTags || "").split(" ") : []
+    const rated = function () {
+      return Array.from(sentiment.querySelectorAll("input")).some(function (input) {
+        return input.value !== ""
+      })
+    }
+    const syncSentiment = function () {
+      if (!sentiment) { return }
+
+      const ask = spoken.indexOf(tagSelect.value) !== -1 || rated()
+      sentiment.classList.toggle("is-away", !ask)
+    }
+
     const syncFollowUp = function (opened) {
       const booking = tagSelect.value === "scheduled"
       // An ask for times is the one beat waiting on HIM, so the date is what he
@@ -70,8 +89,12 @@ $(document).ready(function () {
       if (booking && opened && extras) { extras.open = true }
     }
 
-    tagSelect.addEventListener("change", function () { syncFollowUp(true) })
+    tagSelect.addEventListener("change", function () {
+      syncFollowUp(true)
+      syncSentiment()
+    })
     syncFollowUp(false)
+    syncSentiment()
   })
 
   // ---- Status ------------------------------------------------------------

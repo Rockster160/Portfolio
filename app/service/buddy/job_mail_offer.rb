@@ -257,12 +257,14 @@ module Buddy
     # more use than the subject echoed back - so the quote starts below it. Long
     # enough to carry the ask, short enough that the push preview still shows
     # most of it.
-    GREETING = /\A(hi|hey|hello|dear|greetings|good (morning|afternoon|evening))\b[^\n]{0,40}\z/i
+    # `JobNote::GREETING` is the one definition. The timeline asks the same
+    # question of a beat with no summary on it, and two copies of a regex like
+    # this is how one of them quietly stops matching "Good afternoon".
     QUOTED = 220
 
     def opening_line(body)
       lines = body.to_s.split("\n").map(&:strip).reject(&:empty?)
-      said = lines.find { |line| !line.match?(GREETING) }
+      said = lines.find { |line| !line.match?(JobNote::GREETING) }
       return nil if said.blank?
 
       "> #{said.truncate(QUOTED)}"

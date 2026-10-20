@@ -1,6 +1,10 @@
-<%# One entry in an application's timeline. The edit form is collapsed behind
-   the timestamp rather than sitting open, because the overwhelmingly common
-   thing to do with a note is read it. %>
+<%# One entry in an application's timeline.
+   A ROW IS ONE LINE. Every beat keeps the whole message now - a confirmation
+   mail with its agenda, a rejection with its boilerplate - and twelve of those
+   printed in full is a mailbox rather than a history. So the row is the date,
+   the tag and one line saying what it was, and the message itself is behind the
+   arrow. The edit form is behind its own, for the same reason it always was:
+   the overwhelmingly common thing to do with a note is read it. %>
 <li class="interview-note" id="note-<%= note.id %>">
   <div class="note-head">
     <span class="note-tag note-tag-<%= note.tag %>"><%= note.tag_label %></span>
@@ -14,21 +18,70 @@
     <% if note.source.present? %>
       <span class="note-meta">via <%= note.source %></span>
     <% end %>
+    <%# How it went, on the row. The two numbers rather than their mean: the
+       whole reason there are two is that they disagree. %>
+    <% note.sentiment.each do |field, score| %>
+      <span class="note-score" title="<%= JobNote::SENTIMENT[field] %>">
+        <%= field == :did_well ? "did" : "liked" %>
+        <strong><%= score %></strong>/<%= JobNote::SENTIMENT_CEILING %>
+      </span>
+    <% end %>
   </div>
 
-  <%# Above the body, not under it. A note that keeps the whole message runs to
-     several screens, and a link to the mail it came from is no use at the far
-     end of it. %>
+  <%# Above everything the beat says, not under it. A note that keeps the whole
+     message runs to several screens, and a link to the mail it came from is no
+     use at the far end of one - nor behind the arrow that hides it. %>
   <% if note.url.present? %>
     <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>
   <% end %>
 
-  <%# Printed verbatim, not through `simple_format`. The indentation someone
-     typed to hang sub-notes under a line is part of what they wrote, and HTML
-     collapses it on sight — the CSS holds it instead. `note_body` changes
-     nothing about the text; it only makes the links in it clickable. %>
-  <% if note.body.present? %>
-    <div class="note-body"><%= note_body(note.body) %></div>
+  <div class="note-headline"><%= note.headline %></div>
+
+  <%# Open only when there is more than the headline to show. A beat whose body
+     IS its headline - most things he types by hand - gets no arrow at all,
+     rather than one that opens onto the same sentence again. %>
+  <% if note.more_to_read? %>
+    <details class="note-full">
+      <summary>The whole of it</summary>
+
+      <%# Printed verbatim, not through `simple_format`. The indentation someone
+         typed to hang sub-notes under a line is part of what they wrote, and
+         HTML collapses it on sight — the CSS holds it instead. `note_body`
+         changes nothing about the text; it only makes the links in it
+         clickable. %>
+      <div class="note-body"><%= note_body(note.body) %></div>
+    </details>
+  <% end %>
+
+  <%# The recording of THIS conversation, where there is one. On the beat rather
+     than only in the list further down the page: a call and the transcript of
+     that call are one thing that happened, and the transcript was a separate
+     section you had to know to go and look in. %>
+  <% note.transcripts.ordered.each do |transcript| %>
+    <details class="note-transcript">
+      <summary>
+        <%= transcript.label %>
+        <span class="note-meta">
+          <%= pluralize(transcript.turns.size, "turn") %>
+          <%= "· #{transcript.spoken_minutes} min" if transcript.spoken_minutes %>
+        </span>
+      </summary>
+
+      <%# The conversation itself, and a link to the page that can CHANGE it.
+         Naming speakers and moving turns is editing, which has its own page -
+         this is for reading it where it happened. %>
+      <%= link_to "Name the speakers, fix the turns →",
+            interview_transcript_path(job, transcript), class: "note-link" %>
+
+      <ol class="note-turns">
+        <% transcript.turns.each do |turn| %>
+          <li class="<%= "is-mine" if transcript.mine?(turn["speaker"]) %>">
+            <span class="turn-who"><%= transcript.name_for(turn["speaker"]) %></span>
+            <span class="turn-said"><%= turn["text"] %></span>
+          </li>
+        <% end %>
+      </ol>
+    </details>
   <% end %>
 
   <%# The same field, saying two different things: on a scheduled note the date

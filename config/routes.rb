@@ -78,7 +78,7 @@ Rails.application.routes.draw do
   post  "/byte/board/pins" => "byte#set_board_pins", as: :byte_board_pins
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
   get   "/byte/version" => "byte#version", as: :byte_version
-  get   "/byte/board/tags"  => "byte#board_tags",  as: :byte_board_tags
+  get   "/byte/board/tags" => "byte#board_tags", as: :byte_board_tags
   # Credit buttons: custom board buttons that complete a chore crediting a chosen
   # household member. Managed from the board's settings; pressed from the board.
   get    "/byte/board/buttons"           => "byte#board_buttons",        as: :byte_board_buttons
@@ -395,6 +395,7 @@ Rails.application.routes.draw do
   resource :nfc, only: [:show]
 
   resources :emails, except: [:destroy, :edit] do
+    post :batch, on: :collection
     # Served by position rather than filename: see Email#attachment_at.
     get "attachments/:index", to: "emails#attachment", as: :attachment, on: :member
   end

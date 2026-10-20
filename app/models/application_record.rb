@@ -177,7 +177,10 @@ class ApplicationRecord < ActiveRecord::Base
 
       # rubocop:disable Lint/RedundantSplatExpansion
       if scope_method.present?
-        search_scope.send(scope_method, *value).stripped_sql
+        # A scope that narrows nothing — `in:all` — strips to an empty WHERE.
+        # Left blank it would read as a term that produced no comparison and
+        # fail closed below, so "everything" came back as zero rows.
+        search_scope.send(scope_method, *value).stripped_sql.presence || "TRUE"
       elsif column_data.type.in?(%i[string text])
         case operator
         when *%i[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
@@ -341,11 +344,12 @@ class ApplicationRecord < ActiveRecord::Base
       end
     ).to_s
 
-    # Reduce parens:
+    # Reduce parens: `((x))` reads as `(x)`. Only a group wrapped around another
+    # group - a lone word in parens is a function's argument, and unwrapping it
+    # turned `LOWER(t)` into `LOWERt`.
     tz = Tokenizer.new(sql)
-    str = tz.tokenized_text
     sql = tz.untokenize { |val|
-      /\A\((\w+)\)\z/.tap { |rx| val = val.gsub(rx, '\1') while val.match?(rx) }
+      /\A\((#{Tokenizer::TOKEN_REGEX})\)\z/.tap { |rx| val = val.gsub(rx, '\1') while val.match?(rx) }
       val
     }
     next if sql.blank?

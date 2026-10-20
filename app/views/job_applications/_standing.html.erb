@@ -72,5 +72,17 @@
       <dt>Last beat</dt>
       <dd><%= standing_age(job.engaged_at) %></dd>
     </div>
+
+    <%# Only once he has rated something. An unrated application showing two
+       dashes says "there is a thing here you have not done", which is a chore
+       on a panel that exists to say where the application stands. %>
+    <% job.sentiment.each do |field, score| %>
+      <div>
+        <dt><%= field == :did_well ? "Did" : "Liked" %></dt>
+        <dd title="<%= JobNote::SENTIMENT[field] %>">
+          <%= score %><span class="field-hint">/<%= JobNote::SENTIMENT_CEILING %></span>
+        </dd>
+      </div>
+    <% end %>
   </dl>
 </div>

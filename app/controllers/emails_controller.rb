@@ -20,9 +20,8 @@ class EmailsController < ApplicationController
   ].freeze
 
   def index
-    @emails = current_user.emails.ordered
-    @emails = @emails.query(params[:q])
-    @emails = @emails.where(user: current_user).ordered
+    @emails = current_user.emails.query(params[:q]).ordered
+    @search_notes = ::Email.search_notes.dup
 
     # JSON is the local job hunter reading the job-board digests that land here
     # rather than at Gmail — Ladders and anything like it. It asks for a sender
@@ -81,12 +80,27 @@ class EmailsController < ApplicationController
     end
   end
 
+  # One change to many emails: the ones ticked, or with `all` every email the
+  # search matches - recomputed here from `q` rather than trusted as a list of
+  # ids, since "all" can run to thousands the page never loaded.
+  def batch
+    scope = current_user.emails
+    scope = params[:all].present? ? scope.query(params[:q]) : scope.where(id: Array.wrap(params[:ids]))
+    count = ::Emails::Batch.call(scope, params[:operation], tags: params[:tags])
+
+    render json: { count: count }
+  rescue ::Emails::Batch::UnknownOperation => e
+    render json: { error: "Unknown batch operation #{e.message}" }, status: :unprocessable_entity
+  end
+
   def update
-    @email = ::Email.find(params[:id])
+    @email = current_user.emails.find(params[:id])
     @email.update(update_params)
 
     respond_to do |format|
-      format.html { redirect_to emails_path }
+      # Tags are edited on the email itself and stay there; archiving is done
+      # with it and goes back to the list.
+      format.html { redirect_to(update_params.key?(:tag_list) ? email_path(@email) : emails_path) }
       format.json { render json: @email }
     end
   end
@@ -154,6 +168,7 @@ class EmailsController < ApplicationController
     params.require(:email).permit(
       :archived,
       :read,
+      :tag_list,
       :html_body,
     )
   end

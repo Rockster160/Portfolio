@@ -869,12 +869,87 @@
       }
     }
 
+    // How it went, on the row. Tabular, because two of them sit side by side
+    // and a score that shifts left as it crosses 10 reads as noise.
+    .note-score {
+      border: 1px solid var(--iv-line);
+      border-radius: 4px;
+      padding: 0 5px;
+      color: var(--iv-muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+
+      strong { color: var(--iv-ink); }
+    }
+
+    // THE ROW. One line, and the one thing on the beat that is always read, so
+    // it carries the weight the body used to.
+    .note-headline {
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    // The arrows. Quiet and the same as each other: three of them can sit on
+    // one beat - the message, a recording, the edit form - and three different
+    // weights of control reads as three different kinds of thing.
+    .note-full > summary,
+    .note-transcript > summary,
     .note-edit > summary {
       padding: 2px 0;
       color: var(--iv-muted);
       font-size: 12px;
       font-weight: normal;
     }
+
+    .note-transcript > summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    // The conversation, read rather than corrected - the transcript's own page
+    // is where turns get moved. Capped and scrolling: a half-hour call is 120
+    // turns and it must not push the rest of the timeline off the screen.
+    .note-turns {
+      margin: 4px 0 0;
+      border-left: 2px solid var(--iv-line);
+      padding: 0 0 0 10px;
+      max-height: 320px;
+      overflow-y: auto;
+      list-style: none;
+
+      > li {
+        margin-bottom: 6px;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .turn-who {
+        margin-right: 6px;
+        color: var(--iv-muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      // His own turns, so a conversation can be skimmed for what HE said - the
+      // thing a transcript is reread for before the next round.
+      > li.is-mine .turn-who { color: var(--job-color, #{$base-blue}); }
+    }
+  }
+
+  // The two ratings on the note form. Away rather than `hidden`, because the
+  // attribute loses to any `display` this block or `.split-fields` sets — see
+  // the same trap elsewhere in this app. JS puts the class on and takes it off
+  // as the Type dropdown moves; with no JS the fields are simply always there,
+  // which is the right way round for something nobody has to fill in.
+  .note-sentiment {
+    margin-bottom: 10px;
+
+    &.is-away { display: none; }
   }
 
   // Type chips. Colour carries the shape of an application at a glance — the
