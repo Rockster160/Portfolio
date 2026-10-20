@@ -65,4 +65,49 @@ RSpec.describe "Byte hero face strengths" do
   it "rests on the mood once the dream is gone" do
     expect(result["dream_gone"]).to eq("neutral")
   end
+
+  # A tap's laugh shows for a moment over everything, and whatever changed
+  # underneath meanwhile shows when it ends.
+  describe "a flash" do
+    let(:flash) {
+      JsRunner.eval_module(<<~JS)
+        globalThis.window = globalThis;
+        const { initBuddyHero, FACE_STRENGTH } = await import(#{Rails.root.join("app/javascript/src/pages/byte/buddy/hero.js").to_s.to_json});
+        const el = { dataset: { buddyAwakeExpression: "neutral", buddyTheme: "byte" }, querySelector: () => null };
+        const hero = initBuddyHero({ hero: el });
+        const face = () => el.dataset.buddyExpression;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const out = {};
+
+        hero.setExpression("neutral");
+        hero.holdExpression("board-dream", "thinking", FACE_STRENGTH.dream);
+        hero.flashExpression("grin", 30);
+        out.over_dream = face();
+        hero.setExpression("happy");
+        hero.releaseExpression("board-dream");
+        out.through_changes = face();
+        await wait(60);
+        out.after = face();
+
+        hero.flashExpression("grin", 30);
+        hero.setExpression("thinking", { transient: true });
+        out.ended_by_thinking = face();
+        await wait(60);
+        out.thinking_kept = face();
+
+        process.stdout.write(JSON.stringify(out));
+      JS
+    }
+
+    it "shows over a dream and through a mood change, then settles on the new mood" do
+      expect(flash["over_dream"]).to eq("grin")
+      expect(flash["through_changes"]).to eq("grin")
+      expect(flash["after"]).to eq("happy")
+    end
+
+    it "gives way to a transient overlay" do
+      expect(flash["ended_by_thinking"]).to eq("thinking")
+      expect(flash["thinking_kept"]).to eq("thinking")
+    end
+  end
 end

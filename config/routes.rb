@@ -73,6 +73,7 @@ Rails.application.routes.draw do
   post  "/byte/board/chore_dreams" => "byte#set_board_chore_dreams", as: :byte_board_chore_dreams
   post  "/byte/board/hidden" => "byte#set_board_hidden", as: :byte_board_hidden
   post  "/byte/board/doer" => "byte#set_board_doer", as: :byte_board_doer
+  post  "/byte/buddy/pat" => "byte#pat_buddy", as: :byte_buddy_pat
   post  "/byte/board/members" => "byte#set_board_members", as: :byte_board_members
   post  "/byte/board/pins" => "byte#set_board_pins", as: :byte_board_pins
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items

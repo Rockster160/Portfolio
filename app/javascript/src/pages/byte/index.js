@@ -83,7 +83,7 @@ import { initChoreBoard, iconNode } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
 import { initBoardDream, paceFromMeta } from "./buddy/dream";
 import { faceUrlFor } from "./buddy/face_url";
-import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
+import { toggleBuddyMuted, isBuddyMuted, alarmStoppedAt } from "./buddy/alarm";
 import { initSoundToggle } from "./buddy/sound_toggle";
 import { initReloadCountdown } from "./reload_countdown";
 import { playBoardSound } from "./buddy/sound";
@@ -2513,8 +2513,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     iconFor: iconNode,
     choreDreams: app.dataset.boardChoreDreams !== "false",
     pace: paceFromMeta(JSON.parse(app.dataset.boardDreamPace || "{}")),
+    dismissedAt: Date.parse(app.dataset.boardDreamDismissedAt || "") || 0,
   });
   boardDream.setAlerts(bootstrap.alerts || []);
+
+  // A tap on the pet (Buddy::Pat): it flashes something fun, its mood eases a
+  // little lighter, and a board's dream is put away until the next one. Shown
+  // here at once; the server picks the face and tells every other screen. The
+  // tap that silences a ringing alarm is only that.
+  const applyPat = (data) => {
+    if (data?.expression) {
+      buddyWakeExpr = data.expression;
+      buddyHero?.setExpression(data.expression);
+    }
+    if (data?.flash) buddyHero?.flashExpression?.(data.flash);
+    if (data?.dream_dismissed_at) boardDream?.dismiss(data.dream_dismissed_at);
+    armIdleFaceReset();
+  };
+  app.querySelector(".byte-buddy-char")?.addEventListener("click", async () => {
+    if (Date.now() - alarmStoppedAt() < 1000) return;
+    if (convoManager.currentConversation()?.mode !== "buddy") return;
+
+    boardDream?.dismiss(Date.now());
+    try {
+      const res = await fetch(app.dataset.buddyPatUrl, {
+        method:      "POST",
+        credentials: "same-origin",
+        headers:     {
+          "Content-Type": "application/json",
+          Accept:         "application/json",
+          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+        },
+        body: JSON.stringify({ conversation_id: currentConversationId }),
+      });
+      if (res.ok) applyPat(await res.json());
+    } catch (_e) { /* a missed tap just doesn't laugh */ }
+  });
 
   // What Byte is doing in the background (top-right, opposite the timers).
   // Reported by whoever is doing the work - the Mac filling in applications, a
@@ -3634,6 +3668,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           buddyHero?.setExpression(data.expression);
         }
         armIdleFaceReset(); // a face change is activity — restart the idle clock
+        return;
+      }
+      if (data.kind === "buddy_pat") {
+        if (data.conversation_id === currentConversationId) applyPat(data);
         return;
       }
       if (data.kind === "buddy_sleep") {

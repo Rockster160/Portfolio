@@ -84,6 +84,7 @@ function alarmFaces() {
 let soundInterval = 0;
 let faceInterval = 0;
 let running = false;
+let stoppedAt = 0;
 
 // Start ringing + the face loop. Idempotent — a second expiring timer while one
 // already rings just keeps the single alarm going. `hero` is the buddy hero
@@ -163,6 +164,7 @@ function stopAlarmSound() {
 // Fully stop: silence + end the face loop and drop the transient face back to
 // the resting mood (clearThinking falls through to the stored expression).
 export function stopAlarm({ hero } = {}) {
+  if (running) stoppedAt = Date.now();
   running = false;
   stopAlarmSound();
   if (faceInterval) {
@@ -177,4 +179,10 @@ export function stopAlarm({ hero } = {}) {
 
 export function alarmRunning() {
   return running;
+}
+
+// When a ringing alarm was last stopped, so the tap that silenced it isn't
+// also taken as a tap on the pet.
+export function alarmStoppedAt() {
+  return stoppedAt;
 }

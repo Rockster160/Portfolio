@@ -105,6 +105,16 @@ RSpec.describe Buddy::BoardFace do
       expect(described_class.for(board)).to eq("neutral")
     end
 
+    it "puts away a dream raised before the pet was tapped, until a newer one" do
+      dream!(expression: "eager")
+      board.update!(metadata: board.metadata.merge("dream_dismissed_at" => 1.second.from_now.iso8601(3)))
+
+      expect(described_class.dream_face(board)).to be_nil
+
+      travel(1.minute) { dream!(expression: "eager") }
+      expect(described_class.dream_face(board)).to eq("eager")
+    end
+
     it "thinks over a hot chore the board is dreaming of" do
       expect(described_class.showing(board, chore_dream: true)).to eq("thinking")
       expect(described_class.showing(board)).to be_nil

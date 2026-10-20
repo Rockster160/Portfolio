@@ -151,6 +151,27 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     syncFaceStates();
   };
 
+  // A face shown for a moment over everything else (a tap's laugh), then back
+  // to whatever should be showing. A mood or hold that lands meanwhile is kept
+  // and shows when it ends; a transient overlay (thinking, the alarm) ends it.
+  let flashTimer = 0;
+  const endFlash = () => {
+    clearTimeout(flashTimer);
+    flashTimer = 0;
+  };
+  const settle = () => {
+    if (!flashTimer) paint(effectiveExpression());
+  };
+  const flashExpression = (expression, ms = 2500) => {
+    if (!expression) return;
+    endFlash();
+    paint(expression);
+    flashTimer = window.setTimeout(() => {
+      flashTimer = 0;
+      paint(effectiveExpression());
+    }, ms);
+  };
+
   const setExpression = (expression, opts = {}) => {
     if (!expression) return;
     // A real (non-transient) paint sets the MOOD. It is remembered underneath a
@@ -160,8 +181,9 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     if (!opts.transient) {
       restingExpression = String(expression);
       // Whatever is held (or soft-held over an idle mood) decides the face.
-      return paint(effectiveExpression());
+      return settle();
     }
+    endFlash();
     paint(expression);
   };
 
@@ -172,14 +194,14 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   const holdExpression = (key, expression, strength = FACE_STRENGTH.alert) => {
     if (!key || !expression) return;
     holds.set(String(key), { expression: String(expression), strength: Number(strength) });
-    paint(effectiveExpression());
+    settle();
   };
 
   // The condition passed — drop its hold and fall back to whatever still
   // stands, or the resting mood when nothing does.
   const releaseExpression = (key) => {
     if (!holds.delete(String(key))) return;
-    paint(effectiveExpression());
+    settle();
   };
 
   // Drop the "thinking" overlay and fall back to the standing state, or the
@@ -192,7 +214,10 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   // Force the face back to what should be showing, whatever it currently is.
   // Used to end a transient takeover (e.g. the timer-alarm face loop) that left
   // a non-"thinking" face on screen, which clearThinking won't undo.
-  const restExpression = () => paint(effectiveExpression());
+  const restExpression = () => {
+    endFlash();
+    paint(effectiveExpression());
+  };
 
   const quickButton = (routine) => {
     const btn = document.createElement("button");
@@ -415,6 +440,7 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     setExpression,
     holdExpression,
     releaseExpression,
+    flashExpression,
     setTheme,
     clearThinking,
     restExpression,

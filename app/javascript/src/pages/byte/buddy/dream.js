@@ -115,9 +115,12 @@ export function dreamCandidates(items) {
 }
 
 // The hot chore this board dreams of right now, or null for nothing (quiet
-// hours, a rest, or the draw landing on nothing). `utcOffset` is the board's
-// local offset in minutes, which places its quiet hours.
-export function pickChoreDream(items, boardId, nowMs, pace = DEFAULT_PACE, utcOffset = localOffset(nowMs)) {
+// hours, a rest, the draw landing on nothing, or the pet tapped since this draw
+// at `dismissedAt` ms). `utcOffset` is the board's local offset in minutes,
+// which places its quiet hours.
+export function pickChoreDream(
+  items, boardId, nowMs, pace = DEFAULT_PACE, utcOffset = localOffset(nowMs), dismissedAt = 0,
+) {
   pace = { ...DEFAULT_PACE, ...pace };
   const pool = dreamCandidates(items);
   if (!pool.length) return null;
@@ -134,6 +137,8 @@ export function pickChoreDream(items, boardId, nowMs, pace = DEFAULT_PACE, utcOf
     const quiet = quietAt(k * cycleMs, pace, utcOffset);
     shown.set(k, !resting && !quiet ? drawCycle(pool, boardId, k, pace.blank) : null);
   }
+  if (dismissedAt && dismissedAt >= cycle * cycleMs) return null;
+
   return shown.get(cycle) || null;
 }
 
@@ -142,19 +147,22 @@ function localOffset(ms) {
   return -new Date(ms).getTimezoneOffset();
 }
 
-// The newest Jil dream aimed at a group this board watches.
-export function newestDream(alerts, tags) {
+// The newest Jil dream aimed at a group this board watches, raised since the
+// pet was last tapped.
+export function newestDream(alerts, tags, dismissedAt = 0) {
   return (alerts || [])
     .filter((a) => a && a.dream && a.body && groupsOverlap(a.groups, tags))
+    .filter((a) => !dismissedAt || Date.parse(a.last_raised_at || "") > dismissedAt)
     .sort((a, b) => String(b.last_raised_at || "").localeCompare(String(a.last_raised_at || "")))[0] || null;
 }
 
 export function initBoardDream({
-  bubble, hero, tags, boardIdFn, iconFor, choreDreams = true, pace = DEFAULT_PACE,
+  bubble, hero, tags, boardIdFn, iconFor, choreDreams = true, pace = DEFAULT_PACE, dismissedAt = 0,
 }) {
   if (!bubble) {
     return {
       setAlerts: () => {}, setItems: () => {}, setTags: () => {}, setChoreDreams: () => {}, setPace: () => {},
+      dismiss: () => {},
     };
   }
 
@@ -191,7 +199,7 @@ export function initBoardDream({
   }
 
   function render() {
-    const dream = newestDream(alerts, watched);
+    const dream = newestDream(alerts, watched, dismissedAt);
     if (dream) {
       return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${dream.expression || ""}:${dream.strength || ""}`, () => {
         if (dream.icon) {
@@ -205,7 +213,7 @@ export function initBoardDream({
     }
 
     // Hot-chore dreams can be switched off per board; Jil's still show.
-    const chore = choreDreams ? pickChoreDream(items, boardIdFn?.(), Date.now(), pace) : null;
+    const chore = choreDreams ? pickChoreDream(items, boardIdFn?.(), Date.now(), pace, undefined, dismissedAt) : null;
     if (!chore) return clear();
 
     show(`chore:${chore.id}:${chore.short_name}`, () => {
@@ -252,6 +260,14 @@ export function initBoardDream({
     setPace(next) {
       pace = { ...DEFAULT_PACE, ...next };
       scheduleSlot();
+      render();
+    },
+    // The pet was tapped: put away whatever shows until the next draw or a
+    // dream raised after `at` (ms, or an ISO time from the server).
+    dismiss(at) {
+      const ms = typeof at === "number" ? at : Date.parse(at || "");
+      if (!Number.isFinite(ms) || ms <= dismissedAt) return;
+      dismissedAt = ms;
       render();
     },
   };

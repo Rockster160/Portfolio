@@ -90,8 +90,9 @@ class ByteController < ApplicationController
     chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(
       @board_items_json,
       convo.id,
-      pace:       convo.dream_pace,
-      utc_offset: Time.current.in_time_zone(convo.user.timezone).utc_offset / 60,
+      pace:         convo.dream_pace,
+      utc_offset:   Time.current.in_time_zone(convo.user.timezone).utc_offset / 60,
+      dismissed_at: convo.dream_dismissed_at,
     ).present?
     @board_held_face = Buddy::BoardFace.showing(convo, chore_dream:)
     # Only the owner configures a board, so the settings the picker offers are
@@ -378,6 +379,18 @@ class ByteController < ApplicationController
     convo.save!
     broadcast_convo_change(convo, :updated)
     render json: { ok: true, chore_dreams: convo.chore_dreams?, pace: convo.dream_pace }
+  end
+
+  # POST /byte/buddy/pat — the pet was tapped (Buddy::Pat). Any Buddy thread of
+  # the viewer's own, or a board they may open: a household member tapping a
+  # shared board's pet gets the same laugh, and puts its dream away for
+  # everyone looking at it.
+  def pat_buddy
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    convo ||= ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    render json: Buddy::Pat.call(convo)
   end
 
   # POST /byte/board/doer — who a chore pressed on this board is done by:

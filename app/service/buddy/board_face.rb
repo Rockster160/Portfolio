@@ -63,9 +63,13 @@ module Buddy
       wants.max_by.with_index { |(_, strength), i| [strength, -i] }
     end
 
-    # [face, strength] for the dream the board shows.
+    # [face, strength] for the dream the board shows. One raised before the pet
+    # was last tapped has been put away (see Buddy::Pat).
     def dream_want(board, chore_dream: false)
-      dream = Buddy::Alerts.dreams(board.user).find { |a| overlap?(a.groups, board.chore_tags) }
+      dismissed = board.dream_dismissed_at
+      dream = Buddy::Alerts.dreams(board.user).find { |a|
+        overlap?(a.groups, board.chore_tags) && (dismissed.nil? || a.last_raised_at > dismissed)
+      }
       return [dream.expression || DREAM_FACE.to_s, dream.strength] if dream
 
       [DREAM_FACE.to_s, Buddy::FaceStrength::DREAM] if chore_dream

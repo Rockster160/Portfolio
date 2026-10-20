@@ -118,6 +118,33 @@ RSpec.describe "Board dreams" do
     end
   end
 
+  # Tapping the pet puts its dream away until the next draw.
+  describe "once the pet is tapped" do
+    let(:tapped) { Time.utc(2026, 10, 16, 9, 10) }
+    let(:dismissed) {
+      JsRunner.eval_module(<<~JS)
+        const { pickChoreDream } = await import(#{Rails.root.join("app/javascript/src/pages/byte/buddy/dream.js").to_s.to_json});
+        const items = #{items.to_json};
+        const pace = { every: 30, blank: 0, rest: 0 };
+        const picks = #{[12, 29, 31].map { |m| ((tapped.beginning_of_hour + m.minutes).to_f * 1000).to_i }.to_json}
+          .map((t) => pickChoreDream(items, 42, t, pace, 0, #{(tapped.to_f * 1000).to_i})?.id ?? null);
+        process.stdout.write(JSON.stringify(picks));
+      JS
+    }
+
+    it "dreams of nothing for the rest of that draw, then picks up again, on both sides" do
+      ruby = [12, 29, 31].map { |m|
+        Buddy::BoardDream.pick(
+          items, 42, at: tapped.beginning_of_hour + m.minutes, pace: { every: 30, blank: 0, rest: 0 }, dismissed_at: tapped,
+        )&.dig(:id)
+      }
+
+      expect(ruby.first(2)).to eq([nil, nil])
+      expect(ruby.last).to be_present
+      expect(dismissed).to eq(ruby)
+    end
+  end
+
   it "holds one pick for the whole half hour" do
     start = Time.utc(2026, 10, 16, 9)
     picks = [0, 10, 29].map { |m| Buddy::BoardDream.pick(items, 42, at: start + m.minutes)&.dig(:id) }

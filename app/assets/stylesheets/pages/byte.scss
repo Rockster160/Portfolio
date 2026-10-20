@@ -5505,6 +5505,9 @@ dialog.byte-modal {
   align-self: center;
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
+  // Tapping the pet makes it laugh (Buddy::Pat).
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 // The board's pet mirrors Whisper's state (buddy/durations.js drives these from

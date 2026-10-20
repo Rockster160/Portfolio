@@ -67,6 +67,8 @@
      <%# always on, so it reports true and never offers the toggle. %>
      data-timer-alerts="<%= @kiosk ? current_user.byte_timer_alerts?(@board ? :board : :kiosk) : true %>"
      data-timer-alerts-url="<%= byte_timer_alerts_path %>"
+     <%# Tapping the pet (Buddy::Pat). %>
+     data-buddy-pat-url="<%= byte_buddy_pat_path %>"
      <%# A board shows only the timers placed on it or its groups: its owner's, %>
      <%# and the household's once it's shared. %>
      data-timer-board-id="<%= @conversation.id if @board %>"
@@ -115,6 +117,7 @@
      data-board-tags="<%= Array(@board_tags).to_json %>"
      data-board-chore-dreams="<%= @conversation.chore_dreams? %>"
      data-board-dream-pace="<%= @conversation.metadata.to_h.slice(*ByteConversation::DREAM_PACE_KEYS.values.map(&:first)).to_json %>"
+     data-board-dream-dismissed-at="<%= @conversation.dream_dismissed_at&.iso8601(3) %>"
      data-board-pins="<%= @conversation.pinned_chore_ids.to_json %>"
      <%# Whisper's state as this board wears it (asleep / gone), known before %>
      <%# the feed speaks, so the pet opens holding it rather than on its mood. %>

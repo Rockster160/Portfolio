@@ -221,6 +221,15 @@ class ByteConversation < ApplicationRecord
     User.find_by(id: id)
   end
 
+  # When the board's pet was last tapped, which puts away whatever dream it was
+  # showing until something brings one up again: the next draw, or a dream
+  # raised after it (see Buddy::Pat).
+  def dream_dismissed_at
+    Time.zone.parse(metadata.to_h["dream_dismissed_at"].to_s)
+  rescue ArgumentError
+    nil
+  end
+
   def primary?
     primary_at.present?
   end

@@ -162,6 +162,10 @@ module Buddy
     # steal the turn, so they stay reachable only on a turn that merely talked.
     NOT_A_CONFIRMATION = %i[neutral_blush nerd bashful].freeze
 
+    # What a pet does when it's tapped: a laugh, a blush, a plain happy face.
+    # One of these the pet has is flashed at random (see Buddy::Pat).
+    TAPPED = %i[happy grin cheery playful silly wink uwu neutral_blush bashful excited].freeze
+
     # The four axes a reading is taken on. (`reach` is the fifth value on a face
     # but not an axis — it is the range, not a dimension of the mood.)
     AXES = %i[warmth play weight strain].freeze

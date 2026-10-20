@@ -23,10 +23,11 @@ module Buddy
     DEFAULTS = { every: 30, blank: 25, rest: 0, quiet_from: nil, quiet_to: nil }.freeze
     MASK = 0xFFFFFFFF
 
-    # The chosen item, or nil for nothing right now (quiet hours, a rest, or
-    # the draw landing on nothing). `utc_offset` is the board's local offset
-    # in minutes, which places its quiet hours.
-    def pick(items, board_id, at: Time.current, pace: DEFAULTS, utc_offset: 0)
+    # The chosen item, or nil for nothing right now (quiet hours, a rest, the
+    # draw landing on nothing, or the pet tapped since this draw - see
+    # Buddy::Pat). `utc_offset` is the board's local offset in minutes, which
+    # places its quiet hours.
+    def pick(items, board_id, at: Time.current, pace: DEFAULTS, utc_offset: 0, dismissed_at: nil)
       pace = DEFAULTS.merge(pace.to_h.symbolize_keys)
       pool = candidates(items)
       return nil if pool.empty?
@@ -43,6 +44,8 @@ module Buddy
         resting = (([k - rest_cycles, first].max)...k).any? { |j| shown[j] }
         shown[k] = !resting && !quiet?(k * cycle_ms, pace, utc_offset) && draw(pool, board_id, k, pace[:blank])
       }
+      return nil if dismissed_at && (dismissed_at.to_f * 1000).floor >= cycle * cycle_ms
+
       shown[cycle] || nil
     end
 
