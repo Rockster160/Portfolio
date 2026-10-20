@@ -2065,6 +2065,9 @@ RSpec.describe Buddy::GPT::Turn do
         "*whisk* Whisper quiet is on for 2 hours.",
         "Quiet's on for 30 minutes.",
         "The fan is off for 20 minutes.",
+        # The same window ending at a clock time, and hedged.
+        "Got it. Quiet mode can stay on until 2:15 PM.",
+        "Quiet's on until 3.",
         # The house style is to NAME the record, which is what put these outside
         # a subject list made of pronouns.
         "`Recycling` is done.",
@@ -2402,6 +2405,15 @@ RSpec.describe Buddy::GPT::Turn do
     it "reads the other short ways to say one" do
       ["lights on", "Blinds down", "TV off please", "monitors dark."].each { |said|
         run([{ text: "Kk! all set." }, { text: "Kk! all set." }], text: said)
+
+        expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
+      }
+    end
+
+    # A mode and how long to hold it is the same order with no device in it.
+    it "reads a verbless quiet window as an order" do
+      ["Quiet until 2:15", "quiet mode for an hour"].each { |said|
+        run([{ text: "Sounds good." }, { text: "Sounds good." }], text: said)
 
         expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
       }

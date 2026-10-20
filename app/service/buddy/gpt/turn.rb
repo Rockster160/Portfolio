@@ -295,9 +295,13 @@ module Buddy
         # arm, which is where it first looks like it belongs. That arm is asked
         # with no `@acted` gate, so the same sentence after a SUCCESSFUL call
         # would spend a corrective round rewriting a reply that was right.
+        #
+        # A window can end at a clock time as well as last a duration: "quiet
+        # mode can stay on until 2:15 PM" off a turn that called nothing is the
+        # same claim, hedged with "can stay".
         | \b\w+(?:\s+\w+){0,2}
-            (?:(?:'|\u2019)s|\s+(?:is|are))\s+
-            (?:on|off)\s+for\s+\d
+            (?:(?:'|\u2019)s|\s+(?:is|are)|\s+(?:can|will)\s+stay|\s+stays)\s+
+            (?:on|off)\s+(?:for|until|till|til)\s+\d
         # A watch or a message reported as having GONE. Watches fire on their
         # own signal, never inside a turn, so on a turn that touched nothing
         # and was asked nothing, "the depart watch fired" or "Chelsea got the
@@ -3693,6 +3697,11 @@ module Buddy
           (?:monitors?|screens?|displays?|lights?|lamps?|blinds?|shades?|tvs?|fans?)\s+
           (?:on|off|up|down|dark|open|closed?|high|low|mid|medium)
           (?:\s+please)?[\s.!,]*\z
+        # A mode and how long to hold it, still with no verb: "Quiet until 2:15",
+        # "quiet for an hour". A question about the mode opens with "is".
+        | \A\s*(?:hey[\s,]+\w+[\s,]+)?
+          (?:whisper\s+)?(?:quiet|silent|silence|mute|dnd)(?:\s+mode)?(?:\s+on)?\s+
+          (?:until|till|til|for)\b
       /xi
 
       # ---- a command that said WHEN ------------------------------------------

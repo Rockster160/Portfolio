@@ -145,6 +145,19 @@ RSpec.describe Jil::FunctionSignature do
       end
     end
 
+    describe "when the caller sends a key the signature doesn't have" do
+      let(:quiet) { '"Quiet for" TAB Numeric(30) TAB "minutes" TAB "or until" TAB String()' }
+
+      it "leaves a named slot to its default rather than handing it the extra" do
+        expect(described_class.params(quiet, { "minutes" => 147, "quiet_for" => 147 }))
+          .to eq([147, ""])
+      end
+
+      it "still lines up by position when none of the names match" do
+        expect(described_class.params(quiet, { "minutes" => 147 })).to eq([147, ""])
+      end
+    end
+
     describe "when the signature never named its args" do
       it "keeps them in the order they arrived, which is all there is to go on" do
         given = { "icon" => "🍎", "kind" => "Need", "query" => "food" }

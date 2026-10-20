@@ -85,6 +85,29 @@ RSpec.describe ByteInterviewPrep::HeadsUp do
       expect(described_class.how(item, job, user)).to eq({ kind: :phone, said: true })
     end
 
+    # Google keeps an invite from an unknown sender off the calendar, so there
+    # is no twin; the invite mail is still filed onto the application.
+    describe "when the invite only reached the application" do
+      def note!(body, at:)
+        job.notes.create!(body: body, occurred_at: at)
+      end
+
+      it "takes the link off the invite note naming this interview's day" do
+        item = ours
+        note!("Interview with Bluestaq\nTuesday Oct 20, 2026 ⋅ 12pm – 1pm\n" \
+              "Join Google Meet: https://meet.google.com/dip-asws-sgw", at: start - 1.day)
+
+        expect(described_class.how(item, job, user)).to eq({ kind: :link, url: "https://meet.google.com/dip-asws-sgw" })
+      end
+
+      it "leaves an earlier round's invite alone" do
+        item = ours
+        note!("Recruiter screen\nThursday Oct 1, 2026 ⋅ 9am\nhttps://meet.google.com/old-link-xyz", at: start - 3.weeks)
+
+        expect(described_class.how(item, job, user)).to eq({ kind: :phone, said: false })
+      end
+    end
+
     it "does not take a phone number in the location for an address" do
       item = ours(location: "801-372-5097")
 

@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :message_partner,
   summary:     "Tell another household member something (\"tell Chelsea I'm running late\", \"let " \
-               "her know dinner's ready\"). Goes through their companion, word for word.",
+               "her know dinner's ready\"). Goes through their companion, word for word. " \
+               "\"Tell her X and ask Y\" is ask_partner alone.",
   description: <<~TXT,
     Relay a message to the user's partner (or another household member)
     THROUGH their companion. Use whenever the user wants to tell / let / pass
@@ -64,6 +65,12 @@ Buddy::Tools.register(
 
     This is one-way. If the user wants an ANSWER back, use ask_partner (open
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).
+
+    **"Tell her X and ask if Y" is ONE ask, never this plus an ask.** The
+    question carries both halves - "You left the garage open. Want me to close
+    it?" - and goes out once. Sent as a message_partner AND an ask_partner, the
+    same words reached her phone twice, and she answered in a thread the
+    question never came from (prod 8509).
 
     ## What YOU say back
 

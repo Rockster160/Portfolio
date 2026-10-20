@@ -169,7 +169,9 @@ export class Timer {
       "  " + Text.trunc(name, cell_width - 5 - timer.length),
       timer + "   "
     )
-    const fill = this.total_ms > 0 ? (this.total_ms - this.left_ms) / this.total_ms : 1
+    // A timer drains from full to empty; a deploy is progress, so it fills up.
+    const elapsed = this.total_ms > 0 ? (this.total_ms - this.left_ms) / this.total_ms : 1
+    const fill = this.kind === "deploy" ? elapsed : 1 - elapsed
 
     const fill_cells = Math.round((cell_width - 2) * fill)
     let color = this.acknowledged ? dash_colors.green : dash_colors.yellow

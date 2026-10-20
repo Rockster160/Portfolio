@@ -117,6 +117,7 @@ module ByteInterviewPrep
       rows = [item, *twins(item, application, user)]
       texts = rows.flat_map { |row| [row.location, row.notes] }
       url = texts.lazy.filter_map { |text| meeting_url(text) }.first
+      url ||= invite_note_url(item, application, user)
       return { kind: :link, url: url } if url
 
       { kind: :phone, said: rows.any? { |row| row.notes.to_s.match?(PHONE_RE) } }
@@ -128,6 +129,17 @@ module ByteInterviewPrep
       scope = user.accessible_agenda_items.event.not_cancelled.where(start_at: item.start_at)
       scope = scope.where.not(id: item.id)
       scope.where("agenda_items.name ILIKE ?", "%#{::AgendaItem.sanitize_sql_like(application.company)}%").to_a
+    end
+
+    # An invite from a sender Google doesn't know never reaches the synced
+    # calendar, so there is no twin - but the invite mail still lands on the
+    # application as a note. Only a note naming THIS interview's date, newest
+    # first: an earlier round's invite carries a link that no longer works.
+    def invite_note_url(item, application, user)
+      day   = item.start_at.in_time_zone(user.timezone)
+      dates = [day.strftime("%b %-d, %Y"), day.strftime("%B %-d, %Y"), day.to_date.iso8601]
+      notes = application.notes.recent.to_a.select { |note| dates.any? { |date| note.body.to_s.include?(date) } }
+      notes.lazy.filter_map { |note| meeting_url(note.body) }.first
     end
 
     def meeting_url(text)

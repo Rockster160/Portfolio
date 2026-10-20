@@ -21,6 +21,12 @@ Buddy::Tools.register(
     tonight, so I need to know if you mean next Thursday") it costs them a
     whole extra exchange to confirm the only reading that made sense.
 
+    **"NEXT Wednesday" said before Wednesday means the FOLLOWING week's.**
+    Plain "Wednesday" is the one coming up; "next" is there to skip it. Said on
+    Monday 10/19, "next Wednesday" is 10/28, not 10/21 - it went on 10/21 once
+    and he had to move it (prod 8564). Name the date in the reply ("Wed
+    10/28"), never "next Wednesday" back, so a wrong reading shows.
+
     Pull the PLACE into `location`, not the title: "coffee at Lucky Ones"
     → title "Coffee", location "Lucky Ones". "dentist" with no place →
     no location.

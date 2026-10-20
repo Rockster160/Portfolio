@@ -981,6 +981,17 @@ BUDDY_EDGE_PROBES = [
            "supper time. The clock time was part of the note, not the send time",
   },
   {
+    case:  "prod 8509",
+    say:   "Tell Chelsea she left the garage open and ask if she wants you to close it",
+    tool:  :ask_partner,
+    or:    { tool: :ask_partner_choice },
+    avoid: %i[message_partner],
+    once:  true,
+    note:  "sent a message_partner AND an ask_partner carrying the same words, so her " \
+           "phone got the question twice; she answered in her own thread and the ask " \
+           "sat unanswered under \"I'll pass on what she says\"",
+  },
+  {
     case:  "the same words, framed as the delay",
     say:   "remind Chelsea tomorrow at 4pm that I'm leaving",
     tool:  :schedule_reminder,
@@ -1174,6 +1185,26 @@ BUDDY_EDGE_PROBES = [
                 "correction after it then set the start to 4:28 PM - the OLD leave " \
                 "time - and announced that as a leave time (5145, 5147)",
   },
+
+  # --- "next <weekday>" said earlier in the same week -------------------------
+  # Built from today so it is always a weekday still ahead this week: the
+  # reading in question only exists while that day hasn't come yet.
+  (
+    lambda {
+      ahead = Date.current + 2
+      {
+        case:  "prod 8564",
+        say:   "Add an event next #{ahead.strftime("%A")} at 6:30pm at Carlos' house to hang " \
+               "with Carlos and Lil",
+        tool:  :add_agenda_item,
+        once:  true,
+        args:  { add_agenda_item: { at: /\A#{(ahead + 7).iso8601}T/ } },
+        note:  "said on a Monday, \"next Wednesday\" went on THIS Wednesday as 30 minutes; he " \
+               "moved it to the following Thursday, 6:30-10:00, two minutes later. The reply " \
+               "echoed \"next Wednesday\" instead of the date, which hid the choice",
+      }
+    }
+  ).call,
 
   # --- a routine they say is broken, which is already right -----------------
   {
@@ -1436,6 +1467,25 @@ BUDDY_EDGE_PROBES = [
           "figure and `time_preamble` had 10:49 at the top of the prompt the " \
           "whole time. 23 minutes of extra silence, uncorrected",
   },
+  # A clock time a couple of hours out, so the time asked for is still ahead
+  # whenever the run happens.
+  (
+    lambda {
+      ends  = Time.now.in_time_zone("America/Denver").advance(hours: 2)
+      ends -= (ends.min % 15).minutes
+      {
+        case:  "prod 8612-8615",
+        say:   "Quiet until #{ends.strftime("%-l:%M")}",
+        tool:  :call_jil_function,
+        needs: :quiet_fn,
+        once:  true,
+        args:  { call_jil_function: { or_until: /#{ends.strftime("%-l")}:?#{ends.strftime("%M")}/ } },
+        note:  "the first turn called nothing and said \"Quiet mode can stay on until 2:15 PM\"; " \
+               "the retry sent `quiet_for: 147, minutes: 147`, the spare key landed in the " \
+               "until slot, and quiet ended at 1:47",
+      }
+    }
+  ).call,
 
   {
     case:  "prod 5272-5273",

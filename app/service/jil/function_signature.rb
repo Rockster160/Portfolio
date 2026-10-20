@@ -79,6 +79,12 @@ module Jil::FunctionSignature
   # still lands where it used to rather than being dropped. A slot that nothing
   # filled takes the default the signature declares, which is the value the
   # Run-args modal would have posted for it.
+  #
+  # Once ANY name has matched, the caller is spelling by our labels, and a
+  # leftover is an extra key rather than a misspelling. It only fills a slot
+  # the signature never named: `{ quiet_for: 147, minutes: 147 }` against
+  # `"Quiet for" Numeric … "or until" String` would otherwise put 147 in the
+  # until slot, where it parses as 1:47.
   def params(args_str, given)
     given = (given || {}).transform_keys(&:to_s)
     found = slots(args_str)
@@ -89,7 +95,7 @@ module Jil::FunctionSignature
 
     found.map { |slot|
       next given[slot[:key]] if claimed.include?(slot[:key])
-      next leftover.shift if leftover.any?
+      next leftover.shift if leftover.any? && (claimed.empty? || slot[:key].nil?)
 
       slot[:default]
     }
