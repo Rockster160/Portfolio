@@ -1312,8 +1312,30 @@
     color: $danger;
   }
 
+  // Correcting the brief, not rewriting it: the body goes in as markdown and
+  // comes back out of the same textarea, so the monospace is there to keep the
+  // headings and list markers lined up while they are being edited.
+  .prep-edit {
+    margin-bottom: 18px;
+
+    > summary {
+      padding: 2px 0;
+      color: var(--iv-muted);
+      font-size: 12px;
+      font-weight: normal;
+    }
+
+    textarea {
+      width: 100%;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+  }
+
   .prep-body {
     max-width: 68ch;
+    font-size: 14px;
     line-height: 1.55;
 
     // The first heading sits against the meta row above it, so it loses the
@@ -1330,15 +1352,15 @@
     }
 
     h1 {
-      font-size: 21px;
+      font-size: 19px;
     }
 
     h2 {
-      font-size: 18px;
+      font-size: 16px;
     }
 
     h3 {
-      font-size: 16px;
+      font-size: 15px;
       color: var(--iv-muted);
     }
 

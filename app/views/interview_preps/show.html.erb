@@ -41,6 +41,45 @@
                 data: { confirm: "Delete this prep?" } %>
         </div>
 
+        <%# Collapsed, and above the body rather than under it: the brief runs
+           to several screens, and an edit button at the far end of one is a
+           scroll to get to and a scroll to get back from. %>
+        <details class="prep-edit">
+          <summary>Edit</summary>
+
+          <%= form_with model: @prep, url: interview_prep_path(@job, @prep),
+                method: :patch, local: true do |f| %>
+            <div class="split-fields">
+              <div class="form-field">
+                <%= f.label :title, "Title" %>
+                <%= f.text_field :title %>
+              </div>
+
+              <%# A text field rather than a list. The model keeps a kind it
+                 did not anticipate and labels it by falling through, and a
+                 select would quietly turn that back into one of six. %>
+              <div class="form-field">
+                <%= f.label :kind, "Kind" %>
+                <%= f.text_field :kind, list: "prep-kinds" %>
+                <datalist id="prep-kinds">
+                  <% InterviewPrep::KINDS.each do |kind| %>
+                    <option value="<%= kind %>"></option>
+                  <% end %>
+                </datalist>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <%= f.label :body, "The brief" %>
+              <%= f.text_area :body, rows: 24 %>
+            </div>
+
+            <div class="form-submission">
+              <%= submit_tag "Save prep" %>
+            </div>
+          <% end %>
+        </details>
+
         <%# The brief as the session wrote it. Nothing is reflowed or
            summarised on the way in or out — it was written to be read in ten
            minutes and a second opinion on its wording is not what the page is

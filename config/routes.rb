@@ -443,9 +443,9 @@ Rails.application.routes.draw do
     resources :transcripts, controller: :job_transcripts,
       only: [:create, :show, :update, :destroy]
     # The brief written before an interview. Generated rather than typed, so
-    # there is nothing to create here - it arrives, it is read once, and a bad
-    # one gets deleted.
-    resources :preps, controller: :interview_preps, only: [:show, :destroy]
+    # there is nothing to create here - it arrives, it is read, it gets
+    # corrected where it is wrong, and a useless one gets deleted.
+    resources :preps, controller: :interview_preps, only: [:show, :update, :destroy]
   end
 
   resource :summoners_war do

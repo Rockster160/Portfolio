@@ -67,6 +67,53 @@ RSpec.describe "Interview prep", type: :request do
     expect(response.body).not_to include("not yours")
   end
 
+  # A brief is written by something that could not check everything, so a wrong
+  # fact in it has to be fixable where it is read rather than only deletable.
+  it "can be corrected from its own page" do
+    patch interview_prep_path(job, prep), params: {
+      interview_prep: { body: "## The company\nThey build the Unified Data Library." },
+    }
+
+    expect(response).to redirect_to(interview_prep_path(job, prep))
+    expect(prep.reload.body).to include("Unified Data Library")
+  end
+
+  it "offers the edit on the page itself" do
+    get interview_prep_path(job, prep)
+
+    expect(response.body).to include("<summary>Edit</summary>")
+    expect(response.body).to include("Save prep")
+  end
+
+  # The model labels a kind it did not anticipate by falling through, so an
+  # edit must be able to say one.
+  it "keeps a kind it does not have a label for" do
+    patch interview_prep_path(job, prep), params: {
+      interview_prep: { kind: "pairing", body: prep.body },
+    }
+
+    expect(prep.reload.kind).to eq("pairing")
+    expect(prep.kind_label).to eq("Pairing")
+  end
+
+  it "says so rather than saving an empty brief" do
+    patch interview_prep_path(job, prep), params: { interview_prep: { body: "" } }
+
+    expect(flash[:alert]).to be_present
+    expect(prep.reload.body).to include("Space Force")
+  end
+
+  it "is nobody else's to edit" do
+    other = create(:user).job_applications.create!(company: "Elsewhere")
+    stolen = other.preps.create!(body: "not yours")
+
+    patch interview_prep_path(other, stolen), params: {
+      interview_prep: { body: "mine now" },
+    }
+
+    expect(stolen.reload.body).to eq("not yours")
+  end
+
   it "can be thrown away when it says something wrong" do
     delete interview_prep_path(job, prep)
 

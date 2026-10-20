@@ -133,7 +133,7 @@ module ByteInterviewPrep
 
         - **A recruiter or screening call**: what the company does, in a sentence I could say back. Why the role exists. What they are likely to ask (notice period, salary, why them) and what I should ask back. No algorithms.
         - **A technical interview**: the stack it will be in, the two or three things in it I should go over before I sit down, and the shape of the exercise if the material says anything about it. Be specific - "brush up on X" is worth nothing without saying what about X.
-        - **A hiring manager or behavioral round**: what this team owns, who I would be working for, and the questions that come with that seat. I keep written answers to the common behavioral ones - see below - so point me at the ones that fit rather than writing new ones.
+        - **A hiring manager or behavioral round**: what this team owns, who I would be working for, and the questions that come with that seat. I keep written answers to the common behavioral ones - pick the ones that fit and carry them into the brief as they are written, rather than writing new ones.
         - **A panel or onsite**: who is in it and what each of them is likely to be probing.
 
         WHERE TO LOOK
@@ -160,11 +160,23 @@ module ByteInterviewPrep
         1. **The company** - what they do and who for, in two or three sentences I could say back out loud. Then the handful of facts worth having: size, age, funding or ownership, what they have shipped or announced lately.
         2. **This role, and why it exists** - what the team is for and where I would sit in it.
         3. **What to go over before it starts** - the specific things, named. This is the section I will actually act on, so put the most useful thing first and stop when you run out of real ones. Three good lines beat eight filler ones.
-        4. **What they are likely to ask** - real questions, in the words they would use, with a line on how I would answer each. Where one of my written answers fits, name it.
+        4. **What they are likely to ask** - real questions, in the words they would use, with a line on how I would answer each. Where one of my written answers fits, name it - and carry it in section 7.
         5. **What I should ask them** - three or four, specific to this company and this team. Nothing that could be asked of anybody.
         6. **Anything odd** - a bad sign, a gap in what I know, something in the timeline worth raising. One line each, and leave the section out if there is nothing in it.
 
-        I am reading this in the ten minutes before I join the call, on a phone. Write it to be read standing up: short paragraphs, no preamble, no restating the question, no telling me I will do great. Say where something is a guess rather than stating it flatly - a confident wrong fact about the company said out loud in the call is the one failure that is worse than a thin brief.
+        7. **The answers themselves** - every written answer named in section 4, in full, in the order it was named there. Each one once, however many questions it covers, and leave the section out if the conversation never called for one.
+
+        WHATEVER THE BRIEF NAMES, THE BRIEF CARRIES
+        Nothing in it may need a second page to be worth anything. If it names something I keep written down - a behavioral answer, a number, a line out of my own notes - the thing goes in, not a pointer to it. "Use #3" has sent me to another page to do the one job the brief exists to do, and at T-10 minutes on a phone I am not going to go and open `interview-answers.md` to find out what #3 was. That is the difference between a brief and an index.
+
+        That covers words as well as answers. Every acronym, product name and term of art on the page gets a line saying what it is - their own product names, contract and clearance acronyms, compliance standards, anything out of their stack I do not use. A glossary at the top is enough. "TS/SCI" or "IDIQ" left bare is one more thing to go and look up in the ten minutes I do not have.
+
+        For the written answers specifically:
+        - **Verbatim, as the file has it.** They are already written to be spoken. Tightening one here is a second opinion on a sentence I have already said out loud.
+        - **The cut that fits, not the whole entry.** Several of them have an alternate or a system-design cut; carry the one the question in section 4 actually asks for, and say which it is.
+        - **Only the part I would say.** The `Why it works`, `Backing`, `Use this one when` and `[need number]` notes are mine for maintaining the file. They are not the answer and they do not go in the brief.
+
+        I am reading this in the ten minutes before I join the call, on a phone. Write sections 1 to 6 to be read standing up: short paragraphs, no preamble, no restating the question, no telling me I will do great. Section 7 is reference I scroll down to, so it is as long as the answers are - that length is not a reason to shorten them, and it is not licence to let the sections above sprawl. Say where something is a guess rather than stating it flatly - a confident wrong fact about the company said out loud in the call is the one failure that is worse than a thin brief.
       TXT
     end
   end

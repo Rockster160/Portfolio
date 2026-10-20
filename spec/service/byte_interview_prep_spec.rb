@@ -249,6 +249,15 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).to include("interview-answers.md")
     end
 
+    # A brief that says "use #3" has sent him to another page to do the one
+    # thing it was written to save him - and the answers file is on a drive
+    # the phone reading the brief cannot open at all.
+    it "asks for the written answers themselves, not a pointer to them" do
+      expect(prompt).to include("The answers themselves")
+      expect(prompt).to include("WHATEVER THE BRIEF NAMES, THE BRIEF CARRIES")
+      expect(prompt).to include("Verbatim, as the file has it")
+    end
+
     it "points at the local posting, which outlives their listing" do
       job.update!(jobhunt_job_id: 412)
 
