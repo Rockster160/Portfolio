@@ -172,7 +172,9 @@ Monitor.socket = consumer.subscriptions.create(
     },
   },
 );
-window.Monitor = Monitor;
+// A quick-actions page has its own Monitor (`public/quick_actions/task_monitor.js`)
+// and can load a bundle that pulls this one in; the page's global stays theirs.
+if (!window.Monitor) window.Monitor = Monitor;
 
 // ActionCable's built-in ConnectionMonitor only reopens after its 12s
 // stale threshold elapses — that's a 5–10s "Disconnected" banner on a
