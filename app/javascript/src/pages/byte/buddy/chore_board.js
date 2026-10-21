@@ -51,6 +51,10 @@ const TASK_PRESS_URL = (id) => `/byte/board/tasks/${id}/press`;
 // A list item's circle: POST checks it off its list, DELETE puts it back.
 const LIST_CHECK_URL = (id) => `/byte/board/list_items/${id}/check`;
 
+// A task press is the pet DOING something, so it puts on its working face for
+// a moment: one of these.
+const TASK_FACES = ["nerd", "focused"];
+
 // Managing credit buttons: list/create at the collection, update/delete at one.
 const BUTTONS_URL = "/byte/board/buttons";
 const BUTTON_URL = (id) => `/byte/board/buttons/${id}`;
@@ -288,7 +292,7 @@ const SCALE_MAX = 150;
 const SCALE_STEP = 10;
 
 export function initChoreBoard({
-  root, app, conversationIdFn, sayText, onTagsChanged, onItems, onChoreDreamsChanged,
+  root, app, conversationIdFn, sayText, flashFace, onTagsChanged, onItems, onChoreDreamsChanged,
   onDreamPaceChanged,
 } = {}) {
   if (!root || !app) return null;
@@ -1168,6 +1172,7 @@ export function initChoreBoard({
   // sound, an alert).
   function taskPress(id) {
     if (!find(id, "task")) return;
+    flashFace?.(TASK_FACES[Math.floor(Math.random() * TASK_FACES.length)]);
     return enqueue("task", id, [{ url: TASK_PRESS_URL(id), method: "POST", body: { conversation_id: boardParam() } }]);
   }
 

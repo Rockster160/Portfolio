@@ -385,11 +385,13 @@ globalThis.fetch = async (url, opts = {}) => {
 
 world = JSON.parse(app.dataset.boardItems).map((c) => ({ ...c }));
 
+const flashed = [];
 const board = initChoreBoard({
   root,
   app,
   conversationIdFn: () => 21,
   sayText: () => {},
+  flashFace: (face) => flashed.push(face),
 });
 
 const click = (selector) => {
@@ -551,6 +553,7 @@ out.credit_hit_no_chore_endpoint = requests.every((r) => !r.includes("/chores/")
 const beforeTask = requests.length;
 await click('[data-board-complete="8"]');
 out.task_press = {
+  flashed: [...flashed],
   syncPending: cellFor(8).dataset.syncPending,
   requests: requests.slice(beforeTask),
 };

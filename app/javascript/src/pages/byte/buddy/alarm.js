@@ -129,21 +129,28 @@ export function startAlarm({ hero }) {
 //
 // Several things can want it at once (a board alert, a very high list item the
 // pet is shouting about), so each start names who wants it and the loop runs
-// until the last of them stops.
+// until the last of them stops. A start may bring its own pair of faces; the
+// newest start's pair is the one shown, else the alarm's.
 let alertFlipInterval = 0;
-const alertFlipOwners = new Set();
+const alertFlipOwners = new Map();
 
-export function startAlertFlip({ hero, owner = "alert" }) {
+function flipFaces() {
+  const pairs = Array.from(alertFlipOwners.values()).filter(Boolean);
+  return pairs.length ? pairs[pairs.length - 1] : alarmFaces();
+}
+
+export function startAlertFlip({ hero, owner = "alert", faces = null }) {
   const wasRunning = alertFlipOwners.size > 0;
-  alertFlipOwners.add(owner);
+  alertFlipOwners.delete(owner);
+  alertFlipOwners.set(owner, faces);
   if (wasRunning) return;
 
-  const [faceA, faceB] = alarmFaces();
   let flip = false;
-  if (!running) hero?.setExpression(faceA, { transient: true });
+  if (!running) hero?.setExpression(flipFaces()[0], { transient: true });
   alertFlipInterval = window.setInterval(() => {
     if (running) return; // a ringing timer owns the face while it rings
     flip = !flip;
+    const [faceA, faceB] = flipFaces();
     hero?.setExpression(flip ? faceB : faceA, { transient: true });
   }, 600);
 }

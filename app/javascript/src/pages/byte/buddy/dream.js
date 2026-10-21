@@ -2,8 +2,8 @@
 // the speech bubble's standing alerts. Three sources, strongest first:
 //
 //   0. the newest very high item on the board's list (Buddy::BoardList). The
-//      pet shouts about it - the alarm's back-and-forth, silent - until it's
-//      checked off, and a tap on the pet doesn't put it away.
+//      pet shouts about it - flipping between playful and surprised, silent -
+//      until it's checked off, and a tap on the pet doesn't put it away.
 //   1. a dream sent from Jil (`Buddy.dream` — Whisper wanting food), aimed at a
 //      group the board watches. The newest one sent is the one shown.
 //   2. otherwise, now and then, one of the board's hot chores, at the board's
@@ -30,6 +30,7 @@ export const DEFAULT_PACE = { every: 30, blank: 25, rest: 0, quietFrom: null, qu
 const DREAM_FACE = "thinking";
 const DREAM_HOLD = "board-dream";
 const SHOUT = "board-list";
+const SHOUT_FACES = ["playful", "surprised"];
 
 // mulberry32: a float in [0, 1) from a 32-bit seed.
 export function mulberry32(seed) {
@@ -190,7 +191,7 @@ export function initBoardDream({
   // not rebuild the bubble under the person reading it.
   // `shout` swaps the dream's face for the shouting.
   function show(key, build, face, strength = FACE_STRENGTH.dream, { shout = false } = {}) {
-    if (shout) startAlertFlip({ hero, owner: SHOUT });
+    if (shout) startAlertFlip({ hero, owner: SHOUT, faces: SHOUT_FACES });
     else stopAlertFlip({ hero, owner: SHOUT });
     if (shown === key) return;
     shown = key;

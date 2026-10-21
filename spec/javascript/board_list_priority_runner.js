@@ -56,10 +56,11 @@ const { initBoardDream, initBoardAlert } = await import(
 );
 
 const faces = [];
+const holds = new Map();
 const hero = {
   setExpression: (face, opts) => faces.push([face, !!opts?.transient]),
-  holdExpression: () => {},
-  releaseExpression: () => {},
+  holdExpression: (key, face) => holds.set(key, face),
+  releaseExpression: (key) => holds.delete(key),
   restExpression: () => faces.push(["rest", false]),
 };
 
@@ -86,12 +87,13 @@ feed([
 ]);
 out.high = { speech: speech.textContent, speechHidden: speech.hidden, thoughtHidden: thought.hidden };
 out.high_shouts = intervals.size > 0;
+out.high_face = holds.get("board-list-high") || null;
 
 feed([item(2, "Chairs", "high", 7), item(5, "Keys", "very_high", 2), item(6, "Wallet", "very_high", 8)]);
 tick();
 out.very_high = { thought: thought.textContent, thoughtHidden: thought.hidden, speech: speech.textContent };
 out.shouting = intervals.size > 0;
-out.shout_faces = faces.filter(([, transient]) => transient).length >= 2;
+out.shout_faces = [...new Set(faces.filter(([, transient]) => transient).map(([face]) => face))].sort();
 
 // The pet is tapped: a shout isn't put away by that.
 dream.dismiss(Date.now() + 1000);
@@ -105,6 +107,6 @@ out.checked_off = {
 };
 
 feed([]);
-out.all_done = { speechHidden: speech.hidden, thoughtHidden: thought.hidden };
+out.all_done = { speechHidden: speech.hidden, thoughtHidden: thought.hidden, highFace: holds.get("board-list-high") || null };
 
 process.stdout.write(JSON.stringify(out, null, 2));

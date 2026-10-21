@@ -14,7 +14,8 @@
 //
 // The newest high-priority item of the board's list (Buddy::BoardList) is said
 // here too, first, until it's checked off. It's a thing to do rather than a
-// condition, so the pet says it without the shuffle.
+// condition, so the pet says it without the shuffle, and while any high item is
+// open the pet holds a surprised face.
 
 import { startAlertFlip, stopAlertFlip } from "./alarm";
 import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
@@ -26,6 +27,8 @@ const CYCLE_MS = 5000;
 // The hold key the board alert owns on the hero (see hero.holdExpression). One
 // key, re-pointed as the showing alert changes, released when none stands.
 const ALERT_HOLD = "board-alert";
+const HIGH_HOLD = "board-list-high";
+const HIGH_FACE = "surprised";
 
 export function initBoardAlert({ bubble, hero, tags }) {
   if (!bubble) return { setAlerts: () => {}, setTags: () => {}, setItems: () => {} };
@@ -136,6 +139,8 @@ export function initBoardAlert({ bubble, hero, tags }) {
   // The board's items changed: say its newest high item, if that's different.
   function setItems(items) {
     const item = newestListItem(items, "high");
+    if (item) hero?.holdExpression?.(HIGH_HOLD, HIGH_FACE, FACE_STRENGTH.alert);
+    else hero?.releaseExpression?.(HIGH_HOLD);
     const next = item ? { key: `list:${item.id}`, body: item.name, still: true } : null;
     if (next?.key === listAlert?.key && next?.body === listAlert?.body) return;
     listAlert = next;

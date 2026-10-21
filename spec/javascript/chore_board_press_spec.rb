@@ -169,6 +169,11 @@ RSpec.describe "Chore board presses" do
       expect(result["task_press"]["requests"]).to eq(["POST /byte/board/tasks/8/press"])
       expect(result["task_press"]["syncPending"]).to eq("false")
     end
+
+    # A task is the pet doing something, so it puts on its working face.
+    it "flashes the pet's working face" do
+      expect(result["task_press"]["flashed"]).to contain_exactly(satisfy { |face| %w[nerd focused].include?(face) })
+    end
   end
 
   # Read the way the list pages read a task's tile.
