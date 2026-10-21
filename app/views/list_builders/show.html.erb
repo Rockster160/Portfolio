@@ -20,17 +20,18 @@
   <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
       <h3 id="cmodal-title">Edit Item</h3>
-      <div class="row">
-        <input id="m-name" placeholder="Name">
-      </div>
-      <div class="row icon-row">
+      <div class="cmodal-body">
         <%= render "shared/icon_stack", name: "m-img", value: nil, label: "Icon" %>
-        <span class="icon-row-hint">Type or paste an emoji, search for one, or add a picture</span>
-      </div>
-      <div class="row">
-        <input id="m-display" placeholder="Display name (optional)">
-        <input id="m-stock" class="sm basic" type="number" placeholder="Stock" min="0" style="max-width:80px">
-        <input id="m-low" class="sm basic" type="number" placeholder="Low" min="0" style="max-width:80px">
+        <div class="cmodal-fields">
+          <div class="row">
+            <input id="m-name" placeholder="Name">
+          </div>
+          <div class="row">
+            <input id="m-display" placeholder="Display name (optional)">
+            <input id="m-stock" class="sm basic" type="number" placeholder="Stock" min="0" style="max-width:80px">
+            <input id="m-low" class="sm basic" type="number" placeholder="Low" min="0" style="max-width:80px">
+          </div>
+        </div>
       </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>

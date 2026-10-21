@@ -11,11 +11,15 @@
 // the /buddy/alerts refresh). Board only: with no bubble element this is a
 // no-op, so the caller can wire it on every surface and let it fall away off
 // the board.
+//
+// The newest high-priority item of the board's list (Buddy::BoardList) is said
+// here too, first, until it's checked off. It's a thing to do rather than a
+// condition, so the pet says it without the shuffle.
 
 import { startAlertFlip, stopAlertFlip } from "./alarm";
 import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
 import { alertRowText } from "../alert_strip";
-import { groupsOverlap } from "./board_scope";
+import { groupsOverlap, newestListItem } from "./board_scope";
 
 const CYCLE_MS = 5000;
 
@@ -24,12 +28,13 @@ const CYCLE_MS = 5000;
 const ALERT_HOLD = "board-alert";
 
 export function initBoardAlert({ bubble, hero, tags }) {
-  if (!bubble) return { setAlerts: () => {}, setTags: () => {} };
+  if (!bubble) return { setAlerts: () => {}, setTags: () => {}, setItems: () => {} };
 
   // Mutable: the board can be repointed at other groups live, and setTags
   // re-filters the alerts already in hand against the new set.
   let watched = Array.isArray(tags) ? tags : [];
   let lastAlerts = [];
+  let listAlert = null;
   let alerts = [];
   let cycleTimer = 0;
   let index = 0;
@@ -63,7 +68,10 @@ export function initBoardAlert({ bubble, hero, tags }) {
     // rather than being a transient the next repaint wipes; everything else
     // gets the generic alarm shuffle. Re-evaluated every paint — including each
     // rotation tick — so the face tracks the alert on screen.
-    if (alert?.expression) {
+    if (alert?.still) {
+      stopAlertFlip({ hero });
+      hero?.releaseExpression?.(ALERT_HOLD);
+    } else if (alert?.expression) {
       stopAlertFlip({ hero });
       hero?.holdExpression?.(ALERT_HOLD, alert.expression, strengthOr(alert.strength, FACE_STRENGTH.alert));
     } else {
@@ -81,13 +89,14 @@ export function initBoardAlert({ bubble, hero, tags }) {
     // thing) are one bubble, not a rotation between two identical ones. A
     // dream is a want, not a condition - it goes in the thought bubble
     // (buddy/dream.js), never here.
-    const seen = new Set();
+    const seen = new Set(listAlert ? [listAlert.body] : []);
     alerts = lastAlerts.filter((a) => {
       if (!a || !a.body || a.dream || !groupsOverlap(a.groups, watched)) return false;
       if (seen.has(a.body)) return false;
       seen.add(a.body);
       return true;
     });
+    if (listAlert) alerts.unshift(listAlert);
 
     if (alerts.length === 0) {
       stopCycle();
@@ -124,5 +133,14 @@ export function initBoardAlert({ bubble, hero, tags }) {
     setAlerts(lastAlerts);
   }
 
-  return { setAlerts, setTags };
+  // The board's items changed: say its newest high item, if that's different.
+  function setItems(items) {
+    const item = newestListItem(items, "high");
+    const next = item ? { key: `list:${item.id}`, body: item.name, still: true } : null;
+    if (next?.key === listAlert?.key && next?.body === listAlert?.body) return;
+    listAlert = next;
+    setAlerts(lastAlerts);
+  }
+
+  return { setAlerts, setTags, setItems };
 }

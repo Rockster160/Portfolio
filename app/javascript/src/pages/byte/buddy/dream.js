@@ -1,6 +1,9 @@
 // The pet's thought bubble on a board: what it WANTS, or an idea, as opposed to
-// the speech bubble's standing alerts. Two sources, strongest first:
+// the speech bubble's standing alerts. Three sources, strongest first:
 //
+//   0. the newest very high item on the board's list (Buddy::BoardList). The
+//      pet shouts about it - the alarm's back-and-forth, silent - until it's
+//      checked off, and a tap on the pet doesn't put it away.
 //   1. a dream sent from Jil (`Buddy.dream` — Whisper wanting food), aimed at a
 //      group the board watches. The newest one sent is the one shown.
 //   2. otherwise, now and then, one of the board's hot chores, at the board's
@@ -20,11 +23,13 @@
 // stay identical (spec/javascript/board_dream_spec.rb).
 
 import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
-import { groupsOverlap } from "./board_scope.js";
+import { groupsOverlap, newestListItem } from "./board_scope.js";
+import { startAlertFlip, stopAlertFlip } from "./alarm.js";
 
 export const DEFAULT_PACE = { every: 30, blank: 25, rest: 0, quietFrom: null, quietTo: null };
 const DREAM_FACE = "thinking";
 const DREAM_HOLD = "board-dream";
+const SHOUT = "board-list";
 
 // mulberry32: a float in [0, 1) from a 32-bit seed.
 export function mulberry32(seed) {
@@ -173,6 +178,7 @@ export function initBoardDream({
   let slotTimer = 0;
 
   function clear() {
+    stopAlertFlip({ hero, owner: SHOUT });
     if (shown === null) return;
     shown = null;
     bubble.hidden = true;
@@ -182,13 +188,17 @@ export function initBoardDream({
 
   // Redrawn only when what it says changed: a resync every household tap must
   // not rebuild the bubble under the person reading it.
-  function show(key, build, face, strength = FACE_STRENGTH.dream) {
+  // `shout` swaps the dream's face for the shouting.
+  function show(key, build, face, strength = FACE_STRENGTH.dream, { shout = false } = {}) {
+    if (shout) startAlertFlip({ hero, owner: SHOUT });
+    else stopAlertFlip({ hero, owner: SHOUT });
     if (shown === key) return;
     shown = key;
     bubble.textContent = "";
     build();
     bubble.hidden = false;
-    hero?.holdExpression?.(DREAM_HOLD, face || DREAM_FACE, strength);
+    if (shout) hero?.releaseExpression?.(DREAM_HOLD);
+    else hero?.holdExpression?.(DREAM_HOLD, face || DREAM_FACE, strength);
   }
 
   function line(text) {
@@ -199,6 +209,18 @@ export function initBoardDream({
   }
 
   function render() {
+    const urgent = newestListItem(items, "very_high");
+    if (urgent) {
+      return show(`list:${urgent.id}:${urgent.name}`, () => {
+        const icon = urgent.icon ? iconFor?.(urgent) : null;
+        if (icon) {
+          icon.classList.add("byte-board-dream-icon");
+          bubble.appendChild(icon);
+        }
+        bubble.appendChild(line(urgent.short_name || urgent.name || ""));
+      }, null, FACE_STRENGTH.dream, { shout: true });
+    }
+
     const dream = newestDream(alerts, watched, dismissedAt);
     if (dream) {
       return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${dream.expression || ""}:${dream.strength || ""}`, () => {

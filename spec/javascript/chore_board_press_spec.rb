@@ -189,6 +189,48 @@ RSpec.describe "Chore board presses" do
     end
   end
 
+  describe "an item from the board's list" do
+    it "puts its name on the disc, or its emoji with the name underneath" do
+      expect(result.dig("list_open", "chairs")).to include(
+        "state" => "open", "priority" => "high", "face" => "Chairs", "title" => "", "undoHidden" => true,
+      )
+      expect(result.dig("list_open", "keys")).to include("face" => "🔑", "title" => "Keys")
+    end
+
+    it "fills its ring as soon as it's pressed, and offers Undo once checked" do
+      expect(result["list_mid"]).to include("state" => "done", "sending" => "true", "ring" => "0")
+      expect(result["list_after"]).to include("state" => "done", "sending" => "false", "undoHidden" => false)
+    end
+
+    it "sends nothing for a second press on a checked item" do
+      expect(result["list_pressed_again"]).to eq(0)
+    end
+
+    it "goes back on the list on Undo" do
+      expect(result["list_undone"]).to include(
+        "state" => "open", "ring" => "100", "request" => "DELETE /byte/board/list_items/11/check",
+      )
+    end
+
+    it "says in words how long checked items stay" do
+      expect(result.dig("clear_after", "summaries")).to eq([
+        "GO, checked items leave after 30 seconds",
+        "GO, checked items leave after 5 minutes",
+        "GO, checked items leave after 1 hour",
+        "GO, checked items leave after 2 hours",
+        "GO, checked items leave after 1 minute, 30 seconds",
+        "GO, checked items leave straight away",
+        "GO, checked items leave at the end of the day",
+      ])
+      expect(result.dig("clear_after", "none")).to eq("None")
+    end
+
+    it "leaves the board when its time is up" do
+      expect(result["list_before_leaving"]).to be(true)
+      expect(result["list_left"]).to be(true)
+    end
+  end
+
   # The pad is never emptied and redrawn: a button arriving or leaving moves
   # cells in and out around the ones already standing.
   describe "the set changing" do

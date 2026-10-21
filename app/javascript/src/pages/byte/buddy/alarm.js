@@ -126,12 +126,17 @@ export function startAlarm({ hero }) {
 // doesn't flip — board_alert HOLDS that face through the hero's held-state
 // layer instead, so it stands steady and survives a mood change rather than
 // being a transient the next repaint wipes.
+//
+// Several things can want it at once (a board alert, a very high list item the
+// pet is shouting about), so each start names who wants it and the loop runs
+// until the last of them stops.
 let alertFlipInterval = 0;
-let alertFlipRunning = false;
+const alertFlipOwners = new Set();
 
-export function startAlertFlip({ hero }) {
-  if (alertFlipRunning) return;
-  alertFlipRunning = true;
+export function startAlertFlip({ hero, owner = "alert" }) {
+  const wasRunning = alertFlipOwners.size > 0;
+  alertFlipOwners.add(owner);
+  if (wasRunning) return;
 
   const [faceA, faceB] = alarmFaces();
   let flip = false;
@@ -143,9 +148,8 @@ export function startAlertFlip({ hero }) {
   }, 600);
 }
 
-export function stopAlertFlip({ hero } = {}) {
-  if (!alertFlipRunning) return;
-  alertFlipRunning = false;
+export function stopAlertFlip({ hero, owner = "alert" } = {}) {
+  if (!alertFlipOwners.delete(owner) || alertFlipOwners.size > 0) return;
   if (alertFlipInterval) {
     clearInterval(alertFlipInterval);
     alertFlipInterval = 0;
@@ -174,7 +178,7 @@ export function stopAlarm({ hero } = {}) {
   // If a standing alert is still flipping the face, leave it be — its loop takes
   // the face back over now that `running` is false. Only rest when nothing else
   // is driving the expression.
-  if (!alertFlipRunning) hero?.restExpression?.();
+  if (alertFlipOwners.size === 0) hero?.restExpression?.();
 }
 
 export function alarmRunning() {

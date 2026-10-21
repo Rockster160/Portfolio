@@ -51,3 +51,11 @@ export function feedOwnerMatches(feedOwnerId, boardOwner) {
   if (feedOwnerId == null || boardOwner == null) return true;
   return Number(feedOwnerId) === Number(boardOwner);
 }
+
+// The newest item of a connected list still open at `priority` (Buddy::BoardList
+// sets it), or null. Newest is highest `rank`, the list's own order.
+export function newestListItem(items, priority) {
+  return (items || [])
+    .filter((item) => item && item.kind === "list" && !item.checked && item.priority === priority)
+    .sort((a, b) => Number(b.rank) - Number(a.rank))[0] || null;
+}

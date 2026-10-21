@@ -104,6 +104,7 @@ class ByteController < ApplicationController
       @board_doer = board_doer_value(convo)
       @board_members_options = household_member_options
       @board_member_ids = board_assignees(convo) || [convo.user_id]
+      @board_list_options = convo.user.lists.order(:name).pluck(:id, :name)
     end
     render :show
   end
@@ -437,6 +438,51 @@ class ByteController < ApplicationController
     convo.save!
     broadcast_convo_change(convo, :updated)
     render json: { ok: true, chore_dreams: convo.chore_dreams?, pace: convo.dream_pace }
+  end
+
+  # POST /byte/board/list — connect one of the owner's lists to the board (a
+  # blank list disconnects it), and set when checked items leave and which
+  # items count as high and very high (Buddy::BoardList). Owner-only.
+  def set_board_list
+    convo = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    Buddy::BoardList.save!(
+      convo,
+      list_id:     params[:list_id],
+      clear_after: params[:clear_after],
+      very_high:   params[:very_high],
+      high:        params[:high],
+    )
+    broadcast_convo_change(convo, :updated)
+    render json: { ok: true, list: Buddy::BoardList.wire(convo) }
+  rescue ArgumentError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  # POST /byte/board/list_items/:id/check — a press on a list circle: checks the
+  # item off its list, as of when it was pressed. DELETE puts it back. Anyone
+  # who can open the board, on the item of the list that board shows.
+  def check_board_list_item
+    convo, item = board_list_item
+    return head(:not_found) if item.nil?
+
+    unless item.deleted?
+      item.update!(deleted_at: board_pressed_at(params[:client_checked_at]))
+      item.notify_jil(:removed)
+    end
+    render json: { item: Buddy::BoardList.item_wire(convo, item) }
+  end
+
+  def uncheck_board_list_item
+    convo, item = board_list_item
+    return head(:not_found) if item.nil?
+
+    if item.deleted?
+      item.update!(deleted_at: nil)
+      item.notify_jil(:added)
+    end
+    render json: { item: Buddy::BoardList.item_wire(convo, item) }
   end
 
   # POST /byte/buddy/pat — the pet was tapped (Buddy::Pat). Any Buddy thread of
@@ -1268,8 +1314,12 @@ class ByteController < ApplicationController
   # looking (current_user) decides only who gets credit for a press, and that's
   # settled in the press endpoints, not here.
   def board_items_for(convo)
-    tags = convo&.chore_tags || []
-    return [] if tags.empty? && convo&.pinned_chore_ids.blank?
+    return [] if convo.nil?
+
+    # The connected list's items stand apart from the groups, after the actions.
+    list_items = Buddy::BoardList.items(convo)
+    tags = convo.chore_tags
+    return list_items if tags.empty? && convo.pinned_chore_ids.blank?
 
     owner = convo.user
     day = @board_day || ChoreDay.current(owner)
@@ -1294,7 +1344,7 @@ class ByteController < ApplicationController
     # kind, run on a press as the task's owner — see BoardTaskButton.
     task_items = named.any? ? owner.board_task_buttons.for_board(named).includes(:task).map(&:board_item) : []
 
-    trigger_items + credit_items + task_items + chore_items
+    trigger_items + credit_items + task_items + list_items + chore_items
   end
 
   BOARD_CHORE_ORDER = Arel.sql("sort_order ASC NULLS LAST, id ASC").freeze
@@ -1531,6 +1581,24 @@ class ByteController < ApplicationController
   end
 
   # Other screens showing the board it was changed from fetch it again.
+  # The board a list press came from and the item, when it's on the list that
+  # board shows.
+  def board_list_item
+    convo = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
+    list = convo && Buddy::BoardList.list_for(convo)
+    return [convo, nil] if list.nil?
+
+    [convo, list.list_items.with_deleted.where(permanent: false).find_by(id: params[:id])]
+  end
+
+  # When a press made offline happened: the time it carries, if it's a sane one.
+  def board_pressed_at(value)
+    at = Time.zone.parse(value.to_s) if value.present?
+    at && at <= Time.current && at > 1.day.ago ? at : Time.current
+  rescue ArgumentError
+    Time.current
+  end
+
   def announce_board_change
     board = current_user.byte_conversations.active.buddy.board.find_by(id: params[:conversation_id])
     broadcast_convo_change(board, :updated) if board

@@ -119,6 +119,7 @@
      data-board-dream-pace="<%= @conversation.metadata.to_h.slice(*ByteConversation::DREAM_PACE_KEYS.values.map(&:first)).to_json %>"
      data-board-dream-dismissed-at="<%= @conversation.dream_dismissed_at&.iso8601(3) %>"
      data-board-pins="<%= @conversation.pinned_chore_ids.to_json %>"
+     data-board-list="<%= Buddy::BoardList.wire(@conversation).to_json if @board %>"
      <%# Whisper's state as this board wears it (asleep / gone), known before %>
      <%# the feed speaks, so the pet opens holding it rather than on its mood. %>
      data-board-whisper-state="<%= @board_whisper_state %>"

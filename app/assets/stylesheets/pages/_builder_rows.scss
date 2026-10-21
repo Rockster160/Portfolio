@@ -308,26 +308,34 @@
       }
     }
 
+    // `min-width: 0` lets a field shrink below the browser's default text-box
+    // width, so a row of them fits beside the icon square instead of running
+    // out of the modal.
     input {
       margin: 0;
+      min-width: 0;
       min-height: 44px;
+    }
+
+    // The icon square sits to the left, as tall as the two rows of fields
+    // beside it.
+    .cmodal-body {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .cmodal-fields {
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     // The shared icon square (`shared/_icon_stack`); what is here is only how
     // it looks in this modal.
-    .icon-row {
-      align-items: center;
-    }
-
-    .icon-row-hint {
-      color: $grey-disabled;
-      font-size: 13px;
-    }
-
     .icon-cell {
       position: relative;
       flex: 0 0 auto;
-      width: 72px;
+      width: 100px;
 
       // The square IS the input — contenteditable, hence `cursor: text`.
       .icon-preview {
@@ -388,11 +396,11 @@
         border-radius: 6px;
         background: rgba($blue-d5, 0.85);
         padding: 0;
-        width: 22px;
-        height: 22px;
+        width: 30px;
+        height: 30px;
         min-height: 0;
         color: $grey-light;
-        font-size: 11px;
+        font-size: 16px;
         line-height: 1;
         cursor: pointer;
 
@@ -411,9 +419,9 @@
         .fa-search:before { content: "\f002"; }
       }
 
-      .icon-upload-btn { top: 3px; left: 3px; }
-      .icon-pick-btn { top: 3px; right: 3px; }
-      .icon-clear-btn { right: 3px; bottom: 3px; font-size: 14px; }
+      .icon-upload-btn { top: 4px; left: 4px; }
+      .icon-pick-btn { top: 4px; right: 4px; }
+      .icon-clear-btn { right: 4px; bottom: 4px; font-size: 20px; }
     }
   }
 

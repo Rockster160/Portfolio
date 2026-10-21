@@ -177,6 +177,14 @@
           <input type="checkbox" data-board-share <%= "checked" if @conversation.shared? %>>
           <span>Shared with the household</span>
         </label>
+        <%# A list whose items are circles here. Its own dialog, like the
+            dreams below; the row says which list and opens it. %>
+        <div class="byte-modal-label">
+          List on this board
+          <button type="button" class="byte-modal-input byte-board-setting-open" data-board-list-open>
+            <span data-board-list-summary></span>
+          </button>
+        </div>
         <%# Hot-chore dreams have several knobs, so they live in their own dialog;
             this row says how they're set and opens it. %>
         <div class="byte-modal-label">
@@ -217,6 +225,56 @@
       forms, opened by "+ New" or a tap on a button in the list. The form is
       reused for both, so there is one set of fields to get right; closing it
       drops the draft, since every open starts fresh. %>
+  <%# The list connected to the board (Buddy::BoardList). Saved as a whole;
+      closing it unsaved puts the fields back. %>
+  <% if @board_owned %>
+    <dialog class="byte-modal" data-board-list-dialog>
+      <form class="byte-modal-form basic" data-board-list-form autocomplete="off"
+            data-url="<%= byte_board_list_path %>">
+        <h3 class="byte-modal-title">List on this board</h3>
+        <p class="byte-modal-hint">Each item on the list is a circle here, and a press checks it off.</p>
+        <label class="byte-modal-label">
+          List
+          <select class="byte-modal-input" name="list_id">
+            <option value="">None</option>
+            <% Array(@board_list_options).each do |id, name| %>
+              <option value="<%= id %>"><%= name %></option>
+            <% end %>
+          </select>
+        </label>
+        <%# The app's duration box (routine_step.js#controlFor) with its readback;
+            0 is straight away. The end of the day needs no length. %>
+        <label class="byte-modal-label">
+          Checked items leave after
+          <input type="text" class="byte-modal-input" name="clear_after" inputmode="text"
+                 autocomplete="off" spellcheck="false" data-board-list-clear>
+          <span class="byte-arg-read" data-board-list-clear-read aria-live="polite"></span>
+        </label>
+        <label class="byte-board-member">
+          <input type="checkbox" name="clear_end_of_day">
+          <span>Keep them until the end of the day</span>
+        </label>
+        </div>
+        <label class="byte-modal-label">
+          Very high
+          <input type="text" class="byte-modal-input" name="very_high"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <label class="byte-modal-label">
+          High
+          <input type="text" class="byte-modal-input" name="high"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <p class="byte-modal-hint">Section names, separated by commas, or a /pattern/ on the item's name. The newest high item is what the pet says; the newest very high one it dreams of, and shouts until it's checked off.</p>
+        <p class="byte-board-bb-error" data-board-list-error hidden></p>
+        <div class="byte-modal-actions">
+          <button type="button" class="byte-modal-btn" data-board-list-cancel>Cancel</button>
+          <button type="submit" class="byte-modal-btn byte-modal-btn-primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+  <% end %>
+
   <%# The pace of the pet's hot-chore dreams (Buddy::BoardDream). Saved as a
       whole; closing it unsaved puts the fields back. %>
   <% if @board_owned %>

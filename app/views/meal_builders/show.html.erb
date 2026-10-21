@@ -8,19 +8,20 @@
   <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
       <h3 id="cmodal-title">Edit Item</h3>
-      <div class="row">
-        <input id="m-cat" class="sm" placeholder="Category">
-        <input id="m-name" placeholder="Name">
-        <input id="m-cal" class="sm basic" type="number" placeholder="Calories">
-      </div>
-      <div class="row icon-row">
+      <div class="cmodal-body">
         <%= render "shared/icon_stack", name: "m-img", value: nil, label: "Icon" %>
-        <span class="icon-row-hint">Type or paste an emoji, search for one, or add a picture</span>
-      </div>
-      <div class="row">
-        <input id="m-tag" placeholder="Tag / helper text">
-        <input id="m-alias" placeholder="Alias">
-        <input id="m-desc" placeholder="Description">
+        <div class="cmodal-fields">
+          <div class="row">
+            <input id="m-cat" class="sm" placeholder="Category">
+            <input id="m-name" placeholder="Name">
+            <input id="m-cal" class="sm basic" type="number" placeholder="Calories">
+          </div>
+          <div class="row">
+            <input id="m-tag" placeholder="Tag / helper text">
+            <input id="m-alias" placeholder="Alias">
+            <input id="m-desc" placeholder="Description">
+          </div>
+        </div>
       </div>
       <div class="cmodal-actions">
         <button id="m-delete" class="danger primary" type="button">Delete</button>

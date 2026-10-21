@@ -5662,6 +5662,13 @@ dialog.byte-modal {
 // two things it shows are as large as they can be, and there is nothing on it
 // that opens something else.
 
+// Two quick taps on a chore are two presses, so the page never takes them as a
+// zoom. On the whole surface rather than each disc: a second tap that lands on
+// the label or the gap beside a circle zoomed the board. Pinching still works.
+.byte-app[data-kiosk="true"] {
+  touch-action: manipulation;
+}
+
 .byte-app[data-kiosk="true"] {
   .byte-header,
   .byte-pwd-bar,
@@ -7067,6 +7074,16 @@ $board-cell-max: 200px;
     background: color-mix(in srgb, var(--actor-color) 16%, #0F1B33);
     border-color: color-mix(in srgb, var(--actor-color) 55%, transparent);
   }
+}
+
+// A connected list's items (Buddy::BoardList): the chores' flat disc, which
+// fills its ring when checked off, edged in its priority's colour while open.
+.byte-board-cell[data-kind="list"] { --actor-color: #10B981; }
+.byte-board-cell[data-kind="list"][data-priority="high"] { --actor-color: #F97316; }
+.byte-board-cell[data-kind="list"][data-priority="very_high"] { --actor-color: #EF4444; }
+
+.byte-board-cell[data-kind="list"][data-state="open"]:not([data-priority="normal"]) .byte-board-circle {
+  border-color: var(--actor-color);
 }
 
 // What a task's tile says on its disc (`text`, see chore_board.js#followTiles),

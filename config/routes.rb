@@ -76,6 +76,9 @@ Rails.application.routes.draw do
   post  "/byte/buddy/pat" => "byte#pat_buddy", as: :byte_buddy_pat
   post  "/byte/board/members" => "byte#set_board_members", as: :byte_board_members
   post  "/byte/board/pins" => "byte#set_board_pins", as: :byte_board_pins
+  post  "/byte/board/list" => "byte#set_board_list", as: :byte_board_list
+  post  "/byte/board/list_items/:id/check" => "byte#check_board_list_item", as: :byte_board_list_item_check
+  delete "/byte/board/list_items/:id/check" => "byte#uncheck_board_list_item"
   get   "/byte/board/items" => "byte#board_items", as: :byte_board_items
   get   "/byte/version" => "byte#version", as: :byte_version
   get   "/byte/board/tags" => "byte#board_tags", as: :byte_board_tags

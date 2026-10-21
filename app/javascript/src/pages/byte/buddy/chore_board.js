@@ -24,6 +24,8 @@ import { paceFromMeta, dreamSummary } from "./dream";
 import { createBoardQueue } from "./board_queue";
 import { initBoardTaskButtons, rowHandle, sortableRows } from "./board_task_buttons";
 import { setButtonText, splitGraphemes } from "../../../button_text";
+import { parseDuration, formatDurationShort, humanizeSeconds } from "../../timers/duration.js";
+import { DURATION_PLACEHOLDER, durationRead } from "./routine_step";
 
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
@@ -46,6 +48,9 @@ const PRESS_URL = (id) => `/byte/board/buttons/${id}/press`;
 // feeds (rings, a sound, an alert), not this response.
 const TASK_PRESS_URL = (id) => `/byte/board/tasks/${id}/press`;
 
+// A list item's circle: POST checks it off its list, DELETE puts it back.
+const LIST_CHECK_URL = (id) => `/byte/board/list_items/${id}/check`;
+
 // Managing credit buttons: list/create at the collection, update/delete at one.
 const BUTTONS_URL = "/byte/board/buttons";
 const BUTTON_URL = (id) => `/byte/board/buttons/${id}`;
@@ -56,7 +61,8 @@ const BUTTON_URL = (id) => `/byte/board/buttons/${id}`;
 //   * CREDIT  — a custom button that completes a chore crediting a chosen person.
 //   * TASK    — a custom button that runs a Jil task (the Whisper controls).
 // Triggers, credit buttons and task buttons are all stateless ACTION circles:
-// one press, a flash, nothing to undo. Chores are the only stateful kind.
+// one press, a flash, nothing to undo. Besides chores, a connected list's items
+// (LIST) have state too: open, or checked off and waiting to leave.
 function isTrigger(item) {
   return item && item.kind === "trigger";
 }
@@ -68,6 +74,9 @@ function isTask(item) {
 }
 function isAction(item) {
   return isTrigger(item) || isCredit(item) || isTask(item);
+}
+function isList(item) {
+  return item && item.kind === "list";
 }
 
 // What a press looks like before the server has answered, and it is the same
@@ -117,12 +126,15 @@ const PREDICT = {
     skipped_today: false,
     progress_count: entry.was_skipped ? 0 : c.progress_count,
   }),
+  // When it leaves is the server's to say; until then it stays.
+  list_check: () => ({ checked: true, clears_at: null }),
+  list_undo: () => ({ checked: false, clears_at: null }),
 };
 
 // Which cell a queued press belongs to.
 const CELL_KIND = {
   complete: "chore", undo: "chore", dismiss: "chore", skip: "chore", bring_back: "chore",
-  credit: "credit", trigger: "trigger", task: "task",
+  credit: "credit", trigger: "trigger", task: "task", list_check: "list", list_undo: "list",
 };
 
 // A board dark for longer than this gets a yawn when it comes back. Long
@@ -167,6 +179,7 @@ function cellState(item) {
   // or waved off - it is only ever "there to press", so it gets its own settled
   // state and none of the ring/corner machinery the four chore states drive.
   if (isAction(item)) return item.kind;
+  if (isList(item)) return item.checked ? "done" : "open";
   if (item.progress_count >= item.target_count) return "done";
   if (item.skipped_today) return "skipped";
   if (item.dismissed) return "dismissed";
@@ -184,7 +197,7 @@ function cellState(item) {
 // the grey circle is also the only way back to it.
 function onBoard(items) {
   return items.filter((item) =>
-    isAction(item) ? true : (item.today_visible || item.on_dailies || item.pinned) && !item.archived,
+    isAction(item) || isList(item) ? true : (item.today_visible || item.on_dailies || item.pinned) && !item.archived,
   );
 }
 
@@ -194,6 +207,19 @@ function formatMultiplier(n) {
   if (n == null) return "";
   const f = Number(n);
   return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
+}
+
+// "GO, checked items leave after 30 seconds": how a board's list is set, for
+// the row that opens its dialog.
+export function listSummary(config) {
+  if (!config?.list_id) return "None";
+
+  const clear = String(config.clear_after ?? 3600);
+  let leave;
+  if (clear === "end_of_day") leave = "at the end of the day";
+  else if (Number(clear) === 0) leave = "straight away";
+  else leave = `after ${humanizeSeconds(Number(clear))}`;
+  return `${config.list_name || "List"}, checked items leave ${leave}`;
 }
 
 // A size as a tile sends it: a bare number is pixels.
@@ -377,11 +403,34 @@ export function initChoreBoard({
       const change = PREDICT[entry.kind];
       if (!change) return;
       const at = out.findIndex(
-        (item) => (item.kind || "chore") === "chore" && String(item.id) === entry.item_id,
+        (item) => (item.kind || "chore") === CELL_KIND[entry.kind] && String(item.id) === entry.item_id,
       );
       if (at >= 0) out[at] = { ...out[at], ...change(out[at], entry) };
     });
-    return out;
+    return withoutCleared(out);
+  }
+
+  // A checked list item leaves once its time is up, without waiting on the
+  // server to say so: a timer repaints at the next one due.
+  let clearTimer = 0;
+  function withoutCleared(list) {
+    const now = Date.now();
+    let next = Infinity;
+    const kept = list.filter((item) => {
+      if (!isList(item) || !item.checked || !item.clears_at) return true;
+      const at = Date.parse(item.clears_at);
+      if (at <= now) return false;
+      next = Math.min(next, at);
+      return true;
+    });
+    window.clearTimeout(clearTimer);
+    if (next !== Infinity) {
+      clearTimer = window.setTimeout(() => {
+        items = withQueued(base);
+        paint();
+      }, Math.min(next - now + 50, 2 ** 31 - 1));
+    }
+    return kept;
   }
 
   let items = withQueued(base);
@@ -514,6 +563,18 @@ export function initChoreBoard({
       if (isTask(chore)) paintTileFace(cell, chore);
       return;
     }
+    if (isList(chore)) {
+      cell.dataset.priority = chore.priority || "normal";
+      const ring = cell.querySelector("[data-board-ring]");
+      if (ring) {
+        ring.style.strokeDashoffset = chore.checked ? "0" : "100";
+        ring.style.opacity = chore.checked ? "1" : "0";
+      }
+      const undo = cell.querySelector("[data-board-list-undo]");
+      if (undo) undo.hidden = !chore.checked;
+      markPending(cell, chore);
+      return;
+    }
 
     // Who the done disc belongs to. Same `--actor-color` the chores page keys
     // its finished state off, carried here on data-actor so a chore I finished
@@ -596,7 +657,72 @@ export function initChoreBoard({
   }
 
   function buildCell(item) {
+    if (isList(item)) return buildListCell(item);
     return isAction(item) ? buildActionCell(item) : buildChoreCell(item);
+  }
+
+  function ringSvg() {
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    ring.setAttribute("class", "byte-board-ring");
+    ring.setAttribute("viewBox", "0 0 100 100");
+    ring.setAttribute("aria-hidden", "true");
+    const arc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    arc.setAttribute("cx", "50");
+    arc.setAttribute("cy", "50");
+    arc.setAttribute("r", "48");
+    arc.setAttribute("pathLength", "100");
+    arc.setAttribute("data-board-ring", "");
+    ring.appendChild(arc);
+    return ring;
+  }
+
+  // A list item: pressed to check it off, when its ring fills; Undo puts it
+  // back while it's still here. The name goes on the disc unless it leads with
+  // an emoji, which is then the picture and the name sits underneath.
+  function buildListCell(item) {
+    const cell = document.createElement("div");
+    cell.className = "byte-board-cell";
+    cell.dataset.kind = "list";
+    cell.setAttribute("role", "listitem");
+
+    const disc = document.createElement("div");
+    disc.className = "byte-board-disc";
+
+    const press = document.createElement("button");
+    press.type = "button";
+    press.className = "byte-board-circle";
+    press.dataset.boardComplete = String(item.id);
+    press.dataset.boardKind = "list";
+    press.setAttribute("aria-label", `Check off: ${item.short_name}`);
+
+    let face;
+    if (item.icon) {
+      face = iconNode(item);
+    } else {
+      face = document.createElement("span");
+      face.className = "byte-board-icon byte-board-face-text";
+      face.dataset.words = String(splitGraphemes(item.short_name.trim()).length > 2);
+      face.textContent = item.short_name;
+    }
+    press.append(ringSvg(), face);
+
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "byte-board-undo";
+    undo.dataset.boardListUndo = String(item.id);
+    undo.setAttribute("aria-label", `Put ${item.short_name} back on the list`);
+    undo.title = "Put it back";
+    undo.textContent = "Undo";
+    undo.hidden = true;
+
+    const title = document.createElement("span");
+    title.className = "byte-board-title";
+    title.textContent = item.icon ? item.short_name : "";
+
+    disc.append(press, undo);
+    cell.append(disc, title);
+    paintCell(cell, item);
+    return cell;
   }
 
   // An action circle (trigger or credit button): the icon to aim at and a title,
@@ -836,6 +962,18 @@ export function initChoreBoard({
     if (Array.isArray(payload?.chores) && payload.chores.length > 0) resyncSoon();
   }
 
+  // A list press answers with the item as it now stands, which says when a
+  // checked one leaves.
+  function absorbListItem(fresh) {
+    const at = base.findIndex((item) => isList(item) && String(item.id) === String(fresh.id));
+    if (at >= 0) {
+      base[at] = fresh;
+      keep();
+    }
+    items = withQueued(base);
+    paint();
+  }
+
   // Counts presses as they land, so a fetch that set out before one did can
   // tell its answer is already behind and ask again.
   let landedCount = 0;
@@ -941,7 +1079,8 @@ export function initChoreBoard({
       list.push(entry.mutation_id);
       landedCompletes.set(entry.item_id, list);
     }
-    if (ok && data && (data.chore || data.id != null)) absorb(data);
+    if (ok && data?.item && CELL_KIND[entry.kind] === "list") absorbListItem(data.item);
+    else if (ok && data && (data.chore || data.id != null)) absorb(data);
     // A skip or bring-back answers with something other than the chore, and a
     // refused press leaves the screen showing what it predicted.
     if (!ok || entry.kind === "skip" || entry.kind === "bring_back") resyncSoon();
@@ -1049,6 +1188,30 @@ export function initChoreBoard({
         el.hidden = true;
       }, 1600),
     );
+  }
+
+  // Check a list item off, as of now; pressed again while it's checked, nothing
+  // - Undo is the way back. Undoing one still waiting to be sent just takes it
+  // back off the queue.
+  function listCheck(id) {
+    const item = find(id, "list");
+    if (!item || item.checked) return;
+    return enqueue("list_check", id, [{
+      url: LIST_CHECK_URL(id),
+      method: "POST",
+      body: { conversation_id: boardParam(), client_checked_at: new Date().toISOString() },
+    }]);
+  }
+
+  function listUndo(id) {
+    const queued = waiting(["list_check"], id);
+    if (queued.length) return queued.forEach((e) => queue.remove(e.qid));
+    if (!find(id, "list")?.checked) return;
+    return enqueue("list_undo", id, [{
+      url: LIST_CHECK_URL(id),
+      method: "DELETE",
+      body: { conversation_id: boardParam() },
+    }]);
   }
 
   function dismiss(id, span) {
@@ -1623,6 +1786,9 @@ export function initChoreBoard({
       const undo = e.target.closest("[data-board-undo]");
       if (undo) return bringBack(undo.dataset.boardUndo);
 
+      const listUndoEl = e.target.closest("[data-board-list-undo]");
+      if (listUndoEl) return listUndo(listUndoEl.dataset.boardListUndo);
+
       const press = e.target.closest("[data-board-complete]");
       if (!press) return;
 
@@ -1646,6 +1812,7 @@ export function initChoreBoard({
       if (isTrigger(item)) return fire(item.id);
       if (isCredit(item)) return creditPress(item.id);
       if (isTask(item)) return taskPress(item.id);
+      if (isList(item)) return listCheck(item.id);
       if (item.dismissed || item.skipped_today) return;
 
       return complete(item.id);
@@ -1853,6 +2020,84 @@ export function initChoreBoard({
       }
     });
   }
+
+  // The connected list: the row says which list and when checked items leave,
+  // and opens the dialog, which saves as a whole. Closing it unsaved puts the
+  // fields back.
+  const listOpenEl = root.querySelector("[data-board-list-open]");
+  const listSummaryEl = root.querySelector("[data-board-list-summary]");
+  const listDialogEl = root.querySelector("[data-board-list-dialog]");
+  const listFormEl = root.querySelector("[data-board-list-form]");
+  const listErrorEl = root.querySelector("[data-board-list-error]");
+  const listClearEl = root.querySelector("[data-board-list-clear]");
+  const listClearReadEl = root.querySelector("[data-board-list-clear-read]");
+  if (listClearEl) listClearEl.placeholder = DURATION_PLACEHOLDER;
+
+  // The readback under the box, and the box set aside while the end of the day
+  // is ticked.
+  function paintClearAfter() {
+    if (!listFormEl) return;
+    const endOfDay = listFormEl.elements.clear_end_of_day.checked;
+    listClearEl.disabled = endOfDay;
+    const raw = listClearEl.value.trim();
+    listClearReadEl.textContent = endOfDay ? "" : raw === "0" ? "Straight away" : durationRead(raw);
+    listClearReadEl.dataset.unreadable = String(!endOfDay && !!raw && parseDuration(raw) == null);
+  }
+  let boardList = {};
+  try {
+    boardList = JSON.parse(app.dataset.boardList || "{}") || {};
+  } catch (e) {
+    boardList = {};
+  }
+
+  function paintBoardList() {
+    if (listSummaryEl) listSummaryEl.textContent = listSummary(boardList);
+    if (!listFormEl || listDialogEl?.open) return;
+    const f = listFormEl.elements;
+    f.list_id.value = boardList.list_id ? String(boardList.list_id) : "";
+    const clear = String(boardList.clear_after ?? 3600);
+    f.clear_end_of_day.checked = clear === "end_of_day";
+    f.clear_after.value = clear === "end_of_day" ? "" : formatDurationShort(Number(clear));
+    paintClearAfter();
+    f.very_high.value = boardList.very_high ?? "Very High";
+    f.high.value = boardList.high ?? "High";
+    if (listErrorEl) listErrorEl.hidden = true;
+  }
+  paintBoardList();
+
+  listOpenEl?.addEventListener("click", () => listDialogEl?.showModal());
+  root.querySelector("[data-board-list-cancel]")?.addEventListener("click", () => listDialogEl?.close());
+  listDialogEl?.addEventListener("close", paintBoardList);
+  listFormEl?.addEventListener("input", paintClearAfter);
+  listFormEl?.addEventListener("change", paintClearAfter);
+  listFormEl?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = listFormEl.elements;
+    const raw = f.clear_after.value.trim();
+    const seconds = raw === "0" ? 0 : parseDuration(raw);
+    if (!f.clear_end_of_day.checked && seconds == null) {
+      listErrorEl.textContent = "Say how long checked items stay, like 30s, 5m or 1h.";
+      listErrorEl.hidden = false;
+      return;
+    }
+    try {
+      const data = await apiCall(listFormEl.dataset.url, "POST", {
+        conversation_id: conversationIdFn ? conversationIdFn() : null,
+        list_id: f.list_id.value,
+        clear_after: f.clear_end_of_day.checked ? "end_of_day" : String(seconds),
+        very_high: f.very_high.value,
+        high: f.high.value,
+      });
+      boardList = data?.list || {};
+      listDialogEl.close();
+      flashSaved();
+      resync();
+    } catch (err) {
+      if (!listErrorEl) return;
+      listErrorEl.textContent = err.body?.error || "Couldn't save that.";
+      listErrorEl.hidden = false;
+    }
+  });
 
   // Hot-chore dreams: the row in settings says how they're set and opens the
   // dialog, which saves as a whole. Closing it unsaved puts the fields back to
@@ -2066,6 +2311,19 @@ export function initChoreBoard({
       if (next === JSON.stringify(pinnedIds())) return;
       app.dataset.boardPins = next;
       paintPins();
+    },
+
+    // The connected list changed: fetch the board again if it's this one's.
+    onListChanged(listId) {
+      if (String(listId) === String(boardList.list_id)) resyncSoon();
+    },
+
+    // Set on another device: keep the row and dialog honest.
+    setBoardList(meta) {
+      const raw = meta || {};
+      const same = String(raw.list_id || "") === String(boardList.list_id || "");
+      boardList = { ...raw, list_name: same ? boardList.list_name : null };
+      paintBoardList();
     },
 
     // Switched on another device: keep the controls honest.

@@ -336,6 +336,7 @@ class List < ApplicationRecord
 
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{id}_html_channel", { list_html: rendered_message, timestamp: broadcast_stamp }
+    ::Buddy::BoardList.broadcast!(self)
   end
 
   # Stamped AFTER the read that produced the snapshot, never before. The stamp

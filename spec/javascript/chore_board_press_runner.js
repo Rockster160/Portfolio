@@ -261,6 +261,8 @@ app.dataset.boardItems = JSON.stringify([
   },
 ]);
 
+const laterTimers = [];
+
 globalThis.document = {
   createElement: (tag) => fakeEl(tag),
   createElementNS: (_ns, tag) => fakeEl(tag),
@@ -278,14 +280,16 @@ globalThis.window = {
       this.store[k] = String(v);
     },
   },
-  setTimeout: (fn) => fn(),
+  // Anything short runs at once; a long wait (a checked list item's time to
+  // leave) is kept for the runner to run when it says time has passed.
+  setTimeout: (fn, ms = 0) => (ms > 1000 ? laterTimers.push(fn) : fn()),
   clearTimeout: () => {},
   addEventListener() {},
 };
 // The socket monitor names the page it subscribes from as it loads.
 globalThis.window.location = { pathname: "/byte", search: "" };
 
-const { initChoreBoard } = await import(
+const { initChoreBoard, listSummary } = await import(
   "data:text/javascript;base64," + Buffer.from(built.outputFiles[0].text).toString("base64")
 );
 // Only the trigger flash reaches for it, and only to scope a selector.
@@ -325,7 +329,13 @@ globalThis.fetch = async (url, opts = {}) => {
   const chore = id ? entry(id) : null;
   let body = {};
 
-  if (url.startsWith("/byte/board/items")) {
+  if (url.startsWith("/byte/board/list_items/")) {
+    // Checked off (or back): answers with the item and when it leaves.
+    chore.checked = method === "POST";
+    const leaves = chore.leaves_in_ms ?? 3600000;
+    chore.clears_at = chore.checked ? new Date(Date.now() + leaves).toISOString() : null;
+    body = { item: chore };
+  } else if (url.startsWith("/byte/board/items")) {
     // The board's own resync endpoint - chores AND triggers of the group. This
     // suite drives only chores, so world is the whole answer.
     body = { items: world };
@@ -587,5 +597,60 @@ tile({ text: "[stack 🔔💤]" });
 out.tile_stack = { ...face(), stacked: cellFor(10).querySelector(".byte-board-icon").children[0]?.className };
 tile({ text: "Opening...", icon: "<svg viewBox='0 0 10 10'></svg>", label: "Garage door" });
 out.tile_icon = face();
+
+// ---- a connected list's items ----
+//
+// Pressed to check off: the ring fills before the answer, Undo appears, a
+// second press sends nothing, and the circle leaves when its time is up.
+world.push(
+  { id: 11, kind: "list", name: "Chairs", short_name: "Chairs", icon: null, icon_kind: "empty", priority: "high", rank: 5, checked: false, clears_at: null },
+  { id: 12, kind: "list", name: "🔑 Keys", short_name: "Keys", icon: "🔑", icon_kind: "emoji", priority: "normal", rank: 4, checked: false, clears_at: null, leaves_in_ms: 5000 },
+);
+await board.resync();
+const listCell = (id) => {
+  const cell = cellFor(id);
+  return {
+    state: cell.dataset.state,
+    priority: cell.dataset.priority,
+    sending: cell.dataset.sending,
+    ring: cell.querySelector("[data-board-ring]").style.strokeDashoffset,
+    undoHidden: cell.querySelector("[data-board-list-undo]").hidden,
+    face: cell.querySelector(".byte-board-icon").textContent,
+    title: cell.querySelector(".byte-board-title").textContent,
+  };
+};
+out.list_open = { chairs: listCell(11), keys: listCell(12) };
+
+held = new Set(["POST /byte/board/list_items/11/check"]);
+const listPress = click('[data-board-complete="11"]');
+out.list_mid = listCell(11);
+held = new Set();
+release();
+await listPress;
+out.list_after = listCell(11);
+
+const beforeAgain = requests.length;
+await click('[data-board-complete="11"]');
+out.list_pressed_again = requests.length - beforeAgain;
+
+await click('[data-board-list-undo="11"]');
+out.list_undone = { ...listCell(11), request: requests[requests.length - 1] };
+
+// Keys leaves five seconds after it's checked: still there until the timer
+// the board set for it runs, then gone.
+await click('[data-board-complete="12"]');
+out.list_before_leaving = !!cellFor(12);
+const realNow = Date.now;
+Date.now = () => realNow() + 6000;
+laterTimers.splice(0).forEach((fn) => fn());
+Date.now = realNow;
+out.list_left = !cellFor(12);
+
+// How long checked items stay, as the settings show it.
+const stays = [30, 300, 3600, 7200, 90, 0, "end_of_day"];
+out.clear_after = {
+  summaries: stays.map((clear_after) => listSummary({ list_id: 1, list_name: "GO", clear_after })),
+  none: listSummary({}),
+};
 
 process.stdout.write(JSON.stringify(out, null, 2));

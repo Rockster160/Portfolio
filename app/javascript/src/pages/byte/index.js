@@ -2746,7 +2746,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       boardAlert?.setTags(tags);
       boardDream?.setTags(tags);
     },
-    onItems: (items) => boardDream?.setItems(items),
+    onItems: (items) => {
+      boardDream?.setItems(items);
+      boardAlert?.setItems(items);
+    },
     onChoreDreamsChanged: (on) => boardDream?.setChoreDreams(on),
     onDreamPaceChanged: (pace) => boardDream?.setPace(pace),
   });
@@ -3652,6 +3655,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const pace = paceFromMeta(boardMeta);
             choreBoard?.setDreamPace(pace);
             choreBoard?.setPins(boardMeta.pinned_chore_ids || []);
+            choreBoard?.setBoardList(boardMeta.board_list);
             // Its Buddy may have changed what's on it (a credit button, a
             // chore's groups) - ask again rather than guess which.
             choreBoard?.resync();
@@ -3659,6 +3663,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             choreBoard?.setDoer(String(boardMeta.ask_who) === "true" ? "ask" : String(boardMeta.doer_id || ""));
           }
         }
+        return;
+      }
+      // A list connected to a board changed (Buddy::BoardList.broadcast!).
+      if (data.kind === "board_list") {
+        choreBoard?.onListChanged(data.list_id);
         return;
       }
       if (data.kind === "conversation_read") {
