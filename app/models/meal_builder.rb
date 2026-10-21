@@ -76,8 +76,8 @@ class MealBuilder < ApplicationRecord
 
   private
 
-  # The builder draws `img` as text, so only an emoji will do - not a Tabler
-  # class name or an uploaded icon.
+  # An emoji, not a Tabler class name or an uploaded icon - the builder draws
+  # all three, but a guess made from the name alone is best as the glyph.
   def emoji_for(name)
     values = ::IconPool.search(name, limit: 10).pluck(:c)
     values.find { |value| value.present? && !value.start_with?("ti-", "data:") }.to_s

@@ -18,6 +18,8 @@ Rails.application.config.assets.precompile += %w[jil.js]
 Rails.application.config.assets.precompile += %w[jil_run_modal.js]
 Rails.application.config.assets.precompile += %w[sortable_standalone.js]
 Rails.application.config.assets.precompile += %w[jil.css]
+# The shared icon square, for pages on the quick-actions layout
+Rails.application.config.assets.precompile += %w[icon_field.js]
 
 # Precompile additional assets.
 # application.js, application.css, and all non-JS/CSS in the app/assets

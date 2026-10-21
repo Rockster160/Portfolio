@@ -58,6 +58,7 @@ import { autocompleteOpenFor } from "../../emoji_autocomplete";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
 import { renderCycleButton } from "./message_actions/cycle_button";
+import { renderMessageButtons } from "./message_actions/message_buttons";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import {
   renderReactions,
@@ -826,6 +827,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         bodyEl.parentNode.insertBefore(cycleEl, bodyEl.nextSibling);
       }
       renderCycleButton(cycleEl, message);
+    }
+
+    // Buttons a Jil task put under a message, each firing a trigger. Same mount
+    // pattern; a message carries exactly one action.
+    if (message?.metadata?.tool_name === "buddy_message_buttons") {
+      let buttonsEl = node.querySelector("[data-buddy-message-buttons]");
+      if (!buttonsEl) {
+        buttonsEl = document.createElement("div");
+        buttonsEl.setAttribute("data-buddy-message-buttons", "");
+        bodyEl.parentNode.insertBefore(buttonsEl, bodyEl.nextSibling);
+      }
+      renderMessageButtons(buttonsEl, message);
     }
 
     // `[hicon Fae]` anywhere in the bubble — the body it just wrote AND the

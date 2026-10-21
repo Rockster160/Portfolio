@@ -22,7 +22,8 @@ import { boardOwnerId, feedOwnerMatches } from "./board_scope";
 import { initBoardChorePicker } from "./board_chore_picker";
 import { paceFromMeta, dreamSummary } from "./dream";
 import { createBoardQueue } from "./board_queue";
-import { initBoardTaskButtons } from "./board_task_buttons";
+import { initBoardTaskButtons, rowHandle, sortableRows } from "./board_task_buttons";
+import { setButtonText, splitGraphemes } from "../../../button_text";
 
 // Both skips, and the difference is the whole feature. `dismiss` leaves the
 // chore's cycle exactly where it was and simply stops asking for a while;
@@ -195,9 +196,17 @@ function formatMultiplier(n) {
   return f === Math.floor(f) ? String(Math.floor(f)) : String(f);
 }
 
-// The icon, in whatever shape it arrived. Mirrors the four kinds the chore
-// serializer resolves (`icon_kind`) rather than guessing from the string, so a
-// glyph that happens to look like a path can't be read as one.
+// A size as a tile sends it: a bare number is pixels.
+function cssSize(value) {
+  if (value == null || value === "") return null;
+  return /^\d+(\.\d+)?$/.test(String(value).trim()) ? `${value}px` : String(value);
+}
+
+function setVar(el, name, value) {
+  if (value) el.style.setProperty(name, value);
+  else el.style.removeProperty(name);
+}
+
 // How a glyph string draws, the same rule as the server's Buddy::BoardIcon.
 function iconKindFor(icon) {
   const v = String(icon || "").trim();
@@ -208,6 +217,9 @@ function iconKindFor(icon) {
   return "emoji";
 }
 
+// The icon, in whatever shape it arrived. Mirrors the four kinds the chore
+// serializer resolves (`icon_kind`) rather than guessing from the string, so a
+// glyph that happens to look like a path can't be read as one.
 export function iconNode(chore) {
   // The BOX is what the container query measures, so the glyph always goes
   // inside one even when it is a single character - that is what makes an
@@ -217,9 +229,12 @@ export function iconNode(chore) {
   box.className = "byte-board-icon";
 
   if (chore.icon_kind === "image" || chore.icon_kind === "svg") {
+    // SVG markup goes in as a picture of itself, so whatever it carries never
+    // runs on the page.
+    const markup = chore.icon_kind === "svg" && String(chore.icon).startsWith("<svg");
     const img = document.createElement("img");
     img.className = "byte-board-icon-img";
-    img.src = chore.icon;
+    img.src = markup ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(chore.icon)}` : chore.icon;
     img.alt = "";
     img.draggable = false;
     box.appendChild(img);
@@ -288,7 +303,6 @@ export function initChoreBoard({
   // each chore's own icon, in a modal over everything else.
   const chorePicker = initBoardChorePicker({
     dialog: root.querySelector("[data-board-chore-picker]"),
-    iconFor: iconNode,
   });
 
   const cheerUrl = app.dataset.choreCheerUrl;
@@ -375,19 +389,19 @@ export function initChoreBoard({
   // ---- task buttons that follow their tile ----
   //
   // A task button whose Jil task answers on a monitor tile wears what that tile
-  // says it is right now - the PWA's Gone button reads 🏠 Home while she's out -
-  // so a toggle shows what pressing it will do. The task broadcasts `icon` and
-  // `label` alongside the PWA's own fields; a tile that sends neither leaves the
-  // button as it was configured. Only the board owner's broadcasts count.
+  // says right now, read the way the list pages' task buttons read it: `text`
+  // is what's ON the button (drawn by setButtonText, so `[stack 🔔💤]` and
+  // `[hicon name]` work), `color` its colour and `fontSize` the text's size.
+  // On top of those a tile may send `icon` (an emoji, a `ti-` name, an image
+  // URL or SVG markup), which is drawn in place of the text, `textColor`, and
+  // `label` for the name under the disc, which is otherwise the button's own.
+  // Only the board owner's broadcasts count.
   const tileFaces = new Map();
   const tileMonitors = new Map();
   const ownerId = boardOwnerId(app);
 
-  //
   // One listener per tile however many buttons wear it, all on the page's one
-  // Monitor socket, and dropped once no button on the board answers there. A
-  // task may say `label` or `text` (what the list pages' task buttons read),
-  // and `color`.
+  // Monitor socket, and dropped once no button on the board answers there.
   function followTiles() {
     const wanted = new Set(items.filter(isTask).map((item) => item.monitor).filter(Boolean));
     tileMonitors.forEach((monitor, channel) => {
@@ -406,10 +420,12 @@ export function initChoreBoard({
         received(data) {
           const face = data?.data;
           if (!face || !feedOwnerMatches(data.owner_id, ownerId)) return;
-          const label = face.label ?? face.text;
-          if (face.icon == null && label == null && face.color == null) return;
+          const { icon, text, label, color, fontSize, textColor } = face;
+          if ([icon, text, label, color, fontSize, textColor].every((v) => v == null)) return;
 
-          tileFaces.set(channel, { icon: face.icon, label, color: face.color });
+          tileFaces.set(channel, {
+            icon, text: text == null ? null : String(text), label, color, fontSize: cssSize(fontSize), textColor,
+          });
           paint();
         },
       }));
@@ -420,19 +436,31 @@ export function initChoreBoard({
   // thing again leaves the disc alone.
   function paintTileFace(cell, item) {
     const face = item.monitor ? tileFaces.get(item.monitor) : null;
+    const text = face?.icon ? null : face?.text;
     const icon = face?.icon || item.icon;
     const label = face?.label || item.short_name;
     const color = face?.color || item.color;
-    const key = `${icon}|${label}|${color || ""}`;
+    const key = [icon, text, label, color, face?.fontSize, face?.textColor].map((v) => v || "").join("|");
     if (cell.dataset.face === key) return;
 
-    const kind = face?.icon ? iconKindFor(face.icon) : item.icon_kind;
     cell.dataset.face = key;
-    if (color) cell.style.setProperty("--actor-color", color);
-    else cell.style.removeProperty("--actor-color");
-    cell.querySelector(".byte-board-icon")?.replaceWith(
-      iconNode({ icon, icon_kind: kind, short_name: label }),
-    );
+    setVar(cell, "--actor-color", color);
+    setVar(cell, "--board-face-color", face?.textColor);
+    let glyph;
+    if (text) {
+      glyph = document.createElement("span");
+      glyph.className = "byte-board-icon byte-board-face-text";
+      // A glyph (a stack or a household icon counting as one) draws at icon
+      // size; words wrap smaller.
+      const bare = text.replace(/\[(stack|hicon) [^\]]*\]/gi, "*");
+      glyph.dataset.words = String(splitGraphemes(bare.trim()).length > 2);
+      if (face.fontSize) glyph.style.fontSize = face.fontSize;
+      setButtonText(glyph, text);
+    } else {
+      const kind = face?.icon ? iconKindFor(face.icon) : item.icon_kind;
+      glyph = iconNode({ icon, icon_kind: kind, short_name: label });
+    }
+    cell.querySelector(".byte-board-icon")?.replaceWith(glyph);
     const title = cell.querySelector(".byte-board-title");
     if (title) title.textContent = label;
     cell.querySelector(".byte-board-circle")?.setAttribute("aria-label", `Start: ${label}`);
@@ -1228,6 +1256,7 @@ export function initChoreBoard({
       const chore = known.get(id);
       const row = document.createElement("div");
       row.className = "byte-board-button-row";
+      row.dataset.pinRow = String(id);
       const label = document.createElement("span");
       label.className = "byte-board-button-edit byte-board-pin-name";
       if (chore?.icon_kind) label.appendChild(iconNode(chore));
@@ -1238,9 +1267,14 @@ export function initChoreBoard({
       del.setAttribute("aria-label", `Unpin ${chore?.name || "this chore"}`);
       del.textContent = "×";
       del.addEventListener("click", () => savePins(pinnedIds().filter((p) => p !== id)));
-      row.append(label, del);
+      row.append(rowHandle(), label, del);
       pinsListEl.appendChild(row);
     });
+  }
+
+  // Pins lead the board in the order they're listed, so dragging one moves it.
+  if (pinsListEl) {
+    sortableRows(pinsListEl, "[data-pin-row]", (rows) => savePins(rows.map((row) => Number(row.dataset.pinRow))));
   }
 
   async function paintPins() {
@@ -1498,10 +1532,10 @@ export function initChoreBoard({
     apiCall,
     tagsFn: () => tags,
     conversationIdFn,
-    iconFor: iconNode,
     flashSaved,
     onSaved: (item, show) => item && placeAction(item, show),
     onRemoved: (id) => placeAction({ kind: "task", id }, false),
+    onReordered: () => resync(),
   });
 
   // ---- circle size ----

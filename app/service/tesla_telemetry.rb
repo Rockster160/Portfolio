@@ -156,7 +156,7 @@ class TeslaTelemetry
     return if was_home == now_home
 
     action = now_home ? :arrived : :departed
-    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla))
+    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla, from: (@prev if action == :departed)))
     ::Jil.trigger(@user, :trytravel, travel_payload(action, :phone)) if carrying_him?
   end
 
@@ -185,14 +185,20 @@ class TeslaTelemetry
 
   # No `via`: a pairing the car has corroborated by actually driving off is
   # not the raw radio edge that gets refused at home. Different evidence.
-  def travel_payload(action, source)
+  #
+  # `from` is the position a departure LEFT. The push that shows the car gone
+  # lands hundreds of metres down the road, where the coordinate names the
+  # town, so the car's own leg is placed at the last position it held inside
+  # the boundary - which is what makes `tesla_travel:depart:home` match.
+  def travel_payload(action, source, from: nil)
+    where = from || @car_data
     {
       action:    action,
       source:    source,
-      location:  @car_data.dig(:location, :name),
-      lat:       @car_data.dig(:location, :lat),
-      lng:       @car_data.dig(:location, :lng),
-      action    => @car_data.dig(:location, :name),
+      location:  where.dig(:location, :name),
+      lat:       where.dig(:location, :lat),
+      lng:       where.dig(:location, :lng),
+      action    => where.dig(:location, :name),
       timestamp: ::Time.current,
     }
   end

@@ -6,6 +6,7 @@ const configs = [
   { entry: "application.js", out: "app/assets/builds" },
   { entry: "jil.js", out: "app/assets/builds" },
   { entry: "jil_run_modal.js", out: "app/assets/builds" },
+  { entry: "icon_field.js", out: "app/assets/builds" },
   { entry: "sortable_standalone.js", out: "app/assets/builds" }
 ];
 

@@ -7,9 +7,40 @@
 // every save hands the board the circle to put in or take out, so neither the
 // list nor the pad is emptied and redrawn.
 
+import { bindIconStack } from "../../../icon_stack";
+import { renderIconValue } from "../../../icon_picker";
+import Sortable from "../../../../jil/Sortable.min.js";
+
 const LIST_URL = "/byte/board/task_buttons";
 const ITEM_URL = (id) => `/byte/board/task_buttons/${id}`;
 const DEFAULT_COLOR = "#94A3B8";
+const ORDER_URL = "/byte/board/task_buttons/order";
+
+// A grip at the front of a settings row, for dragging it into place.
+export function rowHandle() {
+  const grip = document.createElement("span");
+  grip.className = "byte-board-row-handle";
+  grip.setAttribute("aria-hidden", "true");
+  grip.textContent = "⋮⋮";
+  return grip;
+}
+
+// Drag-to-reorder for a settings list; `onOrder(rows)` gets the rows as they
+// now stand.
+export function sortableRows(listEl, rowSelector, onOrder) {
+  return Sortable.create(listEl, {
+    animation: 150,
+    draggable: rowSelector,
+    handle: ".byte-board-row-handle",
+    ghostClass: "byte-board-row-ghost",
+    forceFallback: true,
+    fallbackOnBody: true,
+    fallbackTolerance: 0,
+    onEnd: (e) => {
+      if (e.oldIndex !== e.newIndex) onOrder(Array.from(listEl.querySelectorAll(rowSelector)));
+    },
+  });
+}
 
 // The picker: every task this person can run, searched by name and by the
 // tile it answers on, every word having to match.
@@ -79,7 +110,7 @@ function initTaskPicker(dialog) {
 }
 
 export function initBoardTaskButtons({
-  root, apiCall, tagsFn, conversationIdFn, iconFor, onSaved, onRemoved, flashSaved,
+  root, apiCall, tagsFn, conversationIdFn, onSaved, onRemoved, onReordered, flashSaved,
 }) {
   const sectionEl = root.querySelector("[data-board-tasks-section]");
   const listEl = root.querySelector("[data-board-tasks-list]");
@@ -92,7 +123,11 @@ export function initBoardTaskButtons({
   const pickEl = field("task-pick");
   const hintEl = field("hint");
   const labelEl = field("label");
-  const iconEl = field("icon");
+  // The chores form's icon square: type or paste one, search, or upload.
+  const iconStack = formEl.querySelector("[data-icon-stack]");
+  bindIconStack(iconStack);
+  const setIcon = (value) => iconStack?.__setIconValue?.(value, { silent: true });
+  const iconValue = () => iconStack?.__iconValue?.() || "";
   const colorEl = field("color");
   const tagsEl = field("tags");
   const idEl = field("id");
@@ -124,7 +159,7 @@ export function initBoardTaskButtons({
     if (hintEl) {
       hintEl.hidden = !task?.monitor;
       hintEl.textContent = task?.monitor
-        ? "This task answers on a live tile, so the button shows the label, icon and colour it sends."
+        ? "This task answers on a live tile, so the button shows what the tile says, as it does on Quick Actions. The label stays underneath."
         : "";
     }
   }
@@ -136,7 +171,7 @@ export function initBoardTaskButtons({
     if (titleEl) titleEl.textContent = "New task button";
     if (idEl) idEl.value = "";
     if (labelEl) labelEl.value = "";
-    if (iconEl) iconEl.value = "";
+    setIcon("");
     if (colorEl) colorEl.value = DEFAULT_COLOR;
     if (tagsEl) tagsEl.value = tags().filter((t) => t.toLowerCase() !== "all").join(", ");
     if (saveEl) saveEl.textContent = "Add button";
@@ -149,7 +184,7 @@ export function initBoardTaskButtons({
     if (titleEl) titleEl.textContent = "Edit task button";
     if (idEl) idEl.value = String(button.id);
     if (labelEl) labelEl.value = button.label || "";
-    if (iconEl) iconEl.value = button.icon || "";
+    setIcon(button.icon || "");
     if (colorEl) colorEl.value = button.color || DEFAULT_COLOR;
     if (tagsEl) tagsEl.value = (button.tags || []).join(", ");
     if (saveEl) saveEl.textContent = "Save";
@@ -180,7 +215,7 @@ export function initBoardTaskButtons({
     del.textContent = "×";
     del.addEventListener("click", () => remove(row._button));
 
-    row.append(open, del);
+    row.append(rowHandle(), open, del);
     return row;
   }
 
@@ -189,7 +224,12 @@ export function initBoardTaskButtons({
     const swatch = row.querySelector(".byte-board-button-swatch");
     swatch.replaceChildren();
     swatch.style.background = button.icon ? "" : button.color || "";
-    if (button.icon) swatch.appendChild(iconFor({ icon: button.icon, short_name: button.label }));
+    if (button.icon) {
+      const glyph = document.createElement("span");
+      glyph.className = "byte-board-icon";
+      renderIconValue(glyph, button.icon);
+      swatch.appendChild(glyph);
+    }
     row.querySelector(".byte-board-button-label").textContent = button.label;
     row.querySelector(".byte-board-button-who").textContent = `Runs ${button.task_name || "a task you can't see any more"}`;
     row.querySelector(".byte-board-button-del").setAttribute("aria-label", `Delete ${button.label}`);
@@ -239,6 +279,8 @@ export function initBoardTaskButtons({
         if (!keepIds.has(row.dataset.tbRow)) row.remove();
       });
       buttons.forEach((button) => upsertRow(button));
+      // In the server's order, moving the rows that are already there.
+      buttons.forEach((button) => listEl.appendChild(listEl.querySelector(`[data-tb-row="${button.id}"]`)));
       paintEmpty();
     } catch (e) {
       // The list stays as it was; the board itself still works.
@@ -261,7 +303,7 @@ export function initBoardTaskButtons({
       button: {
         task_id: taskEl.value,
         label: labelEl?.value.trim() || "",
-        icon: iconEl?.value.trim() || "",
+        icon: iconValue().trim(),
         color: colorEl?.value || "",
         tags_csv: tagsEl?.value || "",
       },
@@ -279,6 +321,19 @@ export function initBoardTaskButtons({
       showError(err.body?.errors?.join(", ") || "Couldn't save that button.");
     }
   }
+
+  // Dragged into a new place: the board follows once it's stored.
+  sortableRows(listEl, "[data-tb-row]", async (rows) => {
+    try {
+      await apiCall(ORDER_URL, "POST", {
+        conversation_id: conversationIdFn?.(), ids: rows.map((row) => Number(row.dataset.tbRow)),
+      });
+      onReordered?.();
+      flashSaved?.();
+    } catch (e) {
+      // Not stored; the next refresh puts the rows back as they are.
+    }
+  });
 
   async function remove(button) {
     if (!button) return;
@@ -307,6 +362,7 @@ export function initBoardTaskButtons({
   });
   formEl.addEventListener("submit", submit);
   formEl.addEventListener("input", markDirty);
+  formEl.addEventListener("icon-stack-change", markDirty);
   dialogEl.addEventListener("close", () => {
     if (dirty || idEl?.value) reset();
   });

@@ -49,9 +49,19 @@ export const setText = (el, text) => {
 export const setIcon = (row, img, fallback) => {
   const raw = (img || "").trim() || fallback
   if (row.dataset.icon === raw) return
-  row.dataset.icon = raw
 
   const box = row.querySelector(".brow-icon")
+  // A household upload, a Tabler class, inline SVG or a data URL — what the
+  // shared icon field stores — is drawn by its own renderer, loaded beside
+  // this on the builder pages. An upload the pool hasn't resolved yet is left
+  // unmarked, so the render after the pool arrives draws it.
+  if (/^(hicon:|ti-|<svg|data:image\/)/.test(raw) && window.IconField) {
+    window.IconField.renderIconValue(box, raw)
+    if (box.childElementCount > 0) row.dataset.icon = raw
+    return
+  }
+  row.dataset.icon = raw
+
   box.replaceChildren()
   if (/^(https?:|\/)/.test(raw)) {
     const el = document.createElement("img")

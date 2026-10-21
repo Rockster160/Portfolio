@@ -93,6 +93,7 @@ Rails.application.routes.draw do
   # plus how it looks until the task's own tile says otherwise.
   get    "/byte/board/task_buttons"     => "byte#board_task_buttons",       as: :byte_board_task_buttons
   post   "/byte/board/task_buttons"     => "byte#create_board_task_button"
+  post   "/byte/board/task_buttons/order" => "byte#order_board_task_buttons", as: :byte_board_task_buttons_order
   patch  "/byte/board/task_buttons/:id" => "byte#update_board_task_button", as: :byte_board_task_button
   delete "/byte/board/task_buttons/:id" => "byte#delete_board_task_button"
   post "/byte/chore_cheer" => "byte#chore_cheer", as: :byte_chore_cheer

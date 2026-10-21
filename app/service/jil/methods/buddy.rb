@@ -5,9 +5,12 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Methods whose last argument is a block of named settings - `who`, `face` -
   # one line each, written as `Keyword.who("me")` and shown as just "who".
-  NAMED_SETTINGS = %i[alert boardAlert dream timer].freeze
+  NAMED_SETTINGS = %i[alert boardAlert dream timer message button].freeze
   # Settings a block may give more than once, each line adding to the list.
   LISTED_SETTINGS = %i[who groups].freeze
+  # Calls a block may hold besides its named lines, each collected under its
+  # plural - `Buddy.button(...)` lines inside a `Buddy.message` block.
+  NESTED_CALLS = { button: :buttons }.freeze
 
   def execute(line)
     return fallback(line) unless NAMED_SETTINGS.include?(line.methodname.to_sym)
@@ -25,6 +28,9 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #checklist("List" String BR "Message" Text)::Numeric
   #   #alert("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String)::Boolean
   #   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
+  #   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
+  #   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
+  #   #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
   #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
   #   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
@@ -153,6 +159,40 @@ class Jil::Methods::Buddy < Jil::Methods::Base
       ::Buddy::Alerts.hold!(user: user, key: key, body: message, dream: true, **opts.except(:who)).present?
     }
     held.positive?
+  end
+
+  # A message with buttons under it - a question for the people it concerns,
+  # each in their own thread, answered by a press. Not an alert: nothing pins
+  # and nothing stands open, so leaving it unanswered is fine.
+  #
+  # The block takes `who` lines like `alert`, and `Buddy.button(...)` lines,
+  # one per button. `key` ties the copies together: one press can settle all
+  # of them, and so can `resolveMessage` from another task. Sending again under
+  # a key still waiting replaces the older one. Blank makes one up.
+  #
+  # Returns how many people it reached.
+  def message(key, text, options=nil)
+    opts = options.to_h
+    ::Buddy::MessageButtons.send!(
+      owner: @jil.user, users: recipients_for(Array(opts[:who]).join(",")),
+      key: key, text: text, buttons: opts[:buttons],
+    )
+  end
+
+  # One button for `message`. Pressing it fires `trigger` with `data` (a Hash),
+  # as this task's owner, with `pressed_by` added - so what it does is whatever
+  # listens there, built like any other automation. `resolve` (on unless set
+  # false) settles every copy on the press; `resolved` is what they then say
+  # instead of "<who> pressed ..."; `color` is `primary`, `danger` or a hex.
+  def button(label, options=nil)
+    options.to_h.merge(label: label.to_s)
+  end
+
+  # Settles a `message` from elsewhere - the thing it asked about happened by
+  # itself. Its buttons go, and `message` (if any) shows where they were.
+  # Returns false when nothing was waiting under that key.
+  def resolveMessage(key, message, who=nil)
+    ::Buddy::MessageButtons.settle!(owner: @jil.user, users: recipients_for(who), key: key, text: message).positive?
   end
 
   # It's been dealt with. The message `alert` left in the thread is rewritten
@@ -330,8 +370,12 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # Anything that isn't a named line is ignored rather than guessed at.
   def named_settings(block)
     Array.wrap(block).flatten.each_with_object({}) { |parser, settings|
-      next unless parser.is_a?(::Jil::Parser) && parser.objname == :Keyword
+      next unless parser.is_a?(::Jil::Parser)
       next if parser.commented? || parser.inline_comment?
+
+      nested = NESTED_CALLS[parser.methodname.to_s.to_sym] if parser.objname == :Buddy
+      next settings[nested] = [*settings[nested], @jil.execute_block(parser)] if nested
+      next unless parser.objname == :Keyword
 
       name = parser.methodname.to_s
       next unless name.match?(/\A[a-z_]/)

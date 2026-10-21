@@ -3,7 +3,10 @@
 // reading a page's variables — `--bs-*` is scoped to `.byte-app` and
 // `--chores-*` to the chores page, and a component that only works inside one
 // of them isn't shared. Overridable per page through the `--ipick-*` vars.
-.icon-pick-pop {
+//
+// A modal <dialog>, so it opens above (and stays usable from) a form that is
+// itself a modal dialog. It is its own backdrop, so the UA box is undone.
+dialog.icon-pick-pop {
   --ipick-sheet: #16233F;
   --ipick-well: rgba(15, 27, 51, 0.5);
   --ipick-border: rgba(255, 255, 255, 0.14);
@@ -16,10 +19,19 @@
   z-index: 1000;
   display: grid;
   place-items: center;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
   padding: 16px;
+  border: 0;
   background: rgba(0, 0, 0, 0.55);
+  color: inherit;
 
-  &[hidden] { display: none; } // author `display` beats the hidden attr
+  &:not([open]) { display: none; } // author `display` beats the UA's
+
+  &::backdrop { background: transparent; }
 
   .icon-pick-sheet {
     width: 100%;
@@ -33,6 +45,9 @@
     border-radius: 14px;
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
     color: var(--ipick-text);
+
+    // Takes focus on open so a touch screen isn't handed the keyboard.
+    &:focus { outline: none; }
   }
 
   .icon-pick-head {

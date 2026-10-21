@@ -114,6 +114,45 @@ RSpec.describe TravelResolver do
 
       expect(ActionEvent.find(first[:event_id]).notes).to eq("Home")
     end
+
+    # Reported from past the boundary, so the coordinate itself names the town.
+    describe "naming a departure for the place it left" do
+      let(:down_the_road) { [40.47818, -111.98158] }
+
+      before { allow(::LocationCache).to receive(:current_location_name).and_return("Herriman") }
+
+      def depart_from_road
+        record(source: :phone, lat: down_the_road.first, lng: down_the_road.last)
+      end
+
+      it "takes where they last arrived" do
+        travel_to(2.hours.ago) {
+          user.action_events.create!(name: :arrived, notes: "Home", data: { phone: { lat: home.first, lng: home.last } })
+        }
+
+        expect(depart_from_road[:location]).to eq("Home")
+      end
+
+      it "keeps the name of a leg another reporter just opened" do
+        user.action_events.create!(name: :departed, notes: "Home", data: { tesla: { lat: home.first, lng: home.last } })
+
+        expect(depart_from_road[:location]).to eq("Home")
+      end
+
+      it "is the town when their last arrival was somewhere else entirely" do
+        user.action_events.create!(name: :arrived, notes: "Costco", data: { phone: { lat: 40.7, lng: -111.85 } })
+
+        expect(depart_from_road[:location]).to eq("Herriman")
+      end
+
+      it "is the town once they've already left" do
+        travel_to(1.hour.ago) {
+          user.action_events.create!(name: :departed, notes: "Home", data: { phone: { lat: home.first, lng: home.last } })
+        }
+
+        expect(depart_from_road[:location]).to eq("Herriman")
+      end
+    end
   end
 
   describe "who is allowed to announce it" do

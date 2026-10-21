@@ -49,9 +49,7 @@
     No custom icons yet. Use the <i class="fa fa-plus"></i> button or drag an image onto a chore's icon box.
   </div>
 
-  <%# Cropper modal lives INSIDE .chores-page so it inherits the
-      cropper/modal styles nested under .chores-page in chores.scss. %>
-  <%= render "chores/icon_cropper" %>
+  <%= render "shared/icon_cropper" %>
 </div>
 
 <% content_for :after_body do %>
@@ -172,14 +170,10 @@
 
   grid.querySelectorAll(".custom-icon-tile").forEach(bindTile);
 
-  // Reuse the singleton cropper. After save, it posts to
-  // /chores/icons — we listen for the broadcast (via
-  // Monitor) OR fall back to a manual fetch when the page is the
-  // browser tab that issued the upload.
+  // The shared cropper posts to /chores/icons; the grid picks the new icon
+  // up from the Monitor broadcast below.
   addBtn?.addEventListener("click", () => {
-    document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-      detail: { stack: null },
-    }));
+    window.IconCropper?.open({ source: null });
   });
 
   // Monitor channel — `window.Monitor` is bootstrapped from

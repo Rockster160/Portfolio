@@ -165,11 +165,9 @@ class BuddyRoutine < ApplicationRecord
       id:          id,
       name:        name,
       short_name:  name,
-      icon:        board_icon,
-      icon_kind:   board_icon_kind,
       run_count:   run_count,
       last_run_at: last_run_at&.iso8601,
-    }
+    }.merge(Buddy::BoardIcon.fields(board_icon))
   end
 
   # An optional glyph for the board circle, stored on the routine as
@@ -179,10 +177,6 @@ class BuddyRoutine < ApplicationRecord
   # the name, as it always has.
   def board_icon
     metadata.is_a?(Hash) ? metadata["icon"].to_s.strip.presence : nil
-  end
-
-  def board_icon_kind
-    Buddy::BoardIcon.kind_for(board_icon)
   end
 
   # What the editor needs per step, which is more than the summary line: its

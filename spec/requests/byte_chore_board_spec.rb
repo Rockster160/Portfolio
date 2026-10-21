@@ -856,6 +856,29 @@ RSpec.describe "Byte chore board", type: :request do
         expect(response).to have_http_status(:no_content)
         expect(BoardTaskButton.exists?(button.id)).to be(false)
       end
+
+      it "takes the order they were dragged into, and moves nobody else's" do
+        second = BoardTaskButton.create!(user: user, task: task, label: "Quiet", tags: ["Whisper"])
+        theirs = create(:user)
+        their_task = Task.create!(user: theirs, name: "T", listener: "tell:x", code: "// noop")
+        their_button = BoardTaskButton.create!(user: theirs, task: their_task, label: "X", tags: ["Whisper"])
+
+        post "/byte/board/task_buttons/order", params: { ids: [second.id, their_button.id, button.id] }, as: :json
+
+        expect(response).to have_http_status(:no_content)
+        expect(BoardTaskButton.for_board(["Whisper"]).where(user: user).map(&:label)).to eq(["Quiet", "Fed"])
+        expect(their_button.reload.sort_order).to be_nil
+      end
+
+      it "draws a household upload as its picture" do
+        icon = HouseholdIcon.create!(
+          chore_household: user.chore_household, uploaded_by_user: user, name: "Door",
+          image_data: "data:image/png;base64,iVBORw0KGgo=",
+        )
+        button.update!(icon: "hicon:#{icon.id}")
+
+        expect(button.board_item).to include(icon: icon.image_data, icon_kind: :image)
+      end
     end
 
     it "404s pressing someone else's button" do

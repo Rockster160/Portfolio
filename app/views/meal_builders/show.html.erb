@@ -1,5 +1,10 @@
 <% content_for :title, "Meal Calorie Tracker" %>
+<% content_for :head do %>
+  <%= javascript_include_tag "icon_field", defer: true %>
+<% end %>
 <% content_for :modals do %>
+  <%= render "shared/icon_cropper" %>
+
   <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
       <h3 id="cmodal-title">Edit Item</h3>
@@ -8,8 +13,9 @@
         <input id="m-name" placeholder="Name">
         <input id="m-cal" class="sm basic" type="number" placeholder="Calories">
       </div>
-      <div class="row">
-        <input id="m-img" placeholder="Image URL or emoji">
+      <div class="row icon-row">
+        <%= render "shared/icon_stack", name: "m-img", value: nil, label: "Icon" %>
+        <span class="icon-row-hint">Type or paste an emoji, search for one, or add a picture</span>
       </div>
       <div class="row">
         <input id="m-tag" placeholder="Tag / helper text">
@@ -198,6 +204,8 @@
     const mCat = document.getElementById("m-cat")
     const mCal = document.getElementById("m-cal")
     const mImg = document.getElementById("m-img")
+    const mImgStack = elcModal.querySelector("[data-icon-stack]")
+    window.IconField?.bindIconField(mImgStack)
     const mTag = document.getElementById("m-tag")
     const mAlias = document.getElementById("m-alias")
     const mDesc  = document.getElementById("m-desc")
@@ -290,7 +298,8 @@
       mName.value = item?.name || ""
       mCal.value = item?.cal != null ? String(item.cal) : ""
       mCat.value = item?.category || "Food"
-      mImg.value = item?.img || ""
+      if (mImgStack.__setIconValue) mImgStack.__setIconValue(item?.img || "", { silent: true })
+      else mImg.value = item?.img || ""
       mTag.value = item?.tag || ""
       mAlias.value = item?.alias || ""
       mDesc.value  = item?.description || ""
@@ -707,6 +716,8 @@
     // ---------- Boot ----------
     document.addEventListener("DOMContentLoaded", () => {
       render()
+      // Uploaded icons draw once the household's pool is in.
+      window.IconField?.loadIconPool().then(() => render())
       updateSubmit()
       updateMealTime()
     })

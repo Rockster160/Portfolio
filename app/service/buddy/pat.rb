@@ -1,6 +1,6 @@
 module Buddy
-  # Somebody tapped the pet. It flashes something fun (Faces::TAPPED) for a
-  # moment, its mood eases a little lighter underneath, and on a board whatever
+  # Somebody tapped the pet. Unless it's asleep, it flashes something fun
+  # (Faces::TAPPED) for a moment, its mood eases a little lighter underneath, and on a board whatever
   # dream it was showing is put away until the next draw or a newer dream.
   #
   # The lighter mood is a nudge of the reading the current face stands for,
@@ -26,9 +26,10 @@ module Buddy
       conversation.update!(metadata: meta)
       ::Buddy::ExpressionState.set(conversation, mood[:face]) if mood && mood[:face].to_s != conversation.buddy_expression.to_s
 
+      asleep = ::Buddy::Faces::SYSTEM.include?(conversation.buddy_expression.to_s.to_sym)
       result = {
         expression:         conversation.buddy_expression.to_s,
-        flash:              (::Buddy::Faces::TAPPED & ::Buddy::Faces.selectable(theme)).sample&.to_s,
+        flash:              asleep ? nil : (::Buddy::Faces::TAPPED & ::Buddy::Faces.selectable(theme)).sample&.to_s,
         dream_dismissed_at: conversation.dream_dismissed_at&.iso8601(3),
       }
       broadcast(conversation, result)

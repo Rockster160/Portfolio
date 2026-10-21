@@ -162,8 +162,9 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   const settle = () => {
     if (!flashTimer) paint(effectiveExpression());
   };
+  // A sleeping pet isn't woken for one.
   const flashExpression = (expression, ms = 2500) => {
-    if (!expression) return;
+    if (!expression || effectiveExpression() === "sleeping") return;
     endFlash();
     paint(expression);
     flashTimer = window.setTimeout(() => {

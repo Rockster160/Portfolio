@@ -277,6 +277,16 @@ RSpec.describe TeslaTelemetry do
       expect(travel_trigger).to include(action: :departed, source: :tesla)
     end
 
+    # The push that shows it gone is already down the road, so the leg is
+    # placed where it left from.
+    it "places the car's departure at the last position it held at home" do
+      seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" })
+
+      process(Location: { latitude: away.first, longitude: away.last })
+
+      expect(travel_trigger).to include(lat: home.first, lng: home.last, location: "Home", departed: "Home")
+    end
+
     it "reports the car coming back" do
       seed_car_data(location: { lat: away.first, lng: away.last, name: "Draper" })
 

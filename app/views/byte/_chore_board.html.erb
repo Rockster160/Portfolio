@@ -352,12 +352,10 @@
                  placeholder="The task's name" maxlength="60">
         </label>
 
-        <label class="byte-modal-label">
+        <div class="byte-modal-label">
           Icon
-          <input type="text" class="byte-modal-input" data-tb-icon
-                 placeholder="An emoji, or ti-icon-name" maxlength="60"
-                 autocapitalize="off" spellcheck="false">
-        </label>
+          <%= render "shared/icon_stack", name: "tb_icon", value: nil, label: "Button icon" %>
+        </div>
 
         <label class="byte-modal-label">
           Color
@@ -377,6 +375,9 @@
         </div>
       </form>
     </dialog>
+
+    <%# The chores' uploader, for the icon square above. %>
+    <%= render "shared/icon_cropper" %>
 
     <%# Picking the task a button runs: every task this person can run, searched
         by name and by the tile it answers on. %>

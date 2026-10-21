@@ -29,7 +29,12 @@ const stubConsumer = {
       contents: `
         export default {
           connection: { reopen: () => {} },
-          subscriptions: { create: () => ({ perform: () => {} }) },
+          subscriptions: {
+            create: (_params, mixin) => {
+              globalThis.__socket = mixin;
+              return { perform: () => {} };
+            },
+          },
         };
       `,
       loader: "js",
@@ -61,6 +66,8 @@ function matches(el, selector) {
     const got = el.attributes[attr] ?? el.dataset[camel(attr)];
     return String(got) === value;
   }
+  const klass = selector.match(/^\.([\w-]+)$/);
+  if (klass) return String(el.className || "").split(/\s+/).includes(klass[1]);
   const bare = selector.match(/^\[([\w-]+)\]$/);
   if (!bare) return false;
 
@@ -556,5 +563,29 @@ world = world.filter((c) => !(c.kind === "task" && c.id === 9));
 await board.resync();
 out.set_change.after_removal = keys();
 out.set_change.same_node_after_removal = cellFor(1) === standing;
+
+// ---- a task button wearing its tile ----
+//
+// Read the way the list pages read it: `text` goes ON the disc, the name under
+// it stays the button's own, and an `icon` takes the text's place.
+world.push({ id: 10, kind: "task", name: "Garage", short_name: "Garage", icon: "🚗", icon_kind: "emoji", monitor: "garage" });
+await board.resync();
+const tile = (data) => globalThis.__socket.received({ id: "garage", data });
+const face = () => {
+  const glyph = cellFor(10).querySelector(".byte-board-icon");
+  return {
+    title: cellFor(10).querySelector(".byte-board-title")?.textContent,
+    text: glyph.textContent,
+    words: glyph.dataset.words,
+    fontSize: glyph.style.fontSize || null,
+    img: glyph.children[0]?.src || null,
+  };
+};
+tile({ text: "Close Garage", fontSize: 20 });
+out.tile_text = face();
+tile({ text: "[stack 🔔💤]" });
+out.tile_stack = { ...face(), stacked: cellFor(10).querySelector(".byte-board-icon").children[0]?.className };
+tile({ text: "Opening...", icon: "<svg viewBox='0 0 10 10'></svg>", label: "Garage door" });
+out.tile_icon = face();
 
 process.stdout.write(JSON.stringify(out, null, 2));

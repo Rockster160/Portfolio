@@ -3481,6 +3481,22 @@
   function customIconSrcById(id) {
     return IconPool.customSrcById(id);
   }
+  // Shared cropper (`src/icon_cropper.js`, markup in shared/_icon_cropper).
+  // Saves the image as a HouseholdIcon and writes `hicon:<id>` back into the
+  // stack that asked — a pointer, not the image bytes, on every chore that
+  // uses it.
+  function openChoreIconCropper(stack, source = null) {
+    window.IconCropper?.open({
+      source,
+      onSaved: ref => {
+        if (!stack?.__setIconValue) return;
+        stack.__setIconValue(ref, { source: "user" });
+        stack.dispatchEvent(new CustomEvent("chore-icon-picked", {
+          bubbles: true, detail: { value: ref },
+        }));
+      },
+    });
+  }
   function bindIconUploader(form) {
     const stack = form?.querySelector("[data-icon-stack]");
     if (!stack) return;
@@ -3583,11 +3599,7 @@
         // Route pasted images through the cropper so they persist as a
         // HouseholdIcon (referenced by `hicon:<id>`) rather than an
         // inline data URL duplicated onto every chore that uses them.
-        if (file) {
-          document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-            detail: { stack, file },
-          }));
-        }
+        if (file) openChoreIconCropper(stack, file);
         return;
       }
       const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
@@ -3603,9 +3615,7 @@
       // how to load either) so they become named HouseholdIcons.
       if (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("data:image/")) {
         e.preventDefault();
-        document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-          detail: { stack, url: text },
-        }));
+        openChoreIconCropper(stack, text);
       }
     });
     // Image drops route through the cropper so the user lands on the
@@ -3616,9 +3626,7 @@
       if (evt !== "drop") return;
       const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
       if (!file) return;
-      document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-        detail: { stack, file },
-      }));
+      openChoreIconCropper(stack, file);
     }));
     // File-pick from the icon-stack's upload chip mirrors the drop
     // path — the cropper persists the image as a HouseholdIcon and
@@ -3627,9 +3635,7 @@
     fileInput?.addEventListener("change", () => {
       const file = fileInput.files?.[0];
       if (!file) { fileInput.value = ""; return; }
-      document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-        detail: { stack, file },
-      }));
+      openChoreIconCropper(stack, file);
       fileInput.value = "";
     });
   }
@@ -3792,17 +3798,13 @@
       if (res.ok) await IconPool.refreshCustom();
     });
 
-    // "+" → open the cropper modal. ChoreIconCropper handles all the
-    // upload state; we just emit an open event with the originating
-    // stack so the cropper can write the saved icon back into the
-    // active form.
+    // "+" → open the shared cropper with the originating stack so the
+    // saved icon is written back into the active form.
     modal.querySelector("[data-icon-picker-upload]")?.addEventListener("click", e => {
       e.preventDefault();
       const stack = modal.__activeStack;
       modal.classList.add("hidden");
-      document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
-        detail: { stack: stack },
-      }));
+      openChoreIconCropper(stack);
     });
   })();
 
@@ -3923,457 +3925,6 @@
       syncParentPickerButton();
       syncParentChoreLock();
     });
-  })();
-
-  // ============================================================
-  // Custom-icon cropper — file/paste/drop/URL source, canvas crop
-  // with square overlay + zoom/pan, name + keywords, POSTs a 128px
-  // WebP data URL to /chores/icons. On success notifies
-  // IconPool so the picker re-renders and (optionally) writes the
-  // new icon straight into the stack that triggered upload.
-  // ============================================================
-  (function setupIconCropper() {
-    const modal = document.querySelector("[data-icon-cropper-modal]");
-    if (!modal) return;
-
-    const sourcePane  = modal.querySelector("[data-cropper-source]");
-    const stagePane   = modal.querySelector("[data-cropper-stage]");
-    const fileBtn     = modal.querySelector("[data-cropper-file-btn]");
-    const fileInput   = modal.querySelector("[data-cropper-file]");
-    const urlInput    = modal.querySelector("[data-cropper-url]");
-    const sourceError = modal.querySelector("[data-cropper-error]");
-    const stageError  = modal.querySelector("[data-cropper-stage-error]");
-    const canvas      = modal.querySelector("[data-cropper-canvas]");
-    const canvasWrap  = modal.querySelector("[data-cropper-canvas-wrap]");
-    const zoomInput   = modal.querySelector("[data-cropper-zoom]");
-    const resetBtn    = modal.querySelector("[data-cropper-reset]");
-    const nameInput   = modal.querySelector("[data-cropper-name]");
-    const keysInput   = modal.querySelector("[data-cropper-keywords]");
-    const saveBtn     = modal.querySelector("[data-cropper-save]");
-    const saveHint    = modal.querySelector("[data-cropper-save-hint]");
-    const bgEnable    = modal.querySelector("[data-cropper-bg-enable]");
-    const bgControls  = modal.querySelector("[data-cropper-bg-controls]");
-    const bgThreshold = modal.querySelector("[data-cropper-bg-threshold]");
-    const bgThresholdValue = modal.querySelector("[data-cropper-bg-threshold-value]");
-    const bgEdges     = modal.querySelector("[data-cropper-bg-edges]");
-    const previewCanvas = modal.querySelector("[data-cropper-preview]");
-    const ctx = canvas.getContext("2d");
-
-    // Stage 320×320. Crop window 192×192 centred (64px inset). Output 128×128.
-    const STAGE = 320, INSET = 64, CROP = 192, OUTPUT = 128;
-
-    let sourceImage = null;
-    let activeStack = null;       // where to write the saved icon when picker invoked
-    let offsetX = 0, offsetY = 0; // canvas coords of the source's top-left
-    let baseScale = 1;            // "fit" scale derived from source size
-    let userZoom = 1;             // multiplier from the slider
-
-    function showError(el, msg) {
-      el.textContent = msg || "";
-      el.classList.toggle("hidden", !msg);
-    }
-
-    function setSaveEnabled() {
-      const hasImage = !!sourceImage;
-      const hasName  = (nameInput.value || "").trim().length > 0;
-      saveBtn.disabled = !(hasImage && hasName);
-      if (!saveHint) return;
-      // Surface *why* the button is disabled so users don't stare at a
-      // dead "Save icon" with no explanation.
-      let msg = "";
-      if (!hasImage)       msg = "Pick an image to continue";
-      else if (!hasName)   msg = "Add a name to save";
-      saveHint.textContent = msg;
-      saveHint.classList.toggle("hidden", !msg);
-    }
-
-    function resetState() {
-      sourceImage = null;
-      offsetX = 0; offsetY = 0;
-      baseScale = 1; userZoom = 1;
-      zoomInput.value = "1";
-      nameInput.value = "";
-      keysInput.value = "";
-      urlInput.value = "";
-      bgEnable.checked = false;
-      bgThreshold.value = "20";
-      bgThresholdValue.textContent = "20";
-      bgEdges.checked = true;
-      bgControls.classList.add("hidden");
-      showError(sourceError, "");
-      showError(stageError, "");
-      sourcePane.classList.remove("hidden");
-      stagePane.classList.add("hidden");
-      saveBtn.disabled = true;
-      clearPreview();
-    }
-    function clearPreview() {
-      const pctx = previewCanvas.getContext("2d");
-      pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, STAGE, STAGE);
-      if (!sourceImage) return;
-      const s = baseScale * userZoom;
-      const w = sourceImage.naturalWidth * s;
-      const h = sourceImage.naturalHeight * s;
-      ctx.drawImage(sourceImage, offsetX, offsetY, w, h);
-      schedulePreview();
-    }
-
-    function loadDataUrl(dataUrl) {
-      showError(sourceError, "");
-      const img = new Image();
-      img.onload = () => {
-        sourceImage = img;
-        // Fit the image into the crop window (192px) so the visible
-        // square is fully covered at the starting zoom of 1.
-        const fit = Math.max(CROP / img.naturalWidth, CROP / img.naturalHeight);
-        baseScale = fit;
-        userZoom = 1;
-        zoomInput.value = "1";
-        // Center the image within the stage at the starting zoom.
-        offsetX = (STAGE - img.naturalWidth * baseScale) / 2;
-        offsetY = (STAGE - img.naturalHeight * baseScale) / 2;
-        sourcePane.classList.add("hidden");
-        stagePane.classList.remove("hidden");
-        draw();
-        setSaveEnabled();
-        setTimeout(() => nameInput.focus(), 0);
-      };
-      img.onerror = () => {
-        showError(sourceError, "Couldn't load that image.");
-      };
-      img.src = dataUrl;
-    }
-
-    function loadFile(file) {
-      if (!file || !file.type.startsWith("image/")) {
-        showError(sourceError, "Pick an image file.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => loadDataUrl(reader.result);
-      reader.onerror = () => showError(sourceError, "Couldn't read that file.");
-      if (file.type === "image/svg+xml") reader.readAsText(file);
-      else reader.readAsDataURL(file);
-    }
-
-    async function loadFromUrl(url) {
-      showError(sourceError, "");
-      const trimmed = (url || "").trim();
-      if (!trimmed) return;
-      if (trimmed.startsWith("data:image/")) {
-        loadDataUrl(trimmed);
-        return;
-      }
-      // Cross-origin canvas taint protection — fetch the bytes ourselves
-      // and convert to a data URL. Many image hosts don't serve CORS
-      // headers; the picker has to display the result so we need to
-      // own the bytes.
-      try {
-        const res = await fetch(trimmed, { mode: "cors" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        if (!blob.type.startsWith("image/")) throw new Error("Not an image");
-        const reader = new FileReader();
-        reader.onload = () => loadDataUrl(reader.result);
-        reader.onerror = () => showError(sourceError, "Couldn't read URL response.");
-        reader.readAsDataURL(blob);
-      } catch (e) {
-        showError(sourceError, "Couldn't fetch image: " + e.message);
-      }
-    }
-
-    // ---- Source input wiring ----
-    fileBtn.addEventListener("click", e => { e.preventDefault(); fileInput.click(); });
-    fileInput.addEventListener("change", () => {
-      const f = fileInput.files?.[0];
-      if (f) loadFile(f);
-      fileInput.value = "";
-    });
-    urlInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") { e.preventDefault(); loadFromUrl(urlInput.value); }
-    });
-    urlInput.addEventListener("blur", () => {
-      if (urlInput.value.trim()) loadFromUrl(urlInput.value);
-    });
-    // Bound on the whole modal so a NEW drop replaces the already-loaded
-    // image (the source pane is hidden once the stage opens). loadFile →
-    // loadDataUrl resets crop/zoom/pan; name/keywords/bg settings persist.
-    ["dragover", "drop"].forEach(evt => modal.addEventListener(evt, async e => {
-      e.preventDefault();
-      if (evt !== "drop") return;
-      const f = Array.from(e.dataTransfer?.files || []).find(x => x.type.startsWith("image/"));
-      if (f) loadFile(f);
-    }));
-    modal.addEventListener("paste", e => {
-      const items = Array.from(e.clipboardData?.items || []);
-      const item = items.find(it => it.type.startsWith("image/"));
-      if (item) {
-        e.preventDefault();
-        const f = item.getAsFile();
-        if (f) loadFile(f);
-        return;
-      }
-      const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
-      if (text.startsWith("data:image/") || text.startsWith("http://") || text.startsWith("https://")) {
-        e.preventDefault();
-        loadFromUrl(text);
-      }
-    });
-
-    // ---- Crop interactions ----
-    zoomInput.addEventListener("input", () => {
-      if (!sourceImage) return;
-      const newZoom = parseFloat(zoomInput.value);
-      // Anchor zoom at the centre of the crop window so the visible
-      // subject stays in frame as the user zooms in or out.
-      const anchorX = STAGE / 2, anchorY = STAGE / 2;
-      const oldScale = baseScale * userZoom;
-      const newScale = baseScale * newZoom;
-      offsetX = anchorX - ((anchorX - offsetX) * (newScale / oldScale));
-      offsetY = anchorY - ((anchorY - offsetY) * (newScale / oldScale));
-      userZoom = newZoom;
-      draw();
-    });
-    resetBtn.addEventListener("click", e => { e.preventDefault(); resetState(); });
-
-    let dragging = false, dragLastX = 0, dragLastY = 0;
-    canvasWrap.addEventListener("pointerdown", e => {
-      if (!sourceImage) return;
-      dragging = true;
-      dragLastX = e.clientX;
-      dragLastY = e.clientY;
-      canvasWrap.setPointerCapture(e.pointerId);
-    });
-    canvasWrap.addEventListener("pointermove", e => {
-      if (!dragging) return;
-      const rect = canvasWrap.getBoundingClientRect();
-      // Scale screen movement to canvas pixels so dragging feels 1:1
-      // regardless of how the canvas is laid out.
-      const sx = STAGE / rect.width, sy = STAGE / rect.height;
-      offsetX += (e.clientX - dragLastX) * sx;
-      offsetY += (e.clientY - dragLastY) * sy;
-      dragLastX = e.clientX;
-      dragLastY = e.clientY;
-      draw();
-    });
-    ["pointerup", "pointercancel"].forEach(evt => canvasWrap.addEventListener(evt, e => {
-      dragging = false;
-      try { canvasWrap.releasePointerCapture(e.pointerId); } catch (_e) {}
-    }));
-
-    nameInput.addEventListener("input", setSaveEnabled);
-
-    // Background-removal UI bindings — every change updates the live
-    // preview. The controls panel collapses when the master toggle is
-    // off so the modal stays compact in the common case.
-    bgEnable.addEventListener("change", () => {
-      bgControls.classList.toggle("hidden", !bgEnable.checked);
-      schedulePreview();
-    });
-    bgThreshold.addEventListener("input", () => {
-      bgThresholdValue.textContent = bgThreshold.value;
-      schedulePreview();
-    });
-    bgEdges.addEventListener("change", schedulePreview);
-
-    // ---- Render the cropped output, optionally clearing background ----
-    // Reused for both the preview thumbnail and the save payload.
-    // Background removal samples the four output corners (averaged) as
-    // the bg colour, then either marks every matching pixel transparent
-    // (whole-image mode) or flood-fills from the border so internal
-    // matching pixels — eyes, highlights, glyph interiors — survive.
-    function renderToCanvas(targetCanvas) {
-      const w = targetCanvas.width, h = targetCanvas.height;
-      const octx = targetCanvas.getContext("2d");
-      octx.clearRect(0, 0, w, h);
-      if (!sourceImage) return;
-      const scale = baseScale * userZoom;
-      const srcX = (INSET - offsetX) / scale;
-      const srcY = (INSET - offsetY) / scale;
-      const srcSize = CROP / scale;
-      octx.drawImage(sourceImage, srcX, srcY, srcSize, srcSize, 0, 0, w, h);
-      if (bgEnable.checked) {
-        removeBackground(targetCanvas, parseInt(bgThreshold.value, 10), bgEdges.checked);
-      }
-    }
-    function removeBackground(target, threshold, edgesOnly) {
-      const w = target.width, h = target.height;
-      const tctx = target.getContext("2d");
-      const img = tctx.getImageData(0, 0, w, h);
-      const data = img.data;
-      // When the user zooms out, the cropped canvas extends past the
-      // source image and the outer ring becomes transparent padding.
-      // Sampling colour OR seeding the flood fill from those transparent
-      // pixels would either pick a (0,0,0) "bg colour" or eat through
-      // the padding-to-image transition. Walk each border pixel inward
-      // along its ray until we find a pixel actually drawn from the
-      // source image (alpha > 0) and treat THAT as the real edge.
-      function walkInward(x, y, dx, dy) {
-        while (x >= 0 && y >= 0 && x < w && y < h) {
-          if (data[(y * w + x) * 4 + 3] > 0) return [x, y];
-          x += dx; y += dy;
-        }
-        return null;
-      }
-      const cornerSamples = [
-        walkInward(0, 0, 1, 1),
-        walkInward(w - 1, 0, -1, 1),
-        walkInward(0, h - 1, 1, -1),
-        walkInward(w - 1, h - 1, -1, -1),
-      ].filter(Boolean);
-      if (cornerSamples.length === 0) {
-        // Whole crop is transparent — nothing to do.
-        tctx.putImageData(img, 0, 0);
-        return;
-      }
-      let br = 0, bg = 0, bb = 0;
-      cornerSamples.forEach(([x, y]) => {
-        const i = (y * w + x) * 4;
-        br += data[i]; bg += data[i + 1]; bb += data[i + 2];
-      });
-      br /= cornerSamples.length; bg /= cornerSamples.length; bb /= cornerSamples.length;
-      // Threshold 0-100 → sum-of-squared-deltas budget across r,g,b.
-      const t = (threshold / 100) * 255;
-      const budget = t * t * 3;
-      function matches(i) {
-        // Already-transparent padding never matches: it has no colour
-        // to compare against, and treating it as a match would let the
-        // flood fill burn through the padding-to-image transition.
-        if (data[i + 3] === 0) return false;
-        const dr = data[i] - br;
-        const dg = data[i + 1] - bg;
-        const db = data[i + 2] - bb;
-        return dr * dr + dg * dg + db * db <= budget;
-      }
-      if (edgesOnly) {
-        // Flood-fill from every border pixel that matches. Internal
-        // matching pixels never connected to the border stay opaque.
-        const visited = new Uint8Array(w * h);
-        const queue = new Int32Array(w * h);
-        let head = 0, tail = 0;
-        function tryPush(x, y) {
-          if (x < 0 || y < 0 || x >= w || y >= h) return;
-          const pi = y * w + x;
-          if (visited[pi]) return;
-          const i = pi * 4;
-          if (!matches(i)) return;
-          visited[pi] = 1;
-          data[i + 3] = 0;
-          queue[tail++] = pi;
-        }
-        // Seed at the FIRST opaque pixel along each inward ray — the
-        // real image edge, which is past any transparent zoom-out ring.
-        function seedRay(x0, y0, dx, dy) {
-          const start = walkInward(x0, y0, dx, dy);
-          if (start) tryPush(start[0], start[1]);
-        }
-        for (let x = 0; x < w; x++) {
-          seedRay(x, 0, 0, 1);
-          seedRay(x, h - 1, 0, -1);
-        }
-        for (let y = 0; y < h; y++) {
-          seedRay(0, y, 1, 0);
-          seedRay(w - 1, y, -1, 0);
-        }
-        while (head < tail) {
-          const pi = queue[head++];
-          const x = pi % w, y = (pi / w) | 0;
-          tryPush(x + 1, y); tryPush(x - 1, y);
-          tryPush(x, y + 1); tryPush(x, y - 1);
-        }
-      } else {
-        for (let i = 0; i < data.length; i += 4) {
-          if (matches(i)) data[i + 3] = 0;
-        }
-      }
-      tctx.putImageData(img, 0, 0);
-    }
-    function renderOutput() {
-      const out = document.createElement("canvas");
-      out.width = OUTPUT;
-      out.height = OUTPUT;
-      renderToCanvas(out);
-      let url = "";
-      try { url = out.toDataURL("image/webp", 0.85); } catch (_e) {}
-      if (!url || url.length < 64) url = out.toDataURL("image/png");
-      return url;
-    }
-    // Debounced preview update — cheap to re-render at 96×96.
-    let previewTimer = null;
-    function schedulePreview() {
-      clearTimeout(previewTimer);
-      previewTimer = setTimeout(() => renderToCanvas(previewCanvas), 30);
-    }
-
-    saveBtn.addEventListener("click", async e => {
-      e.preventDefault();
-      if (saveBtn.disabled) return;
-      await withSavingState(saveBtn, async () => {
-        showError(stageError, "");
-        const dataUrl = renderOutput();
-        const payload = JSON.stringify({ household_icon: {
-          name:       nameInput.value.trim(),
-          keywords:   keysInput.value.trim(),
-          image_data: dataUrl,
-        } });
-        async function postIcon(token) {
-          return fetch("/chores/icons", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept":       "application/json",
-              "X-CSRF-Token": token,
-            },
-            body: payload,
-          });
-        }
-        try {
-          let res = await postIcon(currentCsrf());
-          if (res.status === 422) {
-            const fresh = await refreshCsrf();
-            if (fresh) res = await postIcon(fresh);
-          }
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}));
-            showError(stageError, (errBody.errors || ["Save failed"]).join(", "));
-            return;
-          }
-          const saved = await res.json();
-          await IconPool.refreshCustom();
-          // If the cropper was opened from a chore-form picker, drop
-          // the freshly-saved icon straight into the form as a
-          // `hicon:<id>` REFERENCE (not the raw data URL) so the chore
-          // stores a pointer instead of duplicating the image bytes.
-          if (activeStack?.__setIconValue) {
-            const ref = `hicon:${saved.id}`;
-            activeStack.__setIconValue(ref, { source: "user" });
-            activeStack.dispatchEvent(new CustomEvent("chore-icon-picked", {
-              bubbles: true, detail: { value: ref },
-            }));
-          }
-          modal.classList.add("hidden");
-          resetState();
-        } catch (err) {
-          showError(stageError, err.message || "Save failed");
-        }
-      });
-    });
-
-    document.addEventListener("chore-icon-cropper-open", e => {
-      activeStack = e.detail?.stack || null;
-      resetState();
-      modal.classList.remove("hidden");
-      if (e.detail?.file) loadFile(e.detail.file);
-      else if (e.detail?.url) loadFromUrl(e.detail.url);
-    });
-
-    modal.querySelectorAll('[data-action="cancel"]').forEach(b =>
-      b.addEventListener("click", () => { modal.classList.add("hidden"); resetState(); }));
   })();
 
   // ============================================================

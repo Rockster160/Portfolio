@@ -58,10 +58,8 @@ class BoardTaskButton < ApplicationRecord
       name:       label,
       short_name: label,
       color:      color.presence,
-      icon:       icon.presence,
-      icon_kind:  Buddy::BoardIcon.kind_for(icon),
       monitor:    monitor_channel,
-    }
+    }.merge(Buddy::BoardIcon.fields(icon))
   end
 
   # `monitor::whisper-btn-home-toggle` answers on `whisper-btn-home-toggle`.

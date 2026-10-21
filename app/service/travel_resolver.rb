@@ -51,6 +51,10 @@ class TravelResolver
   # would leave it unannounced - nothing listening on `travel:` would hear it.
   LEG_RADIUS = 0.003
 
+  # How far from where they last arrived a departure can be reported and still
+  # be leaving it. A geofence's departure has been seen 1.4 km out.
+  LEFT_RADIUS = 0.02
+
   # How the report reached us, which is a different question from who it is
   # about. The geofence and the Bluetooth radio both speak for the person, and
   # only one of them is right in the garage.
@@ -85,6 +89,7 @@ class TravelResolver
       return nil if deaf_to?(via, coord)
 
       name = place_name(coord) || data[:location].presence
+      name = left_from(user, coord, name) if action == :departed
 
       # Asked BEFORE the merge, and about the leg rather than the row. The
       # test can't be "did this create the row" — the car crosses the home
@@ -164,6 +169,22 @@ class TravelResolver
 
       coord = pair.map { |part| Float(part.to_s.strip, exception: false) }
       coord.compact.length == 2 ? coord : nil
+    end
+
+    # A departure is reported once they're already outside the place - a
+    # geofence trips past its radius, the car's first position away is down
+    # the road - so its own coordinate names the town. What they LEFT is where
+    # they last arrived, as long as that is near enough to be the place this
+    # leg started from. A leg another reporter already opened keeps its name.
+    def left_from(user, coord, fallback)
+      return fallback if coord.blank? || ::LocationCache.nearby_contact(coord)
+
+      last = user.action_events.where(name: %w[arrived departed]).order(timestamp: :desc).first
+      return fallback if last.nil? || last.notes.blank?
+      return (last.timestamp >= MERGE_WINDOW.ago ? last.notes : fallback) if last.name == "departed"
+
+      from = last.data.to_h.values.filter_map { |at| [at["lat"], at["lng"]] if at.is_a?(::Hash) && at["lat"] }
+      from.any? { |at| near?(at, coord, LEFT_RADIUS) } ? last.notes : fallback
     end
 
     def place_name(coord)

@@ -171,6 +171,24 @@ RSpec.describe "Chore board presses" do
     end
   end
 
+  # Read the way the list pages read a task's tile.
+  describe "a task button wearing its tile" do
+    it "puts the tile's text on the disc, at its size, and keeps its own name under it" do
+      expect(result["tile_text"]).to include(
+        "title" => "Garage", "text" => "Close Garage", "words" => "true", "fontSize" => "20px",
+      )
+    end
+
+    it "draws a stack as one glyph" do
+      expect(result["tile_stack"]).to include("stacked" => "stacked-emoji", "words" => "false")
+    end
+
+    it "draws an icon it sends in place of the text, as a picture, and takes a label" do
+      expect(result.dig("tile_icon", "img")).to start_with("data:image/svg+xml")
+      expect(result.dig("tile_icon", "title")).to eq("Garage door")
+    end
+  end
+
   # The pad is never emptied and redrawn: a button arriving or leaving moves
   # cells in and out around the ones already standing.
   describe "the set changing" do

@@ -196,6 +196,7 @@ These fire per user, carrying that user's own data.
 | `tesla_parked`, `tesla_charge`, `tesla_drive_start`, `tesla_drive_stop`, `tesla_shift`, `tesla_trip_started`, `tesla_trip_updated`, `tesla_trip_ended` | specific car events | varies |
 | `trytravel` | anything reports a travel leg — the phone's Home geofence, the car's Bluetooth away from home, or the car crossing the home boundary | `action` (`departed`/`arrived`), `location`, `lat`, `lng`, `coord`, `from`, `source` (`phone`/`tesla`), `timestamp`, plus `departed`/`arrived` set to the place name for `travel:arrive:home`-style matching. A report is believed unless it is the Bluetooth radio reporting from home, where it reaches into the garage and pairs with a car somebody else is taking — recognised by the words `depart`/`arrive`, or by an explicit `via:"bluetooth"` |
 | `travel` | a leg the PHONE saw, announced once per leg by task 54 | same keys as `trytravel`. The car never announces: a `departed` ActionEvent carrying only a `tesla` key is the car leaving without its owner |
+| `tesla_travel` | the CAR crossing the home boundary, announced by task 54 for every leg the car reports, whether or not the phone went with it. A departure is placed where the car left from, so `tesla_travel:depart:home` matches | `action` (`departed`/`arrived`), `location`, `departed`/`arrived` set to the place name, `source` (`tesla`), `lat`, `lng` |
 | `monitor` | a dashboard channel updates | `channel` |
 | `websocket` | a websocket message arrives | varies |
 | `jarvis_subscribed` | the Jarvis channel connects | - |

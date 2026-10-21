@@ -63,10 +63,12 @@ RSpec.describe "Tapping the pet", type: :request do
     expect(pat!["expression"]).to eq("sad")
   end
 
-  it "leaves a sleeping pet asleep" do
+  it "leaves a sleeping pet asleep, with no face flashed over it" do
     board.update!(buddy_expression: "sleeping")
+    body = pat!
 
-    expect(pat!["expression"]).to eq("sleeping")
+    expect(body["expression"]).to eq("sleeping")
+    expect(body["flash"]).to be_nil
   end
 
   it "leaves somebody else's pet alone" do

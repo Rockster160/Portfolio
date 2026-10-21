@@ -312,6 +312,18 @@ class ByteController < ApplicationController
     head :no_content
   end
 
+  # POST /byte/board/task_buttons/order — the buttons in the order they were
+  # dragged into. Only the owner's own buttons move; any not named keep theirs.
+  def order_board_task_buttons
+    ids = Array(params[:ids]).map(&:to_i)
+    buttons = current_user.board_task_buttons.where(id: ids).index_by(&:id)
+    BoardTaskButton.transaction {
+      ids.each_with_index { |id, index| buttons[id]&.update!(sort_order: index) }
+    }
+    announce_board_change
+    head :no_content
+  end
+
   # POST /byte/board/tasks/:id/press — run a task button's Jil task, the way
   # tapping it on its own page does: with `execute: true` in its input, as the
   # task's own owner (so a shared task keeps the right account's reach). The run
@@ -939,6 +951,10 @@ class ByteController < ApplicationController
     # validates against that, never against what the browser sent back.
     return respond_buddy_form(action) if action.tool_name == Buddy::FormAction::TOOL_NAME
 
+    # Buttons a Jil task put under a Buddy message. By id, so a stale or forged
+    # value can only ever name a button the message really offered.
+    return respond_buddy_message_buttons(action) if action.tool_name == Buddy::MessageButtons::TOOL_NAME
+
     return head(:conflict) unless action.pending?
 
     value = params[:value]
@@ -1012,6 +1028,19 @@ class ByteController < ApplicationController
   # other row pending. No Mac decision-notify (no blocked hook waits on these)
   # and no destructive apply_decision! — the action stays live until all rows
   # are resolved or it expires. Repeat/overlapping taps are idempotent.
+  # One press: record it, show the answer to everyone it settles, then fire the
+  # button's trigger.
+  def respond_buddy_message_buttons(action)
+    return head(:conflict) unless action.pending?
+
+    button = Buddy::MessageButtons.button_for(action, params[:value])
+    return head(:unprocessable_entity) if button.nil?
+    return head(:conflict) unless action.apply_decision!(value: button["id"], source: :user)
+
+    Buddy::MessageButtons.tapped!(action, button, current_user)
+    render json: action.reload.as_wire
+  end
+
   # Submit an editable form. 422 with the reasons rather than a bare 409, because
   # these render under the fields that caused them and the person still has
   # everything they typed on screen to fix.

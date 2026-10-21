@@ -118,6 +118,17 @@
         line-height: 1;
       }
     }
+
+    // A Tabler icon or inline SVG from the shared icon field.
+    i.ti {
+      color: $grey-light;
+      font-size: 34px;
+    }
+
+    > svg {
+      width: 70%;
+      height: 70%;
+    }
   }
 
   .brow-text {
@@ -300,6 +311,109 @@
     input {
       margin: 0;
       min-height: 44px;
+    }
+
+    // The shared icon square (`shared/_icon_stack`); what is here is only how
+    // it looks in this modal.
+    .icon-row {
+      align-items: center;
+    }
+
+    .icon-row-hint {
+      color: $grey-disabled;
+      font-size: 13px;
+    }
+
+    .icon-cell {
+      position: relative;
+      flex: 0 0 auto;
+      width: 72px;
+
+      // The square IS the input — contenteditable, hence `cursor: text`.
+      .icon-preview {
+        display: grid;
+        place-items: center;
+        outline: none;
+        border: 1px solid $blue-l5;
+        border-radius: 10px;
+        background: $blue-d2;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        overflow: hidden;
+        cursor: text;
+        font-size: 36px;
+        line-height: 1;
+
+        &:focus {
+          border-color: #2563EB;
+        }
+
+        &:empty:before {
+          opacity: 0.3;
+          content: "🖼️";
+          pointer-events: none;
+        }
+
+        img,
+        > svg {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        i.ti {
+          font-size: 34px;
+        }
+      }
+
+      &.is-dropping .icon-preview {
+        border-style: dashed;
+        border-color: #2563EB;
+      }
+
+      // Chips pinned to the corners, quiet so they never compete with the
+      // icon itself.
+      .icon-upload-btn,
+      .icon-pick-btn,
+      .icon-clear-btn {
+        display: grid;
+        position: absolute;
+        z-index: 2;
+        place-items: center;
+        margin: 0;
+        box-shadow: none;
+        border: 1px solid $blue-l5;
+        border-radius: 6px;
+        background: rgba($blue-d5, 0.85);
+        padding: 0;
+        width: 22px;
+        height: 22px;
+        min-height: 0;
+        color: $grey-light;
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+
+        &.hidden {
+          display: none;
+        }
+
+        // The partial asks for Font Awesome, which this layout doesn't load;
+        // the terminess font it does load carries the same glyphs.
+        .fa {
+          font-style: normal;
+          font-family: "terminess";
+        }
+
+        .fa-camera:before { content: "\f030"; }
+        .fa-search:before { content: "\f002"; }
+      }
+
+      .icon-upload-btn { top: 3px; left: 3px; }
+      .icon-pick-btn { top: 3px; right: 3px; }
+      .icon-clear-btn { right: 3px; bottom: 3px; font-size: 14px; }
     }
   }
 

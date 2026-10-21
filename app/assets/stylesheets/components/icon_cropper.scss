@@ -1,0 +1,377 @@
+// Shared custom-icon cropper (app/javascript/src/icon_cropper.js, markup in
+// shared/_icon_cropper.html.erb). A <dialog> moved to <body> on first open, so
+// it carries its OWN palette rather than reading a page's variables, and its
+// own button/input reset rather than relying on a page's. Overridable per page
+// through the `--icrop-*` vars.
+//
+// Buttons and inputs take `!important` on the properties forms.scss also sets
+// with `!important` (button colour) or at a higher specificity from a page
+// cascade, the same way the shared icon picker does.
+.icon-cropper {
+  --icrop-sheet: #00102B;
+  --icrop-well: #0F1B33;
+  --icrop-well-soft: rgba(15, 27, 51, 0.5);
+  --icrop-border: #1F2A44;
+  --icrop-field-border: #334155;
+  --icrop-text: #ECF0F1;
+  --icrop-muted: #94A3B8;
+  --icrop-accent: #2563EB;
+  --icrop-ghost: #1F2A44;
+  --icrop-ghost-hover: #334155;
+  --icrop-error: #FCA5A5;
+
+  // UA dialog reset — the sheet inside does the drawing, so a click whose
+  // target is the dialog itself can only have landed on the ::backdrop.
+  box-sizing: border-box;
+  width: 92vw;
+  max-width: 460px;
+  max-height: 90vh;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  color: var(--icrop-text);
+  font-size: 15px;
+
+  &:not([open]) { display: none; }
+
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  .hidden { display: none !important; }
+
+  .icon-cropper-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 90vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    background: var(--icrop-sheet);
+    border: 1px solid var(--icrop-border);
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  }
+
+  .icon-cropper-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+
+    h3 {
+      flex: 1;
+      margin: 0;
+      color: var(--icrop-text);
+      font-size: 18px;
+      text-align: left;
+    }
+  }
+
+  button {
+    appearance: none;
+    margin: 0 !important;
+    font-family: inherit !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+    cursor: pointer;
+
+    &:active {
+      translate: none;
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
+  .icon-cropper-close {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    padding: 0 !important;
+    background: var(--icrop-ghost) !important;
+    border: none !important;
+    border-radius: 999px !important;
+    color: var(--icrop-text) !important;
+    font-size: 18px !important;
+    font-weight: normal !important;
+    line-height: 1;
+
+    &:hover { background: var(--icrop-ghost-hover) !important; }
+  }
+
+  .icon-cropper-btn {
+    position: relative;
+    padding: 8px 16px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: #FFF !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+
+    &.primary { background: var(--icrop-accent) !important; }
+    &.ghost { background: var(--icrop-ghost) !important; }
+    &.ghost:hover { background: var(--icrop-ghost-hover) !important; }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    // Mid-save: the label fades and a spinner sits where it was.
+    &.loading {
+      pointer-events: none;
+      color: transparent !important;
+    }
+    &.loading::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 16px;
+      height: 16px;
+      margin: -8px 0 0 -8px;
+      border: 2px solid #FFF;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: icon-cropper-spin 0.6s linear infinite;
+    }
+  }
+
+  input[type="text"],
+  input[type="url"] {
+    display: block;
+    width: 100%;
+    margin: 0;
+    background: var(--icrop-well) !important;
+    border: 1px solid var(--icrop-field-border) !important;
+    color: var(--icrop-text) !important;
+    font-family: inherit;
+
+    &:focus {
+      outline: none;
+      border-color: var(--icrop-accent) !important;
+    }
+  }
+
+  input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+  }
+
+  .cropper-source {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 4px;
+  }
+
+  .cropper-hint {
+    margin: 0;
+    color: var(--icrop-muted);
+    text-align: center;
+  }
+
+  .cropper-source-actions {
+    display: flex;
+    justify-content: center;
+  }
+
+  .cropper-url {
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+  }
+
+  .cropper-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  // 320px stage, shrunk on a phone narrower than the sheet. The crop maths
+  // works in canvas pixels, so the drag scales screen movement to match.
+  .cropper-canvas-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+    overflow: hidden;
+    background: #0A1224;
+    border-radius: 12px;
+    touch-action: none;
+    cursor: grab;
+
+    &:active { cursor: grabbing; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    // The crop window: a 192px square inset 64px on the 320px stage, i.e. 20%.
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 20%;
+      border: 2px solid var(--icrop-accent);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+  }
+
+  // Inverted square mask — darkens everything outside the crop window.
+  .cropper-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.55) inset;
+    clip-path: polygon(
+      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+      20% 20%, 20% 80%, 80% 80%, 80% 20%, 20% 20%
+    );
+  }
+
+  .cropper-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .cropper-zoom-row,
+  .cropper-bg-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    color: var(--icrop-muted);
+
+    input[type="range"] { flex: 1; }
+  }
+
+  .cropper-bg {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--icrop-well-soft);
+    border-radius: 8px;
+  }
+
+  .cropper-bg-toggle,
+  .cropper-bg-edges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--icrop-text);
+    cursor: pointer;
+  }
+
+  .cropper-bg-edges { flex-wrap: wrap; }
+
+  .cropper-bg-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 8px;
+    border-left: 2px solid #1E3A5F;
+  }
+
+  .cropper-bg-threshold-value {
+    min-width: 28px;
+    color: var(--icrop-text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .cropper-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  // Checker pattern so transparency reads clearly without leaking the dark
+  // sheet into the perceived icon colour.
+  .cropper-preview {
+    width: 96px;
+    height: 96px;
+    background:
+      linear-gradient(45deg, #2a3a55 25%, transparent 25%) 0 0 / 12px 12px,
+      linear-gradient(-45deg, #2a3a55 25%, transparent 25%) 0 6px / 12px 12px,
+      linear-gradient(45deg, transparent 75%, #2a3a55 75%) 6px -6px / 12px 12px,
+      linear-gradient(-45deg, transparent 75%, #2a3a55 75%) -6px 0 / 12px 12px,
+      #1a2638;
+    border: 1px solid var(--icrop-field-border);
+    border-radius: 8px;
+  }
+
+  .cropper-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    input {
+      margin-top: 6px;
+      padding: 6px 8px !important;
+      border-radius: 6px !important;
+      font-size: 15px !important;
+    }
+  }
+
+  .icon-cropper-label {
+    display: block;
+    color: var(--icrop-muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .icon-cropper-field-hint {
+    color: var(--icrop-muted);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .cropper-error {
+    margin: 4px 0 0;
+    color: var(--icrop-error);
+    text-align: center;
+  }
+
+  .icon-cropper-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  // Sits to the LEFT of Cancel/Save so it says why Save is disabled without
+  // disturbing the button cluster.
+  .cropper-save-hint {
+    align-self: center;
+    margin-right: auto;
+    color: var(--icrop-muted);
+    font-size: 12px;
+  }
+}
+
+@keyframes icon-cropper-spin {
+  to { transform: rotate(360deg); }
+}
+
+body:has(.icon-cropper[open]) {
+  overflow: hidden;
+}

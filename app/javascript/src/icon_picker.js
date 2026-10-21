@@ -125,11 +125,10 @@ export function repaintInlineIcons(root) {
 }
 
 function buildModal() {
-  const el = document.createElement("div");
+  const el = document.createElement("dialog");
   el.className = "icon-pick-pop";
-  el.hidden = true;
   el.innerHTML = `
-    <div class="icon-pick-sheet" role="dialog" aria-label="Pick an icon">
+    <div class="icon-pick-sheet" aria-label="Pick an icon" tabindex="-1" autofocus>
       <div class="icon-pick-head">
         <input type="search" class="icon-pick-search basic" data-pick-search
                placeholder="Search emoji or icons…" autocomplete="off"
@@ -188,29 +187,27 @@ function buildModal() {
   el.addEventListener("click", (e) => {
     if (e.target === el) close();
   });
+  // Escape closes a dialog by itself. The event arrives a beat later, so a
+  // picker opened again in between keeps its callback.
+  el.addEventListener("close", () => {
+    if (!el.open) onPick = null;
+  });
 
   el.__render = render;
   el.__search = searchEl;
   return el;
 }
 
-function onKeyDown(e) {
-  if (e.key === "Escape") close();
-}
-
 export function close() {
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  onPick = null;
-  document.removeEventListener("keydown", onKeyDown);
+  if (!modal?.open) return;
+  modal.close();
 }
 
 export function openIconPicker({ onPick: cb, query = "" } = {}) {
   if (!modal) modal = buildModal();
   onPick = cb || null;
   modal.__search.value = query;
-  modal.hidden = false;
-  document.addEventListener("keydown", onKeyDown);
+  if (!modal.open) modal.showModal();
   modal.__render();
   // Deliberately NOT focused on touch: focusing a search field throws the
   // keyboard up over the grid, and the whole point of the grid is to browse it.

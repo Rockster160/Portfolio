@@ -573,6 +573,122 @@ RSpec.describe Jil::Methods::Buddy do
 
         expect { Jil::Validator.validate!(code) }.not_to raise_error
       end
+
+      # A question with buttons for the two people it concerns. Each press
+      # fires a trigger; one press, or the thing happening by itself, settles
+      # every copy.
+      describe "#message / #button / #resolveMessage" do
+        let(:send_code) {
+          <<~'JIL'
+            closeData = Hash.new({
+              kDir = Keyval.new("direction", "close")::Keyval
+            })::Hash
+            sent = Buddy.message("door-open", "The door is open!", {
+              toMe = Keyword.who("me")::String
+              toChelsea = Keyword.who("Chelsea")::String
+              closeBtn = Buddy.button("Close the door", {
+                closeTrigger = Keyword.trigger("door")::String
+                closeWith = Keyword.data(closeData)::Hash
+                closeColor = Keyword.color("#E25822")::String
+              })::Hash
+              leaveBtn = Buddy.button("Leave it", {
+                leaveTrigger = Keyword.trigger("door")::String
+                leaveSaid = Keyword.resolved("Leaving it open")::String
+              })::Hash
+            })::Numeric
+          JIL
+        }
+
+        before { allow(Jil).to receive(:trigger).and_call_original }
+
+        def action_for(user)
+          ByteAction.find_by(user: user, tool_name: Buddy::MessageButtons::TOOL_NAME)
+        end
+
+        def press(user, id)
+          action = action_for(user)
+          button = Buddy::MessageButtons.button_for(action, id)
+          action.apply_decision!(value: id, source: :user)
+          Buddy::MessageButtons.tapped!(action, button, user)
+        end
+
+        it "validates" do
+          code = send_code + <<~'JIL'
+            done = Buddy.resolveMessage("door-open", "The door is shut", "me, Chelsea")::Boolean
+          JIL
+
+          expect { Jil::Validator.validate!(code) }.not_to raise_error
+        end
+
+        it "sends each of them a message with the buttons under it" do
+          ctx = run(send_code)
+
+          expect(ctx.ctx[:vars][:sent][:value]).to eq(2)
+          [owner, housemate].each do |user|
+            meta = action_for(user).byte_message.metadata
+            expect(meta).to include("tool_name" => Buddy::MessageButtons::TOOL_NAME, "action_state" => "pending")
+            expect(meta["buttons"]).to eq([
+              { "id" => 1, "label" => "Close the door", "color" => "#e25822" },
+              { "id" => 2, "label" => "Leave it" },
+            ])
+          end
+          expect(BuddyAlert.count).to eq(0)
+        end
+
+        it "fires the trigger as the owner and settles both copies when either presses" do
+          run(send_code)
+          press(housemate, 1)
+
+          expect(Jil).to have_received(:trigger).with(
+            owner, "door", { "direction" => "close", "pressed_by" => housemate.first_name }, auth: :trigger,
+          )
+          expect(action_for(owner).reload).to be_decided
+          expect(action_for(owner).byte_message.reload.metadata["buttons_outcome"])
+            .to eq("#{housemate.first_name} pressed \"Close the door\"")
+          expect(action_for(housemate).byte_message.reload.metadata["buttons_outcome"])
+            .to eq("You pressed \"Close the door\"")
+        end
+
+        it "shows a button's own words when it gives them" do
+          run(send_code)
+          press(owner, 2)
+
+          expect(action_for(housemate).byte_message.reload.metadata["buttons_outcome"]).to eq("Leaving it open")
+        end
+
+        it "leaves the other copy waiting when the button doesn't resolve" do
+          run(send_code.sub('leaveSaid = Keyword.resolved("Leaving it open")::String', 'leaveKeep = Keyword.resolve(false)::Boolean'))
+          press(owner, 2)
+
+          expect(action_for(housemate).reload).to be_pending
+        end
+
+        it "settles every copy from another task" do
+          run(send_code)
+          ctx = run('done = Buddy.resolveMessage("door-open", "The door is closing", "me, Chelsea")::Boolean')
+
+          expect(ctx.ctx[:vars][:done][:value]).to be(true)
+          expect(action_for(housemate).reload).to be_decided
+          expect(action_for(housemate).byte_message.reload.metadata["buttons_outcome"]).to eq("The door is closing")
+          expect(Jil).not_to have_received(:trigger).with(owner, "door", anything)
+        end
+
+        it "replaces the copy still waiting when it's sent again" do
+          run(send_code)
+          first = action_for(owner)
+          run(send_code)
+
+          expect(first.reload).to be_decided
+          expect(ByteAction.pending.where(user: owner, tool_name: Buddy::MessageButtons::TOOL_NAME).count).to eq(1)
+        end
+
+        it "fails the task for a button with nothing to fire" do
+          ctx = run(send_code.sub('closeTrigger = Keyword.trigger("door")::String', ""))
+
+          expect(ctx.ctx[:error]).to match(/"Close the door" button needs a trigger/)
+          expect(ByteMessage.where(byte_conversation: owner_convo).count).to eq(0)
+        end
+      end
     end
   end
 

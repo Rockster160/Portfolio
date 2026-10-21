@@ -551,6 +551,9 @@
   #boardAlert("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String face:[%FACES%] strength:Numeric]))::Boolean
   #dream("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String face:[%FACES%] strength:Numeric]))::Boolean
   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
+  #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
+  #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
+  #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean

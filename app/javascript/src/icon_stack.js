@@ -16,11 +16,15 @@
 //   * drag an image file onto the square
 //   * the search chip, which opens the shared picker modal
 //
-// A caller that wants to do something else with an image — crop it, upload it
-// — passes `onImage`; without one, images go in as they arrive.
+// An image (camera chip, paste, drop) goes through the shared cropper
+// (`icon_cropper.js`) and comes back as a `hicon:<id>` household icon, the
+// same as on the chores form. A caller that wants something else passes
+// `onImage`; a page that doesn't render the cropper partial takes the image as
+// it arrives.
 
 import { IconPool } from "./icon_pool";
 import { renderIconValue, openIconPicker, loadIconPool, onIconPoolChanged } from "./icon_picker";
+import { openIconCropper } from "./icon_cropper";
 
 // Typing is clamped to ONE grapheme cluster. Without it, letters typed into
 // the square render at the square's font size — huge scribbles that read as
@@ -83,10 +87,16 @@ export function bindIconStack(stack, { onImage = null } = {}) {
   stack.__iconValue = function () { return hidden ? hidden.value : ""; };
 
   // An image is the one shape a caller may want to intercept — the interview
-  // tracker sends it to a cropper so what gets stored is a 128px square rather
-  // than whatever came off the clipboard.
+  // tracker sends it to its own cropper. Otherwise it's cropped to a 128px
+  // household icon so what gets stored is a reference rather than whatever
+  // came off the clipboard. SVG markup is a cheap inline string and goes in
+  // as-is.
   const takeImage = function (fileOrUrl) {
     if (onImage) return onImage(fileOrUrl);
+
+    const isMarkup = typeof fileOrUrl === "string" && fileOrUrl.startsWith("<svg");
+    if (!isMarkup && openIconCropper({ source: fileOrUrl, onSaved: (ref) => setValue(ref) })) return;
+
     if (typeof fileOrUrl === "string") return setValue(fileOrUrl);
 
     const reader = new FileReader();

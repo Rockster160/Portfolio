@@ -11,15 +11,21 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <% end %>
+<% content_for :head do %>
+  <%= javascript_include_tag "icon_field", defer: true %>
+<% end %>
 <% content_for :modals do %>
+  <%= render "shared/icon_cropper" %>
+
   <div id="cmodal-backdrop" class="cmodal-backdrop hidden">
     <div class="cmodal">
       <h3 id="cmodal-title">Edit Item</h3>
       <div class="row">
         <input id="m-name" placeholder="Name">
       </div>
-      <div class="row">
-        <input id="m-img" placeholder="Image URL or emoji">
+      <div class="row icon-row">
+        <%= render "shared/icon_stack", name: "m-img", value: nil, label: "Icon" %>
+        <span class="icon-row-hint">Type or paste an emoji, search for one, or add a picture</span>
       </div>
       <div class="row">
         <input id="m-display" placeholder="Display name (optional)">
@@ -171,6 +177,8 @@
     const mTitle = document.getElementById("cmodal-title")
     const mName = document.getElementById("m-name")
     const mImg = document.getElementById("m-img")
+    const mImgStack = elcModal.querySelector("[data-icon-stack]")
+    window.IconField?.bindIconField(mImgStack)
     const mDisplay = document.getElementById("m-display")
     const mStock = document.getElementById("m-stock")
     const mLow = document.getElementById("m-low")
@@ -200,7 +208,8 @@
       isNewItem = !item
       mTitle.textContent = isNewItem ? "Add Item" : "Edit Item"
       mName.value = item?.name || ""
-      mImg.value = item?.img || ""
+      if (mImgStack.__setIconValue) mImgStack.__setIconValue(item?.img || "", { silent: true })
+      else mImg.value = item?.img || ""
       mDisplay.value = item?.display || ""
       mStock.value = item?.stock ?? 1
       mLow.value = item?.low != null ? item.low : ""
@@ -719,6 +728,8 @@
     // ---------- Boot ----------
     document.addEventListener("DOMContentLoaded", () => {
       render()
+      // Uploaded icons draw once the household's pool is in.
+      window.IconField?.loadIconPool().then(() => render())
     })
 
     // A tablet that slept or dropped off wifi missed broadcasts; catch up.
