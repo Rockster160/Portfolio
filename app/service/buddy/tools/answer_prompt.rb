@@ -53,6 +53,12 @@ Buddy::Tools.register(
       form.form_fields.map { |field| field.merge(value: prefilled[field[:key]] || field[:value]) }
     },
     title:   ->(payload, ctx) { ctx.user.prompts.find_by(id: payload[:id])&.question.to_s },
+    # Some prompts fill their choices in when they're opened, so a form posted
+    # hours ago is showing what was true then.
+    refresh: ->(payload, ctx) {
+      prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])
+      Buddy::PromptDelivery.load!(ctx.user, prompt) if prompt
+    },
     submit:  "Send it",
     # The other thing a person does with a survey they didn't ask for. Without
     # it the only way out of a prompt Buddy posted was to answer it or leave it

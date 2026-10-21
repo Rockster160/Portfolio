@@ -22,9 +22,10 @@ class Jil
     #
     # This is HALF the picture - see `wired_scopes` for the other half.
     #
-    # `travel` is announced by a Jil task rather than app code, and `deploy` is
-    # the monitor broadcast Buddy::WatchMatcher reads as a finished deploy; a
-    # named watch listens on both, whoever's account it's on.
+    # `travel` and the car's `tesla_travel` are announced by a Jil task rather
+    # than app code, and `deploy` is the monitor broadcast Buddy::WatchMatcher
+    # reads as a finished deploy; a watch listens on them whoever's account
+    # it's on.
     KNOWN_SCOPES = %w[
       agenda_event
       agenda_item
@@ -61,6 +62,7 @@ class Jil
       tesla_trip_ended
       tesla_trip_started
       tesla_trip_updated
+      tesla_travel
       travel
       trytravel
       websocket

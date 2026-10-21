@@ -20,6 +20,13 @@ RSpec.describe Buddy::GPT::ListenerTool do
     JSON.parse(tool.call(args.stringify_keys))
   end
 
+  # The raw travel scopes are here and look like the answer; the named
+  # trigger is the one that covers both devices in one watch.
+  it "sends an arrive-or-leave search to the travel trigger" do
+    expect(call(about: "phone or car arrives or departs")["next"]).to match(/trigger "travel"/)
+    expect(call(about: "doorbell")["next"]).not_to match(/trigger "travel"/)
+  end
+
   it "returns the syntax guide" do
     result = call
 

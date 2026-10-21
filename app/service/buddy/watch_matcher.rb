@@ -17,8 +17,20 @@ module Buddy
 
     def watched_scopes
       Rails.cache.fetch(SCOPE_CACHE_KEY, expires_in: SCOPE_CACHE_TTL) {
-        BuddyWatch.active.distinct.pluck(:trigger_scope).compact
+        scopes = BuddyWatch.active.distinct.pluck(:trigger_scope).compact
+        scopes << CAR_SCOPE if car_travel_watches(BuddyWatch.active).exists?
+        scopes.uniq
       }
+    end
+
+    # The car reports its arrivals and departures on a scope of its own, which
+    # nothing on `travel` hears - that one is the person. A travel watch whose
+    # listener names the car (`source::tesla`) has asked for both, so the car's
+    # reports reach it too, and its own terms decide which ones fire it.
+    CAR_SCOPE = "tesla_travel".freeze
+
+    def car_travel_watches(scope)
+      scope.where(trigger_scope: "travel").where("listener ILIKE ?", "%tesla%")
     end
 
     def bust_scope_cache!
@@ -31,7 +43,9 @@ module Buddy
       scope = deploy_alias(scope.to_s, raw_data)
       return unless watched_scopes.include?(scope)
 
-      watches = BuddyWatch.active.where(user_id: user.id, trigger_scope: scope).to_a
+      active  = BuddyWatch.active.where(user_id: user.id)
+      watches = active.where(trigger_scope: scope).to_a
+      watches += car_travel_watches(active).to_a if scope == CAR_SCOPE
       return if watches.empty?
 
       payload = normalize_payload(raw_data)

@@ -67,6 +67,14 @@ module Buddy
                  "on - say yes and build the watch. Only an EMPTY `matches` means nothing here " \
                  "knows about it, and then say that plainly and ask what it's called.".freeze
 
+      # Arriving and leaving anywhere has its own named trigger, and the raw
+      # travel scopes here are exactly what it exists to keep out of a watch.
+      TRAVEL_WORDS = /arriv|depart|leav|travel|\bcar\b|phone/i
+      TRAVEL = "Every arrival or departure ANYWHERE - the phone, the car or both - is " \
+               "remind_when trigger \"travel\" (target phone, car or both), not a listener " \
+               "from here. Its `text` can be a template: {{ source }} (phone / tesla), " \
+               "{{ action }} (arrived / departed) and {{ location }}.".freeze
+
       DESCRIPTION = <<~TXT.freeze
         The Jil listener syntax, an index of every kind of event that fires
         here, and the listeners already running on this person's automations as
@@ -251,7 +259,8 @@ module Buddy
       end
 
       def next_step(about)
-        "#{COPY_KEYS} #{about.blank? ? UNSEARCHED : SEARCHED}"
+        step = "#{COPY_KEYS} #{about.blank? ? UNSEARCHED : SEARCHED}"
+        about.to_s.match?(TRAVEL_WORDS) ? "#{TRAVEL} #{step}" : step
       end
     end
   end

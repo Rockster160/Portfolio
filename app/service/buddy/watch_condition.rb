@@ -23,7 +23,7 @@ module Buddy
       keyword_init: true
     )
 
-    TRIGGERS = %i[arrive depart chore event agenda whisper deploy custom].freeze
+    TRIGGERS = %i[arrive depart travel chore event agenda whisper deploy custom].freeze
 
     # Which triggers reach into a feature. Watching for an arrival or a deploy
     # is everyone's; a chore watch would tell someone without chores when the
@@ -85,6 +85,7 @@ module Buddy
 
       case trigger
       when "agenda"  then agenda(ctx, target)
+      when "travel"  then travel(ctx, target)
       when "whisper" then whisper(ctx, target)
       when "deploy"  then deploy(ctx)
       when "custom"  then custom(ctx, payload)
@@ -134,9 +135,16 @@ module Buddy
       },
     }.freeze
 
+    # Said when a place-shaped trigger is set with no place. "Every time I arrive
+    # or leave anywhere" is a real request with no place in it, and the answer
+    # is a different call, not a question back to the person.
+    ANYWHERE = " - for EVERY arrival or departure anywhere, it's trigger \"travel\" instead; " \
+               "don't ask them for a place".freeze
+
     def narrowed(ctx, trigger, target, except)
       shape = NARROWED.fetch(trigger.to_sym)
-      raise "#{trigger} needs #{shape[:needs]} (target)" if target.blank? && except.blank?
+      anywhere = shape[:term] == :place_term ? ANYWHERE : ""
+      raise "#{trigger} needs #{shape[:needs]} (target)#{anywhere}" if target.blank? && except.blank?
 
       want = target.present? ? send(shape[:term], ctx, target) : nil
       skip = except.present? ? send(shape[:term], ctx, except, excluding: true) : nil
@@ -305,6 +313,31 @@ module Buddy
       return true if user.id == owner.id
 
       owner.chore_household_id.present? && user.chore_household_id == owner.chore_household_id
+    end
+
+    # Every arrival and departure, anywhere, by whichever of them they named.
+    # The phone is the person and the car is the car (see TravelResolver); a
+    # watch naming the car hears its reports too (Buddy::WatchMatcher).
+    TRAVEL_SOURCES = {
+      "phone" => { term: "source::phone",            who: "your phone" },
+      "car"   => { term: "source::tesla",            who: "the car" },
+      "both"  => { term: "source::OR(phone tesla)",  who: "your phone or the car" },
+    }.freeze
+
+    def travel(ctx, target)
+      key = target.downcase.presence || "both"
+      key = "car" if key.match?(/car|tesla/) && !key.match?(/phone|both/)
+      key = "phone" if key.match?(/phone/) && !key.match?(/car|tesla|both/)
+      source = TRAVEL_SOURCES[key]
+      raise "travel's target is \"phone\", \"car\" or \"both\" - got #{target.inspect}" if source.nil?
+
+      Resolved.new(
+        scope:    "travel",
+        listener: "travel #{source[:term]}",
+        human:    "when #{source[:who]} arrives or leaves anywhere",
+        past:     "#{source[:who].capitalize} arrived or left",
+        owner:    ctx.user,
+      )
     end
 
     def deploy(ctx)

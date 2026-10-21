@@ -159,6 +159,15 @@ module Buddy
       Rails.logger.warn("[Buddy::PromptDelivery] notify failed: #{e.class}: #{e.message}")
     end
 
+    # The step the prompt's own page runs as it opens: `prompt:load`, which a
+    # task listens on to fill in what is only known now. Inline, so the prompt
+    # is current by the time this returns.
+    def load!(user, prompt)
+      data = ::Tokenizing::TriggerData.parse(prompt.params || {}, as: user)
+      ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :load, data: data), auth: :trigger)
+      prompt.reload
+    end
+
     def deliverable?(user, prompt)
       return false if user.nil? || prompt.nil? || prompt.response.present?
 

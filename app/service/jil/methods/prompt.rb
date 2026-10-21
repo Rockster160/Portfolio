@@ -32,6 +32,14 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     scoped
   end
 
+  # A data key that keeps a prompt out of the Buddy thread. Everything a thread
+  # shows is read back into the companion's context, so a question that should
+  # never be part of a conversation stays on /prompts.
+  APP_ONLY = :app_only
+
+  # Posted into the Buddy thread as a form, which pushes on its own. `deliver`
+  # still pushes the /prompts link for a prompt that stays in the app, or for
+  # someone with no thread to put it in.
   def create(title, data, questions, deliver)
     prompts.create(
       question: title,
@@ -42,7 +50,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
         @jil.user, :prompt, prompt.with_jil_attrs(state: :create),
         auth: :trigger, auth_id: @jil.task&.id
       )
-      broadcast_push(prompt) if deliver
+      posted = ::Buddy::PromptDelivery.post!(@jil.user, prompt) if prompt.persisted? && !app_only?(prompt)
+      broadcast_push(prompt) if deliver && posted.nil?
     }
   end
 
@@ -257,6 +266,10 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       url:   Rails.application.routes.url_helpers.prompt_url(prompt),
       badge: @jil.user.prompts.unanswered.reload.count,
     }.compact)
+  end
+
+  def app_only?(prompt)
+    ::ActiveModel::Type::Boolean.new.cast(prompt.params.to_h.with_indifferent_access[APP_ONLY])
   end
 
   def load_prompt(prompt)

@@ -32,6 +32,45 @@ RSpec.describe "remind_when tool" do
     expect(chip.body).to match(/will remind you next time you finish Brush Teeth/)
   end
 
+  # "Any time my phone arrives or leaves" names no place, and arrive/depart
+  # need one. The refusal is read by the model, so it says what to call
+  # instead rather than leaving it to ask the person for a place.
+  describe "every arrival and departure, anywhere" do
+    let(:tool) { Buddy::Tools[:remind_when] }
+    let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
+
+    def confirm(payload)
+      normalized, = Buddy::Tools.validate_payload(tool, payload)
+      tool[:confirm].call(normalized, ctx)
+    end
+
+    # The refusal is read by the model, so it names the call to make instead
+    # of leaving it to ask the person for a place they never had in mind.
+    it "points a placeless depart at the travel trigger" do
+      expect { confirm(text: "x", trigger: "depart", repeat: true) }
+        .to raise_error(/needs a place.*trigger "travel"/)
+    end
+
+    it "is one watch for the phone and the car" do
+      text = "{{ source }}: {{ action }} {{ location }}"
+      run(text: text, trigger: "travel", repeat: true)
+
+      watch = BuddyWatch.last
+      expect([watch.trigger_scope, watch.listener, watch.body, watch.one_shot])
+        .to eq(["travel", "travel source::OR(phone tesla)", text, false])
+      expect(watch.metadata["human_when"]).to eq("every time your phone or the car arrives or leaves anywhere")
+    end
+
+    it "narrows to one of them" do
+      expect(confirm(text: "x", trigger: "travel", target: "the car")[:resolved][:listener]).to eq("travel source::tesla")
+      expect(confirm(text: "x", trigger: "travel", target: "phone")[:resolved][:listener]).to eq("travel source::phone")
+    end
+
+    it "refuses a place, which is arrive or depart" do
+      expect { confirm(text: "x", trigger: "travel", target: "Costco") }.to raise_error(/"phone", "car" or "both"/)
+    end
+  end
+
   # Prod watch 13: "Let me know each time the doorbell sees somebody today"
   # became a standing watch. Nothing would ever have retired it - it would keep
   # pinging about a day that was over until somebody noticed and deleted it.

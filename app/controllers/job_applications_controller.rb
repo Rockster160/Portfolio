@@ -42,6 +42,7 @@ class JobApplicationsController < ApplicationController
     @new_job = current_user.job_applications.new
     load_upcoming
     @in_play = JobApplication.in_play_for(current_user)
+    @silence = JobApplication.silence_for(current_user)
   end
 
   # Newest first. The page is read to answer "where is this now", and the answer

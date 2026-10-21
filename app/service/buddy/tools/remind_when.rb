@@ -27,6 +27,8 @@ Buddy::Tools.register(
                  `read_listener_guide` is what says whether anything does. When
                  nothing does, that is a real `request_feature`, and saying so
                  is the honest answer rather than a failure.
+                 Every arrival or departure ANYWHERE - no place in what they
+                 said, or "wherever I am" - is not this; it's "travel".
       "depart" - when they leave a place. `target` = the place name.
                  With no place named - "when I leave", "the next time I
                  head out", "set the depart check" - the place is where they
@@ -40,6 +42,14 @@ Buddy::Tools.register(
                  `request_feature`. `except` works the same on chore and
                  event ("any chore but the dishes"), and a `custom`
                  listener excludes with a leading `-` on any term.
+      "travel" - EVERY arrival AND departure, anywhere at all. `target` is
+                 whose: "phone" (where they are), "car", or "both" (the
+                 default). ONE call covers both devices and both directions -
+                 "any time my phone or the car arrives or leaves" is
+                 `trigger: "travel"`, `repeat: true`, and nothing else. Never
+                 ask them for a place, and never hand-write a `travel`,
+                 `tesla_travel` or `trytravel` listener for this; `trytravel`
+                 is every raw report, a Bluetooth blip in the garage included.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
                  me to floss". Never when it comes DUE - that is
@@ -166,11 +176,9 @@ Buddy::Tools.register(
     - `{{ now }}`, `{{ today }}`, `{{ weekday }}`, `{{ user }}`, `{{ buddy }}`
       and `{{ greeting }}` are there whatever the trigger was.
     - Arriving and leaving carry `{{ action }}` (`arrived` / `departed`),
-      `{{ location }}` and `{{ source }}` (`phone` / `tesla`). Their phone is
-      `custom` on listener `travel`, their car is `custom` on `tesla_travel`,
-      and each one with no filters hears every arrival AND departure anywhere.
-      "Any time my phone or the car arrives or leaves, send me 'Phone: Arrived
-      at Home'" is one repeating watch on each, both with the same text:
+      `{{ location }}` and `{{ source }}` (`phone` / `tesla`). "Any time my
+      phone or the car arrives or leaves, send me 'Phone: Arrived at Home'" is
+      one `travel` watch with this text:
       `{% if source == "tesla" %}🚗 Car{% else %}📱 Phone{% endif %}: {{ action | capitalize }} {% if action == "arrived" %}at {% endif %}{{ location }}`
 
     A plain sentence is still the right answer most of the time. Reach for a

@@ -8004,6 +8004,33 @@ $board-cell-max: 200px;
   user-select: text;
   -webkit-touch-callout: default;
 
+  // The rebuild-from-the-prompt control. Small and out of the way: it runs by
+  // itself when the form is shown, so tapping it is the exception.
+  .byte-msg-form-top {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -8px;
+  }
+
+  .byte-msg-form-refresh {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--bs-muted);
+    cursor: pointer;
+
+    &.is-reloading svg {
+      transform-origin: 50% 50%;
+      animation: byte-attach-spin 900ms linear infinite;
+    }
+  }
+
   .byte-msg-form-row {
     display: flex;
     flex-direction: column;

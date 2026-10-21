@@ -964,6 +964,18 @@ class ByteController < ApplicationController
     render json: action.reload.as_wire
   end
 
+  # A form rebuilding itself as it's shown, or on its refresh button. The
+  # repaint goes out on the channel like any other message update.
+  def refresh_action
+    action = current_user.byte_actions.find_by(request_id: params[:request_id])
+    return head(:not_found) if action.nil? || action.tool_name != Buddy::FormAction::TOOL_NAME
+
+    message = Buddy::FormAction.refresh!(action)
+    return head(:conflict) if message.nil?
+
+    render json: { message: message.as_wire }
+  end
+
   # PWA button tap → records the decision on ByteAction, updates the
   # message state, broadcasts the update, and pings the Mac's decision
   # hook so any waiting Claude Code PreToolUse hook wakes up.

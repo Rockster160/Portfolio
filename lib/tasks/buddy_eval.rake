@@ -2164,9 +2164,10 @@ BUDDY_EDGE_PROBES = [
     say:   "Any time either my phone or the car departs or arrives, send me a message like " \
            "\"Phone: Arrived at Home\", replacing the phone with the device, arrived/departed, and the location.",
     tool:  :remind_when,
-    args:  { remind_when: { trigger: "custom", repeat: true, text: /\{\{\s*location/ } },
-    note:  "the template was skipped as an uncollected step var, so nothing was set and the reply " \
-           "fell back to \"I don't quite follow\"",
+    args:  { remind_when: { trigger: "travel", repeat: true, text: /\{\{\s*location/ } },
+    once:  true,
+    note:  "the template was skipped as an uncollected step var; once that was fixed it asked for a " \
+           "place, then set three to six overlapping custom travel watches",
   },
 ].freeze
 

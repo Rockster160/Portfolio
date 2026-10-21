@@ -328,6 +328,18 @@ class JobNote < ApplicationRecord
   # applications actually in play out of the wall.
   scope :engaged, -> { where(tag: ENGAGEMENT_DEPTH.keys) }
 
+  # Every beat that means somebody on their side ANSWERED. The engagement
+  # ladder is the one a live process climbs, and it leaves the two settling
+  # tags off because a row carrying either has stopped being live - but a no is
+  # still a reply, and `withdrew` is them pulling out. For the question of
+  # whether anybody ever answered at all, both count.
+  #
+  # What is left over is the whole of a quiet application: his own `applied`
+  # and `responded`, the ATS receipt, and the plain notes a timeline collects.
+  ANSWERED_TAGS = (ENGAGEMENT_DEPTH.keys + %w[rejected withdrew]).freeze
+
+  scope :answered, -> { where(tag: ANSWERED_TAGS) }
+
   # Owed now: due today in THEIR day, or already missed.
   #
   # The zone is the whole of it. There is no `config.time_zone`, so a bare

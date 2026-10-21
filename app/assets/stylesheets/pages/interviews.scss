@@ -257,6 +257,29 @@
     }
   }
 
+  // ---- Never answered --------------------------------------------------
+  // A caption under the standing panel rather than a panel of its own. It is
+  // the one figure here that asks for nothing, and giving it a border would
+  // put it on a level with the three strips above that are all obligations.
+  .interview-silence {
+    margin: 0 0 6px;
+    padding: 2px 14px;
+    color: var(--iv-muted);
+    font-size: 13px;
+
+    strong {
+      color: var(--iv-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .field-hint {
+      &::before {
+        content: "\00b7";
+        padding-right: 6px;
+      }
+    }
+  }
+
   // ---- Search ----------------------------------------------------------
   .interview-search {
     display: flex;

@@ -500,28 +500,50 @@ RSpec.describe Buddy::WatchMatcher do
       end
 
       # The shape remind_when's description hands out for every arrival and
-      # departure, phone and car alike.
+      # departure, phone and car alike, on one watch.
       describe "on a travel leg" do
         let(:template) {
           '{% if source == "tesla" %}🚗 Car{% else %}📱 Phone{% endif %}: ' \
             '{{ action | capitalize }} {% if action == "arrived" %}at {% endif %}{{ location }}'
         }
+        let(:phone) { { "action" => "arrived", "location" => "Home", "source" => "phone" } }
+        let(:car)   { { "action" => "departed", "location" => "Costco", "source" => "tesla" } }
 
-        it "names the phone arriving" do
-          line = announce(template, { "action" => "arrived", "location" => "Home", "source" => "phone" }, scope: :travel)
-
-          expect(line).to eq("📱 Phone: Arrived at Home")
+        def travel_watch(listener)
+          make_watch(trigger_scope: "travel", listener: listener, body: template, one_shot: false)
         end
 
-        # The car's own scope comes from a Jil task, so it is only watchable
-        # where a task listens on it.
-        it "names the car leaving" do
-          allow(Jil::ListenerMatch).to receive(:wired_scopes).and_return(["tesla_travel"])
-          line = announce(
-            template, { "action" => "departed", "location" => "Costco", "source" => "tesla" }, scope: :tesla_travel
-          )
+        it "names the phone arriving" do
+          travel_watch("travel source::OR(phone tesla)")
+          described_class.dispatch(user, :travel, phone)
 
-          expect(line).to eq("🚗 Car: Departed Costco")
+          expect(lines.last).to eq("📱 Phone: Arrived at Home")
+        end
+
+        # The car reports on its own scope, and a watch naming it hears that.
+        it "names the car leaving" do
+          travel_watch("travel source::OR(phone tesla)")
+          described_class.bust_scope_cache!
+          described_class.dispatch(user, :tesla_travel, car)
+
+          expect(lines.last).to eq("🚗 Car: Departed Costco")
+        end
+
+        it "keeps the car out of a watch that only names the phone" do
+          travel_watch("travel source::phone")
+          described_class.bust_scope_cache!
+
+          expect { described_class.dispatch(user, :tesla_travel, car) }.not_to(change { lines.length })
+        end
+
+        # Arriving somewhere is the PERSON getting there; the car pulling in
+        # without them is not that.
+        it "keeps the car out of an ordinary arrival watch" do
+          travel_watch("travel:action::arrived")
+          described_class.bust_scope_cache!
+
+          expect { described_class.dispatch(user, :tesla_travel, car.merge("action" => "arrived")) }
+            .not_to(change { lines.length })
         end
       end
 

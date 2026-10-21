@@ -212,6 +212,43 @@ module Buddy
       false
     end
 
+    # Rebuild a pending form from the tool, as it would be posted now. A form
+    # whose spec carries `refresh:` runs that first - a prompt's load step, which
+    # is what fills in choices that are only known at the moment it's opened.
+    # Values already typed live in the browser's draft and survive the repaint.
+    #
+    # Returns the message, or nil when the form is no longer pending or the
+    # tool can't build it any more.
+    def refresh!(action)
+      return nil unless action&.pending?
+
+      tool = Buddy::Tools[action.tool_input.to_h["tool_name"].to_s.to_sym]
+      spec = tool&.dig(:form)
+      return nil if spec.nil?
+
+      message = action.byte_message
+      return nil if message.nil?
+
+      payload = action.tool_input.to_h["payload"].to_h.symbolize_keys
+      ctx     = Buddy::ToolContext.new(action.user, conversation: action.byte_conversation)
+      spec[:refresh]&.call(payload, ctx)
+      fields = Buddy::FormFields.normalize(spec[:fields].call(payload, ctx)).map { |f| f.transform_keys(&:to_s) }
+      named  = spec[:title]
+      title  = (named.respond_to?(:call) ? named.call(payload, ctx) : named).to_s.presence
+
+      action.update!(buttons: fields)
+      form = message.metadata.to_h["form"].to_h.merge("fields" => fields)
+      message.update!(body: title || message.body, metadata: message.metadata.merge("form" => form))
+      broadcast(action.user, message.reload)
+      message
+    rescue StandardError => e
+      # The fields proc is the resolver, so a prompt answered somewhere else
+      # raises here. That is a normal outcome every time an old form is shown,
+      # not an error worth announcing.
+      Rails.logger.warn("[Buddy::FormAction] refresh failed: #{e.class}: #{e.message}")
+      nil
+    end
+
     class << self
       private
 
@@ -324,6 +361,8 @@ module Buddy
             "fields"  => fields.map { |f| f.transform_keys(&:to_s) },
             "actions" => Buddy::FormFields.buttons(spec),
             "status"  => "pending",
+            # Asked to rebuild itself when it's shown, and offers a button to.
+            "refresh" => spec[:refresh].present?,
           },
         }
       end

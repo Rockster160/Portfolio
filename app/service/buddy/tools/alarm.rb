@@ -46,6 +46,8 @@ Buddy::Tools.register(
 
     `trigger` picks the condition, exactly as it does for `remind_when`:
       "arrive" / "depart" - a place. `target` = the place name.
+      "travel" - every arrival and departure anywhere. `target` = "phone",
+                 "car" or "both".
       "chore"  - a chore being marked done. `target` = the chore name.
       "event"  - an activity being logged. `target` = the event name.
       "agenda" - something added to a calendar. `target` = the calendar name.

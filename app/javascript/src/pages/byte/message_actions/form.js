@@ -28,6 +28,17 @@ import {
 // be worse than none.
 const DRAFTS = new Map();
 
+// requestIds with a refresh in flight, so a repaint that lands mid-request
+// keeps the arrows turning. And the ones already refreshed on being shown,
+// since a history refetch repaints every message and each would ask again.
+const REFRESHING = new Set();
+const SHOWN = new Set();
+
+const REFRESH_ICON = `
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+    <path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"/>
+  </svg>`;
+
 const INPUT_TYPES = {
   text: "text",
   // Not "number" — that widget refuses "1:32" and "1h 32" as they are typed.
@@ -106,6 +117,17 @@ export function renderForm(container, message) {
         ? "expired"
         : "pending";
 
+  // A form that fills itself in when it's opened. What it was posted with
+  // shows straight away and is rebuilt behind it, so nothing waits on this.
+  const refreshable = !locked && form.refresh && requestId;
+  if (refreshable) {
+    container.appendChild(refreshButton(requestId));
+    if (!SHOWN.has(requestId)) {
+      SHOWN.add(requestId);
+      setTimeout(() => refreshForm(requestId), 0);
+    }
+  }
+
   form.fields.forEach((field) => {
     if (field.type === "hidden") return;
     const row = buildRow(field, { draft, locked });
@@ -146,6 +168,47 @@ export function renderForm(container, message) {
 
   container.appendChild(footer);
   return true;
+}
+
+function refreshButton(requestId) {
+  const bar = document.createElement("div");
+  bar.className = "byte-msg-form-top";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "byte-msg-form-refresh";
+  button.dataset.refreshFor = requestId;
+  button.title = "Refresh";
+  button.setAttribute("aria-label", "Refresh");
+  button.innerHTML = REFRESH_ICON;
+  paintRefreshing(button, REFRESHING.has(requestId));
+  button.addEventListener("click", () => refreshForm(requestId));
+  bar.appendChild(button);
+  return bar;
+}
+
+function paintRefreshing(button, on) {
+  button.classList.toggle("is-reloading", on);
+  button.setAttribute("aria-busy", on ? "true" : "false");
+}
+
+// The server rebuilds the form and broadcasts it, which repaints this message
+// the same way any update does. The button can be a different node by the
+// time the answer comes back, so it is found again rather than held.
+async function refreshForm(requestId) {
+  if (REFRESHING.has(requestId)) return;
+
+  const buttons = () =>
+    document.querySelectorAll(`[data-refresh-for="${CSS.escape(requestId)}"]`);
+  REFRESHING.add(requestId);
+  buttons().forEach((b) => paintRefreshing(b, true));
+  try {
+    await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/refresh`, "POST");
+  } catch (e) {
+    console.warn("[byte] form refresh failed", e);
+  } finally {
+    REFRESHING.delete(requestId);
+    buttons().forEach((b) => paintRefreshing(b, false));
+  }
 }
 
 // The footer buttons, in the order the server put them: alternates first, the

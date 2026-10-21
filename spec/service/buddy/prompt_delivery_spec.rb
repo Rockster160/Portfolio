@@ -123,6 +123,43 @@ RSpec.describe Buddy::PromptDelivery do
 
   # Submitting in the thread has to be worth as much as submitting in the app:
   # same response shape, same completion trigger behind it.
+  # Some prompts fill their choices in as they're opened, on `prompt:load`.
+  # The form in the thread runs the same step and rebuilds from what it left.
+  describe "refreshing the form" do
+    let(:action) { described_class.post!(user, prompt) }
+
+    before do
+      allow(Jil).to receive(:trigger).and_call_original
+      allow(Jil).to receive(:trigger).with(user, :prompt, anything, auth: :trigger) { |_, _, data|
+        next unless data[:state] == :load
+
+        prompt.update!(
+          question: "Who did: Puppy Up?",
+          options:  [{ type: :select, question: "Who did it?", choices: %w[Rockster160 Eve], default: "" }],
+        )
+      }
+    end
+
+    it "asks to be refreshed when it's shown" do
+      expect(action.byte_message.metadata.dig("form", "refresh")).to be(true)
+    end
+
+    it "runs the prompt's load step and repaints the fields and the title" do
+      message = Buddy::FormAction.refresh!(action)
+
+      expect(message.body).to eq("Who did: Puppy Up?")
+      expect(message.metadata.dig("form", "fields").pluck("key")).to eq(["Who did it?"])
+      expect(action.reload.buttons.first["choices"]).to eq(%w[Rockster160 Eve])
+      expect(message.metadata.dig("form", "status")).to eq("pending")
+    end
+
+    it "leaves a form that's already been answered alone" do
+      action.update!(state: :decided)
+
+      expect(Buddy::FormAction.refresh!(action)).to be_nil
+    end
+  end
+
   describe "submitting it from the thread" do
     it "writes the answer onto the prompt and fires the completion trigger" do
       action = described_class.post!(user, prompt)

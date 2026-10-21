@@ -507,6 +507,69 @@ RSpec.describe JobApplication do
     end
   end
 
+  describe "the silence" do
+    it "counts an application a machine receipted and nobody answered" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :note, body: "job alert digest", occurred_at: 1.day.ago)
+
+      expect(JobApplication.silence_for(user)).to eq(total: 1, recent: 1)
+    end
+
+    it "counts his own nudge as nothing - a reply has to come from them" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :responded, body: "Nudged them", occurred_at: 1.day.ago)
+
+      expect(JobApplication.silence_for(user)[:total]).to eq(1)
+    end
+
+    it "drops one the moment a person on their side writes" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+
+      expect(JobApplication.silence_for(user)).to eq(total: 0, recent: 0)
+    end
+
+    # A no is still an answer, which is what keeps the figure honest: the
+    # engagement ladder leaves these two off because they settle the row.
+    it "drops a rejection and a withdrawal" do
+      JobNote::IMPLIED_STATUS.slice("rejected", "withdrew").each_key do |tag|
+        job = user.job_applications.create!(company: "Reserv #{tag}")
+        job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+        job.notes.create!(tag: tag, occurred_at: 1.day.ago)
+      end
+
+      expect(JobApplication.silence_for(user)[:total]).to eq(0)
+    end
+
+    it "leaves an older one out of the month figure but in the total" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.months.ago)
+
+      expect(JobApplication.silence_for(user)).to eq(total: 1, recent: 0)
+    end
+
+    # The row whose `applied` beat was never written: the timeline starts at the
+    # receipt, and the receipt is the same day as the application.
+    it "dates one with no applied beat from whatever it does have" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :acknowledged, occurred_at: 2.days.ago)
+
+      expect(JobApplication.silence_for(user)).to eq(total: 1, recent: 1)
+      expect(job.applied_at).to be_within(1.second).of(job.notes.first.occurred_at)
+    end
+
+    it "reaches nobody else's board" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 1.day.ago)
+
+      expect(JobApplication.silence_for(create(:user))).to eq(total: 0, recent: 0)
+    end
+  end
+
   describe "how the whole application has felt" do
     let(:job) { user.job_applications.create!(company: "Reserv") }
 

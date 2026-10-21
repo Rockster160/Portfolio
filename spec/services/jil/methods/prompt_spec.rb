@@ -55,6 +55,58 @@ RSpec.describe Jil::Methods::Prompt do
     end
   end
 
+  # The Buddy thread is where prompts are answered, unless the prompt says it
+  # stays on /prompts.
+  describe "#create in the Buddy thread" do
+    let!(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current) }
+    let(:data) { %(Hash.keyval("action_event_id", 7)::Hash) }
+    let(:code) {
+      <<-JIL
+        params = #{data}
+        p = Prompt.create("How was your shower, sir?", params, {
+          q = PromptQuestion.text("Notes", "")::PromptQuestion
+        }, true)::Prompt
+      JIL
+    }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow_any_instance_of(described_class).to receive(:broadcast_push)
+      allow(WebPushNotifications).to receive(:send_to_byte)
+    end
+
+    def forms
+      ByteAction.where(byte_conversation: conversation, tool_name: Buddy::FormAction::TOOL_NAME)
+    end
+
+    it "posts it as a form, which pushes instead of the /prompts link" do
+      expect_any_instance_of(described_class).not_to receive(:broadcast_push)
+      expect_successful_jil
+
+      expect(forms.map { |a| a.tool_input.dig("payload", "id") }).to eq([Prompt.last.id])
+      expect(WebPushNotifications).to have_received(:send_to_byte)
+    end
+
+    context "when it is kept in the app" do
+      let(:data) {
+        <<~JIL.strip
+          Hash.new({
+              k1 = Keyval.new("action_event_id", 7)::Keyval
+              k2 = Keyval.new("app_only", true)::Keyval
+            })::Hash
+        JIL
+      }
+
+      it "stays out of the thread and pushes the /prompts link" do
+        expect_any_instance_of(described_class).to receive(:broadcast_push)
+        expect_successful_jil
+
+        expect(forms).to be_empty
+        expect(WebPushNotifications).not_to have_received(:send_to_byte)
+      end
+    end
+  end
+
   describe "#chips" do
     let(:code) {
       <<-JIL

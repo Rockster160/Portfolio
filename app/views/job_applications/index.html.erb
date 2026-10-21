@@ -143,6 +143,24 @@
           </div>
         <% end %>
 
+        <%# The exact complement of the table above, and the number a job search
+           mostly consists of: applied, receipted by a machine, never answered
+           by anybody. A figure rather than a list - there is nothing to do
+           about any one of them, and eighty rows would bury the four that are
+           moving.
+
+           The second number is what makes the first readable. Most of a recent
+           batch has simply not had time yet, so a big total with a big recent
+           share inside it is a normal week rather than a dead board. %>
+        <% if @silence[:total].positive? %>
+          <div class="interview-silence">
+            <strong><%= @silence[:total] %></strong> never answered
+            <span class="field-hint">
+              <%= @silence[:recent] %> of them applied in the past month
+            </span>
+          </div>
+        <% end %>
+
         <%# One form for both halves of "pick a job, or name a new one, then
            write the note". The controller decides which happened, so this
            still works if the fieldset toggle never runs. %>

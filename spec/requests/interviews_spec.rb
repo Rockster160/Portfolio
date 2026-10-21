@@ -315,6 +315,55 @@ RSpec.describe "Interview tracker", type: :request do
     end
   end
 
+  describe "the never-answered line" do
+    # The two numbers on the line, flattened: [total, in the past month].
+    def silence_figures
+      line = response.body[/<div class="interview-silence">(.*?)<\/div>/m].to_s
+      line.gsub(/<[^>]+>/, " ").scan(/\d+/).map(&:to_i)
+    end
+
+    it "counts one nobody has answered, and dates it from the application" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 3.days.ago)
+
+      get interviews_path
+
+      expect(silence_figures).to eq([1, 1])
+    end
+
+    it "holds an old one in the total and out of the month" do
+      old = user.job_applications.create!(company: "Reserv")
+      old.notes.create!(tag: :applied, occurred_at: 3.months.ago)
+      fresh = user.job_applications.create!(company: "Bluestaq")
+      fresh.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(silence_figures).to eq([2, 1])
+    end
+
+    it "says nothing when every application has been answered" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+
+      get interviews_path
+
+      expect(response.body).not_to include("never answered")
+    end
+
+    # A fact about the whole board, like the strips above it.
+    it "ignores the status chip and the search box" do
+      job = user.job_applications.create!(company: "Reserv")
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago)
+
+      get interviews_path(status: :rejected, q: "nothing matches this")
+
+      expect(silence_figures).to eq([1, 1])
+    end
+  end
+
   describe "GET /interviews?q=" do
     let!(:netflix) { user.job_applications.create!(company: "Netflix") }
     let!(:anrok) { user.job_applications.create!(company: "Anrok") }

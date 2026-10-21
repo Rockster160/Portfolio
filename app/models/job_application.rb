@@ -46,6 +46,7 @@ class JobApplication < ApplicationRecord
   scope :live,    -> { where(status: LIVE_STATUSES) }
   scope :ordered, -> { order(Arel.sql("COALESCE(last_activity_at, created_at) DESC")) }
   scope :engaged, -> { where(id: JobNote.engaged.select(:job_application_id)) }
+  scope :unanswered, -> { where.not(id: JobNote.answered.select(:job_application_id)) }
 
   # The site's autogen palette. A colour is assigned at creation rather than
   # derived at render, because it also rides along onto the calendar and a
@@ -175,6 +176,33 @@ class JobApplication < ApplicationRecord
   def self.in_play_for(user)
     jobs = user.job_applications.live.engaged.includes(:notes).to_a
     jobs.sort_by { |job| [-job.engagement_depth, -job.engaged_at.to_i, -job.id] }
+  end
+
+  # How much of the board nobody ever answered, in total and among the ones
+  # that went in recently.
+  #
+  # The number most of a job search actually consists of, and the one nothing
+  # on this page said: the wall sorts by what touched a row last, a job-alert
+  # digest touches a row, and `in_play_for` above deliberately shows only the
+  # handful where something is happening. This is its complement.
+  #
+  # Both figures, because the big one on its own is unreadable - a batch sent
+  # last week has not had time to be answered yet, and without the recent
+  # count there is no telling how much of the silence is simply that.
+  SILENCE_WINDOW = 1.month
+
+  def self.silence_for(user)
+    jobs = user.job_applications.unanswered.includes(:notes).to_a
+    cutoff = SILENCE_WINDOW.ago
+    { total: jobs.size, recent: jobs.count { |job| job.applied_at.after?(cutoff) } }
+  end
+
+  # When this one went in. The `applied` beat where there is one; where there
+  # is not, the timeline starts at the ATS receipt instead, which lands the
+  # same day as the application it is receipting.
+  def applied_at
+    sent = notes.select(&:applied?).map(&:occurred_at).min
+    sent || notes.map(&:occurred_at).min || created_at
   end
 
   # How far this one got, as a rung on JobNote::ENGAGEMENT_DEPTH, or nil when
