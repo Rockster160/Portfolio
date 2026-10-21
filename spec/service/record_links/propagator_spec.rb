@@ -513,6 +513,59 @@ RSpec.describe RecordLinks::Propagator do
       it "still asks who when the event is logged on its own" do
         expect { log_event!("Fae") }.to change { user.prompts.count }.by(1)
       end
+
+      describe "marked done by a housemate" do
+        let(:housemate) { create(:user).tap { |u| ChoreHouseholdMembership.create!(chore_household: household, user: u) } }
+
+        it "logs the event on the account the pairing belongs to, without asking who" do
+          litter.update!(sharing_mode: :household)
+          at = 5.minutes.ago.change(usec: 0)
+          ChoreCompleter.new(litter.reload, housemate, at: at).call
+
+          expect(user.action_events.where(name: "Fae").sole.timestamp).to eq(at)
+          expect(housemate.action_events.count).to eq(0)
+          expect(user.prompts.count).to eq(0)
+        end
+      end
+
+      # Pressed on a board that asks who did it: done by nobody yet, and done.
+      describe "pressed on a board that asks who did it" do
+        let(:housemate) { create(:user).tap { |u| ChoreHouseholdMembership.create!(chore_household: household, user: u) } }
+        let(:pressed_at) { 10.minutes.ago.change(usec: 0) }
+        let!(:prompt) { ChoreWhoDidIt.ask!(user, litter.reload, at: pressed_at) }
+
+        def answer!(at)
+          RecordLinks::Guard.reset!
+          prompt.update!(response: { "Who did it?" => housemate.username, "When?" => at.iso8601 })
+          Jil::Executor.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
+        end
+
+        it "logs the event at the press, before anyone answers" do
+          expect(user.action_events.where(name: "Fae").sole.timestamp).to eq(pressed_at)
+          expect(user.prompts.count).to eq(1)
+        end
+
+        it "keeps the one event when the answer lands on the press time" do
+          answer!(pressed_at)
+
+          expect(user.action_events.where(name: "Fae").count).to eq(1)
+          expect(litter.reload.chore_completions.sole.user_id).to eq(housemate.id)
+        end
+
+        it "moves the event to an answered time instead of logging another" do
+          answered = 1.hour.ago.change(usec: 0)
+          answer!(answered)
+
+          expect(user.action_events.where(name: "Fae").sole.timestamp).to eq(answered)
+        end
+
+        it "takes the event back when the press is undone" do
+          ChoreCompletionUndoer.call(user, ChoreCompletion.find(prompt.params["completion_id"]))
+
+          expect(user.action_events.where(name: "Fae").count).to eq(0)
+          expect(Prompt.exists?(prompt.id)).to be(false)
+        end
+      end
     end
   end
 

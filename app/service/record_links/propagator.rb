@@ -129,11 +129,13 @@ module RecordLinks
         # event is the uphill record of that completion (see
         # `sync_completion_event`) - the completer is known, so there is nothing
         # to ask. An event logged on its own, with no completion yet, still
-        # prompts.
+        # prompts. The completion can be a housemate's, so it's looked for
+        # on everybody's account.
         # A stand-in from an earlier question attributes nothing.
-        leaf = chore.completion_leaf_for(user)
-        partner = completion_partner(user, leaf, parse_time(event.timestamp))
-        return nil if partner && partner.skipped_reason != ::ChoreWhoDidIt::WAITING
+        at = parse_time(event.timestamp)
+        done = ::ChoreCompletion.where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
+        done = done.where(completed_at: (at - WINDOW)..(at + WINDOW)) if at
+        return nil if at && done.exists?(["skipped_reason IS DISTINCT FROM ?", ::ChoreWhoDidIt::WAITING])
 
         return ask_who(user, link, event)
       end
@@ -216,30 +218,45 @@ module RecordLinks
       chore = completion.chore
       return if chore.nil?
       # The chore_completion trigger fans out to every household member so each
-      # one's own automations fire, but the event belongs to whoever actually did
-      # it - log it once, on the completer's account, through the completer's own
-      # pairings. A housemate's board press is still their doing here.
-      return unless user.id == completion.user_id
+      # one's own automations fire. The event is logged once, by the one account
+      # whose pairing it goes through (see `uphill_logger_id`).
+      return unless user.id == uphill_logger_id(completion)
 
-      names = [chore.name, chore.parent_chore&.name].compact.map(&:to_s)
-      all_up = RecordLink.live.source_event.target_chore.where(user_id: user.id).to_a
-      link = all_up
-        .select { |l| l.reverse? && names.any? { |n| l.target_name.to_s.casecmp?(n) } }
-        .min_by(&:id)
+      link = uphill_link(user.id, chore)
       return if link.nil?
-
-      # Skip an event shared across chores - it can't round-trip without ticking
-      # the others.
-      fan_out = all_up.count { |l|
-        l.source_name.to_s.casecmp?(link.source_name.to_s) &&
-          l.source_scope.to_s.casecmp?(link.source_scope.to_s)
-      }
-      return if fan_out > 1
 
       case action
       when :completed   then log_completion_event(user, link, completion)
       when :uncompleted then remove_completion_event(user, link, completion)
       end
+    end
+
+    # The account that logs a completion's event: the completer's own pairing
+    # first, then the recorder's, then any housemate's on a shared chore. A
+    # pairing set up on one account still hears a chore its housemate marks
+    # done, and the event goes where that account's automations listen.
+    def uphill_logger_id(completion)
+      chore = completion.chore
+      ids = [completion.user_id, completion.recorded_by_user_id]
+      ids += ::ChoreHousehold.find_by(id: chore.chore_household_id)&.member_user_ids.to_a.sort if chore.share_household?
+      ids.compact.uniq.find { |id| uphill_link(id, chore) }
+    end
+
+    # The reverse pairing a completion of `chore` runs up through on this
+    # account, or nil. Only an event that maps to exactly one chore - a shared
+    # event can't round-trip without ticking the others.
+    def uphill_link(user_id, chore)
+      names = [chore.name, chore.parent_chore&.name].compact.map(&:to_s)
+      all_up = RecordLink.live.source_event.target_chore.where(user_id: user_id).to_a
+      paired = all_up.select { |l| l.reverse? && names.any? { |n| l.target_name.to_s.casecmp?(n) } }
+      link = paired.min_by(&:id)
+      return nil if link.nil?
+
+      fan_out = all_up.count { |l|
+        l.source_name.to_s.casecmp?(link.source_name.to_s) &&
+          l.source_scope.to_s.casecmp?(link.source_scope.to_s)
+      }
+      fan_out > 1 ? nil : link
     end
 
     def log_completion_event(user, link, completion)
@@ -252,6 +269,24 @@ module RecordLinks
       event = user.action_events.create!(uphill_event_attrs(user, link).merge(timestamp: at))
       ::ActionEventNotifier.notify(user, event, :added, auth: :link)
       true
+    end
+
+    # A "who did it?" stand-in is the chore done, so its event is logged as soon
+    # as it's put up, not once somebody answers. The event's id goes on the
+    # question before anything hears about it, so the event's own cascade sees
+    # the question is already asked, the answer moves the event to the answered
+    # time, and taking the stand-in back takes the event with it.
+    def log_stand_in_event(user, completion, prompt)
+      link = uphill_link(user.id, completion.chore)
+      return nil if link.nil?
+
+      at = completion.completed_at
+      return nil unless event_partner(user, link.source_name, link.source_scope, at).nil?
+
+      event = user.action_events.create!(uphill_event_attrs(user, link).merge(timestamp: at))
+      prompt.update!(params: prompt.params.merge("event_id" => event.id, "scope" => link.source_scope, "logged_event" => true))
+      ::ActionEventNotifier.notify(user, event, :added, auth: :link)
+      event
     end
 
     # What to log when a direct completion runs uphill. `source_name` and
@@ -609,14 +644,10 @@ module RecordLinks
       # the completion existed, so the completion's own cascade — tick off the
       # agenda task, take the item off the list — found it already visited and
       # did nothing. The chore rung guards itself in `on_completion`.
-      Guard.visiting([:prompt, prompt.try(:id)]) {
-        at = ::ChoreWhoDidIt.answer!(user, prompt)
-        # The event keeps its row and takes the answered time. One link per
-        # pairing means there's no earlier completion of it to undo.
-        event_id = prompt.params.to_h.with_indifferent_access[:event_id]
-        event = user.action_events.find_by(id: event_id) if event_id.present?
-        event&.update!(timestamp: at) if at.present?
-      }
+      # The event keeps its row and takes the answered time (ChoreWhoDidIt
+      # moves it). One link per pairing means there's no earlier completion of
+      # it to undo.
+      Guard.visiting([:prompt, prompt.try(:id)]) { ::ChoreWhoDidIt.answer!(user, prompt) }
     end
 
     # ---- shared ----

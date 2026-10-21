@@ -50,6 +50,9 @@ module ChoreWhoDidIt
         { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, at) },
       ],
     )
+    # A press, rather than a logged event, is the chore done with no event
+    # behind it yet.
+    ::RecordLinks::Propagator.log_stand_in_event(user, stand_in, prompt) if extra[:event_id].blank?
     ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
     # Asked where they already are, too: the question is one dropdown over a
     # time that's already right, and the app's prompt page is four steps away.
@@ -96,6 +99,11 @@ module ChoreWhoDidIt
     stand_in = ::ChoreCompletion.find_by(id: params[:completion_id], anonymous: true) if params[:completion_id].present?
     at = answered_time(user, response[WHEN_QUESTION], stand_in)
 
+    # The event the question is about takes the answered time first, so the
+    # completion below finds it as its partner instead of logging a second one.
+    event = user.action_events.find_by(id: params[:event_id]) if params[:event_id].present?
+    event&.update!(timestamp: at)
+
     ::ChoreCompletionUndoer.call(user, stand_in) if stand_in
     leaf = chore.completion_leaf_for(who)
     unless done_already?(leaf, at)
@@ -106,14 +114,28 @@ module ChoreWhoDidIt
 
   # The stand-in was undone before anyone answered, so there's no longer a
   # doing to ask about. Deleting the prompt is what closes the form Buddy posted
-  # for it (see Prompt#settle_buddy_forms). An answered one is left alone - its
-  # stand-in goes as part of the answer.
+  # for it (see Prompt#settle_buddy_forms), and an event logged for the stand-in
+  # goes too. An answered one is left alone - its stand-in goes as part of the
+  # answer.
   def retract!(completion)
     return unless waiting?(completion)
 
     asked = ::Prompt.unanswered.where(user_id: completion.user_id)
     asked = asked.where("params->>'source' = ?", SOURCE)
-    asked.where("params->>'completion_id' = ?", completion.id.to_s).destroy_all
+    asked = asked.where("params->>'completion_id' = ?", completion.id.to_s).to_a
+    asked.each { |prompt| drop_logged_event!(prompt) }
+    asked.each(&:destroy!)
+  end
+
+  def drop_logged_event!(prompt)
+    params = prompt.params.to_h.with_indifferent_access
+    return unless params[:logged_event]
+
+    event = prompt.user.action_events.find_by(id: params[:event_id])
+    return if event.nil?
+
+    event.destroy!
+    ::ActionEventNotifier.notify(prompt.user, event, :removed, auth: :link)
   end
 
   # The answer's time, to the second. The form only holds minutes, so an
