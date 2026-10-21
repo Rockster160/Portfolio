@@ -77,11 +77,12 @@ class Jil::Schema
 
   # Dropdowns whose choices depend on who is looking: `%WHO%` is who a Buddy
   # alert can be for - themselves, everyone, or a household member by name -
-  # and `%FACES%` every face a pet knows.
+  # and `%SYSTEM_FACES%` the faces every pet can wear (the `*` beside it lets
+  # any other face name be typed).
   def fill(line)
     return line unless line.include?("%")
 
-    line.gsub("%WHO%") { quoted(who_choices) }.gsub("%FACES%") { quoted(Buddy::Faces.known_names.sort) }
+    line.gsub("%WHO%") { quoted(who_choices) }.gsub("%SYSTEM_FACES%") { quoted(Buddy::Faces.system_faces) }
   end
 
   def who_choices

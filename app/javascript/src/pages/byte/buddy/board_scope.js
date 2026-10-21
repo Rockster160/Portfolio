@@ -1,6 +1,6 @@
 // A board watches groups (its chore_tags) and shows only the things in those
 // groups — chores, routines and credit buttons do this server-side already.
-// The Whisper feeds (duration rings, sounds, standing alerts) are scoped the
+// The feeds from Jil (status rings, sounds, standing alerts) are scoped the
 // same way: each carries its own groups, and a board shows it only when they
 // overlap what the board watches. The overlap is "any", case-insensitive, like
 // the chore board's.
@@ -36,7 +36,7 @@ export function groupsOverlap(feedGroups, tags) {
 
 // The user who OWNS this board, which is who its feeds have to belong to — not
 // whoever is looking at it. A shared board stays its owner's, so it keeps the
-// owner's Whisper feeds when a housemate opens it; a board the housemate owns,
+// owner's feeds when a housemate opens it; a board the housemate owns,
 // watching the same group name, never picks the owner's feeds up. [] off a board.
 export function boardOwnerId(app) {
   const raw = app?.dataset?.boardOwnerId;

@@ -32,8 +32,22 @@ RSpec.describe "Byte hero face strengths" do
       out.strong_dream = face();
       hero.holdExpression("board-alert", "pounce", FACE_STRENGTH.mood - 5);
       out.weak_alert = face();
-      hero.holdExpression("whisper", "hiding", FACE_STRENGTH.whisper);
-      out.whisper = face();
+      hero.holdExpression("board-mood:busy", { byte: "nerd", tiko: "focused" }, 60);
+      out.held_mood = face();
+      hero.setTheme("tiko");
+      out.held_mood_tiko = face();
+      hero.setTheme("moss");
+      out.held_mood_moss = face();
+
+      hero.holdExpression("sleep", "sleeping", FACE_STRENGTH.sleep);
+      hero.holdExpression("board-alert", "pounce", 100);
+      out.asleep_over_strongest = face();
+      hero.setExpression("thinking", { transient: true });
+      out.asleep_over_thinking = face();
+      hero.flashExpression("grin", 30);
+      out.asleep_over_flash = face();
+      hero.releaseExpression("sleep");
+      out.awake = face();
 
       process.stdout.write(JSON.stringify(out));
     JS
@@ -57,9 +71,21 @@ RSpec.describe "Byte hero face strengths" do
     expect(result["strong_dream"]).to eq("eager")
   end
 
-  it "keeps the stronger face when a weaker alert arrives, and gives way to Whisper's state" do
+  it "keeps the stronger face when a weaker alert arrives, and gives way to a stronger held mood" do
     expect(result["weak_alert"]).to eq("eager")
-    expect(result["whisper"]).to eq("hiding")
+    expect(result["held_mood"]).to eq("nerd")
+  end
+
+  it "wears a held mood as the face of whichever pet is showing, and passes over one with none" do
+    expect(result["held_mood_tiko"]).to eq("focused")
+    expect(result["held_mood_moss"]).to eq("eager")
+  end
+
+  it "shows asleep over everything, the strongest alert and a passing face included" do
+    expect(result["asleep_over_strongest"]).to eq("sleeping")
+    expect(result["asleep_over_thinking"]).to eq("sleeping")
+    expect(result["asleep_over_flash"]).to eq("sleeping")
+    expect(result["awake"]).to eq("pounce")
   end
 
   it "rests on the mood once the dream is gone" do

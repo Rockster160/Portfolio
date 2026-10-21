@@ -16,6 +16,9 @@
 // here too, first, until it's checked off. It's a thing to do rather than a
 // condition, so the pet says it without the shuffle, and while any high item is
 // open the pet holds a surprised face.
+//
+// An alert with a look and no words (Jil's `Buddy.mood`) opens no bubble at
+// all: the pet just wears it, each under its own hold, while it stands.
 
 import { startAlertFlip, stopAlertFlip } from "./alarm";
 import { FACE_STRENGTH, strengthOr } from "./face_strength.js";
@@ -29,6 +32,11 @@ const CYCLE_MS = 5000;
 const ALERT_HOLD = "board-alert";
 const HIGH_HOLD = "board-list-high";
 const HIGH_FACE = "surprised";
+const MOOD_HOLD = "board-mood:";
+
+// The look an alert asks for, one face per pet (BuddyAlert#faces) - a pet
+// missing from it keeps to its own feelings. Null when it asks for none.
+const lookOf = (alert) => alert?.faces || null;
 
 export function initBoardAlert({ bubble, hero, tags }) {
   if (!bubble) return { setAlerts: () => {}, setTags: () => {}, setItems: () => {} };
@@ -41,6 +49,7 @@ export function initBoardAlert({ bubble, hero, tags }) {
   let alerts = [];
   let cycleTimer = 0;
   let index = 0;
+  let moodKeys = new Set();
 
   function stopCycle() {
     if (cycleTimer) {
@@ -74,17 +83,34 @@ export function initBoardAlert({ bubble, hero, tags }) {
     if (alert?.still) {
       stopAlertFlip({ hero });
       hero?.releaseExpression?.(ALERT_HOLD);
-    } else if (alert?.expression) {
+    } else if (lookOf(alert)) {
       stopAlertFlip({ hero });
-      hero?.holdExpression?.(ALERT_HOLD, alert.expression, strengthOr(alert.strength, FACE_STRENGTH.alert));
+      hero?.holdExpression?.(ALERT_HOLD, lookOf(alert), strengthOr(alert.strength, FACE_STRENGTH.alert));
     } else {
       hero?.releaseExpression?.(ALERT_HOLD);
       startAlertFlip({ hero });
     }
   }
 
+  // The moods standing for this board, each held under its own key; one that
+  // has gone is let go.
+  function holdMoods() {
+    const next = new Set();
+    lastAlerts.forEach((a) => {
+      if (!a || a.body || a.dream || !a.faces || !groupsOverlap(a.groups, watched)) return;
+      const key = MOOD_HOLD + a.key;
+      next.add(key);
+      hero?.holdExpression?.(key, a.faces, strengthOr(a.strength, FACE_STRENGTH.alert));
+    });
+    moodKeys.forEach((key) => {
+      if (!next.has(key)) hero?.releaseExpression?.(key);
+    });
+    moodKeys = next;
+  }
+
   function setAlerts(next) {
     if (Array.isArray(next)) lastAlerts = next;
+    holdMoods();
     // Only the alerts aimed at a group this board watches. An alert with no
     // groups belongs to no board — it still stands in the chat strip, just not
     // out here — so an unrelated condition never lights up the Whisper wall.

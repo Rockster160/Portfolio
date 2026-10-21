@@ -9,7 +9,7 @@ RSpec.describe "Face strength parity" do
       process.stdout.write(JSON.stringify(FACE_STRENGTH));
     JS
 
-    ruby = %i[idle dream mood alert whisper sleep].to_h { |name|
+    ruby = %i[idle dream mood alert sleep].to_h { |name|
       [name.to_s, Buddy::FaceStrength.const_get(name.upcase)]
     }
     expect(js).to eq(ruby)

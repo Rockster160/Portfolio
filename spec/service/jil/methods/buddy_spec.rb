@@ -813,7 +813,7 @@ RSpec.describe Jil::Methods::Buddy do
         <<~JIL,
           a = Buddy.dream("food", "Foodies!", {
             aGroups = Keyword.groups("Whisper")::String
-            aFace = Keyword.face("eager")::String
+            aFace = Keyword.face("thinking")::String
             aStrength = Keyword.strength(45)::Numeric
           })::Boolean
           b = Buddy.boardAlert("gate", "Gate open", {
@@ -825,7 +825,7 @@ RSpec.describe Jil::Methods::Buddy do
       run(<<~JIL)
         a = Buddy.dream("food", "Foodies!", {
           aGroups = Keyword.groups("Whisper")::String
-          aFace = Keyword.face("eager")::String
+          aFace = Keyword.face("thinking")::String
           aStrength = Keyword.strength(45)::Numeric
         })::Boolean
         b = Buddy.boardAlert("gate", "Gate open", {
@@ -836,6 +836,99 @@ RSpec.describe Jil::Methods::Buddy do
 
       expect(BuddyAlert.open_for(owner, "food").strength).to eq(45)
       expect(BuddyAlert.open_for(owner, "gate").strength).to eq(Buddy::FaceStrength::ALERT)
+    end
+
+    it "holds a mood with no words, from the axes given, until it is resolved" do
+      code = <<~JIL
+        a = Buddy.mood("busy", {
+          aGroups = Keyword.groups("Whisper")::String
+          aWarmth = Keyword.warmth(0.7)::Slider
+          aPlay = Keyword.play(0.5)::Slider
+          aStrain = Keyword.strain(1.4)::Slider
+          aReach = Keyword.reach(0.1)::Slider
+          aStrength = Keyword.strength(60)::Numeric
+        })::Boolean
+      JIL
+      Jil::Validator.validate!(code)
+      run(code)
+
+      held = BuddyAlert.open_for(owner, "busy")
+      expect(held.body).to eq("")
+      expect(held).to be_board_only
+      expect(held.mood).to eq("warmth" => 0.7, "play" => 0.5, "strain" => 1.0, "reach" => 0.1)
+      expect(held.strength).to eq(60)
+      expect(held.strip_wire["faces"]).to include("byte", "tiko", "moss")
+
+      run(%(a = Buddy.resolve("busy", "", "")::Boolean))
+      expect(BuddyAlert.open_for(owner, "busy")).to be_nil
+    end
+
+    it "takes any face by name, and notes one no pet has without failing" do
+      ran = run(<<~JIL)
+        a = Buddy.boardAlert("gate", "Gate open", {
+          aFace = Keyword.face("eager")::String
+        })::Boolean
+        b = Buddy.mood("typo", {
+          bGroups = Keyword.groups("Whisper")::String
+          bFace = Keyword.face("eagre")::String
+          bStrength = Keyword.strength(30)::Numeric
+        })::Boolean
+      JIL
+
+      expect(ran.ctx[:error]).to be_blank
+      expect(ran.ctx[:output]).to include(%(No pet has a face called "eagre" - they keep to their own feelings))
+      gate = BuddyAlert.open_for(owner, "gate")
+      expect(gate.face_for(:byte)).to eq("eager")
+      expect(gate.face_for(:tiko)).to be_nil
+      typo = BuddyAlert.open_for(owner, "typo")
+      expect(typo).to be_look_only
+      expect(typo.faces).to eq({})
+    end
+
+    it "wears the face where a pet has it, and the mood where it doesn't" do
+      run(<<~JIL)
+        a = Buddy.mood("busy", {
+          aFace = Keyword.face("nerd")::String
+          aWarmth = Keyword.warmth(0.55)::Slider
+          aPlay = Keyword.play(0.05)::Slider
+          aWeight = Keyword.weight(0.2)::Slider
+          aStrain = Keyword.strain(0)::Slider
+          aReach = Keyword.reach(0.05)::Slider
+        })::Boolean
+      JIL
+
+      faces = BuddyAlert.open_for(owner, "busy").faces
+      expect(faces).to include("tiko" => "nerd", "byte" => "nerd", "moss" => "sleeping")
+    end
+
+    it "holds nothing for a mood with no axes, or a board alert with no words" do
+      run(<<~JIL)
+        a = Buddy.mood("busy", {
+          aGroups = Keyword.groups("Whisper")::String
+          aReach = Keyword.reach(0.1)::Slider
+        })::Boolean
+        b = Buddy.boardAlert("gate", "", {
+          bWarmth = Keyword.warmth(0.4)::Slider
+        })::Boolean
+      JIL
+
+      expect(BuddyAlert.where(user: owner, key: %w[busy gate])).to be_empty
+    end
+
+    it "lets an alert carry a mood in place of a face" do
+      run(<<~JIL)
+        a = Buddy.boardAlert("gate", "Gate open", {
+          aGroups = Keyword.groups("Whisper")::String
+          aFace = Keyword.face("pounce")::String
+          aWarmth = Keyword.warmth(0.55)::Slider
+          aPlay = Keyword.play(0.05)::Slider
+          aWeight = Keyword.weight(0.2)::Slider
+          aStrain = Keyword.strain(0)::Slider
+          aReach = Keyword.reach(0.05)::Slider
+        })::Boolean
+      JIL
+
+      expect(BuddyAlert.open_for(owner, "gate").face_for(:byte)).to eq("sleeping")
     end
   end
 end

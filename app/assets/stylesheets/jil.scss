@@ -945,6 +945,19 @@ input.text-security {
   .input-wrapper:has(> textarea) {
     width: 100%;
   }
+  input[type="range"] {
+    width: 100px;
+    vertical-align: middle;
+  }
+  .range-value {
+    display: inline-block;
+    min-width: 2.5em;
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .input-wrapper:not(:has(.selected-tag:empty)) > .range-value {
+    display: none;
+  }
   input[type="number"] {
     width: 40px;
 

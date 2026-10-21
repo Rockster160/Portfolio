@@ -18,9 +18,9 @@ import { FACE_STRENGTH } from "./face_strength.js";
 const ROUTINES_URL = "/buddy/routines";
 
 // Who wins when several things want the face at once is a matter of strength
-// (see face_strength.js): asleep over Whisper's state over an alert's face over
-// a real mood over a dream's face over an idle mood, unless an alert or dream
-// was raised with a strength of its own.
+// (see face_strength.js): asleep over an alert's face over a real mood over a
+// dream's face over an idle mood, unless an alert, mood or dream was raised
+// with a strength of its own.
 export { FACE_STRENGTH } from "./face_strength.js";
 
 function csrfToken() {
@@ -108,7 +108,7 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   //      resting default. A new mood or the idle reset changes it. A transient
   //      paint never updates it; a real one does.
   //   2. a HELD STATE — a condition that is TRUE RIGHT NOW and has to show
-  //      until it stops being true: asleep, the Whisper hiding, the laundry
+  //      until it stops being true: asleep, a mood a task holds, the laundry
   //      gate open ("up to no good"). Keyed, so several can stand at once; the
   //      strongest wins and the mood underneath is remembered, not shown. The
   //      whole point is that a held state SURVIVES a mood change, the idle
@@ -121,8 +121,13 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
 
   // key → { expression, strength }. The strongest showing; a later hold at
   // equal strength wins the tie (Map keeps insertion order). Empty = no state
-  // stands and the mood shows.
+  // stands and the mood shows. `expression` is a face, or { theme → face } for
+  // a mood each pet answers with its own (Buddy::Moods), read for whichever
+  // pet is showing.
   const holds = new Map();
+
+  const heldFace = (h) =>
+    typeof h.expression === "string" ? h.expression : h.expression[hero.dataset.buddyTheme];
 
   // What SHOULD show when nothing transient is over it: the strongest hold, if
   // it is at least as strong as the mood, else the mood. A resting mood wants
@@ -130,13 +135,25 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   const effectiveExpression = () => {
     let best = null;
     holds.forEach((h) => {
+      if (!heldFace(h)) return;
       if (!best || h.strength >= best.strength) best = h;
     });
     const mood = restingExpression === IDLE_FACE ? FACE_STRENGTH.idle : FACE_STRENGTH.mood;
-    return best && best.strength >= mood ? best.expression : restingExpression;
+    return best && best.strength >= mood ? heldFace(best) : restingExpression;
   };
 
-  const paint = (expression) => {
+  // A hold at sleep strength (Buddy asleep) is shown over everything, even a
+  // passing face like thinking or a flash.
+  const absoluteFace = () => {
+    let face = null;
+    holds.forEach((h) => {
+      if (h.strength >= FACE_STRENGTH.sleep && heldFace(h)) face = heldFace(h);
+    });
+    return face;
+  };
+
+  const paint = (wanted) => {
+    const expression = absoluteFace() || wanted;
     hero.dataset.buddyExpression = String(expression);
     if (charEl) charEl.dataset.buddyExpression = String(expression);
     // The face is a single data-driven image, not a per-theme CSS rule: look up
@@ -188,13 +205,14 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
     paint(expression);
   };
 
-  // Raise a face the pet wears until it's cleared — asleep, the Whisper hiding,
+  // Raise a face the pet wears until it's cleared — asleep, a task's mood,
   // a board alert's look, a dream's. `key` names it so it can be lifted again;
   // `strength` decides who wins against the other holds and the mood (see
   // FACE_STRENGTH). Re-raising the same key updates it.
   const holdExpression = (key, expression, strength = FACE_STRENGTH.alert) => {
     if (!key || !expression) return;
-    holds.set(String(key), { expression: String(expression), strength: Number(strength) });
+    const face = typeof expression === "object" ? { ...expression } : String(expression);
+    holds.set(String(key), { expression: face, strength: Number(strength) });
     settle();
   };
 
@@ -302,10 +320,13 @@ export function initBuddyHero({ hero, menu, menuToggle, conversationIdFn, onStas
   // previewed without touching the persisted user theme. The face is this pet's
   // own art, so repaint the current expression or the previous pet's face would
   // stay on screen.
+  // A held mood may be a different face on the new pet, so what was settled
+  // is settled again; a transient overlay stays as it is.
   const setTheme = (theme) => {
     if (!theme) return;
+    const settled = hero.dataset.buddyExpression === effectiveExpression();
     hero.dataset.buddyTheme = String(theme);
-    paint(hero.dataset.buddyExpression || restingExpression);
+    paint(settled ? effectiveExpression() : hero.dataset.buddyExpression || restingExpression);
   };
 
   // Reflect the live theme + expression back onto the picker buttons, and

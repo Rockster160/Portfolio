@@ -1,19 +1,18 @@
-// Whisper duration rings, on the board. The wall tablet that used to run the
-// Whisper PWA is now this board, so it shows the same status rings — how long
-// she has been out, how long until the next nap, a quiet window, a kennel
-// check. Server-authoritative: Jil task 229 "Whisper Duration Monitor"
-// broadcasts { status, timers: [{ key, last, next }], sound? } on the
-// "whisper-durations" channel; this is pure presentation off that stream.
+// Status rings on the board: countdowns a Jil task keeps up to date, each a
+// ring that fills as its time runs. Server-authoritative: a task broadcasts
+// { timers: [{ key, label, last, next, sound?, hush?, color? }], groups } on the
+// "board-rings" channel and this is pure presentation off that stream.
 //
-// A faithful port of the ring half of pages/whisper.js — same geometry (r=45 in
-// a 100 viewBox), same readout (whole minutes, then :Ns in the final minute,
-// negative when overdue), same per-key states (overdue pulse, quiet greys the
-// others, kennel maroon), and the same sounds: a ring that runs out plays its
-// key's tune (the nap ring, the nap sound) and again every five minutes while
-// it stays overdue, held during quiet mode; and a Jil task broadcasting
-// { sound } plays that one. One deliberate difference: the row hides itself
-// when there are no timers (sleeping / gone broadcasts an empty list), so an
-// idle board shows the pet alone.
+// Geometry is r=45 in a 100 viewBox. The readout is whole minutes, then :Ns in
+// the final minute, negative once overdue. Everything a ring DOES comes with it,
+// so nothing here knows what any ring is for:
+//   sound - the tune it plays when it runs out (see buddy/sound.js), and again
+//           every five minutes while it stays overdue. None means it's silent.
+//   hush  - while it is counting, the board is hushed: every other ring greys
+//           and their sounds are held. When it ends the feed is asked again.
+//   color - its own colour, kept through a hush and never pulsing when overdue.
+// The row hides itself when there are no timers, so an idle board shows the
+// pet alone.
 //
 // This is entirely separate from buddy/timers.js (the countdown-timer banner) —
 // different data, different element, neither touches the other.
@@ -23,6 +22,7 @@ import { Time } from "../../dashboard/cells/_time";
 import { playBoardSound } from "./sound";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./board_scope";
 
+const CHANNEL = "board-rings";
 const CIRCUMFERENCE = 2 * Math.PI * 45;
 
 // Whole minutes while more than a minute is left, a seconds count in the final
@@ -35,7 +35,7 @@ function formatRemaining(seconds) {
   return `${sign}${m}m`;
 }
 
-export function initBoardDurations({ container, app, onStatus }) {
+export function initBoardRings({ container, app }) {
   if (!container) return { refresh() {}, setTags() {} };
 
   // Read fresh on every use, not captured once: the watched groups can change
@@ -43,23 +43,20 @@ export function initBoardDurations({ container, app, onStatus }) {
   let tags = boardTags(app);
   // Fixed for the life of the board: who it belongs to. A feed only shows here
   // if it's this owner's, so a shared board stays the owner's while a housemate's
-  // own "Whisper" board never picks the owner's feeds up.
+  // own board watching the same group never picks the owner's feeds up.
   const boardOwner = boardOwnerId(app);
   let timers = [];
-  let wasQuietActive = false;
+  let wasHushed = false;
   // The repeating sound for each overdue ring, by key.
   const ringAlarms = {};
   // Whether the feed's most recent groups overlap what this board watches AND it
-  // belongs to this board's owner. The sound-only broadcasts carry no groups, so
-  // they ride this last-known verdict from the duration broadcasts (229), which
-  // run on every whisper event.
+  // belongs to this board's owner.
   let channelMatches = false;
-  // The last broadcast's groups, owner, timers and status, kept so a live tag
-  // change can re-decide the match and repaint without waiting for the next one.
+  // The last broadcast's groups, owner and timers, kept so a live tag change can
+  // re-decide the match and repaint without waiting for the next one.
   let lastGroups;
   let lastOwnerId;
   let lastTimers = [];
-  let lastStatus;
 
   // Groups overlap AND the feed is this board's owner's — the whole gate, in one
   // place so the broadcast path and a live tag change decide it identically.
@@ -67,24 +64,9 @@ export function initBoardDurations({ container, app, onStatus }) {
     return groupsOverlap(lastGroups, tags) && feedOwnerMatches(lastOwnerId, boardOwner);
   }
 
-  // Whisper's own state, parsed from the broadcast status string ("Awake ☀️",
-  // "Napping 💤", "🛏️ Sleeping", "Gone 👋"), so the board's pet can mirror it.
-  function whisperState(status) {
-    const s = String(status || "").toLowerCase();
-    if (/gone/.test(s)) return "gone";
-    if (/sleep|nap/.test(s)) return "asleep";
-    if (/awake/.test(s)) return "awake";
-    return null;
-  }
-
-  // Push the current match + status out to the pet and the rings. Called from a
-  // broadcast and from a live tag change, so both paths render identically.
   function reconcile() {
     syncTimers(channelMatches ? lastTimers : []);
-    updateAllDurations();
-    // Only a board that watches this feed wears Whisper's state; every other
-    // board hears the same channel and must ignore it.
-    onStatus?.(channelMatches ? whisperState(lastStatus) : null);
+    updateAllRings();
   }
 
   function createRingElement(key, label) {
@@ -124,6 +106,15 @@ export function initBoardDurations({ container, app, onStatus }) {
         labelEl.textContent = timerData.label;
       }
 
+      // A ring with a colour of its own wears it, and keeps it through a hush.
+      if (timerData.color) {
+        item.dataset.ringColor = "true";
+        item.style.setProperty("--ring-color", timerData.color);
+      } else {
+        delete item.dataset.ringColor;
+        item.style.removeProperty("--ring-color");
+      }
+
       const atIndex = container.children[index];
       if (atIndex !== item) {
         if (atIndex) container.insertBefore(item, atIndex);
@@ -135,7 +126,7 @@ export function initBoardDurations({ container, app, onStatus }) {
     container.hidden = timers.length === 0;
   }
 
-  function updateDurationRing(timerData) {
+  function updateRing(timerData) {
     const ringEl = container.querySelector(
       `[data-duration-key="${timerData.key}"]`,
     );
@@ -165,51 +156,54 @@ export function initBoardDurations({ container, app, onStatus }) {
     return remaining;
   }
 
-  // The Whisper page's ring alarms: a ring running out plays its key's sound,
-  // then again every five minutes until it's reset. Quiet mode holds them all;
-  // the quiet, out and kennel rings count time rather than ask for anything.
-  function soundOverdue(overdueKeys, quietActive) {
-    overdueKeys.forEach((key) => {
-      if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
-      if (ringAlarms[key]) return;
+  // A ring that runs out plays its own sound, then again every five minutes
+  // until it's reset. A hush holds them all.
+  function soundOverdue(overdue, hushed) {
+    overdue.forEach((timerData) => {
+      if (!timerData.sound || hushed || ringAlarms[timerData.key]) return;
 
-      playBoardSound(key);
-      ringAlarms[key] = setInterval(() => playBoardSound(key), Time.minutes(5));
+      playBoardSound(timerData.sound);
+      ringAlarms[timerData.key] = setInterval(() => playBoardSound(timerData.sound), Time.minutes(5));
     });
 
+    const sounding = new Set(overdue.filter((t) => t.sound).map((t) => t.key));
     Object.keys(ringAlarms).forEach((key) => {
-      if (overdueKeys.has(key) && !quietActive) return;
+      if (sounding.has(key) && !hushed) return;
 
       clearInterval(ringAlarms[key]);
       delete ringAlarms[key];
     });
   }
 
-  function isQuietModeActive() {
-    const quietTimer = timers.find((t) => t.key === "quiet");
-    if (!quietTimer) return false;
+  // The rings hushing the board right now: ones that say so and are still
+  // counting.
+  function hushingKeys() {
     const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
-    return (quietTimer.next || nowSec) - nowSec > 0;
+    return new Set(
+      timers.filter((t) => t.hush && (t.next || nowSec) - nowSec > 0).map((t) => t.key),
+    );
   }
 
-  function updateAllDurations() {
-    const quietActive = isQuietModeActive();
-    const overdueKeys = new Set();
+  function updateAllRings() {
+    const hushing = hushingKeys();
+    const hushed = hushing.size > 0;
+    const overdue = [];
     timers.forEach((timerData) => {
-      const remaining = updateDurationRing(timerData);
-      if (remaining !== undefined && remaining <= 0) overdueKeys.add(timerData.key);
+      const remaining = updateRing(timerData);
+      if (remaining !== undefined && remaining <= 0) overdue.push(timerData);
     });
-    soundOverdue(overdueKeys, quietActive);
-    // Quiet mode greys everything but the quiet (and kennel) rings — the house
-    // is meant to be still, so the other countdowns recede.
+    soundOverdue(overdue, hushed);
+    // A hush greys everything but the hushing rings themselves and any ring
+    // with its own colour, so the other countdowns recede.
     container.querySelectorAll(".duration-ring").forEach((ring) => {
-      ring.classList.toggle("quieted", quietActive);
+      const keeps = hushing.has(ring.dataset.durationKey) || ring.dataset.ringColor;
+      ring.classList.toggle("quieted", hushed && !keeps);
     });
-    if (wasQuietActive && !quietActive) durationMonitor.refresh();
-    wasQuietActive = quietActive;
+    if (wasHushed && !hushed) ringMonitor.refresh();
+    wasHushed = hushed;
   }
 
-  const durationMonitor = Monitor.subscribe("whisper-durations", {
+  const ringMonitor = Monitor.subscribe(CHANNEL, {
     connected() {
       this.refresh();
     },
@@ -220,25 +214,21 @@ export function initBoardDurations({ container, app, onStatus }) {
       // beside the id/channel, not inside the MonitorData payload.
       if (data.owner_id !== undefined) lastOwnerId = data.owner_id;
       // A broadcast that names its groups re-decides whether this board is one
-      // the feed is aimed at. The board only shows the rings and plays the
-      // sounds when its watched groups overlap AND the feed is its owner's —
-      // otherwise it stays dark, even though every board on the account hears
-      // the same channel.
+      // the feed is aimed at. The board only shows the rings when its watched
+      // groups overlap AND the feed is its owner's — otherwise it stays dark,
+      // even though every board on the account hears the same channel.
       if (monitorData.groups !== undefined) lastGroups = monitorData.groups;
       channelMatches = decideMatch();
-      if (monitorData.status !== undefined) lastStatus = monitorData.status;
       if (Array.isArray(monitorData.timers)) lastTimers = monitorData.timers;
-      if (monitorData.sound && channelMatches) playBoardSound(monitorData.sound);
-      // A status-only or sound-only broadcast still re-asserts the pet's state.
       reconcile();
     },
   });
 
-  setInterval(updateAllDurations, Time.second());
-  updateAllDurations();
+  setInterval(updateAllRings, Time.second());
+  updateAllRings();
 
   return {
-    refresh: () => durationMonitor.refresh(),
+    refresh: () => ringMonitor.refresh(),
     // The watched groups changed under us (the board was repointed, here or on
     // another device). Re-decide the match against the last broadcast and
     // repaint — no need to wait for the feed to speak again.

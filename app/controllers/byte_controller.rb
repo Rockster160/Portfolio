@@ -84,7 +84,6 @@ class ByteController < ApplicationController
     @board_tags = convo.chore_tags
     @board_day = ChoreDay.current(convo.user)
     @board_items_json = board_items_for(convo)
-    @board_whisper_state = Buddy::BoardFace.whisper_state(convo)
     # The face it opens on, including a hot chore it is dreaming of this half
     # hour: the script makes the same draw, so nothing flips once it runs.
     chore_dream = convo.chore_dreams? && Buddy::BoardDream.pick(

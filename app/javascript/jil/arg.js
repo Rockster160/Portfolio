@@ -15,6 +15,8 @@ export default class Arg {
 
     this.raw = undefined
     this.options = undefined
+    // A trailing `*` in the options ([a b *]) means "or type your own".
+    this.freeText = false
 
     this.content = undefined
     this.allowedtypes = "Any"
@@ -104,6 +106,10 @@ export default class Arg {
       if (match) {
         this.optional = match[2] == "?"
         this.options = Tokenizer.split(match[1], { by: /[, ]+/ }).map(item => unwrap(item))
+        if (this.options.includes("*")) {
+          this.freeText = true
+          this.options = this.options.filter(item => item !== "*")
+        }
       }
       return
     }

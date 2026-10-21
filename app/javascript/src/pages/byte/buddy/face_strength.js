@@ -8,8 +8,9 @@ export const FACE_STRENGTH = {
   dream:   10,
   mood:    40,
   alert:   50,
-  whisper: 60,
-  sleep:   70,
+  // Above anything a task can raise (Buddy::FaceStrength::MAX): a hold this
+  // strong shows over every other face, a passing one included.
+  sleep:   1000,
 };
 
 // A strength sent with an alert or dream, or `fallback` when it came without one.

@@ -109,10 +109,10 @@
      <%# value on `data-kiosk`, because everything the kiosk hides this hides %>
      <%# too - the board IS a kiosk, with a different pad. %>
      data-board="<%= @board ? "true" : "false" %>"
-     <%# Who the board belongs to. A board's Whisper feeds have to match its %>
-     <%# OWNER, not whoever is looking - that's what keeps a shared board %>
-     <%# showing the owner's feeds while a housemate's own "Whisper" board %>
-     <%# stays dark. See buddy/board_scope.js#feedOwnerMatches. %>
+     <%# Who the board belongs to. A board's feeds have to match its OWNER, %>
+     <%# not whoever is looking - that's what keeps a shared board showing %>
+     <%# the owner's feeds while a housemate's own board watching the same %>
+     <%# group stays dark. See buddy/board_scope.js#feedOwnerMatches. %>
      data-board-owner-id="<%= @conversation.user_id %>"
      data-board-tags="<%= Array(@board_tags).to_json %>"
      data-board-chore-dreams="<%= @conversation.chore_dreams? %>"
@@ -120,9 +120,6 @@
      data-board-dream-dismissed-at="<%= @conversation.dream_dismissed_at&.iso8601(3) %>"
      data-board-pins="<%= @conversation.pinned_chore_ids.to_json %>"
      data-board-list="<%= Buddy::BoardList.wire(@conversation).to_json if @board %>"
-     <%# Whisper's state as this board wears it (asleep / gone), known before %>
-     <%# the feed speaks, so the pet opens holding it rather than on its mood. %>
-     data-board-whisper-state="<%= @board_whisper_state %>"
      data-chore-day="<%= @board_day&.iso8601 %>"
      <%# The board's own set — chores AND triggers of its groups, each tagged %>
      <%# with its `kind` — serialized for the first paint so a cold boot off %>
@@ -289,10 +286,10 @@
     <% if @board %>
       <div class="byte-board-timer" data-buddy-timer-banner hidden></div>
     <% end %>
-    <%# Board-only: the Whisper status rings (out / nap / quiet / kennel), %>
-    <%# justified along the hero's bottom edge. Fed by the whisper-durations %>
-    <%# monitor and painted by buddy/durations.js; a wholly separate surface %>
-    <%# from the countdown-timer banner above, empty + hidden when none stand. %>
+    <%# Board-only: the status rings, justified along the hero's bottom edge. %>
+    <%# Fed by the board-rings monitor and painted by buddy/rings.js; a wholly %>
+    <%# separate surface from the countdown-timer banner above, empty + hidden %>
+    <%# when none stand. %>
     <% if @kiosk %>
       <%# A wall screen's update, counting down along the top. Any touch puts it
           back to the start; pause holds it, the arrow takes it now. Run by
@@ -318,8 +315,8 @@
       </div>
     <% end %>
     <% if @board %>
-      <div class="byte-whisper-rings" data-whisper-rings hidden></div>
-      <%# Whether this screen can make its sounds: the Whisper page's speaker,
+      <div class="byte-board-rings" data-board-rings hidden></div>
+      <%# Whether this screen can make its sounds: a speaker
           in the corner beside the settings gear, struck through while sound
           won't play. Driven by buddy/sound_toggle.js. %>
       <button type="button" class="byte-board-sound" data-board-sound data-state="on">

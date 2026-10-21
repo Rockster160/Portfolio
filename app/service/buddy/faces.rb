@@ -35,6 +35,29 @@ module Buddy
       alarm:    { warmth: 0.80, play: 0.65, weight: 0.55, strain: 0.25 },
     }.freeze
 
+    # The faces the app itself puts on the pet rather than moods: asleep, mid
+    # thought, a wave. Every pet can wear these - one with no drawing for one
+    # wears its nearest face instead.
+    def system_faces
+      [*SYSTEM, *TRANSITIONAL, *GESTURES]
+    end
+
+    # The face a pet wears when asked for one by NAME (a task's `face`): a
+    # system face always, any other only when this pet has that drawing. Nil
+    # otherwise, so the pet keeps to its own feelings rather than a stand-in.
+    def named(theme, name)
+      name = name.to_s.strip.to_sym
+      return nil if name.empty?
+      return resolve(theme, name) if system_faces.include?(name)
+
+      name if all(theme).include?(name)
+    end
+
+    # Is this a face any pet knows?
+    def known?(name)
+      known_names.include?(name.to_s.strip.to_sym)
+    end
+
     # The face whose ART stands in for "thinking" on this pet. The expression
     # NAME stays `thinking` everywhere (so the client's transient/settle logic is
     # untouched); only which drawing it resolves to changes.

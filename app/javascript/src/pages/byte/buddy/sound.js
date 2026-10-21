@@ -1,7 +1,7 @@
 // Board sounds, played on demand from Jil. A task broadcasting
-//   Monitor.broadcast("whisper-durations", { ...sound: "wake" })
-// (the channel the duration rings already ride) or on the "byte" channel lands
-// here as a key, and we play the matching tune. These are the Whisper PWA's
+//   Monitor.broadcast("byte", { ...sound: "wake", groups: [...] })
+// or a status ring that runs out (its `sound`, see buddy/rings.js) lands here
+// as a key, and we play the matching tune. These are the Whisper PWA's
 // named beeps, ported so the board that replaces it makes the same sounds —
 // nap, wake, birthday, alarm, and a default chirp for anything else.
 //

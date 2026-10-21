@@ -35,25 +35,34 @@ module Buddy
     # BuddyAlert, or nil when there was nothing to say it to - no key, no words,
     # or nobody with a companion thread to put it in.
     # `strength` is how strongly its face wants the pet (see Buddy::FaceStrength);
-    # blank keeps an alert's usual.
-    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, strength: nil)
+    # blank keeps an alert's usual. `mood` is the look as a point on the faces'
+    # axes (see Buddy::Moods), which each pet answers with its own face.
+    def raise!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, strength: nil, mood: nil)
       key        = key.to_s.strip
       body       = body.to_s.strip
       groups     = Array(groups).map { |g| g.to_s.strip }.compact_blank
       icon       = icon.to_s.strip.presence
       expression = expression.to_s.strip.presence
       strength   = strength_meta(strength)
+      mood       = ::Buddy::Moods.reading(mood)
       return nil if key.empty? || body.empty?
 
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
       return nil if conversation.nil?
 
       ::Buddy::BoardFeedGroups.remember!(user, groups)
+      look = {
+        "groups"     => groups,
+        "icon"       => icon,
+        "expression" => expression,
+        "strength"   => strength,
+        "mood"       => mood,
+      }.compact_blank
       open = ::BuddyAlert.open_for(user, key)
       if open
-        seen_again!(open, body, groups, icon, expression, strength)
+        seen_again!(open, body, look)
       else
-        open!(user, conversation, key, body, groups, icon, expression, strength)
+        open!(user, conversation, key, body, look)
       end
     end
 
@@ -70,10 +79,14 @@ module Buddy
     # `dream:` makes it a want or an idea rather than a condition: the board
     # shows it in the pet's thought bubble instead of its speech bubble, newest
     # first, and its face only shows while the pet is otherwise idle.
-    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, dream: false, strength: nil)
+    #
+    # With a `mood` or a face (`expression`) and no words it is a look and
+    # nothing else: the pet wears it while it stands, and no bubble opens.
+    def hold!(user:, key:, body:, conversation: nil, groups: nil, icon: nil, expression: nil, dream: false, strength: nil, mood: nil)
       key  = key.to_s.strip
       body = body.to_s.strip
-      return nil if key.empty? || body.empty?
+      mood = ::Buddy::Moods.reading(mood)
+      return nil if key.empty? || (body.empty? && mood.nil? && expression.blank?)
 
       meta = { "board_only" => true }
       groups = Array(groups).map { |g| g.to_s.strip }.compact_blank
@@ -82,6 +95,7 @@ module Buddy
       meta["expression"] = expression.to_s.strip if expression.present?
       meta["dream"]      = true if dream
       meta["strength"]   = strength_meta(strength) if strength_meta(strength)
+      meta["mood"]       = mood if mood
       ::Buddy::BoardFeedGroups.remember!(user, groups)
 
       open = ::BuddyAlert.open_for(user, key)
@@ -196,13 +210,11 @@ module Buddy
       ::Buddy::BoardFace.broadcast!(user)
     end
 
-    def open!(user, conversation, key, body, groups = [], icon = nil, expression = nil, strength = nil)
+    # `look` is what the raise named of its groups, icon, face, strength and
+    # mood - only what it named.
+    def open!(user, conversation, key, body, look={})
       now   = Time.current
-      meta  = {}
-      meta["groups"]     = groups if groups.present?
-      meta["icon"]       = icon if icon.present?
-      meta["expression"] = expression if expression.present?
-      meta["strength"]   = strength if strength
+      meta  = look.dup
       alert = ::BuddyAlert.create!(
         user:              user,
         byte_conversation: conversation,
@@ -230,7 +242,7 @@ module Buddy
     # - a caller that puts a reading in the sentence ("garage open 40 minutes")
     # means the new one - and the count and the clock are what make the bubble
     # say that this is not simply the same moment still on screen.
-    def seen_again!(alert, body, groups = [], icon = nil, expression = nil, strength = nil)
+    def seen_again!(alert, body, look={})
       now   = Time.current
       buzz  = alert.push_again?
       attrs = { body: body, raised_count: alert.raised_count + 1, last_raised_at: now }
@@ -238,10 +250,7 @@ module Buddy
       meta  = meta.merge("notified_at" => now.iso8601) if buzz
       # A re-raise may name groups the first one didn't (or change them); keep
       # them current so the board it belongs to never drifts from the raiser.
-      meta  = meta.merge("groups" => groups) if groups.present?
-      meta  = meta.merge("icon" => icon) if icon.present?
-      meta  = meta.merge("expression" => expression) if expression.present?
-      meta  = meta.merge("strength" => strength) if strength
+      meta  = meta.merge(look) if look.present?
       attrs[:metadata] = meta unless meta.equal?(alert.metadata)
       alert.update!(attrs)
 

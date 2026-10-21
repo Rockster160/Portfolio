@@ -70,8 +70,14 @@ export function field(arg) {
       return content;
     } else if (arg.options) {
       let wrapper = element("span", { class: "input-wrapper" });
-      let ele = select(arg.options);
+      let ele = select(arg.options, undefined, { freeText: arg.freeText });
       wrapper.appendChild(ele);
+      // "<other>": the choices are suggestions, and anything typed here goes.
+      let otherInput = null;
+      if (arg.freeText) {
+        otherInput = element("input", { type: "text", class: "select-other hidden" });
+        wrapper.appendChild(otherInput);
+      }
       let dynamicWrapper = element("span", {
         class: "hidden dynamic input-wrapper",
       });
@@ -88,6 +94,7 @@ export function field(arg) {
       wrapper.insertBefore(ele, dynamicWrapper);
 
       ele.addEventListener("change", (evt) => {
+        otherInput?.classList.toggle("hidden", ele.value != OTHER);
         if (ele.selectedOptions[0].value == "<dynamic>") {
           dynamicWrapper.classList.remove("hidden");
         } else {
@@ -131,10 +138,37 @@ export function field(arg) {
   } else {
     wrapper.appendChild(element("btn", { data: { inputtype: arg.typename } }));
     wrapper.appendChild(entryfield);
+    // A slider says where it sits, since the track alone can't be read.
+    if (entryfield.type == "range") {
+      wrapper.appendChild(element("span", { class: "range-value" }));
+      entryfield.addEventListener("input", () => syncRangeValue(entryfield));
+      syncRangeValue(entryfield);
+    }
     wrapper.appendChild(selectedTag);
   }
 
   return wrapper;
+}
+
+// Puts a value into a select: one of its choices as itself, anything else into
+// the "<other>" box when it has one.
+export function setSelectValue(select, val) {
+  const other = select.parentElement?.querySelector(":scope > .select-other");
+  const known = Array.from(select.options).some((opt) => opt.value === val);
+  if (known || !other) {
+    select.value = val;
+    other?.classList.add("hidden");
+    return;
+  }
+  select.value = OTHER;
+  other.value = val;
+  other.classList.remove("hidden");
+}
+
+// The readout beside a slider, after its value changes by hand or from code.
+export function syncRangeValue(input) {
+  const readout = input.parentElement?.querySelector(":scope > .range-value");
+  if (readout) readout.innerText = input.value;
 }
 
 export function inputFromArg(arg) {
@@ -184,17 +218,29 @@ export function inputFromType(typename) {
   if (type != "textarea") {
     ele.type = type;
   }
+  // A 0-1 dial, in twentieths.
+  if (type == "range") {
+    ele.min = 0;
+    ele.max = 1;
+    ele.step = 0.05;
+  }
 
   return ele;
 }
 
-export function select(opts, data) {
+// The select option that reveals a text box beside a free-text select.
+export const OTHER = "<other>";
+
+export function select(opts, data, { freeText = false } = {}) {
   let ele = element("select", data);
   opts.forEach((item) => {
     ele.appendChild(
       element("option", { name: item, value: item, innerText: item }),
     );
   });
+  if (freeText) {
+    ele.appendChild(element("option", { name: OTHER, value: OTHER, innerText: OTHER }));
+  }
   ele.appendChild(
     element("option", {
       name: "<dynamic>",

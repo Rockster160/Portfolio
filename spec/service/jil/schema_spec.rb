@@ -103,8 +103,8 @@ RSpec.describe Jil::Schema do
       expect(alert_line(other)).to include(%(who:["me" "everyone"]))
     end
 
-    it "offers every face a pet knows" do
-      expect(alert_line(other)).to include(%("pounce"), %("eager"), %("hiding"))
+    it "offers the system faces for a face, or any name typed, beside the mood sliders" do
+      expect(alert_line(other)).to include(%(face:["sleeping" "thinking" "wave" *]), "warmth:Slider")
       expect(alert_line(other)).not_to include("%")
     end
   end

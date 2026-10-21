@@ -57,7 +57,9 @@ class BuddyAlert < ApplicationRecord
   PUSH_AGAIN_AFTER = 12.hours
 
   validates :key, presence: true
-  validates :body, presence: true
+  # A board-only hold may be a look with no words (Buddy::Alerts.hold! with a
+  # mood or a face); everything else has something to say.
+  validates :body, presence: true, unless: :look_only?
 
   scope :for_key,     ->(key) { where(key: key.to_s.strip) }
   scope :newest,      -> { order(last_raised_at: :desc) }
@@ -101,6 +103,7 @@ class BuddyAlert < ApplicationRecord
       "groups"          => groups,
       "icon"            => icon,
       "expression"      => expression,
+      "faces"           => faces,
       "strength"        => strength,
       "board_only"      => board_only?,
       "dream"           => dream?,
@@ -135,12 +138,49 @@ class BuddyAlert < ApplicationRecord
   end
 
   # The face the board's pet HOLDS while this condition stands — the laundry
-  # gate's "up to no good" look, say. An expression name resolved against the
-  # pet's own art (see the hero's faceUrl); a theme with no such face falls back
-  # to neutral rather than going blank. Blank means the generic alarm shuffle,
-  # as before — only an alert that names a mood takes the face over.
+  # gate's "up to no good" look, say — by name. Only a pet with that drawing
+  # wears it (see #face_for). Blank, with no mood either, means the generic
+  # alarm shuffle.
   def expression
     metadata["expression"].to_s.strip.presence
+  end
+
+  # The look it was raised with as a point on the faces' axes (Buddy::Moods),
+  # or nil when it names a face instead, or none.
+  def mood
+    metadata["mood"].presence
+  end
+
+  # Only a look: nothing to say, so no bubble anywhere.
+  def look_only?
+    board_only? && body.blank? && (mood.present? || expression.present?)
+  end
+
+  # The face a pet of this theme wears for it: the face it names, when this pet
+  # has it; else its mood as this pet answers it (seeded by when it was raised,
+  # so the pet keeps one face while it stands); else nil, and the pet keeps to
+  # its own feelings.
+  def face_for(theme)
+    named = ::Buddy::Faces.named(theme, expression) if expression
+    return named.to_s if named
+    return nil if mood.nil?
+
+    ::Buddy::Moods.face(theme, mood, seed: mood_seed)&.to_s
+  end
+
+  # { theme => face } for every pet with an answer, so any board can paint it
+  # as is. Nil when it asks for no look at all.
+  def faces
+    return nil if mood.nil? && expression.nil?
+
+    ::Buddy::Companion.all.keys.each_with_object({}) { |theme, faces|
+      face = face_for(theme)
+      faces[theme.to_s] = face if face
+    }
+  end
+
+  def mood_seed
+    "#{key}:#{raised_at&.to_i}"
   end
 
   # How strongly its face wants the pet (see Buddy::FaceStrength): what it was

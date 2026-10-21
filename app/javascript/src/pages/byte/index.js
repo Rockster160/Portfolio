@@ -75,7 +75,7 @@ import {
 import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero, FACE_STRENGTH } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
-import { initBoardDurations } from "./buddy/durations";
+import { initBoardRings } from "./buddy/rings";
 import { initBuddyProcesses } from "./buddy/processes";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
@@ -2481,44 +2481,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   app.addEventListener("board:placement-changed", () => buddyTimers?.hydrate());
 
-  // The board's pet mirrors Whisper: it sleeps when she sleeps or naps, and
-  // hides when she's gone. Driven off the same whisper-durations status the
-  // rings read, and ONLY on a board that watches the feed (the status arrives
-  // null otherwise), so no other board's pet reacts. A HELD state, so it holds
-  // until the status clears and the remembered mood underneath returns then —
-  // never wiped by a mood broadcast or the idle reset in the meantime.
-  const buddyCharEl = app.querySelector(".byte-buddy-char");
-  function applyWhisperState(state) {
-    if (!buddyCharEl) return;
-    if (!state) {
-      delete buddyCharEl.dataset.whisperState;
-      buddyHero?.releaseExpression?.("whisper");
-      return;
-    }
-    buddyCharEl.dataset.whisperState = state;
-    // The pet wears the matching FACE — asleep the sleeping one, gone the hiding
-    // one — while staying right where it is, as a HELD STATE so a cheer or a
-    // sentiment broadcast doesn't wipe it off the wall; it holds until the state
-    // clears. (A pet with no art for one falls back to neutral in the hero.) Any
-    // other state is no face override, so the pet's own mood shows.
-    if (state === "asleep")
-      buddyHero?.holdExpression?.("whisper", "sleeping", FACE_STRENGTH.whisper);
-    else if (state === "gone")
-      buddyHero?.holdExpression?.("whisper", "hiding", FACE_STRENGTH.whisper);
-    else buddyHero?.releaseExpression?.("whisper");
-  }
-
-  // Board-only Whisper status rings (out / nap / quiet / kennel), off the
-  // whisper-durations stream. No-ops off the board — the element is board-only,
-  // and with no element this neither renders nor subscribes.
-  const boardDurations = initBoardDurations({
-    container: app.querySelector("[data-whisper-rings]"),
+  // Board-only status rings, off the board-rings stream. No-ops off the board
+  // — the element is board-only, and with no element this neither renders nor
+  // subscribes.
+  const boardRings = initBoardRings({
+    container: app.querySelector("[data-board-rings]"),
     app,
-    onStatus: applyWhisperState,
   });
-  // Hold the state the server already knows, so the pet doesn't sit on its mood
-  // until the feed's first broadcast arrives. That broadcast re-asserts it.
-  if (app.dataset.boardWhisperState) applyWhisperState(app.dataset.boardWhisperState);
 
   // The board shows a standing alert in the pet's bubble (no strip out here) and
   // has the pet shuffle beside it. No-op off the board (no bubble element). Fed
@@ -2743,7 +2712,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // alerts, which read the watched set off app.dataset.boardTags that the chore
     // board just rewrote. Keeps every surface on the same groups in one move.
     onTagsChanged: (tags) => {
-      boardDurations?.setTags(tags);
+      boardRings?.setTags(tags);
       boardAlert?.setTags(tags);
       boardDream?.setTags(tags);
     },
@@ -2964,14 +2933,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     // Put the remembered mood back underneath, then lift the sleep state — the
-    // pet falls to its mood, or to any OTHER state still standing (a hiding
-    // Whisper, an open gate).
+    // pet falls to its mood, or to any OTHER state still standing (a task's
+    // mood, an open gate).
     buddyHero?.setExpression(buddyWakeExpr);
     buddyHero?.releaseExpression?.("sleep");
     armIdleFaceReset();
   };
-  // Asleep is a HELD STATE, not a transient: it stays until Byte wakes, outranks
-  // every other standing face, and drops the "thinking" overlay — so a turn that
+  // Asleep is a HELD STATE, not a transient: it stays until Byte wakes, and at
+  // sleep strength nothing shows over it — no standing face, whatever a task
+  // raised it with, and no passing one (thinking, a flash) — so a turn that
   // fails (Mac unreachable) doesn't leave Byte stuck mid-thought. The stored
   // mood lives in buddyWakeExpr and under the hold, restored on wake.
   const buddySleep = () =>
@@ -3608,8 +3578,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!data) return;
       // A Jil task can play a sound on the wall with
       //   Monitor.broadcast("byte", { ...sound: "wake", groups: [...] })
-      // — the board's own channel, alongside the whisper-durations one the
-      // rings ride. Board only, and only when the sound's groups overlap what
+      // — the board's own channel, alongside the board-rings one the rings
+      // ride. Board only, and only when the sound's groups overlap what
       // this board watches AND the feed is this board's owner's, so one board's
       // sound doesn't play on all of them, nor a housemate's on the owner's.
       // owner_id rides the envelope (payload), beside id/channel.
@@ -3645,7 +3615,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               ? convo.metadata.chore_tags
               : legacyTag ? [legacyTag] : [];
             choreBoard?.setTags(nextTags);
-            boardDurations?.setTags(nextTags);
+            boardRings?.setTags(nextTags);
             boardAlert?.setTags(nextTags);
             boardDream?.setTags(nextTags);
             const boardMeta = convo.metadata || {};

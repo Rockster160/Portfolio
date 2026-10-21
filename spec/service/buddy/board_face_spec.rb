@@ -2,14 +2,27 @@ require "rails_helper"
 
 RSpec.describe Buddy::BoardFace do
   let(:user) { User.me }
+  # Bloom, one of the pets with pounce art. (A new thread takes its owner's
+  # pet, so it's set after.)
   let!(:board) {
     user.byte_conversations.create!(
       mode: :buddy, name: "Whisper", last_message_at: Time.current, buddy_expression: "happy",
       metadata: { "board" => true, "chore_tags" => ["Whisper"] },
-    )
+    ).tap { |convo| convo.update!(buddy_theme: :bloom) }
   }
 
+  # A look with no words, the way Jil's Buddy.mood holds one. This point lands
+  # on every pet's sleeping face.
+  let(:asleep) { { warmth: 0.55, play: 0.05, weight: 0.2, strain: 0.0, reach: 0.05 } }
+
   before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+  def mood!(mood: asleep, groups: ["Whisper"], strength: 60)
+    Buddy::Alerts.hold!(
+      user: user, key: "mood-#{SecureRandom.hex(3)}", body: nil,
+      groups: groups, mood: mood, strength: strength, conversation: board,
+    )
+  end
 
   def alert!(groups:, expression:)
     BuddyAlert.create!(
@@ -30,25 +43,47 @@ RSpec.describe Buddy::BoardFace do
       expect(described_class.for(board)).to eq("pounce")
     end
 
+    it "keeps to the pet's own feelings when it has no drawing for the face named" do
+      board.update!(buddy_theme: :byte)
+      alert!(groups: ["Whisper"], expression: "pounce")
+
+      expect(described_class.for(board)).to eq("happy")
+    end
+
+    it "wears a system face on any pet" do
+      board.update!(buddy_theme: :tiko)
+      alert!(groups: ["Whisper"], expression: "sleeping")
+
+      expect(described_class.for(board)).to eq("sleeping")
+    end
+
     it "ignores an alert aimed at another group" do
       alert!(groups: ["Garage"], expression: "pounce")
 
       expect(described_class.for(board)).to eq("happy")
     end
 
-    it "puts Whisper's state over an alert's face" do
+    it "puts a stronger mood over an alert's face" do
       alert!(groups: ["Whisper"], expression: "pounce")
-      described_class.record_whisper!(user, { status: "Napping 💤", groups: "Whisper" })
+      mood!
 
-      expect(described_class.whisper_state(board)).to eq(:asleep)
       expect(described_class.for(board)).to eq("sleeping")
     end
 
-    it "lets go once Whisper is awake again" do
-      described_class.record_whisper!(user, { status: "Gone 👋", groups: ["Whisper"] })
-      expect(described_class.for(board)).to eq("hiding")
+    it "lets go once the mood is resolved" do
+      held = mood!
+      expect(described_class.for(board)).to eq("sleeping")
 
-      described_class.record_whisper!(user, { status: "Awake ☀️" })
+      Buddy::Alerts.resolve!(user: user, key: held.key)
+      expect(described_class.for(board)).to eq("happy")
+    end
+
+    it "answers a mood with each pet's own face" do
+      mood!(mood: { warmth: 0.7, play: 0.5, weight: 0.35, strain: 0.05, reach: 0.1 })
+
+      board.update!(buddy_theme: :tiko)
+      expect(described_class.for(board)).to eq("nerd")
+      board.update!(buddy_theme: :moss)
       expect(described_class.for(board)).to eq("happy")
     end
   end
@@ -90,13 +125,13 @@ RSpec.describe Buddy::BoardFace do
       expect(described_class.for(board)).to eq("pounce")
     end
 
-    it "beats a real mood when raised stronger than one, but not Whisper's state" do
+    it "beats a real mood when raised stronger than one, but not a stronger held mood" do
       dream!(expression: "eager", strength: 45)
       board.update!(buddy_expression: "happy")
       expect(described_class.for(board)).to eq("eager")
 
-      described_class.record_whisper!(user, { status: "Gone 👋", groups: ["Whisper"] })
-      expect(described_class.for(board)).to eq("hiding")
+      mood!
+      expect(described_class.for(board)).to eq("sleeping")
     end
 
     it "ignores a dream aimed at another group" do
@@ -135,48 +170,12 @@ RSpec.describe Buddy::BoardFace do
       expect(described_class.for(board)).to eq("happy")
     end
 
-    it "shows the strongest of several alerts, and beats Whisper's state when raised above it" do
+    it "shows the strongest of several alerts, and beats a held mood when raised above it" do
       strong_alert!(expression: "pounce", strength: 55)
       strong_alert!(expression: "eager", strength: 80)
-      described_class.record_whisper!(user, { status: "Napping", groups: ["Whisper"] })
+      mood!
 
       expect(described_class.for(board)).to eq("eager")
-    end
-  end
-
-  describe ".record_whisper!" do
-    it "tells the board's viewers its face only when the state moved" do
-      described_class.record_whisper!(user, { status: "Napping", groups: ["Whisper"] })
-      described_class.record_whisper!(user, { status: "Napping", groups: ["Whisper"] })
-
-      expect(MonitorChannel).to have_received(:broadcast_to).with(
-        user,
-        hash_including(data: hash_including(kind: :board_face, conversation_id: board.id, expression: "sleeping")),
-      ).once
-    end
-
-    it "keeps nothing from a broadcast with no status or groups" do
-      described_class.record_whisper!(user, { sound: "wake" })
-
-      expect(user.caches.get(described_class::WHISPER_CACHE)).to eq({})
-    end
-  end
-
-  describe "the Whisper monitor broadcast" do
-    it "records the feed's status for the boards" do
-      Jil::Executor.call(user,
-        <<~'JIL',
-          h = Hash.new({
-            c = Keyval.new("status", "🛏️ Sleeping")::Keyval
-            d = Keyval.new("groups", "Whisper")::Keyval
-          })::Hash
-          a = Monitor.broadcast("whisper-durations", {
-            b = MonitorData.data(h)::MonitorData
-          }, false)::Monitor
-        JIL
-      )
-
-      expect(described_class.whisper_state(board)).to eq(:asleep)
     end
   end
 end

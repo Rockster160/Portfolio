@@ -5523,12 +5523,9 @@ dialog.byte-modal {
   -webkit-tap-highlight-color: transparent;
 }
 
-// The board's pet mirrors Whisper's state (buddy/durations.js drives these from
-// the whisper-durations status, only on a board that watches the feed). The FACE
-// carries each state — the hero sets the sleeping face when she sleeps and the
-// hiding face when she's gone — so the pet stays in place. The one extra touch:
-// a sleeping pet's idle bob slows to a breath so it reads as resting, not frozen.
-.byte-buddy-char[data-whisper-state="asleep"] {
+// A sleeping pet's idle bob slows to a breath so it reads as resting, not
+// frozen — whatever put it to sleep.
+.byte-buddy-char[data-buddy-expression="sleeping"] {
   animation-duration: 7s;
 }
 // Moss's art bakes the sprout into the TOP of the 500×500 frame. The
@@ -5973,12 +5970,12 @@ dialog.byte-modal {
   50% { opacity: 0.55; }
 }
 
-// Whisper status rings, justified along the hero's bottom edge. A readout, not
-// a control (pointer-events: none) — the pet keeps the taps. `space-between`
+// Status rings, justified along the hero's bottom edge. A readout, not a
+// control (pointer-events: none) — the pet keeps the taps. `space-between`
 // does exactly the asked-for spread: one ring sits left, two go to the edges,
-// three land left / centre / right, and so on. Painted by buddy/durations.js;
+// three land left / centre / right, and so on. Painted by buddy/rings.js;
 // wholly separate from the countdown-timer banner above.
-.byte-whisper-rings {
+.byte-board-rings {
   position: absolute;
   left: 0;
   right: 0;
@@ -5994,8 +5991,7 @@ dialog.byte-modal {
 
   &[hidden] { display: none; }
 
-  // Whisper's own ring dimensions — 140×140, stroke 8 — so the board reads the
-  // same as the tablet it replaces.
+  // 140×140, stroke 8 — read from across the room.
   .duration-ring {
     position: relative;
     width: 140px;
@@ -6025,19 +6021,21 @@ dialog.byte-modal {
     }
   }
 
-  // Quiet mode: the house is meant to be still, so every ring but the quiet one
-  // (and the kennel, which keeps its own colour) recedes to grey.
-  .duration-ring.quieted:not([data-duration-key="quiet"]):not([data-duration-key="kennel"]) {
+  // A hush: every ring but the hushing one and any ring with its own colour
+  // (buddy/rings.js leaves those out) recedes to grey.
+  .duration-ring.quieted {
     .ring-bg { stroke: rgba(255, 255, 255, 0.08); }
     .ring-progress { stroke: #555; }
     .ring-progress.overdue { stroke: #666; animation: none; }
   }
 
-  .duration-ring[data-duration-key="kennel"] {
+  // A ring that brought its own colour wears it, overdue or not, and doesn't
+  // pulse.
+  .duration-ring[data-ring-color] {
     .ring-progress,
-    .ring-progress.overdue { stroke: #800000; animation: none; }
+    .ring-progress.overdue { stroke: var(--ring-color); animation: none; }
     .ring-timer,
-    .ring-timer.overdue { color: #800000; }
+    .ring-timer.overdue { color: var(--ring-color); }
   }
 
   .ring-content {
@@ -7325,6 +7323,14 @@ $board-cell-max: 200px;
   opacity: 0.55;
   filter: grayscale(0.6);
   transition: opacity 200ms ease, filter 200ms ease;
+}
+
+// Disconnected, the pet sleeps: a little grey, and holding still. The shadow
+// is restated because `filter` replaces the whole list.
+.byte-app[data-connection="down"] .byte-buddy-char {
+  animation: none;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4)) grayscale(0.5);
+  transition: filter 200ms ease;
 }
 
 .byte-board-empty {

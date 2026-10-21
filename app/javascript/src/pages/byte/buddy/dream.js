@@ -224,7 +224,8 @@ export function initBoardDream({
 
     const dream = newestDream(alerts, watched, dismissedAt);
     if (dream) {
-      return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${dream.expression || ""}:${dream.strength || ""}`, () => {
+      const face = dream.faces;
+      return show(`dream:${dream.id}:${dream.body}:${dream.icon || ""}:${JSON.stringify(face || "")}:${dream.strength || ""}`, () => {
         if (dream.icon) {
           const icon = document.createElement("span");
           icon.className = "byte-board-dream-icon";
@@ -232,7 +233,7 @@ export function initBoardDream({
           bubble.appendChild(icon);
         }
         bubble.appendChild(line(dream.body));
-      }, dream.expression, strengthOr(dream.strength, FACE_STRENGTH.dream));
+      }, face, strengthOr(dream.strength, FACE_STRENGTH.dream));
     }
 
     // Hot-chore dreams can be switched off per board; Jil's still show.

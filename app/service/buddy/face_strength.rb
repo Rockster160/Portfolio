@@ -16,9 +16,11 @@ module Buddy
     DREAM   = 10
     MOOD    = 40
     ALERT   = 50
-    WHISPER = 60
-    SLEEP   = 70
+    # The most an alert, mood or dream may be raised with.
     MAX     = 100
+    # Buddy asleep (disconnected, or out of usage). Above anything a task can
+    # name, so nothing is ever shown over it.
+    SLEEP   = 1000
 
     def mood(expression)
       Buddy::BoardFace.idle?(expression) ? IDLE : MOOD

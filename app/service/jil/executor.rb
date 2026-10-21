@@ -36,11 +36,11 @@ class Jil::Executor
   end
 
   # Live status feeds a person is watching change in real time — the Whisper
-  # nap/awake rings are the one that matters. They are cheap to recompute and must
+  # page and a board's status rings. They are cheap to recompute and must
   # flip the moment the state does, so they broadcast immediately rather than wait
   # for the end of a chain that is busy arming a run of schedules. The expensive
   # aggregate views (Upcoming and the like) are what coalescing is for.
-  IMMEDIATE_MONITOR_CHANNELS = %w[whisper-durations].freeze
+  IMMEDIATE_MONITOR_CHANNELS = %w[whisper-durations board-rings].freeze
 
   def self.immediate_monitor?(data)
     channel = data[:channel] || data["channel"] || data[:id] || data["id"]
@@ -386,6 +386,7 @@ class Jil::Executor
       when :Prompt, :PromptQuestion then :Prompt
       when :Hash, :Keyval then :Hash
       when :String, :Text then :String
+      when :Numeric, :Slider then :Numeric
       else
         klass_name || obj.class.to_sym
       end

@@ -5,7 +5,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Methods whose last argument is a block of named settings - `who`, `face` -
   # one line each, written as `Keyword.who("me")` and shown as just "who".
-  NAMED_SETTINGS = %i[alert boardAlert dream timer message button].freeze
+  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button].freeze
   # Settings a block may give more than once, each line adding to the list.
   LISTED_SETTINGS = %i[who groups].freeze
   # Calls a block may hold besides its named lines, each collected under its
@@ -141,6 +141,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # nothing, so a task can call it on every pass. Cleared with `resolve`. Use a
   # key of its own - one an `alert` also uses stays that alert.
   def boardAlert(key, message, options=nil)
+    return false if message.to_s.strip.empty?
+
     opts = alert_options(options)
     held = recipients_for(opts[:who]).count { |user|
       ::Buddy::Alerts.hold!(user: user, key: key, body: message, **opts.except(:who)).present?
@@ -154,9 +156,28 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # a board shows, and the pet wears its face (thinking when blank) only while
   # nothing stronger wants the pet. Cleared with `resolve`.
   def dream(key, message, options=nil)
+    return false if message.to_s.strip.empty?
+
     opts = alert_options(options)
     held = recipients_for(opts[:who]).count { |user|
       ::Buddy::Alerts.hold!(user: user, key: key, body: message, dream: true, **opts.except(:who)).present?
+    }
+    held.positive?
+  end
+
+  # A look and nothing else: the boards its groups aim it at have their pet wear
+  # it while it stands, with no bubble, no message and no push. The look is a
+  # `face` by name, or a mood on the faces' axes - `warmth`, `play`, `weight`,
+  # `strain`, each 0 to 1, only the ones given counting - which every pet
+  # answers with its own face. `reach` is how far from that point a face may be
+  # and still be picked; blank leaves it to each face's own. Re-asserting it
+  # while it stands changes nothing. Cleared with `resolve`.
+  def mood(key, options=nil)
+    opts = alert_options(options)
+    return false if opts[:mood].nil? && opts[:expression].blank?
+
+    held = recipients_for(opts[:who]).count { |user|
+      ::Buddy::Alerts.hold!(user: user, key: key, body: nil, **opts.except(:who, :icon)).present?
     }
     held.positive?
   end
@@ -349,20 +370,32 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # `icon` is an optional glyph (an emoji like "🍖") the BOARD shows in place of
   # the sentence, read from across the room where words can't be; the chat strip
   # keeps the words.
-  # `face` is the expression the board's pet holds while it stands - the laundry
-  # gate's "up to no good" look - resolved against each pet's own art. Blank
-  # keeps the generic alarm shuffle (a dream thinks).
+  # `face` is a face the board's pet holds while it stands - the laundry gate's
+  # pounce - by name, typed freely. A system face (sleeping, thinking, wave)
+  # every pet wears; any other only a pet with that drawing, and one without
+  # keeps to its own feelings. A name no pet has is noted in the task's output
+  # and changes nothing.
+  # `warmth`, `play`, `weight`, `strain` (and `reach`) are the look as a mood -
+  # see `mood` - which each pet answers with its own face; with a `face` too,
+  # it's what a pet without that face wears.
+  # Neither keeps the generic alarm shuffle (a dream thinks).
   # `strength` is how strongly that face wants the pet, on Buddy::FaceStrength's
   # 1-100 scale: the strongest face standing shows. Blank keeps the usual - an
   # alert's sits over a mood, a dream's only over an idle one.
   def alert_options(options)
     opts = options.to_h
+    face = opts[:face].to_s.strip.presence
+    if face && !::Buddy::Faces.known?(face)
+      @jil.ctx[:output] << "No pet has a face called \"#{face}\" - they keep to their own feelings"
+    end
+
     {
       who:        Array(opts[:who]).join(","),
       groups:     Array(opts[:groups]).flat_map { |g| g.to_s.split(",") }.map(&:strip).compact_blank,
       icon:       opts[:icon],
-      expression: opts[:face],
+      expression: face,
       strength:   opts[:strength],
+      mood:       ::Buddy::Moods.reading(opts.slice(*::Buddy::Moods::SETTINGS)),
     }
   end
 

@@ -7,6 +7,9 @@ import {
   inputSelector,
   hi,
   prettify,
+  syncRangeValue,
+  setSelectValue,
+  OTHER,
 } from "./form_helpers.js";
 import Arg from "./arg.js";
 import Dropdown from "./dropdown.js";
@@ -787,7 +790,9 @@ export default class Statement {
                     );
                   },
                 );
-                input.value = JSON.parse(parsed);
+                const value = JSON.parse(parsed);
+                if (input.tagName == "SELECT") setSelectValue(input, value);
+                else input.value = value;
               } catch (e) {
                 console.log("Failed to parse", val);
                 input.value = val.replace(/^"|"$/gm, "");
@@ -795,6 +800,7 @@ export default class Statement {
             } else {
               input.value = val === "null" ? "" : val;
             }
+            if (input.type == "range") syncRangeValue(input);
             if (input.tagName == "TEXTAREA") {
               const rows = clamp(val.split("\n").length, 3, 20);
               input.rows = rows;
@@ -824,6 +830,10 @@ export default class Statement {
       .join(", ");
     let input = arg.querySelector(inputSelector);
     input = input || arg.querySelector(":scope > .switch > input"); // Checkbox nested under .switch
+    // A free-text select set to "<other>" says what was typed.
+    if (input?.tagName == "SELECT" && input.value == OTHER) {
+      input = arg.querySelector(":scope > .select-other") || input;
+    }
 
     if (arg.classList.contains("content")) {
       let statements = Array.from(
@@ -860,6 +870,7 @@ export default class Statement {
       case "input":
         switch (input.type) {
           case "number":
+          case "range":
             if (input.value === "") {
               return prettify(color, "numeric", "null");
             }
