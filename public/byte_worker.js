@@ -183,6 +183,32 @@ async function verifyShellReady() {
   return { ok: true };
 }
 
+// Nothing cached and no server (mid-deploy, or the wifi dropped): rather than
+// the browser's own error page, which a wall screen sits on until somebody
+// reloads it, a page that says so and keeps trying until the server answers.
+const UNREACHABLE_HTML = `<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Reconnecting</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #0B1220; color: #94A3B8; font: 16px system-ui, sans-serif; }
+</style></head>
+<body><p>Can't reach the server. Trying again…</p>
+<script>
+  const retry = () => { if (navigator.onLine !== false) location.reload(); };
+  setInterval(retry, 5000);
+  addEventListener("online", retry);
+</script></body></html>`;
+
+function unreachablePage() {
+  return new Response(UNREACHABLE_HTML, {
+    status: 503,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 async function anyCachedShell() {
   const cache = await caches.open(CACHE);
   for (const p of SHELL_PATHS) {
@@ -457,7 +483,11 @@ self.addEventListener("fetch", (evt) => {
         } catch (e) {}
         const anyShell = await anyCachedShell();
         if (anyShell) return anyShell;
-        return fetch(req);
+        try {
+          return await fetch(req);
+        } catch (e) {
+          return unreachablePage();
+        }
       })(),
     );
     return;
