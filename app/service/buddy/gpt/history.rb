@@ -114,6 +114,7 @@ module Buddy
       # carries forward for nothing.
       def build(conversation, upto:, briefing: false)
         rows = drop_stale_quick_actions(scope(conversation, upto), upto)
+        rows = Buddy::GPT::RetriedRequest.without_old_answers(rows, upto)
         rows = without_routine_reminders(rows) if briefing
         described = descriptions_for(rows)
         rows.filter_map { |msg|

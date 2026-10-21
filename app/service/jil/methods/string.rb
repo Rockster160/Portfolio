@@ -33,6 +33,8 @@ class Jil::Methods::String < Jil::Methods::Base
       token_val(line.objname).include?(evalarg(line.arg))
     when :split
       token_val(line.objname).split(to_regex(evalarg(line.arg)))
+    when :hmac
+      ::OpenSSL::HMAC.hexdigest("SHA256", evalarg(line.arg).to_s, token_val(line.objname))
     else
       if line.objname.match?(/^[A-Z]/)
         send(line.methodname, string_or_regex(token_val(line.objname)), *evalargs(line.args))

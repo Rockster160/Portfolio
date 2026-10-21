@@ -50,6 +50,8 @@ class Execution < ApplicationRecord
                   #   something the user did. Kept distinct from :trigger so a
                   #   prompt the system invented is tellable from one a task
                   #   asked for.
+    webhook:  13, # nil - an unauthenticated POST to a webhook:public task,
+                  #   which checks the caller itself (see String.hmac).
   }
 
   enum :status, {

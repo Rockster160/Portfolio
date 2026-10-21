@@ -321,10 +321,17 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).not_to include("WHAT WAS SAID ON THE EARLIER CALLS")
     end
 
-    it "points at the local posting, which outlives their listing" do
+    # The board's own page answers on localhost, which a tool call cannot fetch
+    # at all; the CLI reads the same row and needs nothing listening.
+    it "points at the local posting with a command rather than a localhost link" do
       job.update!(jobhunt_job_id: 412)
 
-      expect(prompt).to include("#{described_class::JOBHUNT_URL}/jobs/412")
+      expect(prompt).to include("jobhunt show 412")
+      expect(prompt).not_to include("#{described_class::JOBHUNT_URL}/jobs/412")
+    end
+
+    it "tells it not to go fetching a localhost page" do
+      expect(prompt).to include("cannot reach a loopback address")
     end
 
     # There is nobody in front of this run, so a question is a stall and a

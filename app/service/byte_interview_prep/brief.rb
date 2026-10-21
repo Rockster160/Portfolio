@@ -48,10 +48,18 @@ module ByteInterviewPrep
       ].compact.join("\n")
     end
 
+    # THE POSTING IS FETCHED WITH A COMMAND, NOT A LINK.
+    #
+    # The board answers on localhost and a tool call cannot fetch a loopback
+    # address at all, so the session has no way to open the page - and the
+    # scraped posting is the one source for the role that outlives their
+    # listing going dead. `jobhunt show <id>` prints the same row out of the
+    # board's own database, which also means it answers whether or not the web
+    # half of the board is running.
     def job_block(application)
       posting = (
         if application.jobhunt_job_id.present?
-          "- The posting as it was scraped: #{JOBHUNT_URL}/jobs/#{application.jobhunt_job_id}"
+          "- The posting as it was scraped: run `jobhunt show #{application.jobhunt_job_id}`"
         end
       )
 
@@ -173,7 +181,7 @@ module ByteInterviewPrep
 
         WHERE TO LOOK
         - **The web is the main source for the company.** Search for them, read their own site, and read their engineering blog and careers page if they have one. What they build, who they sell it to, how big they are, how old they are, who funds them, what they have shipped or announced lately, and anything that has been said about what it is like to work there. If the listing above is still up, read it.
-        - **`#{JOBHUNT_URL}` is my own job board, running on this machine.** `/jobs/<id>` above has the posting as it was scraped, which outlives their listing going dead. Try it; if it does not answer, carry on without it.
+        - **`jobhunt show <id>` is my own job board, on this machine.** The command named above prints the posting as it was scraped, which outlives their listing going dead - read it, it is the best single source for what the role actually is. Run it in this directory. Do NOT try to fetch `#{JOBHUNT_URL}` or any other localhost page: a tool call cannot reach a loopback address and the refusal is the only thing you will get.
         - **`#{CWD}/profile/profile.yml`** is me: what I do, what I am asking for, what I have said about my own background. Read it before you tell me what to brush up on.
         - **`#{RESUME_REPO}`** is the resume repo - `resume.html`, `accomplishments.md`, `experience.txt`, and `interview-answers.md`, which is where my behavioral answers are already written. It is on an external drive. If it is not mounted, say so in one line and write the brief without it rather than stopping.
 

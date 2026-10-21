@@ -345,6 +345,52 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  describe "a request sent again word for word" do
+    let(:ask) { "Any time my phone departs or arrives, send me a message saying where" }
+
+    it "drops the earlier copy and the answers that only talked, keeping what they added" do
+      said(ask)
+      said("I need the place name to make that watch work.", direction: :inbound, kind: "buddy")
+      said("I skipped remind when — it needed `location`.", direction: :inbound, kind: "buddy_reply", source: "deferred_skipped")
+      said("Wherever I arrived from.")
+      said("I still need one real place to anchor it to.", direction: :inbound, kind: "buddy")
+      again = said(" #{ask.upcase} ")
+
+      expect(build(upto: again)).to eq([
+        { role: :user, content: "Wherever I arrived from." },
+        { role: :user, content: ask.upcase },
+      ])
+    end
+
+    it "keeps replies that did something, and notifications" do
+      said(ask)
+      acted = said("Added it.", direction: :inbound, kind: "buddy_reply")
+      acted.update!(metadata: acted.metadata.merge("buttons" => [{ "id" => 1 }]))
+      said("⏲ Time's up!", direction: :inbound, kind: "buddy", source: "timer")
+      again = said(ask)
+
+      expect(build(upto: again).pluck(:content)).to eq(["Added it.", "⏲ Time's up!", ask])
+    end
+
+    it "leaves everything before the first copy alone" do
+      said("morning")
+      said("Morning!", direction: :inbound, kind: "buddy")
+      said(ask)
+      said("Which place?", direction: :inbound, kind: "buddy")
+      again = said(ask)
+
+      expect(build(upto: again).pluck(:content)).to eq(["morning", "Morning!", ask])
+    end
+
+    it "leaves a short repeat alone" do
+      said("again")
+      said("Which one?", direction: :inbound, kind: "buddy")
+      again = said("again")
+
+      expect(build(upto: again).length).to eq(3)
+    end
+  end
+
   describe "replies aimed at one message" do
     def replied(body, quote, **opts)
       message = said(body, **opts)

@@ -2169,6 +2169,46 @@ BUDDY_EDGE_PROBES = [
     note:  "the template was skipped as an uncollected step var; once that was fixed it asked for a " \
            "place, then set three to six overlapping custom travel watches",
   },
+  # The same sentence again, over the thread where it was refused three times.
+  {
+    case:  "prod 8737",
+    say:   "Any time either my phone or the car departs or arrives, send me a message like " \
+           "\"Phone: Arrived at Home\", replacing the phone with the device, arrived/departed, and the location.",
+    tool:  :remind_when,
+    args:  { remind_when: { trigger: "travel", repeat: true, text: /\{\{\s*location/ } },
+    once:  true,
+    note:  "asked for a place again in its own earlier words - the refusals before the fix were " \
+           "copied rather than the tool being tried",
+    seed:  ->(user, convo) {
+      said = ->(body) { convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body) }
+      replied = ->(body) {
+        convo.byte_messages.create!(
+          user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" }, body: body,
+        )
+      }
+      asked = "Any time either my phone or the car departs or arrives, send me a message like " \
+              "\"Phone: Arrived at Home\", replacing the phone with the device, arrived/departed, and the location."
+      said.call(asked)
+      replied.call("Hmm, I don't quite follow - can you give me a little more to go on?")
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent,
+        metadata: { "kind" => "buddy_reply", "source" => "deferred_skipped" },
+        body: "I skipped remind when — it needed `location`, and nothing earlier in that sequence collected it.",
+      )
+      said.call(asked)
+      replied.call("I need the place name to make that watch work. Tell me the location you want in the message, and I’ll set it up.")
+      said.call("Wherever I arrived/departed from.")
+      replied.call(
+        "Hmm. I need a real place to hang that on. “Wherever” is too fuzzy for the watch to know what to say.\n\n" \
+        "Tell me the location name you want in the message, like Home or Work, and I’ll set it up.",
+      )
+      said.call("It should be a travel watch.")
+      replied.call(
+        "Right, that’s a travel watch, but I still need one real place to anchor it to. “Wherever” won’t fire " \
+        "cleanly.\n\nTell me the location name you want, and I’ll set the arrival/departure message up.",
+      )
+    },
+  },
 ].freeze
 
 namespace :buddy do

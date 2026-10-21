@@ -1,7 +1,7 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:report]
-  before_action :none_unless_user, only: [:execute_task, :jil, :command]
+  before_action :none_unless_user, only: [:jil, :command]
   before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local, :sms]
   skip_before_action :pretty_logit, only: [:report] # Lots of data here
 
@@ -9,6 +9,8 @@ class WebhooksController < ApplicationController
   # retrying, short enough that a button pressed twice on purpose still needs
   # two distinct `pressed_at` values, which it always has.
   TRIGGER_REPLAY_WINDOW = 15.minutes
+
+  PUBLIC_WEBHOOK_LISTENER = "webhook:public".freeze
 
   def jenkins
     head :ok
@@ -101,12 +103,18 @@ class WebhooksController < ApplicationController
   end
 
   # /webhooks/jil
+  # Signed in, any of your own tasks. Not signed in, only a task whose listener
+  # is `webhook:public` - for a service that signs its body but can't log in.
+  # Nothing here checks that signature: the task does, from `headers` and the
+  # raw `body` (String.hmac), so it has to refuse what it can't verify.
   def execute_task
+    return execute_public_task unless user_signed_in?
+
     task = current_user.tasks.active.enabled.find_by(uuid: params[:uuid])
 
     if task.present?
       exe = task.match_run(
-        :webhook, { params: json_params },
+        :webhook, webhook_data,
         force: true, auth: jil_auth_type, auth_id: jil_auth_id
       )
 
@@ -123,6 +131,16 @@ class WebhooksController < ApplicationController
       render json: { data: nil, task: nil, notice: "No task found by that uuid." },
         status: :not_found
     end
+  end
+
+  # Only the task's return value goes back. An anonymous caller is not shown the
+  # task, and an unknown uuid looks the same as a refused one.
+  def execute_public_task
+    task = ::Task.active.enabled.find_by(uuid: params[:uuid], listener: PUBLIC_WEBHOOK_LISTENER)
+    return head :no_content if task.nil?
+
+    task.match_run(:webhook, webhook_data, force: true, auth: :webhook)
+    render json: { data: task.last_result }
   end
 
   def tesla_local
@@ -1185,6 +1203,19 @@ class WebhooksController < ApplicationController
     @json_params = json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
   rescue JSON::ParserError
     @json_params = json
+  end
+
+  # What a webhook task reads. `body` is the request exactly as sent, because a
+  # signature is over those bytes and re-serialized params never match them.
+  # Credentials stay out of `headers`.
+  def webhook_data
+    headers = request.headers.env.filter_map { |key, value|
+      next unless key.start_with?("HTTP_")
+      next if key.in?(["HTTP_AUTHORIZATION", "HTTP_COOKIE"])
+
+      [key.delete_prefix("HTTP_").downcase.tr("_", "-"), value]
+    }.to_h
+    { params: json_params, headers: headers, body: request.raw_post.to_s }
   end
 
   def none_unless_user

@@ -88,4 +88,74 @@ RSpec.describe "Running a Jil task over HTTP" do
     expect(get_task(task.uuid, token: other_key.key)["data"]).to be_nil
     expect(response).to have_http_status(:not_found)
   end
+
+  # A service like GitHub can sign its body but can't log in. A task listening
+  # on webhook:public takes it with no credentials, and has to check the
+  # signature itself from what it's handed.
+  describe "a webhook:public task" do
+    let(:secret) { "shared-secret" }
+    let!(:public_task) {
+      user.tasks.create!(
+        name:     "Signed Hook",
+        listener: "webhook:public",
+        enabled:  true,
+        code:     <<~'JIL',
+          input = Global.input_data()::Hash
+          headers = input.get("headers")::Hash
+          rawBody = input.get("body")::String
+          digest = rawBody.hmac("shared-secret")::String
+          expected = String.new("sha256=#{digest}")::String
+          given = headers.get("x-hub-signature-256")::String
+          event = headers.get("x-github-event")::String
+          signed = Boolean.eq(given, expected)::Boolean
+          out = Global.return("#{event} #{signed}")::String
+        JIL
+      )
+    }
+
+    def post_signed(uuid, body, key: secret, headers: {})
+      signature = "sha256=#{OpenSSL::HMAC.hexdigest("SHA256", key, body)}"
+      post(
+        "/jil/#{uuid}",
+        params:  body,
+        headers: {
+          "CONTENT_TYPE"        => "application/json",
+          "X-GitHub-Event"      => "push",
+          "X-Hub-Signature-256" => signature,
+        }.merge(headers),
+      )
+      response.parsed_body
+    end
+
+    it "runs with no credentials, handing the task the headers and the exact body" do
+      body = post_signed(public_task.uuid, '{"b": 1,  "a": [2]}')
+
+      expect(body).to eq("data" => "push true")
+      expect(public_task.reload.last_execution.auth_type).to eq("webhook")
+    end
+
+    it "lets the task tell a forged signature apart" do
+      expect(post_signed(public_task.uuid, "{}", key: "wrong")["data"]).to eq("push false")
+    end
+
+    it "keeps credentials out of the headers it hands over" do
+      code = <<~JIL
+        input = Global.input_data()::Hash
+        headers = input.get("headers")::Hash
+        keys = headers.keys()::Array
+        out = Global.return(keys)::Array
+      JIL
+      public_task.update!(code: code)
+
+      keys = post_signed(public_task.uuid, "{}", headers: { "Cookie" => "x=1" })["data"]
+      expect(keys).to include("x-github-event")
+      expect(keys).not_to include("cookie", "authorization")
+    end
+
+    it "still refuses an anonymous request for any other task" do
+      post_signed(task.uuid, "{}")
+
+      expect(response).to have_http_status(:no_content)
+    end
+  end
 end
