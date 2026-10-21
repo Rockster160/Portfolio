@@ -46,6 +46,18 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.body).not_to include("data-kiosk-pad")
     end
 
+    # Parsed the way a browser parses it. One stray closing tag in the board's
+    # settings shut .byte-app early, leaving the thread outside it, and the
+    # page's script found no thread and stopped on every board.
+    it "keeps the whole page inside the app, for the owner's settings too" do
+      get "/board/#{thread.id}"
+
+      app = Nokogiri::HTML5(response.body).at_css(".byte-app")
+      expect(app.at_css("[data-byte-thread]")).to be_present
+      expect(app.at_css("[data-byte-composer]")).to be_present
+      expect(app.at_css("[data-board-list-dialog]")).to be_present
+    end
+
     # The background-process strip ("Reading mail", an application filling in) is
     # scoped to the account, not the thread - it belongs to the chat. A board is
     # its own surface and must not carry the account's machinery, so the strip is

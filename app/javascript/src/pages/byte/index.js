@@ -139,13 +139,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- DOM refs ----------
   const thread = app.querySelector("[data-byte-thread]");
-  // Every page that draws .byte-app draws the thread, so without it the page
-  // arrived cut short (a connection dropped mid-deploy). Ask for it again
-  // rather than run half wired.
-  if (!thread) {
-    window.setTimeout(() => window.location.reload(), 5000);
-    return;
-  }
   // Delegated off the thread, so it survives every repaint the way the other
   // message-action handlers do.
   initImageViewer(thread);
