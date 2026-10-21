@@ -403,11 +403,21 @@ Buddy::Tools.register(
     before   = existing&.slice(:tag, :body, :summary, :spoke_to, :follow_up_at, :duration_minutes)
 
     note = (existing || job.notes.new)
-    # A row the mail filed already holds the mail's own words. Reading it sets
-    # the tag, time and who; it never gets to rewrite what the mail said.
+    # THE MAIL'S OWN WORDS, wherever we hold the mail. Reading it sets the tag,
+    # the time and who; it never gets to rewrite what the mail said.
+    #
+    # Off the mail itself and not only off a row that already holds it, because
+    # the arrival is filed ahead of this only once the mail resolves to a single
+    # application - a company sitting on the board twice reaches this with
+    # nothing filed, and then the beat is whatever got typed from the subject
+    # line. That is the shape where it costs the most: a calendar invitation's
+    # subject carries the title and the time, and its BODY is the only place
+    # the link to join appears. `JobNote#item_notes` builds the calendar row
+    # out of this, so a paraphrase here is an interview with no way into it.
     kept_body = existing.body if existing&.source == "Email" && existing.body.present?
+    kept_body ||= ::Buddy::JobMailOffer.mail_text(email) if email
     note.assign_attributes(
-      body:             kept_body || payload[:note].presence,
+      body:             kept_body.presence || payload[:note].presence,
       tag:              payload[:tag],
       # The mail's own clock, so the timeline reads in the order things
       # actually happened rather than in the order they were logged. Mail that

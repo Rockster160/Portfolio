@@ -272,6 +272,52 @@ RSpec.describe "add_job_note tool" do
     end
   end
 
+  # The arrival is only filed ahead of this once the mail resolves to a single
+  # application, so a company sitting on the board twice reaches this with
+  # nothing filed - and an invitation's subject carries the time while its BODY
+  # is the only place the link to join appears.
+  describe "a mail nothing has filed yet" do
+    let(:email) {
+      user.emails.create!(
+        direction: :inbound,
+        mail_id:   "m-11",
+        subject:   "Invitation: Phone Interview @ Thu 12pm",
+        blurb:     "Phone Interview",
+        timestamp: 1.hour.ago.change(usec: 0),
+      )
+    }
+    let(:invite) {
+      "Phone Interview\n\nJoin with Google Meet\nhttps://meet.google.com/vhf-auiw-nhq\n\nOrganizer"
+    }
+
+    before { allow(Buddy::JobMailOffer).to receive(:mail_text).and_return(invite) }
+
+    it "writes the mail's own words rather than the reading of them" do
+      execute(tag: :scheduled, follow_up_at: at, email_id: email.id,
+        note: "Phone interview scheduled for Thu at 12pm.")
+
+      expect(job.notes.last.body).to eq(invite)
+    end
+
+    it "carries the link to join onto the calendar row" do
+      execute(tag: :scheduled, follow_up_at: at, email_id: email.id,
+        note: "Phone interview scheduled for Thu at 12pm.")
+
+      expect(job.notes.last.follow_up_item.notes)
+        .to start_with("Join: https://meet.google.com/vhf-auiw-nhq")
+    end
+
+    # Mail we cannot read off disk is a soft failure upstream, and what was
+    # said out loud about it is better than an empty beat.
+    it "falls back to what was typed when the mail cannot be read" do
+      allow(Buddy::JobMailOffer).to receive(:mail_text).and_return(nil)
+
+      execute(tag: :heard_back, email_id: email.id, note: "They wrote back.")
+
+      expect(job.notes.last.body).to eq("They wrote back.")
+    end
+  end
+
   # Buddy::JobMailOffer files arriving mail on its row as a plain `note`, so
   # this card is the READING of a row that already exists rather than a new one.
   describe "a mail this row already holds" do

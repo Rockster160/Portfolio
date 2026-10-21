@@ -919,6 +919,26 @@ RSpec.describe JobNote do
       expect(notes).not_to include("...")
       expect(notes).not_to include("\u2026")
     end
+
+    # Ten lines into an invitation, under the organiser and the guest list, is
+    # where the only thing worth tapping lives.
+    it "lifts the link to join above everything else" do
+      said = "Aledade - Phone Interview\n\nJoin with Google Meet\nhttps://meet.google.com/vhf-auiw-nhq?hs=224\n\nOrganizer"
+      note = job.notes.create!(body: said, tag: :scheduled, follow_up_at: at)
+
+      notes = note.reload.follow_up_item.notes
+      expect(notes).to start_with("Join: https://meet.google.com/vhf-auiw-nhq?hs=224")
+      expect(notes).to include(job.interview_url)
+      expect(notes).to include("Join with Google Meet")
+    end
+
+    # Every link in an invitation is not the one to tap - the board, the
+    # calendar's own "view event", the dial-in page.
+    it "lifts nothing when the beat names no meeting" do
+      note = job.notes.create!(body: "Reply at https://calendar.google.com/calendar/event?eid=1", tag: :scheduled, follow_up_at: at)
+
+      expect(note.reload.follow_up_item.notes).to start_with(job.interview_url)
+    end
   end
 
   describe "the one line the timeline reads" do

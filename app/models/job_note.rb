@@ -693,9 +693,15 @@ class JobNote < ApplicationRecord
     }
   end
 
-  # The link to the application's own page FIRST, then whatever the beat said.
-  # The row on the calendar is what gets read on the day - and from a notification
-  # in the morning there is no board in front of you to find the company on.
+  # The link to JOIN first where the beat names one, then the link to the
+  # application's own page, then whatever the beat said. The row on the calendar
+  # is what gets read on the day - and from a notification in the morning there
+  # is no board in front of you to find the company on.
+  #
+  # A calendar invitation is mostly boilerplate - the organiser, the guest list,
+  # the forwarding notice - and the one line worth having two minutes beforehand
+  # sits ten lines down inside it. Lifting it out is what makes the row usable
+  # from a notification rather than only readable.
   #
   # ALL OF IT. The column is `text` and the beat is usually a confirmation mail,
   # where the half past 500 characters is the half that says who is joining the
@@ -705,7 +711,9 @@ class JobNote < ApplicationRecord
   # calendar row had. The brief written off this row then reported the ellipsis
   # as a fact about the interview.
   def item_notes
-    [job_application.interview_url, body.to_s.strip.presence].compact.join("\n\n")
+    link = ::ByteInterviewPrep::HeadsUp.meeting_url(body)
+    join = ("Join: #{link}" if link.present?)
+    [join, job_application.interview_url, body.to_s.strip.presence].compact.join("\n\n")
   end
 
   # Somewhere local and writable. A Google-managed calendar is deliberately
