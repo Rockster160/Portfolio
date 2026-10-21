@@ -160,23 +160,31 @@ export class Timer {
   render() {
     this.tick()
     const name = this.name ? this.name + ":" : ""
+    // A deploy past its estimate keeps running until it reports; it's shown as
+    // timed out, counting how far over it has gone.
+    const overdue = this.kind === "deploy" && !this.completed && this.left_ms <= 0
+    const over = overdue ? splitMs(Time.msSinceEpoch() - this.end_time) : undefined
     const timer = (
       this.completed
         ? [this.note || this.human(), clockTime(this.finishedAt())].join(" ")
-        : this.remaining() + " / " + this.human()
+        : overdue
+          ? `+${over.hours * 60 + over.minutes}:${String(over.seconds).padStart(2, "0")} / ${this.human()}`
+          : this.remaining() + " / " + this.human()
     )
     const text = Text.justify(
       "  " + Text.trunc(name, cell_width - 5 - timer.length),
       timer + "   "
     )
     // A running timer drains from full to empty; a deploy is progress, so it
-    // fills up. Once finished, every bar is full in its result color.
+    // fills up, never starting from a bare bar. Once finished, every bar is
+    // full in its result color.
     const elapsed = this.total_ms > 0 ? (this.total_ms - this.left_ms) / this.total_ms : 1
     const fill = this.completed ? 1 : (this.kind === "deploy" ? elapsed : 1 - elapsed)
 
-    const fill_cells = Math.round((cell_width - 2) * fill)
+    let fill_cells = Math.round((cell_width - 2) * fill)
+    if (this.kind === "deploy") { fill_cells = Math.max(1, fill_cells) }
     let color = this.acknowledged ? dash_colors.green : dash_colors.yellow
-    if (this.errored) { color = dash_colors.red }
+    if (this.errored || overdue) { color = dash_colors.red }
     if (this.paused_ms != undefined && !this.completed) { color = dash_colors.darkgrey }
     const filled = Text.bgColor(color, text.slice(0, fill_cells))
     const empty = Text.bgColor(dash_colors.grey, text.slice(fill_cells, -2))
