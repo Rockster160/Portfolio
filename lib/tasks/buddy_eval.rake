@@ -2156,6 +2156,18 @@ BUDDY_EDGE_PROBES = [
     note:  "scheduled Tesla Navigate at the event's booked end (5:59pm) because " \
            "remind_when's run couldn't carry a destination",
   },
+  # A watch whose text fills itself in off the trigger. The `{{ location }}`
+  # in it was read as a step reference nothing had collected, and the watch
+  # was dropped before it was set.
+  {
+    case:  "prod 8687",
+    say:   "Any time either my phone or the car departs or arrives, send me a message like " \
+           "\"Phone: Arrived at Home\", replacing the phone with the device, arrived/departed, and the location.",
+    tool:  :remind_when,
+    args:  { remind_when: { trigger: "custom", repeat: true, text: /\{\{\s*location/ } },
+    note:  "the template was skipped as an uncollected step var, so nothing was set and the reply " \
+           "fell back to \"I don't quite follow\"",
+  },
 ].freeze
 
 namespace :buddy do

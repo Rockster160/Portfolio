@@ -355,6 +355,35 @@ RSpec.describe "Buddy step variables" do
     end
   end
 
+  # A watch's text is a Liquid template rendered when it fires, with the
+  # trigger's keys - the same braces as a step reference, owed by nobody here.
+  describe "an argument that is a template of its own" do
+    let(:remind_when) { Buddy::Tools[:remind_when] }
+
+    it "is not a reference an earlier step owes" do
+      payload = { text: "📱 {{ action }} at {{ location }}", trigger: "custom" }
+
+      expect(Buddy::StepVars.references(payload, remind_when)).to be_empty
+    end
+
+    it "fills in a value a step did collect, and leaves the rest for the template" do
+      filled, missing = Buddy::StepVars.fill({ text: "{{ mine }} at {{ location }}" }, { "mine" => "curry" }, remind_when)
+
+      expect(missing).to be_empty
+      expect(filled[:text]).to eq("curry at {{ location }}")
+    end
+
+    it "sets the watch with its template intact" do
+      text = "📱 {{ action | capitalize }} at {{ location }}"
+      build!([{
+        tool_name: :remind_when,
+        payload:   { trigger: "custom", listener: "travel", when_phrase: "when my phone arrives or leaves", text: text, repeat: true },
+      }])
+
+      expect(BuddyWatch.where(user: user).pluck(:trigger_scope, :body)).to eq([["travel", text]])
+    end
+  end
+
   describe "giving up on an answer that never comes" do
     it "says what it didn't go on to do, and drops the queue" do
       build!([ask_her("Dinner?", "hers"), tell_her("she wants {{hers}}")])

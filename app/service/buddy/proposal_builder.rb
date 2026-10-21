@@ -553,7 +553,7 @@ module Buddy
       def split_hoistable(merged)
         waited = false
         merged.partition { |p|
-          hoistable = !waited && p[:tool][:level] == 2 && Buddy::StepVars.references(p[:payload]).empty?
+          hoistable = !waited && p[:tool][:level] == 2 && Buddy::StepVars.references(p[:payload], p[:tool]).empty?
           waited ||= blocks_hoist?(p)
           hoistable
         }
@@ -786,10 +786,10 @@ module Buddy
       # backstop for everything that didn't come through there.
       def runnable_now(user, conversation, head)
         head.filter_map { |step|
-          keep, broken = step[:calls].partition { |p| Buddy::StepVars.references(p[:payload]).empty? }
+          keep, broken = step[:calls].partition { |p| Buddy::StepVars.references(p[:payload], p[:tool]).empty? }
           next step if broken.empty?
 
-          report_missing_vars(user, conversation, broken.map { |p| p.merge(missing: Buddy::StepVars.references(p[:payload])) })
+          report_missing_vars(user, conversation, broken.map { |p| p.merge(missing: Buddy::StepVars.references(p[:payload], p[:tool])) })
           step.merge(calls: keep) if keep.any?
         }
       end
@@ -974,7 +974,7 @@ module Buddy
           tool = Buddy::Tools[row["tool_name"].to_s.to_sym]
           next nil if tool.nil?
 
-          payload, missing = Buddy::StepVars.fill((row["payload"] || {}).symbolize_keys, vars)
+          payload, missing = Buddy::StepVars.fill((row["payload"] || {}).symbolize_keys, vars, tool)
           {
             tool:      tool,
             payload:   payload,

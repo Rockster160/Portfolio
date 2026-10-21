@@ -194,7 +194,7 @@ module Buddy
         tool    = Buddy::Tools[step["tool_name"]]
         payload = (step["payload"] || {}).transform_keys(&:to_sym)
 
-        unmet = Buddy::StepVars.references(payload) - available
+        unmet = Buddy::StepVars.references(payload, tool) - available
         if unmet.any?
           raise "step #{i + 1} (#{step["tool_name"]}) uses #{unmet.map { |n| "{{#{n}}}" }.join(", ")}, " \
                 "but nothing before it collects that"
@@ -267,7 +267,7 @@ module Buddy
       # function name in the same step is caught exactly as before - and what's
       # lost is only the guarantee about the argument that's a placeholder,
       # which is unknowable by definition. check_var_flow! covers what remains.
-      raise "step #{position} (#{name}): #{e.message}" if Buddy::StepVars.references(payload).empty?
+      raise "step #{position} (#{name}): #{e.message}" if Buddy::StepVars.references(payload, tool).empty?
 
       Rails.logger.info("[Buddy::Routines] step #{position} (#{name}) unresolved at save: #{e.message}")
     end

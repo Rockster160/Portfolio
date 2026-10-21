@@ -274,6 +274,7 @@ Buddy::Tools.register(
     text:   {
       type:        :string,
       required:    true,
+      template:    true,
       description: "What to remind them of. ALWAYS name the thing itself - this fires hours or " \
                    "days later, out of any context, and it is the whole message they get. " \
                    "\"Leave for the dentist\" over \"time to go\"; \"Get ready for the 1:40 " \

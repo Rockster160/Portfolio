@@ -499,6 +499,32 @@ RSpec.describe Buddy::WatchMatcher do
         expect(announce(template, { "name" => "Milk", "list" => "Groceries" })).to eq("🥕 Milk")
       end
 
+      # The shape remind_when's description hands out for every arrival and
+      # departure, phone and car alike.
+      describe "on a travel leg" do
+        let(:template) {
+          '{% if source == "tesla" %}🚗 Car{% else %}📱 Phone{% endif %}: ' \
+            '{{ action | capitalize }} {% if action == "arrived" %}at {% endif %}{{ location }}'
+        }
+
+        it "names the phone arriving" do
+          line = announce(template, { "action" => "arrived", "location" => "Home", "source" => "phone" }, scope: :travel)
+
+          expect(line).to eq("📱 Phone: Arrived at Home")
+        end
+
+        # The car's own scope comes from a Jil task, so it is only watchable
+        # where a task listens on it.
+        it "names the car leaving" do
+          allow(Jil::ListenerMatch).to receive(:wired_scopes).and_return(["tesla_travel"])
+          line = announce(
+            template, { "action" => "departed", "location" => "Costco", "source" => "tesla" }, scope: :tesla_travel
+          )
+
+          expect(line).to eq("🚗 Car: Departed Costco")
+        end
+      end
+
       it "reaches the base context every template gets" do
         line = announce("{{ buddy }} saw {{ name }} on {{ weekday }}", { "name" => "a thing" })
 

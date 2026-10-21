@@ -29,9 +29,15 @@ RSpec.describe ByteInterviewPrep do
   end
 
   describe ".application_for" do
-    # The first line of the notes is the handle, because it is the one thing
-    # every row a job beat writes is guaranteed to carry.
-    it "finds the application off the link in the first line" do
+    # The link in the notes is the handle, because it is the one thing every
+    # row a job beat writes is guaranteed to carry.
+    it "finds the application off the link in the notes" do
+      expect(described_class.application_for(item, user)).to eq(job)
+    end
+
+    it "still finds it when a join link was pasted in above it" do
+      item.update!(notes: "https://meet.google.com/dip-asws-sgw\n#{item.notes}")
+
       expect(described_class.application_for(item, user)).to eq(job)
     end
 
@@ -253,9 +259,23 @@ RSpec.describe ByteInterviewPrep do
     # thing it was written to save him - and the answers file is on a drive
     # the phone reading the brief cannot open at all.
     it "asks for the written answers themselves, not a pointer to them" do
-      expect(prompt).to include("The answers themselves")
       expect(prompt).to include("WHATEVER THE BRIEF NAMES, THE BRIEF CARRIES")
       expect(prompt).to include("Verbatim, as the file has it")
+    end
+
+    # Collected at the end, an answer is read by scrolling up to the question
+    # and back down again, which loses his place in both.
+    it "asks for each answer under the question it answers" do
+      expect(prompt).to include("AN ANSWER SITS UNDER ITS QUESTION")
+      expect(prompt).not_to include("The answers themselves")
+    end
+
+    # The shorthand everyone is assumed to know is the one that goes in bare,
+    # and a glossary at the top is the same scroll the answers were.
+    it "asks for every term to be explained where it is used" do
+      expect(prompt).to include("EVERY TERM IS EXPLAINED WHERE IT IS USED")
+      expect(prompt).to include("IC")
+      expect(prompt).to include("VC")
     end
 
     # 400 characters is a greeting and the first paragraph, so the brief was

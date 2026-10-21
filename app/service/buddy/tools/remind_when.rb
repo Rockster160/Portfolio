@@ -165,6 +165,13 @@ Buddy::Tools.register(
       `{% if outcome == "failed" %}❌ it broke{% else %}🚀 all good{% endif %}`.
     - `{{ now }}`, `{{ today }}`, `{{ weekday }}`, `{{ user }}`, `{{ buddy }}`
       and `{{ greeting }}` are there whatever the trigger was.
+    - Arriving and leaving carry `{{ action }}` (`arrived` / `departed`),
+      `{{ location }}` and `{{ source }}` (`phone` / `tesla`). Their phone is
+      `custom` on listener `travel`, their car is `custom` on `tesla_travel`,
+      and each one with no filters hears every arrival AND departure anywhere.
+      "Any time my phone or the car arrives or leaves, send me 'Phone: Arrived
+      at Home'" is one repeating watch on each, both with the same text:
+      `{% if source == "tesla" %}🚗 Car{% else %}📱 Phone{% endif %}: {{ action | capitalize }} {% if action == "arrived" %}at {% endif %}{{ location }}`
 
     A plain sentence is still the right answer most of the time. Reach for a
     template when they've said something a sentence can't do - where the detail
@@ -221,7 +228,7 @@ Buddy::Tools.register(
     detected - just that you'll let them know.
   TXT
   args: {
-    text:        { type: :string,  required: true,  description: "What to remind them of" },
+    text:        { type: :string,  required: true,  template: true, description: "What to remind them of" },
     trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
     except:      { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },

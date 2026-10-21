@@ -94,18 +94,20 @@ module ByteInterviewPrep
   # Which interview, and whether to write about it at all
   # ==========================================================================
 
-  # THE FIRST LINE OF THE EVENT NOTES IS THE APPLICATION.
+  # THE LINK IN THE EVENT NOTES IS THE APPLICATION.
   #
   # `JobNote#item_notes` writes `job_application.interview_url` first on every
   # row a beat puts on the calendar, precisely so the row read on the day leads
-  # back to the board. That makes it the handle here too.
+  # back to the board. That makes it the handle here too. The whole note is
+  # searched, not just its first line: a join link pasted in above it still
+  # leaves the row ours, and a prep link carries the same id.
   #
   # It is also what separates the two rows one interview has: the internal row
   # is ours and carries the link, and the company's synced invite carries the
   # event description that goes back out to every attendee. Both match a
   # listener looking for "interview" in the title; only one answers this.
   def application_for(item, user)
-    id = item&.notes.to_s.lines.first.to_s[%r{/interviews/(\d+)}, 1]
+    id = item&.notes.to_s[%r{/interviews/(\d+)}, 1]
     return nil if id.blank?
 
     user.job_applications.find_by(id: id)

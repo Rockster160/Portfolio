@@ -259,7 +259,7 @@ class ActionEventsController < ApplicationController
 
     if time.is_a?(String)
       begin
-        return Time.zone.parse(time)
+        return Time.zone.parse(time) || fallback
       rescue StandardError
         return fallback
       end

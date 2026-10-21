@@ -65,9 +65,22 @@ module Buddy
       (payload || {})[CAPTURE_ARG].to_s.strip.presence
     end
 
-    # Every `{{name}}` anywhere in a payload, in no particular order.
-    def references(payload)
-      (payload || {}).values.flat_map { |v| tokens_in(v) }.uniq
+    # The args a tool renders as a Liquid template when it FIRES (`template:
+    # true` on the arg) - a watch's `{{ location }}` is the trigger's, read
+    # hours later, and the same braces as a step reference. Inside these a
+    # token is only a step's when an earlier step captured that name; anything
+    # else is left in place for the template.
+    def template_args(tool)
+      return [] unless tool.is_a?(Hash) && tool[:args].is_a?(Hash)
+
+      tool[:args].select { |_, spec| spec.is_a?(Hash) && spec[:template] }.keys.map(&:to_sym)
+    end
+
+    # Every `{{name}}` anywhere in a payload, in no particular order. Template
+    # args are left out: nothing in them is owed by an earlier step.
+    def references(payload, tool=nil)
+      skip = template_args(tool)
+      (payload || {}).reject { |key, _| skip.include?(key.to_sym) }.values.flat_map { |v| tokens_in(v) }.uniq
     end
 
     def tokens_in(value)
@@ -84,9 +97,9 @@ module Buddy
     # the literal `{{hers}}` on to something that will act on it. A step quietly
     # sending the token itself is precisely the silent failure a saved sequence
     # exists to remove.
-    def fill(payload, vars)
+    def fill(payload, vars, tool=nil)
       values  = (vars || {}).transform_keys(&:to_s)
-      missing = references(payload).reject { |name| values.key?(name) }
+      missing = references(payload, tool).reject { |name| values.key?(name) }
       return [payload, missing] if missing.any?
       return [payload, []] if values.empty?
 
@@ -105,11 +118,16 @@ module Buddy
     # A value that is nothing BUT a token keeps the captured value's own type -
     # a multi-select answer stays an array rather than becoming "[...]". Mixed
     # into a sentence it has to become text, so it is joined readably.
+    # A token with no value is left as written, which only happens inside a
+    # template arg - everywhere else `fill` has already refused.
     def fill_string(text, values)
       whole = text.match(/\A\s*#{TOKEN}\s*\z/)
-      return values[whole[1]] if whole
+      return values[whole[1]] if whole && values.key?(whole[1])
 
-      text.gsub(TOKEN) { readable(values[Regexp.last_match(1)]) }
+      text.gsub(TOKEN) { |token|
+        name = Regexp.last_match(1)
+        values.key?(name) ? readable(values[name]) : token
+      }
     end
 
     def readable(value)

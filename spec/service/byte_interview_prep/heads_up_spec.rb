@@ -154,6 +154,33 @@ RSpec.describe ByteInterviewPrep::HeadsUp do
       expect(described_class.dispatch(user, invite_row.id)).to eq(:not_an_interview)
     end
 
+    # A split interview: ours is booked for the first session only, and the
+    # company sent a second invite with its own link.
+    describe "a second session with no row of ours" do
+      let!(:first) { ours }
+
+      it "sends that invite's own link" do
+        teams = "https://teams.microsoft.com/l/meetup-join/second"
+        second = invite(location: teams, at: start + 75.minutes)
+
+        expect(described_class.dispatch(user, second.id)).to eq(:link)
+        expect(said.body).to eq("Bluestaq starts in 2 minutes - here's the link.\n\n#{teams}")
+        expect(said.metadata).to include("agenda_item_id" => second.id)
+      end
+
+      it "stays quiet for an invite from another company" do
+        other = invite(name: "Interview with Acme", location: "https://meet.google.com/abc", at: start + 75.minutes)
+
+        expect(described_class.dispatch(user, other.id)).to eq(:not_an_interview)
+      end
+
+      it "stays quiet for the twin of our own row" do
+        twin = invite(location: "https://meet.google.com/moh-hbtd-mwh")
+
+        expect(described_class.dispatch(user, twin.id)).to eq(:not_an_interview)
+      end
+    end
+
     it "sends once when the trigger fires twice" do
       item = ours
 

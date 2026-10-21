@@ -64,7 +64,9 @@ module ByteInterviewPrep
 
       # The listener matches both rows of an interview; only ours names the
       # application, so the invite's own trigger stops here and he hears once.
-      application = ByteInterviewPrep.application_for(item, user)
+      # An invite with no row of ours at its minute is another session of an
+      # interview booked that day, and answers for itself.
+      application = ByteInterviewPrep.application_for(item, user) || other_session_of(item, user)
       return :not_an_interview if application.nil?
 
       send!(user, application: application, item: item)
@@ -129,6 +131,23 @@ module ByteInterviewPrep
       scope = user.accessible_agenda_items.event.not_cancelled.where(start_at: item.start_at)
       scope = scope.where.not(id: item.id)
       scope.where("agenda_items.name ILIKE ?", "%#{::AgendaItem.sanitize_sql_like(application.company)}%").to_a
+    end
+
+    # The application behind an invite that is the second half of a split
+    # interview: a row of ours the same day, its company in this
+    # invite's title. Nil while a row of ours shares this minute, because that
+    # row sends its own heads-up and reads this invite as its twin.
+    def other_session_of(item, user)
+      day = item.start_at.in_time_zone(user.timezone).all_day
+      scope = user.accessible_agenda_items.event.not_cancelled.where(start_at: day)
+      scope = scope.where.not(id: item.id)
+      rows = scope.where("agenda_items.notes LIKE ?", "%/interviews/%").order(:start_at).to_a
+      return nil if rows.any? { |row| row.start_at == item.start_at }
+
+      title = item.name.to_s.downcase
+      rows.filter_map { |row| ByteInterviewPrep.application_for(row, user) }.find { |application|
+        application.company.present? && title.include?(application.company.downcase)
+      }
     end
 
     # An invite from a sender Google doesn't know never reaches the synced
