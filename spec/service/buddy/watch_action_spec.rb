@@ -258,4 +258,83 @@ RSpec.describe "Buddy watch actions" do
       expect(Buddy::ProposalBuilder).to have_received(:run_markers!)
     end
   end
+
+  # A listener on the front of a whole chain: a saved routine, or steps written
+  # for this one watch, run with no model turn when the condition hits.
+  describe "running a sequence" do
+    let(:steps_json) {
+      [
+        { tool_name: "set_timer", payload: { minutes: 2, then_continue: true } },
+        { tool_name: "run_jil_task", payload: { name: "Whisper Quiet" } },
+      ].to_json
+    }
+    let!(:routine) {
+      user.buddy_routines.create!(name: "Wind Down", steps: [BuddyRoutine.step(:run_jil_task, { name: "Whisper Quiet" })])
+    }
+
+    it "stores steps written for the watch, checked the way a routine's are" do
+      run(doorbell(text: "Winding down.", steps: steps_json))
+
+      w = BuddyWatch.last
+      expect(w.kind).to eq("action")
+      expect(w.run_steps.pluck("tool_name")).to eq(["set_timer", "run_jil_task"])
+      expect(w.run_task_name).to include("wait 2 min", "run jil task: Whisper Quiet")
+      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last.body).to include("wait 2 min")
+    end
+
+    it "refuses a step that can't run, before anything is armed" do
+      run(doorbell(steps: [{ tool_name: "run_jil_task", payload: { name: "Teleporter" } }].to_json))
+
+      expect(BuddyWatch.count).to eq(0)
+    end
+
+    it "refuses steps alongside a single task" do
+      run(doorbell(run: "Whisper Quiet", steps: steps_json))
+
+      expect(BuddyWatch.count).to eq(0)
+    end
+
+    it "plays the steps through the routine runner when it fires" do
+      run(doorbell(text: "Winding down.", steps: steps_json))
+      w = BuddyWatch.last
+      ran = nil
+      allow(Buddy::ProposalBuilder).to receive(:run_markers!) { |args| ran = args }
+
+      Buddy::WatchMatcher.fire!(w)
+
+      expect(ran[:markers].pluck(:tool_name)).to eq([:set_timer, :run_jil_task])
+      expect(ran[:body]).to eq("Winding down.")
+      expect(w.reload.fired_at).to be_present
+    end
+
+    it "names a saved routine and runs whatever it holds when it fires" do
+      run(doorbell(routine: "wind down"))
+      w = BuddyWatch.last
+      expect(w.run_routine_id).to eq(routine.id)
+      expect(w.run_task_name).to eq("Wind Down")
+
+      allow(Buddy::Routines).to receive(:run!)
+      Buddy::WatchMatcher.fire!(w)
+
+      expect(Buddy::Routines).to have_received(:run!).with(routine, conversation: convo)
+    end
+
+    it "says so instead of running a routine that has been switched off" do
+      run(doorbell(routine: "Wind Down"))
+      w = BuddyWatch.last
+      routine.update!(enabled: false)
+      allow(Buddy::Routines).to receive(:run!)
+
+      Buddy::WatchMatcher.fire!(w)
+
+      expect(Buddy::Routines).not_to have_received(:run!)
+      expect(convo.byte_messages.last.body).to include("Didn't run **Wind Down**", "turned off")
+    end
+
+    it "refuses a routine that doesn't exist" do
+      run(doorbell(routine: "Nope"))
+
+      expect(BuddyWatch.count).to eq(0)
+    end
+  end
 end

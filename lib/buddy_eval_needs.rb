@@ -159,6 +159,7 @@ module BuddyEvalNeeds
     halloway_application: { label: "a live Halloway Systems application", check: ->(u) { JobApplication.where(user: u).live.any? { |j| j.company.to_s.match?(/halloway/i) } } },
     vantrice_two_roles:   { label: "two Vantrice Labs roles on the board", check: ->(u) { JobApplication.where(user: u).count { |j| j.company.to_s.match?(/vantrice/i) } >= 2 } },
     halloway_job_mail:    { label: "triaged job mail from Halloway Systems", check: ->(u) { Email.where(user: u).job_mail.any? { |e| e.subject.to_s.match?(/halloway/i) } } },
+    vet_mail:             { label: "mail from the vet about Pickles", check: ->(u) { Email.where(user: u).exists?(["outbound_mailboxes::text ILIKE ?", "%brightwater%"]) } },
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },
     pending_prompt:       { label: "a pending prompt",             check: ->(u) { u.prompts.unanswered.exists? } },
     whisper_sound_fn:     { label: "the Whisper Sound function",   check: ->(u) { jil(u, /whisper sound/i) } },

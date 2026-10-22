@@ -17,9 +17,18 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   # [PromptQuestion]
   #   #text(String:"Question Text" BR "Default" String)
   #   #duration(String:"Question Text" BR "Default" String)
+  #   #textarea(String:"Question Text" BR "Default" String)
+  #   #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #   #checkbox(String:"Question Text" BR "Default" Boolean)
   #   #choices(String:"Question Text" content(String))
+  #   #select(String:"Question Text" content(String) "Default" String?)
+  #   #chips(String:"Question Text" content(String) "Default" String? BR "Colors" Hash?)
   #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
+  #   #date(String:"Question Text" BR "Default" Date?)
+  #   #datetime(String:"Question Text" BR "Default" Date?)
+  #   #time(String:"Question Text" BR "Default" Date?)
+  #   #color(String:"Question Text" BR "Default" String)
+  #   #hidden(String:"Key" Any:"Value")
   #   #hint(String)
 
   def find(id)

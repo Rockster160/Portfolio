@@ -104,8 +104,18 @@ class BuddyWatch < ApplicationRecord
     [{ tool_name: row["tool"].to_sym, payload: (row["payload"] || {}).transform_keys(&:to_sym) }]
   end
 
+  # A saved routine, by id, or a sequence written for this one watch. Either is
+  # played through the same runner a routine tap uses, waits and questions
+  # included, so a listener can start a whole chain rather than one task.
+  def run_routine_id = metadata.to_h["run_routine_id"].presence&.to_i
+  def run_steps      = Array(metadata.to_h["run_steps"])
+
+  def runs_sequence?
+    run_routine_id.present? || run_steps.any?
+  end
+
   # How long the countdown runs each time this trips.
-  def timer_seconds  = metadata.to_h["timer_seconds"].to_i
+  def timer_seconds = metadata.to_h["timer_seconds"].to_i
 
   # The scopes the NAMED triggers use (arrive/depart, chore, event, deploy,
   # agenda). A custom listener isn't limited to these: it names whatever scope
@@ -116,7 +126,7 @@ class BuddyWatch < ApplicationRecord
   # `active` = not terminally fired, not cancelled, not expired. One-shot
   # watches set `fired_at` after firing (terminal); repeating watches only
   # set `last_fired_at` and stay active until cancelled/expired.
-  scope :active, ->(now = Time.current) {
+  scope :active, ->(now=Time.current) {
     where(fired_at: nil, cancelled_at: nil)
       .where("expires_at IS NULL OR expires_at > ?", now)
   }

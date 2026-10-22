@@ -1,6 +1,6 @@
 require "rails_helper"
 
-# `delivery:action:created|updated|delivered|delayed`, so a Jil task can react
+# `delivery:action:created|updated|delivered|delayed|cancelled|declined`, so a Jil task can react
 # to a package the way it reacts to a list item or a chore.
 #
 # AmazonOrder is a cache-backed PORO with no model callbacks, so this hangs off
@@ -121,9 +121,100 @@ RSpec.describe DeliveryEvents do
 
       expect(calls.map { |pair| pair.last["action"] }).to eq(["delivered"])
     end
+
+    it "fires cancelled when the order is cancelled, and says what it was" do
+      stock!([row])
+
+      calls = fired {
+        AmazonOrder.reload.first.status = :cancelled
+        AmazonOrder.save
+      }
+
+      expect(calls.map(&:last)).to contain_exactly(include("action" => "cancelled", "status" => "cancelled"))
+    end
+
+    it "fires declined when the payment is declined" do
+      stock!([row])
+
+      calls = fired {
+        AmazonOrder.reload.first.status = :declined
+        AmazonOrder.save
+      }
+
+      expect(calls.map { |pair| pair.last["action"] }).to eq(["declined"])
+    end
+
+    # Clearing a declined payment is good news, and an ordinary update.
+    it "calls a declined order clearing an update, carrying what it was" do
+      stock!([row("status" => "declined")])
+
+      calls = fired {
+        AmazonOrder.reload.first.status = nil
+        AmazonOrder.save
+      }
+
+      _scope, data = calls.first
+      expect(data).to include("action" => "updated", "status" => "", "previous_status" => "declined")
+    end
+
+    it "carries the window and where it came from" do
+      stock!([row])
+
+      calls = fired {
+        order = AmazonOrder.reload.first
+        order.time_range = "2-6 PM"
+        order.source = "Shopify"
+        AmazonOrder.save
+      }
+
+      _scope, data = calls.first
+      expect(data).to include("action" => "updated", "time_range" => "2-6 PM", "source" => "Shopify")
+      expect(data).not_to have_key("previous_status")
+    end
+  end
+
+  # What a Jil task's listener line does with the payload, end to end.
+  describe "a listener on it" do
+    def payload_for(&block)
+      calls = fired(&block)
+      calls.first.last
+    end
+
+    it "matches a cancellation and not a delivery" do
+      stock!([row])
+      cancelled = payload_for {
+        AmazonOrder.reload.first.status = :cancelled
+        AmazonOrder.save
+      }
+
+      expect(Jil::ListenerMatch.call("delivery:action:cancelled", :delivery, cancelled)).to be_truthy
+      expect(Jil::ListenerMatch.call("delivery:action:delivered", :delivery, cancelled)).to be_falsey
+    end
+
+    it "matches on the name and carrier" do
+      stock!([row])
+      delivered = payload_for {
+        AmazonOrder.reload.first.delivered = true
+        AmazonOrder.save
+      }
+
+      expect(Jil::ListenerMatch.call("delivery:action:delivered name:/desk/i", :delivery, delivered)).to be_truthy
+      expect(Jil::ListenerMatch.call("delivery:carrier::ups", :delivery, delivered)).to be_falsey
+    end
   end
 
   describe "what it stays quiet about" do
+    it "says nothing when a cancelled order is saved again" do
+      stock!([row("status" => "cancelled")])
+
+      calls = fired {
+        AmazonOrder.reload
+        AmazonOrder.save
+      }
+
+      expect(calls).to be_empty
+    end
+
     it "says nothing when the save changed nothing" do
       stock!([row])
 

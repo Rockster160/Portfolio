@@ -233,9 +233,21 @@ function buildRow(field, { draft, locked }) {
   row.dataset.key = field.key;
   row.dataset.type = field.type;
 
+  // "Sleepy | Alert" names the two ends of a scale, which the page draws on
+  // either side of the slider rather than as one label.
+  const ends = scaleEnds(field);
   const label = document.createElement("span");
   label.className = "byte-msg-form-label";
-  label.textContent = field.label || field.key;
+  if (ends) {
+    label.classList.add("byte-msg-form-ends");
+    ends.forEach((end) => {
+      const span = document.createElement("span");
+      span.textContent = end;
+      label.appendChild(span);
+    });
+  } else {
+    label.textContent = field.label || field.key;
+  }
   row.appendChild(label);
 
   const seeded = Object.prototype.hasOwnProperty.call(draft, field.key)
@@ -245,8 +257,14 @@ function buildRow(field, { draft, locked }) {
   if (!control) return null;
   row.appendChild(control);
 
-  // A duration writes its own hint and keeps rewriting it, so it never carries
-  // a static one. Everything else shows whatever the server sent.
+  // A duration writes its own readback and keeps rewriting it, beneath any
+  // small print the server sent along with it.
+  if (field.hint) {
+    const hint = document.createElement("span");
+    hint.className = "byte-msg-form-hint";
+    hint.textContent = field.hint;
+    row.appendChild(hint);
+  }
   if (field.type === "duration") {
     const hint = document.createElement("span");
     hint.className = "byte-msg-form-hint";
@@ -265,11 +283,6 @@ function buildRow(field, { draft, locked }) {
     };
     row.addEventListener("input", paint);
     paint();
-  } else if (field.hint) {
-    const hint = document.createElement("span");
-    hint.className = "byte-msg-form-hint";
-    hint.textContent = field.hint;
-    row.appendChild(hint);
   }
 
   // Mirror every edit into the draft so a repaint can put it back. Both events:
@@ -281,6 +294,12 @@ function buildRow(field, { draft, locked }) {
   row.addEventListener("change", remember);
 
   return row;
+}
+
+function scaleEnds(field) {
+  if (field.type !== "scale") return null;
+  const parts = String(field.label || field.key).split(" | ");
+  return parts.length === 2 ? parts : null;
 }
 
 function buildControl(field, value, locked) {

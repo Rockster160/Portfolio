@@ -1,9 +1,9 @@
 Buddy::Tools.register(
-  name:        :remind_when,
-  summary:     "Do something when a thing HAPPENS - arriving or leaving, a chore getting DONE, an " \
-               "item ADDED, a deploy, any listener: a nudge, or RUN an automation (\"once I leave, " \
-               "navigate me to Petsmart\"). Coming DUE or a clock time is schedule_reminder.",
-  description: <<~TXT,
+  name:         :remind_when,
+  summary:      "Do something when a thing HAPPENS - arriving or leaving, a chore getting DONE, an " \
+                "item ADDED, a deploy, any listener: a nudge, or RUN an automation (\"once I leave, " \
+                "navigate me to Petsmart\"). Coming DUE or a clock time is schedule_reminder.",
+  description:  <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /
     leave / do> Y". For plain time-based reminders use schedule_reminder.
@@ -50,6 +50,8 @@ Buddy::Tools.register(
                  ask them for a place, and never hand-write a `travel`,
                  `tesla_travel` or `trytravel` listener for this; `trytravel`
                  is every raw report, a Bluetooth blip in the garage included.
+                 "When I get home" or any other named place is never this - it
+                 is `arrive` with that `target`, whatever runs afterwards.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
                  me to floss". Never when it comes DUE - that is
@@ -218,6 +220,35 @@ Buddy::Tools.register(
     if they want to be told, that's `text` as usual. `notify` and `run` don't
     combine - one is a message to a person, the other isn't a message at all.
 
+    ## Running a chain of things
+
+    `routine` names one of their saved routines, and `steps` is a sequence
+    written for this watch alone - the same JSON array `save_routine` takes, in
+    order, waits (`set_timer` with `then_continue: true`) and all. Either one
+    runs the whole chain when the condition hits, with no model in the loop:
+
+      "When I start the printer, wait 2 minutes, then preheat it"
+        trigger: "custom", listener: <the printer starting>,
+        steps: [{"tool_name":"set_timer","payload":{"minutes":2,"then_continue":true}},
+                {"tool_name":"run_jil_task","payload":{"name":"Printer - Preheat"}}]
+
+      "When I log coffee, turn on chill mode, then start a 90-minute focus timer"
+        trigger: "event", target: "Coffee",
+        steps: [{"tool_name":"run_jil_task","payload":{"name":"Chill Mode"}},
+                {"tool_name":"set_timer","payload":{"minutes":90,"label":"Focus"}}]
+
+    A single timer with nothing else is still `timer` on its own.
+
+      "Run my wind-down the next time I get home" -> trigger: "arrive",
+        target: "home", routine: "Wind Down"
+
+    These are one-offs unless they say every time, exactly like a reminder.
+    Use `steps` for anything more than a single task; `run` is still the one
+    for exactly one Jil task. A chain that is worth keeping for its own sake -
+    "and save that as my wind-down" - is `save_routine` first, then `routine`
+    here. `delay` applies to these too. They don't combine with `run`,
+    `timer` or `notify`, and `text` is the line posted above what ran.
+
     `timer` starts a COUNTDOWN each time the condition hits - "set a 1 second
     timer every time something comes into the Claude list" is `timer: 1` on a
     custom listener. **When they say timer, they mean a timer.** A reminder is
@@ -235,7 +266,7 @@ Buddy::Tools.register(
     is (an address, or "it's on my calendar"). Don't explain HOW arrival is
     detected - just that you'll let them know.
   TXT
-  args: {
+  args:         {
     text:        { type: :string,  required: true,  template: true, description: "What to remind them of" },
     trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
@@ -247,7 +278,9 @@ Buddy::Tools.register(
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
     run_args:    { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
-    delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
+    routine:     { type: :string,  required: false, description: "A saved routine to run when the condition hits, by name." },
+    steps:       { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order, run when the condition hits - save_routine's shape, written for this watch alone." },
+    delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run`, `routine` or `steps`." },
     timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
     expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
   },
@@ -256,7 +289,7 @@ Buddy::Tools.register(
   # rest of the household finished theirs, which is exactly the visibility the
   # block exists to prevent.
   gated_values: { trigger: Buddy::WatchCondition::GATED },
-  confirm: ->(payload, ctx) {
+  confirm:      ->(payload, ctx) {
     # The condition - place, chore, calendar, listener - is shared with `alarm`
     # and lives in Buddy::WatchCondition. What's left here is what a REMINDER
     # does with it.
@@ -299,15 +332,41 @@ Buddy::Tools.register(
         }
       end
     end
+
+    # A chain rather than one task: a saved routine by name, or steps written
+    # for this watch alone. Resolved now for the same reason a task is, and
+    # through the routine checks, so a step that can't run fails while they're
+    # still here rather than when the sensor trips.
+    routine_name = payload[:routine].to_s.strip
+    steps_given  = payload[:steps].presence
+    sequence     = nil
+    if routine_name.present? || steps_given
+      raise "a watch runs a saved routine or its own steps, not both" if routine_name.present? && steps_given
+      raise "a watch either tells someone or runs something, not both" if payload[:notify].to_s.strip.present?
+      raise "a watch runs one thing: `run` for a single task, `steps` for several" if run_task
+
+      if routine_name.present?
+        routine = Buddy::Routines.find(ctx.user, routine_name)
+        raise "no routine called #{routine_name.inspect}" if routine.nil?
+        raise "#{routine.name} has no steps to run" if routine.markers.empty?
+
+        Buddy::Routines.check_runnable!(routine, ctx)
+        sequence = { name: routine.name, routine_id: routine.id }
+      else
+        steps = Buddy::Routines.sanitize(Buddy::Routines.parse_rows(steps_given), ctx)
+        sequence = { name: steps.map { |step| BuddyRoutine.step_phrase(step) }.join(", "), steps: steps }
+      end
+    end
+
     delay = payload[:delay].to_i.clamp(0, BuddyWatch::MAX_ACTION_DELAY)
-    delay = 0 if run_task.nil?
+    delay = 0 if run_task.nil? && sequence.nil?
 
     # A countdown rather than a message. Clamped by the same rule an ordinary
     # timer is, so a watch can't create one the timer stack would refuse.
     timer_seconds = payload[:timer].to_i
     if timer_seconds.positive?
       raise "a watch either tells someone or sets a timer, not both" if payload[:notify].to_s.strip.present?
-      raise "a watch either runs a task or sets a timer, not both" if run_task
+      raise "a watch either runs something or sets a timer, not both" if run_task || sequence
 
       timer_seconds = timer_seconds.clamp(1, Buddy::Timers::MAX_SECONDS)
     end
@@ -334,8 +393,9 @@ Buddy::Tools.register(
     expires_at = ctx.end_of_day_for(payload[:expires])
     raise "couldn't read #{payload[:expires].inspect} as a day" if payload[:expires].present? && expires_at.nil?
 
-    framed = if run_task
-      "Run #{run_task[:name]}#{" #{delay}s after" if delay.positive?} #{human}"
+    runs = run_task&.dig(:name) || sequence&.dig(:name)
+    framed = if runs
+      "Run #{runs}#{" #{delay}s after" if delay.positive?} #{human}"
     elsif timer_seconds.positive?
       "Start a #{Buddy::Timers.humanize_seconds(timer_seconds)} timer #{human}"
     elsif to_self
@@ -381,17 +441,19 @@ Buddy::Tools.register(
         watch_owner_id: owner.id,
         run_scope:      run_task&.dig(:scope),
         run_call:       run_task&.dig(:call),
-        run_task_name:  run_task&.dig(:name),
+        run_task_name:  runs,
+        run_routine_id: sequence&.dig(:routine_id),
+        run_steps:      sequence&.dig(:steps),
         run_delay:      delay,
         timer_seconds:  timer_seconds,
         expires_at_iso: expires_at&.iso8601,
       },
     }
   },
-  label: ->(payload, _ctx) {
+  label:        ->(payload, _ctx) {
     "Remind #{payload[:human_when]}: #{payload[:text].to_s.truncate(40)}"
   },
-  execute: ->(payload, ctx) {
+  execute:      ->(payload, ctx) {
     # Don't set a location watch we can't actually anchor - a place we couldn't
     # resolve would store a name-only match that never fires. Report it instead
     # so Buddy asks where the place is rather than pretending it's handled.
@@ -409,7 +471,7 @@ Buddy::Tools.register(
       byte_conversation: conversation,
       notify_user_id:    payload[:notify_user_id],
       kind:              (
-        if payload[:run_scope].present? || payload[:run_call].present?
+        if [:run_scope, :run_call, :run_routine_id, :run_steps].any? { |key| payload[key].present? }
           "action"
         elsif payload[:timer_seconds].to_i.positive?
           "timer"
@@ -423,12 +485,14 @@ Buddy::Tools.register(
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
       expires_at:        (Time.zone.parse(payload[:expires_at_iso].to_s) if payload[:expires_at_iso].present?),
       metadata:          {
-        "human_when"    => payload[:human_when].to_s,
-        "run_scope"     => payload[:run_scope].presence,
-        "run_call"      => payload[:run_call].presence,
-        "run_task_name" => payload[:run_task_name].presence,
-        "run_delay"     => payload[:run_delay].to_i,
-        "timer_seconds" => payload[:timer_seconds].to_i.positive? ? payload[:timer_seconds].to_i : nil,
+        "human_when"     => payload[:human_when].to_s,
+        "run_scope"      => payload[:run_scope].presence,
+        "run_call"       => payload[:run_call].presence,
+        "run_task_name"  => payload[:run_task_name].presence,
+        "run_routine_id" => payload[:run_routine_id].presence,
+        "run_steps"      => payload[:run_steps].presence,
+        "run_delay"      => payload[:run_delay].to_i,
+        "timer_seconds"  => payload[:timer_seconds].to_i.positive? ? payload[:timer_seconds].to_i : nil,
       }.compact,
     )
     {
@@ -445,8 +509,8 @@ Buddy::Tools.register(
   },
   # Setting a watch is safe + reversible (cancel_reminder undoes it), so it
   # runs WITHOUT a confirmation checkbox and drops an activity receipt.
-  auto:    true,
-  receipt: ->(result, ctx) {
+  auto:         true,
+  receipt:      ->(result, ctx) {
     name = ctx.buddy_name
     if result[:unknown_place]
       where = result[:place_name].to_s.strip

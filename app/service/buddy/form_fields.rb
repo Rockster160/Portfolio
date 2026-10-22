@@ -22,7 +22,20 @@ module Buddy
     module_function
 
     TYPES = %i[
-      text textarea number scale select chips choices checkbox date datetime time color hidden
+      text
+      textarea
+      duration
+      number
+      scale
+      select
+      chips
+      choices
+      checkbox
+      date
+      datetime
+      time
+      color
+      hidden
     ].freeze
 
     # The one type whose value is a list rather than a scalar.
@@ -138,6 +151,8 @@ module Buddy
       when :date              then time(field, raw, "%Y-%m-%d")
       when :time              then time(field, raw, "%H:%M")
       when :color             then color(field, raw)
+      # A duration posts as typed ("1h 32"), the way the page's box does; the
+      # Jil task reading the answer is what turns it into minutes.
       else [raw.to_s.strip, nil]
       end
     end

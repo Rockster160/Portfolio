@@ -60,6 +60,9 @@ module Buddy
       # stale between one message and the next, and `check_location` reaches
       # the live one in a single call when it actually matters.
       location:   [],
+      # No section either: mail is searched when a question needs it, never
+      # carried in the prompt.
+      email:      [],
     }.freeze
 
     # The owner's alone, and ENFORCED rather than merely withheld: `enabled_for`
@@ -98,6 +101,7 @@ module Buddy
       inventory:  "the inventory of boxes and where things are stored",
       job_search: "their job applications and the mail about them",
       location:   "where they are right now",
+      email:      "their email inbox",
     }.freeze
 
     def all

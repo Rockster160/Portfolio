@@ -136,6 +136,7 @@ class BuddyEvalWorld
     inventory!
     photos!
     job_hunt!
+    mail!
     self
   end
 
@@ -256,6 +257,24 @@ class BuddyEvalWorld
           headline: "Halloway Systems wants to book a first call.",
           at:       2.days.ago.iso8601,
         },
+      )
+    }
+  end
+
+  # One ordinary message to search for, archived the way most mail is once
+  # it's been read, so a search that only looks in the inbox misses it.
+  def mail!
+    reuse(Email.where(user: user).where("outbound_mailboxes::text ILIKE ?", "%brightwater%").first) {
+      Email.create!(
+        user:               user,
+        mail_id:            "buddy-eval-vet-mail",
+        timestamp:          3.days.ago,
+        archived_at:        2.days.ago,
+        direction:          :inbound,
+        inbound_mailboxes:  [{ name: nil, address: "rocco@ardesian.com" }],
+        outbound_mailboxes: [{ name: "Brightwater Animal Clinic", address: "front@brightwater.example" }],
+        subject:            "Re: Pickles' bloodwork",
+        blurb:              "Hi! Pickles' bloodwork came back and everything looks normal.",
       )
     }
   end

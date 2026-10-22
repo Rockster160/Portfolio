@@ -203,6 +203,39 @@ RSpec.describe "Buddy prompt tools" do
       expect(response["Comments"]).to eq("good one")
     end
 
+    it "renders every type the page draws as that same widget in the thread" do
+      options = [
+        { "type" => "text", "question" => "Notes", "default" => "fine" },
+        { "type" => "duration", "question" => "Duration", "default" => "52" },
+        { "type" => "textarea", "question" => "Comments", "default" => "" },
+        { "type" => "number", "question" => "Reps", "default" => 10, "min" => 0, "max" => 50, "step" => 5 },
+        { "type" => "scale", "question" => "Sleepy | Alert", "min" => 0, "max" => 100, "default" => 60 },
+        { "type" => "checkbox", "question" => "Counted?", "default" => "true" },
+        { "type" => "choices", "question" => "actions", "choices" => %w[V O H], "selected" => ["V"] },
+        { "type" => "select", "question" => "Spool", "choices" => %w[Red Blue], "default" => "Blue" },
+        { "type" => "chips", "question" => "Who?", "choices" => %w[A B], "default" => "A" },
+        { "type" => "date", "question" => "Day", "default" => "2026-10-21" },
+        { "type" => "datetime", "question" => "When?", "default" => "2026-10-21T09:15" },
+        { "type" => "time", "question" => "At", "default" => "09:15" },
+        { "type" => "color", "question" => "Color", "default" => "#4488ff" },
+      ]
+      fields = Buddy::FormFields.normalize(form_for(make_prompt(question: "All of it", options: options)).form_fields)
+
+      expect(fields.map { |f| [f[:key], f[:type]] }).to eq(options.map { |o| [o["question"], o["type"].to_sym] })
+      expect(fields.find { |f| f[:key] == "Duration" }[:value]).to eq("52")
+      expect(fields.find { |f| f[:key] == "Reps" }).to include(min: 0, max: 50, step: 5)
+      expect(fields.find { |f| f[:key] == "actions" }[:value]).to eq(["V"])
+    end
+
+    it "submits a duration as typed, the way the page's box posts it" do
+      prompt = make_prompt(question: "Shower", options: [{ "type" => "duration", "question" => "Duration", "default" => "" }])
+      form = form_for(prompt)
+      collected, errors = Buddy::FormFields.collect(form.form_fields, { "Duration" => " 1h 32 " })
+
+      expect([collected, errors]).to eq([{ "Duration" => "1h 32" }, []])
+      expect(form.build_response(collected)).to eq("Duration" => "1h 32")
+    end
+
     it "keeps hidden fields at their defaults, the way the form submits them" do
       prompt = make_prompt(question: "Dinner?", options: [
         { "question" => "What sounds good?", "type" => "text", "default" => "" },

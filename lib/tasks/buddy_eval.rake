@@ -349,6 +349,7 @@ BUDDY_TOOL_PROBES = {
   # --- what it knows ---
   search_memories:        { say: "what do you know about my sister?", avoid: %i[search_conversations] },
   search_conversations:   { say: "what did we actually say about the kitchen backsplash a few weeks back?", avoid: %i[search_memories search_ideas] },
+  search_email:           { say: "did the vet ever email me back about Pickles' bloodwork?", avoid: %i[search_conversations check_deliveries search_events], needs: :vet_mail },
   define_term:            "when I say the plunge I mean the trailhead in Alpine",
   forget_term:            { say: "bakkie doesn't mean that any more, drop it", needs: :bakkie_defined },
 
@@ -2167,6 +2168,36 @@ BUDDY_EDGE_PROBES = [
     once:  true,
     note:  "the template was skipped as an uncollected step var; once that was fixed it asked for a " \
            "place, then set three to six overlapping custom travel watches",
+  },
+  # A listener with a chain behind it. Before `steps` and `routine` a watch ran
+  # one task at most, so anything with a wait or a second step was a saved
+  # routine nobody would trip, or a reminder that only said it.
+  {
+    case:  "listener chain",
+    say:   "When I log coffee, turn on chill mode, wait 5 minutes, then start a 90 minute focus timer",
+    tool:  :remind_when,
+    avoid: %i[run_jil_task set_timer save_routine],
+    args:  { remind_when: { trigger: "event", target: /coffee/i, steps: /run_jil_task.*then_continue.*set_timer/m } },
+    needs: :jil_trigger,
+    note:  "a watch could only remind or run one task, so a wait and a second step had no shape",
+  },
+  {
+    case:  "listener chain, two steps",
+    say:   "Next time I get home, turn on chill mode and then start a 20 minute timer",
+    tool:  :remind_when,
+    avoid: %i[run_jil_task set_timer],
+    args:  { remind_when: { trigger: "arrive", steps: /run_jil_task.*set_timer/m } },
+    needs: :jil_trigger,
+    note:  "two things after one condition needed a saved routine first",
+  },
+  {
+    case:  "listener runs a routine",
+    say:   "Run my wind down the next time I get home",
+    tool:  :remind_when,
+    avoid: %i[run_routine],
+    args:  { remind_when: { trigger: "arrive", routine: /wind.?down/i } },
+    needs: :wind_down_routine,
+    note:  "run_routine runs now; a saved routine had no way to wait for a condition",
   },
   # A trigger reached by name through the same tool as a function.
   {

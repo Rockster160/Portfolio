@@ -112,7 +112,7 @@ class BuddyRoutine < ApplicationRecord
   end
 
   def self.wait_phrase(args)
-    secs  = args["seconds"].to_i
+    secs  = args["seconds"].to_i.nonzero? || (args["minutes"].to_i * 60)
     spell = secs >= 60 && (secs % 60).zero? ? "#{secs / 60} min" : "#{secs} sec"
     args["then_continue"] ? "wait #{spell}" : "set a #{spell} timer"
   end

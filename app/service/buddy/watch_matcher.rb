@@ -51,7 +51,7 @@ module Buddy
       payload = normalize_payload(raw_data)
       payload = Buddy::DeploySignal.with_commit(user, payload) if scope == "deploy"
       watches.each { |watch| fire!(watch, payload) if watch.matches?(payload) }
-    rescue => e
+    rescue StandardError => e
       # A watch failing to match must never take down the trigger it's
       # riding on (a chore completion, an arrival). Report and move on.
       Buddy::Errors.report(
@@ -185,7 +185,7 @@ module Buddy
       signature = signature_of(watch, payload)
       stamp[:metadata] = watch.metadata.to_h.merge("last_signature" => signature) if signature
       watch.update!(stamp)
-    rescue => e
+    rescue StandardError => e
       Buddy::Errors.report(
         section:   "watch_matcher.fire",
         exception: e,
@@ -276,6 +276,8 @@ module Buddy
     # Fires the scope and leaves a trace. Shared with the delayed worker, which
     # re-checks the watch is still live before calling it.
     def run_action_now!(watch)
+      return run_sequence!(watch) if watch.runs_sequence?
+
       calls = watch.run_calls
       return run_calls!(watch, calls) if calls.any?
 
@@ -284,6 +286,36 @@ module Buddy
 
       ::Jil.trigger(watch.user, scope.to_sym, {}, auth: :buddy, auth_id: watch.user_id)
       action_chip(watch)
+    end
+
+    # A routine, or steps that only this watch holds. A saved routine is looked
+    # up by id when it fires, so an edit since the watch was set is what runs;
+    # one that has been deleted or switched off says so rather than doing
+    # nothing where they'd expect something.
+    def run_sequence!(watch)
+      conversation = watch.byte_conversation
+      return if conversation.nil?
+
+      if watch.run_routine_id
+        routine = BuddyRoutine.where(user_id: watch.user_id).find_by(id: watch.run_routine_id)
+        return Buddy::Routines.run!(routine, conversation: conversation) if routine&.enabled?
+
+        name = routine&.name || watch.run_task_name || "that routine"
+        why  = routine ? "it's turned off" : "it's been deleted"
+        return Buddy::CompanionDelivery.deliver_plain(
+          user:         watch.user,
+          conversation: conversation,
+          text:         "Didn't run **#{name}** #{watch.metadata.to_h["human_when"]} - #{why}.".squish,
+          metadata:     { kind: "buddy", source: "watch", watch_id: watch.id },
+        )
+      end
+
+      Buddy::ProposalBuilder.run_markers!(
+        user:         watch.user,
+        conversation: conversation,
+        markers:      BuddyRoutine.new(steps: watch.run_steps).markers,
+        body:         watch.body.to_s.presence || "Running #{watch.run_task_name}.",
+      )
     end
 
     # A function with its arguments: the same no-model path a scheduled

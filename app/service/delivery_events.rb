@@ -1,6 +1,6 @@
 module DeliveryEvents
   # Jil triggers for the delivery list: `delivery:action:created`,
-  # `:updated`, `:delivered`, `:delayed`.
+  # `:updated`, `:delivered`, `:delayed`, `:cancelled`, `:declined`.
   #
   # AmazonOrder is a cache-backed PORO, so there are no model callbacks to hang
   # these off. Every writer goes through AmazonOrder.save though — both email
@@ -11,6 +11,11 @@ module DeliveryEvents
   module_function
 
   SCOPE = :delivery
+
+  # The statuses an order can move INTO that are news on their own. Each is its
+  # own action, so "tell me if anything gets cancelled" is one listener rather
+  # than an `updated` filtered on a field.
+  STATUS_ACTIONS = %i[cancelled declined].freeze
 
   # The fields that describe the DELIVERY. `email_ids` and `errors` are
   # bookkeeping that churns on every re-parse, and firing an `updated` because
@@ -66,6 +71,9 @@ module DeliveryEvents
       was = before[key]
       next [:created, row, nil] if was.nil?
       next [:delivered, row, was] if arrived?(was, row)
+
+      became = became_status(was, row)
+      next [became, row, was] if became
       next [:delayed, row, was] if slipped?(was, row)
       next [:updated, row, was] if row.values_at(*FACTS) != was.values_at(*FACTS)
 
@@ -75,6 +83,16 @@ module DeliveryEvents
 
   def arrived?(was, now)
     !truthy?(was[:delivered]) && truthy?(now[:delivered])
+  end
+
+  # The status it moved into, when that status is one worth announcing. A
+  # declined order clearing back to active is an ordinary update.
+  def became_status(was, now)
+    status = now[:status].to_s.presence&.to_sym
+    return nil unless STATUS_ACTIONS.include?(status)
+    return nil if was[:status].to_s == status.to_s
+
+    status
   end
 
   # Later than it was. A date moving EARLIER is good news and an ordinary
@@ -99,7 +117,7 @@ module DeliveryEvents
 
   # Flat, so a listener can filter on any of it the way it would any other
   # scope: `delivery:action:delayed`, `delivery:carrier:ups`,
-  # `delivery:name:/desk/i`.
+  # `delivery:name:/desk/i`, `delivery:action:cancelled`.
   #
   # String keys, matching what ListItem hands over (`serialize` output) so a
   # listener reads every scope the same way.
@@ -113,6 +131,13 @@ module DeliveryEvents
       # Only on a slip, and it's the whole point of the event: what it WAS.
       "previous_date"   => (was[:delivery_date].to_s if action == :delayed && was),
       "delivered"       => truthy?(row[:delivered]),
+      # Blank while the order is active; otherwise `cancelled` or `declined`.
+      "status"          => row[:status].to_s,
+      # What it was before this event, so a listener can tell a declined order
+      # that cleared from one that never had a problem.
+      "previous_status" => (was[:status].to_s if was && was[:status].to_s != row[:status].to_s),
+      "time_range"      => row[:time_range].to_s,
+      "source"          => row[:source].to_s,
       "amount"          => row[:amount],
       "order_id"        => row[:order_id].to_s,
       "item_id"         => row[:item_id].to_s,

@@ -8055,6 +8055,13 @@ $board-cell-max: 200px;
     opacity: 0.5;
   }
 
+  // The two ends of a "Sleepy | Alert" scale, one over each end of the slider.
+  .byte-msg-form-ends {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   // A duration that could not be read has to out-shout the 0.5 above: the
   // whole point of the line is that it is noticed before Send.
   .byte-msg-form-hint[data-unreadable="true"] {

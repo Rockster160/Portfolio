@@ -19,7 +19,7 @@ Buddy::Tools.register(
       send to call that tool directly. Example:
 
         [{"tool_name":"run_jil_task","payload":{"name":"Printer - Power On"}},
-         {"tool_name":"set_timer","payload":{"duration":"1m","then_continue":true}},
+         {"tool_name":"set_timer","payload":{"seconds":60,"then_continue":true}},
          {"tool_name":"run_jil_task","payload":{"name":"Printer - Preheat"}}]
 
     A WAIT between two steps is `set_timer` with `then_continue: true`, same as
@@ -96,10 +96,7 @@ Buddy::Tools.register(
 
         captured
       else
-        parsed = JSON.parse(payload[:steps].to_s) rescue nil
-        raise "steps needs to be a JSON array of {tool_name, payload}" unless parsed.is_a?(Array)
-
-        parsed
+        Buddy::Routines.parse_rows(payload[:steps])
       end
     )
 

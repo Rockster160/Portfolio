@@ -132,6 +132,7 @@ module Buddy
           colors:   field[:colors],
           min:      field[:min],
           max:      field[:max],
+          step:     field[:step],
           hint:     field[:hint],
           # Everything on a prompt has to end up with a value — that's what the
           # page enforces, and a half-submitted survey is worse than none.
@@ -193,6 +194,7 @@ module Buddy
         colors:   option[:colors].presence,
         min:      option[:min],
         max:      option[:max],
+        step:     option[:step],
         hint:     hint_for(option),
       }.compact
     end

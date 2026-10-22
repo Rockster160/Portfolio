@@ -169,6 +169,14 @@ module Buddy
     # thing that turns a fuzzy name into a record or raises. A name that matches
     # nothing gets caught here, while the person is still in the conversation
     # and can say which one they meant.
+    # Steps as the model sends them: a JSON array, or the array itself.
+    def parse_rows(value)
+      rows = value.is_a?(Array) ? value : (JSON.parse(value.to_s) rescue nil)
+      raise "steps needs to be a JSON array of {tool_name, payload}" unless rows.is_a?(Array)
+
+      rows
+    end
+
     def sanitize(rows, ctx)
       list = Array(rows)
       raise "a routine needs at least one step" if list.empty?
