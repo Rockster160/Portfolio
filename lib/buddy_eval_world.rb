@@ -299,6 +299,12 @@ class BuddyEvalWorld
         reward_pebbles: 1, recurrence: { freq: :daily }
       )
     }
+    @trash_cans = reuse(live.detect { |chore| chore.name.match?(/take trash cans out/i) }) {
+      Chore.create!(
+        created_by_user: user, chore_household: household, name: "Take trash cans out",
+        reward_pebbles: 2, recurrence: { freq: :weekly, by_day: %w[tue] }
+      )
+    }
     completion!(@water)
     completion!(@recycling)
   end

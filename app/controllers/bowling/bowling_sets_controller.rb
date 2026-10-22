@@ -40,7 +40,7 @@ module Bowling
         # game_vals = params.dig(:bowling_set, :games_attributes).values
         # game_num = game_vals.max { |game| game[:game_num].to_i }
         # jil_trigger(:bowling, {})
-        started_frame_9 = params.dig(:bowling_set, :games_attributes).values&.any? { |game|
+        started_frame_9 = submitted_games.any? { |game|
           next false unless game[:game_num] == "3"
 
           game.dig(:frames_details, "8", :throw1).present? # 8 is index, so frame 9
@@ -107,7 +107,7 @@ module Bowling
         league_id: @league.id,
         set_id:    @set.id,
         game_num:  game_num,
-        bowlers:   @set.games_for_display(game_num).joins(:bowler).map { |game|
+        bowlers:   @set.games_for_display(game_num).select(&:bowler).map { |game|
           { id: game.bowler.id, name: game.bowler.name, bowler_game_id: game.id }
         },
       }
@@ -125,13 +125,19 @@ module Bowling
       end
     end
 
+    # A save can arrive with no games in it - the set saved before any were
+    # added - and that is an update to the set alone.
+    def submitted_games
+      params.dig(:bowling_set, :games_attributes)&.values || []
+    end
+
     def bowling_params
       params.require(:bowling_set).permit(
         # :league_id, - Done before saving
         :lane_number,
       ).merge({
         games_attributes: (
-          params.dig(:bowling_set, :games_attributes).values.map { |g|
+          submitted_games.map { |g|
             g.permit(
               :id,
               :set_id,

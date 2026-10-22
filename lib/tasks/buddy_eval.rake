@@ -822,6 +822,42 @@ BUDDY_EDGE_PROBES = [
     needs: :vantrice_two_roles,
     note:  "two Vantrice roles on the board; the company alone cannot say which",
   },
+  # The question was asked so the note could be filed, and the answer only got
+  # repeated back. It took two more messages to get it filed.
+  {
+    case:  "prod 8716",
+    say:   "Staff Data Engineer",
+    tool:  :add_job_note,
+    args:  { add_job_note: { role: /data/i } },
+    needs: :vantrice_two_roles,
+    note:  "answered \"Senior Software Engineer I - Fullstack.\" back with no call; the note only went in " \
+           "after \"did you mark it down?\" and \"did you connect the email?\"",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :outbound,
+        state:     :sent,
+        body:      "Vantrice Labs invited me to a phone interview Thursday at 12pm, put it down",
+      )
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy" },
+        body:      "Vantrice Labs invited you to a phone interview on Thursday at 12pm. " \
+                   "Which Vantrice Labs role is this for?",
+      )
+    },
+  },
+  # The invite said the sender's zone and it was booked in theirs.
+  {
+    case:  "prod 8720",
+    say:   "Halloway Systems sent the invite: \"Phone Interview @ Thu Oct 29, 2026 12pm - 12:30pm (EDT)\". Log it.",
+    tool:  :add_job_note,
+    args:  { add_job_note: { tag: "scheduled", follow_up_at: /T12:00(?::00)?-04:00/ } },
+    needs: :halloway_application,
+    note:  "an invite reading 12pm (EDT) was booked at 12pm Mountain, two hours late",
+  },
   # The other direction, and the one that was refused outright until now: a
   # DIFFERENT role at a company already on the board is a separate application.
   {
@@ -1225,6 +1261,17 @@ BUDDY_EDGE_PROBES = [
                   "`now` were the same string and the chip couldn't show it either",
   },
 
+  # Nothing Buddy can read names the mood axes, so the honest answer is that it
+  # doesn't know. It listed four with confident descriptions, two of them made up.
+  {
+    case:        "prod 8768",
+    say:         "What are the 4 mood axes for Buddy?",
+    tool:        :none,
+    never_reply: /\b(?:energy|playfulness|directness)\b/i,
+    note:        "answered Warmth, Energy, Playfulness and Directness; the axes are warmth, play, " \
+                 "weight and strain",
+  },
+
   # --- when they are BACK, which is a number the app has ---------------------
   {
     case:         "prod 5266",
@@ -1411,6 +1458,28 @@ BUDDY_EDGE_PROBES = [
     needs: :recycling_completion,
     note:  "the same event with a different name on it, so the time it happened " \
            "has not changed - left off, the log says they did it when they said so",
+  },
+  # Two chores they did and one somebody else did, in one sentence. Theirs were
+  # marked and the reply said Eve's was credited, with no call that did it.
+  {
+    case:         "prod 8800",
+    say:          "Mom (Eve) took both of the cans out, but I just gathered the trash and recycling and took those out.",
+    tool:         :complete_chore,
+    args:         { complete_chore: { chore: /cans/i, credit_to: /eve/i } },
+    needs:        :trash_cans_chore,
+    run:          true,
+    effect_label: "a completion of Take trash cans out credited to Eve",
+    effect:       ->(user) {
+      house = user.chore_household
+      next false if house.nil?
+
+      eve = house.member_named("Eve")
+      cans = house.chores.active.detect { |c| c.name.match?(/take trash cans out/i) }
+      next false if eve.nil? || cans.nil?
+
+      ChoreCompletion.exists?(chore_id: cans.id, user_id: eve.id, completed_at: 5.minutes.ago..)
+    },
+    note:         "said \"left the cans credit with Eve\"; the four receipts were all the speaker's own chores",
   },
 
   # --- a house command with no verb in it -----------------------------------
@@ -2255,6 +2324,39 @@ BUDDY_EDGE_PROBES = [
         "cleanly.\n\nTell me the location name you want, and I’ll set the arrival/departure message up.",
       )
     },
+  },
+  # The same sentence straight after a nap turn. The nap's task leaked into it,
+  # and it offered to run Whisper Skip Nap instead of setting the watch.
+  {
+    case:  "prod 8741",
+    say:   "Any time either my phone or the car departs or arrives, send me a message like " \
+           "\"Phone: Arrived at Home\", replacing the phone with the device, arrived/departed, and the location.",
+    tool:  :remind_when,
+    avoid: %i[run_jil_task],
+    args:  { remind_when: { trigger: "travel", repeat: true, text: /\{\{\s*location/ } },
+    once:  true,
+    note:  "answered with \"I can set that if you mean Whisper Skip Nap\" - the turn before was about " \
+           "the nap, and four calls set nothing",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Let's skip the next nap")
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy" },
+        body:      "I couldn’t find a matching task for that exact skip. If you want, give me the wording you " \
+                   "use for the nap helper and I’ll hit the right one.",
+      )
+    },
+  },
+  # There is one deploy to watch, so there was nothing to ask.
+  {
+    case:       "prod 8763",
+    say:        "Let me know when the next deploy fonishes",
+    tool:       :remind_when,
+    args:       { remind_when: { trigger: "deploy" } },
+    never_args: { remind_when: { target: /\S/ } },
+    note:       "asked twice for \"the deploy name or app\" - `deploy` has never taken a target",
   },
 ].freeze
 

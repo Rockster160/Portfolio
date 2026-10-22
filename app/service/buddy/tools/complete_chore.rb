@@ -32,6 +32,12 @@ Buddy::Tools.register(
     ASSIGNED to is not who to credit: anyone can do anyone's chore, and this
     argument is for who actually did it.
 
+    One message often holds both: "she took the cans out, I did the trash" is
+    one call for the speaker's chore and a SECOND call, with `credit_to`, for
+    the housemate's. Nothing
+    is credited to anybody without that call, so never say a housemate got
+    the credit unless a `complete_chore` naming them is in this turn.
+
     To change a completion that's already recorded — attach the note you
     missed, correct the time — use `edit_chore_completion`, not a second
     `complete_chore`.

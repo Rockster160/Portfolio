@@ -13,8 +13,9 @@
 # store their names.
 Buddy::Tools.register(
   name:             :run_jil_task,
-  summary:          "Run one of their automations by name, right now - anything in `jil_functions` " \
-                    "(lights with a color, the car, the printer, cameras) or `jil_triggers` (scenes, fans).",
+  summary:          "Run one of their automations by name, right now - lights, the car, the printer, " \
+                    "cameras, scenes, fans. A name below that says what they asked is the call: \"skip the " \
+                    "next nap\" is Whisper Skip Nap, not a reminder to cancel.",
   roster:           ->(user) { Buddy::Tools.jil_function_names(user) + Buddy::Tools.jil_trigger_names(user) },
   description:      <<~TXT,
     Run a Jil automation by name. Everything in the `jil_functions` and

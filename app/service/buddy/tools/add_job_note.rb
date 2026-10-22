@@ -32,7 +32,9 @@ Buddy::Tools.register(
     more than one for a company, `company` alone cannot say which and `role` is
     what does. Pass it whenever the mail names a job title. If you leave it off
     and the company has several, this comes back naming the roles - answer it
-    with one of them rather than picking.
+    with one of them rather than picking. When you asked them which role and
+    they've answered, that answer IS the go-ahead: call this in that same turn
+    with the role they named, rather than repeating it back and waiting.
 
     `tag` is what KIND of beat it was, and it does more than colour the row:
     logging `offer`, `rejected` or `withdrew` settles the whole application,
@@ -114,8 +116,10 @@ Buddy::Tools.register(
     On a `scheduled` note it IS the interview, it is what puts the appointment
     on their calendar as a timed event, and it is REQUIRED - a Scheduled note
     with no time says an interview exists and cannot say when, which is the one
-    shape this tool refuses. Read the time off the mail; it is in there, in
-    their own zone, because that is what the mail was sent to tell them.
+    shape this tool refuses. Read the time off the mail, with the zone the mail
+    states. An invite names the sender's zone ("EDT", "Eastern", "Central"), so
+    pass `follow_up_at` with that zone's offset (`2026-10-22T12:00:00-04:00`),
+    never theirs. Only a time with no zone written beside it is in their own.
     `duration_minutes` goes with it ("we'll chat for ~20 minutes", an invite
     reading 2:00-2:20), and without one an interview is booked for an hour.
 

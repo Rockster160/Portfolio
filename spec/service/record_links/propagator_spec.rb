@@ -422,6 +422,16 @@ RSpec.describe RecordLinks::Propagator do
         expect(user.action_events.where(name: "Teeth").count).to eq(1)
       end
 
+      # The event is logged on this account and runs back down; the completion
+      # it stands for is the housemate's, so nothing new is made for this one.
+      it "pays a chore credited to a housemate once" do
+        housemate = create(:user, chore_household: household)
+        ChoreCompleter.new(teeth.reload, housemate, at: Time.current, recorded_by: user).call
+
+        expect(user.action_events.where(name: "Teeth").count).to eq(1)
+        expect(ChoreCompletion.where(chore_id: teeth.id).pluck(:user_id)).to eq([housemate.id])
+      end
+
       it "stays one-way while the flag is off" do
         RecordLink.where(reverse: true).find_each { |l| l.update!(reverse: false) }
 

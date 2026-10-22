@@ -470,12 +470,16 @@ module RecordLinks
       true
     end
 
+    # The completion an event stands for. A chore marked done on a housemate's
+    # behalf is credited to them while its event is logged on this account, so
+    # their completion is the partner too; looking only at this account's own
+    # completions made a second one and paid the chore twice. Their own row is
+    # still preferred when both exist.
     def completion_partner(user, chore, at)
       return nil if chore.nil? || at.blank?
 
-      user.chore_completions
-        .where(chore_id: chore.id, completed_at: (at - WINDOW)..(at + WINDOW))
-        .order(:completed_at).first
+      scope = ::ChoreCompletion.where(chore_id: chore.id, completed_at: (at - WINDOW)..(at + WINDOW))
+      scope.order(Arel.sql(::ChoreCompletion.sanitize_sql(["user_id = ? DESC", user.id])), :completed_at).first
     end
 
     def completion_says?(comp, desired)

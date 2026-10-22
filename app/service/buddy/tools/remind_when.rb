@@ -88,7 +88,9 @@ Buddy::Tools.register(
                  one of her events is named "Whisper", so an `event` watch on
                  her fires on pees, walks and dinners too.
       "deploy" - when a Portfolio deploy finishes, whether it succeeded or
-                 failed. No `target`. Pair with `repeat: true` for a standing
+                 failed. No `target`, and never ask which deploy, app or
+                 branch - there is only one, so "let me know when the next
+                 deploy finishes" is this call as it stands. Pair with `repeat: true` for a standing
                  "ping me on every deploy"; you'll be told which outcome it
                  was when it fires.
       "custom" - anything else that happens: a list getting an item, a prompt
