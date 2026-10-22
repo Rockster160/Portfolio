@@ -4,14 +4,30 @@
 class JobTranscriptsController < ApplicationController
   before_action :authorize_user
   before_action :load_job
-  before_action :load_transcript, only: [:show, :update, :destroy]
+  before_action :load_transcript, only: [:show, :update, :destroy, :sides]
 
-  def show; end
+  # The page, or the conversation as data.
+  #
+  # JSON IS THE LOCAL JOB HUNTER READING THE CORRECTED VERSION. It pulls the
+  # questions he was actually asked out of a recording and rebuilds his spoken
+  # answers for the answer bank, and the one thing that work needs is which
+  # turns are his - which is settled here, on the board, where he can also
+  # correct it. It used to work that out again from its own copy of the file,
+  # so the same recording was labelled twice by two different passes and the
+  # corrected one had to be exported and re-dropped to get back here.
+  def show
+    respond_to do |format|
+      format.html
+      format.json { render json: conversation(@transcript) }
+    end
+  end
 
-  # The whole upload, in one post: the file is read into turns and the file
-  # itself is kept. Nothing is asked about speakers here — naming them is done
-  # on the page that shows the conversation, where there is something to read
-  # them against.
+  # The whole upload, in one post: the file is read into turns, the file itself
+  # is kept, and a pass over the words starts on who was talking. Nothing is
+  # ASKED about speakers, here or on the page - dropping the file in is the
+  # whole instruction, and what the file needs (a split into sides, or being
+  # told which of its own labels is him) is something it can be read off rather
+  # than a question for the person who just dropped it.
   def create
     upload = params[:file]
     return redirect_to(interview_path(@job), alert: "Pick a transcript file first.") if upload.blank?
@@ -25,6 +41,7 @@ class JobTranscriptsController < ApplicationController
 
     if @transcript.save
       @job.touch_activity!
+      queue_speakers(@transcript)
       redirect_to interview_transcript_path(@job, @transcript)
     else
       redirect_to interview_path(@job), alert: @transcript.errors.full_messages.to_sentence
@@ -53,6 +70,49 @@ class JobTranscriptsController < ApplicationController
   end
 
   private
+
+  # An upload that landed is an upload that landed. A queue that is not there
+  # must not turn it into "that file could not be read" - the conversation is
+  # on the page either way, and who was talking is the part that is missing.
+  def queue_speakers(transcript)
+    TranscriptSpeakersWorker.perform_async(transcript.id)
+  rescue StandardError => e
+    Rails.logger.warn("transcript speakers enqueue failed: #{e.class}: #{e.message}")
+  end
+
+  # `who` rather than a name, because that is the question being answered and a
+  # name is not an answer to it: `Speaker 2` is nobody, and `Unknown` is two
+  # different people. `speaker` rides along as what to CALL them, which is the
+  # label where nobody has typed anything better.
+  def conversation(transcript)
+    {
+      id:                 transcript.id,
+      title:              transcript.label,
+      occurred_at:        transcript.occurred_at,
+      company:            @job.company,
+      job_application_id: @job.id,
+      job_note_id:        transcript.job_note_id,
+      turns:              transcript.turns.map { |turn| spoken(transcript, turn) },
+    }
+  end
+
+  def spoken(transcript, turn)
+    label = turn["speaker"].to_s
+    {
+      who:     side_of(transcript, label),
+      speaker: transcript.name_for(label),
+      at:      turn["at"],
+      to:      turn["to"],
+      text:    turn["text"],
+    }
+  end
+
+  def side_of(transcript, label)
+    return :unknown if label == JobTranscript::UNKNOWN || transcript.speakers[label].blank?
+    return :me if transcript.mine?(label)
+
+    :them
+  end
 
   def load_job
     @job = current_user.job_applications.find(params[:interview_id])

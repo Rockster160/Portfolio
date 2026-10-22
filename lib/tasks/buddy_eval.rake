@@ -292,9 +292,8 @@ BUDDY_TOOL_PROBES = {
   # Named down to the exact fan on purpose. Their house has a Great Fan and a
   # HASS Fan, and "the fan" between two of them is a question rather than a
   # call - which is its own probe, below, and a pass when it's asked.
-  call_jil_function:      { say: "turn the great room fan to low", needs: :fan_fn },
-  schedule_function:      { say: "play the Whisper nap sound at 11 tonight", avoid: %i[call_jil_function], needs: :light_fn },
-  trigger_jil_task:       { say: "chill mode", needs: :jil_trigger },
+  run_jil_task:           { say: "turn the great room fan to low", needs: :fan_fn },
+  schedule_function:      { say: "play the Whisper nap sound at 11 tonight", avoid: %i[run_jil_task], needs: :light_fn },
   # A SCOPE, which is what this tool takes, and no `needs:` at all — a trigger
   # is an announcement, so it does not matter whether anything is listening.
   # Asked with a NAME it correctly reached for schedule_function instead.
@@ -430,7 +429,7 @@ BUDDY_TOOL_PROBES = {
   # months - "am I home" reaching it would answer with a forecast.
   check_location:         { say: "am I home right now?", avoid: %i[check_weather remind_when] },
   undo:                   { say: "undo that", needs: :undoable_in_thread },
-  request_feature:        { say: "can you order me a pizza?", avoid: %i[call_jil_function trigger_jil_task] },
+  request_feature:        { say: "can you order me a pizza?", avoid: %i[run_jil_task] },
 }.freeze
 
 # Tools an `effect:` probe is allowed to actually RUN.
@@ -857,7 +856,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 4081, 6603",
     say:   "play the Whisper nap sound in 2 minutes",
     tool:  :schedule_function,
-    avoid: %i[call_jil_function set_timer],
+    avoid: %i[run_jil_task set_timer],
     needs: :whisper_sound_fn,
     note:  "twice, in both directions. First the sound played in the room two " \
            "minutes early - a wait can't hold a tool that runs inside the turn. " \
@@ -873,9 +872,9 @@ BUDDY_EDGE_PROBES = [
     args:  { schedule_function: { name: /\bTV\z/i } },
     or:    {
       tool:  :set_timer,
-      with:  %i[call_jil_function],
-      order: %i[set_timer call_jil_function],
-      args:  { set_timer: { then_continue: true }, call_jil_function: { name: /\bTV\z/i } },
+      with:  %i[run_jil_task],
+      order: %i[set_timer run_jil_task],
+      args:  { set_timer: { then_continue: true }, run_jil_task: { name: /\bTV\z/i } },
     },
     needs: :tv_fn,
     note:  "it set a reminder that read \"Turn off the TV\" and replied as if the " \
@@ -885,7 +884,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 3562",
     say:   "play the nap sound at 11 tonight",
     tool:  :schedule_function,
-    avoid: %i[call_jil_function],
+    avoid: %i[run_jil_task],
     needs: :whisper_sound_fn,
     note:  "it went off sixteen minutes early next to a sleeping dog",
   },
@@ -1427,7 +1426,7 @@ BUDDY_EDGE_PROBES = [
   {
     case:         "the reply the 3 Sep rewrite is for",
     say:          "close the blinds",
-    tool:         :call_jil_function,
+    tool:         :run_jil_task,
     needs:        :blinds_fn,
     # The house answers 200 the moment the script STARTS and the blind is then
     # travelling for another half minute, so the true sentence is the garage
@@ -1442,9 +1441,9 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 31 Aug",
     say:   "open the bottom right blind to 20%",
-    tool:  :call_jil_function,
+    tool:  :run_jil_task,
     needs: :blinds_fn,
-    args:  { call_jil_function: { which: "great_bottom_right" } },
+    args:  { run_jil_task: { which: "great_bottom_right" } },
     note:  "picked `great_bottom` and moved BOTH bottom blinds, because the " \
            "six singles weren't in the enum yet - the model can only see the " \
            "task's `listener` string. They are there now and nothing re-checks it",
@@ -1454,14 +1453,14 @@ BUDDY_EDGE_PROBES = [
   {
     case: "prod 6859-6861, 24 Sep",
     say:  "quiet until 12:30",
-    tool: :call_jil_function,
+    tool: :run_jil_task,
     needs: :quiet_fn,
     # The clock time as they said it. The function resolves it in Ruby now, so a
     # minute count here is the model doing arithmetic it has no reason to do -
     # and the one it did was anchored on the previous message in the thread
     # rather than on the clock.
-    args:       { call_jil_function: { or_until: /12:?30/ } },
-    never_args: { call_jil_function: { quiet_for: /\d/ } },
+    args:       { run_jil_task: { or_until: /12:?30/ } },
+    never_args: { run_jil_task: { quiet_for: /\d/ } },
     note: "set quiet until 12:53 off `quiet_for: 124`, which is 124 minutes from " \
           "10:26am - the time the message BEFORE it landed. 101 was the right " \
           "figure and `time_preamble` had 10:49 at the top of the prompt the " \
@@ -1476,10 +1475,10 @@ BUDDY_EDGE_PROBES = [
       {
         case:  "prod 8612-8615",
         say:   "Quiet until #{ends.strftime("%-l:%M")}",
-        tool:  :call_jil_function,
+        tool:  :run_jil_task,
         needs: :quiet_fn,
         once:  true,
-        args:  { call_jil_function: { or_until: /#{ends.strftime("%-l")}:?#{ends.strftime("%M")}/ } },
+        args:  { run_jil_task: { or_until: /#{ends.strftime("%-l")}:?#{ends.strftime("%M")}/ } },
         note:  "the first turn called nothing and said \"Quiet mode can stay on until 2:15 PM\"; " \
                "the retry sent `quiet_for: 147, minutes: 147`, the spare key landed in the " \
                "until slot, and quiet ended at 1:47",
@@ -1490,9 +1489,9 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 5272-5273",
     say:   "Lock the car, please.",
-    tool:  :call_jil_function,
+    tool:  :run_jil_task,
     needs: :car_fn,
-    args:  { call_jil_function: { action: "lock_doors" } },
+    args:  { run_jil_task: { action: "lock_doors" } },
     note:  "answered \"I don't have a Car Lock function wired up\" and burned two " \
            "model calls looking. Task 430 is enabled, buddy_enabled, and its " \
            "listener carries lock_doors - but its description said Tesla and " \
@@ -1503,7 +1502,7 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 3789, 3728, 3751",
     say:   "show me the last person that rang the doorbell",
-    tool:  :call_jil_function,
+    tool:  :run_jil_task,
     needs: :camera_fn,
     note:  "three separate turns answered \"I can't pull that up from here\" " \
            "with the function sitting unused in the index",
@@ -1512,7 +1511,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 3743",
     say:   "let me know the next time somebody comes to the door",
     tool:  :remind_when,
-    avoid: %i[call_jil_function],
+    avoid: %i[run_jil_task],
     note:  "the same nouns pointed forward are a watch, not a look",
   },
   # --- a question asked beside the call that already answered it ------------
@@ -1534,16 +1533,16 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 7861",
     say:   "Open garage",
-    tool:  :call_jil_function,
-    args:  { call_jil_function: { name: /toggle garage/i } },
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /toggle garage/i } },
     needs: :garage_fns,
     note:  "ran Garage State and answered \"the garage is currently closed\", leaving the door shut",
   },
   {
     case:  "prod 7866",
     say:   "Close garage",
-    tool:  :call_jil_function,
-    args:  { call_jil_function: { name: /toggle garage/i } },
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /toggle garage/i } },
     needs: :garage_fns,
     note:  "same miss in the other direction - reported the state and left the door open",
   },
@@ -1640,7 +1639,7 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 4721",
     say:   "what's going on in the backyard?",
-    tool:  :call_jil_function,
+    tool:  :run_jil_task,
     needs: :camera_fn,
     note:  "no verb of seeing anywhere in it, so the camera arm never fired; " \
            "answered \"the backyard camera still isn't handing over a frame\" " \
@@ -1664,7 +1663,7 @@ BUDDY_EDGE_PROBES = [
     case:  "the one-off it must not swallow",
     say:   "add oat milk to the shopping list",
     tool:  :add_list_item,
-    avoid: %i[schedule_list_items call_jil_function],
+    avoid: %i[schedule_list_items run_jil_task],
     note:  "a WHEN is the whole difference between the two",
   },
 
@@ -1684,7 +1683,7 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 1146",
     say:   "turn the fan to low",
-    tool:  :call_jil_function,
+    tool:  :run_jil_task,
     needs: :fan_fn,
     note:  "\"Done. Fan's on low now.\" with no tool use anywhere",
   },
@@ -2014,7 +2013,7 @@ BUDDY_EDGE_PROBES = [
     # a choice. Picking one is fine; picking one SILENTLY is not, because the
     # person can't tell which room just changed. So: make the call, and say
     # which fan in the reply.
-    tool:         :call_jil_function,
+    tool:         :run_jil_task,
     needs:        :fan_fn,
     expect_reply: /living room|great|master|bedroom|office/i,
     note:         "answered \"Done. Fan's on low now.\" with no tool use at all. " \
@@ -2086,7 +2085,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 8279-8280",
     say:   "What's the house temp right now?",
     tool:  :get_context,
-    avoid: %i[call_jil_function],
+    avoid: %i[run_jil_task],
     needs: :thermostat_reading,
     note:  "called HASS Thermostat with keep/0 to read it, which re-sent the " \
            "mode to the house, and answered \"Set the main thermostat to cool.\"",
@@ -2168,6 +2167,23 @@ BUDDY_EDGE_PROBES = [
     once:  true,
     note:  "the template was skipped as an uncollected step var; once that was fixed it asked for a " \
            "place, then set three to six overlapping custom travel watches",
+  },
+  # A trigger reached by name through the same tool as a function.
+  {
+    case:  "trigger by name",
+    say:   "chill mode",
+    tool:  :run_jil_task,
+    needs: :jil_trigger,
+    note:  "functions and triggers used to be two tools; a trigger's name has to still find its way",
+  },
+  {
+    case:  "prod 8739",
+    say:   "Let's skip the next nap",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /skip nap/i } },
+    needs: :skip_nap_fn,
+    note:  "said it couldn't find a matching task and asked for the wording - Whisper Skip Nap was " \
+           "on the roster the whole time",
   },
   # The same sentence again, over the thread where it was refused three times.
   {
@@ -2338,7 +2354,7 @@ namespace :buddy do
 
   desc "Check every registered tool has an eval probe (no API calls)"
   task tool_coverage: :environment do
-    known   = Buddy::Tools.registry.keys
+    known   = Buddy::Tools.registry.reject { |_, tool| Buddy::Tools.internal?(tool) }.keys
     missing = known - BUDDY_TOOL_PROBES.keys
     unknown = BUDDY_TOOL_PROBES.keys - known
 
@@ -2952,7 +2968,7 @@ namespace :buddy do
     <<~TXT
       STOP. They asked to SEE something, and a camera is what shows it.
 
-      #{names} #{"is".pluralize(camera_functions(user).length)} in your `jil_functions` index right now. Call `call_jil_function` with `expect_result: true` and answer from what comes back.
+      #{names} #{"is".pluralize(camera_functions(user).length)} in your `jil_functions` index right now. Call `run_jil_task` with `expect_result: true` and answer from what comes back.
     TXT
   end
 
@@ -2988,7 +3004,7 @@ namespace :buddy do
 
     # An ANSWERING tool runs inside resolve_call - that's what makes it an
     # answer - and the handful that also `act` really do the thing: print_again
-    # puts a file on the printer, call_jil_function starts the car. An eval is
+    # puts a file on the printer, run_jil_task starts the car. An eval is
     # scoring which tool got picked, and this file has always said nothing is
     # executed, so those are answered as though they had run. BUDDY_EVAL_LIVE=1
     # to let them through when the point is the round trip itself.

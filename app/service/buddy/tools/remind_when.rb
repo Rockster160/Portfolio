@@ -201,7 +201,7 @@ Buddy::Tools.register(
     `trigger: "custom"` with the sensor's listener and `run: "Whisper Quiet"`.
 
     `run` can also name a FUNCTION from `jil_functions`, with its arguments in
-    `run_args` - the same arguments `call_jil_function` takes. "Once I leave
+    `run_args` - the same arguments `run_jil_task` takes. "Once I leave
     the event, navigate me to Petsmart" is `trigger: "depart"` with
     `run: "Tesla Navigate"`, `run_args: { destination: "Petsmart" }`. That is
     the shape whenever the thing should happen when they GET somewhere or LEAVE
@@ -246,7 +246,7 @@ Buddy::Tools.register(
     repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
-    run_args:    { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as call_jil_function takes them ({\"destination\": \"Petsmart\"})." },
+    run_args:    { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
     delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
     timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
     expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },

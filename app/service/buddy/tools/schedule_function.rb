@@ -4,17 +4,19 @@ Buddy::Tools.register(
                     "nap sound in 2 minutes\", \"start the car at 7:40\". A timer only counts down - " \
                     "this does the thing.",
   description:      <<~TXT,
-    Put a Jil FUNCTION call on the clock. Same function, same arguments as
-    `call_jil_function` - this one just happens later.
+    Put one of their Jil automations on the clock - anything in
+    `jil_functions` or `jil_triggers`. Same name, same arguments or data as
+    `run_jil_task` - this one just happens later.
 
     "Play Whisper Nap sound at 11" is this: `name: "Whisper Sound"`,
-    `sound: "nap"`, `at:` eleven tonight. `call_jil_function` would play it the
+    `sound: "nap"`, `at:` eleven tonight. `run_jil_task` would play it the
     moment you called it, sixteen minutes early, in a real room (prod 3562) -
     so the second they say WHEN, this is the tool.
 
     ## Which of the "later" tools
 
-      schedule_function  - a Jil function, with arguments. This one.
+      schedule_function  - a Jil automation by name, with its arguments or
+                           data. This one.
       schedule_trigger   - a raw listener SCOPE (`some:jil:listener`), no
                            arguments to speak of.
       schedule_reminder  - a message for them to READ, or `text: "run <name>"`
@@ -26,9 +28,9 @@ Buddy::Tools.register(
 
     ## Arguments
 
-    `name` and the function's own arguments are exactly what you'd pass to
-    `call_jil_function` - read the signature off `jil_functions` the same way,
-    lowercase_snake_case, in signature order. The function is resolved NOW, so a
+    `name` and the task's own arguments (a function) or `data` (a trigger) are
+    exactly what you'd pass to `run_jil_task` - read the signature or listener
+    off the index the same way. The task is resolved NOW, so a
     name that matches nothing comes straight back to you while they're still
     here to say which one they meant. It's resolved AGAIN when it fires, so a
     function that's since been renamed or switched off degrades honestly
@@ -57,25 +59,25 @@ Buddy::Tools.register(
   TXT
   feature:          :jil,
   args:             {
-    name:   { type: :string, required: true,  description: "Fuzzy function-task name to call, verbatim from `jil_functions`" },
+    name:   { type: :string, required: true,  description: "Task name, verbatim from `jil_functions` or `jil_triggers`" },
+    data:   { type: :string, required: false, description: "A trigger's data, built from its listener. Omit for a function" },
     at:     { type: :string, required: false, description: "When to run it (ISO datetime). Required unless `repeat` is set." },
     repeat: { type: :string, required: false, description: "Recurrence spec, same shapes as schedule_reminder: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / every:<n>-<unit>:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     note:   { type: :string, required: false, description: "The line to show in the thread when it runs, in their words" },
   },
   # Everything else passes through as the function's own arguments, exactly as
-  # in call_jil_function.
+  # in run_jil_task.
   passthrough_args: true,
   auto:             true,
   confirm:          ->(payload, ctx) {
-    fn_args = payload.except(:name, :at, :repeat, :until, :note)
+    fn_args = payload.except(:name, :at, :repeat, :until, :note, :data)
 
-    # Resolved through call_jil_function's OWN confirm rather than a copy of it.
-    # That check is not a name lookup - it is also the read-with-a-writer guard
-    # and the arg normalization - and a second implementation of it would drift
-    # from the one that runs.
-    caller = Buddy::Tools[:call_jil_function]
-    caller[:confirm].call({ name: payload[:name] }.merge(fn_args), ctx)
+    # Resolved through run_jil_task's OWN confirm rather than a copy of it. That
+    # check is not a name lookup - it is also the shape check on the arguments
+    # or data, and a second implementation of it would drift from the one that
+    # runs.
+    Buddy::Tools[:run_jil_task][:confirm].call({ name: payload[:name], data: payload[:data] }.merge(fn_args), ctx)
 
     recurrence = Buddy::RepeatSpec.parse(payload[:repeat], on: ctx.user.perceived_today)
     raise "unknown repeat spec #{payload[:repeat].inspect}" if payload[:repeat].to_s.strip.present? && recurrence.nil?
@@ -107,6 +109,7 @@ Buddy::Tools.register(
         fire_at_iso: fire_at.iso8601,
         recurrence:  recurrence,
         fn_args:     fn_args.transform_keys(&:to_s),
+        data:        payload[:data].to_s.strip.presence,
       }.compact,
     }
   },
@@ -129,7 +132,10 @@ Buddy::Tools.register(
       fire_at:           Time.zone.parse(payload[:fire_at_iso].to_s),
       recurrence:        payload[:recurrence],
       # The tool NAME, never a resolved id - re-resolved every time it fires.
-      action:            { "tool" => "call_jil_function", "payload" => { "name" => payload[:name].to_s }.merge(payload[:fn_args] || {}) },
+      action:            {
+        "tool"    => "run_jil_task",
+        "payload" => { "name" => payload[:name].to_s, "data" => payload[:data] }.compact.merge(payload[:fn_args] || {}),
+      },
     )
     {
       reminder_id: reminder.id,

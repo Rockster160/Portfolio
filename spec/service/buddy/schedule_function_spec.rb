@@ -46,7 +46,7 @@ RSpec.describe "schedule_function" do
       reminder = schedule!(sound: "nap")
 
       expect(reminder.action).to eq(
-        "tool" => "call_jil_function", "payload" => { "name" => "Whisper Sound", "sound" => "nap" },
+        "tool" => "run_jil_task", "payload" => { "name" => "Whisper Sound", "sound" => "nap" },
       )
     end
 
@@ -93,7 +93,7 @@ RSpec.describe "schedule_function" do
     # while they're still here — and so is the read-with-a-writer guard, rather
     # than a second copy of it drifting from the one that runs.
     it "refuses a function that matches nothing" do
-      expect { confirm(name: "Nonexistent Thing") }.to raise_error(/no Jil function matches/)
+      expect { confirm(name: "Nonexistent Thing") }.to raise_error(/no Jil task matches/)
     end
 
     it "refuses a time that has already gone" do
@@ -123,7 +123,7 @@ RSpec.describe "schedule_function" do
 
       Buddy::ReminderFirer.fire!(reminder)
 
-      expect(markers).to eq([{ tool_name: :call_jil_function, payload: { name: "Whisper Sound", sound: "nap" } }])
+      expect(markers).to eq([{ tool_name: :run_jil_task, payload: { name: "Whisper Sound", sound: "nap" } }])
     end
 
     # The same replay a routine goes through, so resolution, level, receipts and

@@ -19,6 +19,9 @@ RSpec.describe "Job transcript upload", type: :request do
   before do
     user.update!(password: "password123", password_confirmation: "password123")
     post(login_path, params: { user: { username: user.username, password: "password123" } })
+    # Every upload starts the pass on who was talking. There is no queue in a
+    # spec, and what it does with the file has its own.
+    allow(TranscriptSpeakersWorker).to receive(:perform_async)
   end
 
   def transcript_file(body, name: "bluestaq-hiring-manager.txt")
@@ -48,6 +51,83 @@ RSpec.describe "Job transcript upload", type: :request do
     transcript = job.transcripts.first
     expect(transcript.file).to be_attached
     expect(transcript.file.download).to eq(body)
+  end
+
+  # DROPPING IT IN IS THE WHOLE INSTRUCTION. Whether the file needs splitting
+  # into sides or just needs telling which of its labels is him is something it
+  # can be read off, so there is nothing to press afterwards.
+  describe "working out who was talking" do
+    let(:unlabelled) {
+      <<~VTT
+        00:00:01 --> 00:00:04
+        Thanks for making the time today.
+
+        00:00:06 --> 00:00:11
+        Happy to be here, I was looking forward to it.
+      VTT
+    }
+
+    it "starts the pass off the upload, with nothing to press" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+
+      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
+        .with(job.transcripts.first.id)
+    end
+
+    it "starts it for a file that named people too, which still never said which is him" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+
+      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
+        .with(job.transcripts.first.id)
+    end
+
+    it "asks nothing on the page about who was talking" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      get(interview_transcript_path(job, job.transcripts.first))
+
+      expect(response.body).not_to include("Work out which of these are me")
+      expect(response.body).to include("read off the recording when it lands")
+    end
+  end
+
+  # The local job hunter pulls questions out of a recording and rebuilds his
+  # spoken answers from them, and the one thing it needs is which turns are
+  # his. That is settled here now, on the board, rather than by a second pass
+  # over its own copy of the same file.
+  describe "the conversation as data" do
+    it "says which side each turn is on, and what to call them" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+      transcript = job.transcripts.first
+      transcript.rename_speakers!(
+        "Speaker 1" => { "name" => "Casey" },
+        "Speaker 2" => { "name" => "Rocco", "me" => "1" },
+      )
+
+      get(interview_transcript_path(job, transcript, format: :json))
+
+      said = response.parsed_body
+      expect(said["company"]).to eq("Bluestaq")
+      expect(said["turns"].pluck("who")).to eq(%w[them me])
+      expect(said["turns"].first["speaker"]).to eq("Casey")
+      expect(said["turns"].first["text"]).to include("disagreeing with a teammate")
+    end
+
+    it "says plainly when a turn is on nobody yet" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+
+      get(interview_transcript_path(job, job.transcripts.first, format: :json))
+
+      expect(response.parsed_body["turns"].pluck("who")).to all(eq("unknown"))
+    end
+
+    it "names the recordings on the board's own list" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+
+      get(interviews_path(format: :json, status: :all))
+
+      found = response.parsed_body["jobs"].find { |row| row["id"] == job.id }
+      expect(found["transcripts"].first).to include("turn_count" => 2, "placed" => false)
+    end
   end
 
   it "says so rather than erroring when no file was picked" do

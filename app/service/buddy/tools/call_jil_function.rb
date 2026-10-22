@@ -3,7 +3,8 @@ Buddy::Tools.register(
   summary:          "Run one of the automations in `jil_functions` with arguments, right now - " \
                     "lights with a color, the car, the printer, cameras. At a later time is " \
                     "schedule_function.",
-  roster:           ->(user) { Buddy::Tools.jil_function_names(user) },
+  # Reached through run_jil_task; still runs the steps and calls that name it.
+  internal:         true,
   description:      <<~TXT,
     Invoke a Jil FUNCTION task with typed args. Use when the person
     asks for something covered by a task in the `jil_functions`
@@ -138,8 +139,7 @@ Buddy::Tools.register(
     # Raising drops the proposal, which surfaces as the honest fallback reply
     # rather than a silent side effect.
     if ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
-      reads = /\b(?:check|checks|report|reports|reporting|state|status|read|reads|sensor|whether)\b/i
-      unless reads.match?("#{match.name} #{match.description}")
+      unless Buddy::Tools::JIL_READS_RX.match?("#{match.name} #{match.description}")
         raise "#{match.name} changes something rather than reporting - can't answer a question with it"
       end
     end

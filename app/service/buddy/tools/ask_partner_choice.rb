@@ -21,7 +21,7 @@ Buddy::Tools.register(
 
       ask_partner_choice(to: "Chelsea", question: "Dinner?", options: "tacos, curry",
                          await_reply: true, var: "hers")
-      call_jil_function(name: "Dinner Planner", meal: "{{hers}}")
+      run_jil_task(name: "Dinner Planner", meal: "{{hers}}")
 
     Use it only when something really is downstream of the answer - a person is
     not a countdown, and anything behind the wait sits there until they reply.

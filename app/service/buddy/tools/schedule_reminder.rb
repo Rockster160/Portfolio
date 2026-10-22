@@ -146,7 +146,7 @@ Buddy::Tools.register(
                   anything else is YES.
       check_expect: `truthy` (default) or `falsy`.
 
-    Same rule as `call_jil_function`: only ever name a function that CHECKS or
+    Same rule as `run_jil_task`: only ever name a function that CHECKS or
     REPORTS. One that opens, closes, sets or starts something will do that every
     time the reminder comes due.
 

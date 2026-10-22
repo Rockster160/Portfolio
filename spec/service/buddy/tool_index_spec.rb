@@ -68,13 +68,10 @@ RSpec.describe Buddy::ToolIndex do
       Task.create!(user: user, name: "Good Morning", listener: "good-morning",
         code: "// noop", enabled: true, buddy_enabled: true)
 
-      expect(schema_for(stage_one, :call_jil_function)[:description]).to include("Theirs:", "HASS TV")
-      expect(schema_for(stage_one, :call_jil_function)[:description]).not_to include("Good Morning")
-      expect(schema_for(stage_one, :trigger_jil_task)[:description]).to include("Good Morning")
-      expect(schema_for(stage_one, :trigger_jil_task)[:description]).not_to include("HASS TV")
+      expect(schema_for(stage_one, :run_jil_task)[:description]).to include("Theirs:", "HASS TV", "Good Morning")
 
-      opened = described_class.schemas(user: user, loaded: [:call_jil_function])
-      expect(schema_for(opened, :call_jil_function)[:description]).to include("HASS TV")
+      opened = described_class.schemas(user: user, loaded: [:run_jil_task])
+      expect(schema_for(opened, :run_jil_task)[:description]).to include("HASS TV")
     end
 
     it "swaps an opened tool's summary for its full schema, in the same place" do

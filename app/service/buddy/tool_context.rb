@@ -790,6 +790,26 @@ module Buddy
       }
     end
 
+    # Either kind of Jil task by name: `{ name:, kind: :function | :trigger }`,
+    # or nil. Both kinds are searched together so the closest name wins
+    # whichever it is - exact, then prefix, then contains. Within a tier,
+    # `prefer` breaks the tie: "Whisper Quiet" is the prefix of a function and
+    # a trigger both, and a call carrying arguments meant the function.
+    def resolve_jil_task(name, prefer: nil)
+      q = name.to_s.downcase.strip
+      return nil if q.blank?
+
+      candidates = user.accessible_tasks.buddy_visible.where.not(listener: [nil, ""]).pluck(:name, :listener)
+      candidates = candidates.map { |n, listener|
+        { name: n, kind: listener.to_s.match?(/(^|\s)function\(/i) ? :function : :trigger }
+      }
+      candidates = candidates.sort_by { |c| c[:kind] == prefer ? 0 : 1 } if prefer
+
+      candidates.find { |c| c[:name].downcase == q } ||
+        candidates.find { |c| c[:name].downcase.start_with?(q) } ||
+        candidates.find { |c| c[:name].downcase.include?(q) }
+    end
+
     # ---- times ----
 
     # Every `iso_time` arg lands here eventually. Goes through parse_in_zone

@@ -28,7 +28,13 @@ class JobApplicationsController < ApplicationController
     #
     # One pass answers both, so they cannot disagree.
     matched = (JobSearch.call(searchable_jobs, @query) if @query.present?)
-    rows = matched ? matched.select { |job| in_filter?(job) } : filtered_jobs.includes(:notes).to_a
+    rows = (
+      if matched
+        matched.select { |job| in_filter?(job) }
+      else
+        filtered_jobs.includes(:notes, :transcripts).to_a
+      end
+    )
     @jobs = surface_interviews(rows)
     # JSON is the local job hunter asking what is already on the board so it
     # never applies to the same company twice. It wants the rows and nothing
@@ -319,15 +325,32 @@ class JobApplicationsController < ApplicationController
 
   def serialize(job)
     {
-      id:         job.id,
-      company:    job.company,
-      role:       job.role,
-      status:     job.status,
-      color:      job.color,
-      logo:       job.logo,
-      source:     job.source,
-      url:        job.url,
-      note_count: job.notes.size,
+      id:          job.id,
+      company:     job.company,
+      role:        job.role,
+      status:      job.status,
+      color:       job.color,
+      logo:        job.logo,
+      source:      job.source,
+      url:         job.url,
+      note_count:  job.notes.size,
+      # The recordings, so the local job hunter finds them in the call it
+      # already makes rather than needing a list of its own. Named and counted
+      # only - the conversation itself is a page of text and it is asked for by
+      # id, one at a time, by whoever actually wants to read one.
+      transcripts: job.transcripts.map { |transcript| outline(transcript) },
+    }
+  end
+
+  def outline(transcript)
+    {
+      id:          transcript.id,
+      title:       transcript.label,
+      occurred_at: transcript.occurred_at,
+      turn_count:  transcript.turns.size,
+      # Has anybody been put on a side yet? Until something has, the turns are
+      # a wall of text with nobody on it and there is nothing to read off them.
+      placed:      transcript.speakers.present?,
     }
   end
 end

@@ -276,8 +276,12 @@ RSpec.describe "call_jil_function tool" do
   describe "the schema" do
     before { Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f } }
 
-    it "offers expect_result as a nullable boolean" do
-      schema = Buddy::Tools.function_schemas.find { |s| s[:name] == :call_jil_function }
+    it "is never offered - run_jil_task is how it's reached" do
+      expect(Buddy::Tools.function_schemas.pluck(:name)).not_to include(:call_jil_function, :trigger_jil_task)
+    end
+
+    it "offers expect_result as a nullable boolean on the tool that reaches it" do
+      schema = Buddy::Tools.function_schemas.find { |s| s[:name] == :run_jil_task }
 
       expect(schema[:parameters][:properties][:expect_result][:type]).to eq([:boolean, :null])
     end

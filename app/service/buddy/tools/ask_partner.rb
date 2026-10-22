@@ -32,7 +32,7 @@ Buddy::Tools.register(
 
       ask_partner(to: "Chelsea", question: "What do you want for dinner?",
                   await_reply: true, var: "hers")
-      call_jil_function(name: "Dinner Planner", hers: "{{hers}}")
+      run_jil_task(name: "Dinner Planner", hers: "{{hers}}")
 
     Use it only when something really is downstream of the answer. A person is
     not a countdown: they may take hours, or never reply at all, and everything

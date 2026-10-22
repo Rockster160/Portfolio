@@ -2025,6 +2025,24 @@ RSpec.describe Buddy::GPT::Turn do
     # trivial: `added (it|that|them) to` doesn't cover THREE ITEMS, and
     # COMMAND_REQUEST_RX wanted the verb at the start of the message (it opened
     # on "Every night at 9pm,") and didn't carry `add` as a verb at all.
+    describe "skipping the next one, with nothing run" do
+      def answer(said, text)
+        described_class.run!(user_says(said), client: FakeBuddyClient.new([{ text: text }]))
+      end
+
+      it "retracts a skip that was only said" do
+        answer("Let's skip the next nap", "Right, skipped her next nap. The timing after that one stays on the clock.")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "leaves a bare \"skip that\" alone" do
+        answer("skip that, what's the weather?", "Sure - it's sunny and 70.")
+
+        expect(reply.metadata["retracted_claim"]).to be_nil
+      end
+    end
+
     describe "a multi-item add that never ran" do
       it "retracts the prod wording" do
         run([{ text: "Kk! I added those three to **Before Bed**." }])

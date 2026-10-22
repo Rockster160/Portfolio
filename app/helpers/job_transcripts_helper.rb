@@ -21,11 +21,16 @@ module JobTranscriptsHelper
   # The side of the conversation a turn sits on. Three, not two: his own, the
   # people he was talking to, and the ones nobody has placed — which are worth
   # looking different, because they are the ones to go and correct.
+  # Placed is "somebody said so", not "it has a name on it". A split into sides
+  # writes `Them`, which IS the answer to who was speaking and reads as its own
+  # name - tested on the name alone it came out as the one thing it is not,
+  # a turn nobody has got to yet.
   def transcript_side(transcript, turn)
     label = turn["speaker"].to_s
-    return "unplaced" if label == JobTranscript::UNKNOWN || transcript.name_for(label) == label
+    return "unplaced" if label == JobTranscript::UNKNOWN
     return "mine" if transcript.mine?(label)
+    return "theirs" if transcript.speakers[label].present?
 
-    "theirs"
+    "unplaced"
   end
 end

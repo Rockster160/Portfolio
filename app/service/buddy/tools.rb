@@ -65,6 +65,7 @@ module Buddy
     # tote when I get home" is a request to file it LATER, and filing it now
     # tells the inventory the tent is somewhere it isn't yet.
     IMMEDIATE_ACTION_TOOLS = %i[
+      run_jil_task
       call_jil_function
       trigger_jil_task
       run_routine
@@ -135,7 +136,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false, roster: nil, board: false)
+    def register(name:, summary:, description:, args:, confirm:, label:, execute:, receipt: nil, guard: nil, hint: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {}, always: false, roster: nil, board: false, internal: false)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -178,6 +179,10 @@ module Buddy
         # Only offered on a board's own chat (Buddy::BoardAdmin), and offered in
         # full there: a board's thread is about setting the board up.
         board:            board == true,
+        # Still runs when a stored row names it - a routine step, a scheduled
+        # call, a watch - but is never offered: another tool is how the model
+        # reaches it now.
+        internal:         internal == true,
         roster:           roster,
         args:             normalize_args(args),
         confirm:          confirm,
@@ -328,6 +333,11 @@ module Buddy
       nil
     end
 
+    # Words a Jil task uses about itself when it only reads. Only a task that
+    # says so may answer a question - one that opens, sets or starts something
+    # does that instead of reporting.
+    JIL_READS_RX = /\b(?:check|checks|report|reports|reporting|state|status|read|reads|sensor|whether)\b/i
+
     # Their Jil FUNCTION tasks and their other Jil automations, by name, the
     # same rows `jil_functions` and `jil_triggers` list in the context.
     def jil_function_names(user)
@@ -345,6 +355,10 @@ module Buddy
 
     def board?(tool)
       tool.is_a?(Hash) && tool[:board] == true
+    end
+
+    def internal?(tool)
+      tool.is_a?(Hash) && tool[:internal] == true
     end
 
     # A tool that settles inside the turn and reports back to the model.
@@ -455,7 +469,7 @@ module Buddy
     # A board tool only on a board's own thread; everything else wherever the
     # person holds its feature.
     def offered(user: nil, conversation: nil)
-      tools = all.reject { |tool| board?(tool) && !conversation&.board? }
+      tools = all.reject { |tool| internal?(tool) || (board?(tool) && !conversation&.board?) }
       user ? tools.select { |tool| Buddy::Features.allows_tool?(user, tool) } : tools
     end
 

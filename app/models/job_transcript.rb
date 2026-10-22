@@ -42,10 +42,22 @@ class JobTranscript < ApplicationRecord
     self
   end
 
-  # Every label in the file, in the order they first speak - which is the order
-  # the conversation introduces them, and so the order they are easiest to name.
+  # Everybody speaking, in the order they first speak - which is the order the
+  # conversation introduces them, and so the order they are easiest to name.
+  #
+  # Read off `speaker` rather than `raw`, because that is who the turn is ON:
+  # a split into sides writes `Me` and `Them` there while `raw` stays the
+  # nothing the file said, and a naming form built off `raw` would offer him a
+  # row for a label no turn is on any more.
   def labels
-    @labels ||= TranscriptParser.speakers_in(turns)
+    @labels ||= turns.map { |turn| turn["speaker"].presence || turn["raw"].to_s }.compact_blank.uniq
+  end
+
+  # Did the file name anybody at all? One label for the whole conversation is
+  # the same thing as none: a recorder that heard one voice, or a phone
+  # transcription that is half an hour of unbroken text.
+  def unlabelled?
+    TranscriptParser.speakers_in(turns).size <= 1
   end
 
   # The labels a turn can be moved to. The same list, plus whatever a turn has

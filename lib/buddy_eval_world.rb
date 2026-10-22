@@ -630,6 +630,16 @@ class BuddyEvalWorld
         "flash lights, vent or close the windows, frunk/trunk, defrost, seat heaters. Car, " \
         "vehicle and Tesla all mean this one.",
 ],
+      # Prod's own description, word for word: whether "skip the next nap"
+      # finds this is the whole question, and a nap is also a chore.
+      [
+        /skip nap/i,
+        "Whisper Skip Nap",
+        "function()::String",
+        "Skips Whisper's next nap: \"skip her next nap\", \"no nap at 5\", \"let her stay up through " \
+        "the next one\". The nap after it stays on the clock, and the answer says when that is. Asked " \
+        "while she's napping, it skips the nap after this one.",
+      ],
     ].each { |rx, name, listener, description|
       wanted_function = listener.start_with?("function")
       found = mine.detect { |task|

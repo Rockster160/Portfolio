@@ -1,17 +1,17 @@
 Buddy::Tools.register(
   name:        :schedule_trigger,
   summary:     "Fire a raw Jil trigger at a time, optionally only if a check passes. A task by " \
-               "name, now, is trigger_jil_task.",
+               "name, now, is run_jil_task.",
   description: <<~TXT,
     Put a raw Jil TRIGGER on the clock, optionally behind a check.
 
     "If I've done the villager car by 8, fire `villager:car:charged`" is this:
     at 8 it looks, and it fires only if the answer says so.
 
-    ## This is not `trigger_jil_task`
+    ## This is not `run_jil_task`
 
-    That one fires a task BY NAME and can only reach the tasks in your
-    `jil_triggers` list. This one publishes a raw scope onto the listener bus.
+    That one runs a task BY NAME and can only reach the tasks in your
+    `jil_functions` and `jil_triggers` lists. This one publishes a raw scope onto the listener bus.
     Nothing is resolved, nothing is named, and **it does not matter whether you
     have access to whatever is listening** - a trigger is an announcement, not a
     call. Anything of theirs listening for that scope, whose filter the data
@@ -19,7 +19,7 @@ Buddy::Tools.register(
 
     So use this when they give you a SCOPE - something shaped like
     `some:jil:listener` - rather than the name of an automation. When they name
-    an automation they want to happen right now, that's `trigger_jil_task`.
+    an automation they want to happen right now, that's `run_jil_task`.
 
     ## Arguments
 

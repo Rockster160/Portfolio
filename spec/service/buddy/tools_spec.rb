@@ -132,7 +132,7 @@ RSpec.describe Buddy::Tools do
     end
 
     it "gives the pass-through tool a freeform args object and opts out of strict" do
-      jil = schema_for(:call_jil_function)
+      jil = schema_for(:run_jil_task)
       expect(jil[:strict]).to be(false)
       expect(jil[:parameters][:properties][:args]).to include(type: :object, additionalProperties: true)
     end

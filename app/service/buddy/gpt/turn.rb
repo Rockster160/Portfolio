@@ -2684,7 +2684,7 @@ module Buddy
         <<~TXT
           STOP. They asked to SEE something, and a camera is what shows it.
 
-          #{camera_functions.map { |n| "`#{n}`" }.to_sentence} #{"is".pluralize(camera_functions.length)} in your `jil_functions` index right now. Call `call_jil_function` with `expect_result: true` and answer from what comes back.
+          #{camera_functions.map { |n| "`#{n}`" }.to_sentence} #{"is".pluralize(camera_functions.length)} in your `jil_functions` index right now. Call `run_jil_task` with `expect_result: true` and answer from what comes back.
 
           A camera holds what it already saw as well as what it can see now, and
           both are yours to pull. "Show me the last person that rang", "who was
@@ -3663,7 +3663,7 @@ module Buddy
         # than becoming a search for a verb anywhere in a paragraph.
         (?:(?:every|each|at|on|in|by|when|whenever|after|before|tomorrow|tonight|
              today|this|next|starting)\b[^,\n]{0,40},\s*)?
-        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
+        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just|let(?:'|’)?s)\s+)*
         (?:turn|switch|toggle|set|start|stop|shut|open|close|lock|unlock|play|pause|
            resume|dim|brighten|run|fire|launch|restart|reboot|enable|disable|mute|unmute|
            print|reprint|queue|preheat|cancel|remind|schedule|undo|
@@ -3697,6 +3697,12 @@ module Buddy
           (?:monitors?|screens?|displays?|lights?|lamps?|blinds?|shades?|tvs?|fans?)\s+
           (?:on|off|up|down|dark|open|closed?|high|low|mid|medium)
           (?:\s+please)?[\s.!,]*\z
+        # Skipping the NEXT of something that recurs - a nap, a reminder. Bare
+        # "skip that" is conversation, so the time word is what makes it an
+        # order.
+        | \A\s*(?:hey[\s,]+\w+[\s,]+)?
+          (?:(?:please|can\s+you|could\s+you|let(?:'|’)?s|just)\s+)*
+          skip\s+(?:(?:the|her|his|my|our)\s+)?(?:next|tonight(?:'|’)?s|today(?:'|’)?s|tomorrow(?:'|’)?s)\b
         # A mode and how long to hold it, still with no verb: "Quiet until 2:15",
         # "quiet for an hour". A question about the mode opens with "is".
         | \A\s*(?:hey[\s,]+\w+[\s,]+)?
@@ -3746,7 +3752,7 @@ module Buddy
       # the gate at all, because "add" is not a device verb and never will be.
       WRITE_REQUEST_RX = /
         \A\s*(?:hey[\s,]+\w+[\s,]+)?
-        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
+        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just|let(?:'|’)?s)\s+)*
         (?:add|put|remove|delete)
         # Same guard as above: the word after the verb is what separates an
         # order from a turn of phrase.

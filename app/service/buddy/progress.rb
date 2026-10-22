@@ -116,6 +116,7 @@ module Buddy
       skip_prompt:           "Skipping it",
 
       # Automations
+      run_jil_task:          "Running that for you",
       call_jil_function:     "Running that for you",
       trigger_jil_task:      "Running that for you",
       run_routine:           "Running the routine",

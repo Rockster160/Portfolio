@@ -312,6 +312,7 @@ module Buddy
     # its listener does.
     def offerable?(tool)
       return false unless Buddy::Tools.routinable?(tool)
+      return false if Buddy::Tools.internal?(tool)
 
       tool[:args].to_h.none? { |_key, spec| spec[:required] && FIELD_TYPES.exclude?(spec[:type]) }
     end

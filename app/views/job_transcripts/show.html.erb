@@ -53,10 +53,17 @@
           <details class="job-details transcript-speakers"
                    <%= "open" if @transcript.speakers.blank? %>>
             <summary>Who was speaking</summary>
+            <%# What is here when the page first opens was read off the words
+               when the file landed: which side each voice is on, and any name
+               the conversation actually said. It is a reading and it is
+               sometimes wrong, so the form says what to do about that rather
+               than presenting itself as the first step. %>
             <p class="field-hint">
-              The recorder guesses at these and gets some of them wrong. Name each
-              one here, tick the one that is you, and then fix any individual turn
-              it put on the wrong person using the picker on the turn itself.
+              Who is who is read off the recording when it lands - and the recorder
+              and the reading both get some of it wrong. Correct a name here, tick
+              the one that is you, and fix any individual turn on the wrong person
+              with the picker on the turn itself. If this still says nothing, the
+              pass is running - give it a minute and reload.
             </p>
 
             <ul class="speaker-rows">

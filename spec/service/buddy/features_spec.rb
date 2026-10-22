@@ -74,7 +74,7 @@ RSpec.describe Buddy::Features do
     # nothing" would quietly strip every tool off the eval harness. The board
     # tools are the exception: they need a board's thread, not a person.
     it "gates nothing when there's no user to check" do
-      off_board = Buddy::Tools.all.reject { |tool| Buddy::Tools.board?(tool) }
+      off_board = Buddy::Tools.all.reject { |tool| Buddy::Tools.board?(tool) || Buddy::Tools.internal?(tool) }
 
       expect(Buddy::Tools.function_schemas.length).to eq(off_board.length)
     end
