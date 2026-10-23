@@ -139,6 +139,37 @@ RSpec.describe "Background processes", type: :request do
       expect(response).to have_http_status(:ok)
       expect(json["cleared"]).to be(false)
     end
+
+    # A chip standing for a state someone is in: the × is how they end it.
+    it "fires the chip's trigger, with its data, as whoever raised it" do
+      owner = create(:user)
+      BackgroundProcess.report!(
+        user:     user,
+        key:      "sick",
+        name:     "Sick",
+        state:    :waiting,
+        metadata: { trigger: "sick", data: { action: "better" }, owner_id: owner.id },
+      )
+      allow(Jil).to receive(:trigger)
+
+      delete "/api/v1/background_processes/sick"
+
+      expect(Jil).to have_received(:trigger).with(
+        owner,
+        "sick",
+        hash_including("action" => "better", "key" => "sick", "dismissed_by" => user.username),
+        auth: :trigger,
+      )
+    end
+
+    it "fires nothing for a chip raised without one" do
+      post "/api/v1/background_processes", params: { key: "jobhunt:line", name: "Preparing" }
+      allow(Jil).to receive(:trigger)
+
+      delete "/api/v1/background_processes/jobhunt:line"
+
+      expect(Jil).not_to have_received(:trigger)
+    end
   end
 
   describe "GET /api/v1/background_processes" do

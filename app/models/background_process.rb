@@ -9,6 +9,7 @@
 #  heartbeat_at :datetime         not null
 #  key          :string           not null
 #  links        :jsonb            not null
+#  metadata     :jsonb            not null
 #  name         :string           not null
 #  source       :string
 #  started_at   :datetime         not null
@@ -77,9 +78,23 @@ class BackgroundProcess < ApplicationRecord
 
   PARKED = %i[waiting failed].freeze
 
+  # A chip can stand for a STATE somebody is in rather than work going on (Jil's
+  # `Buddy.miniAlert`). Those may carry a colour, sit at the front of the strip,
+  # and fire a Jil trigger when the person taps their ×, so clearing the chip is
+  # also the way out of whatever it stands for. Named colours are the ones worth
+  # having on a dark hero; a hex is taken as given.
+  COLORS = {
+    "green"  => "#3fb950",
+    "blue"   => "#58a6ff",
+    "purple" => "#bc8cff",
+    "amber"  => "#d29922",
+    "red"    => "#f85149",
+  }.freeze
+  HEX_RX = /\A#\h{6}\z/
+
   # The only attributes a report may set. Everything else on the row - who it
   # belongs to, when it started, when it was last heard from - is the server's.
-  WRITABLE = %i[name state detail current total links source].freeze
+  WRITABLE = %i[name state detail current total links source metadata].freeze
 
   validates :key, presence: true, format: { with: KEY_RX }
   validates :name, presence: true
@@ -97,6 +112,41 @@ class BackgroundProcess < ApplicationRecord
 
   def detail=(value)
     super(value.presence && value.to_s.strip.truncate(MAX_DETAIL))
+  end
+
+  # Only what the strip and the × know how to use is kept, so a caller can't
+  # park arbitrary data on a chip. Merged onto what is there, so a step that
+  # says nothing about the colour keeps it.
+  def metadata=(value)
+    given = value.to_h.stringify_keys
+    kept = {
+      "color"    => self.class.color_for(given["color"]),
+      "pinned"   => (given["pinned"] == true || given["pinned"].to_s == "true" if given.key?("pinned")),
+      "trigger"  => given["trigger"].to_s.strip.presence,
+      "data"     => (given["data"].to_h.stringify_keys.presence if given["data"].respond_to?(:to_h)),
+      "owner_id" => given["owner_id"].presence&.to_i,
+    }.compact
+    super((self[:metadata] || {}).merge(kept))
+  end
+
+  def self.color_for(value)
+    color = value.to_s.strip.downcase
+    COLORS[color] || (color if color.match?(HEX_RX))
+  end
+
+  # The person let go of it by hand. A chip raised with a trigger fires it, as
+  # whoever's task raised it, so the state it stands for can end with it.
+  # Clearing it from code (`Buddy.clearMiniAlert`, a script finishing) is not
+  # this, and fires nothing.
+  def dismissed!(by:)
+    trigger = metadata["trigger"].presence
+    return if trigger.nil?
+
+    owner = ::User.find_by(id: metadata["owner_id"]) || user
+    data = metadata["data"].to_h.merge("key" => key, "dismissed_by" => by&.username)
+    ::Jil.trigger(owner, trigger, data, auth: :trigger)
+  rescue StandardError => e
+    Rails.logger.warn("[BackgroundProcess] #{key} dismiss trigger failed: #{e.class}: #{e.message}")
   end
 
   def self.normalize_links(value)
@@ -226,6 +276,8 @@ class BackgroundProcess < ApplicationRecord
       total:        total,
       links:        links,
       source:       source,
+      color:        metadata["color"],
+      pinned:       metadata["pinned"] == true,
       stale:        stale?,
       started_at:   started_at&.iso8601(3),
       heartbeat_at: heartbeat_at&.iso8601(3),

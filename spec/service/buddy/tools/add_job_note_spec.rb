@@ -318,6 +318,57 @@ RSpec.describe "add_job_note tool" do
     end
   end
 
+  # A company on the board several times has its mail filed on the likeliest of
+  # those rows, stamped as a guess. `role` is what settles it, and settling it
+  # on a sibling MOVES the beat - one mail stays one beat.
+  describe "a mail filed on a guessed row" do
+    let!(:sibling) { user.job_applications.create!(company: "ApartmentIQ", role: "Backend Engineer") }
+    let(:email) {
+      user.emails.create!(direction: :inbound, mail_id: "m-12", subject: "Interview availability",
+        blurb: "Times?", timestamp: 1.hour.ago.change(usec: 0))
+    }
+    let!(:guessed) {
+      note = job.notes.create!(body: "Times?", tag: :note, occurred_at: email.timestamp,
+        source: "Email")
+      email.update!(job_triage: email.job_triage.merge(job_note_id: note.id, job_note_guess: true))
+      note
+    }
+
+    # `role` is how the model names the row, and it is what resolves the call to
+    # the sibling in the first place.
+    def name_the_sibling
+      execute(tag: :availability, email_id: email.id, note: "Times?", role: "Backend Engineer")
+    end
+
+    it "moves it rather than filing a second copy" do
+      expect { name_the_sibling }.not_to(change { JobNote.count })
+
+      expect(guessed.reload.job_application_id).to eq(sibling.id)
+      expect(guessed.tag).to eq("availability")
+    end
+
+    it "stops being a guess once a row has been named" do
+      name_the_sibling
+
+      expect(email.reload.job_triage).not_to have_key(:job_note_guess)
+    end
+
+    it "undoes to the row it was on" do
+      revert = name_the_sibling[:reverts].first
+
+      expect(revert[:before]["job_application_id"]).to eq(job.id)
+    end
+
+    # Without the stamp an `email_id` beside the wrong `job_id` would drag a
+    # settled beat off the application it belongs to.
+    it "leaves a filing that was never a guess where it is" do
+      email.update!(job_triage: email.job_triage.except(:job_note_guess))
+
+      expect { name_the_sibling }.to change { JobNote.count }.by(1)
+      expect(guessed.reload.job_application_id).to eq(job.id)
+    end
+  end
+
   # Buddy::JobMailOffer files arriving mail on its row as a plain `note`, so
   # this card is the READING of a row that already exists rather than a new one.
   describe "a mail this row already holds" do

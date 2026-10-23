@@ -160,15 +160,16 @@ RSpec.describe Buddy::JobMailOffer do
         expect(body).to include("CALL add_job_note")
       end
 
-      # The one case where the row itself is the open question: several rows for
-      # the company, and nothing in the mail saying which. Filing anyway would
-      # put the beat on a sibling application.
-      it "files nothing when the company holds several rows and the mail names none" do
+      # Several rows for the company and nothing in the mail saying which. The
+      # row is a guess, so it is STAMPED as one - that is what lets `role` move
+      # the beat rather than file a second copy of it.
+      it "files it as a guess when the company holds several rows and the mail names none" do
         user.job_applications.create!(company: "iCapital", role: "Backend Engineer")
         verdict[:headline] = "Application confirmation for iCapital"
         metadata[:subject] = "Thank you for applying"
 
-        expect { call(email: email, body: "Thanks!") }.not_to change(JobNote, :count)
+        expect { call(email: email, body: "Thanks!") }.to change(JobNote, :count).by(1)
+        expect(email.reload.job_triage[:job_note_guess]).to be(true)
       end
 
       # An interview is booked, moved and confirmed by mail that names no job at
@@ -310,7 +311,7 @@ RSpec.describe Buddy::JobMailOffer do
     let!(:backend) { user.job_applications.create!(company: "iCapital", role: "Senior Backend Engineer") }
     let!(:manager) { user.job_applications.create!(company: "iCapital", role: "Engineering Manager") }
 
-    it "asks which job rather than proposing a new company" do
+    it "names every row rather than proposing a new company" do
       body = call.body
 
       expect(body).to include("on their board 2 times")
@@ -320,6 +321,56 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).not_to include("CALL add_job_application")
     end
 
+    # A question in a thread is not a record. The mail goes onto the likeliest
+    # row and `role` moves it, so the worst case is a beat on the wrong job of
+    # the right company rather than no beat at all.
+    describe "filing it on a guess" do
+      let(:email) {
+        user.emails.create!(direction: :inbound, mail_id: "m-amb", subject: "Zoom Interview Availability",
+          blurb: "Zoom", timestamp: arrived)
+      }
+
+      it "files the mail on the row something happened on most recently" do
+        backend.notes.create!(tag: :heard_back, occurred_at: 5.days.ago)
+        manager.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+
+        call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.")
+
+        expect(manager.notes.reload.map(&:body)).to include(/schedule a Zoom/)
+        expect(backend.notes.reload.count).to eq(1)
+      end
+
+      it "leaves a settled row alone even when it moved more recently" do
+        backend.notes.create!(tag: :heard_back, occurred_at: 5.days.ago)
+        manager.notes.create!(tag: :rejected, occurred_at: 1.day.ago)
+
+        call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.")
+
+        expect(backend.notes.reload.map(&:body)).to include(/schedule a Zoom/)
+      end
+
+      it "marks the row it went with and says `role` moves it" do
+        body = call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
+
+        expect(body).to include("<- filed here")
+        expect(body).to include("MOVES the beat")
+        expect(body).to include("already on the marked row")
+      end
+
+      it "stamps the filing as a guess, so the beat can be moved" do
+        call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.")
+
+        expect(email.reload.job_triage[:job_note_guess]).to be(true)
+        expect(email.job_triage[:job_note_id]).to eq(user.job_notes.last.id)
+      end
+
+      # The seed is instructions either way; with no mail to read there is
+      # nothing to file and the call is still the thing that makes the record.
+      it "says the mail is not on the board when there was none to file" do
+        expect(call.body).to include("The mail is not on the board yet")
+      end
+    end
+
     it "still keeps the mail's own words for the note" do
       body = call(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
 
@@ -327,14 +378,19 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).to include("VERBATIM")
     end
 
-    # Prod 7811, and 6557 / 6718 / 6873 before it: the turn asked which role,
-    # which is what this seed says to do, and was then sent "What did not happen
-    # is the CALL - make it now" and pushed a retraction of a claim nobody made
-    # onto his phone. On the Pura mail the retry got the model to pick a role,
-    # which is the one thing this seed forbids. `seed_call` is what read the
-    # question as a dropped call.
-    it "is not told to expect a call, because it may ask instead" do
-      expect(call.metadata).not_to have_key("seed_call")
+    # A seed that only ASKS gets retried with "What did not happen is the CALL -
+    # make it now", and a retraction of a claim nobody made goes out as a second
+    # notification. This seed asks for nothing: the row is filed and `role`
+    # settles it, so there is a call to make and `seed_call` is honest.
+    it "is told to expect a call, because there is one to make" do
+      expect(call.metadata["seed_call"]).to eq("add_job_note")
+    end
+
+    it "carries the row it guessed, so the card knows which one it is on" do
+      backend.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+      manager.notes.create!(tag: :heard_back, occurred_at: 9.days.ago)
+
+      expect(call.metadata["job_application_id"]).to eq(backend.id)
     end
 
     it "still keeps the seed to its own two tools" do

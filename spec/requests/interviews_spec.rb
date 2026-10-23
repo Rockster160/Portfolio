@@ -664,6 +664,62 @@ RSpec.describe "Interview tracker", type: :request do
     end
   end
 
+  describe "moving a note to another application" do
+    let!(:job) { user.job_applications.create!(company: "Aledade PBC", role: "Staff Engineer") }
+    let!(:sibling) { user.job_applications.create!(company: "Aledade PBC", role: "Principal Engineer") }
+    let!(:note) { job.notes.create!(tag: :heard_back, body: "They wrote.", occurred_at: 1.hour.ago) }
+
+    # The picker it is moved with, in the order the options come out.
+    def move_options
+      block = response.body[/<select[^>]*name="job_note\[job_application_id\]".*?<\/select>/m]
+      block.to_s.scan(/<option[^>]*>([^<]+)</).flatten.map(&:strip)
+    end
+
+    it "offers the row it is on first, then the same company" do
+      user.job_applications.create!(company: "Zebra")
+
+      get interview_path(job)
+
+      expect(move_options.first(2))
+        .to eq(["Aledade PBC — Staff Engineer", "Aledade PBC — Principal Engineer"])
+      expect(move_options).to include("Zebra")
+    end
+
+    it "keeps a settled row out of the general list" do
+      user.job_applications.create!(company: "Zebra", status: :rejected)
+
+      get interview_path(job)
+
+      expect(move_options).not_to include("Zebra")
+    end
+
+    it "moves the beat and lands on the row it moved to" do
+      patch interview_note_path(job, note), params: { job_note: { job_application_id: sibling.id } }
+
+      expect(response).to redirect_to(interview_path(sibling))
+      expect(note.reload.job_application_id).to eq(sibling.id)
+    end
+
+    it "refuses a row off somebody else's board" do
+      stranger = create(:user).job_applications.create!(company: "Aledade PBC")
+
+      patch interview_note_path(job, note), params: { job_note: { job_application_id: stranger.id } }
+
+      expect(note.reload.job_application_id).to eq(job.id)
+    end
+
+    it "takes the booking's calendar row with it" do
+      booking = job.notes.create!(tag: :scheduled, occurred_at: 1.hour.ago,
+        follow_up_at: 3.days.from_now)
+
+      patch interview_note_path(job, booking),
+        params: { job_note: { job_application_id: sibling.id } }
+
+      expect(booking.reload.follow_up_item.name).to eq("Interview: Aledade PBC")
+      expect(booking.follow_up_item.notes).to include(sibling.interview_url)
+    end
+  end
+
   describe "notes" do
     let(:job) { user.job_applications.create!(company: "Acme") }
 

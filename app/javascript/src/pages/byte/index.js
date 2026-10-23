@@ -82,6 +82,7 @@ import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { initChoreBoard, iconNode } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
+import { initOwnMoods } from "./buddy/own_moods";
 import { initBoardDream, paceFromMeta } from "./buddy/dream";
 import { faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted, alarmStoppedAt } from "./buddy/alarm";
@@ -186,6 +187,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The board's standing-alert bubble + pet shuffle. Null until it is wired
   // after the hero exists; the alert handlers below guard with `?.`.
   let boardAlert = null;
+  let ownMoods = null;
   // The pet's thought bubble on a board (buddy/dream.js). Fed alongside
   // boardAlert, so declared beside it for the same reason.
   let boardDream = null;
@@ -2498,6 +2500,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     tags: boardTags(app),
   });
   boardAlert.setAlerts(bootstrap.alerts || []);
+  // `Buddy.mood` with no groups: worn by this person's own pet.
+  ownMoods = initOwnMoods({ hero: buddyHero, board: app.dataset.board === "true" });
+  ownMoods.setAlerts(bootstrap.alerts || []);
 
   // The thought bubble: a dream from Jil, else a hot chore now and then. Mounted
   // before the chore board, which hands it the board's items on every paint.
@@ -3712,6 +3717,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.kind === "alerts") {
         alertStrip.setAlerts(data.alerts);
         boardAlert?.setAlerts(data.alerts);
+        ownMoods?.setAlerts(data.alerts);
         boardDream?.setAlerts(data.alerts);
         return;
       }
@@ -3871,6 +3877,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const payload = await res.json();
       alertStrip.setAlerts(payload?.alerts);
       boardAlert?.setAlerts(payload?.alerts);
+      ownMoods?.setAlerts(payload?.alerts);
       boardDream?.setAlerts(payload?.alerts);
     } catch (_) {}
   }

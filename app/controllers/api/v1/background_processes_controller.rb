@@ -45,6 +45,7 @@ class Api::V1::BackgroundProcessesController < Api::V1::BaseController
   def destroy
     key = params[:key].to_s
     cleared = BackgroundProcess.clear!(user: subject, key: key)
+    cleared&.dismissed!(by: subject)
     render_json(key: key, cleared: cleared.present?)
   end
 

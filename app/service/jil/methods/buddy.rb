@@ -5,7 +5,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Methods whose last argument is a block of named settings - `who`, `face` -
   # one line each, written as `Keyword.who("me")` and shown as just "who".
-  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button].freeze
+  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button miniAlert].freeze
   # Settings a block may give more than once, each line adding to the list.
   LISTED_SETTINGS = %i[who groups].freeze
   # Calls a block may hold besides its named lines, each collected under its
@@ -31,7 +31,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
   #   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
   #   #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
-  #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
+  #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash]))::Boolean
   #   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
@@ -257,12 +257,29 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # wants - it stays until something clears it rather than quietly ageing off the
   # strip while it's still true.
   #
+  # The optional block is for a chip that stands for a state somebody is IN:
+  # `color` (green, blue, purple, amber, red, or a hex), `pinned` to put it
+  # ahead of every other chip, and `trigger` + `data` to fire when they tap its
+  # × - so clearing it by hand is also how they end what it stands for.
+  # `clearMiniAlert` fires nothing.
+  #
   # Returns false when it reached nobody with a Buddy hero to show it.
-  def miniAlert(key, label, detail=nil, who=nil)
+  def miniAlert(key, label, detail=nil, who=nil, options=nil)
+    # The block lands in whichever slot follows the last argument given.
+    options, who = who, nil if who.is_a?(::Hash)
+    options, detail = detail, nil if detail.is_a?(::Hash)
+    opts = options.to_h
+    look = {
+      color:    opts[:color],
+      pinned:   opts[:pinned],
+      trigger:  opts[:trigger],
+      data:     opts[:data],
+      owner_id: @jil.user.id,
+    }.compact
     posted = recipients_for(who).count { |user|
       ::BackgroundProcess.note(
         user: user, key: key.to_s, name: label.to_s,
-        detail: detail.presence, state: :waiting, source: :jil
+        detail: detail.presence, state: :waiting, source: :jil, metadata: look
       ).present?
     }
     posted.positive?

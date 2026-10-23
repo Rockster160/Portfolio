@@ -69,6 +69,9 @@ class JobApplicationsController < ApplicationController
     # is why the page is open. See `expected_next_tag`.
     @note = JobNote.new(occurred_at: Time.current, tag: @job.expected_next_tag)
     @merge_candidates = merge_candidates
+    # Once for the page. Every beat carries the same picker, and asking for it
+    # per note is the whole board loaded once per row of the timeline.
+    @move_targets = move_targets(@job)
   end
 
   # The one form on the index does both halves of "pick a job, or name a new
@@ -211,6 +214,21 @@ class JobApplicationsController < ApplicationController
     return job.status == @filter if JobApplication.statuses.key?(@filter)
 
     JobApplication::LIVE_STATUSES.include?(job.status.to_sym)
+  end
+
+  # Where a beat on this page can be moved to, likeliest first: the row it is
+  # on, then the other rows at the SAME COMPANY - which is the whole of why a
+  # beat is ever on the wrong one - then the rest of the live board.
+  #
+  # A settled row is reachable only through its own company's block. Moving a
+  # beat onto a rejected application is a real thing to want and a terrible
+  # default, and the board holds far more closed rows than open ones.
+  def move_targets(job)
+    board = current_user.job_applications.order(:company, :id).to_a
+    same = board.select { |row| row.company == job.company && row.id != job.id }
+    seen = [job.id, *same.map(&:id)]
+    rest = board.reject { |row| seen.include?(row.id) || row.dead? }
+    [job, *same, *rest]
   end
 
   # What each chip prints. Off the board when nothing is being searched; off

@@ -104,6 +104,19 @@
     <%= form_with model: note, url: interview_note_path(job, note), method: :patch, local: true,
           namespace: "note#{note.id}" do |f| %>
       <%= render "note_fields", f: f, note_extras_open: true %>
+      <%# WHOSE application this is. On a mail that arrived for a company the
+         board holds more than once the row was a guess, and the beat has to be
+         movable without being retyped - the alternative is a second copy on
+         the right row and the guess left standing on the wrong one.
+
+         Only on an existing beat's own form: the two forms that CREATE one
+         already name the application another way. %>
+      <div class="form-field note-move">
+        <%= f.label :job_application_id, "On which application" %>
+        <%= f.select :job_application_id,
+              move_targets.map { |row| [row.label, row.id] },
+              {}, data: { note_move: true } %>
+      </div>
       <div class="form-submission">
         <%= submit_tag "Save note" %>
         <%= link_to "Delete", interview_note_path(job, note), method: :delete, class: "btn danger",

@@ -15,13 +15,20 @@ Buddy::Tools.register(
     occurred, and writing them down as though they had puts a fact in their
     history that isn't true. React warmly and log nothing; if they want it
     held, that's the agenda. The moment they say they DID it, log it then.
+
+    `at` is for when it happened earlier than now - "I got sick yesterday
+    morning", "had a coffee at 8". Leave it out for something happening now.
   TXT
   feature:     :events,
   args:        {
     name:  { type: :string, required: true,  description: "Short event label (e.g. 'Coffee', 'Push-ups')" },
     notes: { type: :string, required: false, description: "Optional free-form notes" },
+    at:    { type: :iso_time, required: false, description: "When it happened (ISO), if earlier than now" },
   },
   confirm:     ->(payload, _ctx) {
+    at = payload[:at]
+    raise "that hasn't happened yet - a log is for something already done" if at.respond_to?(:future?) && at.future?
+
     { summary: "Log #{payload[:name]}?", resolved: {} }
   },
   label:       ->(payload, _ctx) {
@@ -37,7 +44,7 @@ Buddy::Tools.register(
       user:      ctx.user,
       name:      payload[:name],
       notes:     payload[:notes],
-      timestamp: Time.current,
+      timestamp: payload[:at].respond_to?(:strftime) ? payload[:at] : Time.current,
       data:      { source: "buddy" },
     )
     # Same side effects as an in-app log: fire the :event trigger (so watches +

@@ -89,7 +89,11 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
   // 0 is asking for a person, 1 is still going, 2 is over. A settled chip is
   // worth seeing and worth seeing LAST — it is the only one on the strip that
   // wants nothing, so it is the one to push off the end when the strip is full.
+  //
+  // A pinned chip (Jil's `Buddy.miniAlert` for a state someone is in) is ahead
+  // of all of them: it is not work, it is the frame the rest is read in.
   function rank(p) {
+    if (p.pinned) return -1;
     if (p.state === "finished") return 2;
     return p.state === "running" ? 1 : 0;
   }
@@ -117,6 +121,11 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       chip.className = "byte-process-chip";
       chip.dataset.processKey = p.key;
       chip.dataset.state = p.state;
+      // A chip raised with a colour wears it as a tint, not just an edge.
+      if (p.color) {
+        chip.dataset.colored = "true";
+        chip.style.setProperty("--process-accent", p.color);
+      }
       if (stale) chip.dataset.stale = "true";
       if (clearing.has(p.key)) chip.dataset.pending = "clear";
       if (clearFailed.has(p.key)) chip.dataset.pending = "clear-failed";

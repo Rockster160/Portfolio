@@ -247,6 +247,7 @@ class JobApplication < ApplicationRecord
     meeting_at = nil   # when the booking still ahead of us is, if there is one
     pending    = false # a booking with no time on it, or one awaiting a rebook
     opened     = false # they have said something nothing has come of yet
+    offered    = false # an offer has landed, however many times it is re-sent
 
     notes.sort_by { |note| [note.occurred_at, note.id] }.each do |note|
       case note.tag.to_sym
@@ -267,8 +268,15 @@ class JobApplication < ApplicationRecord
         meeting_at = nil
         pending    = false
         opened     = false
-      when :take_home, :offer
+      when :take_home
         rounds += 1
+        opened  = false
+      # ONCE. An ATS re-sends the onboarding mail on a timer and each copy is
+      # honestly an offer beat, so the rung is right and the round is not: they
+      # made one offer and are waiting on one answer.
+      when :offer
+        rounds += 1 unless offered
+        offered = true
         opened  = false
       end
     end

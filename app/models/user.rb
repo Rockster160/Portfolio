@@ -56,6 +56,9 @@ class User < ApplicationRecord
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
   has_many :timers, dependent: :destroy
   has_many :job_applications, dependent: :destroy
+  # Every beat on the board, for the handful of places that hold an id and have
+  # to find the row it belongs to before trusting it.
+  has_many :job_notes, through: :job_applications, source: :notes
   has_many :game_templates, dependent: :destroy
   has_many :game_plays, dependent: :destroy
   has_many :byte_messages, dependent: :destroy

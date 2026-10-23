@@ -507,6 +507,19 @@ RSpec.describe JobApplication do
     end
   end
 
+  describe "an offer re-sent on a timer" do
+    it "counts one round however many copies of it arrive" do
+      job = user.job_applications.create!(company: "iCapital")
+      job.notes.create!(tag: :applied, occurred_at: 9.days.ago)
+      job.notes.create!(tag: :offer, occurred_at: 2.days.ago)
+      job.notes.create!(tag: :offer, occurred_at: 1.day.ago)
+      job.notes.create!(tag: :offer, occurred_at: 2.hours.ago)
+
+      expect(job.reload.interaction_count).to eq(1)
+      expect(job.engagement_label).to eq("Offer")
+    end
+  end
+
   describe "the silence" do
     it "counts an application a machine receipted and nobody answered" do
       job = user.job_applications.create!(company: "Reserv")

@@ -614,6 +614,37 @@ RSpec.describe JobNote do
     end
   end
 
+  describe "a booking answering a request for times" do
+    let!(:chase) {
+      job.notes.create!(tag: :availability, follow_up_at: 4.days.from_now, occurred_at: 1.hour.ago)
+    }
+
+    it "takes the Send availability task off the calendar" do
+      item_id = chase.reload.agenda_item_id
+      expect(item_id).to be_present
+
+      job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+
+      expect(chase.reload.follow_up_at).to be_nil
+      expect(AgendaItem.find_by(id: item_id)).to be_nil
+    end
+
+    it "leaves a request for times that came after the booking" do
+      job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now, occurred_at: 2.hours.ago)
+
+      expect(chase.reload.follow_up_at).to be_present
+    end
+
+    it "leaves another application's request alone" do
+      other = user.job_applications.create!(company: "Globex")
+      theirs = other.notes.create!(tag: :availability, follow_up_at: 4.days.from_now, occurred_at: 1.hour.ago)
+
+      job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+
+      expect(theirs.reload.follow_up_at).to be_present
+    end
+  end
+
   # iCapital confirmed Thursday and three minutes later sent "Please disregarded
   # the last email. Here is the correct time" for a Thursday the week after.
   # Both mails filed their own `scheduled` note, and only the CALENDAR was

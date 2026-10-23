@@ -91,32 +91,34 @@ module Buddy
         end
 
         ambiguous = rows.any?
+        # A GUESS, FILED, rather than a question. The answer to "which of these
+        # jobs" has never been "neither", and a beat that waits for one is a
+        # beat that is lost: the seed goes out, the question sits in a thread,
+        # and the board says an application nobody answered. On the wrong row
+        # of the right company it is one `role` away from the right one, and
+        # `add_job_note` moves it there - see `best_guess` for which row this
+        # picks, and the `job_note_guess` stamp for what makes it movable.
+        #
+        # Which is why this seed carries `seed_call` like the other two. A seed
+        # that only ASKS is read as a dropped call: the turn is retried with
+        # "What did not happen is the CALL - make it now", and a second
+        # notification goes out retracting a claim nobody made. The call to
+        # make is now a real one, so there is nothing to strip.
+        guess = (best_guess(rows) if ambiguous)
+        pre_logged = log_arrival!(guess, email, body, occurred_at, guessed: true) if guess
         seed = (
           if ambiguous
-            ambiguous_seed(verdict, rows, metadata, occurred_at, email, body, outgoing)
+            ambiguous_seed(verdict, rows, metadata, occurred_at, email, body, outgoing, pre_logged)
           else
             new_company_seed(verdict, metadata, occurred_at, email, body, outgoing)
           end
         )
 
-        # The one seed that is TOLD to ask rather than act, so the one seed that
-        # must not carry `seed_call`. With it, asking which role is read as a
-        # dropped call: the turn is sent "What did not happen is the CALL - make
-        # it now", and the person gets a second notification retracting a claim
-        # nobody made. Worse on the round it works - a retry on the Pura mail
-        # pushed the model into picking a role, which is exactly what the seed
-        # forbids.
-        #
-        # `seed_tools` stays. They are still the only tools this turn's business,
-        # and the answer to the question it asks is a call on the next turn.
-        meta = prompt_metadata(metadata, nil, verdict, outgoing)
-        meta = meta.except(:seed_call) if ambiguous
-
         return CompanionDelivery.deliver_prompt(
           user:         user,
           conversation: conversation,
           seed:         seed,
-          metadata:     meta,
+          metadata:     prompt_metadata(metadata, guess, verdict, outgoing),
         )
       end
 
@@ -155,7 +157,10 @@ module Buddy
     #
     # Idempotent on the EMAIL — `job_triage[:job_note_id]` is the same stamp
     # `add_job_note` sets, so a mail filed by any route is left alone.
-    def log_arrival!(job, email, body, occurred_at)
+    # `guessed` says the ROW was picked rather than read off the mail, and it is
+    # what lets `add_job_note` move the beat to a sibling instead of filing a
+    # second one. Nothing else may move a filed mail.
+    def log_arrival!(job, email, body, occurred_at, guessed: false)
       return nil if email.nil? || body.blank?
       return nil if email.job_triage[:job_note_id].present?
 
@@ -166,7 +171,9 @@ module Buddy
         source:      "Email",
         url:         Rails.application.routes.url_helpers.email_url(id: email.id),
       )
-      email.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
+      stamp = { job_note_id: note.id }
+      stamp[:job_note_guess] = true if guessed
+      email.update!(job_triage: email.job_triage.merge(stamp))
       job.touch_activity!
       note
     rescue StandardError => e
@@ -224,6 +231,18 @@ module Buddy
       return [] if verdict[:company].blank?
 
       JobHunt.applications_for(user, verdict[:company])
+    end
+
+    # Which of several rows at one company a mail most likely belongs to, with
+    # nothing in the mail to say.
+    #
+    # A live row before a settled one: a company that said no to one
+    # application and is writing about another is the ordinary shape of this,
+    # and a beat landing on the closed row is the one guess that reads as
+    # nonsense. Within that, whatever moved most recently - a process in
+    # motion is what mail is about.
+    def best_guess(rows)
+      rows.min_by { |row| [row.dead? ? 1 : 0, -row.engaged_at.to_i, -row.id] }
     end
 
     # A CARD WITH NOTHING TO DO ON IT STILL HAS TO BE WORTH READING.
@@ -436,8 +455,11 @@ module Buddy
     # The company is on the board more than once and the mail does not say which
     # job. Every row is named, because that is the whole of what has to be
     # decided and the answer is in the mail's own words more often than not.
-    def ambiguous_seed(verdict, rows, metadata, occurred_at, email, body=nil, outgoing=false)
-      listed = rows.map { |row| "  - #{row.role.presence || "(no role recorded)"} - #{job_url(row)}" }
+    def ambiguous_seed(verdict, rows, metadata, occurred_at, email, body=nil, outgoing=false, filed=nil)
+      listed = rows.map { |row|
+        mark = (" <- filed here" if filed && row.id == filed.job_application_id)
+        "  - #{row.role.presence || "(no role recorded)"} - #{job_url(row)}#{mark}"
+      }
 
       [
         (
@@ -458,13 +480,14 @@ module Buddy
         "Say in ONE short sentence what this says.#{JobMailRules.times} " \
         "Then CALL add_job_note" \
         "#{log_hint(occurred_at, email)} with `role` naming WHICH of those jobs it is - the " \
-        "mail usually says, in the subject or the first line. If it genuinely does not, ask " \
-        "them which one rather than picking: a note on the wrong job is permanent." \
-        "#{JobMailRules.note(body)}",
+        "mail usually says, in the subject or the first line. Where it genuinely does not, " \
+        "name the row it is already filed on and SAY which one you went with in your " \
+        "sentence, so they can move it if it is wrong.#{JobMailRules.note(body)}",
         "",
-        "This mail is not on the board yet and nothing else is going to put it there, so " \
-        "the note exists only if that call is made. Reading the role off the mail and " \
-        "filing it is the answer whenever the mail names one.",
+        "#{filed ? "The mail is already on the marked row above" : "The mail is not on the board yet"}" \
+        ", and `role` is what settles it: a row that is not the marked one MOVES the beat " \
+        "there rather than filing a second copy. What is missing either way is what KIND of " \
+        "beat it was, so the call still has to be made.",
       ].compact.join("\n")
     end
 

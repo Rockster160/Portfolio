@@ -177,7 +177,7 @@
         <% else %>
           <ul class="interview-notes">
             <% @notes.each do |note| %>
-              <%= render "note", note: note, job: @job %>
+              <%= render "note", note: note, job: @job, move_targets: @move_targets %>
             <% end %>
           </ul>
         <% end %>

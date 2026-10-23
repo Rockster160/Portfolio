@@ -1022,6 +1022,27 @@ html.html-ctr-byte body {
     background: rgba(95, 185, 125, 0.14);
     opacity: 0.82;
   }
+  // Raised with a colour of its own (Jil's `Buddy.miniAlert`): its accent is
+  // set inline by buddy/processes.js, and the tint is laid over the chip's own
+  // ground rather than mixed into it, whatever state it is in.
+  &[data-colored="true"] {
+    background: rgba(12, 20, 40, 0.72);
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--process-accent);
+      opacity: 0.22;
+      pointer-events: none;
+    }
+
+    // Positioned so they paint over the tint rather than under it.
+    .byte-process-head,
+    .byte-process-links {
+      position: relative;
+    }
+  }
   // Nothing heard for a quarter of an hour. Dimmed, because the count it is
   // showing is frozen and should not read as live.
   &[data-stale="true"] {

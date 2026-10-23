@@ -557,7 +557,7 @@
   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
   #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
-  #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String)::Boolean
+  #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash]))::Boolean // A chip on the hero. color: green/blue/purple/amber/red or a hex; pinned puts it first; trigger fires (with data) when they tap its x.
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
   #timer(Numeric ["seconds" "minutes" "hours"] BR content([label:String board:String groups:String]))::Boolean

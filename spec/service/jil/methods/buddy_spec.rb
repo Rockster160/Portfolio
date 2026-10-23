@@ -738,6 +738,49 @@ RSpec.describe Jil::Methods::Buddy do
       expect(chip.source).to eq("jil")
     end
 
+    # A chip for a state someone is in: coloured, ahead of the rest, and its ×
+    # fires a trigger so letting go of it ends the state.
+    it "takes a colour, a pin and a trigger for its ×" do
+      run(<<~'JIL')
+        better = Hash.keyval("action", "better")::Hash
+        up = Buddy.miniAlert("sick", "Sick", "since Thursday", "", {
+          c = Keyword.color("green")::String
+          p = Keyword.pinned(true)::Boolean
+          t = Keyword.trigger("sick")::String
+          d = Keyword.data(better)::Hash
+        })::Boolean
+      JIL
+
+      chip = BackgroundProcess.live_find(owner, "sick")
+      expect(chip.serialize).to include(color: "#3fb950", pinned: true)
+      expect(chip.metadata).to include("trigger" => "sick", "data" => { "action" => "better" }, "owner_id" => owner.id)
+    end
+
+    it "takes the block straight after the label too" do
+      run(<<~'JIL')
+        up = Buddy.miniAlert("sick", "Sick", {
+          c = Keyword.color("#112233")::String
+        })::Boolean
+      JIL
+
+      chip = BackgroundProcess.live_find(owner, "sick")
+      expect(chip.detail).to be_nil
+      expect(chip.metadata["color"]).to eq("#112233")
+    end
+
+    it "lets go of a chip from code without firing its trigger" do
+      allow(Jil).to receive(:trigger)
+      run(<<~'JIL')
+        up = Buddy.miniAlert("sick", "Sick", "", "", {
+          t = Keyword.trigger("sick")::String
+        })::Boolean
+        gone = Buddy.clearMiniAlert("sick")::Boolean
+      JIL
+
+      expect(BackgroundProcess.live_find(owner, "sick")).to be_nil
+      expect(Jil).not_to have_received(:trigger)
+    end
+
     # waiting/failed are exempt from the stale + age-out sweeps, so a standing
     # condition stays on the strip until something clears it.
     it "raises the chip as waiting, not running" do

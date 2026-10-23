@@ -36,6 +36,11 @@ Buddy::Tools.register(
     they've answered, that answer IS the go-ahead: call this in that same turn
     with the role they named, rather than repeating it back and waiting.
 
+    A mail for one of those companies is already filed on the likeliest of its
+    rows. Naming a DIFFERENT row with `role` moves that beat there; it does not
+    file a second copy, so there is nothing to undo first and nothing lost by
+    correcting it.
+
     `tag` is what KIND of beat it was, and it does more than colour the row:
     logging `offer`, `rejected` or `withdrew` settles the whole application,
     because having to then go and change a dropdown saying the same thing is
@@ -55,6 +60,18 @@ Buddy::Tools.register(
     move is the company's. That is `note`. `availability` on it reprints a
     completed task at the top of their board and leaves it there, which is worse
     than no beat at all: the strip exists to say what is outstanding.
+
+    **The COMPANY asking something of them is `heard_back`, not `note`.** A form
+    to fill in, a document to return, a disclosure, a condition of the job to
+    accept or raise a problem with - all of them are the next move being theirs,
+    and `heard_back` is what puts the row in the strip that says so. Filed as
+    `note` it reads as news, sits in the timeline, and the thing they owe is
+    invisible until the company chases it.
+
+    Housekeeping from the ATS is still `note`, and the line between them is WHO
+    is asking and for WHAT: verifying an email address or finishing a candidate
+    account is a login to sort out, nothing goes back to anybody, and nothing
+    about the application has changed.
 
     **`interview` is the conversation HAPPENING, and nothing else.** It means
     they sat down and talked to a person. Mail is NEVER an `interview` beat: a
@@ -120,6 +137,10 @@ Buddy::Tools.register(
     states. An invite names the sender's zone ("EDT", "Eastern", "Central"), so
     pass `follow_up_at` with that zone's offset (`2026-10-22T12:00:00-04:00`),
     never theirs. Only a time with no zone written beside it is in their own.
+    A zone names a REGION, not a season: "MST", "MT" and "Mountain" all mean
+    Mountain time as it stands on the interview's date (-06:00 in October,
+    -07:00 in January), and "EST"/"Eastern" and the rest work the same way.
+    Convert by region, with the offset in force on that date.
     `duration_minutes` goes with it ("we'll chat for ~20 minutes", an invite
     reading 2:00-2:20), and without one an interview is booked for an hour.
 
@@ -400,11 +421,22 @@ Buddy::Tools.register(
     # filed twice. Buddy::JobMailOffer writes arriving mail onto its row as a
     # plain `note`, and this card is the reading of that same row.
     #
-    # Scoped to `job.notes` on purpose — an `email_id` must never drag a note
-    # filed against one application onto another. A mail nothing has filed, or
-    # a beat mentioned out loud with no email at all, still creates.
-    existing = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
-    before   = existing&.slice(:tag, :body, :summary, :spoke_to, :follow_up_at, :duration_minutes)
+    # A mail nothing has filed, or a beat mentioned out loud with no email at
+    # all, still creates.
+    filed    = ctx.user.job_notes.find_by(id: email&.job_triage&.[](:job_note_id))
+    existing = (filed if filed&.job_application_id == job.id)
+    # ON A SIBLING ROW, and only because the row was GUESSED. A company on the
+    # board several times has the mail filed on the likeliest of them rather
+    # than held back, so arriving here with a different row is the answer to
+    # that guess and the beat moves - one mail stays one beat.
+    #
+    # Never without the stamp. An `email_id` passed beside the wrong `job_id`
+    # would otherwise drag a settled beat off the application it belongs to,
+    # which is the one mistake on this board that cannot be seen afterwards.
+    existing ||= filed if filed && email.job_triage[:job_note_guess]
+    kept       = [:tag, :body, :summary, :spoke_to, :follow_up_at, :duration_minutes]
+    before     = existing&.slice(*kept, :job_application_id)
+    existing&.job_application = job
 
     note = (existing || job.notes.new)
     # THE MAIL'S OWN WORDS, wherever we hold the mail. Reading it sets the tag,
@@ -451,7 +483,9 @@ Buddy::Tools.register(
     # Stamped back onto the email so the context section can say this one is
     # already on the board. Without it the same mail keeps reading as
     # outstanding and gets offered again every time the board is looked at.
-    email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id))
+    # `job_note_guess` goes with it: the row has now been read off the mail, and
+    # a settled beat is not movable.
+    email&.update!(job_triage: email.job_triage.merge(job_note_id: note.id).except(:job_note_guess))
 
     # Confirming the beat is the moment the mail stops being inbox - everything
     # it had to say is now on the board, which is where it will be looked for.

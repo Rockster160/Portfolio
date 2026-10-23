@@ -579,6 +579,16 @@ class JobNote < ApplicationRecord
     booked = booked.where.not(id: id).where(occurred_at: ..occurred_at)
     booked = superseded_bookings(booked) if scheduled?
     booked.find_each { |note| note.update(follow_up_at: nil) }
+    answered_chases.find_each { |note| note.update(follow_up_at: nil) } if scheduled?
+  end
+
+  # The "Send availability" tasks a booking answers. Times were asked for, a
+  # time got booked, so the chase is done; left alone it sits on the calendar
+  # beside the interview it led to. Same bounds as the bookings above: only
+  # chases still in the future, and only ones that came before this booking.
+  def answered_chases
+    chases = job_application.notes.where(tag: :availability).where(follow_up_at: Time.current..)
+    chases.where.not(id: id).where(occurred_at: ..occurred_at)
   end
 
   # Which of the other future bookings this one REPLACES, as opposed to joins.

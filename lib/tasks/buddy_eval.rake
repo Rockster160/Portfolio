@@ -658,6 +658,34 @@ BUDDY_EDGE_PROBES = [
     needs:      :halloway_application,
     note:       "an account to set up is a chore, not a beat on the application",
   },
+  # --- and the other side of THAT: the company asking for something ---------
+  # Both of these were filed as `note` and vanished into the timeline. A form
+  # to return and a condition to accept are the next move being HIS, which is
+  # the one thing the waiting strip exists to say, and neither row ever
+  # appeared on it. The line is who is asking and for what: the ATS wanting an
+  # account set up is housekeeping, the company wanting a document back is not.
+  {
+    case:       "the disclosure form that read as news",
+    say:        "Halloway Systems sent over a conflict of interest disclosure form to fill " \
+                "out - log that on their application",
+    tool:       :add_job_note,
+    avoid:      %i[add_job_application],
+    args:       { add_job_note: { tag: "heard_back" } },
+    never_args: { add_job_note: { tag: /\A(?:note|acknowledged)\z/ } },
+    needs:      :halloway_application,
+    note:       "a form to send back is owed, and `note` leaves it off the waiting strip",
+  },
+  {
+    case:       "the requirements mail that read as news",
+    say:        "Halloway Systems emailed their minimum internet requirements for remote " \
+                "work and asked me to say if I cannot meet them - log it",
+    tool:       :add_job_note,
+    avoid:      %i[add_job_application],
+    args:       { add_job_note: { tag: "heard_back" } },
+    never_args: { add_job_note: { tag: /\A(?:note|acknowledged)\z/ } },
+    needs:      :halloway_application,
+    note:       "a condition to accept or object to is still an answer they are waiting on",
+  },
   # --- work to do is a take-home, whoever sent it ----------------------------
   # Prod 7362, 2 Oct. "Thank you for signing up - complete the assessment to
   # proceed" was filed `acknowledged` off the thanks in its first line. The
@@ -896,6 +924,25 @@ BUDDY_EDGE_PROBES = [
     args:  { add_job_note: { tag: "scheduled", follow_up_at: /T12:00(?::00)?-04:00/ } },
     needs: :halloway_application,
     note:  "an invite reading 12pm (EDT) was booked at 12pm Mountain, two hours late",
+  },
+  # Sick mode is a Jil task listening for a "Sick" event, and it counts the
+  # illness from the event's time - so a start in the past has to be logged
+  # then, not now.
+  {
+    case:  "sick, logged in the past",
+    say:   "I got sick yesterday morning, ugh",
+    tool:  :log_event,
+    args:  { log_event: { name: /sick/i, at: /T(0[5-9]|1[01]):/ } },
+    note:  "a past start has to land at that time for sick mode to count from it",
+  },
+  # "MST" written in October means Mountain time, which is -06:00 then.
+  {
+    case:  "prod 8876",
+    say:   "I replied to Halloway Systems: \"Monday Oct 26 at 9:30 MST sounds great!\" and they confirmed. Log the interview.",
+    tool:  :add_job_note,
+    args:  { add_job_note: { tag: "scheduled", follow_up_at: /T09:30(?::00)?-06:00|T15:30(?::00)?Z/ } },
+    needs: :halloway_application,
+    note:  "\"9:30 MST\" in October was read as -07:00 and booked at 10:30 Mountain",
   },
   # The other direction, and the one that was refused outright until now: a
   # DIFFERENT role at a company already on the board is a separate application.
