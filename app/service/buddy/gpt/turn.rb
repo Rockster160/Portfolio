@@ -1043,6 +1043,12 @@ module Buddy
         # ...and separately, whether a wait was opened for the rest to queue
         # behind. Not the same thing, and see scheduled_for? for why.
         @queued        = false
+        # A reminder or watch holding the rest of this reply, and what it's
+        # holding. See held?.
+        @holder        = nil
+        @hold_before   = Set.new
+        @held          = []
+        @held_ids      = Set.new
         nudged         = false
 
         loop do
@@ -1112,6 +1118,7 @@ module Buddy
           # first. Reading the whole round covers it either way.
           @scheduled ||= acting.any? { |c| self.class.puts_on_clock?(c[:name], c[:arguments]) }
           @queued    ||= acting.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
+          note_holder(acting)
 
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
@@ -1122,7 +1129,9 @@ module Buddy
           # again, and the model has already been told it failed, so letting it
           # count as a proposal would trip the all-discarded fallback and replace
           # a perfectly good "I couldn't find that one, which did you mean?".
-          proposals.concat(acting.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) })
+          proposals.concat(
+            acting.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) && @held_ids.exclude?(c[:call_id]) },
+          )
 
           # A round that only opened tools gave the person nothing, so it
           # doesn't use up one of theirs.
@@ -1276,6 +1285,9 @@ module Buddy
         name = call[:name].to_sym
         # Before the progress line: opening a tool does nothing they'd see.
         return JSON.generate(Buddy::ToolIndex.open(name, loaded: loaded_tools)) if @opening&.include?(call[:call_id])
+        # Before the progress line and before anything runs: a held call is a
+        # step of something later, and nothing about it happens now.
+        return hold_call(call) if held?(call)
 
         # Announced BEFORE the work, not after: an answering tool runs inside
         # this method, so a line posted afterwards would describe something
@@ -3740,6 +3752,9 @@ module Buddy
         | \bthis\s+(?:morning|afternoon|evening)\b
         | \bbefore\s+(?:bed|bedtime|dinner|lunch|work)\b
         | \bwhen\s+i\s+(?:get\s+(?:home|back|up)|wake\s+up)\b
+        | \b(?:once|as\s+soon\s+as|(?:the\s+)?next\s+time|whenever)\s+(?:i|i'm|we|we're|she|he|they|the|my|our|someone|somebody)\b
+        | \bwhen\s+(?:i|we|she|he|they)\s+(?:leave|arrive|get|wake|go|finish|head)\b
+        | \bwhen\s+(?:the|my|our)\s+\w+(?:\s+\w+)?\s+(?:opens?|closes?|finish(?:es)?|starts?|arrives?|rings?)\b
       /xi
 
       # The other half of an imperative, for the writes the verb list above
@@ -3824,6 +3839,92 @@ module Buddy
         @queued
       end
 
+      # "When I get home, turn on the porch light, add milk and tell Chelsea."
+      # One watch holding three calls, made the way the model makes any call -
+      # the alternative was a JSON array of steps written into one argument,
+      # which is the ceremony that kept it from ever being used.
+      #
+      # The calls after the holder are held, in this round and every later
+      # one. Calls BEFORE it in the same round are only held when they're the
+      # do-it-now tools, because that is the order the model emits "turn on
+      # the light when I get home" in - the time phrase read as a second thing
+      # to do, after the first. Anything else ahead of it is a separate request
+      # that happened to share the reply.
+      def note_holder(acting)
+        idx = acting.index { |c| holds_rest?(c) }
+        return if idx.nil?
+
+        @holder = acting[idx]
+        @hold_before = acting[...idx].to_set { |c| c[:call_id] }
+      end
+
+      # Does this call hold the rest of the reply? See Buddy::Tools::HOLD_ARG.
+      def holds_rest?(call)
+        tool = Buddy::Tools[call[:name]]
+        tool.present? && Buddy::Tools.holds_rest?(tool, (call[:arguments] || {}).transform_keys(&:to_sym))
+      end
+
+      def held?(call)
+        return false if @holder.nil? || call[:call_id] == @holder[:call_id]
+
+        name = call[:name].to_sym
+        return false if read_tools.key?(name) || Buddy::SideEffects.handles?(name)
+        return false if @hold_before.include?(call[:call_id]) && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.exclude?(name)
+
+        tool = Buddy::Tools[name]
+        return false if tool.nil? || Buddy::Tools.internal?(tool) || !Buddy::Tools.routinable?(tool)
+        # A lookup tells the model something it needs now, in this reply.
+        return false if Buddy::Tools.answers?(tool) && !Buddy::Tools.acts?(tool)
+        # Another scheduler is its own plan item, not a step of this one. A
+        # wait is the exception: "then wait two minutes" inside the chain.
+        return self.class.queues_rest?(name, call[:arguments]) if SCHEDULING_TOOLS.include?(name)
+
+        true
+      end
+
+      # Checked the way a routine step is, so a name that matches nothing
+      # comes back now rather than when the garage opens.
+      def hold_call(call)
+        # A holder that also tells someone, or runs one task of its own, can't
+        # take steps as well - and finding out after the reply is too late to
+        # say so. Its message belongs in the steps, as a `message_partner`.
+        clash = %w[notify run timer].find { |key| (@holder[:arguments] || {}).transform_keys(&:to_s)[key].present? }
+        raise "#{@holder[:name]} has `#{clash}` set, so it can't run steps too - drop it and make that a step" if clash
+
+        ctx  = Buddy::ToolContext.new(@user, conversation: @conversation)
+        row  = { "tool_name" => call[:name].to_s, "payload" => (call[:arguments] || {}) }
+        step = Buddy::Routines.sanitize_step(row, @held.length + 1, ctx)
+        @held << step
+        @held_ids << call[:call_id]
+        JSON.generate(
+          status: "held",
+          note:   "NOT done now. This is step #{@held.length} of what #{@holder[:name]} runs when it fires. " \
+                  "Say it as something that will happen then, never as done.",
+        )
+      rescue StandardError => e
+        @failed << call[:call_id]
+        JSON.generate(status: "failed", error: e.message, note: "Not held either - this step can't run as written.")
+      end
+
+      # The held calls become the holder's steps, after any it was given. A
+      # holder that didn't make it leaves them with nothing to run them, and
+      # they're marked failed - the model was told they were queued, and a
+      # reply saying so is now the false claim the retraction is for.
+      def with_held_steps(proposals)
+        return proposals if @held.empty?
+
+        holder = proposals.find { |c| c[:call_id] == @holder&.dig(:call_id) }
+        if holder.nil?
+          @failed.merge(@held_ids)
+          return proposals
+        end
+
+        args  = (holder[:arguments] || {}).transform_keys(&:to_s)
+        given = args["steps"].present? ? Buddy::Routines.parse_rows(args["steps"]) : []
+        args  = args.except(Buddy::Tools::HOLD_ARG.to_s).merge("steps" => JSON.generate(given + @held))
+        proposals.map { |c| c.equal?(holder) ? c.merge(arguments: args) : c }
+      end
+
       # Told the way every other refusal is told, because it IS one: the call did
       # not happen. `failed` is load-bearing rather than cosmetic — it drops the
       # call from `proposals`, and it arms `retract_false_claim!` so a reply that
@@ -3837,8 +3938,10 @@ module Buddy
                   "`schedule_function` is this exact call with a time on it, `schedule_trigger` " \
                   "for a Jil listener scope, `schedule_reminder` with `text: \"run <name>\"` for " \
                   "a saved routine, `alarm` when it has to interrupt them, `set_timer` for a " \
-                  "countdown. Never do it now as a consolation, and never say it's scheduled " \
-                  "when it isn't.",
+                  "countdown. When it should happen when something HAPPENS, or with other things " \
+                  "at that time, call `remind_when` / `schedule_reminder` with `then_run_rest: true` " \
+                  "and then make this call again after it. Never do it now as a consolation, and " \
+                  "never say it's scheduled when it isn't.",
         }
       end
 
@@ -4189,6 +4292,7 @@ module Buddy
       end
 
       def build_proposals(proposals)
+        proposals = with_held_steps(proposals)
         return { action: nil, auto_ran: false, forms: [] } if proposals.empty?
 
         markers = proposals.flat_map { |call|

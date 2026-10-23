@@ -29,8 +29,11 @@ Buddy::Tools.register(
     taken from `at` and the recurrence keeps its shape - a daily 9am moved to
     9:30 is still daily.
 
-    This is for a reminder on a CLOCK. A condition-based watch has no time to
-    move; cancel it and set a new one.
+    This is for ONE reminder on a clock. When the one they mean carries a
+    `plan` id and they're talking about the whole thing - "push the garage
+    stuff back an hour" - that's `edit_plan` with `shift`, which moves every
+    part together. A watch's condition, what it runs, or anything else about
+    a plan is `edit_plan` too.
   TXT
   args: {
     match: { type: :string, required: true,  description: "The `answering_reminder` id when there is one; otherwise a substring of the reminder text, or its numeric id" },

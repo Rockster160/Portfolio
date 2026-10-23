@@ -24,12 +24,29 @@
 #
 #     { kind: :location, place: "home", expect: :away }
 #
-#   That last one is for requests like "If I'm not home by 12:50, set Whisper
+#   That one is for requests like "If I'm not home by 12:50, set Whisper
 #   Quiet for an hour." Without it Buddy sets the 12:50 part and reports that no
 #   home-away check is wired — and an unconditional version of a conditional
 #   request is a different request. It COULD have been written as a `jil`
 #   condition, and that is the tell that it should not have to be: a phone
 #   position is not a bespoke automation, it is a fact the app already keeps.
+#
+#   DEVICE — what a Home Assistant device last reported, off the state cache
+#   (Buddy::DeviceStates), for the same reason. Whether the garage is open is
+#   already known; asking a function to find out is ceremony:
+#
+#     { kind: :device, device: "Garage Door", state: "open", expect: :is }
+#
+#   TIME — whether it's inside a window of their day, so a condition can say
+#   "after 10pm" or "on weekdays" about a thing that fires on an event:
+#
+#     { kind: :time, after: "22:00", before: "06:00", days: "weekdays" }
+#
+# And two that hold the others, so one rule can say all of it at once - "if
+# the garage is open, it's after ten and I'm not home":
+#
+#   { kind: :all, of: [<condition>, <condition>, ...] }
+#   { kind: :any, of: [...] }
 #
 # `expect` is the polarity and both directions of each are real: skip the nudge
 # once the thing is DONE (`missing`), or hold it until it HAS happened
@@ -88,12 +105,23 @@ module ScheduleCondition
     boxes:             ->(user) { Box.where(user_id: user.id) },
   }.freeze
 
-  KINDS   = %i[search jil location].freeze
+  KINDS   = %i[search jil location device time all any].freeze
   EXPECTS = {
     search:   %i[found missing],
     jil:      %i[truthy falsy],
     location: %i[at away],
+    device:   %i[is is_not],
+    time:     %i[inside outside],
+    all:      %i[met],
+    any:      %i[met],
   }.freeze
+
+  # The kinds that hold other conditions rather than asking anything.
+  GROUPS = %i[all any].freeze
+
+  # How deep a group may nest. Nobody says a rule with three levels of
+  # brackets in it, so a deeper one is a malformed payload, not a request.
+  MAX_DEPTH = 3
 
   # How close counts as being there. `DistanceHelper`'s own default is 0.001°
   # (~110m), which is the radius LocationCache and TravelResolver already treat
@@ -150,6 +178,14 @@ module ScheduleCondition
     when :location
       here = at_place?(data[:place], user)
       data[:expect] == :away ? !here : here
+    when :device
+      same = Device.same?(Device.state(data[:device], user), data[:state])
+      data[:expect] == :is_not ? !same : same
+    when :time
+      inside = TimeWindow.inside?(data, Time.current.in_time_zone(user.timezone))
+      data[:expect] == :outside ? !inside : inside
+    when :all, :any
+      Group.answer(data) { |part| answer(part, user) }
     end
   end
 
@@ -257,19 +293,80 @@ module ScheduleCondition
   # Runs on the way IN as well as on the way out, so a condition that can never
   # be evaluated is refused while the person is still in the conversation rather
   # than at 9pm three weeks later.
-  def normalize(condition)
+  def normalize(condition, depth=0)
     data = (condition.presence || {}).to_h.symbolize_keys
     # A location condition is the one kind whose whole payload is optional -
     # `place` defaults to home - so it is the only one that has to be recognised
     # by its `kind` alone. Every other caller leaves `kind` out and lets it be
     # inferred, which is why this can't simply ask whether `kind` is set.
-    return nil if data.values_at(:find, :query, :task, :place).all?(&:blank?) &&
-      data[:kind].to_s != "location"
+    return nil if data.values_at(*SIGNAL_KEYS).all?(&:blank?) && data[:kind].to_s != "location"
 
-    kind = (data[:kind].presence || (data[:task].present? ? :jil : :search)).to_s.to_sym
+    kind = (data[:kind].presence || inferred_kind(data)).to_s.to_sym
     raise "no condition kind called #{kind.inspect} (have: #{KINDS.join(", ")})" unless KINDS.include?(kind)
+    return normalize_group(kind, data, depth) if GROUPS.include?(kind)
 
     send(:"normalize_#{kind}", data).merge(kind: kind, expect: expect_for(kind, data))
+  end
+
+  # The keys that say a condition is there at all.
+  SIGNAL_KEYS = %i[find query task place device state after before days of].freeze
+
+  # Which kind a row is when it doesn't say. The model writes these as plain
+  # objects - `{device:, state:}`, `{after: "22:00"}` - and naming the kind on
+  # every one is ceremony the keys already settle.
+  def inferred_kind(data)
+    return :all if data[:of].present?
+    return :device if data[:device].present?
+    return :time if data.values_at(:after, :before, :days).any?(&:present?)
+    return :location if data[:place].present? && data[:find].blank?
+    return :jil if data[:task].present?
+
+    :search
+  end
+
+  # A group of one is that one condition, and an empty group is no condition,
+  # so a rule only ever stores the shape it actually needs.
+  def normalize_group(kind, data, depth)
+    raise "conditions nest at most #{MAX_DEPTH} deep" if depth >= MAX_DEPTH
+
+    parts = Array.wrap(data[:of]).filter_map { |part| normalize(part, depth + 1) }
+    return nil if parts.empty?
+    return parts.first if parts.one?
+
+    { kind: kind, of: parts, expect: :met }
+  end
+
+  # Several conditions as one - see ScheduleCondition::Group.
+  def from_rows(rows, match: :all, also: nil)
+    Group.from_rows(rows, match: match, also: also)
+  end
+
+  # The half of a condition that can be checked while the person is still
+  # here. Each kind is asked the question that can be wrong FOREVER, never the
+  # one that only has an answer later:
+  #
+  # * a search runs, because a query that blows up in SQL or needed quoting
+  #   is wrong now and will still be wrong at 9pm.
+  # * a Jil task resolves but is not called - asking a function isn't free,
+  #   and a reminder for next Tuesday would fire it today to prove it can.
+  # * a place resolves but isn't checked - the phone may not have reported a
+  #   position yet, and that's no argument against Tuesday's reminder.
+  # * a device has to be one that reports in. Its current state is beside
+  #   the point; the name being wrong is not.
+  # * a time window was already proven readable by normalize.
+  def validate!(condition, user)
+    data = normalize(condition)
+    return if data.nil?
+
+    case data[:kind]
+    when :search then met?(data, user: user)
+    when :jil then resolve_task(data[:task], user)
+    when :location then validate_place!(data, user)
+    when :device
+      Device.state(data[:device], user)
+    when :all, :any then data[:of].each { |part| validate!(part, user) }
+    end
+    data
   end
 
   def expect_for(kind, data)
@@ -301,21 +398,42 @@ module ScheduleCondition
     { place: data[:place].to_s.strip.presence || "home" }
   end
 
+  def normalize_device(data)
+    Device.normalize(data)
+  end
+
+  def normalize_time(data)
+    TimeWindow.normalize(data)
+  end
+
   # One line for a person: what this is waiting on, in the order they'd say it.
   def describe(condition)
     data = normalize(condition)
     return nil if data.blank?
 
-    case data[:kind]
-    when :search
-      "only if #{data[:expect] == :missing ? "no" : "any"} #{data[:find].to_s.humanize.downcase} match `#{data[:query]}`"
-    when :jil
-      "only if **#{data[:task]}** comes back #{data[:expect] == :falsy ? "false" : "true"}"
-    when :location
-      "only if you're #{data[:expect] == :away ? "not at" : "at"} #{data[:place]}"
-    end
+    "only if #{clause(data)}"
   rescue StandardError => e
     "condition unreadable (#{e.message})"
+  end
+
+  def clause(data)
+    case data[:kind]
+    when :search
+      "#{data[:expect] == :missing ? "no" : "any"} #{data[:find].to_s.humanize.downcase} match `#{data[:query]}`"
+    when :jil
+      "**#{data[:task]}** comes back #{data[:expect] == :falsy ? "false" : "true"}"
+    when :location
+      "you're #{data[:expect] == :away ? "not at" : "at"} #{data[:place]}"
+    when :device
+      "#{data[:device]} is #{"not " if data[:expect] == :is_not}#{data[:state]}"
+    when :time
+      "it's #{"not " if data[:expect] == :outside}#{TimeWindow.phrase(data)}"
+    when :all, :any
+      data[:of].map { |part| clause(part) }.to_sentence(
+        two_words_connector: data[:kind] == :all ? " and " : " or ",
+        last_word_connector: data[:kind] == :all ? ", and " : ", or ",
+      )
+    end
   end
 
   # A skip is invisible by design - nothing is posted, which is the point - and

@@ -398,6 +398,19 @@ module Buddy
     # all — which is why it gets its own step kind rather than reusing :timer.
     AWAIT_ARG = :await_reply
 
+    # Marks a scheduling call as holding the REST of the reply: the calls made
+    # after it are what it runs when it fires, rather than happening now. Not
+    # WAIT_ARG, because that one makes ProposalBuilder treat the call as a
+    # countdown gate, and a reminder or a watch is a different thing to wait on
+    # - it keeps what it holds on its own row, for as long as it takes.
+    HOLD_ARG = :then_run_rest
+
+    def holds_rest?(tool, payload)
+      return false unless tool.is_a?(Hash) && tool[:args].key?(HOLD_ARG)
+
+      ActiveModel::Type::Boolean.new.cast((payload || {})[HOLD_ARG]).present?
+    end
+
     def awaits_reply?(tool, payload)
       return false unless tool.is_a?(Hash) && tool[:args].key?(AWAIT_ARG)
 

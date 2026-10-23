@@ -269,9 +269,37 @@ Buddy::Tools.register(
     `name:"<item>" is:today is:completed`.
 
     The offset's unit is required - `-30` is rejected rather than guessed at.
+
+    ## Doing several things when it fires
+
+    "At 9pm, lock up, turn the porch light off and add bins to the list" is ONE
+    reminder that runs three things. Pass `then_run_rest: true` here, then make
+    the three calls exactly as you would to do them now, in the same reply -
+    they are held and become what this runs, in that order. Nothing happens
+    now. `text` is the line posted above them when they run.
+    (`steps` takes the same thing as a JSON array, if you'd rather write it.)
+
+    ## Several conditions at once
+
+    `only_if` is a JSON array of plain objects, and the reminder speaks only if
+    EVERY one holds when it fires (`only_if_any: true` for any one of them):
+
+      {"device": "Garage Door", "state": "open"}       what a device reports
+      {"device": "Porch Light", "state": "on", "expect": "is_not"}
+      {"after": "22:00", "before": "06:00"}           a window of the day
+      {"days": "weekdays"}                            or "weekends", "mon,wed"
+      {"place": "home", "expect": "away"}             where they are
+      {"find": "chore_completions", "query": "name:\\"Trash\\" is:today", "expect": "missing"}
+      {"task": "Is The Car Plugged In", "expect": "falsy"}
+
+    "At 11 tonight, if the garage is still open and I'm not home, tell me" is
+    `at` plus `only_if: [{"device":"Garage Door","state":"open"},
+    {"place":"home","expect":"away"}]`. A device is named the way it reports
+    in (`device_states` in context has them). Use this instead of the single
+    `check_*` arguments whenever there's more than one thing to check.
   TXT
   args: {
-    text:   {
+    text:          {
       type:        :string,
       required:    true,
       template:    true,
@@ -281,7 +309,7 @@ Buddy::Tools.register(
                    "doctor appointment\" over \"get ready\". A nudge that doesn't say what it " \
                    "is for makes them come and ask you.",
     },
-    at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
+    at:            { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
     anchor:        {
       type:        :string,
       required:    false,
@@ -291,8 +319,8 @@ Buddy::Tools.register(
                    "Use the domain they named - the agenda/calendar is `agenda:`, a chore " \
                    "is `chore:`, whose offset counts from 4am. Instead of `at`.",
     },
-    repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
-    until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
+    repeat:        { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
+    until:         { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     every_minutes: { type: :integer, required: false, description: "Repeat WITHIN the day this often, starting at the repeat spec's time" },
     until_time:    { type: :string,  required: false, description: "Stop repeating for the day at this time (HH:MM). Needs every_minutes." },
     stop_when:     {
@@ -306,13 +334,17 @@ Buddy::Tools.register(
     stop_listener: { type: :string, required: false, description: "Jil listener string, for stop_when=custom. Read read_listener_guide first." },
     stop_phrase:   { type: :string, required: false, description: "Plain-language meaning of the stop listener. Required for stop_when=custom." },
     stop_past:     { type: :string, required: false, description: "The same stop condition written as something that HAS happened (\"The print finished\"), for the message saying the reminders have stopped. With stop_when=custom." },
-    check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
-    check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
-    check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
-    check_place:  { type: :string, required: false, description: "Check where they are instead. A place name, or home." },
-    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy at away], description: "found/missing for a search, truthy/falsy for a task, at/away for a place" },
-    kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
-    notify: { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
+    check:         { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
+    check_query:   { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
+    check_task:    { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
+    check_place:   { type: :string, required: false, description: "Check where they are instead. A place name, or home." },
+    check_expect:  { type: :enum,   required: false, values: %i[found missing truthy falsy at away], description: "found/missing for a search, truthy/falsy for a task, at/away for a place" },
+    only_if:       { type: :string, required: false, description: "JSON array of conditions that must ALL hold when it fires - device, time window, place, search, task. See \"Several conditions at once\"." },
+    only_if_any:   { type: :boolean, required: false, description: "Fire when ANY of `only_if` holds instead of all of them." },
+    steps:         { type: :string, required: false, description: "JSON array of {tool_name, payload} to RUN when it fires, in order - save_routine's shape. `text` is the line posted above them." },
+    then_run_rest: { type: :boolean, required: false, description: "The calls you make after this one in this reply are what it RUNS when it fires, instead of happening now." },
+    kind:          { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
+    notify:        { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
   confirm: ->(payload, ctx) {
     recurrence_hash = Buddy::RepeatSpec.parse(
@@ -403,9 +435,9 @@ Buddy::Tools.register(
     # the person is still in the conversation - not at 9pm three weeks later,
     # when the only symptom is a reminder that quietly never came.
     checks = payload.values_at(:check, :check_task, :check_place).count(&:present?)
-    raise "a check is a search, a task or a place - not more than one" if checks > 1
+    raise "a check is a search, a task or a place - not more than one; use only_if for several" if checks > 1
 
-    condition = ScheduleCondition.normalize({
+    single = ScheduleCondition.normalize({
       kind:   (:location if payload[:check_place].present?),
       find:   payload[:check],
       query:  payload[:check_query],
@@ -413,24 +445,24 @@ Buddy::Tools.register(
       place:  payload[:check_place],
       expect: payload[:check_expect],
     })
-    # Run it once, here. A search that blows up in SQL, a task name that
-    # resolves to nothing, a value that needed quoting - all of it surfaces in
-    # the conversation rather than at 9pm three weeks later, where the only
-    # symptom is a reminder that quietly never came.
-    #
-    # Deliberately not run for a `jil` check: asking a function is not free, and
-    # a reminder set for next Tuesday would fire it today just to prove it can.
-    # `resolve_task` still runs, which is the half that can be wrong forever.
-    #
-    # Nor for a `location` check, for the mirror reason: running it needs a
-    # position the phone may not have reported yet, and not knowing where
-    # somebody is right now is no argument against setting a reminder for
-    # Tuesday. Resolving the PLACE is the half that can be wrong forever.
-    case condition&.dig(:kind)
-    when :jil      then ScheduleCondition.resolve_task(condition[:task], ctx.user)
-    when :location then ScheduleCondition.validate_place!(condition, ctx.user)
-    when nil       then nil
-    else ScheduleCondition.met?(condition, user: ctx.user)
+    condition = ScheduleCondition.from_rows(
+      payload[:only_if],
+      match: (ActiveModel::Type::Boolean.new.cast(payload[:only_if_any]) ? :any : :all),
+      also:  single,
+    )
+    # Checked once, here, as far as it can be without the moment it's about -
+    # see ScheduleCondition.validate! for what each kind is asked.
+    ScheduleCondition.validate!(condition, ctx.user)
+
+    # What it RUNS when it fires, instead of saying something. The same steps a
+    # routine takes, checked the same way, so a step that can't run fails while
+    # they're still here; stored by name, so each re-resolves when it fires.
+    action_rows = nil
+    if payload[:steps].present?
+      raise "a reminder for someone else tells them something; it can't run steps" if payload[:notify].to_s.strip.present?
+
+      steps = Buddy::Routines.sanitize(Buddy::Routines.parse_rows(payload[:steps]), ctx)
+      action_rows = steps.map { |step| { "tool" => step["tool_name"], "payload" => step["payload"] } }
     end
 
     # An anchor is a moment that MOVES, so the row keeps the expression and
@@ -494,12 +526,17 @@ Buddy::Tools.register(
     end
     summary = "#{summary.chomp("?")}, #{ScheduleCondition.describe(condition)}?" if condition
     summary = "#{summary.chomp("?")}, #{stop_condition.human}?" if stop_condition
+    if action_rows
+      runs = action_rows.map { |row| BuddyRoutine.step_phrase(BuddyRoutine.step(row["tool"], row["payload"])) }
+      summary = "#{summary.chomp("?")} - running #{runs.to_sentence}?"
+    end
     {
       summary:  summary,
       resolved: {
         fire_at_iso:    fire_at&.iso8601,
         recurrence:     recurrence_hash,
         condition:      condition,
+        action_rows:    action_rows,
         notify_user_id: notify_user&.id,
         recipient_name: notify_user&.first_name,
         stop_scope:     stop_condition&.scope,
@@ -542,6 +579,8 @@ Buddy::Tools.register(
       anchor:            payload[:anchor].presence,
       recurrence:        payload[:recurrence],
       condition:         payload[:condition],
+      action:            payload[:action_rows].presence,
+      plan_id:           Buddy::Plan.current_id,
     )
     # The rule that ends it. A one-shot watch, armed on the same condition
     # machinery `remind_when` uses — it fires once, switches the reminder off
@@ -556,6 +595,7 @@ Buddy::Tools.register(
         listener:          payload[:stop_listener],
         body:              payload[:stop_human].to_s.presence || "That's done",
         one_shot:          true,
+        plan_id:           reminder.plan_id,
         metadata:          {
           "cancels_reminder_id" => reminder.id,
           "human_when"          => payload[:stop_human].to_s,
@@ -576,6 +616,8 @@ Buddy::Tools.register(
       recipient_name: payload[:recipient_name],
       stop_watch_id:  stopper&.id,
       stop_human:     payload[:stop_human],
+      only_if:        ScheduleCondition.describe(reminder.condition),
+      runs:           (reminder.action_calls.map { |c| BuddyRoutine.step_phrase(BuddyRoutine.step(c[:tool_name], c[:payload])) } if payload[:action_rows].present?),
       # Said in as many words, because the one thing that must not happen next
       # is the reply describing an ending that isn't there.
       stop_failed:    (
@@ -608,31 +650,40 @@ Buddy::Tools.register(
 
     rule = (::Anchor.describe(result[:anchor]) if result[:anchor].present?)
 
-    if rule
-      # No time at all when nothing is booked yet, and the receipt says so
-      # rather than naming a minute: the rule is set and it is waiting.
-      nxt = (fire_at ? " (next: #{ctx.friendly_future(fire_at)})" : " - nothing on it yet")
-      "#{name} will #{who ? "send this to #{who}" : "remind you"} #{rule}#{nxt}#{stops}"
-    elsif rec.is_a?(Hash)
-      hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
-      tstr  = hhmm ? Buddy::Clock.at(hhmm) : rec["at"].to_s
-      ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
-      verb  = who ? "send this to #{who}" : "remind you"
-      # An intraday rule has a start AND an end to its day, and "at 5:19pm"
-      # names only the first of fourteen fires. Unless it runs round the clock,
-      # in which case it has no window to name and saying one is the lie.
-      shut  = Buddy::Clock.at(rec["until_at"])
-      band  = (
-        if Buddy::ReminderPresenter.all_day?(rec) then ""
-        elsif rec["every_minutes"].to_i.positive? && shut then " from #{tstr} to #{shut}"
-        end
-      )
+    line = (
+      if rule
+        # No time at all when nothing is booked yet, and the receipt says so
+        # rather than naming a minute: the rule is set and it is waiting.
+        nxt = (fire_at ? " (next: #{ctx.friendly_future(fire_at)})" : " - nothing on it yet")
+        "#{name} will #{who ? "send this to #{who}" : "remind you"} #{rule}#{nxt}#{stops}"
+      elsif rec.is_a?(Hash)
+        hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
+        tstr  = hhmm ? Buddy::Clock.at(hhmm) : rec["at"].to_s
+        ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
+        verb  = who ? "send this to #{who}" : "remind you"
+        # An intraday rule has a start AND an end to its day, and "at 5:19pm"
+        # names only the first of fourteen fires. Unless it runs round the clock,
+        # in which case it has no window to name and saying one is the lie.
+        shut  = Buddy::Clock.at(rec["until_at"])
+        band  = (
+          if Buddy::ReminderPresenter.all_day?(rec) then ""
+          elsif rec["every_minutes"].to_i.positive? && shut then " from #{tstr} to #{shut}"
+          end
+        )
 
-      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)}#{band || " at #{tstr}"}#{ends}#{stops}"
-    elsif who
-      "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}"
-    else
-      "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
-    end
+        "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)}#{band || " at #{tstr}"}#{ends}#{stops}"
+      elsif who
+        "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}"
+      else
+        "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
+      end
+    )
+    # What it does and what it waits on go underneath, because those are the
+    # two halves of a rule most worth catching before it sits there.
+    extra = [
+      (result[:runs].present? ? "runs #{Array(result[:runs]).to_sentence}" : nil),
+      result[:only_if].presence,
+    ].compact
+    extra.any? ? "#{line}\n#{extra.join(" · ")}" : line
   },
 )

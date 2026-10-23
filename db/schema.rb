@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_20_210523) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_22_183040) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -629,9 +629,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_210523) do
     t.jsonb "condition"
     t.jsonb "action"
     t.text "anchor"
+    t.string "plan_id"
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
     t.index ["notify_user_id"], name: "index_buddy_reminders_on_notify_user_id"
+    t.index ["user_id", "plan_id"], name: "index_buddy_reminders_on_user_id_and_plan_id"
     t.index ["user_id"], name: "index_buddy_reminders_on_user_id"
   end
 
@@ -693,8 +695,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_210523) do
     t.datetime "updated_at", null: false
     t.bigint "notify_user_id"
     t.string "listener"
+    t.jsonb "condition"
+    t.string "plan_id"
     t.index ["byte_conversation_id"], name: "index_buddy_watches_on_byte_conversation_id"
     t.index ["notify_user_id"], name: "index_buddy_watches_on_notify_user_id"
+    t.index ["user_id", "plan_id"], name: "index_buddy_watches_on_user_id_and_plan_id"
     t.index ["user_id", "trigger_scope"], name: "index_buddy_watches_on_user_id_and_trigger_scope"
     t.index ["user_id"], name: "index_buddy_watches_on_user_id"
   end

@@ -113,6 +113,9 @@ class BuddyEvalWorld
 
   attr_reader :user, :made, :reused
 
+  # A plan id no reply will ever have: real ones are `p` and a message id.
+  EVAL_PLAN_ID = "p900000001".freeze
+
   def initialize(user)
     @user   = user
     @made   = []
@@ -124,6 +127,7 @@ class BuddyEvalWorld
     lists!
     events!
     reminders!
+    plan!
     agenda!
     ideas!
     kept_episode!
@@ -397,6 +401,20 @@ class BuddyEvalWorld
       next if matching.any?
 
       track(BuddyReminder.create!(user: user, byte_conversation: convo, body: body, fire_at: 6.hours.from_now))
+    }
+  end
+
+  # Two reminders one request made, so "push the garage stuff back an hour"
+  # has a plan to find. Both in the eval thread for the same reason the
+  # reminders above are: context only shows this thread's.
+  def plan!
+    convo = conversation
+    return if convo.nil?
+
+    found = BuddyReminder.pending.where(user: user, byte_conversation_id: convo.id).detect { |r| r.body.to_s.match?(/garage is shut/i) }
+    reuse(found) {
+      track(BuddyReminder.create!(user: user, byte_conversation: convo, body: "Lock the back door", fire_at: 5.hours.from_now, plan_id: EVAL_PLAN_ID))
+      BuddyReminder.create!(user: user, byte_conversation: convo, body: "Check the garage is shut", fire_at: 5.hours.from_now + 15.minutes, plan_id: EVAL_PLAN_ID)
     }
   end
 

@@ -35,7 +35,13 @@ module Buddy
     # Returns { action: <ByteAction or nil>, auto_ran: <bool> } so the caller
     # can pick the right expression: something to confirm (action present) vs
     # something already done (auto_ran) vs nothing.
+    #
+    # Whatever these calls schedule is one plan (see Buddy::Plan).
     def create(user:, byte_message:, markers:)
+      Buddy::Plan.within(byte_message) { compose(user: user, byte_message: byte_message, markers: markers) }
+    end
+
+    def compose(user:, byte_message:, markers:)
       return { action: nil, auto_ran: false, forms: [] } if markers.blank?
 
       # Build validated per-marker proposals.

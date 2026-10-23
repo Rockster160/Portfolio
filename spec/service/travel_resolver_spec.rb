@@ -9,7 +9,13 @@ RSpec.describe TravelResolver do
   let(:user) { create(:user) }
   let(:home) { [40.48038, -111.99827] }
 
-  before { allow(::LocationCache).to receive(:current_location_name).and_return("Home") }
+  # `home` is a saved place, as it is for anyone. Which contacts exist is
+  # otherwise whatever the shared test database holds for `User.me`, and a
+  # departure from somewhere unsaved names itself differently.
+  before {
+    allow(::LocationCache).to receive(:current_location_name).and_return("Home")
+    allow(::LocationCache).to receive(:nearby_contact) { |loc| Contact.new(name: "Home") if loc == home }
+  }
 
   def record(**payload)
     described_class.record({ action: :departed, lat: home.first, lng: home.last }.merge(payload), user: user)

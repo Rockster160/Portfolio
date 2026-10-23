@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:         :remind_when,
-  summary:      "Do something when a thing HAPPENS - arriving or leaving, a chore getting DONE, an " \
-                "item ADDED, a deploy, any listener: a nudge, or RUN an automation (\"once I leave, " \
-                "navigate me to Petsmart\"). Coming DUE or a clock time is schedule_reminder.",
+  summary:      "Do something when a thing HAPPENS - arriving or leaving, a chore DONE, an item " \
+                "ADDED, a deploy, a sensor: a nudge, or RUN several things (\"when I get home, " \
+                "porch light on and tell Chelsea\"). A clock time is schedule_reminder.",
   description:  <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /
@@ -260,6 +260,38 @@ Buddy::Tools.register(
     arg is how a timer hangs off a condition. Like `run`, it says nothing and
     doesn't combine with `notify`.
 
+    ## Doing several things when it happens
+
+    "When I get home, turn on the porch light, add milk to the list and tell
+    Chelsea I'm back" is ONE watch that runs three things. Pass
+    `then_run_rest: true` on this call, then make the three calls exactly as
+    you would to do them now, in the same reply - `run_jil_task`,
+    `add_list_item`, `message_partner`. They are held, not run, and become
+    what this watch runs, in that order, when the condition hits. `text` is
+    the line posted above them. That is the whole of it: no routine to save,
+    no JSON to write. Call this one FIRST, or in the same reply as the rest -
+    anything you already ran in an earlier reply has already happened.
+
+    ## Only sometimes
+
+    `only_if` is a JSON array of plain objects, checked the moment the
+    condition hits. When they don't all hold, nothing is said or run and the
+    watch stays armed for the next time - "when the garage opens after 10pm"
+    at 3pm isn't the garage opening after 10pm.
+
+      {"device": "Garage Door", "state": "open"}       what a device reports
+      {"device": "Porch Light", "state": "on", "expect": "is_not"}
+      {"after": "22:00", "before": "06:00"}           a window of the day
+      {"days": "weekdays"}                            or "weekends", "mon,wed"
+      {"place": "home", "expect": "away"}             where THEY are
+      {"find": "chore_completions", "query": "name:\\"Trash\\" is:today", "expect": "missing"}
+
+    "If the garage opens after 10 and I'm not home, message me" is
+    `trigger: "custom"` on the garage sensor with `only_if:
+    [{"after":"22:00","before":"06:00"},{"place":"home","expect":"away"}]`.
+    `only_if_any: true` makes it any one of them. A device is named the way it
+    reports in (`device_states` in context has every one).
+
     IMPORTANT for places (arrive/depart): the system resolves the place from
     the person's contacts and calendar. You do NOT know in advance whether it
     can - so don't state the reminder is set in your own words, and don't
@@ -269,22 +301,25 @@ Buddy::Tools.register(
     detected - just that you'll let them know.
   TXT
   args:         {
-    text:        { type: :string,  required: true,  template: true, description: "What to remind them of" },
-    trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
-    target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
-    except:      { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },
-    listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
-    when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
-    past_phrase: { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
-    repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
-    notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
-    run:         { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
-    run_args:    { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
-    routine:     { type: :string,  required: false, description: "A saved routine to run when the condition hits, by name." },
-    steps:       { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order, run when the condition hits - save_routine's shape, written for this watch alone." },
-    delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run`, `routine` or `steps`." },
-    timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
-    expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
+    text:          { type: :string,  required: true,  template: true, description: "What to remind them of" },
+    trigger:       { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
+    target:        { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
+    except:        { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },
+    listener:      { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
+    when_phrase:   { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
+    past_phrase:   { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
+    repeat:        { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
+    notify:        { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
+    run:           { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
+    run_args:      { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
+    routine:       { type: :string,  required: false, description: "A saved routine to run when the condition hits, by name." },
+    steps:         { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order, run when the condition hits - save_routine's shape, written for this watch alone." },
+    delay:         { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run`, `routine` or `steps`." },
+    timer:         { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
+    expires:       { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
+    only_if:       { type: :string,  required: false, description: "JSON array of conditions that must ALL hold when it trips - device state, a time window, where they are. See \"Only sometimes\"." },
+    only_if_any:   { type: :boolean, required: false, description: "Go ahead when ANY of `only_if` holds instead of all of them." },
+    then_run_rest: { type: :boolean, required: false, description: "The calls you make after this one in this reply are what it RUNS when the condition hits, instead of happening now." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
   # into a feature: a chore watch would tell someone without chores when the
@@ -376,6 +411,14 @@ Buddy::Tools.register(
     every = ActiveModel::Type::Boolean.new.cast(payload[:repeat])
     human = Buddy::WatchCondition.repeating_phrase(human) if every
 
+    # The rest of what has to be true, asked when it trips. Checked as far as
+    # it can be now, so a device that doesn't exist fails here.
+    gate = ScheduleCondition.from_rows(
+      payload[:only_if],
+      match: (ActiveModel::Type::Boolean.new.cast(payload[:only_if_any]) ? :any : :all),
+    )
+    ScheduleCondition.validate!(gate, ctx.user)
+
     # Who gets the heads-up. An explicit `notify` wins; otherwise, if the watch
     # has to be owned by someone else (an agenda the user doesn't own), the
     # requester still gets told. The watch fires for `owner`, so a recipient who
@@ -406,6 +449,7 @@ Buddy::Tools.register(
       "Let #{recipient.first_name} know #{human}"
     end
     framed = "#{framed}, until #{expires_at.strftime("%b %-e")}" if expires_at
+    framed = "#{framed}, #{ScheduleCondition.describe(gate)}" if gate
 
     # Deliberately a note rather than a raise: two reminders on one condition
     # ("shower" and "do laundry" when I get home) are perfectly normal. The one
@@ -449,6 +493,7 @@ Buddy::Tools.register(
         run_delay:      delay,
         timer_seconds:  timer_seconds,
         expires_at_iso: expires_at&.iso8601,
+        condition:      gate,
       },
     }
   },
@@ -486,6 +531,8 @@ Buddy::Tools.register(
       listener:          payload[:listener].presence,
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
       expires_at:        (Time.zone.parse(payload[:expires_at_iso].to_s) if payload[:expires_at_iso].present?),
+      condition:         payload[:condition].presence,
+      plan_id:           Buddy::Plan.current_id,
       metadata:          {
         "human_when"     => payload[:human_when].to_s,
         "run_scope"      => payload[:run_scope].presence,
@@ -507,6 +554,7 @@ Buddy::Tools.register(
       run_delay:      watch.run_delay,
       timer_seconds:  watch.timer_seconds,
       expires_at:     watch.expires_at&.iso8601,
+      only_if:        ScheduleCondition.describe(watch.condition),
     }
   },
   # Setting a watch is safe + reversible (cancel_reminder undoes it), so it
@@ -533,6 +581,7 @@ Buddy::Tools.register(
       # trying to avoid by bounding it.
       ends = (Time.zone.parse(result[:expires_at].to_s) rescue nil)
       line = "#{line}, until #{ctx.friendly_day(ends)}" if ends
+      line = "#{line}, #{result[:only_if]}" if result[:only_if].present?
       # A hand-written watch shows what it's really matching underneath. This is
       # the one moment they can catch a listener that's subtly wrong, before it
       # sits there for a month not firing.

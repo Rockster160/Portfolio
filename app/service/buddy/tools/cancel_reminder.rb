@@ -19,6 +19,11 @@ Buddy::Tools.register(
     substring cannot tell those apart. When it can't, this refuses and lists
     them rather than guessing, and you pick by id.
 
+    A row carrying a `plan` id is one part of something bigger - a watch, a
+    reminder and its stop rule from one request. "Forget the garage stuff"
+    means all of it: that's `edit_plan` with `cancel: true`, one call, not
+    this once per row.
+
     Those context sections also show rows the person switched OFF from the
     panel, marked `status: off`. Those still exist and can still be removed;
     they just aren't running. Don't describe one as gone, and don't reach for a

@@ -128,6 +128,7 @@ module BuddyEvalNeeds
     tomato_reminder:      { label: "a tomato reminder in the eval thread", check: ->(u) { reminder(u, /tomato/i) } },
     flower_bed_reminder:  { label: "a flower bed reminder in the eval thread", check: ->(u) { reminder(u, /flower bed/i) } },
     vet_reminder:         { label: "a vet reminder in the eval thread", check: ->(u) { reminder(u, /vet/i) } },
+    garage_plan:          { label: "a two-part garage plan in the eval thread", check: ->(u) { reminder(u, /garage is shut/i) && reminder(u, /back door/i) } },
     celsius_today:        { label: "a Celsius logged today",       check: ->(u) { event_today(u, /celsius/i) } },
     sandwich_today:       { label: "a sandwich logged today",      check: ->(u) { event_today(u, /sandwich/i) } },
     oat_milk_listed:      { label: "oat milk on a list",           check: ->(u) { list_item(u, /oat milk/i) } },

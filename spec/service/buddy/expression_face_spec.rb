@@ -195,11 +195,14 @@ RSpec.describe Buddy::ExpressionState do
 
     it "draws a whole character in every one, not an overlay" do
       # Measured on a downsample — the question is 3% of the frame versus 30%,
-      # and decoding half a million pixels a face to answer it is a waste.
+      # and decoding half a million pixels a face to answer it is a waste. The
+      # line sits well below a standing body because a pose can lower it
+      # without making it an overlay: asleep and flattened, the whole slime
+      # covers about a fifth.
       thin = faces.filter_map { |path|
         small = ChunkyPNG::Image.from_file(path).resample_nearest_neighbor(180, 180)
         cover = small.pixels.count { |px| ChunkyPNG::Color.a(px) > 128 } / (180.0 * 180)
-        next if cover >= 0.25
+        next if cover >= 0.12
 
         "#{path.basename} covers #{(cover * 100).round(1)}% of its frame"
       }

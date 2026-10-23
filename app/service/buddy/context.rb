@@ -1179,12 +1179,17 @@ module Buddy
 
         tz    = conversation.user.timezone
         today = now.in_time_zone(tz).to_date
+        plans = Buddy::Plan.shared_ids(conversation.user)
         live  = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
             id:           r.id,
             fire_at:      Buddy::Clock.day_at(r.fire_at, zone: tz),
             kind:         r.kind,
             body:         r.body.to_s.first(120),
+            # Set when this row is one part of a request that made several -
+            # `edit_plan` changes them together.
+            plan:         (r.plan_id if plans.include?(r.plan_id)),
+            only_if:      (ScheduleCondition.describe(r.condition) if r.condition.present?),
             # A recurring reminder rolls `fire_at` forward the moment it fires,
             # so the next occurrence is all that's visible and the one that just
             # went off looks like it never did - announced as "tomorrow at 8:00
@@ -1333,11 +1338,14 @@ module Buddy
       def active_watches(conversation, _now=Time.current)
         return [] unless defined?(BuddyWatch)
 
+        plans = Buddy::Plan.shared_ids(conversation.user)
         live = BuddyWatch.active.where(byte_conversation_id: conversation.id).order(:created_at).limit(15).map { |w|
           {
             id:       w.id,
             when:     (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
             body:     w.body.to_s.first(120),
+            plan:     (w.plan_id if plans.include?(w.plan_id)),
+            only_if:  (ScheduleCondition.describe(w.condition) if w.condition.present?),
             # Present only on a hand-written watch. Carried so a "why did that
             # fire" (or a near-duplicate) can be reasoned about from the actual
             # condition rather than the prose around it. It is also the ONLY

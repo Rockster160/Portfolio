@@ -168,6 +168,7 @@ module Buddy
 
     def fire!(watch, payload={})
       return if debounced?(watch, payload)
+      return held_back!(watch) unless condition_met?(watch)
 
       if watch.notify_user_id
         fire_cross_user!(watch, payload)
@@ -192,6 +193,46 @@ module Buddy
         user:      watch.user,
         extra:     { watch_id: watch.id },
       )
+    end
+
+    # The rest of the rule, asked the moment the thing happens. An answer that
+    # can't be had goes ahead, the same as a reminder's: a redundant nudge is
+    # noise, and one that silently never comes can't be told from one that
+    # was never set.
+    def condition_met?(watch)
+      ScheduleCondition.met?(watch.condition, user: watch.user)
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.condition",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id, condition: watch.condition },
+      )
+      true
+    end
+
+    # Not this time. The watch stays armed - a one-shot included, because the
+    # thing it waits for is the event AND the rest of the rule, and only half
+    # of that happened.
+    #
+    # It leaves the same small chip a skipped reminder does, so a condition
+    # that is quietly wrong can be seen being wrong. At most one an hour per
+    # watch: a garage gated to the night opens a dozen times a day, and a chip
+    # for every one of them is a feed nobody asked for.
+    SKIP_NOTE_EVERY = 1.hour
+
+    def held_back!(watch)
+      meta = watch.metadata.to_h
+      last = (Time.zone.parse(meta["last_skip_noted_at"].to_s) rescue nil)
+      return if last && last > SKIP_NOTE_EVERY.ago
+
+      ScheduleCondition.announce_skip!(
+        user:         watch.user,
+        conversation: watch.byte_conversation,
+        condition:    watch.condition,
+        subject:      watch.body.to_s.truncate(60),
+      )
+      watch.update!(metadata: meta.merge("last_skip_noted_at" => Time.current.iso8601))
     end
 
     def fire_self!(watch, payload={})

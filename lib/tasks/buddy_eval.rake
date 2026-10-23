@@ -357,6 +357,7 @@ BUDDY_TOOL_PROBES = {
   save_routine:           "when I say prep my printer, turn it on, wait a minute, then preheat it",
   run_routine:            { say: "run my wind-down", needs: :wind_down_routine },
   edit_routine:           { say: "in my wind-down, make the timer 20 minutes instead of 10", avoid: %i[save_routine], needs: :wind_down_routine },
+  edit_plan:              { say: "push the garage stuff back an hour", avoid: %i[move_reminder cancel_reminder], needs: :garage_plan },
   forget_routine:         { say: "delete my wind-down routine, I don't use it", needs: :wind_down_routine },
   link_records:           { say: "from now on, whenever I log a Strawberry Celsius, tick off my water chore", needs: :water_chore },
   unlink_records:         { say: "logging coffee shouldn't tick off the chore any more", needs: :coffee_pairing },
@@ -515,6 +516,44 @@ BUDDY_EVAL_READERS = %i[
 #               paths. The same fields as the probe (tool, with, order, args,
 #               avoid...), laid over it; the turn passes if it meets either.
 BUDDY_EDGE_PROBES = [
+  # --- one request, several things, later -----------------------------------
+  # Asked for directly: three things on one condition and a time-and-device
+  # rule, all with nothing run now. The pieces existed as a `steps` JSON field
+  # nobody ever filled in, and a single check per reminder.
+  {
+    case:  "plans: when X, do three things",
+    say:   "When I get home, run Chill Mode, add oat milk to the grocery list and start a 10 minute timer",
+    tool:  :remind_when,
+    avoid: %i[save_routine run_jil_task],
+    args:  { remind_when: { trigger: /arrive/, then_run_rest: true } },
+    needs: :grocery_list,
+    note:  "one watch holding the three calls; none of them runs now",
+  },
+  {
+    case:  "plans: device + time + place",
+    say:   "At 11 tonight, if the garage door is still open and I'm not home, message me",
+    tool:  :schedule_reminder,
+    avoid: %i[remind_when request_feature],
+    args:  { schedule_reminder: { only_if: /garage.*open|open.*garage/im } },
+    note:  "one reminder with both conditions in only_if, not a check_* for one and a sentence for the other",
+  },
+  {
+    case:  "plans: an event gated on the time",
+    say:   "Whenever the garage door opens after 10pm, let me know",
+    tool:  :remind_when,
+    avoid: %i[schedule_reminder request_feature],
+    args:  { remind_when: { only_if: /22:00|10\s*pm/i, repeat: true } },
+    note:  "the hour is a condition on the watch, not a reminder at 10pm",
+  },
+  {
+    case:  "plans: cancel the whole thing",
+    say:   "forget the whole garage plan",
+    tool:  :edit_plan,
+    avoid: %i[cancel_reminder],
+    args:  { edit_plan: { cancel: true } },
+    needs: :garage_plan,
+    note:  "one call for every part, not a cancel_reminder per row",
+  },
   # --- a link, and something to do about it --------------------------------
   # The URL names the event and carries a date, and both are guesses about the
   # page: it listed three dates under that title and an address the link never

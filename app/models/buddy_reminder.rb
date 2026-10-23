@@ -18,6 +18,7 @@
 #  updated_at           :datetime         not null
 #  byte_conversation_id :bigint           not null
 #  notify_user_id       :bigint
+#  plan_id              :string
 #  user_id              :bigint           not null
 #
 class BuddyReminder < ApplicationRecord

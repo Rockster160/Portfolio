@@ -5,6 +5,7 @@
 #  id                   :bigint           not null, primary key
 #  body                 :text             not null
 #  cancelled_at         :datetime
+#  condition            :jsonb
 #  expires_at           :datetime
 #  fired_at             :datetime
 #  kind                 :string           default("prompt"), not null
@@ -18,6 +19,7 @@
 #  updated_at           :datetime         not null
 #  byte_conversation_id :bigint           not null
 #  notify_user_id       :bigint
+#  plan_id              :string
 #  user_id              :bigint           not null
 #
 class BuddyWatch < ApplicationRecord
