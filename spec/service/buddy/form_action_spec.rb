@@ -100,14 +100,32 @@ RSpec.describe Buddy::FormAction do
       expect(meta["fields"].find { |f| f["key"] == "Calories" }["value"]).to eq("180")
     end
 
-    it "refuses a half-filled form and keeps it live so they can fix it" do
+    # Free text, numbers and multi-picks may go in empty, the way the page lets
+    # them: a shower's "With" is usually blank.
+    it "sends a form with its text left blank" do
       prompt = calorie_prompt
       action = post_form(prompt, {})
 
-      result = described_class.submit!(action, values: { "Notes" => "cafe protein shake", "Calories" => "" })
+      result = described_class.submit!(action, values: { "Notes" => "", "Calories" => "" })
+
+      expect(result[:ok]).to be(true)
+      expect(prompt.reload.response).to be_a(Hash)
+      expect(prompt.response["Notes"]).to be_blank
+    end
+
+    it "refuses a form missing a pick and keeps it live so they can fix it" do
+      prompt = Prompt.create!(user: user, answer_type: :single, question: "Washed it?", options: [
+        { "type" => "chips", "question" => "Washed", "choices" => ["Yes", "No"] },
+        { "type" => "text", "default" => "", "question" => "With" },
+        { "type" => "choices", "question" => "Medicine taken", "choices" => ["Multi", "Ibu"] },
+      ])
+      action = post_form(prompt, {})
+
+      result = described_class.submit!(action, values: { "Washed" => "", "With" => "", "Medicine taken" => [] })
 
       expect(result[:ok]).to be(false)
-      expect(result[:errors].join).to include("Calories needs a value")
+      expect(result[:errors].join).to include("Washed needs a value")
+      expect(result[:errors].join).not_to include("With", "Medicine")
       expect(action.reload).to be_pending
       expect(prompt.reload.response).to be_nil
     end

@@ -21,6 +21,13 @@ module Buddy
     # the widget's resting position rather than an answer. See placeholder?.
     FLOOR_TYPES = { scale: 0, number: nil }.freeze
 
+    # The only questions that can't go in empty, matching the page: a single
+    # pick (a select offers no blank, chips are radios) and a scale, which
+    # always rests somewhere. Text, notes, durations, numbers, dates and
+    # multi-picks may all be left blank - a shower's "With" usually is, and a
+    # day with no medicine ticks none.
+    REQUIRED_TYPES = %i[select chips scale].freeze
+
     TRUTHY = %w[true yes y on 1 sure yep yeah yup ok okay done].freeze
 
     # When something happened, as opposed to what happened. See #defaulted.
@@ -103,18 +110,19 @@ module Buddy
         response[question_of(option)] = value if value.present?
       }
 
+      # A blank answer is an answer: it clears whatever the field opened with.
       resolve_keys(answers).each { |option, answer|
-        response[question_of(option)] = coerce(option, answer)
+        response[question_of(option)] = blank_answer?(answer) ? empty_for(option) : coerce(option, answer)
       }
       response
     end
 
-    # Questions still empty after Buddy's answers land. answer_prompt refuses to
-    # submit while this is non-empty.
+    # Required questions still empty after Buddy's answers land. answer_prompt
+    # refuses to submit while this is non-empty.
     def missing(response)
       visible.filter_map { |option|
         q = question_of(option)
-        q if response[q].blank?
+        q if required?(option) && response[q].blank?
       }
     end
 
@@ -134,9 +142,7 @@ module Buddy
           max:      field[:max],
           step:     field[:step],
           hint:     field[:hint],
-          # Everything on a prompt has to end up with a value — that's what the
-          # page enforces, and a half-submitted survey is worse than none.
-          required: true,
+          required: REQUIRED_TYPES.include?(field[:type]),
         }.compact
       }
     end
@@ -170,6 +176,18 @@ module Buddy
 
     def hidden
       @hidden ||= options.select { |o| type_of(o) == :hidden }
+    end
+
+    def blank_answer?(answer)
+      answer.nil? || (answer.respond_to?(:empty?) && answer.empty?) || (answer.is_a?(String) && answer.strip.empty?)
+    end
+
+    def empty_for(option)
+      type_of(option) == MULTI_TYPE ? [] : ""
+    end
+
+    def required?(option)
+      REQUIRED_TYPES.include?(type_of(option))
     end
 
     def type_of(option)

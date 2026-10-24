@@ -303,7 +303,7 @@ module Buddy
         ctx     = Buddy::ToolContext.new(user, conversation: action.byte_conversation)
         fields  = Buddy::FormFields.normalize(spec[:fields].call(payload, ctx))
 
-        collected, errors = Buddy::FormFields.collect(fields, values)
+        collected, errors = Buddy::FormFields.collect(fields, values, keep_blanks: spec[:keep_blanks] == true)
         return { ok: false, errors: errors } if errors.any?
 
         merged = payload.merge(spec[:arg].to_sym => collected)

@@ -99,10 +99,14 @@ module Buddy
     # Returns [collected, errors]. Errors are written for a person to read,
     # because they render under the field that caused them.
     #
+    # An optional field left empty is dropped, so the tool sees the argument as
+    # not given - unless `keep_blanks`, for a form where emptying a field that
+    # arrived filled IS the answer, and dropping it would put the old value back.
+    #
     # Values are matched by KEY only — no fuzzy matching. The client sends back
     # the keys it was given, so anything else is a bug or a forged request, and
     # in both cases guessing is the wrong response.
-    def collect(fields, values)
+    def collect(fields, values, keep_blanks: false)
       posted    = (values || {}).transform_keys(&:to_s)
       collected = {}
       errors    = []
@@ -117,7 +121,11 @@ module Buddy
         if error
           errors << error
         elsif blank?(value)
-          errors << "#{field[:label]} needs a value" if field[:required]
+          if field[:required]
+            errors << "#{field[:label]} needs a value"
+          elsif keep_blanks
+            collected[field[:key]] = field[:type] == MULTI ? [] : ""
+          end
         else
           collected[field[:key]] = value
         end
