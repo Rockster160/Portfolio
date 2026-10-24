@@ -6,36 +6,48 @@ Buddy::Tools.register(
     Create a NEW chore in the user's household. Use when the user wants a task
     they haven't been tracking yet to become a repeating (or one-off) chore.
     Do NOT use to just complete something they already did - that's
-    `complete_chore`.
+    `complete_chore`. And when a chore for it ALREADY exists - "we need to trim
+    Fae's claws tomorrow" with Trim Kitty Nails on the list - that's
+    `edit_chore` with `due`, not a second chore.
 
     Optional details, only pass the ones the user actually gives:
       schedule - free-form recurrence: "every Sunday", "weekdays", "daily",
                  "every 3 days", "monthly on the 1st". Blank = one-off.
-      assignee - a household member's first name, or "me".
+      assignee - a household member's first name, or "me". ONLY when they name
+                 who it's for. Leave it out for anything shared - a household
+                 group, "so we both see it", "a household chore". Left out,
+                 everyone in the household sees it; given, only that person.
       reward   - pebble reward (a number). If omitted, a sensible amount is
                  guessed from the chore; you don't need to ask.
       parent   - another chore name to nest this UNDER as a sub-task.
       after    - another chore name this one should follow (surfaces once that
                  chore is done) - a dependency, not a clock schedule.
-      due      - when it should first be due ("today", "tomorrow", a date).
+      due      - when it should first be due. Pass "today", "tomorrow" or a
+                 weekday as the WORD, never a date you worked out: after
+                 midnight "tomorrow" is the day they wake up into, and the word
+                 is counted that way. A date is for a date they named.
       priority - how urgent: critical / high / normal / low / none. Only pass
                  it when the user says so ("this one's urgent", "low priority",
                  "don't bother flagging it") - otherwise it defaults to normal.
       groups   - comma-separated groups to file it under ("Kitchen, Pets").
                  A board shows the chores in the groups it watches. In a
                  board's own chat, leaving this out files it under that
-                 board's groups.
+                 board's groups. "A household chore" is about who sees it
+                 (leave `assignee` out), not a group called Household.
+      notes    - anything to keep with it: a packing list, what to bring, how
+                 it's done.
     An icon is chosen automatically from the name.
   TXT
   feature:     :chores,
   args:        {
     name:     { type: :string, required: true,  description: "Chore name" },
     schedule: { type: :string, required: false, description: "Free-form schedule; blank = one-off" },
-    assignee: { type: :string, required: false, description: "Household member first name, or 'me'" },
+    assignee: { type: :string, required: false, description: "Household member first name, or 'me' - only when they name who it's for; omit for shared" },
     reward:   { type: :integer, required: false, description: "Pebble reward; omit to auto-guess" },
     parent:   { type: :string, required: false, description: "Parent chore name to nest this under" },
     after:    { type: :string, required: false, description: "Chore this one follows (dependency)" },
-    due:      { type: :string, required: false, description: "When it's first due - YYYY-MM-DD (from the local date in RIGHT NOW) or an ISO datetime" },
+    due:      { type: :string, required: false, description: "When it's first due - 'today', 'tomorrow', a weekday, YYYY-MM-DD, or an ISO datetime" },
+    notes:    { type: :string, required: false, description: "Notes kept on the chore" },
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
     priority: { type: :string, required: false, description: "Urgency: critical, high, normal, low, or none. Omit for normal" },
     groups:   { type: :string, required: false, description: "Comma-separated groups to file it under" },
@@ -44,7 +56,10 @@ Buddy::Tools.register(
     household = ctx.user.chore_household
     raise "no chore household on user" if household.nil?
 
-    assignee = payload[:assignee].present? ? ctx.resolve_household_user(payload[:assignee]) : ctx.user
+    # Nobody named means nobody: an assigned chore is hidden from everyone else
+    # in the household, so defaulting to whoever asked made shared chores
+    # impossible to create.
+    assignee = ctx.resolve_household_user(payload[:assignee]) if payload[:assignee].present?
 
     # A named `after` chore is a dependency (after_chore recurrence); it takes
     # precedence over a clock schedule. Otherwise parse the free-form schedule.
@@ -151,6 +166,7 @@ Buddy::Tools.register(
       recurrence:          payload[:recurrence],
       parent_chore_id:     payload[:parent_chore_id],
       tags:                Array(payload[:tags]),
+      notes:               payload[:notes].presence,
       marked_due_at:       (Time.zone.parse(payload[:marked_due_at_iso].to_s) if payload[:marked_due_at_iso].present?),
     )
     {

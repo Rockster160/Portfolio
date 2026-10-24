@@ -156,8 +156,12 @@ class TeslaTelemetry
     return if was_home == now_home
 
     action = now_home ? :arrived : :departed
-    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla, from: (@prev if action == :departed)))
-    ::Jil.trigger(@user, :trytravel, travel_payload(action, :phone)) if carrying_him?
+    # The phone's copy leaves from the same spot as the car. Placed where the
+    # car is by now - hundreds of metres down the road - it lands too far from
+    # the phone's own departure to join it, and reads as a second trip.
+    from = (@prev if action == :departed)
+    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla, from: from))
+    ::Jil.trigger(@user, :trytravel, travel_payload(action, :phone, from: from)) if carrying_him?
   end
 
   # Whether the phone went with the car, asked at the moment the car crosses

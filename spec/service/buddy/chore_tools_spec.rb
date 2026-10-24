@@ -255,6 +255,60 @@ RSpec.describe "Buddy chore tools" do
     end
   end
 
+  describe "who sees it, its notes, and the day it's due" do
+    let(:user) { create(:user) }
+    let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
+
+    before { user.update!(chore_household_id: household.id) }
+
+    def run(tool_name, payload)
+      tool = Buddy::Tools[tool_name]
+      confirm = tool[:confirm].call(payload, Buddy::ToolContext.new(user))
+      resolved = payload.merge(confirm[:resolved])
+      [tool[:execute].call(resolved, Buddy::ToolContext.new(user)), resolved, tool]
+    end
+
+    def created(payload) = Chore.find(run(:create_chore, payload).first[:chore_id])
+
+    # An assigned chore is hidden from everyone else in the household.
+    it "leaves a chore nobody was named for unassigned, so the household sees it" do
+      expect(created(name: "Empty Car").assigned_to_user_id).to be_nil
+      expect(created(name: "Bowling Bags", assignee: "me").assigned_to_user_id).to eq(user.id)
+    end
+
+    it "keeps notes on a new chore, and replaces or clears them on an edit" do
+      chore = created(name: "Whisper Car Bag", notes: "leash, harness, water bottle")
+      expect(chore.notes).to eq("leash, harness, water bottle")
+
+      run(:edit_chore, { chore: "Whisper Car Bag", notes: "leash, harness, kibble" })
+      expect(chore.reload.notes).to eq("leash, harness, kibble")
+      run(:edit_chore, { chore: "Whisper Car Bag", notes: "none" })
+      expect(chore.reload.notes).to be_nil
+    end
+
+    # The chore day runs 4am to 4am, so at 12:40 AM Saturday it is still
+    # Friday's, and "tomorrow" is the Saturday they wake up into.
+    it "counts 'tomorrow' from the chore day, not the calendar" do
+      travel_to(Time.find_zone("America/Denver").local(2026, 10, 24, 0, 40)) {
+        chore = created(name: "Bowling Bags", due: "tomorrow")
+        expect(ChoreDay.current(user, at: chore.marked_due_at)).to eq(Date.new(2026, 10, 24))
+      }
+    end
+
+    it "marks an existing chore due on a day and leaves its schedule alone" do
+      chore = household.chores.create!(
+        created_by_user: user, name: "Trim Kitty Nails",
+        recurrence: { "freq" => "relative", "unit" => "week", "interval" => 2 }
+      )
+      today = ChoreDay.current(user)
+
+      run(:edit_chore, { chore: "Trim Kitty Nails", due: "tomorrow" })
+      chore.reload
+      expect(ChoreDay.current(user, at: chore.marked_due_at)).to eq(today + 1)
+      expect(chore.recurrence).to eq("freq" => "relative", "unit" => "week", "interval" => 2)
+    end
+  end
+
   describe "priority" do
     let(:user) { create(:user) }
     let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }

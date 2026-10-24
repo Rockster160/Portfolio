@@ -21,13 +21,13 @@ Buddy::Tools.register(
 
     { summary: "Edit #{event.name}?", resolved: { action_event_id: event.id } }
   },
-  label:       ->(payload, _ctx) {
+  label:       ->(payload, ctx) {
     event = ActionEvent.find_by(id: payload[:action_event_id])
     base = event&.name || payload[:event].to_s
     diffs = []
     diffs << "name → #{payload[:name]}" if payload[:name].present?
     diffs << "notes → #{payload[:notes].to_s.first(30)}" if payload[:notes].present?
-    diffs << "time → #{Buddy::Clock.at(payload[:at])}" if payload[:at].respond_to?(:strftime)
+    diffs << "time → #{Buddy::Clock.at(ctx.resolve_time(payload[:at]))}" if payload[:at].present?
     { title: base, sub: diffs.join("\n").presence }
   },
   execute:     ->(payload, ctx) {
@@ -35,7 +35,7 @@ Buddy::Tools.register(
     attrs = {}
     attrs[:name]      = payload[:name]  if payload[:name].present?
     attrs[:notes]     = payload[:notes] if payload[:notes].present?
-    attrs[:timestamp] = payload[:at]    if payload[:at].respond_to?(:strftime)
+    attrs[:timestamp] = ctx.resolve_time(payload[:at]) if payload[:at].present?
     before = attrs.keys.index_with { |k| event.public_send(k) }  # old values, for undo
     if attrs.any? && event.update!(attrs)
       ActionEventNotifier.notify(ctx.user, event, :changed, auth: :buddy, auth_id: ctx.user.id)

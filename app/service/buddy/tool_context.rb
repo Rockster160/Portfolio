@@ -817,6 +817,8 @@ module Buddy
     # naive "2026-08-03T16:45:00" — the most natural thing for the model to
     # write — used to become 16:45 UTC, which is 10:45 AM on a UTC-6 calendar.
     def resolve_time(iso)
+      return iso if iso.respond_to?(:strftime)
+
       parse_in_zone(iso.to_s)
     end
 
@@ -934,16 +936,34 @@ module Buddy
     # Either one marks a chore due a day early. A date on its own is therefore
     # anchored to the start of its chore day; anything naming a real clock time
     # is kept as the instant it names.
+    #
+    # A day said as a word ("tomorrow", "friday", "in 3 days") is counted from
+    # the chore day rather than the calendar: at 12:40 AM "tomorrow" is the day
+    # they wake up into, not the one after it.
     def resolve_due(text)
       str = text.to_s.strip
       return nil if str.empty?
       return :clear if CLEAR_DUE.include?(str.downcase)
+
+      named = named_chore_day(str.downcase)
+      return ChoreDay.starts_at(named, user) if named
 
       time = parse_in_zone(str)
       return nil if time.nil?
       return time unless str.match?(DATE_ONLY_RX)
 
       ChoreDay.starts_at(time.to_date, user)
+    end
+
+    def named_chore_day(text)
+      today = ChoreDay.current(user)
+      case text
+      when "today", "tonight" then today
+      when "tomorrow"         then today + 1
+      else
+        weekday = WEEKDAY_NAMES.include?(text.delete_prefix("next ").strip)
+        relative_or_named_day(text, today) if weekday || text.match?(RELATIVE_DAYS_RX)
+      end
     end
 
     def parse_in_zone(str)

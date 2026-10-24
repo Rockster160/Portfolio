@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_chore,
-  summary:     "Change an existing chore - rename, schedule, assignee, next due date, urgency, " \
-               "groups, archive.",
+  summary:     "Change an existing chore - rename, schedule, assignee, next due date (\"we need to " \
+               "do X tomorrow\"), urgency, groups, notes, archive.",
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
     when it's next due, change how urgent it is, or archive/unarchive a chore
@@ -17,9 +17,15 @@ Buddy::Tools.register(
     easy mistake. `schedule` is the RECURRENCE, how often it comes back ("every
     Sunday", "weekdays"). `due` is a ONE-OFF date for the next time only, and
     it leaves the recurrence alone: "the trash goes out Tuesday this week",
-    "bump the vet thing to Friday", "this one's due tomorrow". Pass `due` as a
-    date (YYYY-MM-DD) taken from the local date in RIGHT NOW, or a full ISO
-    datetime when the hour genuinely matters. Pass "none" to clear it.
+    "bump the vet thing to Friday", "this one's due tomorrow", "we need to trim
+    Fae's claws tomorrow" (Trim Kitty Nails). An existing chore said with a day
+    is this, never a new chore and never a schedule change. Pass "today",
+    "tomorrow" or a weekday as the WORD - after midnight "tomorrow" is the day
+    they wake up into, and the word is counted that way - a YYYY-MM-DD for a
+    date they named, or a full ISO datetime when the hour genuinely matters.
+    Pass "none" to clear it.
+
+    `notes` REPLACES the chore's notes. To add to them, include what's there.
 
     `groups` REPLACES the groups the chore is filed under (comma-separated);
     a board shows the chores in the groups it watches. To add one, include
@@ -30,11 +36,12 @@ Buddy::Tools.register(
     chore:    { type: :string, required: true,  description: "Fuzzy name of the chore to edit" },
     name:     { type: :string, required: false, description: "New name" },
     schedule: { type: :string, required: false, description: "New RECURRENCE, e.g. 'every Sunday'" },
-    due:      { type: :string, required: false, description: "When it's next due - YYYY-MM-DD or ISO datetime, or 'none' to clear. A one-off, not the recurrence" },
+    due:      { type: :string, required: false, description: "When it's next due - 'today', 'tomorrow', a weekday, YYYY-MM-DD, ISO datetime, or 'none'. A one-off, not the recurrence" },
     assignee: { type: :string, required: false, description: "New assignee (household member first name)" },
     priority: { type: :string, required: false, description: "New urgency: critical, high, normal, low, or none" },
     disabled: { type: :string, required: false, description: "'true' to archive, 'false' to unarchive" },
     groups:   { type: :string, required: false, description: "The FULL comma-separated list of groups, or 'none'" },
+    notes:    { type: :string, required: false, description: "The chore's notes in full, or 'none' to clear" },
   },
   confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
@@ -47,7 +54,7 @@ Buddy::Tools.register(
     # nothing (prod byte_action 493). A phantom confirmation is worse than an
     # error, because the error is the thing that makes the model say what it
     # actually wants changed.
-    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled, :groups)
+    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled, :groups, :notes)
     if given.all? { |v| v.to_s.strip.blank? }
       raise "nothing to change on #{chore.name} - say what should be different"
     end
@@ -101,6 +108,7 @@ Buddy::Tools.register(
     diffs << "priority → #{payload[:priority]}" if payload[:priority].present?
     diffs << "groups → #{Array(payload[:tags]).join(", ").presence || "none"}" unless payload[:tags].nil?
     diffs << "assign → #{User.find_by(id: payload[:assignee_id])&.first_name}" if payload[:assignee_id]
+    diffs << "notes → #{payload[:notes].to_s.first(30)}" if payload[:notes].present?
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
     { title: base, sub: diffs.join("\n").presence }
   },
@@ -116,6 +124,9 @@ Buddy::Tools.register(
     attrs[:recurrence]          = payload[:recurrence]  if payload[:recurrence].present?
     attrs[:priority]            = payload[:priority]    if payload[:priority].present?
     attrs[:tags]                = Array(payload[:tags]) unless payload[:tags].nil?
+    if payload[:notes].present?
+      attrs[:notes] = (payload[:notes] unless payload[:notes].to_s.strip.casecmp?("none"))
+    end
     if payload[:due_at_iso].present?
       attrs[:marked_due_at] = (Time.zone.parse(payload[:due_at_iso].to_s) unless payload[:due_at_iso] == "clear")
     end

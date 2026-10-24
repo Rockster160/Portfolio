@@ -421,6 +421,29 @@ RSpec.describe Buddy::Timers do
         expect(Timer.find(result[:data][:timer_id]).name).to eq("Tea")
         expect(tool[:receipt].call(result[:data], ctx)).to include("1 min timer for Tea")
       end
+
+      # "Timer until 5:25" at 3:14 was set ten minutes short when the model did
+      # the subtraction itself.
+      it "runs until a clock time, counted from now" do
+        tool = Buddy::Tools[:set_timer]
+        zone = Time.find_zone(user.timezone)
+        travel_to(zone.local(2026, 10, 23, 15, 14, 0)) {
+          ctx = Buddy::ToolContext.new(user, conversation: user.byte_conversations.create!(mode: :buddy))
+          payload = { ends_at: "2026-10-23T17:25:00" }
+          payload = payload.merge(tool[:confirm].call(payload, ctx)[:resolved])
+          result = Buddy::Tools.dispatch(tool, JSON.parse(payload.to_json).symbolize_keys, ctx)
+
+          expect(result[:data][:seconds]).to eq(131 * 60)
+          expect(Timer.find(result[:data][:timer_id]).end_at).to eq(zone.local(2026, 10, 23, 17, 25, 0))
+        }
+      end
+
+      it "refuses a clock time that has already gone" do
+        ctx = Buddy::ToolContext.new(user)
+        expect {
+          Buddy::Tools[:set_timer][:confirm].call({ ends_at: 5.minutes.ago.iso8601 }, ctx)
+        }.to raise_error(/already passed/)
+      end
     end
 
     # A board shows only the timers attached to it; the chat shows them all.

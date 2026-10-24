@@ -11,6 +11,10 @@ Buddy::Tools.register(
     otherwise. This is for short countdowns the person actively watches - for a
     recurring nudge, use schedule_reminder.
 
+    A timer UNTIL a clock time - "timer until 5:25", "actually make it 5:20" -
+    is `ends_at`, the time itself. Never work out the minutes yourself. When
+    it corrects a timer you just set, cancel that one in the same reply.
+
     When they say ALARM, use `alarm`. It reaches a clock time as well as a
     duration, and what goes off says what it was set for rather than that a
     timer is up - "Wake up" instead of "your Wake up timer's done". Follow the
@@ -90,6 +94,7 @@ Buddy::Tools.register(
     seconds:       { type: :integer, required: false, description: "Countdown length in whole seconds. Give this OR minutes, not both" },
     minutes:       { type: :integer, required: false, description: "Countdown length in whole minutes, when that's how they said it (\"30 minutes\"). Give this OR seconds, not both" },
     label:         { type: :string,  required: false, description: "Short name for what the timer is for" },
+    ends_at:       { type: :iso_time, required: false, description: "The clock time it runs UNTIL (\"timer until 5:25\"), instead of seconds/minutes" },
     repeat:        {
       type:        :boolean,
       required:    false,
@@ -148,10 +153,15 @@ Buddy::Tools.register(
   # without. Raising here drops the proposal, which is better than a one-second
   # countdown standing in for a thirty-minute one.
   confirm:     ->(payload, ctx) {
-    raise "a timer needs a length - give seconds or minutes" if Buddy::Tools::SetTimer.seconds(payload).zero?
+    ends_at = ctx.resolve_time(payload[:ends_at]) if payload[:ends_at].present?
+    raise "couldn't read #{payload[:ends_at].inspect} as a time" if payload[:ends_at].present? && ends_at.nil?
+    raise "#{Buddy::Clock.at(ends_at, zone: ctx.user.timezone)} has already passed" if ends_at&.past?
+
+    resolved = { ends_at_iso: ends_at&.iso8601 }.compact
+    raise "a timer needs a length - give seconds, minutes or ends_at" if Buddy::Tools::SetTimer.seconds(payload.merge(resolved)).zero?
 
     board = (Buddy::Timers.find_board!(ctx.user, payload[:board]) if payload[:board].present?)
-    { summary: "Set a timer", resolved: { board_id: board&.id }.compact }
+    { summary: "Set a timer", resolved: resolved.merge(board_id: board&.id).compact }
   },
   label:       ->(payload, _ctx) { "Timer · #{Buddy::Timers.humanize_seconds(Buddy::Tools::SetTimer.seconds(payload))}" },
   execute:     ->(payload, ctx) {
@@ -246,9 +256,14 @@ module Buddy
     module SetTimer
       module_function
 
-      # One length, whichever way they said it. Seconds wins if both arrive,
-      # because it's the more specific of the two.
+      # One length, whichever way they said it. A clock time (resolved by
+      # confirm) is counted down to from now; otherwise seconds wins if both
+      # arrive, because it's the more specific of the two.
       def seconds(payload)
+        if payload[:ends_at_iso].present?
+          ends_at = ::Time.zone.parse(payload[:ends_at_iso].to_s)
+          return [(ends_at - ::Time.current).round, 0].max if ends_at
+        end
         return payload[:seconds].to_i if payload[:seconds].present?
 
         payload[:minutes].to_i * 60

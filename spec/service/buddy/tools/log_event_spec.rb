@@ -27,7 +27,16 @@ RSpec.describe "log_event tool" do
     expect(log(name: "Sick", at: at).timestamp).to eq(at)
   end
 
+  # How it arrives in practice: the proposal is stored as JSON and run from
+  # there, so the time is a string by the time it executes.
+  it "logs it when it happened, given the time as stored text" do
+    at = 2.days.ago.change(hour: 8, min: 0, sec: 0)
+
+    expect(log(name: "Sick", at: at.iso8601).timestamp).to eq(at)
+  end
+
   it "refuses a time that hasn't come yet" do
     expect { tool[:confirm].call({ name: "Lunch", at: 2.hours.from_now }, ctx) }.to raise_error(/hasn't happened/)
+    expect { tool[:confirm].call({ name: "Lunch", at: 2.hours.from_now.iso8601 }, ctx) }.to raise_error(/hasn't happened/)
   end
 end

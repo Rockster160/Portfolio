@@ -25,9 +25,11 @@ Buddy::Tools.register(
     notes: { type: :string, required: false, description: "Optional free-form notes" },
     at:    { type: :iso_time, required: false, description: "When it happened (ISO), if earlier than now" },
   },
-  confirm:     ->(payload, _ctx) {
-    at = payload[:at]
-    raise "that hasn't happened yet - a log is for something already done" if at.respond_to?(:future?) && at.future?
+  # `at` is a Time straight from the model and an ISO string once the proposal
+  # has been stored and run from there, so both read it through resolve_time.
+  confirm:     ->(payload, ctx) {
+    at = ctx.resolve_time(payload[:at]) if payload[:at].present?
+    raise "that hasn't happened yet - a log is for something already done" if at&.future?
 
     { summary: "Log #{payload[:name]}?", resolved: {} }
   },
@@ -40,11 +42,12 @@ Buddy::Tools.register(
   # Level 2: logs immediately as a pre-checked row; unchecking deletes the log.
   level:       2,
   execute:     ->(payload, ctx) {
+    at = ctx.resolve_time(payload[:at]) if payload[:at].present?
     event = ActionEvent.create!(
       user:      ctx.user,
       name:      payload[:name],
       notes:     payload[:notes],
-      timestamp: payload[:at].respond_to?(:strftime) ? payload[:at] : Time.current,
+      timestamp: at || Time.current,
       data:      { source: "buddy" },
     )
     # Same side effects as an in-app log: fire the :event trigger (so watches +

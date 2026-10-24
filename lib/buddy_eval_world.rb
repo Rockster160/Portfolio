@@ -309,6 +309,12 @@ class BuddyEvalWorld
         reward_pebbles: 2, recurrence: { freq: :weekly, by_day: %w[tue] }
       )
     }
+    @claws = reuse(live.detect { |chore| chore.name.match?(/nail|claw/i) }) {
+      Chore.create!(
+        created_by_user: user, chore_household: household, name: "Trim Kitty Nails",
+        reward_pebbles: 3, recurrence: { freq: :relative, unit: :week, interval: 2 }
+      )
+    }
     completion!(@water)
     completion!(@recycling)
   end

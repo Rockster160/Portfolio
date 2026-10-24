@@ -935,6 +935,45 @@ BUDDY_EDGE_PROBES = [
     args:  { log_event: { name: /sick/i, at: /T(0[5-9]|1[01]):/ } },
     note:  "a past start has to land at that time for sick mode to count from it",
   },
+  # Nobody was named, and "me" went in anyway: an assigned chore is hidden from
+  # the rest of the household, so all three made that day were Rocco's alone.
+  {
+    case:       "prod 8986",
+    say:        "Add chore for tomorrow to empty car. Tag it home so we both see it.",
+    tool:       :create_chore,
+    args:       { create_chore: { due: /\Atomorrow\z/i } },
+    never_args: { create_chore: { assignee: /./ } },
+    note:       "assigned to the asker, so the person it was meant to be shared with never saw it",
+  },
+  {
+    case:       "prod 8936",
+    say:        "Add a Household chore that's due tomorrow. It should be \"Whisper Car Bag\". Notes should include Leash + harness, poop baggies, water bottle, flat bowl, bag of kibble, and treats.",
+    tool:       :create_chore,
+    args:       { create_chore: { notes: /leash/i } },
+    never_args: { create_chore: { assignee: /./, groups: /household/i } },
+    note:       "the notes were promised and never written - the tool had nowhere to put them; " \
+                "\"Household\" became a group when it meant who could see it",
+  },
+  # A chore that already exists, said with a day: the next due date moves and
+  # the schedule stays.
+  {
+    case:       "due on a day, schedule kept",
+    say:        "we need to trim Fae's claws tomorrow",
+    tool:       :edit_chore,
+    args:       { edit_chore: { due: /\Atomorrow\z/i } },
+    never_args: { edit_chore: { schedule: /./ } },
+    avoid:      %i[create_chore],
+    needs:      :claws_chore,
+    note:       "asked for: one day marked without touching how often it comes round",
+  },
+  {
+    case:  "prod 8926",
+    say:   "Timer until 5:25",
+    tool:  :set_timer,
+    args:  { set_timer: { ends_at: /T17:25/ } },
+    avoid: %i[alarm],
+    note:  "worked out as 121 minutes at 3:14 - ten short",
+  },
   # "MST" written in October means Mountain time, which is -06:00 then.
   {
     case:  "prod 8876",

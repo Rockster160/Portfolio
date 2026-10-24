@@ -120,6 +120,7 @@ module BuddyEvalNeeds
     recycling_chore:      { label: "a recycling chore",            check: ->(u) { chore(u, /recycl/i) } },
     trash_cans_chore:     { label: "a Take trash cans out chore and Eve in the house", check: ->(u) { chore(u, /take trash cans out/i) && u.chore_household&.member_named("Eve").present? } },
     water_chore:          { label: "a water chore",                check: ->(u) { chore(u, /water/i) } },
+    claws_chore:          { label: "a nail-trimming chore",        check: ->(u) { chore(u, /nail|claw/i) } },
     shower_chore:         { label: "a shower chore",               check: ->(u) { chore(u, /shower/i) } },
     dish_chores:          { label: "the load + unload dish chores", check: ->(u) { chore(u, /unload dishwasher/i) && chore(u, /load dishes/i) } },
     water_completion:     { label: "a water completion today",     check: ->(u) { completion(u, /water/i) } },

@@ -347,6 +347,16 @@ RSpec.describe TeslaTelemetry do
         expect(travel_triggers.pluck(:source)).to eq(%i[tesla phone])
       end
 
+      # Placed where the car is by then, it was too far from the phone's own
+      # departure to join it, and became a second trip announced twice.
+      it "places the phone's departure where the car left from, too" do
+        allow(::LocationCache).to receive(:driving?).and_return(true)
+
+        leave!
+
+        expect(travel_triggers.last).to include(source: :phone, lat: home.first, lng: home.last, departed: "Home")
+      end
+
       # 2026-09-10: last Bluetooth edge 10:22:15, car crossed around 10:23
       # unpaired. Chelsea went, he didn't.
       it "reports only the car when the pairing dropped in the driveway" do
