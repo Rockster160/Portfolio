@@ -748,12 +748,17 @@ RSpec.describe Jil::Methods::Buddy do
           p = Keyword.pinned(true)::Boolean
           t = Keyword.trigger("sick")::String
           d = Keyword.data(better)::Hash
+          tp = Keyword.tap("sick")::String
+          td = Keyword.tapData(better)::Hash
         })::Boolean
       JIL
 
       chip = BackgroundProcess.live_find(owner, "sick")
-      expect(chip.serialize).to include(color: "#3fb950", pinned: true)
-      expect(chip.metadata).to include("trigger" => "sick", "data" => { "action" => "better" }, "owner_id" => owner.id)
+      expect(chip.serialize).to include(color: "#3fb950", pinned: true, tappable: true)
+      expect(chip.metadata).to include(
+        "trigger" => "sick", "data" => { "action" => "better" }, "owner_id" => owner.id,
+        "tap" => "sick", "tap_data" => { "action" => "better" }
+      )
     end
 
     it "takes the block straight after the label too" do

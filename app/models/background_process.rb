@@ -81,7 +81,9 @@ class BackgroundProcess < ApplicationRecord
   # A chip can stand for a STATE somebody is in rather than work going on (Jil's
   # `Buddy.miniAlert`). Those may carry a colour, sit at the front of the strip,
   # and fire a Jil trigger when the person taps their ×, so clearing the chip is
-  # also the way out of whatever it stands for. Named colours are the ones worth
+  # also the way out of whatever it stands for. A second trigger, `tap`, fires
+  # on a tap of the chip itself, for one with something to do there rather than
+  # somewhere to go. Named colours are the ones worth
   # having on a dark hero; a hex is taken as given.
   COLORS = {
     "green"  => "#3fb950",
@@ -123,10 +125,16 @@ class BackgroundProcess < ApplicationRecord
       "color"    => self.class.color_for(given["color"]),
       "pinned"   => (given["pinned"] == true || given["pinned"].to_s == "true" if given.key?("pinned")),
       "trigger"  => given["trigger"].to_s.strip.presence,
-      "data"     => (given["data"].to_h.stringify_keys.presence if given["data"].respond_to?(:to_h)),
+      "data"     => hash_for(given["data"]),
+      "tap"      => given["tap"].to_s.strip.presence,
+      "tap_data" => hash_for(given["tap_data"]),
       "owner_id" => given["owner_id"].presence&.to_i,
     }.compact
     super((self[:metadata] || {}).merge(kept))
+  end
+
+  def hash_for(value)
+    value.to_h.stringify_keys.presence if value.respond_to?(:to_h)
   end
 
   def self.color_for(value)
@@ -139,14 +147,28 @@ class BackgroundProcess < ApplicationRecord
   # Clearing it from code (`Buddy.clearMiniAlert`, a script finishing) is not
   # this, and fires nothing.
   def dismissed!(by:)
-    trigger = metadata["trigger"].presence
-    return if trigger.nil?
+    fire(metadata["trigger"], metadata["data"], "dismissed_by" => by&.username)
+  end
+
+  # A tap on the chip itself, for one raised with `tap`. Returns whether there
+  # was anything to fire.
+  def tapped!(by:)
+    fire(metadata["tap"], metadata["tap_data"], "tapped_by" => by&.username)
+  end
+
+  def tappable?
+    metadata["tap"].present?
+  end
+
+  def fire(trigger, data, extra)
+    return false if trigger.blank?
 
     owner = ::User.find_by(id: metadata["owner_id"]) || user
-    data = metadata["data"].to_h.merge("key" => key, "dismissed_by" => by&.username)
-    ::Jil.trigger(owner, trigger, data, auth: :trigger)
+    ::Jil.trigger(owner, trigger, data.to_h.merge("key" => key, **extra), auth: :trigger)
+    true
   rescue StandardError => e
-    Rails.logger.warn("[BackgroundProcess] #{key} dismiss trigger failed: #{e.class}: #{e.message}")
+    Rails.logger.warn("[BackgroundProcess] #{key} trigger #{trigger} failed: #{e.class}: #{e.message}")
+    false
   end
 
   def self.normalize_links(value)
@@ -278,6 +300,7 @@ class BackgroundProcess < ApplicationRecord
       source:       source,
       color:        metadata["color"],
       pinned:       metadata["pinned"] == true,
+      tappable:     tappable?,
       stale:        stale?,
       started_at:   started_at&.iso8601(3),
       heartbeat_at: heartbeat_at&.iso8601(3),

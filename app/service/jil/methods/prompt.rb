@@ -91,6 +91,17 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     prompt.update(attrs)
   end
 
+  # Asks it again: the form already in the Buddy thread is replaced by a fresh
+  # one at the bottom, so a question someone has scrolled past comes back to
+  # them without a second copy. False for one already answered, one kept in
+  # the app, or someone with no thread to put it in.
+  def deliver(prompt_data) # rubocop:disable Naming/PredicateMethod -- Jil method names cannot carry `?`
+    prompt = load_prompt(prompt_data)
+    return false if app_only?(prompt)
+
+    ::Buddy::PromptDelivery.post!(@jil.user, prompt).present?
+  end
+
   # [PromptQuestion]
 
   def text(text, default)

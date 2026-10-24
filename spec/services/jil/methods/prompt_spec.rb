@@ -107,6 +107,59 @@ RSpec.describe Jil::Methods::Prompt do
     end
   end
 
+  describe "#deliver" do
+    let!(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current) }
+    let(:code) {
+      <<-JIL
+        asks = Prompt.all(false)::Array
+        open = asks.first()::Prompt
+        again = open.deliver()::Boolean
+      JIL
+    }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(WebPushNotifications).to receive(:send_to_byte)
+    end
+
+    def forms
+      ByteAction.where(byte_conversation: conversation, tool_name: Buddy::FormAction::TOOL_NAME)
+    end
+
+    it "asks again in the thread, in place of the form already there" do
+      prompt = user.prompts.create!(question: "Sick check-in", options: [{ type: :text, question: "Notes" }])
+      Buddy::PromptDelivery.post!(user, prompt)
+      first = forms.sole
+
+      expect_successful_jil
+      expect(ctx.dig(:vars, :again, :value)).to be(true)
+      expect(forms.where.not(id: first.id).sole.tool_input.dig("payload", "id")).to eq(prompt.id)
+      expect(first.reload).not_to be_pending
+    end
+
+    context "when it was already answered" do
+      let(:answered) {
+        user.prompts.create!(
+          question: "Sick check-in",
+          options:  [{ type: :text, question: "Notes" }],
+          response: { "Notes" => "fine" },
+        )
+      }
+      let(:code) {
+        <<-JIL
+          open = Prompt.find(#{answered.id})::Prompt
+          again = open.deliver()::Boolean
+        JIL
+      }
+
+      it "does nothing" do
+        expect_successful_jil
+        expect(ctx.dig(:vars, :again, :value)).to be(false)
+        expect(forms).to be_empty
+      end
+    end
+  end
+
   describe "#chips" do
     let(:code) {
       <<-JIL

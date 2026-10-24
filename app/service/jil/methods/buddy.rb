@@ -31,7 +31,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
   #   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
   #   #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
-  #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash]))::Boolean
+  #   #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash tap:String tapData:Hash]))::Boolean
   #   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
 
@@ -261,7 +261,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # `color` (green, blue, purple, amber, red, or a hex), `pinned` to put it
   # ahead of every other chip, and `trigger` + `data` to fire when they tap its
   # × - so clearing it by hand is also how they end what it stands for.
-  # `clearMiniAlert` fires nothing.
+  # `tap` + `tapData` fire on a tap of the chip itself. `clearMiniAlert` fires
+  # nothing.
   #
   # Returns false when it reached nobody with a Buddy hero to show it.
   def miniAlert(key, label, detail=nil, who=nil, options=nil)
@@ -274,6 +275,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
       pinned:   opts[:pinned],
       trigger:  opts[:trigger],
       data:     opts[:data],
+      tap:      opts[:tap],
+      tap_data: opts[:tapData],
       owner_id: @jil.user.id,
     }.compact
     posted = recipients_for(who).count { |user|

@@ -15,6 +15,7 @@
 #   POST   /api/v1/background_processes         start it, or step it if it is already there
 #   PATCH  /api/v1/background_processes/:key    the same thing, key in the path
 #   DELETE /api/v1/background_processes/:key    clear it; unknown keys say ok
+#   POST   /api/v1/background_processes/:key/tap  a tap on the chip, for one raised with `tap`
 #
 # A PATCH for a key that was cleared, or never existed, STARTS one. A long run
 # whose chip was dismissed mid-flight puts it back on its next step, rather
@@ -47,6 +48,12 @@ class Api::V1::BackgroundProcessesController < Api::V1::BaseController
     cleared = BackgroundProcess.clear!(user: subject, key: key)
     cleared&.dismissed!(by: subject)
     render_json(key: key, cleared: cleared.present?)
+  end
+
+  def tapped
+    key = params[:key].to_s
+    process = BackgroundProcess.live_find(subject, key)
+    render_json(key: key, fired: process&.tapped!(by: subject) == true)
   end
 
   private

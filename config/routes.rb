@@ -171,10 +171,14 @@ Rails.application.routes.draw do
       # not what row it made last time. The constraint keeps a colon (the
       # nesting convention) and refuses a dot, which routing would read as a
       # format suffix.
-      resources :background_processes,
+      resources(
+        :background_processes,
         only:        [:index, :create, :update, :destroy],
         param:       :key,
-        constraints: { key: %r{[^/.]+} }
+        constraints: { key: %r{[^/.]+} },
+      ) {
+        post :tap, on: :member, action: :tapped
+      }
 
       resources :lists, only: [:index, :show, :update, :create, :destroy] do
         post :reorder, on: :collection

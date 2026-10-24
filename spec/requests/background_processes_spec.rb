@@ -172,6 +172,45 @@ RSpec.describe "Background processes", type: :request do
     end
   end
 
+  describe "POST /api/v1/background_processes/:key/tap" do
+    before { sign_in! }
+
+    it "fires the chip's tap, with its data, as whoever raised it" do
+      owner = create(:user)
+      BackgroundProcess.report!(
+        user:     user,
+        key:      "sick",
+        name:     "Sick",
+        state:    :waiting,
+        metadata: { trigger: "sick", tap: "sick", tap_data: { action: "check_in" }, owner_id: owner.id },
+      )
+      allow(Jil).to receive(:trigger)
+
+      post "/api/v1/background_processes/sick/tap"
+
+      expect(json["fired"]).to be(true)
+      expect(Jil).to have_received(:trigger).with(
+        owner,
+        "sick",
+        hash_including("action" => "check_in", "key" => "sick", "tapped_by" => user.username),
+        auth: :trigger,
+      )
+      expect(BackgroundProcess.live_find(user, "sick")).to be_present
+    end
+
+    it "fires nothing for a chip raised without one, or no chip at all" do
+      post "/api/v1/background_processes", params: { key: "jobhunt:line", name: "Preparing" }
+      allow(Jil).to receive(:trigger)
+
+      post "/api/v1/background_processes/jobhunt:line/tap"
+      expect(json["fired"]).to be(false)
+      post "/api/v1/background_processes/never:ran/tap"
+      expect(json["fired"]).to be(false)
+
+      expect(Jil).not_to have_received(:trigger)
+    end
+  end
+
   describe "GET /api/v1/background_processes" do
     before { sign_in! }
 

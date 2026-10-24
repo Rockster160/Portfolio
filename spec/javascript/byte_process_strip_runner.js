@@ -271,6 +271,15 @@ out.no_url = view()[0].has_url;
 out.no_links_rows = view()[0].rows;
 tap(container.children[0]);
 out.tap_without_links = [...opened];
+out.tap_without_links_requests = [...requests];
+
+// A chip with something to do rather than somewhere to go asks the server.
+await reset(payload({ key: "sick", links: [], tappable: true }));
+out.tappable_has_url = view()[0].has_url;
+tap(container.children[0]);
+await new Promise((r) => setTimeout(r, 0));
+out.tappable_requests = [...requests];
+out.tappable_opened = [...opened];
 
 // ---- a gesture that is not a tap --------------------------------------------
 // Rocco, 17 Sep: "swiping is now getting triggered as a click ... A drag on it

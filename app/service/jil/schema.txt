@@ -451,7 +451,7 @@
   .response::Hash
   .update("Title" TAB String? BR "Data" TAB Hash? BR "Questions" content(PromptQuestion))::Boolean
   !.destroy::Boolean
-  !.deliver::Boolean
+  .deliver::Boolean // Asks it again in the Buddy thread, replacing the form already there. False once answered.
 *[PromptQuestion]
   #text(String:"Question Text" BR "Default" String)
   #duration(String:"Question Text" BR "Default" String)
@@ -557,7 +557,7 @@
   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
   #resolveMessage("Key" String BR "Message" Text BR "Who" String)::Boolean
-  #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash]))::Boolean // A chip on the hero. color: green/blue/purple/amber/red or a hex; pinned puts it first; trigger fires (with data) when they tap its x.
+  #miniAlert("Key" String BR "Label" String BR "Detail" String BR "Who" String BR content([color:String pinned:Boolean trigger:String data:Hash tap:String tapData:Hash]))::Boolean // A chip on the hero. color: green/blue/purple/amber/red or a hex; pinned puts it first; trigger fires (with data) when they tap its x; tap fires (with tapData) when they tap the chip.
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
   #timer(Numeric ["seconds" "minutes" "hours"] BR content([label:String board:String groups:String]))::Boolean

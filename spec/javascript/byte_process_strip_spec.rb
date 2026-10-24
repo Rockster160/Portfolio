@@ -129,6 +129,13 @@ RSpec.describe "Buddy background process strip" do
     it "does nothing when the chip goes nowhere" do
       expect(result["no_url"]).to be_nil
       expect(result["tap_without_links"]).to eq([])
+      expect(result["tap_without_links_requests"]).to eq([])
+    end
+
+    it "asks the server to fire its tap when it was raised with one" do
+      expect(result["tappable_has_url"]).to eq("true")
+      expect(result["tappable_requests"]).to eq(["POST /api/v1/background_processes/sick/tap"])
+      expect(result["tappable_opened"]).to eq([])
     end
   end
 

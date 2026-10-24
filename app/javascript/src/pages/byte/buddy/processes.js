@@ -20,7 +20,8 @@
 //     ever sent, and it is still there on the next device to look.
 //   * a chip's links are pills under it — the job posting, the queue, the
 //     email. Real anchors, so a long-press copies one and a middle-click opens
-//     a tab, and the whole chip is a shortcut to the first.
+//     a tab, and the whole chip is a shortcut to the first. A chip with no
+//     links that was raised with a `tap` trigger asks the server to fire it.
 //
 // IT SITS OVER BUDDY, so everything that is only DECORATION is gone: no icon
 // (the colour already says whether something is waiting on you) and no second
@@ -176,7 +177,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       if (links.length) chip.appendChild(linkRow(links));
       // The body is a shortcut to the first one as well - a bigger target for
       // the common case, where there is only the one anyway.
-      if (destination(p)) chip.dataset.hasUrl = "true";
+      if (destination(p) || p.tappable) chip.dataset.hasUrl = "true";
       wireChip(chip, p);
       container.appendChild(chip);
     });
@@ -266,7 +267,18 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
       const current = processes.get(p.key) || p;
       const url = destination(current);
       if (url) window.open(url, "_blank", "noopener");
+      else if (current.tappable) tapProcess(current.key);
     });
+  }
+
+  // Whatever the tap starts shows up on its own (a form in the thread, a
+  // message), so there is nothing to wait for here beyond saying it failed.
+  async function tapProcess(key) {
+    try {
+      await apiCall(`${BASE_URL}/${encodeURIComponent(key)}/tap`, "POST");
+    } catch (e) {
+      console.warn("[buddy] background tap failed", e);
+    }
   }
 
   // A tap on the × is a REQUEST to clear. The chip stays, visibly pending,
