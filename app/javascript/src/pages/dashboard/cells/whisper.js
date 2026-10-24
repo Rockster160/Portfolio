@@ -247,6 +247,13 @@ import { snapshotGate } from "../../../lists/snapshot_order";
     }
   }
 
+  function removeListItem(listIdx) {
+    const item = cell.data.listItems[listIdx];
+    if (item && cell.listSocket) {
+      cell.listSocket.send({ remove: item.name || item });
+    }
+  }
+
   cell = Cell.register({
     title: "Whisper",
 
@@ -258,6 +265,19 @@ import { snapshotGate } from "../../../lists/snapshot_order";
       buttons: [{}, {}, {}, {}, {}],
       timers: [],
       listItems: [],
+    },
+    oncontextmenu: function (evt, ctx) {
+      if (ctx.lineIndex == null || ctx.charIndex == null) return;
+
+      // List items render on lines 8-9, after the status, blank, and 5 button lines
+      const listIdx = ctx.lineIndex - 7;
+      if (listIdx < 0 || listIdx > 1) return;
+
+      const numMatch = (ctx.lineEl?.textContent || "").match(/^\d+\.\s/);
+      if (!numMatch || ctx.charIndex >= numMatch[0].length) return;
+
+      evt.preventDefault();
+      removeListItem(listIdx);
     },
     onload: function () {
       subscribeToButtonMonitors();
@@ -284,11 +304,7 @@ import { snapshotGate } from "../../../lists/snapshot_order";
       // Remove list item: -6 or -7
       if (/^-[67]$/.test(text)) {
         const num = parseInt(text.match(/\d+/)[0]);
-        const listIdx = num - 6;
-        const item = cell.data.listItems[listIdx];
-        if (item && cell.listSocket) {
-          cell.listSocket.send({ remove: item.name || item });
-        }
+        removeListItem(num - 6);
         return;
       }
 
