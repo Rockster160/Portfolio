@@ -41,8 +41,12 @@ RSpec.describe Buddy::VoiceLines do
       # did, so it answers for a finished thing however warmly it is worded.
       # `wake_yawn` is NOT — nobody asked for it and nothing finished, which
       # is exactly where a sleepy blush belongs.
+      #
+      # Tiko's `nerd` art is a spellbook rather than a pair of glasses, and a
+      # routine is a spell cast from it - so its routine lines may wear it.
       it "#{theme} does not blush or put its glasses on over something finished" do
-        moods = Array(kinds[:routine_run]).pluck(:mood) + Array(kinds[:chore_done]).pluck(:mood)
+        cast  = theme.to_sym == :tiko ? [] : Array(kinds[:routine_run]).pluck(:mood)
+        moods = cast + Array(kinds[:chore_done]).pluck(:mood)
 
         expect(moods & Buddy::Faces::NOT_A_CONFIRMATION).to eq([])
       end
