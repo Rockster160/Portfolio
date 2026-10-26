@@ -612,6 +612,44 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the words are the record; the summary belongs on the card, not in it",
   },
+  # --- them coming to him first ----------------------------------------------
+  {
+    case:  "prod, Ichi 22 Oct",
+    say:   "A recruiter from Pinecrest Labs messaged me out of the blue about a Staff Engineer " \
+           "role - get it on the board",
+    tool:  :add_job_application,
+    args:  { add_job_application: { tag: "reached_out" } },
+    note:  "a recruiter's cold approach went on as a plain note, so the row read as nothing " \
+           "having happened and nothing said the reply was his",
+  },
+  # --- correcting a beat that arriving mail already filed ---------------------
+  {
+    case:  "prod 9148",
+    say:   "That should have been a scheduled call for tomorrow. It has a calendar event attached.",
+    tool:  :add_job_note,
+    args:  { add_job_note: { tag: "scheduled", email_id: /\A\d+\z/, follow_up_at: /./ } },
+    needs: :halloway_job_mail,
+    note:  "no tool was called for four turns in a row - it said the note was fixed, then " \
+           "that a calendar item couldn't be edited, while the mail's beat sat as a plain note",
+    seed:  ->(user, convo) {
+      mail = Email.where(user: user).detect { |e| e.subject.to_s.match?(/halloway/i) }
+      at = Date.tomorrow.in_time_zone(user.timezone) + 11.5.hours
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "job_mail_watcher" },
+        body: "[nothing was said to you - this fired on its own] Job mail just arrived, and it " \
+              "belongs to an application already on their board.\n\nCompany: Halloway Systems\n" \
+              "What happened: Phone interview scheduled\nKind: interview scheduling\n" \
+              "Calendar invite, booked for: #{at.strftime("%A %b %-d, %-l:%M%P %Z")} " \
+              "(#{at.iso8601}) for 30 minutes\n" \
+              "Email id: #{mail.id}",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy_reply" },
+        body: "Halloway Systems sent the phone interview invite.",
+      )
+    },
+  },
   # --- a machine's receipt is not a beat anybody is waiting on --------------
   # Prod 6162, 14 Sep. GitLab's "thanks for applying, a real human will review
   # this" was logged as Applied on an application that had already been applied

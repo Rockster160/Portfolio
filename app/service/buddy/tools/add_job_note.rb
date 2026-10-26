@@ -41,6 +41,15 @@ Buddy::Tools.register(
     file a second copy, so there is nothing to undo first and nothing lost by
     correcting it.
 
+    **Fixing a beat already filed is this tool, too.** When they say a mail's
+    beat is wrong - "that should have been a scheduled call", "that was a
+    rejection" - call this with that mail's `email_id` and the right tag. It
+    revises the beat that mail already put on the board rather than adding a
+    second one. There is no other way to change it, so until this has been
+    called and tapped nothing has changed, and saying it has is the failure:
+    four replies in a row once agreed it was sorted while the beat sat there
+    untouched.
+
     `tag` is what KIND of beat it was, and it does more than colour the row:
     logging `offer`, `rejected` or `withdrew` settles the whole application,
     because having to then go and change a dropdown saying the same thing is
@@ -93,6 +102,18 @@ Buddy::Tools.register(
     cancellation is the smaller one. No date belongs on it - the date that
     mattered was on the booking it cancels.
 
+    **Them coming to him first is `reached_out`.** A recruiter's cold message
+    about a role, a hiring manager asking if he's open to a chat - on a job he
+    never applied to, it is the opening beat, the way `applied` is when he
+    went to them. Their reply to something already going is `heard_back`.
+
+    **A reminder is `reminder`, never the tag of what it is reminding about.**
+    DocuSign re-sending the onboarding packet, a screening vendor saying the
+    form is still outstanding, "Reminder: your interview is tomorrow" - nothing
+    happened, a machine nudged. Tagged `offer`, the same offer re-sent four
+    times reads as four offers. A reminder counts for nothing on the board: no
+    round, no activity, and never the beat that says whose move it is.
+
     **An ATS receipt is `acknowledged`, not `applied` and not `heard_back`.**
     "Thanks for applying, a real human will review this" is a machine saying it
     arrived. `applied` is a thing THEY did, so putting it on a robot's reply
@@ -105,9 +126,9 @@ Buddy::Tools.register(
     `applied` beat to sit just before the earliest one - so a mail that is only
     the robot doing paperwork rewrites when they applied. A code to verify an
     email address, a link to finish setting up a candidate account, a sign-in
-    prompt, a password reset, a job-alert digest, a survey, a reminder about
-    something already booked: same sender, no beat on the application. Those are
-    `note`.
+    prompt, a password reset, a job-alert digest, a survey: same sender, no beat
+    on the application. Those are `note`. A reminder about something already
+    booked or sent is `reminder`.
 
     **`note` is a correct answer, not a failure to classify.** It means "this
     happened", which is the honest record of mail that is none of the beats
@@ -172,7 +193,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again; a recruiter approaching them first is `reached_out`; a machine re-sending something already on the board is `reminder`, never the tag of what it reminds about. offer/rejected/withdrew also settle the application",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

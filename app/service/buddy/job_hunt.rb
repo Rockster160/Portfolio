@@ -281,7 +281,7 @@ module Buddy
     end
 
     def slim_application(job)
-      latest = job.notes.max_by { |note| [note.occurred_at, note.id] }
+      latest = job.latest_beat
       owed   = job.notes.filter_map(&:follow_up_at).min
 
       {

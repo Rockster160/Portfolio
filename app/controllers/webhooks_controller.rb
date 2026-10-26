@@ -661,6 +661,8 @@ class WebhooksController < ApplicationController
       outgoing:    outgoing,
     )
     return render json: { error: :"no buddy conversation" }, status: :not_found if message.nil?
+    # A reminder is filed on the row and says nothing, so there is no message.
+    return render json: { filed: :reminder, job_note_id: message.id }, status: :created if message.is_a?(JobNote)
 
     render json: message.as_wire, status: :created
   end

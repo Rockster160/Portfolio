@@ -44,6 +44,8 @@ class JobNote < ApplicationRecord
     acknowledged:   11,
     availability:   12,
     cancelled:      13,
+    reminder:       14,
+    reached_out:    15,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
@@ -75,6 +77,19 @@ class JobNote < ApplicationRecord
   # through is not the process ending, and at KODE Health the rejection that did
   # end it arrived four hours afterwards as its own beat.
   #
+  # `reached_out` is THEM opening it: a recruiter or a hiring manager who came
+  # to him first, where `applied` would be him going to them. It is the first
+  # beat on a row he never applied to, and it is a person on their side moving,
+  # so it is a rung and an interaction like `heard_back` - and his move next.
+  #
+  # `reminder` is a machine nudging about something already on the timeline -
+  # DocuSign re-sending the onboarding packet every day until it is signed, a
+  # screening vendor saying the form is still outstanding. It needed a tag of
+  # its own because it kept wearing the tag of the thing it reminds about: one
+  # offer re-sent four times read as four offers. It is not an interaction - it
+  # moves no rung, starts no round, doesn't make a quiet row look active, and
+  # is never the latest beat when asking whose move it is (see NOT_INTERACTIONS).
+  #
   # `acknowledged` is the ATS auto-reply, and it needed a tag of its own because
   # neither neighbour is honest about it. `applied` is a thing THEY did, and
   # stamping it on a machine's receipt says they applied twice; `heard_back` is
@@ -82,6 +97,8 @@ class JobNote < ApplicationRecord
   # wearing it makes a live application look answered.
   TAG_LABELS = {
     "note"           => "Note",
+    "reminder"       => "Reminder",
+    "reached_out"    => "Reached out",
     "applied"        => "Applied",
     "acknowledged"   => "Acknowledged",
     "heard_back"     => "Heard back",
@@ -97,6 +114,10 @@ class JobNote < ApplicationRecord
     "withdrew"       => "Withdrew",
   }.freeze
 
+  # Beats that are on the timeline without anything having happened. See
+  # `reminder` above.
+  NOT_INTERACTIONS = %w[reminder].freeze
+
   # The beats that mean HIS MOVE, and what each one is asking for. A timeline
   # ending on one of these is an application waiting on him rather than on them,
   # which is the difference between a board you read and a board you work from.
@@ -111,6 +132,7 @@ class JobNote < ApplicationRecord
     "take_home"    => "Take-home to do",
     "offer"        => "Answer the offer",
     "heard_back"   => "Reply to them",
+    "reached_out"  => "Reply to them",
   }.freeze
 
   # HOW FAR a process actually got, for the handful of applications where one
@@ -131,6 +153,7 @@ class JobNote < ApplicationRecord
   # not outrank one that has been in the room.
   ENGAGEMENT_DEPTH = {
     "heard_back"     => 1,
+    "reached_out"    => 1,
     "availability"   => 2,
     "scheduled"      => 3,
     "cancelled"      => 3,
@@ -299,11 +322,14 @@ class JobNote < ApplicationRecord
   # The LAST beat on an application, one row per application. A timeline is read
   # from the end: what has to happen next is a question about the most recent
   # thing that happened, and an older note of the same tag is history.
+  # Reminders are skipped: a nudge about the offer is not the last thing that
+  # happened, the offer is.
   scope :latest_per_application, -> {
     where(
       "job_notes.id = (" \
       "SELECT inner_notes.id FROM job_notes inner_notes " \
       "WHERE inner_notes.job_application_id = job_notes.job_application_id " \
+      "AND inner_notes.tag <> #{tags[:reminder]} " \
       "ORDER BY inner_notes.occurred_at DESC, inner_notes.id DESC LIMIT 1)",
     )
   }

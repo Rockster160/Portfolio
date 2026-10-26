@@ -124,6 +124,71 @@ RSpec.describe Buddy::JobMailOffer do
         )
       }
 
+      # A booking whose words are a reschedule link and a LinkedIn URL carries
+      # its slot only in the calendar part.
+      describe "a calendar invite inside it" do
+        let(:invite) {
+          {
+            starts_at: Time.utc(2026, 10, 27, 17, 30),
+            ends_at:   Time.utc(2026, 10, 27, 18, 0),
+            location:  "+1 385-259-9640",
+            cancelled: false,
+          }
+        }
+
+        it "states the slot in their own zone, with the offset to book it at" do
+          allow(email).to receive(:calendar_invite).and_return(invite)
+
+          body = call(email: email, body: "Need to make changes to this event?").body
+
+          expect(body).to include(
+            "Calendar invite, booked for: Tuesday Oct 27, 11:30am MDT (2026-10-27T11:30:00-06:00) " \
+            "for 30 minutes at +1 385-259-9640",
+          )
+        end
+
+        it "says when the invite calls the booking off" do
+          allow(email).to receive(:calendar_invite).and_return(invite.merge(cancelled: true))
+
+          expect(call(email: email, body: "Cancelled").body).to include("Calendar CANCELLATION of the booking at:")
+        end
+
+        it "says nothing of an invite the mail doesn't have" do
+          allow(email).to receive(:calendar_invite).and_return(nil)
+
+          expect(call(email: email, body: "Thanks").body).not_to include("Calendar")
+        end
+      end
+
+      # Read by the model a reminder took the tag of what it reminded about, so
+      # one offer re-sent every day went on the timeline as an offer each time.
+      describe "a reminder" do
+        before { metadata[:subject] = "Reminder: iCapital Onboarding: Welcome Aboard!" }
+
+        it "is filed as a reminder, with no turn and nothing said" do
+          expect(Buddy::CompanionDelivery).not_to receive(:deliver_prompt)
+          expect(Buddy::CompanionDelivery).not_to receive(:deliver_plain)
+
+          filed = call(email: email, body: "Please sign the documents.")
+
+          expect(filed).to be_a(JobNote)
+          expect(filed).to have_attributes(tag: "reminder", job_application_id: job.id)
+          expect(email.reload.job_triage[:job_note_id]).to eq(filed.id)
+        end
+
+        it "reads any subject that says it is one" do
+          ["Reminder - Background Check Needed", "Friendly reminder: your interview", "[iCapital] Reminder: sign"].each { |subject|
+            expect(described_class.reminder_mail?(subject: subject)).to be(true)
+          }
+        end
+
+        # A person writing back is not a machine nudging.
+        it "leaves a reply to a reminder to the model" do
+          expect(described_class.reminder_mail?(subject: "Re: Reminder: iCapital Onboarding")).to be(false)
+          expect(described_class.reminder_mail?(subject: "Your offer reminders")).to be(false)
+        end
+      end
+
       it "writes the mail onto the row before any model sees it" do
         call(email: email, body: "Thanks for applying to iCapital.")
 

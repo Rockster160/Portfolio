@@ -139,6 +139,16 @@ module Buddy
       # to belong to instead. Where the row genuinely is in doubt the company
       # holds several, `job` is nil, and the ambiguous branch above has already
       # returned.
+      # A reminder is filed as one and nothing more. Read by the model it took
+      # the tag of the thing it was reminding about, so a DocuSign packet
+      # re-sent every day until signed went on the timeline as an offer each
+      # time, announced each time. Nothing about the application changed, so
+      # there is nothing to say.
+      if reminder_mail?(metadata)
+        reminder = log_arrival!(job, email, body, occurred_at, tag: :reminder)
+        return reminder if reminder
+      end
+
       pre_logged = log_arrival!(job, email, body, occurred_at)
 
       CompanionDelivery.deliver_prompt(
@@ -160,13 +170,13 @@ module Buddy
     # `guessed` says the ROW was picked rather than read off the mail, and it is
     # what lets `add_job_note` move the beat to a sibling instead of filing a
     # second one. Nothing else may move a filed mail.
-    def log_arrival!(job, email, body, occurred_at, guessed: false)
+    def log_arrival!(job, email, body, occurred_at, guessed: false, tag: :note)
       return nil if email.nil? || body.blank?
       return nil if email.job_triage[:job_note_id].present?
 
       note = job.notes.create!(
         body:        body,
-        tag:         :note,
+        tag:         tag,
         occurred_at: email.timestamp || occurred_at || Time.current,
         source:      "Email",
         url:         Rails.application.routes.url_helpers.email_url(id: email.id),
@@ -295,6 +305,17 @@ module Buddy
       return nil if email.nil?
 
       "[Read the mail](#{mail_url(email)})"
+    end
+
+    # A subject that SAYS it is a reminder: "Reminder: iCapital Onboarding",
+    # "Reminder - Background Check Needed", "Friendly reminder". Read off the
+    # subject rather than asked of the model, which is what kept filing them as
+    # whatever they were reminding about. A reply ("Re: Reminder: ...") is a
+    # person writing back, and is left to the model.
+    REMINDER_SUBJECT = /\A\s*(?:\[[^\]]*\]\s*)?(?:friendly\s+)?reminder\b/i
+
+    def reminder_mail?(metadata)
+      metadata[:subject].to_s.match?(REMINDER_SUBJECT)
     end
 
     # Is this mail about THAT row's job, as far as anything here can tell?
@@ -498,6 +519,7 @@ module Buddy
       [
         "What happened: #{verdict[:headline]}",
         "Kind: #{verdict[:kind]}",
+        invite_line(email),
         "Subject: #{metadata[:subject]}",
         "#{outgoing ? "To" : "From"}: #{metadata[:sender]}",
         (if email.present?
@@ -507,7 +529,31 @@ module Buddy
          end),
         ("Mail: #{mail_url(email)}" if email.present?),
         message_block(body),
-      ]
+      ].compact
+    end
+
+    # The slot from the mail's calendar part, which is often the only place it
+    # is written: a booking whose body is a reschedule link and a LinkedIn URL
+    # reads as an interview being arranged, and gets filed as a note with no
+    # time. Stated in their own zone with the offset spelled out, which is the
+    # shape `follow_up_at` takes.
+    def invite_line(email)
+      invite = email&.calendar_invite
+      return nil if invite.nil?
+
+      zone = email.user&.timezone || ::User.timezone
+      starts = invite[:starts_at].in_time_zone(zone)
+      ends = invite[:ends_at]&.in_time_zone(zone)
+      length = ((ends - starts) / 60).round if ends && ends > starts
+      what = invite[:cancelled] ? "CANCELLATION of the booking at" : "invite, booked for"
+      [
+        "Calendar #{what}: #{starts.strftime("%A %b %-d, %-l:%M%P %Z")} (#{starts.iso8601})",
+        (" for #{length} minutes" if length),
+        (" at #{invite[:location]}" if invite[:location]),
+      ].join
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::JobMailOffer] no invite for email #{email&.id}: #{e.class}: #{e.message}")
+      nil
     end
 
     # Who WROTE the mail, where the answer is "they did".

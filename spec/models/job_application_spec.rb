@@ -520,6 +520,49 @@ RSpec.describe JobApplication do
     end
   end
 
+  # A recruiter coming to him first, on a job he never applied to.
+  describe "being reached out to" do
+    let(:job) { user.job_applications.create!(company: "Ichi") }
+
+    before { job.notes.create!(tag: :reached_out, body: "I came across your background", occurred_at: 1.day.ago) }
+
+    it "is a person on their side moving, with the reply his" do
+      expect(job.reload.interaction_count).to eq(1)
+      expect(job.engagement_depth).to eq(1)
+      expect(job.owed_now).to eq("Reply to them")
+      expect(JobApplication.silence_for(user)[:total]).to eq(0)
+    end
+  end
+
+  # A machine re-sending something already on the timeline. Nothing happened,
+  # so nothing on the board may read as though it did.
+  describe "a reminder" do
+    let(:job) { user.job_applications.create!(company: "iCapital") }
+
+    before {
+      job.notes.create!(tag: :offer, occurred_at: 3.days.ago)
+      job.notes.create!(tag: :reminder, body: "Reminder: please sign", occurred_at: 1.hour.ago)
+    }
+
+    it "is not an interaction" do
+      expect(job.reload.interaction_count).to eq(1)
+      expect(job.engagement_label).to eq("Offer")
+    end
+
+    it "doesn't make a quiet row look active" do
+      job.touch_activity!
+
+      expect(job.reload.last_activity_at).to be_within(5.seconds).of(3.days.ago)
+      expect(job.engaged_at).to be_within(5.seconds).of(3.days.ago)
+    end
+
+    it "leaves the beat it reminds about as the one whose move it is" do
+      expect(job.reload.latest_beat).to be_offer
+      expect(job.owed_now).to eq("Answer the offer")
+      expect(JobNote.waiting_on_you_for(user).map(&:tag)).to eq(["offer"])
+    end
+  end
+
   describe "the silence" do
     it "counts an application a machine receipted and nobody answered" do
       job = user.job_applications.create!(company: "Reserv")

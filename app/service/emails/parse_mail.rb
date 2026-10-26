@@ -64,6 +64,7 @@ class Emails::ParseMail
     }
   }
   💾(:attachments) { mail.attachments || [] }
+  💾(:calendar_invite) { ::Emails::CalendarInvite.from_parts(flat_parts) }
 
   private
 

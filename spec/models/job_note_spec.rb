@@ -415,6 +415,7 @@ RSpec.describe JobNote do
         "Take-home to do: Acme",
         "Answer the offer: Acme",
         "Reply to them: Acme",
+        "Reply to them: Acme",
       ])
     end
 

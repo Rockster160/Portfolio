@@ -1031,6 +1031,9 @@
   // Their move and yours: the same hue, the outbound one darker, so a glance
   // down the thread shows who it's waiting on.
   .note-tag-heard_back { background: #34d0e0; }
+  // Them coming to him first: the same family as hearing back, since it is
+  // the same thing - a person on their side waiting on his reply.
+  .note-tag-reached_out { background: #2f9fd8; }
   .note-tag-responded { background: #1a8b96; }
   .note-tag-recruiter_call { background: #a371f7; }
   // Deliberately NOT in the booked amber it sits next to: the whole point of

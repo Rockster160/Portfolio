@@ -10,7 +10,7 @@
    the rest is a read, and it wears the quiet panel the standings table on the
    index wears for the same reason. %>
 <%
-  latest = job.notes.max_by { |note| [note.occurred_at, note.id] }
+  latest = job.latest_beat
   # Nothing is owed on an application that is over, and nothing is booked on
   # one either - a rejection clears the calendar (JobNote#withdraw_booking) but
   # the note it cleared is still on the row.

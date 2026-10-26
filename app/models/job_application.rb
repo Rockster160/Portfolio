@@ -78,7 +78,7 @@ class JobApplication < ApplicationRecord
   # A job is only ever as current as its newest note. Kept as a column so the
   # index can sort without loading every note.
   def touch_activity!
-    latest = notes.maximum(:occurred_at)
+    latest = notes.where.not(tag: JobNote::NOT_INTERACTIONS).maximum(:occurred_at)
     update_columns(last_activity_at: latest, updated_at: Time.current)
   end
 
@@ -251,7 +251,7 @@ class JobApplication < ApplicationRecord
 
     notes.sort_by { |note| [note.occurred_at, note.id] }.each do |note|
       case note.tag.to_sym
-      when :heard_back, :availability
+      when :heard_back, :reached_out, :availability
         opened = true
       when :scheduled
         rounds    += 1 unless pending || meeting_at&.after?(note.occurred_at)
@@ -292,7 +292,17 @@ class JobApplication < ApplicationRecord
   # notes are loaded for the depth anyway, so this costs nothing and cannot
   # report a row quiet for nine days with yesterday's beat sitting on it.
   def engaged_at
-    notes.map(&:occurred_at).max || last_activity_at || created_at
+    beats.map(&:occurred_at).max || last_activity_at || created_at
+  end
+
+  # The notes that are something having happened, which is every one but a
+  # reminder. Loaded notes, so the board's preload still answers it.
+  def beats
+    notes.reject { |note| JobNote::NOT_INTERACTIONS.include?(note.tag) }
+  end
+
+  def latest_beat
+    beats.max_by { |note| [note.occurred_at, note.id] }
   end
 
   # What the newest beat is asking HIM for, or nil when the next move is
@@ -300,7 +310,7 @@ class JobApplication < ApplicationRecord
   # `JobNote.waiting_on_you_for` takes - the two say whose move it is on the
   # same page and must never disagree about it.
   def owed_now
-    notes.max_by { |note| [note.occurred_at, note.id] }&.owed
+    latest_beat&.owed
   end
 
   # The soonest interview still ahead of us, off a `scheduled` note. This is the
@@ -386,8 +396,7 @@ class JobApplication < ApplicationRecord
     return :applied if notes.empty?
     return conversation_tag if unreported_interview_at.present?
 
-    latest = notes.max_by { |note| [note.occurred_at, note.id] }
-    latest&.heard_back? ? :responded : :note
+    latest_beat&.heard_back? ? :responded : :note
   end
 
   protected

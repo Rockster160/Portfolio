@@ -1,5 +1,5 @@
 <%
-  latest = job.notes.max_by(&:occurred_at)
+  latest = job.latest_beat
   booked = job.next_interview_at unless job.dead?
   # No floor, for the same reason the strip on the index has none: a missed
   # chase is the one most worth showing. A booked interview isn't a chase and

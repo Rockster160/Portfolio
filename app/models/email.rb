@@ -255,6 +255,8 @@ class Email < ApplicationRecord
   # and nothing but this can reach it - an attachment has no URL anywhere, it
   # only exists inside the mail.
   💾(:attachments) { parser.attachments.to_a }
+  # The invite in its calendar part, if it came with one. See Emails::CalendarInvite.
+  💾(:calendar_invite) { parser.calendar_invite }
 
   # One attachment by its position in that list. The POSITION is the handle
   # because a filename is neither unique within a message nor safe in a path -
