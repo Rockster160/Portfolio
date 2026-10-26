@@ -6996,15 +6996,31 @@ $board-cell-max: 200px;
   }
 }
 
+// Round, and sized for a fingertip: they sit out in the disc's corners, where
+// the circle leaves room, so their size comes out of empty space rather than
+// out of the disc's own press area.
+.ctr-byte .byte-app .byte-board-disc .byte-board-skip,
+.ctr-byte .byte-app .byte-board-disc .byte-board-cycle {
+  bottom: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 9px;
+  border-radius: 50%;
+}
+
 .ctr-byte .byte-app .byte-board-disc .byte-board-skip {
-  left: -2px;
+  left: -6px;
 }
 
 // Styled exactly like its opposite number. The two are a pair - the words on
 // them are what say which is which, and colouring one of them made it read as
 // a warning rather than as the other half of a choice.
 .ctr-byte .byte-app .byte-board-disc .byte-board-cycle {
-  right: -2px;
+  right: -6px;
 }
 
 // Takes the whole bottom edge, since it replaces the pair rather than sitting
