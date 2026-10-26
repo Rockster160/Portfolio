@@ -4202,6 +4202,58 @@ RSpec.describe Buddy::GPT::Turn do
         expect(reply.body).to include("Rain Friday this week.")
       end
     end
+
+    context "when the forecast goes under it as a table" do
+      let(:forecast) {
+        [
+          {
+            "date"    => Date.current.iso8601,
+            "high"    => 65,
+            "low"     => 41,
+            "rain"    => 60,
+            "sky"     => "Rain",
+            "notable" => "rain",
+            "alpine"  => "1-3pm",
+          },
+          { "date" => Date.current.tomorrow.iso8601, "high" => 58, "low" => 40, "rain" => 0, "sky" => "Clear" },
+        ]
+      }
+
+      def tabled_briefing(text)
+        message = convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+          metadata: {
+            "kind"         => "buddy_trigger",
+            "hidden"       => true,
+            "buddy_action" => "today",
+            "briefing"     => {
+              "weather"  => { "high" => 65, "low" => 41, "notable" => "rain", "week" => "rain Wed & Fri" },
+              "alpine"   => { "today" => ["Rain in Alpine 1-3pm"], "week" => ["Wednesday, rain at 80%"] },
+              "forecast" => forecast,
+            },
+          }
+        )
+        described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
+      end
+
+      it "puts the table last and staples none of the week back on" do
+        tabled_briefing("Morning! Bluestaq at 9:30.")
+
+        expect(reply.body).to start_with("Morning! Bluestaq at 9:30.\n\n| | Home | Alpine |")
+        expect(reply.body).to include("| Today | 🌧️ 65°/41° · 60% | 1-3pm |")
+        expect(reply.body).not_to include("this week", "In Alpine")
+        expect(Array(reply.metadata["repairs"])).not_to include("week_weather", "rain_hours", "alpine_week_odds", "weather")
+      end
+
+      it "is taken back out before the model sees the reply again" do
+        tabled_briefing("Morning! Bluestaq at 9:30.")
+        later    = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "thanks!")
+        replayed = Buddy::GPT::History.build(convo, upto: later).map { |item| item[:content].to_s }.join
+
+        expect(replayed).to include("Bluestaq at 9:30")
+        expect(replayed).not_to include("| Home |")
+      end
+    end
   end
 
   # Prod 4684, 08:00: "Nothing showing up as due on chores right now." The seed

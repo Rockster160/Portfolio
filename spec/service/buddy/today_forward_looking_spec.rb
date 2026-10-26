@@ -252,7 +252,7 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     it "keeps the week to its own short list" do
-      expect(seed).to include("LATER THIS WEEK")
+      expect(seed).to include("COMING UP")
       expect(seed).to include("- tomorrow · 6:00 PM · Drinks out")
     end
 

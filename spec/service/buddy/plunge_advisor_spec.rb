@@ -167,6 +167,22 @@ RSpec.describe Buddy::PlungeAdvisor do
 
     # Today already has a block of its own directly above this one in the seed,
     # and two lists of the same windows is how a briefing ends up saying it twice.
+    it "names the last day of the week as next week's, not today's" do
+      expect(block(daily_rain: { "2026-08-27" => 90 })).to include("next Thursday, rain at 90%")
+    end
+
+    it "lays the days out by date for the forecast table, today's hours included" do
+      allow(WeatherService).to receive(:data).and_return(
+        week_payload(hours: 72, rain_at: { "2026-08-20" => [13, 14], "2026-08-22" => [10, 11] }, daily_rain: { "2026-08-25" => 80 }),
+      )
+
+      expect(described_class.forecast_cells(user, now: now)).to eq(
+        Date.new(2026, 8, 20) => "1-3pm",
+        Date.new(2026, 8, 22) => "10am-12pm",
+        Date.new(2026, 8, 25) => "80%",
+      )
+    end
+
     it "leaves today alone" do
       expect(block(rain_at: { "2026-08-20" => [13, 14] })).to eq("")
     end

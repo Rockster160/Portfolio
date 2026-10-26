@@ -127,6 +127,29 @@ RSpec.describe "Buddy Today briefing" do
   # two contradicting things about the same week.
   # The bracket on the stash line, which the prompt lost six times across two
   # windows before this moved into Ruby.
+  describe "a seed whose forecast goes on as a table" do
+    let(:facts) {
+      {
+        name:     "Rocco",
+        today:    [],
+        due:      [],
+        jobs:     [],
+        week:     [],
+        stash:    [],
+        waiting:  [],
+        weather:  { high: 65, low: 41, notable: "rain", week: "rain Wed" },
+        alpine:   { today: ["Rain in Alpine 1-3pm"], week: [] },
+        forecast: [{ date: Date.current, high: 65, low: 41 }],
+      }
+    }
+    let(:seed) { Buddy::TodayBriefing.seed(nil, nil, facts: facts) }
+
+    it "tells the companion the table is there instead of asking for the figures" do
+      expect(seed).to include(Buddy::TodayBriefing::WRITING_RULES[:forecast])
+      expect(seed).not_to include(Buddy::TodayBriefing::WEATHER_DIRECTIVE, Buddy::TodayBriefing::WRITING_RULES[:alpine])
+    end
+  end
+
   describe ".stash_age_said?" do
     def said?(body, waiting: "7 weeks")
       Buddy::TodayBriefing.stash_age_said?(body, { idea: "Kennel auto-open idea", waiting: waiting })

@@ -33,6 +33,21 @@ RSpec.describe CatchMalformedRequestMiddleware do
     expect(body).to eq(["Not a valid MIME type"])
   end
 
+  it "refuses an Accept header that is not a MIME type without calling the app" do
+    expect(app).not_to receive(:call)
+    probe = env_for("GET").merge("HTTP_ACCEPT" => "../../../../etc/services{{")
+    status, _headers, body = middleware.call(probe)
+
+    expect(status).to eq(405)
+    expect(body).to eq(["Not a valid MIME type"])
+  end
+
+  it "passes an ordinary Accept header through" do
+    browser = env_for("GET").merge("HTTP_ACCEPT" => "text/html,application/xhtml+xml,*/*;q=0.8")
+
+    expect(middleware.call(browser).first).to eq(200)
+  end
+
   it "refuses a POST whose body stops short of its Content-Length" do
     # What Puma hands the app when the client hangs up mid-body: the declared
     # Content-Length is never delivered, so the read raises instead of returning.

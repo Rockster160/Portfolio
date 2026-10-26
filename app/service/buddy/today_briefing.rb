@@ -777,18 +777,19 @@ module Buddy
       # A rule can only ask for what the seed is carrying, so the ask moved to
       # `:plunge`, which is pushed off the line itself.
       alpine:    "Alpine only ever comes up when the canyon is wet, so it's news by the time you're reading it. Give the hours wherever there are hours and the day on its own where there aren't.",
+      # The table is code-built and goes on after the reply (Buddy::GPT::Turn),
+      # so the figures in it are never the model's to drop or reorder. Rain is
+      # named as ordinary because, handed a wet week, briefings cast it as a
+      # nuisance to be put up with, and here it isn't one.
+      forecast:  "Their forecast goes under your message as a table - today's high and low, the week, and Alpine - so the figures and the days are already covered. Leave them to it. If today's sky changes what they'd do, a few plain words; otherwise the weather needs nothing from you. Rain is good news to them - welcome weather, never a nuisance or something to get through.",
       plunge:    "One of the Alpine lines calls out a good window for a plunge. Float it once and lightly, as something the day has room for, in the hours it actually names.",
       waiting:   "Somebody in the house asked them something and it's still sitting there. Say who asked and what, so they can answer it.",
-      # NOT a cap. `facts[:week]` is already `upcoming_notable` - the ordinary
-      # week has been taken out by `notable?` before the model ever sees it -
-      # so a second selection here throws away work that was already done, and
-      # it contradicts "All of it reaches them" three lines above it in the
-      # same prompt. There is no reading that satisfies both, and two
-      # companions will split it two different ways off the identical section -
-      # one keeping three of four and dropping a named birthday, the other
-      # keeping all five. Same event, same morning, told to one house
-      # and not the other.
-      week:      "The week's already down to its exceptions, so every one of them reaches them - a few words each, the name and the day.",
+      # NOT a cap. `facts[:week]` is already `upcoming_notable`, narrowed to the
+      # next couple of days by Buddy::BriefingFacts#coming_up - the selecting
+      # is done in Ruby. A second selection asked of the model here would
+      # contradict "All of it reaches them" three lines above it, and two
+      # companions split that two different ways off the identical section.
+      week:      "What's coming up is already down to the next couple of days, so every one of them reaches them - a few words each, the name and the day.",
       # "Occasionally" stays and "one at a time" goes. The rarity is a real
       # instruction - the same thought is picked every morning until it is
       # settled, so floating it daily is nagging - but the COUNT was a
@@ -810,9 +811,11 @@ module Buddy
       # On the HIGH, not on the block. Past mid-afternoon the figures are dropped
       # and only the week's outlook is left, and a rule asking for a high there
       # would put one back onto the briefing that decided it no longer mattered.
-      rules << :weather   if facts.dig(:weather, :high).present?
-      rules << :week_sky  if facts.dig(:weather, :week).present?
-      rules << :alpine    if facts[:alpine].present? && facts[:alpine].values.flatten.compact_blank.any?
+      tabled = Buddy::BriefingFacts.tabled?(facts)
+      rules << :forecast  if tabled
+      rules << :weather   if !tabled && facts.dig(:weather, :high).present?
+      rules << :week_sky  if !tabled && facts.dig(:weather, :week).present?
+      rules << :alpine    if !tabled && facts[:alpine].present? && facts[:alpine].values.flatten.compact_blank.any?
       rules << :plunge    if Buddy::PlungeAdvisor.plunge_offered?(facts.dig(:alpine, :today))
       rules << :week      if facts[:week].any?
       rules << :waiting   if Array(facts[:waiting]).any?

@@ -77,6 +77,11 @@ Buddy::Tools.register(
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
     morning") into ISO using the local time in RIGHT NOW block.
 
+    **A day with no time ("tomorrow", "Monday") is 9am that day.** Set it and
+    say the time so they can move it. Asking first leaves nothing set when
+    they've gone to bed. After midnight, "tomorrow" is the day they wake up
+    into, not the one after it.
+
     RECURRING: pass `repeat` to fire the reminder on a schedule instead
     of just once. Use for "check in with me every day at 9", "remind me
     to take the trash out every Wednesday night", etc. `repeat` accepts:

@@ -44,6 +44,18 @@ RSpec.describe Buddy::UnpromptedMemory do
     expect(described_class.trim(body, carried, facts_with)).to eq(body)
   end
 
+  it "takes the sentence pointing back at it along with it" do
+    body = "Dentist at 9. I'm holding that audit note for you. That one's been sitting a while. High of 74."
+
+    expect(trim(body)).to eq("Dentist at 9. High of 74.")
+  end
+
+  it "leaves a sentence opening with \"that\" when nothing before it was cut" do
+    body = "Dentist at 9. That one's been on the calendar a while."
+
+    expect(trim(body)).to eq(body)
+  end
+
   it "keeps a body that was nothing else" do
     body = "I'm still holding that audit note for you."
 

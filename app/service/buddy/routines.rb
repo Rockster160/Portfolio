@@ -92,6 +92,11 @@ module Buddy
     # out on that rule, which is right: it is also three of his chores.
     MIN_SHORTENED_WORDS = 2
 
+    # A word one letter off still names it - "Good noght" said at bedtime is
+    # good night, and nothing else in it is content. Only for words this long:
+    # a short word one letter off is usually a different word.
+    TYPO_MIN_LENGTH = 4
+
     def named_outright(user, text)
       return nil unless user.respond_to?(:buddy_routines)
 
@@ -99,7 +104,8 @@ module Buddy
       return nil if asked.empty?
 
       rows = user.buddy_routines.enabled.ordered.to_a
-      rows.find { |r| words(r.name).sort == asked.sort } || shortened_name(rows, asked)
+      exact = rows.find { |r| words(r.name).sort == asked.sort }
+      exact || rows.find { |r| whole_name?(asked, words(r.name)) } || shortened_name(rows, asked)
     end
 
     # The one routine this is an abbreviation of, or nil when it is nobody's or
@@ -107,8 +113,29 @@ module Buddy
     def shortened_name(rows, asked)
       return nil if asked.length < MIN_SHORTENED_WORDS
 
-      matches = rows.select { |r| (asked - words(r.name)).empty? }
+      matches = rows.select { |r| unmatched(asked, words(r.name)).empty? }
       matches.first if matches.one?
+    end
+
+    def whole_name?(asked, name)
+      asked.length == name.length && unmatched(asked, name).empty?
+    end
+
+    # The asked words no word of the name accounts for, each name word used
+    # once.
+    def unmatched(asked, name)
+      pool = name.dup
+      asked.reject { |word|
+        at = pool.index { |candidate| same_word?(word, candidate) }
+        pool.delete_at(at) if at
+      }
+    end
+
+    def same_word?(said, named)
+      return true if said == named
+      return false if [said, named].any? { |word| word.length < TYPO_MIN_LENGTH }
+
+      Buddy::ToolContext.levenshtein(said, named) <= 1
     end
 
     # The markers a call expands into, or nil when the call isn't a routine run.

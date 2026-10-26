@@ -101,16 +101,47 @@ module Buddy
       served = context_for(user, conversation)
 
       {
-        name:    user&.first_name,
-        today:   Array(served[:today_notable]).reject { |i| i[:passed] },
-        due:     Array(served[:upcoming_reminders]).select { |r| r[:status].blank? },
-        jobs:    Array(served[:chores_due_today]),
-        week:    Array(served[:upcoming_notable]),
-        stash:   stash_due(user, Array(served[:stashed_ideas]), now),
-        waiting: Array(served[:pending_relays]),
-        weather: weather(user, now),
-        alpine:  (alpine?(user) ? alpine_lines(user, now) : {}),
+        name:     user&.first_name,
+        today:    Array(served[:today_notable]).reject { |i| i[:passed] },
+        due:      Array(served[:upcoming_reminders]).select { |r| r[:status].blank? },
+        jobs:     Array(served[:chores_due_today]),
+        week:     coming_up(user, Array(served[:upcoming_notable]), now),
+        stash:    stash_due(user, Array(served[:stashed_ideas]), now),
+        waiting:  still_asking(user, Array(served[:pending_relays]), now),
+        weather:  weather(user, now),
+        alpine:   (alpine?(user) ? alpine_lines(user, now) : {}),
+        forecast: forecast(user, now),
       }
+    end
+
+    # How far ahead a briefing looks, counting from tomorrow, and how many
+    # things it carries from there. A whole week of one-offs read out every
+    # morning buries the two that matter today under five that will come round
+    # again before they happen.
+    COMING_UP_DAYS  = 2
+    COMING_UP_LIMIT = 4
+
+    # By the label Buddy::Context#day_label wrote, which is "tomorrow" and then
+    # the weekday name - and those are exact for the days this keeps.
+    def coming_up(user, items, now)
+      return items if items.empty? || user.nil?
+
+      today = Buddy::Day.today(user, now: now)
+      near  = (1..COMING_UP_DAYS).map { |ahead| ahead == 1 ? "tomorrow" : (today + ahead).strftime("%A") }
+      items.select { |item| near.include?(item[:day].to_s) }.first(COMING_UP_LIMIT)
+    end
+
+    # A question relayed to them is about the moment it was asked - the garage
+    # left open, what's for dinner. Someone who rarely types never passes one
+    # over, so without this it is read out every morning as if it were still
+    # happening. The briefing repeats only what arrived since yesterday began.
+    def still_asking(user, relays, now)
+      return relays if relays.empty?
+
+      since = Buddy::Day.range(user, date: Buddy::Day.today(user, now: now) - 1).first
+      fresh = BuddyRelay.where(id: relays.pluck(:id))
+      fresh = fresh.where("COALESCE(delivered_at, created_at) >= ?", since).pluck(:id)
+      relays.select { |relay| fresh.include?(relay[:id]) }
     end
 
     def context_for(user, conversation)
@@ -132,6 +163,22 @@ module Buddy
     rescue StandardError => e
       Rails.logger.warn("[Buddy::BriefingFacts] weather failed: #{e.class}: #{e.message}")
       {}
+    end
+
+    # The rows of the table that goes under the briefing (Buddy::ForecastTable).
+    # Today's row goes once the day's high stops mattering, for the reason
+    # `weather` drops it.
+    def forecast(user, now)
+      return [] if user.nil?
+
+      today  = Buddy::Day.today(user, now: now)
+      alpine = alpine?(user) ? Buddy::PlungeAdvisor.forecast_cells(user, now: now) : {}
+      days   = WeatherService.week_days(user: user).select { |day| day[:date] >= today }
+      days   = days.reject { |day| day[:date] == today } if late_in_day?(user, now)
+      days.map { |day| day.merge(alpine: alpine[day[:date]]).compact }
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::BriefingFacts] forecast failed: #{e.class}: #{e.message}")
+      []
     end
 
     def late_in_day?(user, now)
@@ -171,9 +218,9 @@ module Buddy
         ["ON TODAY",        facts[:today].map { |i| agenda_line(i) }],
         ["ALSO DUE TODAY",  facts[:due].map { |r| "#{due_time(r)} · #{r[:body]}" }],
         ["JOBS TODAY",      job_lines(facts[:jobs])],
-        ["WEATHER",         weather_lines(facts[:weather])],
-        ["ALPINE",          Array(facts.dig(:alpine, :today)) + Array(facts.dig(:alpine, :week))],
-        ["LATER THIS WEEK", facts[:week].map { |i| week_line(i) }],
+        ["WEATHER",         tabled?(facts) ? sky_lines(facts) : weather_lines(facts[:weather])],
+        ["ALPINE",          tabled?(facts) ? plunge_lines(facts) : alpine_block(facts)],
+        ["COMING UP",       facts[:week].map { |i| week_line(i) }],
         ["WAITING ON THEM", Array(facts[:waiting]).map { |r| "#{r[:from]} asked: #{r[:question]}" }],
         ["ON THEIR MIND",   stash_lines(facts)],
       ].reject { |_title, lines| lines.compact_blank.empty? }
@@ -247,6 +294,28 @@ module Buddy
       # briefings in one window turned a double-POINT mail run into a mail run
       # that happens twice, and a trash day into gathering the trash twice.
       [row[:name], row[:hot].presence && "#{row[:hot]} points"].compact_blank.join(" · ")
+    end
+
+    # Whether the forecast goes under the briefing as a table, in which case the
+    # seed carries only what the table can't say.
+    def tabled?(facts)
+      Array(facts[:forecast]).any?
+    end
+
+    # Today's sky in a word, so the companion knows what kind of day it is
+    # without being handed figures to read out.
+    def sky_lines(facts)
+      notable = facts.dig(:weather, :notable).presence
+      notable ? ["Today: #{notable}"] : []
+    end
+
+    def alpine_block(facts)
+      Array(facts.dig(:alpine, :today)) + Array(facts.dig(:alpine, :week))
+    end
+
+    # The plunge call is a judgement the table has no column for.
+    def plunge_lines(facts)
+      Array(facts.dig(:alpine, :today)).select { |line| line.to_s.start_with?(Buddy::PlungeAdvisor::PLUNGE_PREFIX) }
     end
 
     def weather_lines(weather)

@@ -267,7 +267,9 @@ module Buddy
         return { role: :assistant, content: relay_content(message, body) } if relay?(message)
         return { role: :assistant, content: form_standin(message, body) } if form_card?(message)
 
-        { role: :assistant, content: body } if prose_reply?(message) || fast_path?(message)
+        # A briefing's forecast table was put on by code, and replayed as the
+        # model's own words it teaches the next briefing to write tables.
+        { role: :assistant, content: Buddy::ForecastTable.strip(body) } if prose_reply?(message) || fast_path?(message)
       end
 
       # What a quick-action seed becomes once it's history.

@@ -176,15 +176,22 @@ class TravelResolver
     # the road - so its own coordinate names the town. What they LEFT is where
     # they last arrived, as long as that is near enough to be the place this
     # leg started from. A leg another reporter already opened keeps its name.
+    # A saved place it tripped beside is where they were headed, not where
+    # they left, unless they never arrived anywhere near it.
     def left_from(user, coord, fallback)
-      return fallback if coord.blank? || ::LocationCache.nearby_contact(coord)
+      return fallback if coord.blank?
 
       last = user.action_events.where(name: %w[arrived departed]).order(timestamp: :desc).first
       return fallback if last.nil? || last.notes.blank?
-      return (last.timestamp >= MERGE_WINDOW.ago ? last.notes : fallback) if last.name == "departed"
+      return last.notes if last.name == "arrived" && left_arrival?(last, coord)
+      return fallback if last.name == "arrived" || ::LocationCache.nearby_contact(coord)
 
-      from = last.data.to_h.values.filter_map { |at| [at["lat"], at["lng"]] if at.is_a?(::Hash) && at["lat"] }
-      from.any? { |at| near?(at, coord, LEFT_RADIUS) } ? last.notes : fallback
+      last.timestamp >= MERGE_WINDOW.ago ? last.notes : fallback
+    end
+
+    def left_arrival?(arrival, coord)
+      from = arrival.data.to_h.values.filter_map { |at| [at["lat"], at["lng"]] if at.is_a?(::Hash) && at["lat"] }
+      from.any? { |at| near?(at, coord, LEFT_RADIUS) }
     end
 
     def place_name(coord)
@@ -222,17 +229,24 @@ class TravelResolver
       event
     end
 
-    # Only the person's own reports are compared. The car and the phone are
+    # Only a report about the person is compared. The car and the phone are
     # routinely apart on one leg — it is the car's crossing that the phone's
     # report is joining.
+    #
+    # It's one leg when it lands near any point the row already holds, not only
+    # the phone's. A geofence departure trips wherever it trips, sometimes
+    # hundreds of metres out, while the car's copy made for the phone aboard
+    # carries the car's own point exactly.
     def elsewhere?(event, source, coord)
       return false unless ANNOUNCING_SOURCES.include?(source&.to_sym) && coord.present?
 
       there = event.data.to_h[source.to_s].to_h
-      there_loc = [there["lat"], there["lng"]]
-      return false if there_loc.compact.length < 2
+      return false if [there["lat"], there["lng"]].compact.length < 2
 
-      !near?(there_loc.map(&:to_f), coord.map(&:to_f), LEG_RADIUS)
+      seen = event.data.to_h.values.filter_map { |at|
+        [at["lat"], at["lng"]].map(&:to_f) if at.is_a?(::Hash) && at["lat"] && at["lng"]
+      }
+      seen.none? { |at| near?(at, coord.map(&:to_f), LEG_RADIUS) }
     end
   end
 end

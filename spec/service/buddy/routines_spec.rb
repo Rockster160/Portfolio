@@ -228,6 +228,22 @@ RSpec.describe "Buddy routines" do
       expect(told).to eq(["dark"])
     end
 
+    it "runs it through a one-letter typo" do
+      routine!("good night", [tell_step("dark")])
+
+      says!("Good noght", "Night night.")
+
+      expect(told).to eq(["dark"])
+    end
+
+    it "takes no typo in a short word" do
+      routine!("lamp on", [tell_step("lamp")])
+
+      says!("lamp in", "Okay.")
+
+      expect(told).to be_empty
+    end
+
     it "leaves a disabled one switched off" do
       routine!("good night", [tell_step("dark")], enabled: false)
 

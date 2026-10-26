@@ -3,6 +3,8 @@
 # ::Oauth::TeslaApi.me.check_telemetry
 
 class TeslaTelemetry
+  include DistanceHelper
+
   # Receives fleet-telemetry records (via bin/tesla_telemetry_bridge.rb →
   # /webhooks/tesla_telemetry → here) and runs side-effect detections.
   #
@@ -135,54 +137,106 @@ class TeslaTelemetry
     ::Jil.trigger(@user, scope, empty)
   end
 
-  # The car's own account of leaving home and coming back, which is the only
-  # thing in the house that knows the car went somewhere without its owner. Scoped
-  # to the home boundary on purpose: every other place the car passes through
-  # is a city name changing mid-drive, and none of those are legs.
+  # The car's own account of its legs, wherever it goes: it has left when it
+  # is no longer where it was parked, and it has arrived when it is sitting in
+  # Park again. It is the only thing that knows the car went somewhere without
+  # its owner.
   #
   # Fires `trytravel` rather than recording anything itself, so every source
   # arrives through the one Jil funnel the person can edit. `source: :tesla` is
   # what keeps it quiet — TravelResolver only lets the phone announce. A second
   # report goes out under `:phone` when the phone was aboard; see
   # `carrying_him?`.
+  #
+  # Read off the state the car is in, never off a single gear change, because
+  # Tesla drops a push now and then and a lost shift must not lose the leg with
+  # it. Out of Park and away from the spot is a departure, so a car whose shift
+  # out of Park never arrived still leaves once it is down the road. In Park and
+  # standing still with a leg open is an arrival, so a lost shift into Park is
+  # caught by the next push that shows it parked. Where it stands between the
+  # two is held in the `:car_leg` cache:
+  #
+  #   parked:  the spot it is sitting in
+  #   leaving: the spot it shifted out of Park in, and hasn't left yet
+  #   driving: away from any spot, `carried` saying whether he went too
+  #
+  # Backing out to let the other car by, or pulling forward onto the charger,
+  # leaves Park and comes back without leaving the spot, and is no leg at all.
   def detect_travel_changes
-    return unless field_present_in_record?(:Location)
-    # A car that has never reported a position has not crossed anything, so
-    # the first push after a deploy isn't read as an arrival.
-    return unless positioned?(@prev) && positioned?(@car_data)
+    return unless positioned?(@car_data) && @car_data.dig(:drive, :shift).present?
 
-    was_home = car_at_home?(@prev)
-    now_home = car_at_home?(@car_data)
-    return if was_home == now_home
+    leg = @user.caches.get(:car_leg)
+    spot = leg[:parked] || leg[:leaving]
+    now = left?(leg, spot) ? drive_off(spot) : leg
+    now = parked_now? ? pull_in(now) : underway(now)
 
-    action = now_home ? :arrived : :departed
-    # The phone's copy leaves from the same spot as the car. Placed where the
-    # car is by now - hundreds of metres down the road - it lands too far from
-    # the phone's own departure to join it, and reads as a second trip.
-    from = (@prev if action == :departed)
-    ::Jil.trigger(@user, :trytravel, travel_payload(action, :tesla, from: from))
-    ::Jil.trigger(@user, :trytravel, travel_payload(action, :phone, from: from)) if carrying_him?
+    @user.caches.set(:car_leg, now) unless now == leg
   end
 
-  # Whether the phone went with the car, asked at the moment the car crosses
-  # the boundary — which is what makes it answerable without a timer or any
-  # pending state. The car's own crossing is the clock.
+  # Sitting in Park, its position alone isn't believed: GPS wanders in a
+  # parking structure. Something has to say it is underway — the gear, or the
+  # wheels turning when that gear never arrived.
+  def left?(leg, spot)
+    return false if spot.blank? || near?(coord_of(@car_data), coord_of(location: spot))
+
+    leg[:leaving].present? || !parked_now?
+  end
+
+  def parked_now?
+    @car_data.dig(:drive, :shift).to_s == "P" && !@car_data.dig(:drive, :moving)
+  end
+
+  def here
+    @car_data[:location].slice(:lat, :lng, :name)
+  end
+
+  # Placed where it was parked. The push that shows the car gone lands down the
+  # road, where the coordinate names the town rather than the place it left.
+  def drive_off(spot)
+    carried = carrying_him?
+    from = { location: spot }
+    ::Jil.trigger(@user, :trytravel, travel_payload(:departed, :tesla, from: from))
+    ::Jil.trigger(@user, :trytravel, travel_payload(:departed, :phone, from: from)) if carried
+    { driving: true, carried: carried }
+  end
+
+  # Only a leg that went somewhere ends in an arrival. Back in Park on the spot
+  # it shifted out in is nothing, and so is the first push after a deploy.
   #
-  # Sound on geometry rather than luck: Bluetooth reaches about ten metres and
-  # the home boundary about a hundred. Riding in it, the pairing holds through
-  # the crossing. Left behind, it dropped at the end of the driveway,
-  # necessarily before - the last Bluetooth edge lands under a minute before an
-  # unpaired boundary crossing, which is the car going without its owner, and
-  # this says so. The same geometry answers the way back: somebody else driving
-  # home crosses the boundary while the owner's phone is still a hundred metres
-  # away in the house.
+  # The phone's copy goes only with a leg that carried him. Asking the radio
+  # here would be asking it in the garage, where it reaches into the house:
+  # somebody else parking pairs with a phone that never left.
+  def pull_in(leg)
+    return leg if leg[:parked].present?
+
+    if leg[:driving]
+      ::Jil.trigger(@user, :trytravel, travel_payload(:arrived, :tesla))
+      ::Jil.trigger(@user, :trytravel, travel_payload(:arrived, :phone)) if leg[:carried]
+    end
+    { parked: here }
+  end
+
+  # Out of Park. A car first heard already on the road has a leg open whose
+  # start nobody saw, so it still arrives wherever it next parks.
+  def underway(leg)
+    return { leaving: leg[:parked] } if leg[:parked].present?
+
+    leg.presence || { driving: true, carried: false }
+  end
+
+  # Whether the phone went with the car, asked once the car has left the spot
+  # it was parked in — which is what makes it answerable without a timer. The
+  # car's own departure is the clock.
+  #
+  # Sound on geometry rather than luck: Bluetooth reaches about ten metres, and
+  # the car has gone about a hundred by the time it counts as gone. Riding in
+  # it, the pairing holds. Left behind, it dropped at the end of the driveway,
+  # necessarily before, and this says so.
   #
   # This is what keeps `travel:depart:home` firing at all. A pairing in the
   # garage no longer announces on its own (TravelResolver refuses it), and the
   # geofence has never once sent a departure, so without this nothing would
-  # ever report him leaving his own house. On the arrival side the geofence
-  # does work, and this is the belt to its braces — the merge window collapses
-  # the two into one leg and only the first announces.
+  # ever report him leaving his own house.
   def carrying_him?
     ::LocationCache.driving?
   end
@@ -190,10 +244,8 @@ class TeslaTelemetry
   # No `via`: a pairing the car has corroborated by actually driving off is
   # not the raw radio edge that gets refused at home. Different evidence.
   #
-  # `from` is the position a departure LEFT. The push that shows the car gone
-  # lands hundreds of metres down the road, where the coordinate names the
-  # town, so the car's own leg is placed at the last position it held inside
-  # the boundary - which is what makes `tesla_travel:depart:home` match.
+  # `from` is the spot a departure LEFT, so the car's own leg is placed where it
+  # was parked - which is what makes `tesla_travel:depart:home` match.
   def travel_payload(action, source, from: nil)
     where = from || @car_data
     {
@@ -209,10 +261,6 @@ class TeslaTelemetry
 
   def positioned?(data)
     coord_of(data).compact.length == 2
-  end
-
-  def car_at_home?(data)
-    ::LocationCache.at_home?(coord_of(data))
   end
 
   def coord_of(data)

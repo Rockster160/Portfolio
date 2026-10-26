@@ -123,6 +123,28 @@ module WeatherService
     }
   end
 
+  # Today and the six days after it, one hash per day, for a caller that lays
+  # the week out itself rather than reading it as a sentence. `date` is in the
+  # forecast location's own timezone, the same way `format_week_outlook` names
+  # its days.
+  def week_days(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    payload = data(lat: lat, lng: lng, user: user)
+    return [] if payload.blank?
+
+    offset = payload["timezone_offset"].to_i
+    Array(payload["daily"]).first(7).map { |day|
+      {
+        date:    Time.at(day["dt"].to_i + offset).utc.to_date,
+        high:    day.dig("temp", "max")&.round,
+        low:     day.dig("temp", "min")&.round,
+        rain:    (day["pop"].to_f * 100).round,
+        sky:     day.dig("weather", 0, "main").to_s.presence,
+        clouds:  day["clouds"].to_i,
+        notable: day_notable(day),
+      }
+    }
+  end
+
   def fetch(lat, lng, key)
     uri = URI("https://api.openweathermap.org/data/3.0/onecall")
     uri.query = URI.encode_www_form(

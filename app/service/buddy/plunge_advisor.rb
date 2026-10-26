@@ -100,6 +100,16 @@ module Buddy
     # nothing at all about WHEN. Those days get their odds and no window rather
     # than a plausible-sounding hour.
     def week_rain_lines(user, now: Time.current)
+      week_rain(user, now: now).map { |day|
+        next "#{day[:label]}, rain #{day[:window]}" if day[:window]
+
+        "#{day[:label]}, #{day[:kind]} at #{day[:pop]}% - the forecast has no hours that far out, so the day on its own is the whole of it"
+      }
+    end
+
+    # The same days as `week_rain_lines`, as data: a `window` where the hourly
+    # forecast reaches, and a `kind` and `pop` where it doesn't.
+    def week_rain(user, now: Time.current)
       data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
       return [] if data.blank?
 
@@ -109,6 +119,20 @@ module Buddy
       days   = timed_days(first, hourly.last&.first)
 
       timed_rain(hourly, tz, days, first) + loose_rain(data, tz, days, first)
+    end
+
+    # Alpine's rain by date, today included, as the few words a forecast table
+    # has room for: the hours where there are hours and the odds where there
+    # aren't. Dry days are absent.
+    def forecast_cells(user, now: Time.current)
+      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      return {} if data.blank?
+
+      cells = Hash.new { |hash, date| hash[date] = [] }
+      today = analyze(data, user, Buddy::Day.zone(user).name, now)
+      cells[Buddy::Day.today(user, now: now)].concat(today[:rain_windows]) if today[:notable]
+      week_rain(user, now: now).each { |day| cells[day[:date]] << (day[:window] || "#{day[:pop]}%") }
+      cells.transform_values { |parts| parts.join(", ") }
     end
 
     # The days the hourly forecast reaches all the way through. One it only half
@@ -140,7 +164,7 @@ module Buddy
     def timed_rain(hourly, tz, days, first)
       wet = hourly.select { |at, hour| days.include?(at.to_date) && DAY_HOURS.cover?(at.hour) && rainy?(hour) }
       contiguous_windows(wet.map(&:last), tz).map { |win|
-        "#{day_label(win[0], first)}, rain #{format_window(win)}"
+        { date: win[0].to_date, label: day_label(win[0], first), window: format_window(win) }
       }
     end
 
@@ -153,13 +177,18 @@ module Buddy
         kind = WeatherService.day_notable(day)
         next unless WET_KINDS.include?(kind)
 
-        "#{day_label(at, first)}, #{kind} at #{(day["pop"].to_f * 100).round}% - the forecast has no hours that far out, so the day on its own is the whole of it"
+        { date: date, label: day_label(at, first), kind: kind, pop: (day["pop"].to_f * 100).round }
       }
     end
 
     # `first` is tomorrow, which is the only day here with a name of its own.
+    # The last day of the week falls on today's weekday, and named bare it
+    # reads as today.
     def day_label(time, first)
-      time.to_date == first ? "tomorrow" : time.strftime("%A")
+      return "tomorrow" if time.to_date == first
+      return "next #{time.strftime("%A")}" if time.to_date >= first + WEEK_DAYS
+
+      time.strftime("%A")
     end
 
     # ---- analysis ----

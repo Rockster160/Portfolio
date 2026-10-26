@@ -110,6 +110,66 @@ RSpec.describe Buddy::BriefingFacts do
   # A question somebody in the house asked and is still waiting on IS part of
   # the day, and it was reachable through `get_context` before a briefing turn
   # stopped being offered one.
+  describe "what's coming up" do
+    let(:now) { tz.parse("2026-10-26 08:00") } # a Monday
+
+    def item(day, title) = { day: day, time: "6pm", title: title }
+
+    it "keeps the next two days and leaves the rest of the week for later" do
+      items = [item("tomorrow", "Dinner"), item("Wednesday", "Yoga"), item("Friday", "Party"), item("next Monday", "Trip")]
+
+      expect(described_class.coming_up(user, items, now).pluck(:title)).to eq(%w[Dinner Yoga])
+    end
+
+    it "carries no more than a handful" do
+      items = Array.new(6) { |i| item("tomorrow", "Thing #{i}") }
+
+      expect(described_class.coming_up(user, items, now).length).to eq(described_class::COMING_UP_LIMIT)
+    end
+  end
+
+  describe "the forecast table" do
+    let(:now) { tz.parse("2026-10-26 08:00") }
+    let(:days) {
+      (0..6).map { |i| { date: Date.new(2026, 10, 26) + i, high: 60, low: 40, rain: 0, sky: "Clear", clouds: 0, notable: nil } }
+    }
+
+    before { allow(WeatherService).to receive(:week_days).and_return(days) }
+
+    it "carries the week, with Alpine's rain on his" do
+      allow(user).to receive(:me?).and_return(true)
+      allow(Buddy::PlungeAdvisor).to receive(:forecast_cells).and_return({ Date.new(2026, 10, 28) => "80%" })
+
+      rows = described_class.forecast(user, now)
+
+      expect(rows.length).to eq(7)
+      expect(rows[2][:alpine]).to eq("80%")
+    end
+
+    it "drops today once the day's high has stopped mattering" do
+      rows = described_class.forecast(user, tz.parse("2026-10-26 18:00"))
+
+      expect(rows.first[:date]).to eq(Date.new(2026, 10, 27))
+    end
+
+    it "leaves the seed only today's sky and the plunge call" do
+      facts = {
+        today:    [],
+        due:      [],
+        jobs:     [],
+        week:     [],
+        stash:    [],
+        weather:  { high: 65, low: 41, notable: "rain", week: "rain Tue & Wed" },
+        alpine:   { today: ["Rain in Alpine 1-3pm", "#{Buddy::PlungeAdvisor::PLUNGE_PREFIX} rain lands 1-3pm"], week: ["Wednesday, rain at 80%"] },
+        forecast: days,
+      }
+      block = described_class.block(facts)
+
+      expect(block).to include("WEATHER\n- Today: rain", Buddy::PlungeAdvisor::PLUNGE_PREFIX)
+      expect(block).not_to include("High 65", "rain Tue", "1-3pm\n", "80%")
+    end
+  end
+
   describe "a question waiting on them" do
     let(:partner) { create(:user) }
 
@@ -123,6 +183,18 @@ RSpec.describe Buddy::BriefingFacts do
     it "is collected" do
       expect(described_class.build(user, convo)[:waiting].pluck(:question))
         .to include("Are we still on for Thursday?")
+    end
+
+    it "is left out once it was asked before yesterday" do
+      BuddyRelay.create!(
+        from_user: partner, to_user: user, to_conversation: convo, kind: :ask_open,
+        status: :delivered, body: "Want me to close the garage?", delivered_at: 6.days.ago
+      )
+
+      questions = described_class.build(user, convo)[:waiting].pluck(:question)
+
+      expect(questions).to include("Are we still on for Thursday?")
+      expect(questions).not_to include("Want me to close the garage?")
     end
 
     it "reaches the seed with who asked it" do

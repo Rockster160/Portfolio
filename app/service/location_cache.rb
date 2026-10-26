@@ -30,9 +30,13 @@ class LocationCache
   # `recent_locations` can be days old while the phone is telling us exactly
   # where it is right now. That is how a departure came to be stamped with the
   # previous evening's arrival coordinate (action_event 52194).
+  #
+  # A pairing is reported even when the flag already says so. The flag only
+  # knows the last edge that arrived, and an edge the phone never sent leaves it
+  # wrong: miss the drop at the gym and the flag still reads "driving" when the
+  # car pairs again to leave, so refusing a repeat would lose that departure
+  # too. Two reports of one edge land in the same TravelResolver row.
   def self.set_driving(bool, coord: nil)
-    return if driving? == bool
-
     departed = bool
     here_loc = coord.presence&.map(&:to_f) || recent_locations[-1]&.dig(:loc)
 

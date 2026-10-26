@@ -253,11 +253,12 @@ RSpec.describe TeslaTelemetry do
   # The car is the only thing in the house that knows it went somewhere
   # without Rocco. Scoped to the home boundary: every other place name that
   # changes mid-drive is a city, not a leg.
-  describe "crossing the home boundary" do
+  describe "the car's travel legs" do
     let(:home) { [40.48038, -111.99827] }
+    let(:down_the_road) { [40.48250, -111.99827] }
     let(:away) { [40.52292, -111.85389] }
 
-    before { allow_any_instance_of(AddressBook).to receive(:home).and_return(instance_double(Address, loc: home)) }
+    before { user.caches.find_or_create_by!(key: :car_leg).update!(data: {}) }
 
     # filter_map, not select.pluck(2): the rows are [args, kwargs] pairs, and
     # `pluck(2)` indexes the PAIR rather than the args inside it.
@@ -269,100 +270,166 @@ RSpec.describe TeslaTelemetry do
       travel_triggers.first
     end
 
-    it "reports the car leaving" do
-      seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" })
+    def parked_at(coord, name="Home")
+      spot = { lat: coord.first, lng: coord.last, name: name }
+      seed_car_data(location: spot, drive: { speed_mph: 0, shift: "P" })
+      user.caches.set(:car_leg, { parked: spot })
+      move_to(coord)
+    end
 
-      process(Location: { latitude: away.first, longitude: away.last })
+    def move_to(coord)
+      process(Location: { latitude: coord.first, longitude: coord.last })
+    end
 
+    def shift(gear)
+      process(Gear: "ShiftState#{gear}")
+    end
+
+    def drive_away!
+      parked_at(home)
+      shift(:D)
+      move_to(down_the_road)
+    end
+
+    it "reports the car leaving once it has left the spot it was parked in" do
+      drive_away!
+
+      expect(travel_triggers.length).to eq(1)
       expect(travel_trigger).to include(action: :departed, source: :tesla)
     end
 
-    # The push that shows it gone is already down the road, so the leg is
-    # placed where it left from.
-    it "places the car's departure at the last position it held at home" do
-      seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" })
-
-      process(Location: { latitude: away.first, longitude: away.last })
+    it "places the departure where it was parked" do
+      drive_away!
 
       expect(travel_trigger).to include(lat: home.first, lng: home.last, location: "Home", departed: "Home")
     end
 
-    it "reports the car coming back" do
-      seed_car_data(location: { lat: away.first, lng: away.last, name: "Draper" })
+    it "says nothing on the shift itself, before it has gone anywhere" do
+      parked_at(home)
 
-      process(Location: { latitude: home.first, longitude: home.last })
-
-      expect(travel_trigger).to include(action: :arrived, source: :tesla)
-    end
-
-    it "says nothing while it sits on the drive" do
-      seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" })
-
-      process(Location: { latitude: home.first + 0.00001, longitude: home.last })
+      shift(:D)
 
       expect(travel_trigger).to be_nil
     end
 
-    # A city name changing halfway through a drive is not a leg.
-    it "says nothing about the places it passes through" do
-      seed_car_data(location: { lat: away.first, lng: away.last, name: "Draper" })
+    it "counts reversing out of the garage as setting off" do
+      parked_at(home)
+      shift(:R)
+      move_to(down_the_road)
 
-      process(Location: { latitude: 40.76379, longitude: -111.90071 })
+      expect(travel_trigger).to include(action: :departed)
+    end
+
+    it "reports it leaving anywhere, not only home" do
+      parked_at(away, "Draper")
+      shift(:D)
+      move_to(home)
+
+      expect(travel_trigger).to include(action: :departed, departed: "Draper")
+    end
+
+    it "reports the car arriving when it goes back into Park" do
+      drive_away!
+      move_to(away)
+
+      shift(:P)
+
+      expect(travel_triggers.last).to include(action: :arrived, source: :tesla, lat: away.first, lng: away.last)
+    end
+
+    # Pulled forward onto the charger or out to let the other car by.
+    it "says nothing when it goes back into Park without leaving the spot" do
+      parked_at(home)
+      shift(:R)
+      move_to([home.first + 0.0002, home.last])
+      shift(:P)
 
       expect(travel_trigger).to be_nil
     end
 
-    # The first push after a deploy has no previous position to have crossed
-    # from, and must not be read as an arrival.
-    it "says nothing when there is no previous position" do
-      process(Location: { latitude: home.first, longitude: home.last })
+    it "reports the leg when the push that parks it is the first to show it gone" do
+      parked_at(home)
+      shift(:D)
 
-      expect(travel_trigger).to be_nil
+      process(Gear: "ShiftStateP", Location: { latitude: away.first, longitude: away.last })
+
+      expect(travel_triggers.pluck(:action)).to eq(%i[departed arrived])
     end
 
-    it "says nothing on a push that carries no position" do
-      seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" })
+    it "says nothing about a red light" do
+      drive_away!
+      move_to(away)
 
-      process(ChargeState: "Idle")
+      process(VehicleSpeed: 0)
 
-      expect(travel_trigger).to be_nil
+      expect(travel_triggers.length).to eq(1)
     end
 
-    # A pairing in the garage no longer announces on its own, and the geofence
-    # has never once sent a departure — so this is the only thing that reports
-    # Rocco leaving his own house. Bluetooth reaches ~10m and the boundary
-    # ~100m, so a pairing that survives the crossing means he is in the car.
-    describe "whether the phone went with it" do
-      before { seed_car_data(location: { lat: home.first, lng: home.last, name: "Home" }) }
+    it "says nothing on the first push after a deploy, and starts from there" do
+      move_to(home)
 
-      def leave!
-        process(Location: { latitude: away.first, longitude: away.last })
+      shift(:P)
+      shift(:D)
+      move_to(down_the_road)
+
+      expect(travel_triggers.pluck(:action)).to eq([:departed])
+    end
+
+    it "arrives wherever it next parks when first heard already on the road" do
+      shift(:D)
+      move_to(away)
+
+      shift(:P)
+
+      expect(travel_triggers.pluck(:action)).to eq([:arrived])
+    end
+
+    # Tesla drops a push now and then. The next leg must not be lost with it.
+    describe "a shift that never arrived" do
+      it "still leaves once it is driving away from where it was parked" do
+        parked_at(home)
+        shift(:P)
+
+        process(VehicleSpeed: 35, Location: { latitude: down_the_road.first, longitude: down_the_road.last })
+
+        expect(travel_trigger).to include(action: :departed, departed: "Home")
       end
 
+      # The car going to sleep pushes `<invalid>`, which reads as Park.
+      it "still arrives on the next push that shows it parked" do
+        drive_away!
+        move_to(away)
+
+        process(Gear: "<invalid>", VehicleSpeed: 0)
+
+        expect(travel_triggers.pluck(:action)).to eq(%i[departed arrived])
+      end
+    end
+
+    # GPS wanders in a parking structure while the car sits there.
+    it "says nothing when the position jumps while it sits in Park" do
+      parked_at(home)
+      shift(:P)
+
+      move_to(away)
+
+      expect(travel_trigger).to be_nil
+    end
+
+    describe "whether the phone went with it" do
       it "reports him leaving too when the phone is still paired" do
         allow(::LocationCache).to receive(:driving?).and_return(true)
 
-        leave!
+        drive_away!
 
         expect(travel_triggers.pluck(:source)).to eq(%i[tesla phone])
-      end
-
-      # Placed where the car is by then, it was too far from the phone's own
-      # departure to join it, and became a second trip announced twice.
-      it "places the phone's departure where the car left from, too" do
-        allow(::LocationCache).to receive(:driving?).and_return(true)
-
-        leave!
-
         expect(travel_triggers.last).to include(source: :phone, lat: home.first, lng: home.last, departed: "Home")
       end
 
-      # 2026-09-10: last Bluetooth edge 10:22:15, car crossed around 10:23
-      # unpaired. Chelsea went, he didn't.
       it "reports only the car when the pairing dropped in the driveway" do
         allow(::LocationCache).to receive(:driving?).and_return(false)
 
-        leave!
+        drive_away!
 
         expect(travel_triggers.pluck(:source)).to eq([:tesla])
       end
@@ -372,31 +439,34 @@ RSpec.describe TeslaTelemetry do
       it "does not label the corroborated report as Bluetooth" do
         allow(::LocationCache).to receive(:driving?).and_return(true)
 
-        leave!
+        drive_away!
 
         expect(travel_triggers.last).not_to have_key(:via)
       end
 
-      # Same geometry the other way: driving himself home, the pairing holds
-      # through the crossing.
-      it "reports him arriving too when he drove himself home" do
-        seed_car_data(location: { lat: away.first, lng: away.last, name: "Draper" })
+      it "reports him arriving too when he left with it" do
         allow(::LocationCache).to receive(:driving?).and_return(true)
+        drive_away!
+        move_to(away)
 
-        process(Location: { latitude: home.first, longitude: home.last })
+        shift(:P)
 
-        expect(travel_triggers.pluck(:source)).to eq(%i[tesla phone])
+        expect(travel_triggers.last(2).pluck(:action, :source)).to eq([%i[arrived tesla], %i[arrived phone]])
       end
 
-      # Chelsea coming back: at the boundary his phone is still a hundred
-      # metres away indoors, far out of Bluetooth range.
-      it "reports only the car when he was never in it" do
-        seed_car_data(location: { lat: away.first, lng: away.last, name: "Draper" })
+      # Somebody else parking in the garage pairs with the phone in the house,
+      # so the radio at the moment of parking says nothing about who drove.
+      it "reports only the car arriving when it left without him" do
         allow(::LocationCache).to receive(:driving?).and_return(false)
+        drive_away!
+        move_to(away)
+        move_to(home)
+        allow(::LocationCache).to receive(:driving?).and_return(true)
 
-        process(Location: { latitude: home.first, longitude: home.last })
+        shift(:P)
 
-        expect(travel_triggers.pluck(:source)).to eq([:tesla])
+        expect(travel_triggers.last).to include(action: :arrived, source: :tesla)
+        expect(travel_triggers.pluck(:source)).not_to include(:phone)
       end
     end
   end

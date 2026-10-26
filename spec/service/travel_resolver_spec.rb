@@ -145,6 +145,15 @@ RSpec.describe TravelResolver do
         expect(depart_from_road[:location]).to eq("Home")
       end
 
+      it "is where they last arrived, not the saved place next door the geofence tripped by" do
+        allow(::LocationCache).to receive_messages(current_location_name: "B's", nearby_contact: Contact.new(name: "B's"))
+        travel_to(6.hours.ago) {
+          user.action_events.create!(name: :arrived, notes: "Home", data: { phone: { lat: home.first, lng: home.last } })
+        }
+
+        expect(record(source: :phone, lat: 40.479019, lng: -111.998513)[:location]).to eq("Home")
+      end
+
       it "is the town when their last arrival was somewhere else entirely" do
         user.action_events.create!(name: :arrived, notes: "Costco", data: { phone: { lat: 40.7, lng: -111.85 } })
 
@@ -202,6 +211,19 @@ RSpec.describe TravelResolver do
 
       record(source: :tesla, lat: 40.480958, lng: -111.98846)
 
+      expect(user.action_events.where(name: :departed).count).to eq(1)
+    end
+
+    # The geofence tripped 400 m out; the car's copy for the phone aboard
+    # carries the car's point at the boundary, which the car already put on
+    # the row.
+    it "folds the car's copy for the phone into a leg the geofence opened far off" do
+      record(source: :phone, lat: 40.478615, lng: -112.002299)
+      record(source: :tesla, lat: 40.480569, lng: -111.998742)
+
+      copy = record(source: :phone, lat: 40.480569, lng: -111.998742)
+
+      expect(copy[:announce]).to be(false)
       expect(user.action_events.where(name: :departed).count).to eq(1)
     end
 

@@ -94,6 +94,30 @@ RSpec.describe Buddy::Emphasis do
     end
   end
 
+  # Three sentences, five spans, two of them temperatures.
+  describe "a short briefing bolding every fact in it" do
+    let(:body) {
+      "High of **55°F**, low **39°F**. Rain **Sunday, Monday and Friday**. " \
+        "**PC income tasks** have waited **6 weeks**."
+    }
+
+    it "takes the bold off the figures" do
+      expect(described_class.thin(body)).to include("High of 55°F, low 39°F.")
+    end
+
+    it "leaves the names their bold" do
+      expect(described_class.thin(body)).to include("**PC income tasks**", "**Sunday, Monday and Friday**")
+    end
+  end
+
+  describe "a title with italics in it" do
+    it "is one span, not the start of the next one" do
+      body = "Friday at 7pm is **Derek Halloween Party *bring Whisper***, and Saturday is **Tipsy treating**."
+
+      expect(described_class.spans(body)).to eq(["Derek Halloween Party *bring Whisper*", "Tipsy treating"])
+    end
+  end
+
   describe "what it refuses to touch" do
     it "leaves italics alone" do
       body = briefing(["Morning! *boing*"] + (1..9).map { |n| "**Thing #{n}** is on." })

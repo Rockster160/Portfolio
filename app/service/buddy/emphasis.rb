@@ -30,12 +30,17 @@ module Buddy
 
     # `**like this**`, non-greedy and within one line, so an unclosed pair
     # can't swallow the rest of the briefing. Single asterisks are left alone:
-    # italics are not what went wrong and the prompt welcomes them.
-    SPAN_RX = /\*\*(?=\S)([^*\n]+?)\*\*/
+    # italics are not what went wrong and the prompt welcomes them. An italic
+    # pair may sit inside the span - an event titled "Party *bring Whisper*" is
+    # bolded whole, and without this its closing `**` paired with the next
+    # span's opener.
+    SPAN_RX = /\*\*(?=\S)((?:[^*\n]|\*[^*\n]+\*)+?)\*\*/
 
-    # Below this, emphasis is scarce by definition and there is nothing to
-    # measure. It also keeps a two-sentence briefing from tripping on three
-    # spans, where the ratio alone would.
+    # Below this, emphasis is scarce enough that none of it is taken off
+    # wholesale. It also keeps a two-sentence briefing from losing every span
+    # over three, where the ratio alone would. Figures still come off a short
+    # one that is over the line - a time in bold beside every name is the same
+    # overrun at any length.
     FLOOR = 8
 
     # A span carrying only a FIGURE - a time, a temperature, a percentage, a
@@ -67,12 +72,13 @@ module Buddy
     def thin(body)
       text  = body.to_s
       found = spans(text)
-      return body if found.length < FLOOR
       return body if found.length <= sentences(text).length
 
       # Figures first. If that is enough to bring it back under, the names keep
       # their emphasis and the briefing reads the way the rule always wanted.
       text  = text.gsub(SPAN_RX) { |span| figure?(::Regexp.last_match(1)) ? ::Regexp.last_match(1) : span }
+      return text if found.length < FLOOR
+
       found = spans(text)
       return text if found.length <= sentences(text).length
 

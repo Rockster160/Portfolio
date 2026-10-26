@@ -51,6 +51,8 @@ module Buddy
     # of it.
     GRAMMAR = Buddy::Restatement::FILLER
 
+    BACK_REFERENCE = /\A(?:that one|that|it)\b/i
+
     def trim(body, memories, facts)
       text = body.to_s
       return text if text.blank?
@@ -65,11 +67,20 @@ module Buddy
       return text if private_words.empty? && loose_sets.empty?
 
       kept = []
+      dropped = false
       # Same split and the same separator handling as Buddy::DayClaim and
       # `without_empty_chore_note`: the break that led INTO a dropped sentence
       # leaves with it.
       text.split(/((?<=[.!?])\s+)/).each { |part|
-        if names?(part, private_words, at_least: 1) || loose_sets.any? { |words| names?(part, words, at_least: 2) }
+        next kept << part if part.blank?
+
+        # A sentence pointing back at the one just cut goes with it - otherwise
+        # "That one's been sitting for 9 weeks" lands on whatever was said
+        # before it.
+        orphaned = dropped && part.match?(BACK_REFERENCE)
+        dropped = orphaned || names?(part, private_words, at_least: 1) ||
+          loose_sets.any? { |words| names?(part, words, at_least: 2) }
+        if dropped
           Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a prompt-resident memory")
           kept.pop
         else

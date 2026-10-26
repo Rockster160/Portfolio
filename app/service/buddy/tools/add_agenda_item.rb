@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :add_agenda_item,
   summary:     "Put a NEW appointment, event or task on their calendar. A nudge at a time is " \
-               "schedule_reminder; changing an existing item is edit_agenda_item.",
+               "schedule_reminder; changing an existing item is edit_agenda_item; a job " \
+               "an existing chore covers, due on a day, is edit_chore.",
   description: <<~TXT,
     Add a new item to the user's calendar/agenda. Use for appointments,
     events, or tasks. `at` is an ISO datetime. `duration` is in minutes.
@@ -13,6 +14,11 @@ Buddy::Tools.register(
     on the agenda is `kind: task` here, not a reminder and not a list item.
     No time named? Pick the natural one (now, for "once I get home"; tonight,
     for "later") and say what you assumed - don't stall the add to ask.
+
+    **A job around the house that a CHORE already covers is not an agenda
+    item.** "We need to trim Fae's nails today", "take out the trash
+    tomorrow" - when a chore for it exists, that's `edit_chore` with `due`,
+    which marks the day and leaves its schedule alone.
 
     **A weekday whose time has already gone today means NEXT week.** "Dinner
     with Sam Thursday at 7", said at nine on a Thursday evening, is next

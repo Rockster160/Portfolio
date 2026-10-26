@@ -870,11 +870,7 @@ module Buddy
         return [] if body.blank?
 
         [
-          ("the day's high and low" if weather_dropped?(body)),
-          ("the week's weather" if week_dropped?(body)),
-          ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
-          ("the rain odds on Alpine's week" if week_odds_dropped?(body)),
-          ("the rain hours on Alpine's week" if week_hours_dropped?(body)),
+          *dropped_weather(body),
           *unnamed_agenda(body).map { |i| i[:title].to_s },
           *unnamed_week(body).map { |i| "#{i[:title]} on #{i[:day].presence || "later this week"}" },
           *unowned_items(body).map { |i| "whose #{i[:title]} is - it is #{i[:owner]}'s, not theirs" },
@@ -885,6 +881,38 @@ module Buddy
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] dropped-fact check failed: #{e.class}: #{e.message}")
         []
+      end
+
+      # Nothing, when the forecast goes on as a table - the draft was told to
+      # leave it alone.
+      def dropped_weather(body)
+        return [] if forecast_tabled?
+
+        [
+          ("the day's high and low" if weather_dropped?(body)),
+          ("the week's weather" if week_dropped?(body)),
+          ("today's rain hours in Alpine" if rain_hours_dropped?(body)),
+          ("the rain odds on Alpine's week" if week_odds_dropped?(body)),
+          ("the rain hours on Alpine's week" if week_hours_dropped?(body)),
+        ]
+      end
+
+      def forecast_tabled?
+        today_briefing? && Buddy::BriefingFacts.tabled?(briefing_facts)
+      end
+
+      # The week's forecast under the briefing, after every repair has run so
+      # none of them reads it as something the model said. See
+      # Buddy::ForecastTable.
+      def with_forecast_table(body)
+        return body unless forecast_tabled?
+        return body if body.blank? || body.strip == PLACEHOLDER
+
+        table = Buddy::ForecastTable.table(briefing_facts[:forecast], today: Buddy::Day.today(@user))
+        table ? "#{body.rstrip}\n\n#{table}" : body
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] forecast table failed: #{e.class}: #{e.message}")
+        body
       end
 
       def weather_dropped?(body)
@@ -1715,6 +1743,7 @@ module Buddy
       # Buddy::TodayBriefing.weather_line for why this stopped being a request.
       def with_weather(body)
         return body unless today_briefing?
+        return body if forecast_tabled?
         return body unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
 
         figures = seed_figures
@@ -1836,6 +1865,7 @@ module Buddy
       # day carrying three 99-100% days.
       def with_week_weather(body)
         return body unless today_briefing?
+        return body if forecast_tabled?
 
         outlook = seed_week_outlook
         days    = Buddy::TodayBriefing.flagged_days(outlook)
@@ -1866,6 +1896,7 @@ module Buddy
       # repair never got one back.
       def with_rain_hours(body)
         return body unless today_briefing?
+        return body if forecast_tabled?
 
         # Only what went missing, so a briefing that gave three of four windows
         # gets the fourth back rather than all four read at it again.
@@ -1893,6 +1924,7 @@ module Buddy
       # Sourced from the seed, for the reason briefing_alpine_week gives.
       def with_alpine_week_odds(body)
         return body unless today_briefing?
+        return body if forecast_tabled?
 
         missing = Buddy::TodayBriefing.week_odds_missing(body, briefing_alpine_week)
         hours   = Buddy::TodayBriefing.week_hours_missing(body, briefing_alpine_week)
@@ -2094,7 +2126,7 @@ module Buddy
         Array(briefing_facts[:today]).select { |i| i.is_a?(::Hash) && !named_in?(body, i) }
       end
 
-      # The same, for LATER THIS WEEK, and it was the hole this check had.
+      # The same, for COMING UP, and it was the hole this check had.
       #
       # Nothing read `facts[:week]`, so a draft that named every item on today
       # and dropped the week section whole passed clean and went out first try.
@@ -3056,6 +3088,7 @@ module Buddy
       def finalize_success(outcome)
         @repairs = []
         body = trimmed_of_removals(display_body(outcome[:text]))
+        draft = body
         # One thing said twice: a single call with no tools answers the question
         # and then answers it again, reworded. See
         # Buddy::Restatement for why this compares word sets rather than
@@ -3099,6 +3132,7 @@ module Buddy
         body = repaired(:alpine_week_odds, body) { |b| with_alpine_week_odds(b) }
         body = repaired(:leave_times, body) { |b| with_leave_times(b) }
         body = repaired(:greeting, body) { |b| with_greeting(b) }
+        body = with_forecast_table(body)
         # Scrubbing can empty a reply outright - a leaked form marker can be the
         # whole body.
         #
@@ -3204,8 +3238,11 @@ module Buddy
         # That is what a briefing "becoming robotic" is, and nothing in the data
         # said how often it was happening. Now the daily
         # audit can count it instead of anybody guessing.
+        # The model's own words go beside them, so what a repair cut can be read
+        # back rather than guessed at.
         if @repairs.present?
-          @reply.update!(metadata: @reply.metadata.to_h.merge("repairs" => @repairs.map(&:to_s)))
+          repairs = { "repairs" => @repairs.map(&:to_s), "unrepaired" => draft }
+          @reply.update!(metadata: @reply.metadata.to_h.merge(repairs))
         end
 
         stamp_usage_rollup

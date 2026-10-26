@@ -962,9 +962,25 @@ BUDDY_EDGE_PROBES = [
     tool:       :edit_chore,
     args:       { edit_chore: { due: /\Atomorrow\z/i } },
     never_args: { edit_chore: { schedule: /./ } },
-    avoid:      %i[create_chore],
+    avoid:      %i[create_chore add_agenda_item],
     needs:      :claws_chore,
     note:       "asked for: one day marked without touching how often it comes round",
+  },
+  {
+    case:  "prod 9024",
+    say:   "We need to trim Fae's nails today",
+    tool:  :edit_chore,
+    args:  { edit_chore: { due: /\Atoday\z/i } },
+    avoid: %i[add_agenda_item create_chore],
+    needs: :claws_chore,
+    note:  "made an agenda item called Trim Fae's Nails; the chore was only marked due after " \
+           "\"there should be a chore for that\"",
+  },
+  {
+    case: "prod 9062",
+    say:  "Remind me to respond to Reserv tomorrow",
+    tool: :schedule_reminder,
+    note: "asked what time and left nothing set; he had just said good night",
   },
   {
     case:  "prod 8926",
