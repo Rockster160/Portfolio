@@ -759,6 +759,83 @@
     }
   }
 
+  // ---- The process -----------------------------------------------------
+  //
+  // A checklist, read down. Quieter than the standing panel above it on
+  // purpose: that one is where you are, this one is how far, and only one of
+  // them is news.
+  .job-rubric {
+    margin-bottom: 14px;
+    border: 1px solid var(--iv-line);
+    border-radius: 10px;
+    background: var(--iv-surface);
+    padding: 10px 14px;
+
+    .rubric-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+
+      h4 {
+        margin: 0;
+        color: var(--iv-text);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+    }
+
+    .rubric-steps {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rubric-step {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 10px;
+      padding: 3px 0;
+
+      label {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        color: var(--iv-text);
+        cursor: pointer;
+      }
+
+      input[type="checkbox"] {
+        margin: 0;
+      }
+
+      // Done is the resting state of most of this list, so it reads as
+      // finished rather than as something achieved — the one worth looking at
+      // is the next one.
+      &.is-done label {
+        color: var(--iv-muted);
+      }
+
+      &.is-next .rubric-name {
+        font-weight: bold;
+      }
+    }
+
+    .rubric-when {
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+
+    .rubric-save {
+      margin-top: 8px;
+    }
+
+    .rubric-edit {
+      margin-top: 10px;
+    }
+  }
+
   // Status control and the facts beside it. The logo used to live here; it
   // moved up into the title, which is where a logo goes.
   .job-header {

@@ -455,6 +455,8 @@ Rails.application.routes.draw do
   # is the thing you open during a search, not the record it stores.
   resources :interviews, controller: :job_applications, except: [:new, :edit] do
     post :merge, on: :member
+    # The steps of this one's process, ticked or rewritten.
+    patch :rubric, on: :member
     resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
     resources :transcripts, controller: :job_transcripts,
       only: [:create, :show, :update, :destroy]

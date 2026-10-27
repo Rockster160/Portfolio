@@ -304,8 +304,16 @@ class Email < ApplicationRecord
   # from the same box. `inbound_mailboxes` is always our side regardless of
   # direction; mail that reached a personal Gmail falls back to the house
   # address, since a reply can only leave from a domain we control.
+  # The box to send AS. One of ours, necessarily - mail can only leave from a
+  # domain we control - so a message that reached a Gmail address of his falls
+  # through to the general one.
+  #
+  # Keys are symbolized because they arrive both ways: a row just created still
+  # holds the Ruby hash it was assigned, where one read back out of the column
+  # has string keys. Without this a reloaded row answered every reply from
+  # `contact@ardesian.com` rather than from the address the mail came to.
   def reply_from
-    inbound_mailboxes.filter_map { |mailbox| mailbox[:address] }.find { |address|
+    inbound_mailboxes.filter_map { |mailbox| mailbox.to_h.symbolize_keys[:address] }.find { |address|
       address.split("@", 2).last.in?(self.class.registered_domains)
     } || "contact@ardesian.com"
   end

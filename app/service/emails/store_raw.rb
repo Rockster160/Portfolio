@@ -43,6 +43,13 @@ module Emails
       email = user.emails.find_by(mail_id: message_id(parser, stamp))
       email ||= create(user, parser, mail, stamp, direction, triage)
       attach(email, raw)
+      # The one thing this path does run, despite everything above about mail
+      # already dealt with elsewhere - because an invite is not an automation.
+      # It is a time he has to be somewhere, and an invite that only ever
+      # existed as a .ics inside a message is the exact thing that goes
+      # missing. Idempotent on the invite's own UID, so the same message
+      # arriving down both ingest paths still books one row.
+      ::Emails::InviteSync.call(email, parser: parser)
       email
     rescue StandardError => e
       Rails.logger.warn("[Emails::StoreRaw] could not store #{raw.to_s.bytesize}B: #{e.class}: #{e.message}")

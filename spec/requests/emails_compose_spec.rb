@@ -56,6 +56,22 @@ RSpec.describe "Email compose", type: :request do
       expect(response.body).to include('value="RE: Next steps with Neighbor!"')
       expect(response.body).to include('value="contact"')
     end
+
+    # Keys arrive both ways: a row just created still holds the Ruby hash it
+    # was assigned, where one read back out of the column has string keys.
+    # Reading a stored row therefore found no address at all and answered from
+    # the house box instead of the one the mail came to.
+    it "prefills From with the box the mail came to, on a row read back out of the database" do
+      email = inbound_from(
+        sender_name:    "Erin McDonald",
+        sender_address: "erin@acme.test",
+        our_address:    "rocco@ardesian.com",
+      )
+
+      get new_email_path(email: Email.find(email.id).reply_defaults)
+
+      expect(response.body).to include('value="rocco"')
+    end
   end
 
   describe "POST /emails" do

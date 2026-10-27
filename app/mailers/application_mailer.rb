@@ -22,4 +22,18 @@ class ApplicationMailer < ActionMailer::Base
       body:         html_body,
     )
   end
+
+  # An RSVP to an invite that arrived as a .ics. The words are a courtesy - what
+  # the organizer's calendar actually reads is the attached event, and it only
+  # reads it because `method=REPLY` is on the part's own content type. Sent as
+  # plain text so the calendar part is the only thing in the message worth
+  # parsing. See Emails::InviteReply.
+  def calendar_reply(from:, to:, subject:, intro:, ics:)
+    attachments["invite.ics"] = {
+      mime_type: "text/calendar; method=REPLY; charset=UTF-8",
+      content:   ics,
+    }
+
+    mail(from: from, to: to, subject: subject, body: intro)
+  end
 end

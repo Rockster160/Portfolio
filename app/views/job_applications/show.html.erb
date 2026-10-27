@@ -46,6 +46,8 @@
           <%= render "standing", job: @job %>
         <% end %>
 
+        <%= render "rubric", job: @job %>
+
         <div class="job-header">
           <%= form_with model: @job, url: interview_path(@job), method: :patch, local: true,
                 class: "basic job-status-form" do |f| %>

@@ -8,7 +8,7 @@
 # done.
 class JobApplicationsController < ApplicationController
   before_action :authorize_user
-  before_action :load_job, only: [:show, :update, :destroy, :merge]
+  before_action :load_job, only: [:show, :update, :destroy, :merge, :rubric]
 
   # `status` filters the wall. Nothing means live — active and offers — which
   # is the "hide the rejected by default" the tracker is supposed to do.
@@ -129,6 +129,22 @@ class JobApplicationsController < ApplicationController
 
   # Folds two rows into one. The model decides which is kept - jobhunt's, when
   # one of them is - so this may land somewhere other than the page it came from.
+  # The rounds between applying and an answer: either ticked off, or rewritten
+  # from what the company said their process is.
+  #
+  # One endpoint because they are one panel. The ticks arrive as a set of
+  # checkboxes and the steps as a block of lines, and `ticking` is what tells
+  # an unchecked box from an absent form - without it, a save with nothing
+  # ticked and a request with no rubric in it at all look identical, and the
+  # second one would clear the first one's work.
+  def rubric
+    steps = params.fetch(:rubric, {})
+    @job.rubric_lines = steps[:lines] if steps.key?(:lines)
+    @job.rubric_ticks = steps[:done] if steps.key?(:ticking)
+    @job.save!
+    redirect_to interview_path(@job)
+  end
+
   def merge
     other = current_user.job_applications.find(params[:other_id])
     labels = { @job.id => "##{@job.id}", other.id => "##{other.id}" }

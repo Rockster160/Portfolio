@@ -162,4 +162,51 @@ RSpec.describe Emails::StoreRaw do
 
     expect(email.timestamp).to be_within(1.second).of(at)
   end
+
+  # This path exists precisely because the mail was already read elsewhere, so
+  # it deliberately runs none of the automations the domain path runs. An
+  # invite is the exception: a meeting is a time he has to be somewhere, and
+  # the .ics inside a message read in Gmail is the exact thing that goes
+  # missing.
+  it "still puts a calendar invite on the day" do
+    user.agendas.order(:id).first || create(:agenda, user: user)
+    calendar = [
+      "BEGIN:VCALENDAR",
+      "METHOD:REQUEST",
+      "BEGIN:VEVENT",
+      "UID:watcher-1@acme.test",
+      "SUMMARY:Interview: Acme",
+      "DTSTART:20261110T160000Z",
+      "DTEND:20261110T164500Z",
+      "ORGANIZER:mailto:erin@acme.test",
+      "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:rocco@example.com",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n")
+    source = [
+      "From: Erin McDonald <erin@acme.test>",
+      "To: Rocco Nicholls <rocco@example.com>",
+      "Subject: Invitation: Interview",
+      "Message-ID: <watch-1@acme.test>",
+      "Date: Mon, 27 Oct 2026 09:00:00 -0600",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="xx"',
+      "",
+      "--xx",
+      "Content-Type: text/plain",
+      "",
+      "See you then.",
+      "",
+      "--xx",
+      'Content-Type: application/ics; name="invite.ics"',
+      'Content-Disposition: attachment; filename="invite.ics"',
+      "",
+      calendar,
+      "--xx--",
+      "",
+    ].join("\n")
+
+    expect { described_class.call(user: user, raw: source) }.to change(AgendaItem, :count).by(1)
+    expect(AgendaItem.last.start_at).to eq(Time.utc(2026, 11, 10, 16, 0))
+  end
 end

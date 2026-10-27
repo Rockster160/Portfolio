@@ -10,6 +10,7 @@
 #  logo             :text
 #  pay              :string
 #  role             :string
+#  rubric           :jsonb            not null
 #  source           :string
 #  status           :integer          default("active"), not null
 #  url              :string
@@ -103,6 +104,126 @@ class JobApplication < ApplicationRecord
   # at payout. Parsing any of that into a column loses the half that matters.
   def terms
     { "Location" => location, "Pay" => pay }.compact_blank
+  end
+
+  # THE PROCESS: the rounds between applying and an answer, as a list that
+  # ticks itself off.
+  #
+  # Four steps, because every search starts not knowing what the rounds are.
+  # The company says later - "a 30 minute call with the team, then a live
+  # coding exercise, then the CEO for an hour" - and then the list is theirs
+  # rather than this one. See `rubric_lines=`.
+  DEFAULT_RUBRIC = ["Applied", "Recruiter screen", "Interview", "Offer"].freeze
+
+  # Which beat ticks a step off, read from what the step is CALLED. The names a
+  # company uses for its own rounds are remarkably uniform, so a step pasted
+  # from their mail usually knows what answers it without being told.
+  #
+  # Order is the whole correctness of this: "take-home exercise" and "technical
+  # interview" both say interview-ish things, and the first match is the one
+  # that gets it. Anything unrecognized ticks by hand, which is also the right
+  # answer for a reference check or a background check - real steps that no
+  # beat on the timeline will ever speak for.
+  RUBRIC_INTERVIEW = /interview|onsite|on.site|panel|coding|technical|pairing|manager|final|call/i
+  RUBRIC_TAGS = {
+    /\bappl(y|ied|ication)/i                       => "applied",
+    /recruiter|phone screen|screening|intro call/i => "recruiter_call",
+    /take.?home|assignment|homework|exercise/i     => "take_home",
+    /\boffer\b/i                                   => "offer",
+    RUBRIC_INTERVIEW                               => "interview",
+  }.freeze
+
+  # A step is a line somebody typed, and a list of them is a process rather
+  # than a questionnaire.
+  MAX_RUBRIC_NAME = 80
+  MAX_RUBRIC_STEPS = 24
+
+  Step = Struct.new(:name, :tag, :done_at, :by_hand, keyword_init: true) do
+    def done?
+      done_at.present?
+    end
+  end
+
+  # The steps in order, with everything the timeline has already answered
+  # ticked off.
+  #
+  # DERIVED, not stored. A beat is what makes a round have happened, so the
+  # tick is read off the notes every time rather than written down when one
+  # arrives - which is the same reason `stale?` reads `engaged_at` instead of
+  # the `last_activity_at` column that drifts. Nothing to keep in step, nothing
+  # to repair, and a step's date is the date of the thing itself however late
+  # it was written up.
+  #
+  # Each beat answers at most one step, oldest first, so a company with three
+  # interview rounds ticks them off one interview at a time.
+  def rubric_steps
+    beats = notes.select { |note| note.occurred_at.present? }.sort_by(&:occurred_at)
+    spent = []
+    rubric_shape.map { |step|
+      stored = step["done_at"].presence
+      beat = (beats.find { |note| note.tag == step["tag"] && spent.exclude?(note.id) } if stored.nil?)
+      spent << beat.id if beat
+      Step.new(
+        name:    step["name"],
+        tag:     step["tag"],
+        done_at: stored ? Time.zone.parse(stored) : beat&.occurred_at,
+        by_hand: stored.present?,
+      )
+    }
+  end
+
+  # The stored list, or the standard one when nobody has touched it. An empty
+  # column means "nothing said about this application's process", which is true
+  # of almost all of them and is exactly when the default is wanted.
+  def rubric_shape
+    return rubric if rubric.present?
+
+    DEFAULT_RUBRIC.map { |name| { "name" => name, "tag" => self.class.rubric_tag_for(name) } }
+  end
+
+  def self.rubric_tag_for(name)
+    RUBRIC_TAGS.find { |pattern, _tag| name.to_s.match?(pattern) }&.last
+  end
+
+  def rubric_lines
+    rubric_shape.pluck("name").join("\n")
+  end
+
+  # The whole list, replaced by what he typed - one step per line, pasted
+  # straight out of the mail that described them, bullets and numbering and
+  # all.
+  #
+  # A line that still says what it said keeps the step it was, with its tick
+  # and the beat it ticks on. So adding the two rounds a company has just
+  # named, or deleting the take-home they don't do, is not a reset of
+  # everything already answered. Emptying it entirely IS one - the list goes
+  # back to the standard four.
+  def rubric_lines=(text)
+    kept = rubric_shape.index_by { |step| step["name"].to_s.downcase }
+    lines = text.to_s.split("\n").filter_map { |line|
+      name = line.strip.sub(/\A(?:[-*\u2022]|\d+[.)])\s+/, "").strip.first(MAX_RUBRIC_NAME)
+      next if name.blank?
+
+      kept[name.downcase] || { "name" => name, "tag" => self.class.rubric_tag_for(name) }
+    }
+    self.rubric = lines.uniq { |step| step["name"].downcase }.first(MAX_RUBRIC_STEPS)
+  end
+
+  # Ticks the steps whose boxes came back checked and clears the rest. The
+  # POSITION in the list is the handle, the way an attachment's is: a step is a
+  # line of text, which is neither unique nor stable enough to key on.
+  #
+  # Clearing only ever removes a tick made BY HAND. A step a beat answered goes
+  # back to being answered by that beat the moment this is saved, which is why
+  # the view does not offer to untick one - the way to say an interview didn't
+  # happen is to delete the interview.
+  def rubric_ticks=(checked)
+    wanted = Array(checked).map(&:to_i)
+    self.rubric = rubric_shape.each_with_index.map { |step, index|
+      step.merge(
+        "done_at" => (wanted.include?(index) ? (step["done_at"].presence || Time.current.utc.iso8601) : nil),
+      )
+    }
   end
 
   # A job is only ever as current as its newest note. Kept as a column so the

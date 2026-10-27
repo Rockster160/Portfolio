@@ -77,4 +77,62 @@ RSpec.describe Emails::CalendarInvite do
   it "is nil for a mail without one" do
     expect(Emails::ParseMail.call(Mail.new { body "Hello" }).calendar_invite).to be_nil
   end
+
+  # A forwarded invite arrives as a FILE, and its type says nothing about
+  # calendars. For months those were mail with no time in it at all.
+  it "finds the calendar sent as a file" do
+    ics = outlook
+    mail = Mail.new {
+      text_part { body "Looking forward to it." }
+      add_file(filename: "invite.ics", content: ics)
+      parts.last.content_type = "application/octet-stream; name=invite.ics"
+    }
+
+    expect(Emails::ParseMail.call(mail).calendar_invite[:starts_at]).to eq(Time.utc(2026, 10, 27, 17, 30))
+  end
+
+  # The handle a reschedule lands on, and the two things a reply has to quote
+  # back for the organizer's calendar to accept it.
+  it "reads what identifies the event" do
+    invite = described_class.parse(outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nUID:abc-123@acme.test\r\nSEQUENCE:2"))
+
+    expect(invite).to include(uid: "abc-123@acme.test", sequence: 2, method: "REQUEST")
+  end
+
+  it "reads the guest list, as the agenda already stores one" do
+    invite = described_class.parse(
+      outlook.sub(
+        "BEGIN:VEVENT",
+        "BEGIN:VEVENT\r\nORGANIZER;CN=Erin McDonald:mailto:Erin@Acme.test\r\n" \
+        "ATTENDEE;CN=Rocco;PARTSTAT=ACCEPTED:mailto:rocco@example.com\r\n" \
+        "ATTENDEE;ROLE=OPT-PARTICIPANT:mailto:panel@acme.test",
+      ),
+    )
+
+    expect(invite[:organizer]).to eq(
+      "email"           => "erin@acme.test",
+      "display_name"    => "Erin McDonald",
+      "response_status" => "needsAction",
+      "optional"        => false,
+    )
+    expect(invite[:attendees].pluck("email")).to eq(["rocco@example.com", "panel@acme.test"])
+    expect(invite[:attendees].first["response_status"]).to eq("accepted")
+    expect(invite[:attendees].last["optional"]).to be(true)
+  end
+
+  # Anything else - DELEGATED, IN-PROCESS - means "not yet" to anybody looking
+  # at who is coming.
+  it "reads an answer it does not know as no answer" do
+    invite = described_class.parse(
+      outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nATTENDEE;PARTSTAT=DELEGATED:mailto:rocco@example.com"),
+    )
+
+    expect(invite[:attendees].first["response_status"]).to eq("needsAction")
+  end
+
+  it "keeps no guest there is no way to reach" do
+    invite = described_class.parse(outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nATTENDEE;CN=Big Room:mailto:"))
+
+    expect(invite[:attendees]).to be_empty
+  end
 end

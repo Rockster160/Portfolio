@@ -23,6 +23,12 @@ class ReceiveEmailWorker
       @email.mail_blob.attach(stored_blob) if @email.mail_blob.blank?
     end
 
+    # Before the triggers, and regardless of them: an invite is a time to be
+    # somewhere, and a task that archives the mail it came in should not also
+    # take the meeting off the day. Idempotent on the invite's own UID, so a
+    # re-ingest of the same message lands on the row it already wrote.
+    ::Emails::InviteSync.call(@email, parser: parser)
+
     return unless trigger
 
     # TODO: If using UUID, should specifically trigger ONLY that Task with the email as input.

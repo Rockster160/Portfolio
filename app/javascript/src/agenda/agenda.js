@@ -2712,14 +2712,17 @@
 
   // Pulls the attendees + self_response payload off the clicked seed and
   // populates the attendee list + RSVP buttons. No-op on non-invite events
-  // (zero attendees) and on non-Google agendas (RSVP requires upstream
-  // patch). Optimistic UI: the clicked button enters a pending state until
-  // the server returns the new metadata; on failure we revert.
+  // (zero attendees) and on anything with nobody to answer: a synced event
+  // answers through Google, an invite that arrived as a .ics answers by
+  // replying to the organizer, and an event of his own answers to nobody.
+  // Optimistic UI: the clicked button enters a pending state until the server
+  // returns the new metadata; on failure we revert.
   function hydrateRsvp(modal, dataEl) {
     const d = dataEl.dataset;
     const attendees = safeJsonParse(d.attendees, []);
     const organizer = safeJsonParse(d.organizer, null);
     const isGoogle = d.agendaSource === "google";
+    const isMailInvite = d.mailInvite === "true";
     const isEvent = d.kind === "event";
     const itemUrl = d.itemUrl || "";
     const selfResp = d.selfResponse || "";
@@ -2767,7 +2770,7 @@
 
     const rsvpRow = modal.querySelector("[data-rsvp-row]");
     if (!rsvpRow) return;
-    const showRsvp = isGoogle && isEvent && (attendees.length > 0);
+    const showRsvp = (isGoogle || isMailInvite) && isEvent && (attendees.length > 0);
     rsvpRow.classList.toggle("hidden", !showRsvp);
     rsvpRow.querySelectorAll("[data-rsvp-action]").forEach((btn) => {
       btn.classList.toggle("is-current", btn.dataset.rsvpAction === selfResp);

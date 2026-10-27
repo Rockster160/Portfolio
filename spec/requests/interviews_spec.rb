@@ -344,6 +344,61 @@ RSpec.describe "Interview tracker", type: :request do
 
   # A recruiter came to him about something he does not want. The row had been
   # asking him to answer a message he had decided not to answer.
+  # THE PROCESS: how far along this one is, which a timeline read bottom-up is
+  # worst at answering.
+  describe "the rubric on an application" do
+    let!(:job) { user.job_applications.create!(company: "Acme") }
+
+    # The strip of the page the panel occupies, so a step name is not matched
+    # against the whole document.
+    def rubric_strip
+      response.body[/<div class="job-rubric">.*?<details/m].to_s
+    end
+
+    it "opens on the standard steps" do
+      get interview_path(job)
+
+      expect(rubric_strip).to include("Applied", "Recruiter screen", "Interview", "Offer")
+      expect(rubric_strip).to include("0 of 4")
+    end
+
+    it "shows the ones the timeline has answered as answered" do
+      job.notes.create!(tag: :applied, occurred_at: 2.weeks.ago)
+      get interview_path(job)
+
+      expect(rubric_strip).to include("1 of 4")
+    end
+
+    it "takes the company's own rounds" do
+      patch rubric_interview_path(job), params: { rubric: { lines: "Team call\nLive coding\nCEO" } }
+
+      expect(response).to redirect_to(interview_path(job))
+      expect(job.reload.rubric.pluck("name")).to eq(["Team call", "Live coding", "CEO"])
+    end
+
+    it "ticks a step by hand" do
+      patch rubric_interview_path(job), params: { rubric: { ticking: 1, done: ["1"] } }
+
+      expect(job.reload.rubric_steps.map(&:done?)).to eq([false, true, false, false])
+    end
+
+    it "clears a hand tick when the box comes back unchecked" do
+      patch rubric_interview_path(job), params: { rubric: { ticking: 1, done: ["1"] } }
+      patch rubric_interview_path(job), params: { rubric: { ticking: 1 } }
+
+      expect(job.reload.rubric_steps).to all(satisfy { |step| !step.done? })
+    end
+
+    # Without the marker, a save with nothing ticked and a request with no
+    # rubric in it at all look identical.
+    it "leaves the ticks alone when the request carries none" do
+      patch rubric_interview_path(job), params: { rubric: { ticking: 1, done: ["0"] } }
+      patch rubric_interview_path(job), params: {}
+
+      expect(job.reload.rubric_steps.first.done?).to be(true)
+    end
+  end
+
   describe "ignoring an approach" do
     let(:job) {
       job = user.job_applications.create!(company: "Initech")

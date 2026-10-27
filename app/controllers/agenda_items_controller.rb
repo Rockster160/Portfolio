@@ -13,6 +13,7 @@ class AgendaItemsController < ApplicationController
   before_action :reject_stale_client_mutation!, only: [:update, :destroy]
 
   rescue_from GoogleSyncFailed, with: :render_google_sync_failed
+  rescue_from ::Emails::InviteReply::Undeliverable, with: :render_invite_reply_failed
 
   # Defer the "Notify others" fan-out a beat so the async travel-chain sync
   # can stamp metadata["travel"] first — the briefing includes travel time
@@ -171,25 +172,29 @@ class AgendaItemsController < ApplicationController
   # For a Google-synced detached row this also deletes the Google override
   # so the upstream view restores the standard occurrence instead of
   # keeping the modified one.
-  # RSVP to a Google-synced event. Patches the connected account's
-  # responseStatus upstream first (no email blast — `sendUpdates=none`),
-  # then mirrors locally into AgendaItem.metadata.self_response. Phantoms
-  # are materialized + detached so the response applies to THIS occurrence
-  # only — matches the per-occurrence editing model the rest of the
+  # RSVP to an invite. Two kinds reach this, and only the local half of the
+  # work is shared: a Google-synced event patches the connected account's
+  # responseStatus upstream (no email blast — `sendUpdates=none`), while an
+  # invite that arrived as a .ics replies to the organizer by mail, which is
+  # the only thing holding that event. Either way the answer is then mirrored
+  # into AgendaItem.metadata.self_response.
+  #
+  # Phantoms are materialized + detached so the response applies to THIS
+  # occurrence only — matches the per-occurrence editing model the rest of the
   # controller uses.
   RESPONSE_STATUSES = %w[accepted tentative declined needsAction].freeze
 
   def respond
     @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
     return head :not_found unless @item
-    return render json: { errors: ["Not a Google-synced event."] }, status: :unprocessable_entity unless @item.agenda.managed_externally?
+    return render json: { errors: ["Nothing to respond to on this event."] }, status: :unprocessable_entity unless respondable?(@item)
 
     response_status = params[:response].to_s
     return render json: { errors: ["Unknown response."] }, status: :unprocessable_entity if RESPONSE_STATUSES.exclude?(response_status)
 
     with_agenda_write_lock(@item.agenda) {
       new_attendees = updated_attendees_for_self(response_status)
-      instance_id = mirror_rsvp_to_google!(@item, new_attendees)
+      instance_id = send_rsvp!(@item, new_attendees, response_status)
       apply_rsvp_locally!(@item, instance_id, new_attendees, response_status)
 
       @item.agenda.broadcast!
@@ -883,12 +888,42 @@ class AgendaItemsController < ApplicationController
     render json: { errors: [exception.message] }, status: :bad_gateway
   end
 
+  def render_invite_reply_failed(exception)
+    render json: { errors: [exception.message] }, status: :unprocessable_entity
+  end
+
+  # An event somebody is waiting on an answer about. Google holds the guest
+  # list for a synced one; for a mailed invite the only record of it is the
+  # .ics that came with the message, and the organizer's own calendar.
+  def respondable?(item)
+    item.agenda.managed_externally? || item.mail_invite?
+  end
+
+  # Sends the answer wherever that event actually lives. Returns the Google
+  # event id it was written against, and nil for a mailed invite — there is no
+  # upstream id to keep, and `apply_rsvp_locally!` stores whatever comes back.
+  def send_rsvp!(item, attendees, response_status)
+    return mirror_rsvp_to_google!(item, attendees) if item.agenda.managed_externally?
+
+    ::Emails::InviteReply.call(item: item, response: response_status)
+    nil
+  end
+
+  # Which of his addresses is answering. The connected account for a synced
+  # invite; for a mailed one it is the address the .ics was sent to, because
+  # that is the attendee line the organizer's calendar is holding.
+  def rsvp_self_address
+    return @item.invite_details["replying_as"].to_s.downcase unless @item.agenda.managed_externally?
+
+    @item.agenda.google_account.email.to_s.downcase
+  end
+
   # Builds the attendees array to send back to Google: existing attendees
   # with self's responseStatus replaced. If the connected account isn't
   # already in the list (e.g. invite landed before we synced) we insert it
   # so the response actually lands.
   def updated_attendees_for_self(response_status)
-    account_email = @item.agenda.google_account.email.to_s.downcase
+    account_email = rsvp_self_address
     existing = @item.attendees.map(&:to_h)
     found = false
     updated = existing.map { |a|

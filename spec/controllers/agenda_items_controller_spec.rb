@@ -1132,6 +1132,89 @@ RSpec.describe AgendaItemsController, type: :controller do
     end
   end
 
+  # The other half of the RSVP path: an invite that arrived as a .ics on a
+  # calendar of his own. Nobody's API has this event, so the answer travels
+  # back as a reply to the organizer - and the row is then marked the same way
+  # a synced one is.
+  describe "responding to an invite that came as mail" do
+    let(:user) { create(:user) }
+    let(:agenda) { create(:agenda, user: user) }
+
+    let!(:item) {
+      agenda.agenda_items.create!(
+        kind:     :event,
+        name:     "Interview: Acme",
+        start_at: 1.hour.from_now,
+        end_at:   2.hours.from_now,
+        metadata: {
+          "attendees"     => [
+            { "email" => "rocco@ardesian.com", "self" => true, "response_status" => "needsAction" },
+            { "email" => "erin@acme.test", "response_status" => "accepted" },
+          ],
+          "organizer"     => { "email" => "erin@acme.test" },
+          "self_response" => "needsAction",
+          "invite"        => {
+            "uid"         => "booking-9f2",
+            "sequence"    => 1,
+            "replying_as" => "rocco@ardesian.com",
+          },
+        },
+      )
+    }
+
+    before do
+      allow_any_instance_of(ApplicationController).to receive(:current_user).and_return(user)
+      allow_any_instance_of(ApplicationController).to receive(:user_signed_in?).and_return(true)
+      allow_any_instance_of(ApplicationController).to receive(:authorize_user_or_guest).and_return(true)
+    end
+
+    it "replies to the organizer and marks the row answered" do
+      expect(Emails::InviteReply).to receive(:call).with(item: item, response: "accepted").and_return(true)
+
+      post :respond, params: { id: item.id, response: "accepted" }, format: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(item.reload.self_response).to eq("accepted")
+      expect(item.attendees.find { |a| a["self"] }["response_status"]).to eq("accepted")
+    end
+
+    it "sends a real reply carrying the answer" do
+      post :respond, params: { id: item.id, response: "declined" }, format: :json
+
+      sent = ActionMailer::Base.deliveries.last
+      expect(sent.to).to eq(["erin@acme.test"])
+      expect(sent.all_parts.map(&:decoded).join).to include("PARTSTAT=DECLINED")
+    end
+
+    # The reply files its own sent copy, and filing runs the invite pickup. The
+    # answer quotes the same event under METHOD:REPLY, so without a guard the
+    # row was rewritten from it and lost everybody but him.
+    it "keeps the guest list when its own reply is filed" do
+      post :respond, params: { id: item.id, response: "accepted" }, format: :json
+
+      expect(item.reload.attendees.pluck("email")).to eq(["rocco@ardesian.com", "erin@acme.test"])
+      expect(item.name).to eq("Interview: Acme")
+    end
+
+    # Nothing upstream to point at, and `external_uid` is the calendar sync's
+    # own handle - a row wearing one is a row a job note refuses to write into.
+    it "claims no upstream id for it" do
+      post :respond, params: { id: item.id, response: "tentative" }, format: :json
+
+      expect(item.reload.external_uid).to be_nil
+      expect(item.status).to eq("tentative")
+    end
+
+    it "says why rather than going quiet when the reply cannot be sent" do
+      item.update!(metadata: item.metadata.merge("organizer" => nil))
+
+      post :respond, params: { id: item.id, response: "accepted" }, format: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(item.reload.self_response).to eq("needsAction")
+    end
+  end
+
   describe "search" do
     let(:user) { create(:user) }
     let!(:agenda) { create(:agenda, user: user) }

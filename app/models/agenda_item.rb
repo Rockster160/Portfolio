@@ -432,6 +432,21 @@ class AgendaItem < ApplicationRecord
     attendees.any?
   end
 
+  # The .ics this row was built from - its UID, the organizer's sequence, the
+  # mail it arrived in and the address it was sent to. See Emails::InviteSync.
+  def invite_details
+    hash = metadata["invite"]
+    hash.is_a?(Hash) ? hash : {}
+  end
+
+  # An invite that reached us as mail rather than through a calendar. It answers
+  # the same three buttons a synced invite does, but the answer travels back as
+  # a reply to the organizer instead of a write to Google - nobody's API has
+  # this event on it.
+  def mail_invite?
+    invite_details["uid"].present?
+  end
+
   def needs_response?
     self_response == "needsAction"
   end
@@ -597,6 +612,7 @@ class AgendaItem < ApplicationRecord
       self_response:      self_response,
       needs_response:     needs_response?,
       declined:           declined?,
+      mail_invite:        mail_invite?,
       client_mutation_id: client_mutation_id,
       presentation_attrs: presentation_attrs,
     )
@@ -678,6 +694,7 @@ class AgendaItem < ApplicationRecord
       "attendees"            => attendees.to_json,
       "organizer"            => organizer.to_json,
       "self-response"        => self_response,
+      "mail-invite"          => mail_invite?,
     }
   end
 

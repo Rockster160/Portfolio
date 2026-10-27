@@ -679,4 +679,123 @@ RSpec.describe JobApplication do
       expect(job.sentiment_average).to be_nil
     end
   end
+
+  # THE PROCESS. Every search starts not knowing the rounds, so the list starts
+  # as the four that are always there and becomes the company's own once they
+  # say what theirs is.
+  describe "the rubric" do
+    let(:job) { user.job_applications.create!(company: "Acme") }
+
+    def beat(tag, at)
+      job.notes.create!(tag: tag, occurred_at: at)
+    end
+
+    it "starts as the standard steps, none of them answered" do
+      expect(job.rubric_steps.map(&:name)).to eq(["Applied", "Recruiter screen", "Interview", "Offer"])
+      expect(job.rubric_steps).to all(satisfy { |step| !step.done? })
+    end
+
+    # The tick is read off the notes every time rather than written down when
+    # one arrives, so a step's date is the date of the thing itself however
+    # late it was written up.
+    it "ticks a step off the beat that answered it, on the beat's own date" do
+      beat(:applied, 3.weeks.ago)
+      beat(:recruiter_call, 2.weeks.ago)
+
+      steps = job.reload.rubric_steps
+      expect(steps.map(&:done?)).to eq([true, true, false, false])
+      expect(steps.first.done_at).to be_within(1.second).of(3.weeks.ago)
+      expect(steps.first.by_hand).to be(false)
+    end
+
+    it "answers one step per beat, so each round ticks off its own interview" do
+      job.rubric_lines = "Applied\nTeam call\nLive coding challenge\nCEO interview"
+      job.save!
+      beat(:interview, 2.days.ago)
+
+      expect(job.reload.rubric_steps.map(&:done?)).to eq([false, true, false, false])
+    end
+
+    it "works out what ticks a step off from what the step is called" do
+      job.rubric_lines = "Applied\nRecruiter screen\nTake-home exercise\nFinal panel\nOffer\nReference check"
+      job.save!
+
+      expect(job.rubric.pluck("tag")).to eq(
+        ["applied", "recruiter_call", "take_home", "interview", "offer", nil],
+      )
+    end
+
+    it "takes the steps as they were pasted, bullets and numbering and all" do
+      job.rubric_lines = "- 30m with the team\n2. Live coding\n* CEO, one hour\n\n"
+      job.save!
+
+      expect(job.rubric.pluck("name")).to eq(["30m with the team", "Live coding", "CEO, one hour"])
+    end
+
+    # Adding the two rounds a company has just named is not a reset of
+    # everything already answered.
+    it "keeps the tick on a step that still reads the same" do
+      job.rubric_ticks = [0]
+      job.save!
+      answered = job.rubric_steps.first.done_at
+
+      job.rubric_lines = "Applied\nRecruiter screen\nTake-home\nInterview\nOffer"
+      job.save!
+
+      expect(job.rubric_steps.first.done_at).to be_within(1.second).of(answered)
+      expect(job.rubric_steps.map(&:name)).to include("Take-home")
+    end
+
+    it "goes back to the standard steps when the list is emptied" do
+      job.rubric_lines = "Just the one"
+      job.save!
+      job.rubric_lines = ""
+      job.save!
+
+      expect(job.rubric_steps.map(&:name)).to eq(JobApplication::DEFAULT_RUBRIC)
+    end
+
+    it "ticks a step nothing on the timeline speaks for" do
+      job.rubric_lines = "Reference check"
+      job.save!
+      job.rubric_ticks = [0]
+      job.save!
+
+      expect(job.rubric_steps.first.done?).to be(true)
+      expect(job.rubric_steps.first.by_hand).to be(true)
+    end
+
+    it "clears a tick that was made by hand" do
+      job.rubric_ticks = [0, 1]
+      job.save!
+      job.rubric_ticks = [0]
+      job.save!
+
+      expect(job.rubric_steps.map(&:done?)).to eq([true, false, false, false])
+    end
+
+    # The way to say an interview didn't happen is to delete the interview.
+    it "cannot be talked out of a step the timeline answered" do
+      beat(:applied, 1.week.ago)
+      job.reload.rubric_ticks = []
+      job.save!
+
+      expect(job.reload.rubric_steps.first.done?).to be(true)
+    end
+
+    it "keeps the list to something a person typed" do
+      job.rubric_lines = (1..40).map { |n| "Step #{n}" }.join("\n")
+      job.save!
+
+      expect(job.rubric.size).to eq(JobApplication::MAX_RUBRIC_STEPS)
+      expect(job.rubric.first["name"].length).to be <= JobApplication::MAX_RUBRIC_NAME
+    end
+
+    it "keeps one step per name" do
+      job.rubric_lines = "Interview\ninterview\nOffer"
+      job.save!
+
+      expect(job.rubric.pluck("name")).to eq(["Interview", "Offer"])
+    end
+  end
 end
