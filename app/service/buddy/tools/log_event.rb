@@ -16,6 +16,12 @@ Buddy::Tools.register(
     history that isn't true. React warmly and log nothing; if they want it
     held, that's the agenda. The moment they say they DID it, log it then.
 
+    A state they've come into has already happened, and it's logged the
+    moment they say so: "I'm sick", "I think I'm coming down with
+    something", "I need you to keep track of my symptoms" all log "Sick".
+    Automations listen for these, so sympathy without the log means nothing
+    starts tracking. Say sorry AND log it.
+
     `at` is for when it happened earlier than now - "I got sick yesterday
     morning", "had a coffee at 8". Leave it out for something happening now.
   TXT

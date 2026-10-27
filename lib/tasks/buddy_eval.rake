@@ -973,6 +973,25 @@ BUDDY_EDGE_PROBES = [
     args:  { log_event: { name: /sick/i, at: /T(0[5-9]|1[01]):/ } },
     note:  "a past start has to land at that time for sick mode to count from it",
   },
+  # Said in the present, it read as conversation: four sympathetic replies and
+  # a remembered "wants symptom tracking", but no event, so sick mode never
+  # started.
+  {
+    case:  "prod 9191",
+    say:   "I’m sick",
+    tool:  :log_event,
+    args:  { log_event: { name: /\Asick\z/i } },
+    avoid: :remember,
+    note:  "sympathy and no log, so the sick-mode task never heard about it",
+  },
+  {
+    case:  "prod 9197",
+    say:   "I need you to keep track of my symptoms!",
+    tool:  :log_event,
+    args:  { log_event: { name: /\Asick\z/i } },
+    avoid: :remember,
+    note:  "remembered as a wish instead of logging Sick, which is what tracks symptoms",
+  },
   # Nobody was named, and "me" went in anyway: an assigned chore is hidden from
   # the rest of the household, so all three made that day were Rocco's alone.
   {
