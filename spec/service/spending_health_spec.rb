@@ -88,31 +88,51 @@ RSpec.describe SpendingHealth do
     end
   end
 
-  describe ".gpt_month" do
+  describe ".gpt_credit" do
     def usage(at, micros, **attrs)
       BuddyUsage.create!({
         user: user, model: "gpt-5.4-mini", env: :production, cost_micros: micros, created_at: at,
       }.merge(attrs))
     end
 
-    it "adds up every billed call since the start of the UTC month" do
-      usage(Time.utc(2026, 9, 30, 23), 9_000_000)
-      usage(Time.utc(2026, 10, 1, 1), 1_000_000)
-      usage(Time.utc(2026, 10, 2), 500_000, env: :development, kind: :eval)
-      usage(Time.utc(2026, 10, 2), 700_000, env: :test)
+    # As the bank alert writes it: the merchant is all it knows.
+    def charge(at, cents, payee)
+      spend(at, cents, payee: payee, created_at: at)
+    end
 
-      month = described_class.gpt_month(now: Time.utc(2026, 10, 19))
+    it "counts down from the top-off by every billed call since the last one" do
+      charge(Time.utc(2026, 10, 15, 5), 1_612, "OPENAI")
+      charge(Time.utc(2026, 10, 21, 19), 1_612, "OPENAI")
+      usage(Time.utc(2026, 10, 21, 18), 9_000_000)
+      usage(Time.utc(2026, 10, 22), 1_000_000)
+      usage(Time.utc(2026, 10, 23), 500_000, env: :development, kind: :eval)
+      usage(Time.utc(2026, 10, 23), 700_000, env: :test)
 
-      expect(month).to eq(
-        spent_micros: 1_500_000, budget_micros: 20_000_000, resets_at: Time.utc(2026, 11, 1).to_i,
-      )
+      expect(described_class.gpt_credit).to eq(balance_micros: 18_500_000, top_up_micros: 20_000_000)
+    end
+
+    # The bank's own copy of a charge renames the payee and adds what it was.
+    it "never reads the ChatGPT subscription as a top-off, before or after the bank's copy" do
+      charge(Time.utc(2026, 10, 21, 19), 1_612, "OPENAI")
+      charge(Time.utc(2026, 10, 22), 2_149, "OPENAI *CHATGPT SUBS")
+      spend(Time.utc(2026, 10, 23), 2_149, payee: "OpenAI", description: "OPENAI *CHATGPT SUBSCR")
+      usage(Time.utc(2026, 10, 21, 20), 1_000_000)
+
+      expect(described_class.gpt_credit[:balance_micros]).to eq(19_000_000)
     end
 
     it "leaves out a Jil call made on someone else's key" do
+      charge(Time.utc(2026, 10, 1), 1_612, "OPENAI")
       usage(Time.utc(2026, 10, 2), 300_000, kind: :jil)
       usage(Time.utc(2026, 10, 2), 200_000, kind: :jil, user: User.me)
 
-      expect(described_class.gpt_month(now: Time.utc(2026, 10, 19))[:spent_micros]).to eq(200_000)
+      expect(described_class.gpt_credit[:balance_micros]).to eq(19_800_000)
+    end
+
+    it "is empty until a top-off has been seen" do
+      usage(Time.utc(2026, 10, 2), 200_000)
+
+      expect(described_class.gpt_credit).to eq({})
     end
   end
 
@@ -133,11 +153,7 @@ RSpec.describe SpendingHealth do
           days:              { "2026-09-13": 500 },
           caffeine_limit_mg: ::CaffeineIntake::DAILY_LIMIT_MG,
           caffeine:          { "2026-09-13": 200 },
-          gpt:               {
-            spent_micros:  0,
-            budget_micros: described_class::GPT_MONTHLY_MICROS,
-            resets_at:     Time.utc(2026, 10, 1).to_i,
-          },
+          gpt:               {},
         }))
         expect(::Jil).to have_received(:trigger).with(
           user, :monitor, { channel: :spending, refresh: true }, auth: :trigger

@@ -26,9 +26,6 @@ module SpendingHealth
   # the stretch it has to last. From the layoff to the end of the year. `from`
   # and `through` are both whole perceived days, so the range runs from 3am on
   # the first to 3am after the last.
-  # What the OpenAI account is allowed to spend in a month, which is every
-  # model call the app makes, wherever it was made.
-  GPT_MONTHLY_MICROS = 20_000_000
   BALANCE_GOAL = {
     cents:   4_000_000,
     from:    "2026-09-11",
@@ -46,6 +43,9 @@ module SpendingHealth
   # nothing, and "NISSAN" alone would call it car), so they are caught by what
   # the bank calls them.
   LOAN_PATTERN = /\b(loan|lease|mortgage)\b/i
+  # What the OpenAI account's auto-recharge brings its prepaid credit back up
+  # to. Every model call the app makes, wherever it was made, spends from it.
+  GPT_TOP_UP_MICROS = 20_000_000
 
   class << self
     def refresh!(user: ::User.me)
@@ -77,24 +77,38 @@ module SpendingHealth
       }.merge(
         buckets(user),
         ::CaffeineIntake.payload(user),
-        gpt: gpt_month,
+        gpt: gpt_credit,
       )
     end
 
-    # This month's model spend against its limit. The month is a UTC calendar
-    # month because that is how OpenAI bills it. Evals and localhost count:
-    # they arrive here from the laptop and cost the same money. A Jil GPT call
-    # made on someone else's key is their bill, not this one.
-    def gpt_month(now: ::Time.current)
-      from = now.utc.beginning_of_month
-      scope = ::BuddyUsage.billed.since(from)
+    # What the OpenAI account holds, against what its auto-recharge fills it
+    # back up to. OpenAI has no API for the balance, so it is worked out: full
+    # at the last top-off, less every call since. Evals and localhost count:
+    # they arrive here from the laptop and spend the same credit. A Jil GPT
+    # call made on someone else's key is their bill, not this one.
+    #
+    # Empty until a top-off has been seen — without one there is nothing to
+    # count down from.
+    def gpt_credit
+      topped_up_at = gpt_topped_up_at
+      return {} if topped_up_at.nil?
+
+      scope = ::BuddyUsage.billed.since(topped_up_at)
       scope = scope.where.not(kind: :jil).or(scope.where(kind: :jil, user: ::User.me))
 
       {
-        spent_micros:  scope.spend_micros,
-        budget_micros: GPT_MONTHLY_MICROS,
-        resets_at:     from.next_month.to_i,
+        balance_micros: GPT_TOP_UP_MICROS - scope.spend_micros,
+        top_up_micros:  GPT_TOP_UP_MICROS,
       }
+    end
+
+    # A top-off is a card charge from OpenAI that isn't the ChatGPT
+    # subscription. Timed by `created_at`: the row is written the moment the
+    # bank's alert lands, and the times the bank sends later carry no zone.
+    def gpt_topped_up_at
+      scope = ::BankTransaction.countable.spending.where("payee ILIKE ?", "openai")
+      scope = scope.where("COALESCE(description, '') NOT ILIKE ?", "%chatgpt%")
+      scope.maximum(:created_at)
     end
 
     # Grouped in Ruby rather than SQL: a perceived day is local-3am to

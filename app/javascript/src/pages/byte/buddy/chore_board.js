@@ -192,16 +192,16 @@ function cellState(item) {
 
 // Only what is being asked for today. `today_visible` is the same field
 // /chores/today sorts on, so the board and the page agree about what the day
-// holds without this knowing anything about recurrence. Dailies show either
-// way, as they do in Today's Dailies section, and so do the chores pinned to
-// this board.
+// holds without this knowing anything about recurrence. The chores pinned to
+// this board show either way; a Dailies chore is held to its schedule like any
+// other.
 //
 // A dismissed or skipped chore is KEPT and greyed rather than dropped: it was
 // on the board a moment ago and vanishing on a press reads as a mis-tap, and
 // the grey circle is also the only way back to it.
 function onBoard(items) {
   return items.filter((item) =>
-    isAction(item) || isList(item) ? true : (item.today_visible || item.on_dailies || item.pinned) && !item.archived,
+    isAction(item) || isList(item) ? true : (item.today_visible || item.pinned) && !item.archived,
   );
 }
 

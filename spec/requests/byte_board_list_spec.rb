@@ -51,6 +51,17 @@ RSpec.describe "Byte board list", type: :request do
       )
     end
 
+    it "sits after the pinned chores and ahead of the rest" do
+      litter = create(:chore, created_by_user: user, name: "Litter", tags: ["Pets"])
+      create(:chore, created_by_user: user, name: "Sweep", tags: ["Garage"], marked_due_at: Time.current)
+      board.update!(pinned_chore_ids: [litter.id])
+      connect
+
+      get "/byte/board/items", params: { conversation_id: board.id }
+
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Litter", "🔑 Keys", "Cards", "Chairs", "Sweep"])
+    end
+
     it "takes a leading emoji as the picture" do
       connect
 

@@ -23,9 +23,10 @@ import { dash_colors, clamp } from "../vars";
 // Bills and loan payments never reach it — the server leaves them out — so
 // every purchase, large or small, counts on the day it landed.
 //
-// GPT month, between the money and Claude, is every model call the app made
-// this month — production, evals and localhost alike — against the account's
-// monthly limit. It rides the payload as `gpt`.
+// GPT credit, between the money and Claude, is what the OpenAI account holds
+// against what its auto-recharge tops it back up to. Every model call the app
+// makes — production, evals and localhost alike — spends from it. It rides the
+// payload as `gpt`.
 //
 // The Claude bars are the same reading for the plan's rate limits: what is
 // left of the 5-hour session and of the week, against how much of each window
@@ -405,46 +406,31 @@ import { dash_colors, clamp } from "../vars";
     return bar(row, text, left / 100, mark, left <= 0, false, wall);
   }
 
-  // The month's model spend against what the OpenAI account may spend, drained
-  // like the money and with the month's ☼. Its month is the UTC one OpenAI
-  // bills by, so it is read off `resets_at` rather than the 3am days above.
-  // Cents on hover: a whole-dollar figure would sit at $0 for days.
-  function gptBar(row, now_ms) {
+  // What the OpenAI account holds against what its auto-recharge fills it back
+  // up to. It drains as calls are made and fills again at each top-off, which
+  // keeps no calendar, so there is no ☼. Hover spells out what is in the
+  // account, in cents: a top-off's whole range is a few dollars.
+  function gptBar(row) {
     const gpt = cell.data.gpt || {};
-    if (!(gpt.budget_micros > 0) || !gpt.resets_at) {
+    if (!(gpt.top_up_micros > 0) || typeof gpt.balance_micros !== "number") {
       return blank;
     }
 
-    // A month that has rolled over since the last push started at nothing,
-    // and nothing is pushed at midnight UTC to say so.
-    const rolled = now_ms >= gpt.resets_at * 1000;
-    const spent = rolled ? 0 : gpt.spent_micros || 0;
-    const left = (gpt.budget_micros - spent) / gpt.budget_micros;
-    const now = new Date(now_ms);
-    const start = rolled
-      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-      : new Date(gpt.resets_at * 1000);
-    if (!rolled) start.setUTCMonth(start.getUTCMonth() - 1);
-    const reset = new Date(start.getTime());
-    reset.setUTCMonth(reset.getUTCMonth() + 1);
-    const reset_ms = reset.getTime();
-    const dollars = function (micros) {
-      return "$" + (micros / 1000000).toFixed(2);
-    };
+    const left = gpt.balance_micros / gpt.top_up_micros;
+    const sign = gpt.balance_micros < 0 ? "-" : "";
     const figure =
-      dollars(spent) + " / $" + Math.round(gpt.budget_micros / 1000000) + "  ";
+      sign +
+      "$" +
+      (Math.abs(gpt.balance_micros) / 1000000).toFixed(2) +
+      " / $" +
+      Math.round(gpt.top_up_micros / 1000000) +
+      "  ";
     const text =
       cell.data.hover === row
-        ? Text.justify(bar_width, "  GPT month", figure)
-        : "  GPT month";
+        ? Text.justify(bar_width, "  GPT credit", figure)
+        : "  GPT credit";
 
-    return bar(
-      row,
-      text,
-      left,
-      remainingOf(start.getTime(), reset_ms, now_ms),
-      left <= 0,
-    );
+    return bar(row, text, left, undefined, left <= 0);
   }
 
   // Counts UP: it fills as the day's caffeine lands, where the bars above it
@@ -562,7 +548,7 @@ import { dash_colors, clamp } from "../vars";
         month_left,
       ),
       spendBar(today_row, "Today", spentOver(today, 1), day_budget, today_left),
-      gptBar(gpt_row, now_ms),
+      gptBar(gpt_row),
       claudeBar(session_row, "Claude session", "five_hour", now),
       claudeBar(claude_week_row, "Claude week", "seven_day", now),
       caffeineBar(

@@ -134,8 +134,9 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.parsed_body["items"].pluck("name")).to eq(["Second", "Older", "First"])
     end
 
-    # Today leads with the person's Dailies, in the order they keep them in.
-    it "puts the owner's Dailies first, in their own order" do
+    # A Dailies chore is an ordinary chore on a board: its schedule says whether
+    # it shows and where, the same as any other.
+    it "orders the owner's Dailies like any other chore" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
       create(:chore, created_by_user: user, name: "Plain", tags: ["Home"], sort_order: 1, marked_due_at: Time.current)
       late = create(:chore, created_by_user: user, name: "Late", tags: ["Home"], sort_order: 2, marked_due_at: Time.current)
@@ -145,18 +146,18 @@ RSpec.describe "Byte chore board", type: :request do
 
       get "/byte/board/items", params: { conversation_id: thread.id }
 
-      expect(response.parsed_body["items"].pluck("name")).to eq(["Early", "Late", "Plain"])
+      expect(response.parsed_body["items"].pluck("name")).to eq(["Plain", "Late", "Early"])
     end
 
-    it "marks the owner's Dailies, even one that isn't due" do
+    it "leaves a Dailies chore that isn't due to its schedule" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
-      pinned = create(:chore, created_by_user: user, name: "Pinned", tags: ["Home"])
-      ChoreDaily.create!(user: user, chore: pinned, sort_order: 0)
+      daily = create(:chore, created_by_user: user, name: "Daily", tags: ["Home"])
+      ChoreDaily.create!(user: user, chore: daily, sort_order: 0)
 
       get "/byte/board/items", params: { conversation_id: thread.id }
 
-      item = response.parsed_body["items"].find { |i| i["name"] == "Pinned" }
-      expect(item.slice("on_dailies", "today_visible")).to eq("on_dailies" => true, "today_visible" => false)
+      item = response.parsed_body["items"].find { |i| i["name"] == "Daily" }
+      expect(item.slice("today_visible", "pinned")).to eq("today_visible" => false)
     end
 
     # The board draws its pet's chore dreams the way the morning hot picks are

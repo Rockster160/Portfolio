@@ -1340,7 +1340,7 @@ class ByteController < ApplicationController
   def board_items_for(convo)
     return [] if convo.nil?
 
-    # The connected list's items stand apart from the groups, after the actions.
+    # The connected list's items stand apart from the groups, after the pins.
     list_items = Buddy::BoardList.items(convo)
     tags = convo.chore_tags
     return list_items if tags.empty? && convo.pinned_chore_ids.blank?
@@ -1356,8 +1356,8 @@ class ByteController < ApplicationController
       hidden_ids = Chore.board_hidden(convo.hidden_chore_filter).pluck(:id).to_set
       chore_items = chore_items.reject { |item| hidden_ids.include?(item[:id]) }
     end
-    chore_items = board_pinned_first(convo, owner, chore_items, day)
-    chore_items = board_hot_weighted(chore_items, day)
+    chore_items = board_hot_weighted(board_pinned_first(convo, owner, chore_items, day), day)
+    pinned_items, chore_items = chore_items.partition { |item| item[:pinned] }
 
     # Routines and buttons come from the NAMED groups only — "All" is a chores-only
     # wildcard, so an all-chores board doesn't also sweep in every routine.
@@ -1368,7 +1368,7 @@ class ByteController < ApplicationController
     # kind, run on a press as the task's owner — see BoardTaskButton.
     task_items = named.any? ? owner.board_task_buttons.for_board(named).includes(:task).map(&:board_item) : []
 
-    trigger_items + credit_items + task_items + list_items + chore_items
+    trigger_items + credit_items + task_items + pinned_items + list_items + chore_items
   end
 
   BOARD_CHORE_ORDER = Arel.sql("sort_order ASC NULLS LAST, id ASC").freeze
@@ -1408,7 +1408,7 @@ class ByteController < ApplicationController
       items += ctx.serialize_all(chores).map { |c| c.merge(kind: :chore) }
     end
 
-    board_chores_ordered(owner, items)
+    board_chores_ordered(items)
   end
 
   # The default chore set: the owner's accessible chores, serialized as the owner.
@@ -1416,7 +1416,7 @@ class ByteController < ApplicationController
     scope = wants_all ? owner.accessible_chores : owner.accessible_chores.tagged(tags)
     chores = scope.order(BOARD_CHORE_ORDER).to_a
     ctx = ChoreSerializerContext.for_user(owner, day: day)
-    board_chores_ordered(owner, ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
+    board_chores_ordered(ctx.serialize_all(chores)).map { |c| c.merge(kind: :chore) }
   end
 
   # Which members' assigned chores a board shows, or nil when it's never been set
@@ -1431,31 +1431,25 @@ class ByteController < ApplicationController
     (Array(raw).map(&:to_i).uniq & convo.user.chore_household_user_ids)
   end
 
-  # Chores on a board read in the Today page's order, so a chore sits in the same
-  # place out here as everywhere else it appears: the owner's Dailies in their
-  # own order (shown whether or not they're due, as Today shows them), then the chores due today, then the carryovers. Due today ranks
-  # by priority, ties kept in the Grid order (sort_order); carryovers by
-  # priority, then most recently due, the ones with no derived due date last.
-  # Computed fresh every time, so a reorder, a due date settling or a chore
-  # coming or going moves the board exactly as it moves Today.
-  def board_chores_ordered(owner, items)
+  # Chores on a board in the order Today ranks its scheduled chores: the chores
+  # due today, then the carryovers. Due today ranks by priority, ties kept in
+  # the Grid order (sort_order); carryovers by priority, then most recently due,
+  # the ones with no derived due date last. A Dailies chore is an ordinary chore
+  # here - its schedule decides whether it shows and where. Computed fresh every
+  # time, so a reorder, a due date settling or a chore coming or going moves the
+  # board as it moves Today.
+  def board_chores_ordered(items)
     items = items.sort_by { |c| [c[:sort_order] || Float::INFINITY, c[:id]] }
-    daily_ids = ChoreDaily.for_user(owner).pluck(:chore_id)
-    dailies, items = items.partition { |c| daily_ids.include?(c[:id]) }
-    # On the board because they're the owner's Dailies, schedule or not - the
-    # way Today shows them - whoever the chore was serialized as.
-    dailies = dailies.sort_by { |c| daily_ids.index(c[:id]) }.map { |c| c.merge(on_dailies: true) }
-    items = items.map { |c| c.merge(on_dailies: false) }
     due, rest = items.partition { |c| c[:due_today] }
     sorted_due = due.sort_by.with_index { |c, i| [-board_priority_rank(c), i] }
     sorted_rest = rest.sort_by.with_index { |c, i|
       date = c[:scheduled_due_on]
       [-board_priority_rank(c), date.present? ? 0 : 1, date.present? ? -Date.iso8601(date).jd : 0, i]
     }
-    dailies + sorted_due + sorted_rest
+    sorted_due + sorted_rest
   end
 
-  # Pinned chores lead the chores, in their pinned order, whatever groups the
+  # Pinned chores lead the chores and the connected list, in their pinned order, whatever groups the
   # board watches and whether or not they're due — `pinned` is what keeps one on
   # the board when Today wouldn't show it. A pinned chore the groups also bring
   # shows once, in its pinned place.
@@ -1468,7 +1462,7 @@ class ByteController < ApplicationController
     if missing.any?
       found = owner.accessible_chores.active.where(id: missing).to_a
       ChoreSerializerContext.for_user(owner, day: day).serialize_all(found).each { |item|
-        by_id[item[:id]] = item.merge(kind: :chore, on_dailies: false)
+        by_id[item[:id]] = item.merge(kind: :chore)
       }
     end
     pinned = ids.filter_map { |id| by_id[id]&.merge(pinned: true) }
