@@ -285,6 +285,13 @@ RSpec.describe TeslaTelemetry do
       process(Gear: "ShiftState#{gear}")
     end
 
+    # Gear lands within seconds and the position up to a minute behind it, so
+    # the push that settles where it parked comes after the shift into Park.
+    def park_at(coord)
+      shift(:P)
+      move_to(coord)
+    end
+
     def drive_away!
       parked_at(home)
       shift(:D)
@@ -332,9 +339,30 @@ RSpec.describe TeslaTelemetry do
       drive_away!
       move_to(away)
 
-      shift(:P)
+      park_at(away)
 
       expect(travel_triggers.last).to include(action: :arrived, source: :tesla, lat: away.first, lng: away.last)
+    end
+
+    it "places the arrival where it settles, not the last position from the road" do
+      drive_away!
+      move_to(down_the_road)
+
+      shift(:P)
+      expect(travel_triggers.pluck(:action)).to eq([:departed])
+
+      move_to(home)
+      expect(travel_triggers.last).to include(action: :arrived, lat: home.first, lng: home.last)
+    end
+
+    it "arrives where it last was once no newer position is coming" do
+      drive_away!
+      move_to(away)
+      shift(:P)
+
+      travel_to(2.minutes.from_now) { process(VehicleSpeed: 0) }
+
+      expect(travel_triggers.last).to include(action: :arrived, lat: away.first, lng: away.last)
     end
 
     # Pulled forward onto the charger or out to let the other car by.
@@ -366,9 +394,7 @@ RSpec.describe TeslaTelemetry do
     end
 
     it "says nothing on the first push after a deploy, and starts from there" do
-      move_to(home)
-
-      shift(:P)
+      park_at(home)
       shift(:D)
       move_to(down_the_road)
 
@@ -379,7 +405,7 @@ RSpec.describe TeslaTelemetry do
       shift(:D)
       move_to(away)
 
-      shift(:P)
+      park_at(away)
 
       expect(travel_triggers.pluck(:action)).to eq([:arrived])
     end
@@ -401,6 +427,7 @@ RSpec.describe TeslaTelemetry do
         move_to(away)
 
         process(Gear: "<invalid>", VehicleSpeed: 0)
+        move_to(away)
 
         expect(travel_triggers.pluck(:action)).to eq(%i[departed arrived])
       end
@@ -449,7 +476,7 @@ RSpec.describe TeslaTelemetry do
         drive_away!
         move_to(away)
 
-        shift(:P)
+        park_at(away)
 
         expect(travel_triggers.last(2).pluck(:action, :source)).to eq([%i[arrived tesla], %i[arrived phone]])
       end
@@ -463,7 +490,7 @@ RSpec.describe TeslaTelemetry do
         move_to(home)
         allow(::LocationCache).to receive(:driving?).and_return(true)
 
-        shift(:P)
+        park_at(home)
 
         expect(travel_triggers.last).to include(action: :arrived, source: :tesla)
         expect(travel_triggers.pluck(:source)).not_to include(:phone)

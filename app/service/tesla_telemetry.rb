@@ -17,6 +17,10 @@ class TeslaTelemetry
   # value is already in the unit a US driver reads.
   TIRE_PRESSURE_LOW = 39.0
 
+  # Gear pushes within seconds and Location once a minute, so this is how long
+  # past a shift into Park a position from before it can still be the latest.
+  POSITION_LAG_MS = 90 * 1000
+
   def self.process(data)
     new(data).process
   end
@@ -208,12 +212,25 @@ class TeslaTelemetry
   # somebody else parking pairs with a phone that never left.
   def pull_in(leg)
     return leg if leg[:parked].present?
+    return leg unless settled?
 
     if leg[:driving]
       ::Jil.trigger(@user, :trytravel, travel_payload(:arrived, :tesla))
       ::Jil.trigger(@user, :trytravel, travel_payload(:arrived, :phone)) if leg[:carried]
     end
     { parked: here }
+  end
+
+  # The push that shows it in Park usually still carries the last position
+  # from while it was driving, up to a minute back down the street, and an
+  # arrival placed there misses Home by a hundred metres. So it waits for a
+  # position reported since the shift, or for long enough that none is coming.
+  def settled?
+    shifted_at = @car_data.dig(:drive, :shifted_at)
+    located_at = @car_data.dig(:location, :ts)
+    return true if shifted_at.blank? || located_at.blank? || located_at >= shifted_at
+
+    (::Time.current.to_f * 1000) - shifted_at > POSITION_LAG_MS
   end
 
   # Out of Park. A car first heard already on the road has a leg open whose
