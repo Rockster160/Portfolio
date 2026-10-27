@@ -333,6 +333,7 @@ export function initChoreBoard({
   // each chore's own icon, in a modal over everything else.
   const chorePicker = initBoardChorePicker({
     dialog: root.querySelector("[data-board-chore-picker]"),
+    iconFor: iconNode,
   });
 
   const cheerUrl = app.dataset.choreCheerUrl;

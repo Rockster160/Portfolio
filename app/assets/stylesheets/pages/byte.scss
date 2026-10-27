@@ -18,6 +18,12 @@ html.html-ctr-byte body {
   overscroll-behavior: none;
 }
 
+// The board index is a plain page with no inner scroller of its own, so its
+// body is the thing that scrolls.
+html.html-ctr-byte.html-act-board_index body {
+  overflow-y: auto;
+}
+
 // Hard reset — app-wide `forms.scss` gradients + blue-card form background
 // would obliterate this layout otherwise. Applies to .byte-app AND every
 // surface outside it that shares the same design system (drawer, modals,
