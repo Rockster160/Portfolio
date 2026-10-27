@@ -193,7 +193,7 @@ Buddy::Tools.register(
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again; a recruiter approaching them first is `reached_out`; a machine re-sending something already on the board is `reminder`, never the tag of what it reminds about. offer/rejected/withdrew also settle the application",
+      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again; a recruiter approaching them first is `reached_out`; a machine re-sending something already on the board is `reminder`, never the tag of what it reminds about. offer/rejected/withdrew/ignored also settle the application. NEVER pick `ignored` off a mail - it is him deciding he does not want the thing, which no message says; an approach he has not answered is `reached_out`",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

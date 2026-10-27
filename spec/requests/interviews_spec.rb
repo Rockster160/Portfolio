@@ -55,6 +55,26 @@ RSpec.describe "Interview tracker", type: :request do
 
     # The picker is the same partial as the job page; on the form it has no
     # record to PATCH, so it posts the square in a hidden field instead.
+    # The Type dropdown is ordered by when a beat happens, so its first option
+    # is no longer a safe default - a blank body under any other tag is a beat
+    # this form would file.
+    it "opens the capture form's Type on Note" do
+      get interviews_path
+
+      form = response.body[/<form[^>]*capture-form.*?<\/form>/m]
+      block = form[/<select[^>]*name="job_note\[tag\]".*?<\/select>/m]
+      expect(block[/<option selected="selected" value="(\w+)"/, 1]).to eq("note")
+    end
+
+    # Reading down a process, each option saying who causes it.
+    it "says who causes each kind of beat" do
+      get interviews_path
+
+      expect(response.body).to include("Applied — you")
+      expect(response.body).to include("Acknowledged — a machine")
+      expect(response.body).to include("Heard back — them")
+    end
+
     it "offers the icon square on the new-company form" do
       get interviews_path
 
@@ -319,6 +339,36 @@ RSpec.describe "Interview tracker", type: :request do
 
       expect(chip_count("Stale")).to eq(0)
       expect(chip_count("Ghosted")).to eq(1)
+    end
+  end
+
+  # A recruiter came to him about something he does not want. The row had been
+  # asking him to answer a message he had decided not to answer.
+  describe "ignoring an approach" do
+    let(:job) {
+      job = user.job_applications.create!(company: "Initech")
+      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
+      job.touch_activity!
+      job
+    }
+
+    it "stops asking him to reply, and leaves the wall" do
+      post interview_notes_path(job), params: { job_note: { tag: :ignored, occurred_at: Time.current } }
+
+      get interviews_path
+
+      expect(job.reload.status).to eq("ignored")
+      expect(card_order).not_to include(job.id)
+      expect(response.body).not_to include("Reply to them")
+      expect(chip_count("Ignored")).to eq(1)
+    end
+
+    it "opens on its own chip" do
+      post interview_notes_path(job), params: { job_note: { tag: :ignored, occurred_at: Time.current } }
+
+      get interviews_path(status: :ignored)
+
+      expect(card_order).to eq([job.id])
     end
   end
 

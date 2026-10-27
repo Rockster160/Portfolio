@@ -11,8 +11,10 @@
   <div class="split-fields">
     <div class="form-field">
       <%= f.label :tag, "Type" %>
-      <%= f.select :tag, JobNote::TAG_LABELS.map { |value, label| [label, value] },
-            {}, data: { note_tag: true } %>
+      <%# Offered in the order these happen, each saying who causes it: half the
+         list is the same moment seen from his side and theirs, and the names
+         alone do not separate them. See JobNote::TAG_ORIGINS. %>
+      <%= f.select :tag, JobNote.tag_options, {}, data: { note_tag: true } %>
     </div>
 
     <div class="form-field">

@@ -35,6 +35,7 @@ class JobApplication < ApplicationRecord
   # rejected → they said no.
   # closed   → over by your choice: withdrew, took something else.
   # ghosted  → they went silent on a conversation that had started.
+  # ignored  → they came to him about something he does not want. Never engaged.
   #
   # `ghosted` is the hand-marked twin of `stale?` below, and the two are not
   # the same thing. Stale reads itself off a row nobody ever answered; this is
@@ -43,7 +44,7 @@ class JobApplication < ApplicationRecord
   # weeks after the silence began, and everything on the page still counts from
   # the last beat rather than from the marking, because nothing here is keyed
   # to the status column.
-  enum :status, { active: 0, offer: 1, rejected: 2, closed: 3, ghosted: 4 }
+  enum :status, { active: 0, offer: 1, rejected: 2, closed: 3, ghosted: 4, ignored: 5 }
 
   # None of the three that are over. This is what the index shows unless asked
   # otherwise — "hide the rejected by default".
@@ -184,7 +185,7 @@ class JobApplication < ApplicationRecord
   end
 
   def dead?
-    rejected? || closed? || ghosted?
+    rejected? || closed? || ghosted? || ignored?
   end
 
   # Applied, receipted by a machine, and nothing from anybody since. Nine

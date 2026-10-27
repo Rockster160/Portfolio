@@ -164,6 +164,71 @@ RSpec.describe JobNote do
     end
   end
 
+  # A recruiter came to him about something he does not want. There is no reply
+  # to write, and before this the only ways out claimed something untrue:
+  # `withdrew` is them pulling out and `rejected` says they said no.
+  describe "the ignored tag" do
+    it "reads as Ignored and needs no body" do
+      note = job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
+
+      expect(note.tag_label).to eq("Ignored")
+      expect(note.body).to be_nil
+    end
+
+    it "settles the application as ignored" do
+      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
+      job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
+
+      expect(job.reload.status).to eq("ignored")
+      expect(job.dead?).to be(true)
+    end
+
+    # The whole point: the row had been asking him to answer a message he had
+    # decided not to answer.
+    it "leaves nothing owed on the row" do
+      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
+      job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
+
+      expect(job.reload.owed_now).to be_nil
+    end
+  end
+
+  # Half the list is the same moment seen from his side and theirs, or from a
+  # person's and a robot's, and picking the wrong half of a pair is the failure
+  # that keeps happening.
+  describe "the Type dropdown" do
+    it "says who causes each beat" do
+      options = JobNote.tag_options.to_h
+
+      expect(options["Applied — you"]).to eq("applied")
+      expect(options["Acknowledged — a machine"]).to eq("acknowledged")
+      expect(options["Heard back — them"]).to eq("heard_back")
+      expect(options["Response — you"]).to eq("responded")
+      expect(options["Interview — a meeting"]).to eq("interview")
+      expect(options["Ignored — you"]).to eq("ignored")
+    end
+
+    it "has an origin for every tag it offers" do
+      expect(JobNote::TAG_ORIGINS.keys).to match_array(JobNote::TAG_LABELS.keys)
+    end
+
+    # The order a process runs in, so picking one is reading down it. The three
+    # at the bottom are housekeeping rather than beats in a process.
+    it "opens on the beats that start an application and keeps housekeeping last" do
+      keys = JobNote::TAG_LABELS.keys
+
+      expect(keys.first(2)).to eq(%w[reached_out applied])
+      expect(keys.last(3)).to eq(%w[ignored note reminder])
+    end
+
+    # A chip is read by somebody who is not choosing anything.
+    it "keeps the origin out of the label the timeline prints" do
+      note = job.notes.create!(tag: :heard_back, occurred_at: 1.hour.ago, body: "Keen to talk")
+
+      expect(note.tag_label).to eq("Heard back")
+    end
+  end
+
   describe ".recent" do
     it "reverses the association's own order rather than stacking onto it" do
       old = job.notes.create!(body: "Older", occurred_at: 9.days.ago)

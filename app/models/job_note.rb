@@ -46,6 +46,7 @@ class JobNote < ApplicationRecord
     cancelled:      13,
     reminder:       14,
     reached_out:    15,
+    ignored:        16,
   }
 
   # Reading order, and the order of the dropdown. `responded` is the other half
@@ -95,9 +96,19 @@ class JobNote < ApplicationRecord
   # stamping it on a machine's receipt says they applied twice; `heard_back` is
   # a person writing, which is the beat actually being waited on, and a robot
   # wearing it makes a live application look answered.
+  #
+  # `ignored` is him declining to engage at all, and it is the answer to a
+  # `reached_out` row: a recruiter came to him about something he does not want,
+  # so there is no reply to write and nothing to chase. Without it the row sat
+  # on the waiting strip asking him to answer a message he had decided not to
+  # answer, and the only ways out claimed something untrue - `withdrew` is THEM
+  # pulling out, `rejected` says they said no.
+  #
+  # The last three are out of the chronology on purpose: they are housekeeping
+  # rather than beats in a process, and `note` led the list only because it is
+  # the default a blank form wants - which is now said where that form is built
+  # rather than by sitting a tag out of order.
   TAG_LABELS = {
-    "note"           => "Note",
-    "reminder"       => "Reminder",
     "reached_out"    => "Reached out",
     "applied"        => "Applied",
     "acknowledged"   => "Acknowledged",
@@ -112,7 +123,46 @@ class JobNote < ApplicationRecord
     "offer"          => "Offer",
     "rejected"       => "Rejected",
     "withdrew"       => "Withdrew",
+    "ignored"        => "Ignored",
+    "note"           => "Note",
+    "reminder"       => "Reminder",
   }.freeze
+
+  # WHO CAUSED IT, printed beside the label in the dropdown.
+  #
+  # Half this list is a pair: the same moment seen from his side and theirs, or
+  # from a person's and a robot's. The names alone do not separate them -
+  # "Applied" and "Acknowledged" are both true of the day he applied - and the
+  # wrong half of a pair is the failure that keeps happening: `applied` on an
+  # ATS receipt says they applied twice, `heard_back` on a robot makes a live
+  # application look answered.
+  TAG_ORIGINS = {
+    "reached_out"    => "them",
+    "applied"        => "you",
+    "acknowledged"   => "a machine",
+    "heard_back"     => "them",
+    "responded"      => "you",
+    "recruiter_call" => "a meeting",
+    "availability"   => "them",
+    "scheduled"      => "them",
+    "interview"      => "a meeting",
+    "cancelled"      => "them",
+    "take_home"      => "them",
+    "offer"          => "them",
+    "rejected"       => "them",
+    "withdrew"       => "them",
+    "ignored"        => "you",
+    "note"           => "you",
+    "reminder"       => "a machine",
+  }.freeze
+
+  # What the Type dropdown offers. The origin rides along in the option text and
+  # NOT in `tag_label`, which is what the timeline chips print - a chip saying
+  # "Heard back — them" is a label explaining itself to somebody who is not
+  # choosing anything.
+  def self.tag_options
+    TAG_LABELS.map { |tag, label| ["#{label} — #{TAG_ORIGINS[tag]}", tag] }
+  end
 
   # Beats that are on the timeline without anything having happened. See
   # `reminder` above.
@@ -185,6 +235,7 @@ class JobNote < ApplicationRecord
     "offer"    => :offer,
     "rejected" => :rejected,
     "withdrew" => :closed,
+    "ignored"  => :ignored,
   }.freeze
 
   MAX_BODY = 10_000

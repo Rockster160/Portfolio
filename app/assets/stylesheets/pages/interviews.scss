@@ -376,7 +376,8 @@
     // it just stops competing with the live ones for attention.
     &.status-rejected,
     &.status-closed,
-    &.status-ghosted {
+    &.status-ghosted,
+    &.status-ignored {
       opacity: 0.62;
     }
 

@@ -13,6 +13,7 @@
     { key: "rejected", label: "Rejected", count: @counts["rejected"].to_i },
     { key: "closed", label: "Closed", count: @counts["closed"].to_i },
     { key: "ghosted", label: "Ghosted", count: @counts["ghosted"].to_i },
+    { key: "ignored", label: "Ignored", count: @counts["ignored"].to_i },
     { key: "stale", label: "Stale", count: @stale_count },
     { key: "all", label: "All", count: @counts.values.sum },
   ]
@@ -231,7 +232,11 @@
                 <% end %>
               </div>
 
-              <%= fields_for :job_note, JobNote.new(occurred_at: Time.current) do |f| %>
+              <%# `note` explicitly, because the Type dropdown is ordered by when a
+                 beat happens rather than by what a blank form should default
+                 to - and a blank body under any other tag is a beat this form
+                 would file. See `build_note`. %>
+              <%= fields_for :job_note, JobNote.new(occurred_at: Time.current, tag: :note) do |f| %>
                 <%= render "note_fields", f: f, note_extras_open: false %>
               <% end %>
 
