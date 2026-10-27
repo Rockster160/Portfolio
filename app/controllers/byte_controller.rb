@@ -1262,12 +1262,14 @@ class ByteController < ApplicationController
     render json: { on: current_user.byte_affirmation? }
   end
 
-  # Whether this wall surface rings and shows Buddy's timers. Held per surface
-  # (board vs kiosk) so one screen can be silenced without quieting the chat.
+  # Whether this wall surface rings and shows Buddy's timers, so one screen can
+  # be silenced without quieting the chat. A board holds its own switch, which
+  # anyone who can open it may flip; the kiosk's is the person's.
   def timer_alerts
     return head(:forbidden) unless current_user&.byte_access?
 
     surface = params[:surface].to_s
+    return set_board_timer_alerts if surface == "board"
     return head(:unprocessable_entity) unless User::BYTE_TIMER_ALERT_SURFACES.include?(surface)
 
     current_user.set_byte_timer_alerts(surface, params[:on])
@@ -1305,6 +1307,17 @@ class ByteController < ApplicationController
   end
 
   private
+
+  # A board's own timer switch (see #timer_alerts).
+  def set_board_timer_alerts
+    board = ByteConversation.accessible_boards_for(current_user).find_by(id: params[:conversation_id])
+    return head(:not_found) if board.nil?
+
+    on = ActiveModel::Type::Boolean.new.cast(params[:on]).present?
+    board.update!(metadata: board.metadata.to_h.merge("timer_alerts" => on))
+    broadcast_convo_change(board, :updated)
+    render json: { surface: :board, on: board.timer_alerts? }
+  end
 
   # The board's own set for one thread: the TRIGGERS (routines) in its groups,
   # then the credit buttons, then the CHORES in its groups. A chore in ANY of

@@ -186,6 +186,18 @@ class ByteConversation < ApplicationRecord
     !(metadata.is_a?(Hash) && metadata["chore_dreams"].to_s == "false")
   end
 
+  # Whether this board shows and rings Buddy's timers. Held on the board, so
+  # one board can be quiet while another rings. On unless switched off.
+  def timer_alerts?
+    !(metadata.is_a?(Hash) && metadata["timer_alerts"].to_s == "false")
+  end
+
+  # An "All" board with its timers on shows every Buddy timer, not only the
+  # ones placed on it or its groups.
+  def shows_every_timer?
+    timer_alerts? && chore_tags.any? { |tag| tag.casecmp?(BOARD_ALL_TAG) }
+  end
+
   # The pace of its hot-chore dreams (Buddy::BoardDream), keyed as the metadata
   # it's stored in. A value outside the offered choices reads as the default.
   DREAM_PACE_KEYS = {

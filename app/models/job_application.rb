@@ -6,7 +6,9 @@
 #  color            :string           not null
 #  company          :string           not null
 #  last_activity_at :datetime
+#  location         :string
 #  logo             :text
+#  pay              :string
 #  role             :string
 #  source           :string
 #  status           :integer          default("active"), not null
@@ -31,10 +33,19 @@ class JobApplication < ApplicationRecord
   # active   → still in play, still worth chasing.
   # offer    → they said yes. Still open, because it isn't decided yet.
   # rejected → they said no.
-  # closed   → over by your choice: withdrew, took something else, went cold.
-  enum :status, { active: 0, offer: 1, rejected: 2, closed: 3 }
+  # closed   → over by your choice: withdrew, took something else.
+  # ghosted  → they went silent on a conversation that had started.
+  #
+  # `ghosted` is the hand-marked twin of `stale?` below, and the two are not
+  # the same thing. Stale reads itself off a row nobody ever answered; this is
+  # the one where somebody did, and then stopped - which no clock can tell from
+  # a company that is simply slow. Dating it is the whole point: it is marked
+  # weeks after the silence began, and everything on the page still counts from
+  # the last beat rather than from the marking, because nothing here is keyed
+  # to the status column.
+  enum :status, { active: 0, offer: 1, rejected: 2, closed: 3, ghosted: 4 }
 
-  # Neither rejected nor closed. This is what the index shows unless asked
+  # None of the three that are over. This is what the index shows unless asked
   # otherwise — "hide the rejected by default".
   #
   # Named because the index needs the same answer in Ruby: a search narrows the
@@ -47,6 +58,12 @@ class JobApplication < ApplicationRecord
   scope :ordered, -> { order(Arel.sql("COALESCE(last_activity_at, created_at) DESC")) }
   scope :engaged, -> { where(id: JobNote.engaged.select(:job_application_id)) }
   scope :unanswered, -> { where.not(id: JobNote.answered.select(:job_application_id)) }
+
+  # How long a row nobody has ever answered keeps its square on the wall,
+  # counted from the last thing tracked on it rather than from the application
+  # date - an ATS re-sending its own template is still something happening, and
+  # the wall only ever promised that something had.
+  STALE_AFTER = 1.week
 
   # The site's autogen palette. A colour is assigned at creation rather than
   # derived at render, because it also rides along onto the calendar and a
@@ -73,6 +90,18 @@ class JobApplication < ApplicationRecord
   # "Acme — Staff Engineer", or just "Acme" when the listing had no title.
   def label
     [company, role].compact_blank.join(" — ")
+  end
+
+  # What the job is actually offering, labelled and in reading order, with the
+  # blanks dropped.
+  #
+  # Free text, both of them. A band rather than a figure is the normal case
+  # ("160-170 + commissions"), what is on offer moves as the conversation goes
+  # on, and the thing that decides it is as often a constraint as a number -
+  # four days in the office, relocation, a bonus that needs you still employed
+  # at payout. Parsing any of that into a column loses the half that matters.
+  def terms
+    { "Location" => location, "Pay" => pay }.compact_blank
   end
 
   # A job is only ever as current as its newest note. Kept as a column so the
@@ -155,7 +184,26 @@ class JobApplication < ApplicationRecord
   end
 
   def dead?
-    rejected? || closed?
+    rejected? || closed? || ghosted?
+  end
+
+  # Applied, receipted by a machine, and nothing from anybody since. Nine
+  # tenths of a job search is this shape, and a square each is how the four
+  # that are moving end up below the fold.
+  #
+  # It drops off the wall and nothing else: the chips count it, its own chip
+  # opens it, a search still finds it, and the silence line above the wall has
+  # always counted the whole pile. One beat from a person puts it back.
+  #
+  # Off the NOTES rather than `last_activity_at`, which is why this is not a
+  # scope: `engaged_at` is the same answer wherever `touch_activity!` was
+  # remembered and the right one where it was not, and a wall that hid a row
+  # with yesterday's beat on it would be unexplainable from the page.
+  def stale?
+    return false if dead?
+    return false if notes.any? { |note| JobNote::ANSWERED_TAGS.include?(note.tag) }
+
+    engaged_at.before?(STALE_AFTER.ago)
   end
 
   # The applications actually IN PLAY: still live, and with at least one beat

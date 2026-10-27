@@ -375,7 +375,8 @@
     // A rejected or closed application is history. It stays fully readable —
     // it just stops competing with the live ones for attention.
     &.status-rejected,
-    &.status-closed {
+    &.status-closed,
+    &.status-ghosted {
       opacity: 0.62;
     }
 
@@ -432,6 +433,29 @@
       padding: 1px 8px;
       color: var(--iv-muted);
       font-size: 11px;
+    }
+
+    // What the job is, under the name it belongs to and above everything that
+    // is only true this week. Pills rather than a sentence: they are read down
+    // the column as much as across the card, and they wrap at 260px.
+    .card-facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .card-fact {
+      border: 1px solid var(--iv-line);
+      border-radius: 999px;
+      padding: 1px 8px;
+      color: var(--iv-muted);
+      font-size: 11px;
+
+      &.is-vibe {
+        color: var(--iv-text);
+        font-variant-numeric: tabular-nums;
+      }
     }
 
     .card-latest {
@@ -689,7 +713,8 @@
       padding-top: 9px;
     }
 
-    .standing-facts {
+    .standing-facts,
+    .standing-terms {
       display: flex;
       flex-wrap: wrap;
       gap: 6px 24px;
@@ -710,6 +735,11 @@
       dd {
         margin: 0;
         font-size: 14px;
+      }
+    }
+
+    .standing-facts {
+      dd {
         font-variant-numeric: tabular-nums;
       }
 
@@ -718,6 +748,13 @@
         color: var(--iv-waiting);
         font-weight: bold;
       }
+    }
+
+    // Ruled off the figures the way the figures are ruled off the tasks above.
+    .standing-terms {
+      margin-top: 9px;
+      border-top: 1px solid var(--iv-line);
+      padding-top: 9px;
     }
   }
 

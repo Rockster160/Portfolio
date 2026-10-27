@@ -39,8 +39,10 @@
         <%= render "logo_picker", save_label: "Use this crop" %>
 
         <%# Nothing to stand on with an empty timeline, and the page already
-           says so where the notes would be. %>
-        <% if @notes.any? %>
+           says so where the notes would be - unless what the job pays or where
+           it is has been written down, which is worth a panel on its own
+           before anybody has replied. %>
+        <% if @notes.any? || @job.terms.any? %>
           <%= render "standing", job: @job %>
         <% end %>
 
@@ -86,6 +88,18 @@
                 <div class="form-field">
                   <%= f.label :role, "Role" %>
                   <%= f.text_field :role %>
+                </div>
+              </div>
+
+              <div class="split-fields">
+                <div class="form-field">
+                  <%= f.label :location, "Location" %>
+                  <%= f.text_field :location, placeholder: "Remote · Salt Lake City, 4 days in office" %>
+                </div>
+
+                <div class="form-field">
+                  <%= f.label :pay, "Pay" %>
+                  <%= f.text_field :pay, placeholder: "160-170 + commissions" %>
                 </div>
               </div>
 

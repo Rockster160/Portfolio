@@ -4,14 +4,16 @@
 <%
   # Chips are links carrying the same page with one filter written in, so the
   # bar always says exactly what is on screen. `live` is the default and the
-  # reason rejections don't pile up in your face.
-  live_count = (@counts["active"].to_i + @counts["offer"].to_i)
+  # reason rejections don't pile up in your face; Stale is the pile it hands
+  # the wall's leftovers to, counted so it is never a disappearance.
   filters = [
-    { key: "live", label: "Live", count: live_count },
+    { key: "live", label: "Live", count: @live_count },
     { key: "active", label: "Active", count: @counts["active"].to_i },
     { key: "offer", label: "Offers", count: @counts["offer"].to_i },
     { key: "rejected", label: "Rejected", count: @counts["rejected"].to_i },
     { key: "closed", label: "Closed", count: @counts["closed"].to_i },
+    { key: "ghosted", label: "Ghosted", count: @counts["ghosted"].to_i },
+    { key: "stale", label: "Stale", count: @stale_count },
     { key: "all", label: "All", count: @counts.values.sum },
   ]
 %>

@@ -215,11 +215,11 @@ class User < ApplicationRecord
     self.byte_prefs = byte_prefs.to_h.merge("affirmation" => on.present?)
   end
 
-  # Whether a wall surface rings and shows Buddy's timers. The board and the
-  # kiosk each hold their own switch, so a chore board can be made quiet without
-  # touching the chat - which is the home of the timers and always shows them.
-  # Absent means on, the behaviour before the switch existed.
-  BYTE_TIMER_ALERT_SURFACES = %w[board kiosk].freeze
+  # Whether the kiosk rings and shows Buddy's timers, so it can be made quiet
+  # without touching the chat - which is the home of the timers and always
+  # shows them. A board holds its own (ByteConversation#timer_alerts?). Absent
+  # means on, the behaviour before the switch existed.
+  BYTE_TIMER_ALERT_SURFACES = %w[kiosk].freeze
 
   def byte_timer_alerts?(surface)
     byte_prefs.to_h["timer_alerts"].to_h[surface.to_s] != false

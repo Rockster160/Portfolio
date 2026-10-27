@@ -63,9 +63,10 @@
      data-pet-scale-url="<%= byte_pet_scale_path %>"
      data-affirmation-url="<%= byte_affirmation_action_path %>"
      <%# Whether Buddy's timers ring and show on THIS surface. Only the wall %>
-     <%# surfaces carry their own switch; the chat is the timers' home and is %>
-     <%# always on, so it reports true and never offers the toggle. %>
-     data-timer-alerts="<%= @kiosk ? current_user.byte_timer_alerts?(@board ? :board : :kiosk) : true %>"
+     <%# surfaces carry their own switch - each board its own, the kiosk the %>
+     <%# person's; the chat is the timers' home and is always on, so it reports %>
+     <%# true and never offers the toggle. %>
+     data-timer-alerts="<%= @board ? @conversation.timer_alerts? : (@kiosk ? current_user.byte_timer_alerts?(:kiosk) : true) %>"
      data-timer-alerts-url="<%= byte_timer_alerts_path %>"
      <%# Tapping the pet (Buddy::Pat). %>
      data-buddy-pat-url="<%= byte_buddy_pat_path %>"
@@ -969,10 +970,11 @@
       </div>
       <%# Only the wall surfaces carry this. The chat is where timers are set and %>
       <%# watched, so it always shows them; a board or kiosk can be made quiet %>
-      <%# without quieting the chat. Off hides the chips here entirely. %>
+      <%# without quieting the chat. Off hides the chips here entirely, and an %>
+      <%# "All" board only sweeps in every timer while it is on. %>
       <% if @kiosk %>
         <% timer_surface = @board ? :board : :kiosk %>
-        <% timer_alerts_on = current_user.byte_timer_alerts?(timer_surface) %>
+        <% timer_alerts_on = @board ? @conversation.timer_alerts? : current_user.byte_timer_alerts?(:kiosk) %>
         <div class="byte-setting">
           <div class="byte-setting-label">
             <span class="byte-setting-name">Timer alerts</span>

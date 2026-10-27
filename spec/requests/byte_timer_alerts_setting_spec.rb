@@ -1,9 +1,9 @@
 require "rails_helper"
 
-# A wall surface (the chore board, the kiosk) can turn its timer alerts off, and
+# A wall surface (a chore board, the kiosk) can turn its timer alerts off, and
 # off means the chips never appear there — no ring, no face takeover — without
-# quieting the chat, which is the home of the timers. Each surface holds its own
-# switch; one being off says nothing about the other.
+# quieting the chat, which is the home of the timers. Each board holds its own
+# switch, and the kiosk the person's; one being off says nothing about another.
 RSpec.describe "Byte timer alerts setting", type: :request do
   let(:user) { User.me }
 
@@ -22,29 +22,20 @@ RSpec.describe "Byte timer alerts setting", type: :request do
   end
 
   describe User do
-    it "is on for a surface nobody has touched" do
+    it "is on for a kiosk nobody has touched" do
       user.update!(byte_prefs: {})
 
-      expect(user.byte_timer_alerts?(:board)).to be(true)
       expect(user.byte_timer_alerts?(:kiosk)).to be(true)
     end
 
-    it "round-trips a surface off and back on" do
-      user.set_byte_timer_alerts(:board, false)
+    it "round-trips the kiosk off and back on" do
+      user.set_byte_timer_alerts(:kiosk, false)
       user.save!
-      expect(user.reload.byte_timer_alerts?(:board)).to be(false)
+      expect(user.reload.byte_timer_alerts?(:kiosk)).to be(false)
 
-      user.set_byte_timer_alerts(:board, true)
+      user.set_byte_timer_alerts(:kiosk, true)
       user.save!
-      expect(user.reload.byte_timer_alerts?(:board)).to be(true)
-    end
-
-    it "keeps the two surfaces independent" do
-      user.set_byte_timer_alerts(:board, false)
-      user.save!
-
-      expect(user.reload.byte_timer_alerts?(:board)).to be(false)
-      expect(user.byte_timer_alerts?(:kiosk)).to be(true)
+      expect(user.reload.byte_timer_alerts?(:kiosk)).to be(true)
     end
 
     it "leaves the rest of the preferences alone" do
@@ -55,8 +46,9 @@ RSpec.describe "Byte timer alerts setting", type: :request do
       expect(user.reload.byte_font_scale).to eq(130)
     end
 
-    it "ignores a surface that is not a wall surface" do
+    it "ignores a surface that is not the kiosk" do
       user.set_byte_timer_alerts(:chat, false)
+      user.set_byte_timer_alerts(:board, false)
       user.save!
 
       expect(user.reload.byte_prefs.to_h["timer_alerts"]).to be_blank
@@ -64,24 +56,54 @@ RSpec.describe "Byte timer alerts setting", type: :request do
   end
 
   describe "the endpoint" do
-    it "stores a surface off and says so" do
-      post byte_timer_alerts_path, params: { surface: "board", on: false }, as: :json
+    let!(:board) {
+      user.byte_conversations.create!(
+        mode: :buddy, name: "Home", last_message_at: Time.current, metadata: { "board" => true },
+      )
+    }
+    let!(:other) {
+      user.byte_conversations.create!(
+        mode: :buddy, name: "Desk", last_message_at: Time.current, metadata: { "board" => true },
+      )
+    }
+
+    it "stores one board off, leaving the other boards and the kiosk on" do
+      post byte_timer_alerts_path, params: { surface: "board", conversation_id: board.id, on: false }, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["surface"]).to eq("board")
       expect(response.parsed_body["on"]).to be(false)
-      expect(user.reload.byte_timer_alerts?(:board)).to be(false)
-      expect(user.byte_timer_alerts?(:kiosk)).to be(true)
+      expect(board.reload.timer_alerts?).to be(false)
+      expect(other.reload.timer_alerts?).to be(true)
+      expect(user.reload.byte_timer_alerts?(:kiosk)).to be(true)
     end
 
-    it "turns a surface back on and says so" do
-      user.set_byte_timer_alerts(:kiosk, false)
-      user.save!
+    it "turns a board back on" do
+      board.update!(metadata: board.metadata.merge("timer_alerts" => false))
 
-      post byte_timer_alerts_path, params: { surface: "kiosk", on: true }, as: :json
+      post byte_timer_alerts_path, params: { surface: "board", conversation_id: board.id, on: true }, as: :json
 
       expect(response.parsed_body["on"]).to be(true)
-      expect(user.reload.byte_timer_alerts?(:kiosk)).to be(true)
+      expect(board.reload.timer_alerts?).to be(true)
+    end
+
+    it "refuses a board this person can't open" do
+      theirs = create(:user).byte_conversations.create!(
+        mode: :buddy, name: "Theirs", last_message_at: Time.current, metadata: { "board" => true },
+      )
+
+      post byte_timer_alerts_path, params: { surface: "board", conversation_id: theirs.id, on: false }, as: :json
+
+      expect(response).to have_http_status(:not_found)
+      expect(theirs.reload.timer_alerts?).to be(true)
+    end
+
+    it "stores the kiosk off and says so" do
+      post byte_timer_alerts_path, params: { surface: "kiosk", on: false }, as: :json
+
+      expect(response.parsed_body["surface"]).to eq("kiosk")
+      expect(response.parsed_body["on"]).to be(false)
+      expect(user.reload.byte_timer_alerts?(:kiosk)).to be(false)
+      expect(board.reload.timer_alerts?).to be(true)
     end
 
     it "refuses an unknown surface" do
@@ -111,9 +133,8 @@ RSpec.describe "Byte timer alerts setting", type: :request do
       expect(response.body).to include('data-surface="board"')
     end
 
-    it "reports the board surface off on the app root when it is off" do
-      user.set_byte_timer_alerts(:board, false)
-      user.save!
+    it "reports the board off on its own page when it is off" do
+      board.update!(metadata: board.metadata.merge("timer_alerts" => false))
 
       get byte_board_thread_path(board)
 

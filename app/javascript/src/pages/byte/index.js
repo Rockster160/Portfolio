@@ -2470,13 +2470,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
     enabled: app.dataset.timerAlerts !== "false",
     // On a board, which timers it shows: those placed on it or on one of its
-    // groups, from its owner, or the household's once it's shared. Read live,
-    // since the groups and the share switch change in place.
+    // groups, from its owner, or the household's once it's shared. An "All"
+    // board shows every one of theirs. Read live, since the groups and the
+    // share switch change in place.
     onBoardFn: app.dataset.timerBoardId ? (t) => {
       if (String(t.board_id ?? "") === app.dataset.timerBoardId) return true;
       if (String(t.user_id) !== app.dataset.timerBoardOwnerId && app.dataset.timerBoardShared !== "true") return false;
       let tags = [];
       try { tags = JSON.parse(app.dataset.boardTags || "[]").map((g) => String(g).toLowerCase()); } catch (e) {}
+      if (t.buddy && tags.includes("all")) return true;
       return (t.board_groups || []).some((g) => tags.includes(String(g).toLowerCase()));
     } : null,
     boardId: app.dataset.timerBoardId || null,
@@ -2883,7 +2885,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           Accept:         "application/json",
           "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
         },
-        body: JSON.stringify({ surface: surface, on: next }),
+        body: JSON.stringify({ surface: surface, on: next, conversation_id: app.dataset.timerBoardId || null }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

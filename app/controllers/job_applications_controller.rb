@@ -35,7 +35,10 @@ class JobApplicationsController < ApplicationController
         filtered_jobs.includes(:notes, :transcripts).to_a
       end
     )
-    @jobs = surface_interviews(rows)
+    # The stale read is off the NOTES - see JobApplication#stale? - so it is the
+    # one narrowing that cannot be a WHERE. Both paths above have the rows and
+    # their notes loaded by here, which is all it needs.
+    @jobs = surface_interviews(narrow_staleness(rows))
     # JSON is the local job hunter asking what is already on the board so it
     # never applies to the same company twice. It wants the rows and nothing
     # else, so it returns before the page's own furniture is loaded.
@@ -44,6 +47,17 @@ class JobApplicationsController < ApplicationController
     end
 
     @counts = status_counts(matched)
+    @stale_count = stale_count(matched)
+    # Counted here rather than added up in the view, for the same reason the
+    # status counts are: the Live chip lands on the wall, the wall drops the
+    # stale ones, and `active + offer` in the view could not know that - it
+    # printed a number that was true of nothing on screen.
+    @live_count = @counts["active"].to_i + @counts["offer"].to_i
+    @live_count -= @stale_count if drop_stale?
+    # Deliberately the whole live board, stale ones included. This is the
+    # picker for "something just happened" - and a beat landing on a quiet row
+    # is exactly what brings it back, so dropping it here would mean searching
+    # for a row in order to revive it.
     @live_jobs = current_user.job_applications.live.order(:company).to_a
     @new_job = current_user.job_applications.new
     load_upcoming
@@ -183,6 +197,26 @@ class JobApplicationsController < ApplicationController
     scope.live
   end
 
+  # `stale` is not a status, so both `filtered_jobs` and `in_filter?` hand it
+  # the live board and the staleness is read off that here.
+  def narrow_staleness(rows)
+    return rows.select(&:stale?) if @filter == "stale"
+    return rows.reject(&:stale?) if @filter == "live" && drop_stale?
+
+    rows
+  end
+
+  # Whether the live wall is the FRESH live wall.
+  #
+  # Not when something is being searched: typing a company is asking "where is
+  # X", and a row going quiet is the likeliest reason to go looking for it.
+  # Not for JSON either - that is the local job hunter asking what is already
+  # on the board so it never applies to the same company twice, and a row it
+  # cannot see is a company it will apply to again.
+  def drop_stale?
+    @query.blank? && !request.format.json?
+  end
+
   # Everything, ranked by the query. `ordered` so a tie in score still falls
   # back to "what happened most recently", the way the unsearched wall does.
   def searchable_jobs
@@ -241,6 +275,11 @@ class JobApplicationsController < ApplicationController
     return current_user.job_applications.group(:status).count if matched.nil?
 
     matched.group_by(&:status).transform_values(&:size)
+  end
+
+  def stale_count(matched)
+    rows = matched || current_user.job_applications.live.includes(:notes)
+    rows.count(&:stale?)
   end
 
   # A booked interview outranks recency. It's the one thing on this page with a
@@ -320,6 +359,8 @@ class JobApplicationsController < ApplicationController
       :logo,
       :source,
       :url,
+      :location,
+      :pay,
       :jobhunt_job_id,
     )
   end
@@ -351,6 +392,8 @@ class JobApplicationsController < ApplicationController
       logo:        job.logo,
       source:      job.source,
       url:         job.url,
+      location:    job.location,
+      pay:         job.pay,
       note_count:  job.notes.size,
       # The recordings, so the local job hunter finds them in the call it
       # already makes rather than needing a list of its own. Named and counted

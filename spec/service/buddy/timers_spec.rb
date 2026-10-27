@@ -483,6 +483,24 @@ RSpec.describe Buddy::Timers do
         expect(described_class.live_for_board(other)).to be_empty
       end
 
+      it "shows every timer on an All board, until its timers are switched off" do
+        board.update!(chore_tags: ["All"])
+        in_chat = described_class.create!(user: user, seconds: 60, conversation: chat)
+
+        expect(described_class.live_for_board(board)).to eq([in_chat])
+        expect(described_class.live_for_board(other)).to be_empty
+
+        board.update!(metadata: board.metadata.merge("timer_alerts" => false))
+        expect(described_class.live_for_board(board)).to be_empty
+      end
+
+      it "leaves a regular timer off an All board" do
+        board.update!(chore_tags: ["All"])
+        user.timers.create!(kind: :countdown, duration_ms: 60_000, started_at: Time.current)
+
+        expect(described_class.live_for_board(board)).to be_empty
+      end
+
       describe "in a household" do
         let(:house) { create(:chore_household) }
         let!(:housemate) { create(:user, chore_household_id: house.id) }
@@ -516,6 +534,22 @@ RSpec.describe Buddy::Timers do
 
           expect(described_class.audience(placed)).to include(user, housemate)
           expect(described_class.audience(alone)).to eq([user])
+        end
+
+        it "puts every household timer on a shared All board, and tells the household" do
+          alone = described_class.create!(user: user, seconds: 60, conversation: chat)
+          theirs.update!(metadata: theirs.metadata.merge("chore_tags" => ["All"]))
+          expect(described_class.live_for_board(theirs)).to be_empty
+          expect(described_class.audience(alone)).to eq([user])
+
+          theirs.update!(metadata: theirs.metadata.merge("shared" => true))
+          expect(described_class.live_for_board(theirs)).to eq([alone])
+          expect(described_class.audience(alone)).to include(user, housemate)
+          expect(described_class.reachable(housemate, alone.id)).to eq(alone)
+
+          theirs.update!(metadata: theirs.metadata.merge("timer_alerts" => false))
+          expect(described_class.audience(alone)).to eq([user])
+          expect(described_class.reachable(housemate, alone.id)).to be_nil
         end
 
         it "lets a housemate reach a placed timer from the board, but not one in the chat" do

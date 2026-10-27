@@ -96,8 +96,10 @@ class TimerSerializer
     base[:wait] = true if @t.countdown? && Buddy::Timers.wait?(@t)
 
     # Where it shows besides the chat. A board's hero drops every timer not
-    # placed on it, and a household member's unless the board is shared.
+    # placed on it, and a household member's unless the board is shared. An
+    # "All" board keeps every Buddy timer, so it needs to know which are.
     if @t.countdown?
+      base[:buddy]        = @t.timer_page&.slug == Buddy::Timers::PAGE_SLUG
       base[:user_id]      = @t.user_id
       base[:board_id]     = Buddy::Timers.board_id(@t)
       base[:board_groups] = Buddy::Timers.groups(@t)

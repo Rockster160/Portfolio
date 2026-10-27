@@ -29,7 +29,8 @@ module Buddy
     # Where a timer shows besides the chat, which shows all of them: the board it
     # was named for or started from (a board button runs in that board's thread),
     # and any board watching one of its groups. A board shows its owner's timers
-    # and, once shared, the household's too.
+    # and, once shared, the household's too. An "All" board with its timers on
+    # shows every one of them, placed or not.
     BOARD  = "board_id".freeze
     GROUPS = "board_groups".freeze
 
@@ -274,12 +275,15 @@ module Buddy
 
     # The live timers one board shows: those attached to it or to one of the
     # groups it watches, from its owner and, when it's shared, the household.
+    # An "All" board shows all of theirs.
     def live_for_board(board)
       owners = board.shared? ? board.user.chore_household_user_ids : [board.user_id]
       pages  = TimerPage.where(user_id: owners, slug: PAGE_SLUG).select(:id)
       tags   = board.chore_tags.map(&:downcase)
       scope  = Timer.live.where(user_id: owners, timer_page_id: pages, kind: :countdown)
       scope  = scope.where("started_at IS NOT NULL OR paused_at IS NOT NULL")
+      return scope.ordered if board.shows_every_timer?
+
       scope.where(
         "timers.metadata->>:board = :id OR EXISTS (" \
         "SELECT 1 FROM jsonb_array_elements_text(COALESCE(timers.metadata->:groups, '[]'::jsonb)) g " \
@@ -304,24 +308,34 @@ module Buddy
       Array(timer&.metadata.to_h[GROUPS])
     end
 
-    # Who hears about a change to it: its owner, and the household too once it
-    # is placed on a board, since a shared board shows it on their screens.
+    # Who hears about a change to it: its owner, and the household too once a
+    # shared board shows it on their screens.
     def audience(timer)
       return [timer.user] unless buddy_timer?(timer.user, timer)
-      return [timer.user] if board_id(timer).nil? && groups(timer).empty?
       return [timer.user] if timer.user.chore_household_id.nil?
+      return [timer.user] unless on_household_screens?(timer)
 
       User.where(chore_household_id: timer.user.chore_household_id).to_a
     end
 
     # A household timer a viewer may pause, cancel or acknowledge: their own, or
-    # one placed on a board, which a household member is looking at.
+    # one a household board shows, which a household member is looking at.
     def reachable(user, id)
       timer = Timer.unscope(where: :archived_at).find_by(id: id, user_id: user.chore_household_user_ids)
       return nil if timer.nil? || !buddy_timer?(timer.user, timer)
       return timer if timer.user_id == user.id
 
-      timer if board_id(timer) || groups(timer).any?
+      timer if on_household_screens?(timer)
+    end
+
+    # Whether a board beyond its owner's own can show it: it is placed on a
+    # board or a group, or a shared "All" board in the household shows every
+    # timer.
+    def on_household_screens?(timer)
+      return true if board_id(timer) || groups(timer).any?
+
+      boards = ByteConversation.active.buddy.board.shared.where(user_id: timer.user.chore_household_user_ids)
+      boards.any?(&:shows_every_timer?)
     end
 
     # The board a spoken name points at, among the boards this person can open.

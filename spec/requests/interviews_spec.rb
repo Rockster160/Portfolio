@@ -15,6 +15,11 @@ RSpec.describe "Interview tracker", type: :request do
     response.body[pattern, 1]&.to_i
   end
 
+  # The ids in the JSON the local job hunter reads.
+  def json_ids
+    response.parsed_body["jobs"].map { |job| job["id"] }
+  end
+
   # The order of the wall, by application id.
   def card_order
     response.body.scan(/<a class="interview-card[^>]*href="\/interviews\/(\d+)"/).flatten.map(&:to_i)
@@ -71,6 +76,25 @@ RSpec.describe "Interview tracker", type: :request do
       card = response.body[/<a class="interview-card[^>]*href="#{interview_path(job)}".*?<\/a>/m]
       text = ActionController::Base.helpers.strip_tags(card).gsub(/\s+/, " ")
       expect(text.scan(/Applied/i).size).to eq(1)
+    end
+
+    # What the job IS, as against where it has got to - the pair being compared
+    # across the wall rather than read off one row.
+    it "prints the pay, the location and the vibe on a card" do
+      job = user.job_applications.create!(
+        company:  "Samsara",
+        location: "Remote",
+        pay:      "160-170 + commissions",
+      )
+      job.notes.create!(tag: :interview, occurred_at: 1.day.ago, did_well: 7, liked_them: 9)
+
+      get interviews_path
+
+      card = response.body[/<a class="interview-card[^>]*href="#{interview_path(job)}".*?<\/a>/m]
+      expect(card).to include("160-170 + commissions")
+      expect(card).to include("Remote")
+      expect(card).to include("Did 7.0")
+      expect(card).to include("Liked 9.0")
     end
 
     # The wall is sorted by "what touched this most recently", which will
@@ -162,6 +186,142 @@ RSpec.describe "Interview tracker", type: :request do
   # Everything above the fold read `follow_up_at`, so an availability request -
   # which arrives as a task with no date on it - appeared in neither strip and
   # sat on the wall as an ordinary note between two things the company did.
+  # Nine tenths of a job search is applied, receipted by a machine, never
+  # answered by anybody - and each one held a square on the wall.
+  describe "the stale drop-off" do
+    # Went in, got receipted, nothing since.
+    def quiet_row(company, applied_at)
+      job = user.job_applications.create!(company: company)
+      job.notes.create!(tag: :applied, occurred_at: applied_at)
+      job
+    end
+
+    it "drops one nobody has answered in over a week" do
+      job = quiet_row("Initech", 8.days.ago)
+
+      get interviews_path
+
+      expect(card_order).not_to include(job.id)
+      expect(chip_count("Stale")).to eq(1)
+      expect(chip_count("Live")).to eq(0)
+    end
+
+    it "keeps one that went in this week" do
+      job = quiet_row("Initech", 3.days.ago)
+
+      get interviews_path
+
+      expect(card_order).to include(job.id)
+      expect(chip_count("Stale")).to eq(0)
+      expect(chip_count("Live")).to eq(1)
+    end
+
+    # The week runs from the last thing TRACKED, not from the application: an
+    # ATS re-sending its own template is still something having happened.
+    it "counts the week from the last beat on the row" do
+      job = quiet_row("Initech", 20.days.ago)
+      job.notes.create!(tag: :acknowledged, occurred_at: 2.days.ago)
+
+      get interviews_path
+
+      expect(card_order).to include(job.id)
+    end
+
+    # Somebody answered. However long ago that was, this is not the shape the
+    # drop-off is for - marking it Ghosted is his call to make.
+    it "keeps one a person has answered, however quiet it has gone" do
+      job = user.job_applications.create!(company: "Initech")
+      job.notes.create!(tag: :heard_back, occurred_at: 30.days.ago, body: "Keen to talk")
+
+      get interviews_path
+
+      expect(card_order).to include(job.id)
+      expect(chip_count("Stale")).to eq(0)
+    end
+
+    it "opens the pile on its own chip" do
+      job = quiet_row("Initech", 8.days.ago)
+
+      get interviews_path(status: :stale)
+
+      expect(card_order).to eq([job.id])
+    end
+
+    # Typing a company is asking where it is, and having gone quiet is the
+    # likeliest reason to go looking.
+    it "still turns up in a search of the live board" do
+      job = quiet_row("Initech", 8.days.ago)
+
+      get interviews_path(q: "Initech")
+
+      expect(card_order).to eq([job.id])
+    end
+
+    # The local job hunter asks this so it never applies to the same company
+    # twice. A row it cannot see is a company it applies to again.
+    it "stays in the JSON the local job hunter reads" do
+      job = quiet_row("Initech", 8.days.ago)
+
+      get interviews_path(format: :json)
+
+      expect(json_ids).to include(job.id)
+    end
+
+    # A beat landing on a quiet row is what brings it back, so the picker it is
+    # logged from has to still offer it.
+    it "stays in the picker on the capture form" do
+      quiet_row("Initech", 8.days.ago)
+
+      get interviews_path
+
+      expect(response.body).to include(">Initech<")
+    end
+  end
+
+  # The hand-marked twin: somebody answered, and then stopped. No clock can
+  # tell that from a company that is simply slow, so this one is his to say.
+  describe "a ghosted application" do
+    let(:job) {
+      job = user.job_applications.create!(company: "Initech")
+      job.notes.create!(tag: :heard_back, occurred_at: 30.days.ago, body: "Keen to talk")
+      job.touch_activity!
+      job
+    }
+
+    it "leaves the wall and counts on its own chip" do
+      patch interview_path(job), params: { job_application: { status: :ghosted } }
+
+      get interviews_path
+
+      expect(card_order).not_to include(job.id)
+      expect(chip_count("Ghosted")).to eq(1)
+      expect(chip_count("Live")).to eq(0)
+    end
+
+    # The whole point of marking it by hand: it is marked weeks after the
+    # silence started, and the row still dates from the last beat.
+    it "reads its age from the last beat, not from being marked" do
+      patch interview_path(job), params: { job_application: { status: :ghosted } }
+
+      get interviews_path(status: :ghosted)
+
+      expect(card_order).to eq([job.id])
+      expect(response.body).to include("1 month ago")
+      expect(response.body).not_to include("less than a minute ago")
+    end
+
+    it "is not counted as stale as well" do
+      quiet = user.job_applications.create!(company: "Acme")
+      quiet.notes.create!(tag: :applied, occurred_at: 20.days.ago)
+      patch interview_path(quiet), params: { job_application: { status: :ghosted } }
+
+      get interviews_path
+
+      expect(chip_count("Stale")).to eq(0)
+      expect(chip_count("Ghosted")).to eq(1)
+    end
+  end
+
   describe "the waiting-on-you strip" do
     let!(:job) { user.job_applications.create!(company: "Neighbor") }
 
@@ -584,6 +744,14 @@ RSpec.describe "Interview tracker", type: :request do
       patch interview_path(job), params: { job_application: { status: :rejected } }
 
       expect(job.reload.status).to eq("rejected")
+    end
+
+    it "stores the pay and the location as typed" do
+      patch interview_path(job),
+        params: { job_application: { location: "Remote", pay: "160-170 + commissions" } }
+
+      expect(job.reload.location).to eq("Remote")
+      expect(job.pay).to eq("160-170 + commissions")
     end
 
     # The square PATCHes on change rather than waiting for a submit, so every
@@ -1030,6 +1198,13 @@ RSpec.describe "Interview tracker", type: :request do
   # The index answers this for the whole board. This page is the one open while
   # something is being written down, and it used to answer none of it.
   describe "the standing banner on one application" do
+    # Only the terms strip. The edit form below the panel carries a label for
+    # each of these fields, so a bare search of the page finds "Location" on a
+    # row that has not been given one.
+    def terms_strip
+      response.body[/<dl class="standing-terms">.*?<\/dl>/m].to_s
+    end
+
     # Which option the Type dropdown opens on.
     def selected_tag
       block = response.body[/<select[^>]*name="job_note\[tag\]".*?<\/select>/m]
@@ -1084,6 +1259,44 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).to include("job-standing")
       expect(response.body).not_to include("Reply to them")
       expect(response.body).not_to include(">Move<")
+    end
+
+    # Read off the panel while deciding between two applications, which is why
+    # they are printed as typed: a band, a base plus commission, a number with
+    # a day-in-office constraint hanging off it.
+    it "prints what it pays and where it is" do
+      job = user.job_applications.create!(
+        company:  "Acme",
+        location: "Salt Lake City, 4 days in office",
+        pay:      "160-170 + commissions",
+      )
+      job.notes.create!(tag: :heard_back, occurred_at: 2.days.ago, body: "Keen to talk")
+
+      get interview_path(job)
+
+      expect(terms_strip).to include("160-170 + commissions")
+      expect(terms_strip).to include("Salt Lake City, 4 days in office")
+    end
+
+    it "leaves out the half that has not been written down" do
+      job = user.job_applications.create!(company: "Acme", pay: "210k")
+      job.notes.create!(tag: :heard_back, occurred_at: 2.days.ago, body: "Keen to talk")
+
+      get interview_path(job)
+
+      expect(terms_strip).to include(">Pay<")
+      expect(terms_strip).not_to include(">Location<")
+    end
+
+    # The panel is otherwise the timeline's read, but a band worth weighing is
+    # on the row before anybody has replied to it.
+    it "opens the panel for terms alone on a row with no timeline" do
+      job = user.job_applications.create!(company: "Acme", pay: "160-170 + commissions")
+
+      get interview_path(job)
+
+      expect(response.body).to include("job-standing")
+      expect(terms_strip).to include("160-170 + commissions")
     end
 
     it "stays off a row with nothing on its timeline" do

@@ -85,4 +85,19 @@
       </div>
     <% end %>
   </dl>
+
+  <%# A line of its own under the figures. What the job pays and where it is
+     are the two things being weighed between applications rather than read off
+     this one, and they are sentences where everything above is a number - put
+     in the same row they would wrap the count off the end of it. %>
+  <% if job.terms.any? %>
+    <dl class="standing-terms">
+      <% job.terms.each do |label, value| %>
+        <div>
+          <dt><%= label %></dt>
+          <dd><%= value %></dd>
+        </div>
+      <% end %>
+    </dl>
+  <% end %>
 </div>

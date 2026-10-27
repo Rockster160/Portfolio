@@ -20,6 +20,25 @@
     <span class="status-pill"><%= job.status.humanize %></span>
   </div>
 
+  <%# What the job IS, as against where it has got to - the pair being compared
+     across the wall rather than read off one row, with the vibe beside them
+     because a 9 only means something next to the pay it was given for.
+     Values as typed; a band, a base plus commission and a day-in-office
+     constraint are all one line. %>
+  <% vibe = job.sentiment %>
+  <% if job.terms.any? || vibe.any? %>
+    <div class="card-facts">
+      <% job.terms.each_value do |value| %>
+        <span class="card-fact"><%= value %></span>
+      <% end %>
+      <% vibe.each do |field, score| %>
+        <span class="card-fact is-vibe" title="<%= JobNote::SENTIMENT[field] %>">
+          <%= field == :did_well ? "Did" : "Liked" %> <%= score %>
+        </span>
+      <% end %>
+    </div>
+  <% end %>
+
   <%# The loudest thing on the card, because it's the only thing on it with a
      date you have to be somewhere for. %>
   <% if booked.present? %>
