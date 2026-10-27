@@ -94,6 +94,31 @@ RSpec.describe Buddy::Emphasis do
     end
   end
 
+  # 8 spans over 11 sentences, none of them a figure: one event to a sentence
+  # and every title bolded, so no sentence carries two and the bold still
+  # marks out nothing.
+  describe "a briefing that bolds every event once" do
+    let(:body) {
+      briefing([
+        "Morning!",
+        "**Interview: Acme** at 11:30am, then **Interview: Globex** at 3pm.",
+        "At 5:30pm, **Sitter watches the dog** and wants a dinner update.",
+        "Then **Haunted maze & dinner** at 6pm, and you should **leave by 5:43pm**.",
+        "Nice little evening.",
+        "**Jobs today** are Shower and Go get mail.",
+        "That is enough for a day.",
+        "Rain today.",
+        "Good weather for staying in.",
+        "Tomorrow is **Sam's Birthday** all day.",
+        "Thursday at 6:30pm is **Games night**.",
+      ])
+    }
+
+    it "takes all of it off" do
+      expect(described_class.thin(body)).to eq(body.delete("*"))
+    end
+  end
+
   # Three sentences, five spans, two of them temperatures.
   describe "a short briefing bolding every fact in it" do
     let(:body) {

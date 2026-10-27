@@ -2959,6 +2959,12 @@ module Buddy
         Array(meta["seed_tools"]).map(&:to_s).compact_blank
       end
 
+      # Built by Buddy::JobMailOffer, whichever of its seeds it was: each one
+      # offers the job tools and nothing else.
+      def job_mail_seed?
+        seed_tools.include?("add_job_note")
+      end
+
       # The handful of always-needed values, inlined so a chat-only turn never
       # has to spend a round trip on get_context just to know its own face.
       #
@@ -3094,6 +3100,11 @@ module Buddy
         # Buddy::Restatement for why this compares word sets rather than
         # phrasing, and why the bar for dropping anything is as high as it is.
         body = repaired(:restatement, body) { |b| Buddy::Restatement.collapse(b) }
+        # A job-mail notification reading "Done." over the beat it filed, when
+        # the beat is what the push was for. See Buddy::FilingReceipt.
+        body = repaired(:filing_receipt, body) { |b|
+          job_mail_seed? ? Buddy::FilingReceipt.mend(b, outcome[:proposals]) : b
+        }
         # A trailing "which is <something charming>" carrying no fact. Briefing
         # only, because that is where it lives and where the day it should have
         # been talking about is available to check against. See Buddy::Flourish

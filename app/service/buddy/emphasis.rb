@@ -15,9 +15,11 @@ module Buddy
   # means it has nothing to route around.
   #
   # Scarcity is the whole of what emphasis is, so that is what gets measured -
-  # spans against SENTENCES, not a number somebody picked. More bold runs than
-  # sentences means every sentence has more than one, and at that point none of
-  # them is standing out from the others.
+  # spans against SENTENCES, not a number somebody picked. The line is one span
+  # for every two sentences. One per sentence is not a line at all: a briefing
+  # that names one event per sentence and bolds every title sits exactly on it
+  # without crossing it, and that is the "every name in turn" the prompt
+  # forbids, wearing a tidier distribution.
   #
   # Measured against the real ones rather than guessed. The five that went this
   # way ran 15, 26, 24, 28 and 37 spans over 12, 13, 15, 13 and 8 sentences, so
@@ -37,11 +39,14 @@ module Buddy
     SPAN_RX = /\*\*(?=\S)((?:[^*\n]|\*[^*\n]+\*)+?)\*\*/
 
     # Below this, emphasis is scarce enough that none of it is taken off
-    # wholesale. It also keeps a two-sentence briefing from losing every span
-    # over three, where the ratio alone would. Figures still come off a short
+    # wholesale. It also keeps a short briefing from losing every span over
+    # two or three, where the ratio alone would. Figures still come off a short
     # one that is over the line - a time in bold beside every name is the same
     # overrun at any length.
     FLOOR = 8
+
+    # Sentences each span needs behind it before emphasis counts as scarce.
+    SENTENCES_PER_SPAN = 2
 
     # A span carrying only a FIGURE - a time, a temperature, a percentage, a
     # bare number, a span of two of them. These are the ones the overrun is
@@ -72,7 +77,7 @@ module Buddy
     def thin(body)
       text  = body.to_s
       found = spans(text)
-      return body if found.length <= sentences(text).length
+      return body if scarce?(found, text)
 
       # Figures first. If that is enough to bring it back under, the names keep
       # their emphasis and the briefing reads the way the rule always wanted.
@@ -80,7 +85,7 @@ module Buddy
       return text if found.length < FLOOR
 
       found = spans(text)
-      return text if found.length <= sentences(text).length
+      return text if scarce?(found, text)
 
       # Still every sentence over. Which four of thirty-seven were the ones
       # that mattered is not answerable from here, and picking by position
@@ -88,6 +93,10 @@ module Buddy
       # bold at all reads perfectly well; the morning after the worst of these
       # came out that way on its own.
       text.gsub(SPAN_RX) { ::Regexp.last_match(1) }
+    end
+
+    def scarce?(found, text)
+      found.length * SENTENCES_PER_SPAN <= sentences(text).length
     end
 
     def figure?(inner)

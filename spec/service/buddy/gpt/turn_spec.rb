@@ -4461,6 +4461,50 @@ RSpec.describe Buddy::GPT::Turn do
         expect(client.calls.first.tools).to be_empty
       end
 
+      # The round after the call answers the call's result, and the last round
+      # is the reply - so the push can come back as a receipt for the filing.
+      describe "answered with a receipt for the filing" do
+        let(:filing) {
+          {
+            name:      :add_job_note,
+            arguments: {
+              "company" => "iCapital",
+              "note"    => "The PCIIA terms are standard and not negotiable.",
+              "summary" => "HR clarified offer terms around the PCIIA and non-compete.",
+            },
+          }
+        }
+
+        before {
+          user.grant_buddy_features!(:job_search)
+          JobApplication.create!(user: user, company: "iCapital", status: :offer)
+        }
+
+        it "says what was filed instead" do
+          seeded(
+            [
+              { text: "iCapital says the PCIIA is standard.", tool_calls: [filing] },
+              { text: "Done. iCapital’s note is on the row now." },
+            ],
+            %w[add_job_note add_job_application],
+          )
+
+          expect(reply.body).to eq("iCapital: HR clarified offer terms around the PCIIA and non-compete.")
+        end
+
+        it "leaves a sentence about the mail alone" do
+          seeded(
+            [
+              { tool_calls: [filing] },
+              { text: "Set for Tuesday at 11:30am with iCapital." },
+            ],
+            %w[add_job_note add_job_application],
+          )
+
+          expect(reply.body).to eq("Set for Tuesday at 11:30am with iCapital.")
+        end
+      end
+
       # Every other self-initiated seed - a check-in, a watch, a reminder - is
       # asked for WORDS, and whatever they say back can go anywhere.
       it "leaves a seed that names none of them with the full set" do
