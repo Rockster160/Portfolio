@@ -2423,6 +2423,26 @@ BUDDY_EDGE_PROBES = [
     note:  "scheduled Tesla Navigate at the event's booked end (5:59pm) because " \
            "remind_when's run couldn't carry a destination",
   },
+  # Tesla Navigate picks the next place itself when the destination is blank,
+  # so a bare "take me" is a call, not a question about where.
+  {
+    case:       "take me, nowhere named",
+    say:        "Take me",
+    tool:       :call_jil_function,
+    args:       { call_jil_function: { name: /navigate/i } },
+    never_args: { call_jil_function: { destination: /\S/ } },
+    needs:      :navigate_fn,
+    note:       "asked where to instead of letting Tesla Navigate pick the next event",
+  },
+  {
+    case:       "let's go, nowhere named",
+    say:        "Let's go",
+    tool:       :call_jil_function,
+    args:       { call_jil_function: { name: /navigate/i } },
+    never_args: { call_jil_function: { destination: /\S/ } },
+    needs:      :navigate_fn,
+    note:       "a bare go is the next place on the day, which the function works out",
+  },
   # A watch whose text fills itself in off the trigger. The `{{ location }}`
   # in it was read as a step reference nothing had collected, and the watch
   # was dropped before it was set.
