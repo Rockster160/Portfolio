@@ -683,6 +683,56 @@ RSpec.describe JobApplication do
   # THE PROCESS. Every search starts not knowing the rounds, so the list starts
   # as the four that are always there and becomes the company's own once they
   # say what theirs is.
+  describe "the other names it answers to" do
+    let(:job) { user.job_applications.create!(company: "iCapital") }
+
+    it "takes one name per line and keeps them as typed" do
+      job.known_as_lines = " Institutional Capital Network \n\naccurate.com\n"
+      job.save!
+
+      expect(job.reload.known_as).to eq(["Institutional Capital Network", "accurate.com"])
+      expect(job.known_as_lines).to eq("Institutional Capital Network\naccurate.com")
+    end
+
+    it "keeps one of each name" do
+      job.known_as_lines = "Accurate\naccurate\nSterling"
+
+      expect(job.known_as).to eq(["Accurate", "Sterling"])
+    end
+
+    it "keeps the list to something a person typed" do
+      job.known_as_lines = (1..30).map { |n| "Name #{n}" }.join("\n")
+
+      expect(job.known_as.size).to eq(JobApplication::MAX_KNOWN_AS)
+      expect(job.known_as.first.length).to be <= JobApplication::MAX_KNOWN_AS_NAME
+    end
+
+    # A domain catches everything that vendor sends from; a whole address
+    # catches only itself, which is what to write down when the domain is
+    # shared - a Gmail address a recruiter works out of.
+    it "matches a sender by domain or in full" do
+      job.update!(known_as: ["accurate.com", "alexis.salamon@example.test"])
+
+      expect(job.known_sender?("InfoNeeded@Accurate.com")).to be(true)
+      expect(job.known_sender?("alexis.salamon@example.test")).to be(true)
+      expect(job.known_sender?("someone@example.test")).to be(false)
+      expect(job.known_sender?("")).to be(false)
+    end
+
+    it "is not a sender just because the name reads like one" do
+      job.update!(known_as: ["Accurate"])
+
+      expect(job.known_sender?("infoneeded@accurate.com")).to be(false)
+    end
+
+    it "is listed as carrying other names only when it does" do
+      job
+      aliased = user.job_applications.create!(company: "Wildcat", known_as: ["wildcat.test"])
+
+      expect(JobApplication.with_other_names.to_a).to eq([aliased])
+    end
+  end
+
   describe "the rubric" do
     let(:job) { user.job_applications.create!(company: "Acme") }
 

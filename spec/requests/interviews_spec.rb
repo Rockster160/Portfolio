@@ -346,6 +346,23 @@ RSpec.describe "Interview tracker", type: :request do
   # asking him to answer a message he had decided not to answer.
   # THE PROCESS: how far along this one is, which a timeline read bottom-up is
   # worst at answering.
+  describe "the other names an application answers to" do
+    let!(:job) { user.job_applications.create!(company: "iCapital") }
+
+    it "offers the field on the page" do
+      get interview_path(job)
+
+      expect(response.body).to include("Also known as")
+    end
+
+    it "saves what was typed into it" do
+      patch interview_path(job),
+        params: { job_application: { known_as_lines: "Institutional Capital Network\naccurate.com" } }
+
+      expect(job.reload.known_as).to eq(["Institutional Capital Network", "accurate.com"])
+    end
+  end
+
   describe "the rubric on an application" do
     let!(:job) { user.job_applications.create!(company: "Acme") }
 

@@ -460,4 +460,41 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::JobHunt.resolve_application(user, "Stripe", said: "Product Designer")).to eq(picked)
     end
   end
+
+  # The legal entity on the paperwork, the brand on the board, and the vendors
+  # a process is handed to are all one employer as far as the timeline goes.
+  describe "the other names an employer's mail arrives under" do
+    let!(:job) {
+      application!("iCapital").tap { |row|
+        row.update!(known_as: ["Institutional Capital Network", "Accurate", "accurate.com"])
+      }
+    }
+
+    it "answers to the legal name the paperwork uses" do
+      expect(Buddy::JobHunt.resolve_application(user, "Institutional Capital Network, Inc.")).to eq(job)
+    end
+
+    it "settles it before the fuzzy matching gets a say" do
+      other = application!("Accurate Systems")
+
+      expect(Buddy::JobHunt.applications_for(user, "Accurate")).to eq([job])
+      expect(Buddy::JobHunt.applications_for(user, "Accurate Systems")).to eq([other])
+    end
+
+    it "knows the vendor by the address it writes from" do
+      expect(Buddy::JobHunt.resolve_by_sender(user, ["infoneeded@accurate.com"])).to eq(job)
+    end
+
+    it "asks nothing of a row with no other names on it" do
+      expect(Buddy::JobHunt.resolve_by_sender(user, ["recruiter@stripe.com"])).to be_nil
+    end
+
+    # Two applications screened by the same vendor say nothing about which one
+    # a mail belongs to, and a beat on the wrong one is worse than none.
+    it "picks neither when two rows both claim the sender" do
+      application!("Wildcat").update!(known_as: ["accurate.com"])
+
+      expect(Buddy::JobHunt.resolve_by_sender(user, ["infoneeded@accurate.com"])).to be_nil
+    end
+  end
 end

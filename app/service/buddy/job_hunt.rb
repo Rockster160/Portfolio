@@ -79,6 +79,12 @@ module Buddy
       return [] if name.empty?
 
       board = JobApplication.where(user: user)
+      # A name he has already written down as this employer's settles it on its
+      # own. Nothing below gets a say: the other names exist precisely because
+      # the matching below read this one wrong once.
+      answering = by_other_name(board, name)
+      return answering if answering.any?
+
       hits  = JobSearch.by_company(board, normalize(name)).to_a
       # `by_company` is FUZZY - it keeps every row that scores at all - so a
       # near-miss comes back beside the exact match rather than behind it.
@@ -165,6 +171,38 @@ module Buddy
       return false if said.empty?
 
       (words & said).length >= (words.length * ratio)
+    end
+
+    # The board rows that answer to `name` by one of the other names written on
+    # them. Compared normalized, so the entry is useful however the mail spells
+    # it: "Institutional Capital Network, Inc." reaches a row written down as
+    # "Institutional Capital Network".
+    def by_other_name(board, name)
+      wanted = normalize(name)
+      return [] if wanted.blank?
+
+      board.with_other_names.to_a.select { |job|
+        Array(job.known_as).any? { |entry| normalize(entry) == wanted }
+      }
+    end
+
+    # The ONE row that claims this SENDER, or nil.
+    #
+    # The last handle a mail leaves when it names no employer that means
+    # anything - a screening vendor writing about a job he left in 2019, a
+    # signature service with nothing in it but a document name. Who sent it is
+    # the one fact such a mail cannot hide, and a vendor written down on a row
+    # is him saying which process it belongs to.
+    #
+    # One row only. A vendor two applications both use says nothing about
+    # which, and a beat on the wrong one is worse than a beat nobody filed.
+    def resolve_by_sender(user, addresses)
+      mails = Array(addresses).filter_map { |address| address.to_s.strip.presence }
+      return nil if mails.empty?
+
+      board   = JobApplication.where(user: user).with_other_names
+      matches = board.to_a.select { |job| mails.any? { |mail| job.known_sender?(mail) } }
+      matches.one? ? matches.first : nil
     end
 
     # The board row whose ROLE the text names, when exactly one does.

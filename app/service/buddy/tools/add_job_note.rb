@@ -152,7 +152,9 @@ Buddy::Tools.register(
     **`follow_up_at` means two different things, and the tag decides which.**
 
     On a `scheduled` note it IS the interview, it is what puts the appointment
-    on their calendar as a timed event, and it is REQUIRED - a Scheduled note
+    on their calendar as a timed event, tied to the application - mail or not:
+    a screenshot of an invite, or "add an interview with Tyler tomorrow at
+    noon", is this tool with `scheduled` - and it is REQUIRED - a Scheduled note
     with no time says an interview exists and cannot say when, which is the one
     shape this tool refuses. Read the time off the mail, with the zone the mail
     states. An invite names the sender's zone ("EDT", "Eastern", "Central"), so
@@ -169,6 +171,12 @@ Buddy::Tools.register(
     task, and it is optional - set it only if they actually said they'd come
     back to this. An `availability` note is the useful middle: the date is when
     the times are owed by, and the task reads "Send availability".
+
+    **An interview with no mail behind it keeps everything they gave you.** Put
+    the link to join (or the address) and anything else the invite said in
+    `note`, word for word - the calendar row lifts the join link out of it, and
+    the brief written before the call reads the rest. Who it is with goes in
+    `spoke_to`.
 
     `summary` is one line saying what the note SAYS, and it exists so `note`
     never has to be shortened. It is what the card shows them; `note` is what

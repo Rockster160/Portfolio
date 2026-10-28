@@ -735,6 +735,54 @@ RSpec.describe Buddy::JobMailOffer do
   # board Peregrine posts on, 96 seconds after the application went out. It
   # opened row 90 for a company that does not exist, and left one application in
   # two halves - the `applied` beat on 89, its confirmation on 90.
+  # A background check names the PAST employers it is verifying and never the
+  # one that ordered it, so the classifier reads a real company that is not
+  # hiring and is not on the board - and a second row gets opened for a job he
+  # left years ago. The vendor written on the row is the only thing in that
+  # mail pointing back at the process it belongs to.
+  context "when the company named is not on the board but the sender is written down" do
+    let!(:job) {
+      user.job_applications.create!(
+        company: "iCapital", role: "Full Stack Engineer", status: :offer,
+        known_as: ["accurate.com"]
+      )
+    }
+    let(:email) {
+      user.emails.create!(
+        mail_id: "m-#{SecureRandom.hex(4)}", timestamp: arrived, direction: :inbound,
+        subject: "Other Information Needed for Screening Request", blurb: "Employer: Orca Health",
+        outbound_mailboxes: [{ name: "Accurate CS", address: "infoneeded@accurate.com" }]
+      )
+    }
+
+    before {
+      verdict[:company]  = "Orca Health"
+      verdict[:headline] = "Asked for contact details to finish the screening"
+      metadata[:sender]  = "infoneeded@accurate.com"
+    }
+
+    it "files the mail on the row that uses that vendor" do
+      message = call(email: email, body: "Employer: Orca Health")
+
+      expect(message.metadata["job_application_id"]).to eq(job.id)
+      expect(job.notes.reload.size).to eq(1)
+    end
+
+    it "does not open a row for the employer being verified" do
+      body = call(email: email, body: "Employer: Orca Health").body
+
+      expect(body).not_to include("NOT on their board yet")
+      expect(body).not_to include("Company: Orca Health")
+      expect(body).to include("Company: iCapital")
+    end
+
+    it "leaves a sender nobody wrote down to the ordinary matching" do
+      job.update!(known_as: [])
+
+      expect(call(email: email, body: "Employer: Orca Health").body).to include("NOT on their board yet")
+    end
+  end
+
   context "when the company named is not on the board but the role is" do
     let!(:job) {
       user.job_applications.create!(company: "Peregrine Advisors", role: "Generative AI Engineer")

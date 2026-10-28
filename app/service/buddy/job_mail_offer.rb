@@ -67,6 +67,16 @@ module Buddy
       # named here as the narrower mistake arrived two days later and was not
       # narrow. A Motorola verify-account mail filed on Shopify's row and was
       # announced as Shopify, off the two words "Software Engineer".
+      # WHO SENT IT, when the name in the mail leads nowhere.
+      #
+      # Ahead of the role, because this one is a correction he typed and that
+      # one is an inference off a few words. A background-check vendor's mail
+      # names the PAST employers it is verifying - "Employer: Orca Health" - so
+      # the classifier reads a company that is real, is not hiring, and is not
+      # on the board, and a new row gets opened for it. The vendor written down
+      # on the row whose offer it belongs to is the only thing in the mail that
+      # points back at the right process.
+      job ||= JobHunt.resolve_by_sender(user, sender_addresses(email)) if job.nil? && rows.none?
       job ||= JobHunt.resolve_by_role(user, verdict[:headline]) if job.nil? && rows.none?
       # The watcher hands the words over because it read the message off disk.
       # The domain inbox doesn't, and for its first week that meant the seed
@@ -579,6 +589,14 @@ module Buddy
     end
 
     # The row on the board, so a reply and a receipt can both point at it.
+    # Who the mail came from. `from` is THEM on an inbound row - see
+    # Emails::StoreRaw - and nil for an outgoing one, where the sender is him.
+    def sender_addresses(email)
+      return [] if email.nil?
+
+      Array.wrap(email.from).filter_map { |mailbox| mailbox.to_h.symbolize_keys[:address].presence }
+    end
+
     def job_url(job)
       "#{AppPages.url_for("/interviews")}/#{job.id}"
     end

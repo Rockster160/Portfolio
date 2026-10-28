@@ -5,6 +5,7 @@
 #  id               :bigint           not null, primary key
 #  color            :string           not null
 #  company          :string           not null
+#  known_as         :jsonb            not null
 #  last_activity_at :datetime
 #  location         :string
 #  logo             :text
@@ -104,6 +105,56 @@ class JobApplication < ApplicationRecord
   # at payout. Parsing any of that into a column loses the half that matters.
   def terms
     { "Location" => location, "Pay" => pay }.compact_blank
+  end
+
+  # THE OTHER NAMES ONE EMPLOYER'S MAIL ARRIVES UNDER.
+  #
+  # A company is one name on the board and several in its own mail: the legal
+  # entity on the paperwork, the brand on the careers page, and the vendors it
+  # hands pieces of the process to - a background check, a signature service, a
+  # scheduling tool. None of them read as the company, so their mail either
+  # misses this row or opens a second one for an employer that is not hiring.
+  #
+  # An entry is a NAME the mail might use, or a SENDER - a mail domain or a
+  # whole address. The sender is the one that holds when the mail names nobody
+  # useful at all: a screening vendor's mail names the PAST employers it is
+  # verifying, never the company that ordered the screening.
+  #
+  # Typed by hand, and exact rather than fuzzy on purpose. Every entry here is
+  # something he wrote down because the ordinary matching got it wrong, and a
+  # second guess on top of a correction is no correction at all.
+  MAX_KNOWN_AS = 12
+  MAX_KNOWN_AS_NAME = 120
+
+  # Rows carrying any other name at all, which is the few of them. Everything
+  # that reads `known_as` compares it in Ruby - normalizing a name is more than
+  # SQL should be asked to do - so the scope is what keeps that to a handful of
+  # rows instead of the whole board.
+  scope :with_other_names, -> { where("jsonb_array_length(known_as) > 0") }
+
+  def known_as_lines
+    Array(known_as).join("\n")
+  end
+
+  def known_as_lines=(text)
+    names = text.to_s.split("\n").filter_map { |line|
+      line.strip.first(MAX_KNOWN_AS_NAME).presence
+    }
+    self.known_as = names.uniq(&:downcase).first(MAX_KNOWN_AS)
+  end
+
+  # Does one of the other names reach this row from an address? Matched whole
+  # or by domain, so "accurate.com" catches `infoneeded@accurate.com` and
+  # anything else that vendor sends from.
+  def known_sender?(address)
+    mail = address.to_s.strip.downcase
+    return false if mail.blank?
+
+    domain = mail.split("@", 2).last.to_s
+    Array(known_as).any? { |entry|
+      name = entry.to_s.strip.downcase
+      name.present? && (name == mail || name == domain)
+    }
   end
 
   # THE PROCESS: the rounds between applying and an answer, as a list that

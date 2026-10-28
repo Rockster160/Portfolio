@@ -377,6 +377,7 @@ class JobApplicationsController < ApplicationController
       :url,
       :location,
       :pay,
+      :known_as_lines,
       :jobhunt_job_id,
     )
   end

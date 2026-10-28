@@ -579,6 +579,18 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "a second row would split the company's timeline",
   },
+  # --- an interview booked out loud, with no mail behind it -----------------
+  {
+    case:  "prod 9371",
+    say:   "Add this as a new interview with Halloway Systems tomorrow at noon - it's with Tyler " \
+           "Mills, 30 minutes, https://halloway.zoom.us/j/97253200449",
+    tool:  :add_job_note,
+    avoid: %i[add_agenda_item],
+    args:  { add_job_note: { tag: "scheduled", follow_up_at: /./, note: /zoom\.us/ } },
+    needs: :halloway_application,
+    note:  "went on the calendar as a bare event, and then it couldn't find the application " \
+           "to tie it to",
+  },
   # --- job mail announced without an email number to hand ------------------
   # The Mac watcher reads the personal Gmail, so the beat is SPOKEN to Buddy
   # rather than carried by a row she can look up. Without `occurred_at` the

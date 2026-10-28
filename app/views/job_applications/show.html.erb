@@ -117,6 +117,21 @@
                 </div>
               </div>
 
+              <%# The names this employer's mail actually arrives under. A
+                 vendor here is what stops its mail opening a row of its own —
+                 see JobApplication::MAX_KNOWN_AS. %>
+              <div class="form-field">
+                <%= f.label :known_as_lines, "Also known as" %>
+                <%= f.text_area :known_as_lines, rows: 3,
+                      placeholder: "Institutional Capital Network\naccurate.com" %>
+                <span class="field-hint">
+                  One per line. A company name the mail might use instead, or the mail
+                  domain of a service they hand part of the process to &mdash; a background
+                  check, a signature service. Mail from one lands here rather than opening
+                  an application of its own.
+                </span>
+              </div>
+
               <div class="form-field">
                 <%= f.label :color, "Calendar colour" %>
                 <%= f.color_field :color %>
