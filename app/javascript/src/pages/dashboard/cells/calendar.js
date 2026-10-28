@@ -4,6 +4,7 @@ import { dash_colors } from "../vars";
 
 (function () {
   let cell = undefined;
+  const MAX_NOTE_LINES = 10;
 
   function dateLine(date) {
     return Text.center(
@@ -155,11 +156,15 @@ import { dash_colors } from "../vars";
         // in the agenda detail modal; just suppressed here.
         const isOcs = (calendar || "").toLowerCase().includes("oneclaimsolution");
         if (notes && !isOcs) {
-          notes
+          const noteLines = notes
             .split("\n")
             .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-            .forEach((line) => lines.push(line));
+            .filter((line) => line.length > 0);
+          const shown = noteLines.slice(0, MAX_NOTE_LINES);
+          if (noteLines.length > MAX_NOTE_LINES) {
+            shown[shown.length - 1] += Text.grey(" …");
+          }
+          shown.forEach((line) => lines.push(line));
         }
       }
     });
