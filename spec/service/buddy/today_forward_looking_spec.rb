@@ -273,7 +273,7 @@ RSpec.describe "Buddy Today forward-looking" do
     # 'Chelsea has yoga tomorrow' is accurate and acceptable." The owner leads
     # the title, so the row reads as hers before the model has written a word.
     it "puts whose it is in front of what it is" do
-      expect(seed).to include("- 4:00 PM · Chelsea: Her thing")
+      expect(seed).to include("- 4:00 PM · Chelsea's Her thing")
     end
 
     it "marks a thing that isn't happening" do

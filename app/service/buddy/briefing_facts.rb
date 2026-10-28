@@ -250,10 +250,12 @@ module Buddy
 
     # Whose it is leads the title, because that is the order somebody says it in
     # and it is the difference between "you have yoga at 4" and "she has yoga
-    # at 4" - the first being plainly wrong about whose day it is.
+    # at 4" - the first being plainly wrong about whose day it is. A possessive
+    # rather than a label, so a title copied into the prose brings its owner
+    # with it: "Chelsea: Yoga" loses her as soon as the colon is dropped.
     def agenda_line(item)
       title = item[:title]
-      title = "#{item[:owner]}: #{title}" if item[:mine] == false && item[:owner].present?
+      title = "#{item[:owner]}'s #{title}" if item[:mine] == false && item[:owner].present?
 
       bits = [item[:time], title]
       bits << item[:where] if item[:where].present?

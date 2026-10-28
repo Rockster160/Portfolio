@@ -358,15 +358,25 @@ RSpec.describe "Interview tracker", type: :request do
     it "opens on the standard steps" do
       get interview_path(job)
 
-      expect(rubric_strip).to include("Applied", "Recruiter screen", "Interview", "Offer")
-      expect(rubric_strip).to include("0 of 4")
+      expect(rubric_strip).to include("Applied", "Recruiter screen", "Onsite loop", "Offer")
+      expect(rubric_strip).to include("0 of 6")
+    end
+
+    # Every form in this app is a card unless it says otherwise - shadow, fill
+    # and all - and a card inside this panel's own box clipped the heading
+    # against its edge.
+    it "draws no second card inside the panel" do
+      get interview_path(job)
+
+      expect(rubric_strip.scan(/<form[^>]*>/).size).to eq(1)
+      expect(rubric_strip).to include('class="basic"')
     end
 
     it "shows the ones the timeline has answered as answered" do
       job.notes.create!(tag: :applied, occurred_at: 2.weeks.ago)
       get interview_path(job)
 
-      expect(rubric_strip).to include("1 of 4")
+      expect(rubric_strip).to include("1 of 6")
     end
 
     it "takes the company's own rounds" do
@@ -379,7 +389,7 @@ RSpec.describe "Interview tracker", type: :request do
     it "ticks a step by hand" do
       patch rubric_interview_path(job), params: { rubric: { ticking: 1, done: ["1"] } }
 
-      expect(job.reload.rubric_steps.map(&:done?)).to eq([false, true, false, false])
+      expect(job.reload.rubric_steps.map(&:done?)).to eq([false, true, false, false, false, false])
     end
 
     it "clears a hand tick when the box comes back unchecked" do

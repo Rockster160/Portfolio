@@ -125,4 +125,22 @@ RSpec.describe Markdown do
       expect(out).to include("<li>eggs</li>")
     end
   end
+  describe "block quotes" do
+    it "renders a run of quoted lines as one quote, with the soft wraps joined up" do
+      out = html("> I built the backfill tooling\n> first. Backfilling tables with millions\n> of rows one script at a time is how you end up half-migrated.")
+      expect(out.scan("<blockquote>").size).to eq(1)
+      expect(out).to include("backfill tooling first. Backfilling tables with millions of rows")
+    end
+
+    it "keeps a blank quoted line as the break between two quoted paragraphs" do
+      out = html("> One thing.\n>\n> Another thing.")
+      expect(out.scan("<blockquote>").size).to eq(1)
+      expect(out).to match(%r{One thing\.(<br\s*/?>){2}Another thing\.})
+    end
+
+    it "leaves two quotes with ordinary text between them as two quotes" do
+      out = html("> First.\n\nSomething said.\n\n> Second.")
+      expect(out.scan("<blockquote>").size).to eq(2)
+    end
+  end
 end

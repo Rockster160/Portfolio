@@ -224,9 +224,18 @@ class TravelResolver
       scope = user.action_events.where(name: action)
       scope = scope.where(timestamp: MERGE_WINDOW.ago..)
       event = scope.order(timestamp: :desc).first
-      return nil if event && elsewhere?(event, source, coord)
+      return nil if event.nil? || elsewhere?(event, source, coord)
+      return nil if reversed_since?(user, action, event)
 
       event
+    end
+
+    # A leg the other way since then means this report is a new leg, not a
+    # second word on that one - home, out past the fence, home again. Compared
+    # by id: a phone that was offline replays its queued edges in one second.
+    def reversed_since?(user, action, event)
+      opposite = action.to_sym == :arrived ? :departed : :arrived
+      user.action_events.where(name: opposite).exists?(["id > ?", event.id])
     end
 
     # Only a report about the person is compared. The car and the phone are

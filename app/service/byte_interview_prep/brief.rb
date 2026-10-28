@@ -213,11 +213,14 @@ module ByteInterviewPrep
         AN ANSWER SITS UNDER ITS QUESTION
         Not in a section of its own further down. The answers used to be collected at the end and named from section 4, so reading one meant scrolling between the question and the answer and losing my place in both. Every question in section 4 is followed by the answer to THAT question, whole, before the next question starts. If one written answer is honestly the answer to two of the questions, use it once: keep the question it fits best and drop the other, rather than printing the same story twice or sending me back up the page to find it.
 
+        A PARAGRAPH IS ONE LINE
+        Never wrap a line to a width. I read this on a phone and the phone does its own wrapping, so a newline in the middle of a sentence is rendered as a break: a paragraph wrapped at eighty characters arrives as four separate blocks of two lines each with a gap between them, and the answer I am trying to read is in pieces. Breaks BETWEEN paragraphs, bullets and sections are right and wanted - it is the ones inside a paragraph that are never needed. This covers the quoted answers too: one `>` line per paragraph, however long that line gets.
+
         EVERY TERM IS EXPLAINED WHERE IT IS USED
         In brackets, at first use, in the sentence it appears in - not in a glossary at the top, which is the same scroll as the answers were. It applies to all of them and not only the exotic ones: the shorthand everybody in the industry is assumed to know is exactly the one that goes past me bare, and "IC" and "VC" both have. So would ARR, RIF, FTE, Series B, SOC 2, TS/SCI, IDIQ, and anything out of their own product line or their stack. Write "IC (individual contributor - hands-on, nobody reporting to me)" the first time and plain English after it. A word I have to go and look up in the ten minutes I do not have is a word the brief did not carry.
 
         For the written answers specifically:
-        - **Verbatim, as the file has it.** They are already written to be spoken. Tightening one here is a second opinion on a sentence I have already said out loud.
+        - **Verbatim, as the file has it.** They are already written to be spoken. Tightening one here is a second opinion on a sentence I have already said out loud. Verbatim is the WORDS: the file wraps its own lines at about eighty characters and those wraps are not part of the answer, so join them back up and give me each paragraph as one line.
         - **The cut that fits, not the whole entry.** Several of them have an alternate or a system-design cut; carry the one the question it is sitting under actually asks for, and say which it is.
         - **Only the part I would say.** The `Why it works`, `Backing`, `Use this one when` and `[need number]` notes are mine for maintaining the file. They are not the answer and they do not go in the brief.
 

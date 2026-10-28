@@ -691,7 +691,9 @@ RSpec.describe JobApplication do
     end
 
     it "starts as the standard steps, none of them answered" do
-      expect(job.rubric_steps.map(&:name)).to eq(["Applied", "Recruiter screen", "Interview", "Offer"])
+      expect(job.rubric_steps.map(&:name)).to eq(
+        ["Applied", "Recruiter screen", "Hiring manager call", "Technical screen", "Onsite loop", "Offer"],
+      )
       expect(job.rubric_steps).to all(satisfy { |step| !step.done? })
     end
 
@@ -703,7 +705,7 @@ RSpec.describe JobApplication do
       beat(:recruiter_call, 2.weeks.ago)
 
       steps = job.reload.rubric_steps
-      expect(steps.map(&:done?)).to eq([true, true, false, false])
+      expect(steps.map(&:done?)).to eq([true, true, false, false, false, false])
       expect(steps.first.done_at).to be_within(1.second).of(3.weeks.ago)
       expect(steps.first.by_hand).to be(false)
     end
@@ -714,6 +716,15 @@ RSpec.describe JobApplication do
       beat(:interview, 2.days.ago)
 
       expect(job.reload.rubric_steps.map(&:done?)).to eq([false, true, false, false])
+    end
+
+    # Three of the standard steps are interviews, so the rounds come off one at
+    # a time rather than all at once on the first one logged.
+    it "ticks one standard interview round per interview logged" do
+      beat(:interview, 2.weeks.ago)
+      beat(:interview, 1.week.ago)
+
+      expect(job.reload.rubric_steps.map(&:done?)).to eq([false, false, true, true, false, false])
     end
 
     it "works out what ticks a step off from what the step is called" do
@@ -771,7 +782,7 @@ RSpec.describe JobApplication do
       job.rubric_ticks = [0]
       job.save!
 
-      expect(job.rubric_steps.map(&:done?)).to eq([true, false, false, false])
+      expect(job.rubric_steps.map(&:done?)).to eq([true, false, false, false, false, false])
     end
 
     # The way to say an interview didn't happen is to delete the interview.

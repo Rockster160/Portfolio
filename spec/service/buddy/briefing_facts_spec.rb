@@ -369,7 +369,7 @@ RSpec.describe Buddy::BriefingFacts do
         { time: "4:00 PM", title: "Yoga", mine: false, owner: "Chelsea" },
       )
 
-      expect(line).to eq("4:00 PM · Chelsea: Yoga")
+      expect(line).to eq("4:00 PM · Chelsea's Yoga")
     end
 
     it "leaves their own alone" do
@@ -395,7 +395,7 @@ RSpec.describe Buddy::BriefingFacts do
         { time: "10:00 AM", title: "Hair trim", mine: false, owner: "Chelsea", cal: "Alchemibluum" },
       )
 
-      expect(line).to eq("10:00 AM · Chelsea: Hair trim")
+      expect(line).to eq("10:00 AM · Chelsea's Hair trim")
     end
 
     # Whose it is was the only thing the calendar was ever standing in for, and

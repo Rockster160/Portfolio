@@ -109,11 +109,23 @@ class JobApplication < ApplicationRecord
   # THE PROCESS: the rounds between applying and an answer, as a list that
   # ticks itself off.
   #
-  # Four steps, because every search starts not knowing what the rounds are.
+  # The rounds a software job runs in practice, because every search starts not
+  # knowing what THIS company's are. Only the ones that happen nearly every
+  # time: a take-home, a system design round and a references call are each
+  # common enough to expect and missing often enough that putting them here
+  # leaves most applications with a step that will never be ticked.
+  #
   # The company says later - "a 30 minute call with the team, then a live
   # coding exercise, then the CEO for an hour" - and then the list is theirs
   # rather than this one. See `rubric_lines=`.
-  DEFAULT_RUBRIC = ["Applied", "Recruiter screen", "Interview", "Offer"].freeze
+  DEFAULT_RUBRIC = [
+    "Applied",
+    "Recruiter screen",
+    "Hiring manager call",
+    "Technical screen",
+    "Onsite loop",
+    "Offer",
+  ].freeze
 
   # Which beat ticks a step off, read from what the step is CALLED. The names a
   # company uses for its own rounds are remarkably uniform, so a step pasted

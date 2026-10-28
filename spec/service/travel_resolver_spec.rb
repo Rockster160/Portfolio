@@ -206,6 +206,18 @@ RSpec.describe TravelResolver do
       expect(user.action_events.where(name: :departed).count).to eq(2)
     end
 
+    # A phone that was offline replays its queued edges together: home, out
+    # past the fence, home again, all in one second.
+    it "announces coming back after going the other way inside the window" do
+      record(source: :phone, action: :arrived)
+      record(source: :phone, action: :departed)
+
+      back = record(source: :phone, action: :arrived)
+
+      expect(back[:announce]).to be(true)
+      expect(user.action_events.order(:id).pluck(:name)).to eq(["arrived", "departed", "arrived"])
+    end
+
     it "still merges the car's copy of a leg into the person's, however far apart" do
       record(source: :phone, lat: 40.48449, lng: -111.98563)
 

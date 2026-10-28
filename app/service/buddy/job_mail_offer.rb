@@ -536,7 +536,9 @@ module Buddy
     # is written: a booking whose body is a reschedule link and a LinkedIn URL
     # reads as an interview being arranged, and gets filed as a note with no
     # time. Stated in their own zone with the offset spelled out, which is the
-    # shape `follow_up_at` takes.
+    # shape `follow_up_at` takes, and led by the day it is from now when that's
+    # today, tomorrow or yesterday, so the push copies the word rather than
+    # working it out.
     def invite_line(email)
       invite = email&.calendar_invite
       return nil if invite.nil?
@@ -546,14 +548,19 @@ module Buddy
       ends = invite[:ends_at]&.in_time_zone(zone)
       length = ((ends - starts) / 60).round if ends && ends > starts
       what = invite[:cancelled] ? "CANCELLATION of the booking at" : "invite, booked for"
+      day = relative_day(starts.to_date, ::Time.current.in_time_zone(zone).to_date)
       [
-        "Calendar #{what}: #{starts.strftime("%A %b %-d, %-l:%M%P %Z")} (#{starts.iso8601})",
+        "Calendar #{what}: #{"#{day}, " if day}#{starts.strftime("%A %b %-d, %-l:%M%P %Z")} (#{starts.iso8601})",
         (" for #{length} minutes" if length),
         (" at #{invite[:location]}" if invite[:location]),
       ].join
     rescue StandardError => e
       Rails.logger.warn("[Buddy::JobMailOffer] no invite for email #{email&.id}: #{e.class}: #{e.message}")
       nil
+    end
+
+    def relative_day(date, today)
+      { -1 => "yesterday", 0 => "today", 1 => "tomorrow" }[(date - today).to_i]
     end
 
     # Who WROTE the mail, where the answer is "they did".

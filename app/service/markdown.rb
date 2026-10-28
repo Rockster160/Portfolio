@@ -26,7 +26,7 @@ class Markdown
         style: "text-align: center;"
       ),
       /^\s*(-{3,}|={3,}|—{1,})\s*$/                                   => tag.hr,
-      /^&gt; (.*?)$/                                                  => ->(match) { tokenize(wrap(match[1], :blockquote)) },
+      /^&gt;.*(?:\n&gt;.*)*/                                          => quote_wrapper,
       /`(.*?)`/                                                       => wrap('\1', :code),
       /\*\*(.+?)\*\*/                                                 => wrap('\1', :strong),
       /(?<![*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![*\w])/                => wrap('\1', :strong),
@@ -207,6 +207,20 @@ class Markdown
       contrast = ColorGenerator.contrast_text_color_on_background(color) # Must be hex
 
       wrap(content, :color, style: "background-color: #{color}; color: #{contrast};")
+    }
+  end
+
+  # A run of `>` lines is ONE quote, and a soft wrap inside it is a space. A
+  # written answer carried into a brief is wrapped at the width of the file it
+  # was copied out of, and rendering each of those lines as its own quote broke
+  # one paragraph into stacked blocks with a gap between every two display
+  # lines. The blank `>` line is the only break the writer meant, so it is the
+  # only one that survives.
+  def quote_wrapper
+    ->(match) {
+      said = match[0].split("\n").map { |line| line.sub(/\A&gt;[ \t]?/, "").strip }
+      parts = said.chunk(&:empty?).reject(&:first).map { |_empty, group| group.join(" ") }
+      tokenize(wrap(parts.join(tag.br + tag.br).html_safe, :blockquote))
     }
   end
 

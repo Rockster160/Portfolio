@@ -3,17 +3,23 @@
    far along it is, which is the other half of the same question and the one a
    timeline read bottom-up is worst at answering.
 
-   Every search starts not knowing the rounds, so the list starts as the four
-   that are always there. The company names its own later — "30 minutes with
-   the team, then a live coding exercise, then the CEO for an hour" — and then
-   the list is theirs. See JobApplication::DEFAULT_RUBRIC. %>
+   Every search starts not knowing the rounds, so the list starts as the ones
+   a software job nearly always runs. The company names its own later — "30
+   minutes with the team, then a live coding exercise, then the CEO for an
+   hour" — and then the list is theirs. See JobApplication::DEFAULT_RUBRIC.
+
+   Both forms are `basic`: a plain one picks up the card treatment every form
+   on this app wears — its own shadow, its own fill and `overflow: hidden` —
+   which inside a panel that already draws a box is a box in a box with the
+   heading clipped against its edge. %>
 <%
   steps = job.rubric_steps
   done = steps.count(&:done?)
   next_up = steps.index { |step| !step.done? }
 %>
 <div class="job-rubric">
-  <%= form_with url: rubric_interview_path(job), method: :patch, local: true do |f| %>
+  <%= form_with url: rubric_interview_path(job), method: :patch, local: true,
+        class: :basic do |f| %>
     <%# Tells an unchecked box from an absent form - see the controller. %>
     <%= hidden_field_tag "rubric[ticking]", 1 %>
 
@@ -55,7 +61,8 @@
 
   <details class="job-details rubric-edit">
     <summary>Change the steps</summary>
-    <%= form_with url: rubric_interview_path(job), method: :patch, local: true do |f| %>
+    <%= form_with url: rubric_interview_path(job), method: :patch, local: true,
+          class: :basic do |f| %>
       <div class="form-fields">
         <div class="form-field">
           <%= label_tag "rubric_lines", "One step per line" %>
@@ -67,7 +74,7 @@
             doesn't undo the ones already answered. A step named after a beat (a recruiter
             screen, a take-home, an interview, an offer) ticks itself off when you log
             that beat; anything else you tick by hand. Empty it to go back to the standard
-            four.
+            rounds.
           </span>
         </div>
 

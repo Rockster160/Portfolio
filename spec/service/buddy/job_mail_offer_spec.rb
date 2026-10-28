@@ -139,7 +139,7 @@ RSpec.describe Buddy::JobMailOffer do
         it "states the slot in their own zone, with the offset to book it at" do
           allow(email).to receive(:calendar_invite).and_return(invite)
 
-          body = call(email: email, body: "Need to make changes to this event?").body
+          body = travel_to(Time.utc(2026, 10, 20)) { call(email: email, body: "Need to make changes to this event?").body }
 
           expect(body).to include(
             "Calendar invite, booked for: Tuesday Oct 27, 11:30am MDT (2026-10-27T11:30:00-06:00) " \
@@ -151,6 +151,15 @@ RSpec.describe Buddy::JobMailOffer do
           allow(email).to receive(:calendar_invite).and_return(invite.merge(cancelled: true))
 
           expect(call(email: email, body: "Cancelled").body).to include("Calendar CANCELLATION of the booking at:")
+        end
+
+        # A cancellation lands after the slot it calls off, on the same day.
+        it "names the day it is from now" do
+          allow(email).to receive(:calendar_invite).and_return(invite.merge(cancelled: true))
+
+          body = travel_to(Time.utc(2026, 10, 27, 21, 25)) { call(email: email, body: "Cancelled").body }
+
+          expect(body).to include("Calendar CANCELLATION of the booking at: today, Tuesday Oct 27, 11:30am MDT")
         end
 
         it "says nothing of an invite the mail doesn't have" do
