@@ -60,6 +60,19 @@ class JobTranscript < ApplicationRecord
     TranscriptParser.speakers_in(turns).size <= 1
   end
 
+  # The pass, while it is on this transcript - the same chip the worker raises,
+  # found by the same key. A row here is the one honest answer to "is it
+  # actually doing something": the alternative is a column on this table that
+  # says a pass started and goes on saying it after the worker that set it
+  # died.
+  def reading
+    @reading ||= BackgroundProcess.live_find(job_application.user, Transcripts::Speakers.key_for(self))
+  end
+
+  def reading?
+    reading.present?
+  end
+
   # The labels a turn can be moved to. The same list, plus whatever a turn has
   # already been corrected to, so a correction is never the one option missing.
   def speaker_options

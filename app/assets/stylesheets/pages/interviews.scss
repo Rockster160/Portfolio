@@ -1245,6 +1245,12 @@
     color: var(--iv-muted);
     font-size: 13px;
   }
+  // Said in the accent rather than the muted grey the rest of the row is in:
+  // it is the one word on the line that is about right now.
+  .transcript-reading-tag {
+    color: var(--iv-booked);
+    font-weight: 600;
+  }
 }
 
 .transcript-page {
@@ -1275,6 +1281,36 @@
     margin-bottom: 16px;
     color: var(--iv-muted);
     font-size: 13px;
+  }
+
+  // A pass under way, which is a state and not a result - so it sits apart
+  // from the brief, in the accent, above the conversation it is still
+  // changing. Pulsing rather than still: the page reloads itself every eight
+  // seconds and an unmoving line through that reads as a page that is stuck.
+  .transcript-reading {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--job-color, var(--iv-booked));
+    border-radius: 0 6px 6px 0;
+    background: var(--iv-surface);
+    color: var(--iv-muted);
+    font-size: 14px;
+    animation: transcript-reading-pulse 2.4s ease-in-out infinite;
+
+    strong {
+      color: var(--iv-text);
+    }
+  }
+
+  @keyframes transcript-reading-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .transcript-reading {
+      animation: none;
+    }
   }
 
   .danger-link {

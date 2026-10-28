@@ -68,6 +68,33 @@ module Transcripts
           "#{named.map(&:strip).uniq.join(", ")}. Anyone else who speaks is still `t`."
       end
 
+      # What was settled just before this stretch. Said plainly as context and
+      # fenced off from the job, because the one thing that must not happen is
+      # a reply that quotes it back: the quotes are looked for in the window
+      # only, so a cut copied out of here is found nowhere and the turn it was
+      # meant to open is lost.
+      BEFORE_SAID = <<~TEXT.freeze
+        WHAT WAS SAID JUST BEFORE THIS STRETCH, already worked out and settled.
+        It is here so you can tell who is talking as this stretch OPENS - a
+        stretch that begins mid-answer is the same words whoever is saying
+        them. Do not split it again, do not quote from it, and do not include
+        any of it in your reply. `m` is the candidate and `t` is the employer's
+        side, as below.
+      TEXT
+
+      # Each settled turn as one line. `...` at the front where the turn ran on
+      # longer than was worth sending, so it reads as the end of something
+      # rather than as a turn that started there.
+      def before_block(before)
+        rows = Array(before).filter_map { |row|
+          said = row.to_h[:said].to_s.strip
+          "[#{row.to_h[:side]}] #{said}" if said.present? && row.to_h[:side].present?
+        }
+        return nil if rows.empty?
+
+        [BEFORE_SAID, rows.join("\n\n")].join("\n\n")
+      end
+
       # ---- the two shapes it is asked for --------------------------------------
 
       # Labels for turns that are already cut, which is the easy half: the
@@ -152,7 +179,7 @@ module Transcripts
         ].join("\n\n")
       end
 
-      def turns_input(turns, transcript, offset: 0)
+      def turns_input(turns, transcript, offset: 0, before: [])
         said = turns.each_with_index.map { |turn, index|
           clock = turn["at"].present? ? " [#{(turn["at"] / 60).to_i}m]" : ""
           "#{offset + index + 1}.#{clock} #{turn["text"]}"
@@ -160,13 +187,14 @@ module Transcripts
         [
           RULES,
           context(transcript),
+          before_block(before),
           format(TURNS_OUTPUT, count: turns.size),
           said.join("\n\n"),
-        ].join("\n\n")
+        ].compact.join("\n\n")
       end
 
-      def cuts_input(text, transcript)
-        [RULES, context(transcript), CUTS_OUTPUT, text].join("\n\n")
+      def cuts_input(text, transcript, before: [])
+        [RULES, context(transcript), before_block(before), CUTS_OUTPUT, text].compact.join("\n\n")
       end
     end
   end

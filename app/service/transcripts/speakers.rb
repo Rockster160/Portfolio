@@ -59,21 +59,59 @@ module Transcripts
     # the last turn swallow it. Under this it is the end of that turn.
     TAIL_SLACK = 400
 
+    # How much of a window a call has to get through for the turn running past
+    # its end to be worth re-reading. Under this the call made no ground - a
+    # single answer ran the length of the window - and handing the next one the
+    # same text costs a call to be told the same thing.
+    LEAST_GROUND = 0.2
+
     # What the cut's `who` means. Anything else is dropped, which is what keeps
     # a reply inventing `Speaker 3` out of the transcript.
     SIDES = { "m" => ME, "t" => THEM }.freeze
+    LETTERS = SIDES.invert.freeze
+
+    # How much of what was already settled rides along into the next call. A
+    # window starting cold opens mid-answer with no way to tell whose answer it
+    # is: the stretch before it is the only thing that says whether the voice
+    # carrying on is the one that was asked or the one that asked. Three turns
+    # because the handover before the window is what settles it and the one
+    # before that says which way it was going; more is paid for on every call
+    # and answers the same question twice.
+    BEFORE_TURNS = 3
+
+    # Of each of those turns, the END - the words nearest the window, which are
+    # the ones the opening of it is a reply to. A long answer's first sentence
+    # says nothing about what is happening four minutes later.
+    BEFORE_CHARS = 240
 
     Result = Struct.new(:ok, :placed, :unplaced, :error, keyword_init: true)
 
+    # The chip the worker raises while it reads, and the one the transcript
+    # page looks for to say that something is happening. Here rather than in
+    # either of them because a page asking a different question than the worker
+    # answered is a page that says nothing is running while it runs.
+    def key_for(transcript)
+      "transcript:speakers:#{transcript.id}"
+    end
+
     # The whole pass. Returns a Result either way: nothing raises at the caller,
     # because a transcript this could not read is exactly where it was.
-    def call(transcript)
+    # `progress` is called with how many calls are done and how many there are
+    # to make, so whatever raised the pass can say that it is moving. A pass
+    # nobody is watching passes no block and nothing here knows the difference.
+    def call(transcript, &progress)
       turns = Array(transcript.turns)
       return Result.new(ok: false, error: :empty) if turns.empty?
       return Result.new(ok: false, error: :settled) if transcript.speakers.present?
       return name_labels(transcript) unless transcript.unlabelled?
 
-      split = turns.size > 1 ? from_turns(transcript, turns) : from_blob(transcript, turns)
+      split = (
+        if turns.size > 1
+          from_turns(transcript, turns, &progress)
+        else
+          from_blob(transcript, turns, &progress)
+        end
+      )
       return split if split.is_a?(Result)
 
       # Nothing placed is a failed pass, not a finished one: the transcript is
@@ -137,6 +175,7 @@ module Transcripts
     # split and is worse than a gap.
     def from_turns(transcript, turns)
       placed = turns.map { |turn| turn.merge("speaker" => UNKNOWN) }
+      total = calls_for(turns.size, MOST_TURNS)
       calls = 0
 
       turns.each_slice(MOST_TURNS).with_index do |slice, chunk|
@@ -144,7 +183,9 @@ module Transcripts
 
         calls += 1
         offset = chunk * MOST_TURNS
-        said = ask(Prompt.turns_input(slice, transcript, offset: offset))
+        before = settled(placed.first(offset))
+        said = ask(Prompt.turns_input(slice, transcript, offset: offset, before: before))
+        yield(calls, total) if block_given?
         letters = letters(said, slice.size)
         next if letters.nil?
 
@@ -152,6 +193,15 @@ module Transcripts
       end
 
       placed
+    end
+
+    # The tail of what is already placed, as the next call is given it. A chunk
+    # whose answer was thrown away leaves its turns on UNKNOWN, and those are
+    # left out rather than handed over as a side they were never put on.
+    def settled(placed)
+      placed.reverse.take_while { |turn| turn["speaker"] != UNKNOWN }.first(BEFORE_TURNS).reverse.map { |turn|
+        said(LETTERS[turn["speaker"]], turn["text"])
+      }
     end
 
     # The reply, as one side per turn, or nil if it cannot be trusted that far.
@@ -168,6 +218,13 @@ module Transcripts
     # cut was found. That cut is DROPPED on the way out and re-found by the next
     # call, because its turn runs past the end of the window and the model
     # cannot see where it ends.
+    #
+    # The window SLIDES rather than landing fresh: the last few turns already
+    # settled go with it, as context and not as text to cut again. Without them
+    # a window opens in the middle of a conversation with nothing to say who is
+    # talking - and the first few turns of one are the ones that put every turn
+    # after them on a side, because a conversation read as alternating is read
+    # from wherever it was picked up.
     def from_blob(transcript, turns)
       text = turns.first.to_h["text"].to_s
       return Result.new(ok: false, error: :empty) if text.strip.empty?
@@ -176,22 +233,36 @@ module Transcripts
       at = 0
       reached = 0
       calls = 0
+      total = calls_for(text.length, BLOB_CHARS)
 
       while at < text.length && calls < MOST_CALLS
         calls += 1
         window = text[at, BLOB_CHARS].to_s
-        found = locate(window, ask(Prompt.cuts_input(window, transcript)), at)
+        before = before(text, cuts, at)
+        found = locate(window, ask(Prompt.cuts_input(window, transcript, before: before)), at)
+        yield(calls, total) if block_given?
         break if found.empty?
 
         reached = at + window.length
         # The end of the window is the end of the file: there is no next call to
         # re-find the last cut, so it stays.
-        last = (window.length < BLOB_CHARS ? nil : found.pop)
+        ending = window.length < BLOB_CHARS
+        last = (ending ? nil : found.pop)
         cuts.concat(found)
+
+        # A window whose last handover sits near its own start made no ground,
+        # and dropping that cut to re-find it would spend the next call reading
+        # the same stretch again - which is how ten calls cover one minute of a
+        # monologue. It is kept instead and the walk carries on from the end of
+        # the window, so a turn longer than a window arrives as two turns on
+        # the same side, which reads as one.
+        if last && last[:at] - at < (BLOB_CHARS * LEAST_GROUND)
+          cuts << last
+          at = reached
+          next
+        end
+
         break if last.nil?
-        # No progress - one cut, at the position this window started from - and
-        # another call would ask the same question again.
-        break if last[:at] <= at
 
         reached = last[:at]
         at = last[:at]
@@ -200,6 +271,35 @@ module Transcripts
       return Result.new(ok: false, error: :unreadable) if cuts.empty?
 
       from_cuts(text, cuts, reached)
+    end
+
+    # The last few settled turns as words, ending where the window begins. The
+    # cut that was popped is not among them - it is the turn the next window
+    # opens with, and handing it over as settled would be answering the
+    # question the call is being asked.
+    def before(text, cuts, edge)
+      taken = cuts.last(BEFORE_TURNS)
+      taken.each_with_index.map { |cut, index|
+        stop = taken[index + 1].to_h[:at] || edge
+        said(LETTERS[cut[:side]], text[cut[:at]...stop].to_s)
+      }
+    end
+
+    # One turn as the prompt takes it: which side, and the tail of what they
+    # said. Nothing is sliced mid-word - a half word at the front reads as a
+    # mistranscription, and this is the one place the model is shown text it is
+    # not meant to match against the file.
+    def said(letter, text)
+      kept = text.to_s.strip
+      kept = "...#{kept.last(BEFORE_CHARS).sub(/\A\S+\s/, "")}" if kept.length > BEFORE_CHARS
+      { side: letter, said: kept }
+    end
+
+    # How many calls a file this size takes, as a number to count up to rather
+    # than an exact one: a window ends at its last handover, so a long turn
+    # costs a call that covered less than the whole window.
+    def calls_for(size, each)
+      [(size / each.to_f).ceil, MOST_CALLS].min.clamp(1, MOST_CALLS)
     end
 
     # Where each quote actually is in the text, in order. A quote that is not

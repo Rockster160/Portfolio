@@ -26,25 +26,36 @@ class TranscriptSpeakersWorker
     transcript = JobTranscript.find_by(id: transcript_id)
     return if transcript.nil?
 
-    watched(transcript) { report(transcript, Transcripts::Speakers.call(transcript)) }
+    watched(transcript) { |progress|
+      report(transcript, Transcripts::Speakers.call(transcript, &progress))
+    }
   end
 
   private
 
+  # The chip goes up before the first call, because the first call is the
+  # longest wait and a chip that appears once something has finished says the
+  # opposite of what it is for. Every call after it moves the count, which is
+  # the difference between working and hung, visible without opening a log.
   def watched(transcript)
+    note(transcript)
+    yield(->(done, total) { note(transcript, current: done, total: total) })
+  ensure
+    BackgroundProcess.clear(
+      user: transcript.job_application.user,
+      key:  Transcripts::Speakers.key_for(transcript),
+    )
+  end
+
+  def note(transcript, **moved)
     BackgroundProcess.note(
       user:   transcript.job_application.user,
-      key:    "transcript:speakers:#{transcript.id}",
+      key:    Transcripts::Speakers.key_for(transcript),
       name:   "Reading the recording",
       detail: transcript.job_application.company,
       links:  [{ label: "📝", url: transcript_url(transcript) }],
       source: :rails,
-    )
-    yield
-  ensure
-    BackgroundProcess.clear(
-      user: transcript.job_application.user,
-      key:  "transcript:speakers:#{transcript.id}",
+      **moved,
     )
   end
 

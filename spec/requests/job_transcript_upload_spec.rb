@@ -81,6 +81,35 @@ RSpec.describe "Job transcript upload", type: :request do
         .with(job.transcripts.first.id)
     end
 
+    # Dropping a file in and landing on a page that looks exactly like a failed
+    # read is the thing that makes a minute feel like a hang.
+    it "says on the page that the reading is under way, and how far along" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      transcript = job.transcripts.first
+      BackgroundProcess.note(
+        user:    user,
+        key:     Transcripts::Speakers.key_for(transcript),
+        name:    "Reading the recording",
+        current: 2,
+        total:   5,
+      )
+
+      get(interview_transcript_path(job, transcript))
+
+      expect(response.body).to include("Reading the recording")
+      expect(response.body).to include("pass 2 of 5")
+      expect(response.body).to include("http-equiv=\"refresh\"")
+    end
+
+    it "says nothing about reading once the pass is done with it" do
+      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+
+      get(interview_transcript_path(job, job.transcripts.first))
+
+      expect(response.body).not_to include("Reading the recording")
+      expect(response.body).not_to include("http-equiv=\"refresh\"")
+    end
+
     it "asks nothing on the page about who was talking" do
       post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
       get(interview_transcript_path(job, job.transcripts.first))

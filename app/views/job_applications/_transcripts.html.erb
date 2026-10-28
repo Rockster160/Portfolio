@@ -21,6 +21,11 @@
           <%= link_to transcript.label, interview_transcript_path(job, transcript),
                 class: "transcript-link" %>
           <span class="transcript-meta">
+            <%# The first place he looks after dropping a file in, so it is the
+               first place that has to say the reading is under way. %>
+            <% if transcript.reading? %>
+              <span class="transcript-reading-tag">reading…</span> ·
+            <% end %>
             <%= pluralize(transcript.turns.size, "turn") %>
             <% if transcript.spoken_minutes %>
               · <%= transcript.spoken_minutes %> min

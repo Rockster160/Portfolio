@@ -43,6 +43,23 @@
                 data: { confirm: "Delete this transcript? The file goes with it." } %>
         </div>
 
+        <%# While the pass is on it, the page says so. A transcript being read
+           and one the pass could make nothing of look identical otherwise -
+           both are a wall of turns with nobody on them - and the difference
+           between them is the whole question of whether to wait or to start
+           correcting it by hand. It reloads itself because what ends the wait
+           is a worker finishing, which this page has no other way to hear. %>
+        <% if @transcript.reading? %>
+          <% content_for :head do %>
+            <meta http-equiv="refresh" content="8">
+          <% end %>
+          <p class="transcript-reading">
+            <strong>Reading the recording.</strong>
+            <%= transcript_reading(@transcript) %>
+            This page refreshes itself.
+          </p>
+        <% end %>
+
         <%= form_with url: interview_transcript_path(@job, @transcript), method: :patch,
               local: true, class: "transcript-form" do %>
 
@@ -62,8 +79,7 @@
               Who is who is read off the recording when it lands - and the recorder
               and the reading both get some of it wrong. Correct a name here, tick
               the one that is you, and fix any individual turn on the wrong person
-              with the picker on the turn itself. If this still says nothing, the
-              pass is running - give it a minute and reload.
+              with the picker on the turn itself.
             </p>
 
             <ul class="speaker-rows">

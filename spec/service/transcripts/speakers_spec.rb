@@ -8,11 +8,16 @@ RSpec.describe Transcripts::Speakers do
   let(:user) { User.me }
   let(:job) { user.job_applications.create!(company: "Bluestaq", role: "Principal Engineer") }
 
+  # What each call was actually asked, in order. A window carries the stretch
+  # before it, and the only way to say that it did is to read the prompt.
+  def asked = (@asked ||= [])
+
   # A queue rather than `and_return(a, b)`: every call builds a fresh client, so
   # any_instance_of would hand back the first reply forever.
   def model_says(*texts)
     queue = texts.dup
-    allow_any_instance_of(Buddy::GPT::Client).to receive(:stream) { |*|
+    allow_any_instance_of(Buddy::GPT::Client).to receive(:stream) { |_client, args|
+      asked << args[:instructions].to_s
       {
         ok:    true,
         text:  (queue.length > 1 ? queue.shift : queue.first),
@@ -58,6 +63,31 @@ RSpec.describe Transcripts::Speakers do
       expect(transcript.turns.pluck("speaker")).to eq(%w[Them Me Them])
       expect(transcript.mine?("Me")).to be(true)
       expect(transcript.mine?("Them")).to be(false)
+    end
+
+    it "says how far along it is while it reads" do
+      model_says({ sides: "tmt" }.to_json)
+      seen = []
+
+      described_class.call(transcript) { |done, total| seen << [done, total] }
+
+      expect(seen).to eq([[1, 1]])
+    end
+
+    # A chunk that starts at turn 41 opens in the middle of an answer. Which
+    # side that answer is on is settled by what came before it, and nothing
+    # else - so the turns already placed go with the question.
+    it "tells the next chunk what the last one settled" do
+      many = transcript!(cued(*Array.new(45) { |index| "Turn number #{index}, with words in it." }))
+      model_says({ sides: "t#{"m" * 39}" }.to_json, { sides: "mmmmm" }.to_json)
+
+      described_class.call(many)
+
+      expect(asked.length).to eq(2)
+      expect(asked.first).not_to include("WHAT WAS SAID JUST BEFORE")
+      expect(asked.last).to include("WHAT WAS SAID JUST BEFORE")
+      expect(asked.last).to include("[m] Turn number 39")
+      expect(asked.last).not_to include("[m] Turn number 20")
     end
 
     # The whole reason it is one letter per turn. A short answer lined up from
@@ -218,6 +248,97 @@ RSpec.describe Transcripts::Speakers do
       transcript.reload
       expect(transcript.turns.length).to eq(2)
       expect(transcript.turns.first["text"]).to include("Happy to be here")
+    end
+
+    # Half an hour of talking is several calls, and the second one opens
+    # wherever the first one stopped - mid-answer, with nothing in front of it.
+    # The stretch already settled goes with it so the voice carrying on can be
+    # told from the one replying to it.
+    context "when it takes more than one call" do
+      subject(:long) {
+        transcript!([{
+          "raw"     => JobTranscript::UNKNOWN,
+          "speaker" => JobTranscript::UNKNOWN,
+          "at"      => nil,
+          "to"      => nil,
+          "text"    => wall,
+        }])
+      }
+
+      let(:wall) {
+        [
+          "Thanks for making the time today, I know it is a busy week.",
+          "Happy to be here. #{"I have been looking forward to this all week. " * 120}",
+          "So tell me about something you built that you are proud of.",
+          "The one I come back to is a mail consolidation at Slingshot. " \
+          "#{"It took six attempts over about three months to land it. " * 110}",
+        ].join(" ")
+      }
+
+      before do
+        model_says(
+          cuts(
+            ["t", "Thanks for making the time today"],
+            ["m", "Happy to be here. I have been"],
+            ["t", "So tell me about something you built"],
+          ),
+          cuts(
+            ["t", "So tell me about something you built"],
+            ["m", "The one I come back to is a mail"],
+          ),
+        )
+      end
+
+      it "hands the next window the turns the last one settled" do
+        described_class.call(long)
+
+        expect(asked.length).to eq(2)
+        expect(asked.first).not_to include("WHAT WAS SAID JUST BEFORE")
+        expect(asked.last).to include("WHAT WAS SAID JUST BEFORE")
+        expect(asked.last).to include("[t] Thanks for making the time today")
+        expect(asked.last).to include("looking forward to this all week.")
+      end
+
+      # The end of the turn, not the start of it: the words next to the window
+      # are the ones its opening is a reply to.
+      it "carries the end of a long turn rather than all of it" do
+        described_class.call(long)
+
+        expect(asked.last).to include("[m] ...")
+        expect(asked.last.length).to be < asked.first.length
+      end
+
+      # One answer running the whole length of a window. The handover at the
+      # top of it is the only one there is, and re-reading from there would ask
+      # the next call for the same stretch again.
+      it "carries on past a window it got no ground on" do
+        asked.clear
+        monologue = transcript!([{
+          "raw"     => JobTranscript::UNKNOWN,
+          "speaker" => JobTranscript::UNKNOWN,
+          "at"      => nil,
+          "to"      => nil,
+          "text"    => "So tell me about it. #{"It ran for about three months in the end. " * 300}",
+        }])
+        model_says(
+          cuts(["t", "So tell me about it. It ran"]),
+          cuts(["m", "It ran for about three months in the end."]),
+        )
+
+        described_class.call(monologue)
+
+        expect(asked.length).to eq(2)
+        expect(asked.last).not_to include("So tell me about it.")
+      end
+
+      it "counts the calls it is going to make" do
+        seen = []
+
+        described_class.call(long) { |done, total| seen << [done, total] }
+
+        expect(seen.map(&:first)).to eq([1, 2])
+        expect(seen.map(&:last).uniq).to eq([2])
+      end
     end
 
     it "says so and changes nothing when the reply is not readable" do

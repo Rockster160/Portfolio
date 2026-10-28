@@ -18,6 +18,18 @@ module JobTranscriptsHelper
     said.sub(/\A0:/, "")
   end
 
+  # What the pass is doing, while it is doing it. The count only appears once
+  # the first call has come back, because until then how many there will be is
+  # not known - and "1 of 1" invented for the wait before the first answer
+  # would be wrong on every transcript that takes more than one call.
+  def transcript_reading(transcript)
+    reading = transcript.reading
+    return nil if reading.nil?
+
+    moved = (" — pass #{reading.current} of #{reading.total}" if reading.current && reading.total)
+    "Working out who was talking#{moved}."
+  end
+
   # The side of the conversation a turn sits on. Three, not two: his own, the
   # people he was talking to, and the ones nobody has placed — which are worth
   # looking different, because they are the ones to go and correct.
