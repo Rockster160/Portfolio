@@ -9130,6 +9130,8 @@ $board-cell-max: 200px;
     border-color: var(--bs-accent);
     transform: translateY(-2px);
   }
+
+  &:active { transform: scale(0.97); }
 }
 .byte-board-card-pet {
   width: 92px;
@@ -9175,6 +9177,40 @@ $board-cell-max: 200px;
   width: 100%;
   box-sizing: border-box;
 }
+// The card that was tapped, while its board loads: held in the accent with the
+// pet hopping and a line saying so, the rest stepped back, so the press is
+// visibly taken however long the board takes to arrive.
+.byte-board-card-opening {
+  display: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bs-accent);
+}
+.byte-board-index-grid.is-opening .byte-board-card-wrap:not(.is-opening) {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+.byte-board-card-wrap.is-opening {
+  > .byte-board-card {
+    border-color: var(--bs-accent);
+    box-shadow: 0 0 0 2px var(--bs-accent);
+    transform: scale(0.98);
+  }
+  .byte-board-card-pet { animation: byte-board-card-hop 700ms ease-in-out infinite; }
+  .byte-board-card-groups,
+  .byte-board-card-shared-by { display: none; }
+  .byte-board-card-opening { display: block; }
+}
+@keyframes byte-board-card-hop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+  60% { transform: translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .byte-board-card-wrap.is-opening .byte-board-card-pet { animation: none; }
+}
+
 // A board a housemate shared - theirs to manage, so a plain line saying whose.
 .byte-board-card-shared-by {
   font-size: 11px;

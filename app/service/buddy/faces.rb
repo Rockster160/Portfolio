@@ -72,8 +72,16 @@ module Buddy
     end
 
     # { name => drawn face } for every expression name any pet knows, resolved
-    # for this one. One disk read, so a page can resolve the whole set at once.
+    # for this one. Held per process outside development, like `known_names`:
+    # working it out walks every pet's mood table for every name, which is most
+    # of a page that draws pets.
     def resolved_names(theme)
+      return resolve_names(theme) if Rails.env.development?
+
+      (@resolved_names ||= {})[theme.to_s.to_sym] ||= resolve_names(theme).freeze
+    end
+
+    def resolve_names(theme)
       drawn = all(theme)
       known_names.index_with { |name|
         drawn.include?(name) ? name : nearest_drawn(theme, drawn, name)

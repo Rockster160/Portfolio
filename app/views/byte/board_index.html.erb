@@ -63,6 +63,7 @@
             <% unless b.user_id == current_user.id %>
               <span class="byte-board-card-shared-by">Shared by <%= b.user.username %></span>
             <% end %>
+            <span class="byte-board-card-opening" aria-hidden="true">Opening…</span>
           <% end %>
         </div>
       <% end %>

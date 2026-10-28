@@ -30,6 +30,35 @@ function boot() {
     cards.set(String(card.dataset.conversationId), card);
   });
 
+  // ---- opening ---------------------------------------------------------------
+  // A board can take a moment to arrive, and a plain link gives nothing back in
+  // the meantime. A tapped card shows it's opening and the rest step back, so
+  // the press reads as taken rather than missed. A modified click opens a tab
+  // and leaves this page as it was.
+  grid.addEventListener("click", (event) => {
+    const link = event.target.closest(".byte-board-card");
+    if (!link || event.defaultPrevented) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    const card = link.closest("[data-board-card]");
+    if (grid.classList.contains("is-opening")) {
+      event.preventDefault();
+      return;
+    }
+    grid.classList.add("is-opening");
+    card?.classList.add("is-opening");
+    link.setAttribute("aria-busy", "true");
+  });
+  // Coming back to this page from the board's own back button restores it from
+  // the cache exactly as it was left: mid-open.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+
+    grid.classList.remove("is-opening");
+    grid.querySelectorAll("[data-board-card].is-opening").forEach((card) => card.classList.remove("is-opening"));
+    grid.querySelectorAll("[aria-busy]").forEach((link) => link.removeAttribute("aria-busy"));
+  });
+
   const paint = (card) => {
     const pet = card.querySelector("[data-board-card-pet]");
     if (!pet) return;
