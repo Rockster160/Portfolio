@@ -14,12 +14,16 @@
 # automation engine to reach a tool sitting right there.
 Buddy::Tools.register(
   name:        :schedule_list_items,
-  summary:     "Add items to a list LATER or on a repeat: \"add these to Before Bed every day at " \
-               "9pm\", \"put bin bags on the shopping list every Sunday\".",
+  summary:     "Add items to a list at a clock time or on a repeat: \"add batteries to Costco at " \
+               "5\", \"add these to Before Bed every day at 9pm\".",
   description: <<~TXT,
     Put items onto a list LATER, once or on a repeat. "Add these to Before Bed
     every night at 9", "put the bin bags on the shopping list every Sunday
     morning", "add the packing items to Camping on Friday".
+
+    An add with a clock time on it - "at 5", "at 6pm", "tonight at 9" - is
+    this call, with that time as `at`. It waits on the clock, quietly, with
+    nothing counting down in their window.
 
     The WHEN can arrive on its own turn. Asked what "at 6" meant in "put the
     tent on Camping at 6" and answered "6pm", that answer is `at` for the add

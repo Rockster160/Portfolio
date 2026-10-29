@@ -1976,6 +1976,17 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  # A clock time on an add, said in one go. It went on a 188 minute wait timer
+  # holding the add, which put a countdown chip in the window for it.
+  {
+    case:  "prod 9481",
+    say:   "Add batteries to the Costco section on the groceries list at 5",
+    tool:  :schedule_list_items,
+    avoid: %i[set_timer add_list_item],
+    args:  { schedule_list_items: { at: /./ } },
+    needs: :grocery_section,
+    note:  "set a 188 minute then_continue wait with the add held behind it",
+  },
   # The other side of the same change: a scheduling tool in the index must not
   # swallow the ordinary one-off add, which has the receipt and the undo on it.
   {
