@@ -92,6 +92,25 @@ class ChoreCompletion < ApplicationRecord
 
   scope :for_day, ->(day) { where(day_key: day) }
 
+  # Done by somebody outside the household: it settles the chore so it stops
+  # coming up, credits nobody, and pays nothing. `recorder` is whoever marked
+  # it, kept as the row's user; display ignores it (see #credited).
+  def self.record_anonymous!(chore, recorder, at:, note: nil, tab_id: nil)
+    completion = create!(
+      chore:          chore,
+      user:           recorder,
+      completed_at:   at,
+      day_key:        ChoreDay.current(recorder, at: at),
+      payout_skipped: true,
+      skipped_reason: "Marked done by someone outside the household",
+      anonymous:      true,
+      note:           note.to_s,
+    )
+    related = (chore.parent_chore if chore.sub_chore?)
+    ChoreBroadcaster.broadcast_changes!(recorder, chore, related: related, actor_tab_id: tab_id)
+    completion
+  end
+
   # `is:today` — a RELATIVE window, which is the only kind a stored condition
   # can use. `time>2026-08-12` is fine typed into a search box and useless
   # written into a reminder that fires every night, since the date it was

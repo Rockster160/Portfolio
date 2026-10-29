@@ -50,18 +50,9 @@ class ChoreCompletionsController < ApplicationController
     # credited tap; parent_chore_id auto-syncs from chore.parent_chore_id
     # so the parent's shared cooldown / carryover queries still see the
     # tap.
-    completion = ChoreCompletion.create!(
-      chore:          tapped,
-      user:           current_user,
-      completed_at:   completed_at,
-      day_key:        ChoreDay.current(current_user, at: completed_at),
-      payout_skipped: true,
-      skipped_reason: "Marked done by someone outside the household",
-      anonymous:      true,
-      note:           params[:note].to_s,
+    completion = ChoreCompletion.record_anonymous!(
+      tapped, current_user, at: completed_at, note: params[:note], tab_id: params[:tab_id]
     )
-    related = (tapped.parent_chore if tapped.sub_chore?)
-    ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
     render json: response_payload(tapped, completion).merge(anonymous: true), status: :created
   end
 

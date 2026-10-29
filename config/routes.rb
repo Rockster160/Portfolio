@@ -276,6 +276,7 @@ Rails.application.routes.draw do
     get    "/items/:id/state"            => "chores#state",              as: :item_state
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder
+    post   "/bulk"                       => "chores#bulk",               as: :bulk
     post   "/items/:id/dailies"          => "chores#pin_daily",          as: :pin_daily
     delete "/items/:id/dailies"          => "chores#unpin_daily",        as: :unpin_daily
     post   "/items/:id/mark_due"         => "chores#mark_due",            as: :mark_due

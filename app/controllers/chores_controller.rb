@@ -66,6 +66,50 @@ class ChoresController < ApplicationController
     render json: { ok: true, count: accessible_ids.size }
   end
 
+  # POST /chores/bulk — body { op:, ids: [...] } plus what the op needs. One
+  # action over the chores picked in the grid's select mode, each chore going
+  # through the same path its own button takes:
+  #   mark_due - due on `due_on` (YYYY-MM-DD), today when it's blank
+  #   complete - done at `completed_at` by `credit_user_id`, through
+  #              ChoreCompleter so pebbles, streaks and triggers land on
+  #              them; by somebody outside the household when it's blank
+  #   tag      - add the group `tag`
+  #   untag    - take the group `tag` off
+  # Answers with the whole chore set: a completion moves parents, sub-chores
+  # and :after_chore followers that were never in `ids`.
+  BULK_OPS = %i[mark_due complete tag untag].freeze
+
+  def bulk
+    op = params[:op].to_s.to_sym
+    return render(json: { error: "unknown_op" }, status: :unprocessable_entity) unless BULK_OPS.include?(op)
+    if %i[tag untag].include?(op) && !current_user.can_manage_chores?
+      return render(json: { error: "Only household managers can do that." }, status: :forbidden)
+    end
+
+    chores = current_user.accessible_chores.where(id: Array(params[:ids]).map(&:to_i)).to_a
+    return render(json: { error: "no_chores" }, status: :unprocessable_entity) if chores.empty?
+
+    unpaid = (
+      case op
+      when :mark_due then bulk_mark_due(chores)
+      when :complete then bulk_complete(chores)
+      else bulk_tag(chores, op)
+      end
+    )
+    return if performed?
+
+    load_chore_page_data
+    render json: {
+      chores:         @ctx.serialize_all(@chores),
+      count:          chores.size,
+      unpaid:         unpaid,
+      lookahead:      @lookahead_json,
+      server_ts:      Time.current.iso8601(3),
+      balance:        @balance_total,
+      today_earnings: @balance_today,
+    }
+  end
+
   # POST /chores/items/:id/mark_due — stamp the chore as "needs to get
   # done." Household-wide (the column lives on Chore), cleared by any
   # ChoreCompletion. Idempotent re-stamp refreshes the timestamp so a
@@ -675,6 +719,60 @@ class ChoresController < ApplicationController
         server_ts:      Time.current.iso8601(3),
       },
     })
+  end
+
+  # Today stamps the moment, as the single "!" does; any other day anchors to
+  # that chore-day's start, as the Due Date field does.
+  def bulk_mark_due(chores)
+    on = params[:due_on].to_s.strip
+    day = on.present? ? (Date.iso8601(on) rescue nil) : ChoreDay.current(current_user)
+    return render(json: { error: "bad_date" }, status: :unprocessable_entity) if day.nil?
+
+    stamp = day == ChoreDay.current(current_user) ? Time.current : ChoreDay.starts_at(day, current_user)
+    chores.each { |chore| chore.update!(marked_due_at: stamp) }
+    []
+  end
+
+  # Returns the names that were recorded without a payout (cooldown,
+  # threshold), so the page can say which of the picked chores paid nothing.
+  def bulk_complete(chores)
+    at = parse_iso(params[:completed_at]) || Time.current
+    return render(json: { error: "in_the_future" }, status: :unprocessable_entity) if at > 5.minutes.from_now
+
+    if params[:credit_user_id].blank?
+      chores.each { |chore|
+        ChoreCompletion.record_anonymous!(chore, current_user, at: at, note: params[:note], tab_id: params[:tab_id])
+      }
+      return []
+    end
+
+    credit = assignable_users.find { |user| user.id == params[:credit_user_id].to_i }
+    return render(json: { error: "unknown_member" }, status: :unprocessable_entity) if credit.nil?
+
+    # Credit goes to them; the trigger has to reach whoever marked it too.
+    recorded_by = (current_user if credit.id != current_user.id)
+    chores.filter_map { |chore|
+      leaf = chore.completion_leaf_for(credit)
+      result = ChoreCompleter.new(leaf, credit, at: at, note: params[:note].presence, recorded_by: recorded_by).call
+      if recorded_by
+        # ChoreCompleter broadcasts against the credited person, and the
+        # Chores channels are per-user.
+        related = (leaf.parent_chore if leaf.sub_chore?)
+        ChoreBroadcaster.broadcast_changes!(current_user, leaf, related: related, actor_tab_id: params[:tab_id])
+      end
+      leaf.name if result.skipped?
+    }
+  end
+
+  def bulk_tag(chores, op)
+    tag = params[:tag].to_s.strip
+    return render(json: { error: "no_tag" }, status: :unprocessable_entity) if tag.blank?
+
+    chores.each { |chore|
+      tags = op == :tag ? chore.tags + [tag] : chore.tags.reject { |have| have.casecmp?(tag) }
+      chore.update!(tags: tags)
+    }
+    []
   end
 
   def parse_iso(value)

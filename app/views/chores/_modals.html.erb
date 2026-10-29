@@ -559,6 +559,87 @@
   </div>
 </div>
 
+<%# Select mode's "Due…": every picked chore due on one day, today unless
+  another is picked. %>
+<div id="chore-bulk-due-modal" class="chores-modal-backdrop hidden" data-bulk-due-modal>
+  <div class="chores-modal confirm-modal">
+    <div class="modal-head">
+      <h3 data-bulk-due-title>Due</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-bulk-due-form autocomplete="off" novalidate>
+      <div class="form-section">
+        <label class="field-label">Due date</label>
+        <input type="date" data-bulk-due-on required>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary" data-bulk-due-submit>Set due date</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%# Select mode's "Done by…": one completion per picked chore, all for the
+  same person at the same time. A household member gets the pebbles, streaks
+  and triggers; "Somebody Else" settles them and credits nobody. %>
+<div id="chore-bulk-complete-modal" class="chores-modal-backdrop hidden" data-bulk-complete-modal>
+  <div class="chores-modal">
+    <div class="modal-head">
+      <h3 data-bulk-complete-title>Mark done</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-bulk-complete-form autocomplete="off" novalidate>
+      <p class="field-hint" data-bulk-complete-hint></p>
+      <div class="form-section">
+        <label class="field-label">Done by</label>
+        <select data-bulk-complete-user data-1p-ignore="true" data-lpignore="true">
+          <option value="">Somebody Else</option>
+          <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
+            <option value="<%= u.id %>" data-username="<%= u.username %>"
+                    <%= "selected" if u.id == current_user.id %>><%= u.username %><%= " (me)" if u.id == current_user.id %></option>
+          <% end %>
+        </select>
+      </div>
+      <div class="form-section">
+        <label class="field-label">When was it done?</label>
+        <input type="datetime-local" data-bulk-complete-at required>
+      </div>
+      <div class="form-section">
+        <label class="field-label">Note (optional)</label>
+        <input type="text" data-bulk-complete-note>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary" data-bulk-complete-submit>Mark done</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%# Select mode's "Group…": add one group to every picked chore, or take it
+  off them. Suggestions are filled from the loaded chores on open. %>
+<div id="chore-bulk-tag-modal" class="chores-modal-backdrop hidden" data-bulk-tag-modal>
+  <div class="chores-modal confirm-modal">
+    <div class="modal-head">
+      <h3 data-bulk-tag-title>Group</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-bulk-tag-form autocomplete="off" novalidate>
+      <div class="form-section">
+        <label class="field-label">Group</label>
+        <input type="text" data-bulk-tag-name list="chore-bulk-tag-options" placeholder="Home, Morning">
+        <datalist id="chore-bulk-tag-options" data-bulk-tag-options></datalist>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="button" class="ghost" data-bulk-tag-submit="untag">Remove</button>
+        <button type="submit" class="primary" data-bulk-tag-submit="tag">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <%# Confirmation for the edit-modal head "!" button. That button touches
   ONE field — the Due Date — so the confirm says exactly that and nothing
   more. Confirming writes the date on its own (no Save trip) and closes

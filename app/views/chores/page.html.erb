@@ -55,6 +55,21 @@
     <div class="chores-grid" data-chores-grid></div>
   </div>
 
+  <%# Select mode's action bar (Grid only). Pinned to the bottom while the
+      mode is on; the count includes picks the current search is hiding. %>
+  <div class="chores-select-bar" data-select-bar hidden>
+    <div class="select-bar-row">
+      <span class="select-bar-count" data-select-count>0 selected</span>
+      <button type="button" class="btn ghost" data-select-matching>Select all</button>
+      <button type="button" class="btn ghost" data-select-clear>Clear</button>
+    </div>
+    <div class="select-bar-row">
+      <button type="button" class="btn" data-bulk-action="mark_due">Due…</button>
+      <button type="button" class="btn" data-bulk-action="complete">Done by…</button>
+      <button type="button" class="btn" data-bulk-action="tag">Group…</button>
+    </div>
+  </div>
+
   <div class="chores-view view-today" data-view="today">
     <section class="chores-section chores-dailies-section">
       <h3 class="chores-section-heading">Dailies</h3>

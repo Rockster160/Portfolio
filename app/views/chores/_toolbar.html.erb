@@ -1,11 +1,15 @@
-<%# Toolbar layout: × | edit | search (with inline clear) | + %>
+<%# Toolbar layout: × | edit | select | search (with inline clear) | + %>
 <div class="chores-toolbar">
   <button class="btn ghost icon-only" data-multiplier-toggle title="Multi-mode — next tap asks for count">×N</button>
   <button class="btn ghost icon-only" data-edit-mode-toggle title="Edit mode — tap a chore to edit; drag to reorder">
     <i class="fa fa-pencil" aria-hidden="true"></i>
   </button>
+  <button class="btn ghost icon-only" data-select-mode-toggle title="Select — tap chores to pick several, then act on them all">
+    <i class="fa fa-check-square-o" aria-hidden="true"></i>
+    <span class="select-mode-count" data-select-mode-count hidden>0</span>
+  </button>
   <div class="search-wrap">
-    <input type="search" placeholder="<%= local_assigns[:search_placeholder] || "Search chores..." %>" data-chores-search autocomplete="off">
+    <input type="search" placeholder="<%= local_assigns[:search_placeholder] || "Search… e.g. group:home due<+7 -is:done" %>" data-chores-search autocomplete="off">
     <button type="button" class="search-clear" data-search-clear aria-label="Clear" hidden>×</button>
   </div>
   <button class="btn icon-only" data-add-chore title="Add chore">+</button>

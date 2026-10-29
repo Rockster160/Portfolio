@@ -712,6 +712,95 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .chore-card.sortable-chosen {
     transform: scale(1.04);
   }
+
+  // Select mode (Grid only): a tap picks a card, and the bar pinned to the
+  // bottom acts on every pick at once.
+  &[data-active-view="today"] .chores-toolbar [data-select-mode-toggle] {
+    display: none;
+  }
+  &.select-mode {
+    padding-bottom: 150px;
+  }
+  &.select-mode .chore-card.selected {
+    border-color: var(--chores-accent);
+    box-shadow:
+      0 0 0 2px var(--chores-accent),
+      0 0 12px #2563eb55;
+  }
+  // A film over the whole card, the same way edit mode marks one; the
+  // corners already belong to the hot/streak/priority badges.
+  &.select-mode .chore-card.selected::after {
+    content: "\f00c";
+    font-family: FontAwesome;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: #2563EB40;
+    color: #FFFFFFCC;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 6;
+  }
+  // How many are picked, on the toggle itself so it stays in view with the
+  // sticky toolbar.
+  .chores-toolbar [data-select-mode-toggle] .select-mode-count {
+    margin-left: 6px;
+    font-weight: 700;
+  }
+  .chores-toolbar [data-select-mode-toggle] .select-mode-count[hidden] {
+    display: none;
+  }
+  .chores-select-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: calc(min(560px, 100% - 32px));
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--chores-card-border);
+    background: var(--chores-card-bg);
+    box-shadow: 0 6px 24px #000A;
+  }
+  .chores-select-bar[hidden] {
+    display: none;
+  }
+  .chores-select-bar .select-bar-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .chores-select-bar .select-bar-count {
+    flex: 1;
+    font-weight: 600;
+  }
+  .chores-select-bar .btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--chores-accent);
+    color: #FFF !important;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .chores-select-bar .select-bar-row:last-child .btn {
+    flex: 1;
+  }
+  .chores-select-bar .btn.ghost {
+    background: #1F2A44;
+  }
+  .chores-select-bar .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 }
 
 // .sortable-drag is the FLOATING CLONE that follows the cursor. It's

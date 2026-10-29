@@ -897,6 +897,10 @@
   // freshly cloned blank template. After this returns, the element
   // is fully initialized and any future updates flow through the
   // patcher — same code path as a live update on an existing card.
+  // Chores picked in the Grid's select mode. Declared ahead of the card
+  // builders because patchGridCard re-applies `.selected` on every repaint.
+  const selectedChoreIds = new Set();
+
   function initGridCard(el, c) {
     el.dataset.choreId = c.id;
     // Seed the data attrs the patcher's structural-change detector
@@ -1112,6 +1116,7 @@
     patchText(el.querySelector(":scope > .title"), c.name);
     applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
+    el.classList.toggle("selected", selectedChoreIds.has(c.id));
   }
   function patchHotCell(cell, c) {
     const inner = cell.querySelector(".chore-circle");
@@ -1565,7 +1570,7 @@
       s.pointerId = e.pointerId; s.card = card; s.startX = e.clientX; s.startY = e.clientY;
       s.startedAt = performance.now(); s.moved = false; s.longPressFired = false;
       s.timer = setTimeout(() => {
-        if (!s.card || s.moved) return;
+        if (!s.card || s.moved || selectModeActive) return;
         s.longPressFired = true;
         if (inEditMode) openChoreHistoryModal(s.card.dataset.choreId);
         else undoLastCompletion(s.card.dataset.choreId);
@@ -1588,6 +1593,7 @@
       // In edit mode every short tap means "edit"; the click handler
       // opens the edit modal. Never auto-complete from edit mode.
       if (editModeActive) return;
+      if (selectModeActive) { toggleChoreSelected(card); return; }
       if (multiplierActive) { openMultiplierModal(card); return; }
       if (e.shiftKey) { openEditModal(card); return; }
       completeChore(card.dataset.choreId);
@@ -1606,6 +1612,7 @@
         return;
       }
       if (editModeActive) { e.preventDefault(); e.stopPropagation(); openEditModal(card); return; }
+      if (selectModeActive) { e.preventDefault(); e.stopPropagation(); return; }
     }, true);
     container.addEventListener("contextmenu", e => {
       const card = e.target.closest("[data-chore-id]");
@@ -2843,8 +2850,15 @@
   // search — works against the store, both views
   // ============================================================
   // Shared with every other chore picker — see app/javascript/src/chore_search.js.
-  function score(needle, name, aliases) {
-    return window.ChoreSearch.score(needle, name, aliases);
+  // The search box's full syntax (fields, OR, negation); see chore_search.js.
+  // `for:` reads usernames off the household picker the shell already
+  // renders, and dates are chore days.
+  function searchScore(q, c) {
+    const users = {};
+    document.querySelectorAll("[data-bulk-complete-user] option[data-username]").forEach(opt => {
+      users[opt.value] = opt.dataset.username;
+    });
+    return window.ChoreSearch.queryScore(c, q, { today: currentChoreDayIso(), users });
   }
   const SEARCH_EXTRA_LIMIT = 10;
   function currentSearchQuery() {
@@ -2866,8 +2880,7 @@
       cards.forEach(card => {
         const c = ChoreStore.get(parseInt(card.dataset.choreId, 10));
         if (!c) return;
-        const s = score(q, c.short_name || c.name, c.aliases || []);
-        card.style.display = s > 0 ? "" : "none";
+        card.style.display = searchScore(q, c) > 0 ? "" : "none";
       });
     });
     renderSearchExtra(q);
@@ -2893,7 +2906,7 @@
     const scored = [];
     for (const c of ChoreStore.activeForGrid()) {
       if (exclude.has(c.id)) continue;
-      const s = score(q, c.short_name || c.name, c.aliases || []);
+      const s = searchScore(q, c);
       if (s > 0) scored.push({ c, s });
     }
     scored.sort((a, b) => b.s - a.s);
@@ -3810,7 +3823,7 @@
 
   // ============================================================
   // Chore picker — same modal flavor as the icon picker, but populated
-  // from ChoreStore. Reuses the `score()` ranker so search semantics
+  // from ChoreStore. Reuses `searchScore()` so search semantics
   // match the chores-grid search. Two opener modes share the modal:
   //   * [data-anchor-picker-open] — Follows-another-chore (recurrence
   //     anchor). Excludes self + any chore that would form a cycle.
@@ -3843,7 +3856,7 @@
       const selfId = parseInt(modal.dataset.selfId || "", 10) || null;
       const candidates = ChoreStore.activeForGrid().filter(c => passesFilter(c, selfId));
       const scored = candidates
-        .map(c => ({ c, s: score(q, c.short_name || c.name, c.aliases || []) }))
+        .map(c => ({ c, s: searchScore(q, c) }))
         .filter(x => x.s > 0)
         .sort((a, b) => b.s - a.s || (a.c.name || "").localeCompare(b.c.name || ""));
       const items = scored.map(x => x.c);
@@ -4240,6 +4253,7 @@
   const editModeBtn = document.querySelector('[data-edit-mode-toggle]');
   let sortableInstance = null;
   function enterEditMode() {
+    exitSelectMode();
     editModeActive = true;
     editModeBtn.classList.add("active");
     root?.classList.add("edit-mode");
@@ -4293,6 +4307,232 @@
     reorderContainer("[data-chores-today]", ids);
   }
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
+
+  // ============================================================
+  // Select mode (Grid) — pick several chores, act on them all at once
+  // ============================================================
+  // A tap picks or unpicks a card instead of completing it. "Select all"
+  // picks every card the current search leaves showing and adds them to
+  // what's already picked, so a few searches can build one selection, and
+  // single taps still adjust it afterwards. Picks survive the search
+  // changing; the count says how many there are in all.
+  let selectModeActive = false;
+  const selectModeBtn = document.querySelector("[data-select-mode-toggle]");
+  const selectBar = document.querySelector("[data-select-bar]");
+
+  function enterSelectMode() {
+    if (editModeActive) exitEditMode();
+    if (multiplierActive) { multiplierActive = false; multiplierBtn?.classList.remove("active"); }
+    selectModeActive = true;
+    selectModeBtn?.classList.add("active");
+    root?.classList.add("select-mode");
+    const badge = selectModeBtn?.querySelector("[data-select-mode-count]");
+    if (badge) badge.hidden = false;
+    if (selectBar) selectBar.hidden = false;
+    refreshSelectBar();
+  }
+  function exitSelectMode() {
+    if (!selectModeActive) return;
+    selectModeActive = false;
+    selectModeBtn?.classList.remove("active");
+    root?.classList.remove("select-mode");
+    const badge = selectModeBtn?.querySelector("[data-select-mode-count]");
+    if (badge) badge.hidden = true;
+    if (selectBar) selectBar.hidden = true;
+    clearChoreSelection();
+  }
+  function gridCards() {
+    return Array.from(document.querySelectorAll("[data-chores-grid] > [data-chore-id]"));
+  }
+  function matchingGridCards() {
+    return gridCards().filter(card => card.style.display !== "none");
+  }
+  function setChoreSelected(card, on) {
+    const id = parseInt(card.dataset.choreId, 10);
+    if (!id) return;
+    if (on) selectedChoreIds.add(id); else selectedChoreIds.delete(id);
+    card.classList.toggle("selected", on);
+  }
+  function toggleChoreSelected(card) {
+    setChoreSelected(card, !selectedChoreIds.has(parseInt(card.dataset.choreId, 10)));
+    refreshSelectBar();
+  }
+  function clearChoreSelection() {
+    selectedChoreIds.clear();
+    gridCards().forEach(card => card.classList.remove("selected"));
+    refreshSelectBar();
+  }
+  // Picks that went away (archived, moved out of the household) stop counting.
+  function pruneChoreSelection() {
+    selectedChoreIds.forEach(id => { if (!ChoreStore.get(id)) selectedChoreIds.delete(id); });
+  }
+  function refreshSelectBar() {
+    if (!selectBar) return;
+    pruneChoreSelection();
+    const count = selectedChoreIds.size;
+    const countEl = selectBar.querySelector("[data-select-count]");
+    if (countEl) countEl.textContent = `${count} selected`;
+    const badge = selectModeBtn?.querySelector("[data-select-mode-count]");
+    if (badge) badge.textContent = String(count);
+    const matching = matchingGridCards();
+    // The count is what a press would change: the unpicked ones, or every
+    // one when they're all picked and the press clears them.
+    const unpicked = matching.filter(card => !selectedChoreIds.has(parseInt(card.dataset.choreId, 10))).length;
+    const allPicked = matching.length > 0 && unpicked === 0;
+    const matchBtn = selectBar.querySelector("[data-select-matching]");
+    if (matchBtn) {
+      const n = allPicked ? matching.length : unpicked;
+      const scope = currentSearchQuery() ? `${n} matching` : `all ${n}`;
+      matchBtn.textContent = `${allPicked ? "Deselect" : "Select"} ${scope}`;
+      matchBtn.disabled = matching.length === 0;
+    }
+    const clearBtn = selectBar.querySelector("[data-select-clear]");
+    if (clearBtn) clearBtn.disabled = count === 0;
+    selectBar.querySelectorAll("[data-bulk-action]").forEach(btn => { btn.disabled = count === 0; });
+  }
+  selectModeBtn?.addEventListener("click", () => { if (selectModeActive) exitSelectMode(); else enterSelectMode(); });
+  selectBar?.querySelector("[data-select-matching]")?.addEventListener("click", () => {
+    const matching = matchingGridCards();
+    const allPicked = matching.every(card => selectedChoreIds.has(parseInt(card.dataset.choreId, 10)));
+    matching.forEach(card => setChoreSelected(card, !allPicked));
+    refreshSelectBar();
+  });
+  selectBar?.querySelector("[data-select-clear]")?.addEventListener("click", clearChoreSelection);
+  document.querySelector("[data-chores-search]")?.addEventListener("input", () => {
+    if (selectModeActive) refreshSelectBar();
+  });
+
+  // One request for the whole selection; the answer carries every chore, so
+  // reconcile repaints the parents and followers a completion moved as well.
+  async function runBulk(op, extra, btn) {
+    const ids = Array.from(selectedChoreIds);
+    if (!ids.length || !window.requireOnlineForChores()) return null;
+    return withSavingState(btn, async () => {
+      try {
+        const data = await api("/chores/bulk", "POST", { op, ids, tab_id: TAB_ID, ...extra });
+        reconcile(data);
+        refreshSelectBar();
+        return data;
+      } catch (err) {
+        flash("Couldn't update them: " + err.message, "error");
+        return null;
+      }
+    });
+  }
+  function choreCount(n) { return `${n} chore${n === 1 ? "" : "s"}`; }
+
+  const bulkDueModal = document.querySelector("[data-bulk-due-modal]");
+  const bulkDueForm  = bulkDueModal?.querySelector("[data-bulk-due-form]");
+  const bulkDueOn    = bulkDueModal?.querySelector("[data-bulk-due-on]");
+  function closeBulkDueModal() { bulkDueModal?.classList.add("hidden"); }
+  wireModalDismiss(bulkDueModal, { onCancel: closeBulkDueModal, onBackdrop: closeBulkDueModal });
+  selectBar?.querySelector('[data-bulk-action="mark_due"]')?.addEventListener("click", () => {
+    if (!bulkDueModal || !selectedChoreIds.size) return;
+    const title = bulkDueModal.querySelector("[data-bulk-due-title]");
+    if (title) title.textContent = `Make ${choreCount(selectedChoreIds.size)} due`;
+    if (bulkDueOn) bulkDueOn.value = currentChoreDayIso();
+    bulkDueModal.classList.remove("hidden");
+  });
+  bulkDueForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const on = bulkDueOn?.value || currentChoreDayIso();
+    const data = await runBulk("mark_due", { due_on: on }, bulkDueForm.querySelector('button[type="submit"]'));
+    if (!data) return;
+    closeBulkDueModal();
+    const when = on === currentChoreDayIso()
+      ? "today"
+      : new Date(`${on}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    flash(`${choreCount(data.count)} due ${when}`);
+  });
+
+  const bulkCompleteModal = document.querySelector("[data-bulk-complete-modal]");
+  const bulkCompleteForm  = bulkCompleteModal?.querySelector("[data-bulk-complete-form]");
+  const bulkCompleteUser  = bulkCompleteModal?.querySelector("[data-bulk-complete-user]");
+  function refreshBulkCompleteCopy() {
+    const who = bulkCompleteUser?.selectedOptions?.[0]?.dataset?.username || "";
+    const n = choreCount(selectedChoreIds.size);
+    const hint = bulkCompleteModal?.querySelector("[data-bulk-complete-hint]");
+    if (hint) {
+      hint.textContent = who
+        ? `Credits ${who} with the pebbles as if they did them themselves.`
+        : "Marks them done so they stop coming up. Nobody in the household gets the pebbles.";
+    }
+    const title = bulkCompleteModal?.querySelector("[data-bulk-complete-title]");
+    if (title) title.textContent = `Mark ${n} done`;
+    const submit = bulkCompleteModal?.querySelector("[data-bulk-complete-submit]");
+    if (submit) submit.textContent = who ? `Mark done for ${who}` : "Mark done";
+  }
+  bulkCompleteUser?.addEventListener("change", refreshBulkCompleteCopy);
+  function closeBulkCompleteModal() { bulkCompleteModal?.classList.add("hidden"); }
+  wireModalDismiss(bulkCompleteModal, { onCancel: closeBulkCompleteModal, onBackdrop: closeBulkCompleteModal });
+  selectBar?.querySelector('[data-bulk-action="complete"]')?.addEventListener("click", () => {
+    if (!bulkCompleteModal || !selectedChoreIds.size) return;
+    const tsField = bulkCompleteModal.querySelector("[data-bulk-complete-at]");
+    if (tsField) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, "0");
+      tsField.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const noteField = bulkCompleteModal.querySelector("[data-bulk-complete-note]");
+    if (noteField) noteField.value = "";
+    refreshBulkCompleteCopy();
+    bulkCompleteModal.classList.remove("hidden");
+  });
+  bulkCompleteForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const tsStr = bulkCompleteModal.querySelector("[data-bulk-complete-at]")?.value || "";
+    const who = bulkCompleteUser?.selectedOptions?.[0]?.dataset?.username || "";
+    const data = await runBulk("complete", {
+      credit_user_id: bulkCompleteUser?.value || "",
+      completed_at:   (tsStr ? new Date(tsStr) : new Date()).toISOString(),
+      note:           bulkCompleteModal.querySelector("[data-bulk-complete-note]")?.value || "",
+    }, bulkCompleteForm.querySelector('button[type="submit"]'));
+    if (!data) return;
+    closeBulkCompleteModal();
+    const unpaid = data.unpaid || [];
+    flash(
+      `Marked ${choreCount(data.count)} done${who ? ` for ${who}` : ""}` +
+        (unpaid.length ? ` (no pebbles for ${unpaid.join(", ")})` : ""),
+      unpaid.length ? "warn" : "ok",
+    );
+  });
+
+  const bulkTagModal = document.querySelector("[data-bulk-tag-modal]");
+  const bulkTagForm  = bulkTagModal?.querySelector("[data-bulk-tag-form]");
+  const bulkTagName  = bulkTagModal?.querySelector("[data-bulk-tag-name]");
+  function closeBulkTagModal() { bulkTagModal?.classList.add("hidden"); }
+  wireModalDismiss(bulkTagModal, { onCancel: closeBulkTagModal, onBackdrop: closeBulkTagModal });
+  selectBar?.querySelector('[data-bulk-action="tag"]')?.addEventListener("click", () => {
+    if (!bulkTagModal || !selectedChoreIds.size) return;
+    const title = bulkTagModal.querySelector("[data-bulk-tag-title]");
+    if (title) title.textContent = `Group ${choreCount(selectedChoreIds.size)}`;
+    const options = bulkTagModal.querySelector("[data-bulk-tag-options]");
+    if (options) {
+      options.replaceChildren(...knownGroups().map(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        return opt;
+      }));
+    }
+    if (bulkTagName) bulkTagName.value = "";
+    bulkTagModal.classList.remove("hidden");
+    bulkTagName?.focus();
+  });
+  async function submitBulkTag(op, btn) {
+    const tag = bulkTagName?.value?.trim() || "";
+    if (!tag) { bulkTagName?.focus(); return; }
+    const data = await runBulk(op, { tag }, btn);
+    if (!data) return;
+    closeBulkTagModal();
+    flash(op === "tag" ? `Added ${tag} to ${choreCount(data.count)}` : `Took ${tag} off ${choreCount(data.count)}`);
+  }
+  bulkTagForm?.addEventListener("submit", e => {
+    e.preventDefault();
+    submitBulkTag("tag", bulkTagForm.querySelector('[data-bulk-tag-submit="tag"]'));
+  });
+  bulkTagModal?.querySelector('[data-bulk-tag-submit="untag"]')?.addEventListener("click", e => {
+    submitBulkTag("untag", e.currentTarget);
+  });
 
   // Form submit
   if (editForm) { bindPillGroups(); bindGroupChips(); bindIconUploader(editForm); }
@@ -5851,6 +6091,7 @@
       const linkBase = href.split("?")[0];
       a.classList.toggle("active", linkBase === VIEW_PATHS[view]);
     });
+    if (view !== "grid") exitSelectMode();
     if (alreadyActive) return;
     // Lazy-hydrate per-view data on activation. Grid/Today draw
     // straight from ChoreStore so no fetch is needed — ChoreStore
