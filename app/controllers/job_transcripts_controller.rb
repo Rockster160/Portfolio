@@ -4,7 +4,7 @@
 class JobTranscriptsController < ApplicationController
   before_action :authorize_user
   before_action :load_job
-  before_action :load_transcript, only: [:show, :update, :destroy, :sides]
+  before_action :load_transcript, only: [:show, :update, :destroy, :tidy]
 
   # The page, or the conversation as data.
   #
@@ -22,33 +22,26 @@ class JobTranscriptsController < ApplicationController
     end
   end
 
-  # The whole upload, in one post: the file is read into turns, the file itself
-  # is kept, and a pass over the words starts on who was talking. Nothing is
-  # ASKED about speakers, here or on the page - dropping the file in is the
-  # whole instruction, and what the file needs (a split into sides, or being
-  # told which of its own labels is him) is something it can be read off rather
-  # than a question for the person who just dropped it.
+  # The whole upload, in one post: the words are read into turns, kept as a
+  # file, and a pass over them starts on who was talking. Nothing is ASKED
+  # about speakers, here or on the page - handing the recording over is the
+  # whole instruction, and what it needs (a split into sides, or being told
+  # which of its own labels is him) is something it can be read off rather than
+  # a question for the person who just dropped it.
+  #
+  # A FILE OR A PASTE, and the one place that tells them apart is `Intake`.
   def create
-    upload = params[:file]
-    return redirect_to(interview_path(@job), alert: "Pick a transcript file first.") if upload.blank?
-
-    @transcript = @job.transcripts.new(transcript_params)
-    @transcript.ingest!(upload.tempfile, filename: upload.original_filename)
-    @transcript.file.attach(
-      io: reread(upload), filename: upload.original_filename,
-      content_type: upload.content_type.presence || "text/plain"
-    )
-
-    if @transcript.save
-      @job.touch_activity!
-      queue_speakers(@transcript)
-      redirect_to interview_transcript_path(@job, @transcript)
-    else
-      redirect_to interview_path(@job), alert: @transcript.errors.full_messages.to_sentence
+    @transcript = Transcripts::Intake.call(@job, params[:job_transcript])
+    if @transcript.nil?
+      alert = "Pick a transcript file, or paste the words in."
+      return redirect_to(interview_path(@job), alert: alert)
     end
+
+    @job.touch_activity!
+    redirect_to interview_transcript_path(@job, @transcript)
   rescue StandardError => e
     Rails.logger.warn("transcript upload failed: #{e.class}: #{e.message}")
-    redirect_to interview_path(@job), alert: "That file could not be read as a transcript."
+    redirect_to interview_path(@job), alert: "Nothing in that could be read as a conversation."
   end
 
   # ONE SUBMIT FOR THE WHOLE PAGE. Naming the speakers and moving individual
@@ -64,21 +57,29 @@ class JobTranscriptsController < ApplicationController
       notice: moved.positive? ? "Saved. #{moved} turn#{"s" unless moved == 1} moved." : "Saved."
   end
 
+  # Another pass over the words, asked for rather than repeated.
+  #
+  # It runs by itself when a recording lands, and the press is for the two
+  # times that is not enough: the pass read the words before he had corrected
+  # who was talking, and a conversation whose terms it did not know came back
+  # with the same mishearing in thirty places. Both are better on a second
+  # reading, and neither is worth paying for on every page load.
+  def tidy
+    TranscriptTidyWorker.perform_async(@transcript.id, true)
+    redirect_to interview_transcript_path(@job, @transcript),
+      notice: "Going back over the words. The page will say when it is done."
+  rescue StandardError => e
+    Rails.logger.warn("transcript tidy enqueue failed: #{e.class}: #{e.message}")
+    redirect_to interview_transcript_path(@job, @transcript),
+      alert: "That could not be started just now."
+  end
+
   def destroy
     @transcript.destroy!
     redirect_to interview_path(@job), notice: "Transcript removed."
   end
 
   private
-
-  # An upload that landed is an upload that landed. A queue that is not there
-  # must not turn it into "that file could not be read" - the conversation is
-  # on the page either way, and who was talking is the part that is missing.
-  def queue_speakers(transcript)
-    TranscriptSpeakersWorker.perform_async(transcript.id)
-  rescue StandardError => e
-    Rails.logger.warn("transcript speakers enqueue failed: #{e.class}: #{e.message}")
-  end
 
   # `who` rather than a name, because that is the question being answered and a
   # name is not an answer to it: `Speaker 2` is nobody, and `Unknown` is two
@@ -120,14 +121,6 @@ class JobTranscriptsController < ApplicationController
 
   def load_transcript
     @transcript = @job.transcripts.find(params[:id])
-  end
-
-  # `ingest!` has already read the tempfile to the end, and an IO at EOF
-  # attaches as an empty file — the upload would be on the page, nameable and
-  # readable, with nothing behind the download link.
-  def reread(upload)
-    upload.tempfile.rewind
-    upload.tempfile
   end
 
   # `permit!` because the KEYS are the data: a speaker label is whatever the

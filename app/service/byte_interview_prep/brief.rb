@@ -151,6 +151,71 @@ module ByteInterviewPrep
       ["", "WHAT WAS SAID ON THE EARLIER CALLS", "What they actually told me, and what I actually said. `ME` is me.", "", said].join("\n")
     end
 
+    # HIS OWN ANSWERS, FROM EVERY OTHER RECORDING THERE IS.
+    #
+    # The recordings on this application are the conversation so far; these are
+    # something else - the same stories told to other companies, in the words
+    # they actually came out in. A brief written off the answer bank alone is
+    # written off how an answer reads, and how it reads is not how it went: the
+    # same story told out loud arrived without the mechanism in it twice.
+    #
+    # Only his turns, because the other side of somebody else's interview is
+    # about a job he is not preparing for. Only the long ones, because a turn
+    # of five words is "yeah, exactly" and carries nothing. And capped, because
+    # every recording he has ever dropped in would be the longest thing in the
+    # prompt by an order of magnitude.
+    MOST_SPOKEN = 24
+    LEAST_SPOKEN = 240
+    MOST_SPOKEN_CHARS = 12_000
+
+    def spoken(application, user)
+      found = JobTranscript.ordered.includes(:job_application).where(
+        job_application_id: user.job_applications.where.not(id: application.id).select(:id),
+      )
+      rows = found.flat_map { |transcript| spoken_turns(transcript) }
+      budget = MOST_SPOKEN_CHARS
+      kept = []
+
+      rows.first(MOST_SPOKEN).each do |row|
+        break if budget.negative?
+
+        kept << row
+        budget -= row[:said].length
+      end
+
+      kept
+    end
+
+    def spoken_turns(transcript)
+      transcript.turns.filter_map { |turn|
+        said = turn["text"].to_s.strip
+        next unless transcript.mine?(turn["speaker"].to_s) && said.length >= LEAST_SPOKEN
+
+        { where: spoken_where(transcript), said: said }
+      }
+    end
+
+    def spoken_where(transcript)
+      [
+        transcript.job_application.company,
+        transcript.occurred_at&.strftime("%b %-d"),
+      ].compact_blank.join(", ")
+    end
+
+    def spoken_section(application, user)
+      found = spoken(application, user)
+      return nil if found.empty?
+
+      said = found.map { |row| "- **#{row[:where]}**: #{row[:said]}" }
+      [
+        "",
+        "HOW I ACTUALLY TELL THESE STORIES",
+        "My own answers out of recordings of interviews with OTHER companies - the words as they came out, not as they are written down. The written answers are still what goes in the brief; this is for seeing where one of them arrives thin when it is said out loud. Where a story below came out without the thing that made it hard - the mechanism, the number, the name of the tool - say so in one line under the answer it belongs to.",
+        "",
+        said.join("\n\n"),
+      ].join("\n")
+    end
+
     def text(application, item, user: nil)
       user ||= application.user
 
@@ -170,6 +235,7 @@ module ByteInterviewPrep
 
         #{timeline_block(application, user)}
         #{recordings_section(application)}
+        #{spoken_section(application, user)}
 
         WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST
         Everything else follows from it, and the material above is what decides it - the title on the row, who it is with, how long it is, and what the last beat on the timeline said. A 30 minute first call with a recruiter is not a technical screen, and a brief that prepares me for the wrong one is worse than no brief.

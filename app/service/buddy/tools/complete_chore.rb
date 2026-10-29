@@ -9,6 +9,10 @@ Buddy::Tools.register(
     user's accessible chores. Supports `count=N` when the same chore
     should be marked done multiple times (e.g. drank water 5x).
 
+    Call it when what they say they did IS one of their chores. `chore` is
+    fuzzy about spelling, not about meaning: a chore that only shares a game,
+    a room or a pet with what they said is a different job.
+
     Pass `at` when the user says they finished at a PAST time — accepts
     natural phrasing like "an hour ago", "this morning", "8:15am", or an
     ISO timestamp. Omit `at` (or use "now") when they just finished. The

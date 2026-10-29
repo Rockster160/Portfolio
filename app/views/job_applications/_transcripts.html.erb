@@ -42,39 +42,7 @@
   <%= form_with url: interview_transcripts_path(job), method: :post, local: true,
         multipart: true, class: "transcript-upload" do %>
     <div class="form-fields">
-      <%# The box IS the instruction. A file input on its own says you may pick
-         a file and says nothing at all about dropping one, which is the gesture
-         everybody tries first. The input stays underneath, so this degrades to
-         exactly what was here before if the script never runs. %>
-      <div class="drop" data-drop>
-        <p class="drop-say"><strong>Drop a transcript here</strong></p>
-        <%= label_tag :file, "or choose a file" %>
-        <%= file_field_tag :file, accept: ".txt,.vtt,.srt,text/plain" %>
-        <p class="drop-got" data-drop-got></p>
-        <span class="field-hint">
-          A recorder's export — captions with timestamps, plain
-          <code>Name: what they said</code> lines, or one unbroken wall of text
-          with no names in it at all. The file is kept, and who was talking is
-          worked out from it.
-        </span>
-      </div>
-
-      <div class="split-fields">
-        <div class="form-field">
-          <%= label_tag "job_transcript[title]", "What it was" %>
-          <%= text_field_tag "job_transcript[title]", nil,
-                placeholder: "Hiring manager interview" %>
-        </div>
-
-        <div class="form-field">
-          <%= label_tag "job_transcript[job_note_id]", "Against which beat" %>
-          <%= select_tag "job_transcript[job_note_id]",
-                options_for_select(notes.map { |note|
-                  ["#{note.tag_label} · #{note.occurred_at.strftime('%b %-d')}", note.id]
-                }),
-                include_blank: "Not tied to one" %>
-        </div>
-      </div>
+      <%= render "transcript_intake", id: "panel", notes: notes %>
 
       <div class="form-submission">
         <%= submit_tag "Add transcript" %>

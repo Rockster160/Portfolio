@@ -54,7 +54,8 @@ module Buddy
       "#{body}\n\nGive #{recipient.first_name} a warm heads-up in your own voice — this is #{who}'s own " \
         "plan, not #{recipient.first_name}'s, so frame it as #{who}'s (\"#{who} added…\"), never as something " \
         "on #{recipient.first_name}'s own schedule. Just an FYI, nothing to confirm or act on. Lead with what " \
-        "actually matters (the when/where and anything unusual)."
+        "actually matters (the when/where and anything unusual). Bold the event's name at most; the " \
+        "time, place and drive read as plain words."
     end
 
     # Scope the event to whose calendar it lives on, WITHOUT naming the

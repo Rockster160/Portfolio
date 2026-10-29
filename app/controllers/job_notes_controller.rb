@@ -13,6 +13,7 @@ class JobNotesController < ApplicationController
 
     if @note.save
       @job.touch_activity!
+      attach_transcript(@note)
     else
       flash[:alert] = @note.errors.full_messages.to_sentence
     end
@@ -46,6 +47,22 @@ class JobNotesController < ApplicationController
   end
 
   private
+
+  # The recording of the thing just logged, where one came in with it. A
+  # conversation and the beat saying it happened are one thing, so they are one
+  # submit - see Transcripts::Intake.
+  #
+  # A beat that saved stays saved. Words that could not be read as a
+  # conversation say so and leave the note alone, because the note is the part
+  # that was typed and the recording is the part that can be handed over again.
+  def attach_transcript(note)
+    return if Transcripts::Intake.call(@job, params[:job_transcript], note: note).nil?
+
+    flash[:notice] = "Note added. Working out who was talking in the recording."
+  rescue StandardError => e
+    Rails.logger.warn("note transcript failed: #{e.class}: #{e.message}")
+    flash[:alert] = "The note is saved, but nothing in that could be read as a conversation."
+  end
 
   def load_job
     @job = current_user.job_applications.find(params[:interview_id])

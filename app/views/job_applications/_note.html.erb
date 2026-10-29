@@ -58,10 +58,13 @@
      that call are one thing that happened, and the transcript was a separate
      section you had to know to go and look in. %>
   <% note.transcripts.ordered.each do |transcript| %>
-    <details class="note-transcript">
+    <details class="note-transcript" data-transcript-search>
       <summary>
         <%= transcript.label %>
         <span class="note-meta">
+          <% if transcript.reading? %>
+            <span class="transcript-reading-tag">reading…</span>
+          <% end %>
           <%= pluralize(transcript.turns.size, "turn") %>
           <%= "· #{transcript.spoken_minutes} min" if transcript.spoken_minutes %>
         </span>
@@ -73,11 +76,25 @@
       <%= link_to "Name the speakers, fix the turns →",
             interview_transcript_path(job, transcript), class: "note-link" %>
 
+      <%# THE SAME BOX AS THE TRANSCRIPT'S OWN PAGE, because the list below is
+         the same scroller and the question asked of it is the same one. The
+         ids are per transcript: a timeline can hold several, and two inputs
+         sharing an id hands every label to whichever the browser found first. %>
+      <div class="transcript-search">
+        <%= label_tag "note_transcript_query_#{transcript.id}", "Find a line" %>
+        <%= search_field_tag "note_transcript_query_#{transcript.id}", nil,
+              id: "note_transcript_query_#{transcript.id}", autocomplete: :off,
+              placeholder: "testing, money, a name…", data: { transcript_query: true } %>
+        <span class="field-hint" data-transcript-count>
+          <%= pluralize(transcript.turns.size, "turn") %>
+        </span>
+      </div>
+
       <ol class="note-turns">
         <% transcript.turns.each do |turn| %>
-          <li class="<%= "is-mine" if transcript.mine?(turn["speaker"]) %>">
-            <span class="turn-who"><%= transcript.name_for(turn["speaker"]) %></span>
-            <span class="turn-said"><%= turn["text"] %></span>
+          <li class="<%= "is-mine" if transcript.mine?(turn["speaker"]) %>" data-turn>
+            <span class="turn-who" data-turn-text><%= transcript.name_for(turn["speaker"]) %></span>
+            <span class="turn-said" data-turn-text><%= turn["text"] %></span>
           </li>
         <% end %>
       </ol>

@@ -1,0 +1,60 @@
+<%# A recording handed over, in whichever form it is in: the file a recorder
+   exported, or the words themselves.
+
+   TWO WAYS IN BECAUSE THE RECORDINGS ARRIVE TWO WAYS. A meeting recorder
+   writes a file; Voice Memos reads the whole thing back as one unbroken line
+   on screen with nowhere to save it, and the only way to upload that was to
+   paste it into a text editor, save it, and come back here for the file. Both
+   are read by the same parser — see Transcripts::Intake.
+
+   `id` suffixes every input, because this partial appears twice on an
+   application: once on its own panel, once inside the form that logs a beat.
+   `notes` is the beats it can be tied to, and nil where the form is already
+   making the one it belongs to. %>
+<div class="transcript-intake">
+  <%# The box IS the instruction. A file input on its own says you may pick a
+     file and says nothing at all about dropping one, which is the gesture
+     everybody tries first. The input stays underneath, so this degrades to a
+     plain file picker if the script never runs. %>
+  <div class="drop" data-drop>
+    <p class="drop-say"><strong>Drop a transcript here</strong></p>
+    <%= label_tag "transcript_file_#{id}", "or choose a file" %>
+    <%= file_field_tag "job_transcript[file]", accept: ".txt,.vtt,.srt,text/plain",
+          id: "transcript_file_#{id}" %>
+    <p class="drop-got" data-drop-got></p>
+    <span class="field-hint">
+      A recorder's export — captions with timestamps, plain
+      <code>Name: what they said</code> lines, or one unbroken wall of text
+      with no names in it at all.
+    </span>
+  </div>
+
+  <div class="form-field transcript-paste">
+    <%= label_tag "transcript_text_#{id}", "or paste the words" %>
+    <%= text_area_tag "job_transcript[text]", nil, rows: 3, id: "transcript_text_#{id}",
+          placeholder: "Thanks for making the time today. Happy to be here…" %>
+    <span class="field-hint">
+      Straight out of Voice Memos or a phone transcription, one line and all
+      of it. It is kept as a text file and read exactly like one.
+    </span>
+  </div>
+
+  <div class="split-fields">
+    <div class="form-field">
+      <%= label_tag "transcript_title_#{id}", "What it was" %>
+      <%= text_field_tag "job_transcript[title]", nil, id: "transcript_title_#{id}",
+            placeholder: "Hiring manager interview" %>
+    </div>
+
+    <% if notes %>
+      <div class="form-field">
+        <%= label_tag "transcript_note_#{id}", "Against which beat" %>
+        <%= select_tag "job_transcript[job_note_id]",
+              options_for_select(notes.map { |note|
+                ["#{note.tag_label} · #{note.occurred_at.strftime('%b %-d')}", note.id]
+              }),
+              include_blank: "Not tied to one", id: "transcript_note_#{id}" %>
+      </div>
+    <% end %>
+  </div>
+</div>

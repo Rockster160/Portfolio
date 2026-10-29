@@ -69,7 +69,7 @@ class LocationCache
   # a hash literal sitting in that last position is one edit away from being
   # read as those keywords instead of as the payload.
   def self.transition_payload(departed, here_loc)
-    name = current_location_name(here_loc)
+    name = current_location_name(here_loc, establishments: true)
     {
       coord: departed ? nil : recent_locations[-1], # If arrived, show current
       from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
@@ -118,12 +118,11 @@ class LocationCache
     User.me.address_book.contact_by_loc(loc || last_location[:loc])
   end
 
-  def self.current_location_name(loc=nil)
-    nearby_contact(loc)&.name || lookup_location_name(loc)
-  end
-
-  def self.lookup_location_name(loc=nil)
-    User.me.address_book.reverse_geocode(loc || last_location[:loc], get: :city)
+  # `establishments:` is for where they've STOPPED - an arrival or a
+  # departure. A position on the move is named without one; see
+  # AddressBook#place_name.
+  def self.current_location_name(loc=nil, establishments: false)
+    User.me.address_book.place_name(loc || last_location&.dig(:loc), establishments: establishments)
   end
 
   def self.last_location

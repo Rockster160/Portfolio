@@ -291,15 +291,113 @@ class AddressBook
     nil
   end
 
-  # Find address at [lat,lng]
+  # What to call the spot at [lat,lng], most specific answer first:
+  #
+  #   1. the named place of an appointment around now that it's at
+  #   2. the nearest saved contact
+  #   3. the nearest business (`establishments: true` only)
+  #   4. the city
+  #
+  # A business is only worth naming where they've stopped. While moving, the
+  # nearest one is whatever the road happens to pass, and the lookup is paid
+  # for on every position report.
+  def place_name(loc, establishments: false)
+    return unless valid_loc?(loc)
+
+    loc = loc.map(&:to_f)
+    name = agenda_place_near(loc)
+    name ||= find_contact_near(loc)&.name.presence
+    name ||= nearest_establishment(loc) if establishments
+    name || reverse_geocode(loc, get: :city)
+  end
+
+  # An appointment's venue is geocoded to one point and parked at another, so
+  # this is wider than `near?`'s ~110m. Three times it is still the same lot.
+  AGENDA_PLACE_RADIUS = 0.003
+  # Arriving early and leaving late are both normal; the coordinate check is
+  # what keeps the window honest.
+  AGENDA_PLACE_BEHIND = 4.hours
+  AGENDA_PLACE_AHEAD = 2.hours
+  # Each candidate can cost a geocode the first time its location is seen.
+  AGENDA_PLACE_MAX = 8
+
+  # The short form of an appointment's location, when that location is a NAME
+  # ("Horsetail Falls", "Costco - Riverton") and they're standing at it. A bare
+  # street address has no name to give, so it's left for the business lookup,
+  # which can find what's at that address.
+  def agenda_place_near(loc)
+    agenda_places.select { |place| near?(place[:loc], loc, AGENDA_PLACE_RADIUS) }.min_by { |place|
+      distance(place[:loc], loc)
+    }&.dig(:name)
+  end
+
+  # Cached for a few minutes because the car's position is named on every
+  # push, and the calendar does not move that fast.
+  def agenda_places
+    bucket = Time.current.to_i / 5.minutes.to_i
+    Rails.cache.fetch("agenda_places(#{@user.id},#{bucket})", expires_in: 10.minutes) {
+      window = (Time.current - AGENDA_PLACE_BEHIND)..(Time.current + AGENDA_PLACE_AHEAD)
+      scope = AgendaItem.where(agenda_id: Agenda.where(user_id: @user.id).select(:id))
+      scope = scope.where(start_at: window, cancelled_at: nil, all_day: false)
+      scope = scope.where.not(location: [nil, ""])
+      scope.order(:start_at).limit(AGENDA_PLACE_MAX).filter_map { |item|
+        next if self.class.non_travelable?(item.location)
+        next if ::Buddy::Place.street?(item.location.strip)
+
+        there = coords_for_location(item.travel_nav_address.presence || item.location)
+        { name: ::Buddy::Place.short(item.location), loc: there.map(&:to_f) } if valid_loc?(there)
+      }
+    }
+  rescue StandardError => e
+    # A calendar that won't read is one fallback lost, never the name.
+    Rails.logger.warn("[AddressBook] agenda_places: #{e.class}: #{e.message}")
+    []
+  end
+
+  # How far a business can be from where they stopped and still be where they
+  # are. A big-box store's point is the middle of the building, and the car is
+  # out in the lot.
+  ESTABLISHMENT_RADIUS_METERS = 150
+  # Answers about an area rather than a business.
+  NOT_ESTABLISHMENT_TYPES = %w[locality political route neighborhood premise street_address].freeze
+
+  def nearest_establishment(loc)
+    return unless Rails.env.production?
+
+    nonnil_cache("nearest_establishment(#{loc.map { |l| l.round(4) }.join(",")})") {
+      ::PrettyLogger.info("\b[AddressCache] Nearest establishment #{loc.join(",")}")
+      params = {
+        location: loc.join(","),
+        radius:   ESTABLISHMENT_RADIUS_METERS,
+        key:      ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
+      }.to_query
+
+      url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?#{params}"
+      res = RestClient.get(url)
+      json = JSON.parse(res.body, symbolize_names: true)
+
+      json[:results].to_a.reject { |place|
+        place[:geometry].blank? || place[:types].to_a.intersect?(NOT_ESTABLISHMENT_TYPES)
+      }.min_by { |place|
+        distance(loc, place.dig(:geometry, :location).values_at(:lat, :lng))
+      }&.dig(:name)
+    }
+  rescue StandardError => e
+    ::SlackNotifier.err(e, "nearest_establishment failed: (#{loc}): [#{e.class}]:#{e.message}", user: @user)
+    nil
+  end
+
+  # The nearest of their addresses within `near?` of [lat,lng]. Two saved
+  # places can sit inside one radius - a neighbour two doors down - and the
+  # first row the table returns is not the one they're at.
   def find_address_near(coord)
     return unless coord.compact.length == 2
 
-    addresses.find { |details|
+    addresses.select { |details|
       next unless details.loc&.compact&.length == 2
 
       near?(details.loc, coord)
-    }
+    }.min_by { |details| distance(details.loc, coord) }
   end
 
   # Find contact at [lat,lng]

@@ -579,6 +579,24 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "a second row would split the company's timeline",
   },
+  # --- a game's chore is not everything done in the game -------------------
+  {
+    case:  "prod 9413",
+    say:   "I was supposed to rescue him 10 times. I just rescued him once.",
+    tool:  :none,
+    avoid: %i[complete_chore],
+    needs: :game_chore,
+    note:  "a running count in a game was marked as the ACNH Chores chore, and the reply " \
+           "said \"one down, nine to go\" as if it had counted",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Rescued Gulliver")
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "That sounds like a side quest that got away from you. What happened?",
+      )
+    },
+  },
+
   # --- an interview booked out loud, with no mail behind it -----------------
   {
     case:  "prod 9371",
@@ -1936,6 +1954,27 @@ BUDDY_EDGE_PROBES = [
     note:  "answered \"I can't make list items recur on a schedule\" and filed a " \
            "feature request, over a reminder row that has stored a tool call " \
            "and fired it with no model turn all along",
+  },
+  # A time given in answer to the question it raised. The add went on the list
+  # straight away and the reply said it would be there at 5pm.
+  {
+    case:  "prod 9449",
+    say:   "5pm",
+    tool:  :schedule_list_items,
+    avoid: %i[add_list_item],
+    args:  { schedule_list_items: { at: /./ } },
+    needs: :grocery_section,
+    note:  "added the item on the spot and said \"they're sitting there at 5pm\"",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        body: "Add batteries to the Costco section on the groceries list at 5",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "What do you want `at 5` to mean here - 5pm, or five of them?",
+      )
+    },
   },
   # The other side of the same change: a scheduling tool in the index must not
   # swallow the ordinary one-off add, which has the receipt and the undo on it.

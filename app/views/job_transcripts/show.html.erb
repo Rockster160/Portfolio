@@ -10,7 +10,7 @@
    two scales, and both are done while reading: you recognise who Speaker 3 is
    four minutes in, and you spot the handover the recorder missed a paragraph
    later. Two forms would mean saving, losing your place, and scrolling back. %>
-<div class="wide-container interviews-page transcript-page"
+<div class="wide-container interviews-page transcript-page" data-interviews
      style="--job-color: <%= @job.color %>;">
   <div class="app-card-container">
     <div class="app-card-title">
@@ -25,7 +25,7 @@
     </div>
 
     <div class="app-card-body">
-      <div class="app-card-inner">
+      <div class="app-card-inner" data-transcript-search>
         <div class="transcript-meta-row">
           <span><%= pluralize(@transcript.turns.size, "turn") %></span>
           <% if @transcript.spoken_minutes %>
@@ -38,6 +38,15 @@
             <%= link_to "the file as uploaded",
                   rails_blob_path(@transcript.file, disposition: "attachment") %>
           <% end %>
+          <% if transcript_mended(@transcript) %>
+            <span><%= transcript_mended(@transcript) %></span>
+          <% end %>
+          <%# Going over the words again costs the same calls to be told the
+             same thing, so it is pressed rather than repeated - and it is
+             worth pressing once the speakers have been corrected by hand,
+             because who was talking is half of what places a word. %>
+          <%= link_to "Check the words", tidy_interview_transcript_path(@job, @transcript),
+                method: :post %>
           <%= link_to "Delete", interview_transcript_path(@job, @transcript),
                 method: :delete, class: "danger-link",
                 data: { confirm: "Delete this transcript? The file goes with it." } %>
@@ -49,16 +58,47 @@
            between them is the whole question of whether to wait or to start
            correcting it by hand. It reloads itself because what ends the wait
            is a worker finishing, which this page has no other way to hear. %>
-        <% if @transcript.reading? %>
+        <% if @transcript.reading? || @transcript.tidying? %>
           <% content_for :head do %>
             <meta http-equiv="refresh" content="8">
           <% end %>
+        <% end %>
+
+        <% if @transcript.reading? %>
           <p class="transcript-reading">
             <strong>Reading the recording.</strong>
             <%= transcript_reading(@transcript) %>
             This page refreshes itself.
           </p>
         <% end %>
+
+        <%# The second pass, on the words themselves. Its own line rather than
+           folded into the first: they run one after the other and take
+           different lengths of time, and one line covering both would say the
+           reading was still going while the words were being gone over. %>
+        <% if @transcript.tidying? %>
+          <p class="transcript-reading">
+            <strong>Going back over the words.</strong>
+            <%= transcript_tidying(@transcript) %>
+            This page refreshes itself.
+          </p>
+        <% end %>
+
+        <%# THE BOX IS NOT IN THE FORM. Everything below it is one submit, and a
+           text input inside that form sends the whole page on Enter - which is
+           the key anybody presses after typing what they were looking for. It
+           filters the turns inside the form all the same: the card is what
+           carries `data-transcript-search`, so the box and the turns are in
+           one container without wrapping the form in another. %>
+        <div class="transcript-search">
+          <%= label_tag :transcript_query, "Find a line" %>
+          <%= search_field_tag :transcript_query, nil, id: "transcript_query",
+                placeholder: "testing, money, a name…", autocomplete: :off,
+                data: { transcript_query: true } %>
+          <span class="field-hint" data-transcript-count>
+            <%= pluralize(@transcript.turns.size, "turn") %>
+          </span>
+        </div>
 
         <%= form_with url: interview_transcript_path(@job, @transcript), method: :patch,
               local: true, class: "transcript-form" do %>
@@ -106,9 +146,11 @@
 
           <ol class="transcript-turns">
             <% @transcript.turns.each_with_index do |turn, index| %>
-              <li class="tt-turn <%= transcript_side(@transcript, turn) %>">
+              <li class="tt-turn <%= transcript_side(@transcript, turn) %>" data-turn>
                 <div class="tt-head">
-                  <span class="tt-name"><%= @transcript.name_for(turn["speaker"]) %></span>
+                  <span class="tt-name" data-turn-text>
+                    <%= @transcript.name_for(turn["speaker"]) %>
+                  </span>
                   <% if transcript_clock(turn["at"]) %>
                     <span class="tt-at"><%= transcript_clock(turn["at"]) %></span>
                   <% end %>
@@ -124,7 +166,14 @@
                         ),
                         class: "tt-move", title: "Move this turn onto somebody else" %>
                 </div>
-                <p class="tt-said"><%= turn["text"] %></p>
+                <%# A turn whose words were put right keeps what the recorder
+                   wrote, because a fix made from context is sometimes the
+                   wrong fix and the only way to see that is to read what it
+                   replaced. %>
+                <%= tag.p turn["text"],
+                      class: ["tt-said", ("mended" if turn["heard"].present?)],
+                      data: { turn_text: true },
+                      title: heard_title(turn) %>
               </li>
             <% end %>
           </ol>

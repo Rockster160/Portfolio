@@ -32,7 +32,7 @@ RSpec.describe "Job transcript upload", type: :request do
   end
 
   it "reads the file into turns and lands on the conversation" do
-    post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
     transcript = job.transcripts.first
     expect(transcript.turns.length).to eq(2)
@@ -46,11 +46,169 @@ RSpec.describe "Job transcript upload", type: :request do
   # attaches as an empty file - the upload would be on the page, nameable and
   # readable, with nothing behind the download link.
   it "keeps the file as it was dropped in" do
-    post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
     transcript = job.transcripts.first
     expect(transcript.file).to be_attached
     expect(transcript.file.download).to eq(body)
+  end
+
+  # "I'd like to be able to just paste in the text, since it usually comes from
+  # Voice Memos which gives the entire text as a single line."
+  describe "pasting the words instead of a file" do
+    let(:spoken) {
+      "Thanks for making the time today. Happy to be here, I was looking forward to it."
+    }
+
+    it "reads a paste into a conversation and lands on it" do
+      post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
+
+      transcript = job.transcripts.first
+      expect(transcript.turns.length).to eq(1)
+      expect(transcript.turns.first["text"]).to include("looking forward to it")
+      expect(response).to redirect_to(interview_transcript_path(job, transcript))
+    end
+
+    # The paste is written as the text file it would have been, so there is one
+    # thing to reread when the parse got the conversation wrong.
+    it "keeps the paste as a file, like any other upload" do
+      post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
+
+      transcript = job.transcripts.first
+      expect(transcript.file).to be_attached
+      expect(transcript.file.download).to eq(spoken)
+      expect(transcript.file.filename.to_s).to end_with(".txt")
+    end
+
+    it "starts the pass on who was talking, the same as a file does" do
+      post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
+
+      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
+        .with(job.transcripts.first.id)
+    end
+
+    it "takes the title and the beat typed beside it" do
+      note = job.notes.create!(
+        body: "Spoke to the hiring manager", tag: :interview, occurred_at: 1.day.ago,
+      )
+
+      post(interview_transcripts_path(job), params: {
+        job_transcript: { text: spoken, title: "Hiring manager round", job_note_id: note.id },
+      })
+
+      transcript = job.transcripts.first
+      expect(transcript.label).to eq("Hiring manager round")
+      expect(transcript.job_note_id).to eq(note.id)
+    end
+
+    it "says so rather than erroring when the box holds nothing but spaces" do
+      post(interview_transcripts_path(job), params: { job_transcript: { text: "   \n  " } })
+
+      expect(response).to redirect_to(interview_path(job))
+      expect(flash[:alert]).to include("Pick a transcript file")
+      expect(job.transcripts).to be_empty
+    end
+
+    it "offers the box on the page, beside the one for a file" do
+      get(interview_path(job))
+
+      expect(response.body).to include("or paste the words")
+    end
+  end
+
+  # "Can we add the ability to attach/upload the transcripts directly when
+  # submitting an Interview? Right now it's 2 separate pieces." A conversation
+  # and the beat saying it happened are one thing that happened.
+  describe "logging the conversation with the beat" do
+    let(:note_params) {
+      {
+        job_note: {
+          body:        "Hour with the hiring manager, mostly system design.",
+          tag:         :interview,
+          occurred_at: Time.current.strftime("%Y-%m-%dT%H:%M"),
+        },
+      }
+    }
+
+    it "files the recording against the beat the same submit created" do
+      post(interview_notes_path(job), params: note_params.merge(
+        job_transcript: { file: transcript_file(body) },
+      ))
+
+      note = job.notes.last
+      transcript = job.transcripts.first
+      expect(transcript.job_note_id).to eq(note.id)
+      expect(transcript.turns.length).to eq(2)
+      expect(response).to redirect_to(interview_path(job))
+    end
+
+    it "takes a paste there too" do
+      post(interview_notes_path(job), params: note_params.merge(
+        job_transcript: { text: "So tell me how you would scale the writes." },
+      ))
+
+      expect(job.transcripts.first.job_note_id).to eq(job.notes.last.id)
+      expect(flash[:notice]).to include("Working out who was talking")
+    end
+
+    it "logs the beat on its own when no recording came with it" do
+      post(interview_notes_path(job), params: note_params)
+
+      expect(job.notes.size).to eq(1)
+      expect(job.transcripts).to be_empty
+      expect(flash[:alert]).to be_blank
+    end
+
+    # The note is the part that was typed. A recording that could not be read
+    # is one that can be handed over again, and losing the note with it would
+    # mean typing the whole thing twice.
+    it "keeps the beat when the words could not be read as a conversation" do
+      allow(Transcripts::Intake).to receive(:call).and_raise(StandardError, "nope")
+
+      post(interview_notes_path(job), params: note_params.merge(
+        job_transcript: { text: "something" },
+      ))
+
+      expect(job.notes.size).to eq(1)
+      expect(flash[:alert]).to include("note is saved")
+    end
+
+    it "offers the recording on the beat form rather than only in the panel" do
+      get(interview_path(job))
+
+      expect(response.body).to include("With a recording")
+      expect(response.body).to include("multipart/form-data")
+    end
+  end
+
+  # "Both openable as a full, dedicated page, but also able to open as a
+  # scrollable view. Both views should also have a search." Half an hour of
+  # talking is 120 turns, and what is asked of it afterwards is a lookup.
+  describe "finding a line in it" do
+    it "offers the box on the transcript's own page" do
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
+
+      get(interview_transcript_path(job, job.transcripts.first))
+
+      expect(response.body).to include("Find a line")
+      expect(response.body).to include("data-transcript-query")
+      expect(response.body).to include("data-turn-text")
+    end
+
+    it "reads the conversation under the beat in the timeline, box and all" do
+      note = job.notes.create!(
+        body: "Hiring manager round", tag: :interview, occurred_at: 1.day.ago,
+      )
+      post(interview_transcripts_path(job), params: {
+        job_transcript: { file: transcript_file(body), job_note_id: note.id },
+      })
+
+      get(interview_path(job))
+
+      expect(response.body).to include("I would rather have the argument early.")
+      expect(response.body).to include("data-transcript-search")
+      expect(response.body).to include("Find a line")
+    end
   end
 
   # DROPPING IT IN IS THE WHOLE INSTRUCTION. Whether the file needs splitting
@@ -68,14 +226,14 @@ RSpec.describe "Job transcript upload", type: :request do
     }
 
     it "starts the pass off the upload, with nothing to press" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
 
       expect(TranscriptSpeakersWorker).to have_received(:perform_async)
         .with(job.transcripts.first.id)
     end
 
     it "starts it for a file that named people too, which still never said which is him" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
       expect(TranscriptSpeakersWorker).to have_received(:perform_async)
         .with(job.transcripts.first.id)
@@ -84,7 +242,7 @@ RSpec.describe "Job transcript upload", type: :request do
     # Dropping a file in and landing on a page that looks exactly like a failed
     # read is the thing that makes a minute feel like a hang.
     it "says on the page that the reading is under way, and how far along" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
       transcript = job.transcripts.first
       BackgroundProcess.note(
         user:    user,
@@ -102,7 +260,7 @@ RSpec.describe "Job transcript upload", type: :request do
     end
 
     it "says nothing about reading once the pass is done with it" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
 
       get(interview_transcript_path(job, job.transcripts.first))
 
@@ -111,7 +269,7 @@ RSpec.describe "Job transcript upload", type: :request do
     end
 
     it "asks nothing on the page about who was talking" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(unlabelled) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
       get(interview_transcript_path(job, job.transcripts.first))
 
       expect(response.body).not_to include("Work out which of these are me")
@@ -125,7 +283,7 @@ RSpec.describe "Job transcript upload", type: :request do
   # over its own copy of the same file.
   describe "the conversation as data" do
     it "says which side each turn is on, and what to call them" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
       transcript = job.transcripts.first
       transcript.rename_speakers!(
         "Speaker 1" => { "name" => "Casey" },
@@ -142,7 +300,7 @@ RSpec.describe "Job transcript upload", type: :request do
     end
 
     it "says plainly when a turn is on nobody yet" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
       get(interview_transcript_path(job, job.transcripts.first, format: :json))
 
@@ -150,7 +308,7 @@ RSpec.describe "Job transcript upload", type: :request do
     end
 
     it "names the recordings on the board's own list" do
-      post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
       get(interviews_path(format: :json, status: :all))
 
@@ -170,7 +328,7 @@ RSpec.describe "Job transcript upload", type: :request do
   # ONE SUBMIT FOR THE WHOLE PAGE: naming a speaker and moving a turn onto the
   # right one are done while reading, and they post together.
   it "names the speakers and moves a turn in one save" do
-    post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
     transcript = job.transcripts.first
 
     patch(interview_transcript_path(job, transcript), params: {
@@ -197,7 +355,7 @@ RSpec.describe "Job transcript upload", type: :request do
   end
 
   it "shows the transcript on the interview page once it is there" do
-    post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
     get(interview_path(job))
 
@@ -209,7 +367,7 @@ RSpec.describe "Job transcript upload", type: :request do
   # the login redirect rather than showing the conversation.
   it "refuses a transcript belonging to another application" do
     other = user.job_applications.create!(company: "Elsewhere")
-    post(interview_transcripts_path(job), params: { file: transcript_file(body) })
+    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
     transcript = job.transcripts.first
 
     get(interview_transcript_path(other, transcript))

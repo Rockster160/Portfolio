@@ -21,6 +21,10 @@ Buddy::Tools.register(
     every night at 9", "put the bin bags on the shopping list every Sunday
     morning", "add the packing items to Camping on Friday".
 
+    The WHEN can arrive on its own turn. Asked what "at 6" meant in "put the
+    tent on Camping at 6" and answered "6pm", that answer is `at` for the add
+    they asked for, and this is the call that makes it.
+
     Several items in one go: `items` is one per line, and they land together as
     one set of rows on one card, the same as if they'd been asked for now.
 

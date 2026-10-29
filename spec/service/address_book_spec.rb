@@ -220,4 +220,80 @@ RSpec.describe AddressBook do
       expect(book.match_contact("Unknown Person")).to be_nil
     end
   end
+
+  describe "#place_name" do
+    let(:user)  { create(:user) }
+    let(:book)  { described_class.new(user) }
+    let(:here)  { [40.5, -111.9] }
+    let(:agenda) { create(:agenda, user: user) }
+
+    before do
+      allow(book).to receive_messages(
+        find_contact_near:     nil,
+        nearest_establishment: nil,
+        reverse_geocode:       "Riverton",
+        geocode:               nil,
+      )
+    end
+
+    def appointment(location, start_at: 30.minutes.from_now, at: here)
+      allow(book).to receive(:geocode).with(location).and_return(at)
+      create(:agenda_item, agenda: agenda, location: location, start_at: start_at)
+    end
+
+    it "names an appointment's place before anything else" do
+      appointment("Horsetail Falls, Alpine, UT", at: [40.501, -111.901])
+      allow(book).to receive(:find_contact_near).and_return(Contact.new(name: "Wil"))
+
+      expect(book.place_name(here, establishments: true)).to eq("Horsetail Falls")
+    end
+
+    it "skips an appointment that is somewhere else" do
+      appointment("Horsetail Falls, Alpine, UT", at: [40.6, -111.9])
+
+      expect(book.place_name(here)).to eq("Riverton")
+    end
+
+    it "skips an appointment outside the window" do
+      appointment("Horsetail Falls, Alpine, UT", start_at: 6.hours.from_now)
+
+      expect(book.place_name(here)).to eq("Riverton")
+    end
+
+    it "leaves a bare street address to the business lookup" do
+      appointment("12723 S Park Ave, Riverton, UT 84065")
+      allow(book).to receive(:nearest_establishment).with(here).and_return("Riverton Dental")
+
+      expect(book.place_name(here, establishments: true)).to eq("Riverton Dental")
+    end
+
+    it "falls back to the nearest contact" do
+      allow(book).to receive(:find_contact_near).with(here).and_return(Contact.new(name: "Home"))
+
+      expect(book.place_name(here, establishments: true)).to eq("Home")
+    end
+
+    it "falls back to the nearest business only when asked for one" do
+      allow(book).to receive(:nearest_establishment).with(here).and_return("Costco")
+
+      expect(book.place_name(here, establishments: true)).to eq("Costco")
+      expect(book.place_name(here)).to eq("Riverton")
+    end
+
+    it "falls back to the city" do
+      expect(book.place_name(here, establishments: true)).to eq("Riverton")
+    end
+  end
+
+  describe "#find_address_near" do
+    let(:book) { described_class.new(User.me) }
+
+    it "picks the nearest of two saved places in range" do
+      far = instance_double(Address, loc: [40.5008, -111.9])
+      close = instance_double(Address, loc: [40.5001, -111.9])
+      allow(book).to receive(:addresses).and_return([far, close])
+
+      expect(book.find_address_near([40.5, -111.9])).to eq(close)
+    end
+  end
 end

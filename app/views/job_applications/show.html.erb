@@ -187,9 +187,22 @@
            what you just added lands directly under the form. %>
         <details class="note-new" open>
           <summary>+ Add a note</summary>
-          <%= form_with model: @note, url: interview_notes_path(@job), method: :post, local: true do |f| %>
+          <%= form_with model: @note, url: interview_notes_path(@job), method: :post, local: true,
+                multipart: true do |f| %>
             <div class="form-fields">
               <%= render "note_fields", f: f, note_extras_open: false %>
+
+              <%# ONE SUBMIT FOR THE CONVERSATION AND THE BEAT SAYING IT
+                 HAPPENED. They are one thing that happened, and logging them
+                 separately meant writing the interview, saving, scrolling to
+                 the panel below, and picking the beat back out of a dropdown
+                 to say which one the recording was of. Closed, because most
+                 beats are a sentence and have no recording at all. %>
+              <details class="note-transcript-new">
+                <summary>+ With a recording</summary>
+                <%= render "transcript_intake", id: "note", notes: nil %>
+              </details>
+
               <div class="form-submission">
                 <%= submit_tag "Add note" %>
               </div>

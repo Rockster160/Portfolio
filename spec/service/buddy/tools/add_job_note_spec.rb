@@ -63,11 +63,11 @@ RSpec.describe "add_job_note tool" do
     # The invite and the confirmation are two separate mails, so each is its own
     # turn and no merge_key can see the other. Left alone, the appointment lands
     # on the agenda twice.
-    it "refuses a second booking at the same minute" do
+    it "files a second booking at the same minute as a plain note" do
       execute(tag: :scheduled, follow_up_at: at, note: "The invite.")
+      resolved = confirm(tag: :scheduled, follow_up_at: at, note: "The confirmation.")[:resolved]
 
-      expect { confirm(tag: :scheduled, follow_up_at: at, note: "The confirmation.") }
-        .to raise_error(/already booked for then/)
+      expect(resolved).to include(tag: :note, follow_up_at: nil)
     end
 
     # A different time is a reschedule, not a duplicate.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_28_191502) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_29_191200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1431,6 +1431,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_28_191502) do
     t.jsonb "turns", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "tidied_at"
     t.index ["job_application_id"], name: "index_job_transcripts_on_job_application_id"
     t.index ["job_note_id"], name: "index_job_transcripts_on_job_note_id"
   end

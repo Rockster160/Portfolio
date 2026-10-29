@@ -570,11 +570,7 @@ class TeslaCacheStore
     end
 
     def location_name(lat, lng)
-      book = User.me.address_book
-      contact = book.find_contact_near([lat, lng])
-      return contact.name if contact.respond_to?(:name) && contact.name.present?
-
-      book.reverse_geocode([lat, lng], get: :city).presence
+      User.me.address_book.place_name([lat.to_f, lng.to_f]).presence
     end
 
     def max_ts(*values) = values.compact.max

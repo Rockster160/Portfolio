@@ -8,6 +8,7 @@
 // shows its initials), so a failure here degrades rather than breaks.
 import { bindIconStack } from "../icon_stack";
 import { bindDropZones } from "../drop_zone";
+import { bindTranscriptSearch } from "../transcript_search";
 
 $(document).ready(function () {
   const page = document.querySelector("[data-interviews]")
@@ -334,4 +335,8 @@ $(document).ready(function () {
   // The transcript upload. See `drop_zone.js` — the file input underneath
   // works on its own, so this only adds the gesture and the signposting.
   bindDropZones(page)
+
+  // Looking something up in a recording, wherever one is being read — the
+  // beats in the timeline here, and the transcript's own page.
+  bindTranscriptSearch(page)
 })

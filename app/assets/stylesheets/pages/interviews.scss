@@ -1050,12 +1050,14 @@
 
     // The conversation, read rather than corrected - the transcript's own page
     // is where turns get moved. Capped and scrolling: a half-hour call is 120
-    // turns and it must not push the rest of the timeline off the screen.
+    // turns and it must not push the rest of the timeline off the screen. Deep
+    // enough to actually read in, because with the box above it this is where
+    // a lookup gets answered rather than only where it gets confirmed.
     .note-turns {
       margin: 4px 0 0;
       border-left: 2px solid var(--iv-line);
       padding: 0 0 0 10px;
-      max-height: 320px;
+      max-height: 60vh;
       overflow-y: auto;
       list-style: none;
 
@@ -1439,6 +1441,16 @@
     line-height: 1.5;
   }
 
+  // A turn the words pass changed. Marked at the turn rather than at the word
+  // because the words are not tagged — what is kept is the line as the
+  // recorder wrote it, and it is the whole line that can be read back from the
+  // tooltip. Faint on purpose: most turns in a long recording carry one, and a
+  // highlight on most of a page is a page with no highlight on it.
+  .tt-said.mended {
+    border-bottom: 1px dotted var(--iv-line);
+    cursor: help;
+  }
+
   // One save for the whole page, and it has to be reachable from anywhere in
   // half an hour of talking — a button at the bottom of 126 turns is a button
   // nobody presses.
@@ -1468,6 +1480,91 @@
     // simply there.
     .tt-move {
       opacity: 1;
+    }
+  }
+}
+
+// FINDING A LINE, in both the places a conversation gets read: its own page
+// and the beat it hangs off in the timeline. One block for both, because the
+// box does the same thing in each and a search that looks like two different
+// controls reads as two different features.
+//
+// A turn that does not match is taken out of the flow rather than dimmed. The
+// lists are already scrollers, so what is wanted is the four lines that
+// mention the thing sitting next to each other.
+.interviews-page {
+  .transcript-search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 12px 0 0;
+
+    label {
+      margin: 0;
+      color: var(--iv-muted);
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    input[type="search"] {
+      flex: 1 1 180px;
+      min-width: 0;
+      margin: 0;
+      padding: 4px 9px;
+      font-size: 13px;
+    }
+
+    // The count, which is the only thing that can say a search found nothing -
+    // an empty list and a transcript that has not loaded look identical.
+    .field-hint {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  [data-turn].is-unmatched {
+    display: none;
+  }
+
+  // The words themselves, lit rather than boxed: a mark with a heavy
+  // background in the middle of a sentence is read as a different sentence.
+  mark {
+    border-radius: 2px;
+    background: var(--tt-mine);
+    color: inherit;
+    box-shadow: 0 1px 0 var(--tt-mine-line);
+  }
+}
+
+// HANDING THE RECORDING OVER, either way it is in. The paste box sits under
+// the drop zone rather than beside it: they are two answers to one question,
+// and side by side they read as two things to fill in.
+.interviews-page {
+  .transcript-intake {
+    .transcript-paste {
+      margin-top: 12px;
+
+      textarea {
+        font-size: 13px;
+      }
+    }
+
+    .split-fields {
+      margin-top: 12px;
+    }
+  }
+
+  // The same quiet arrow as the rest of a note's controls - a recording is an
+  // extra on the beat form, not a second form inside it.
+  .note-transcript-new {
+    margin-bottom: 12px;
+
+    > summary {
+      padding: 2px 0;
+      color: var(--iv-muted);
+      font-size: 13px;
+      font-weight: 400;
     }
   }
 }

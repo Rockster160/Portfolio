@@ -197,7 +197,7 @@ class TravelResolver
     def place_name(coord)
       return nil if coord.blank?
 
-      ::LocationCache.current_location_name(coord)
+      ::LocationCache.current_location_name(coord, establishments: true)
     end
 
     # The reporters that saw the same leg write into one row rather than one

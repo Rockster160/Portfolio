@@ -281,10 +281,15 @@ Buddy::Tools.register(
     # `filed` is excluded because it IS this mail: Buddy::JobMailOffer files an
     # arriving mail on its row before this card is raised, so without the
     # exclusion the duplicate checks below read that row as a clash with itself.
+    #
+    # The second one is filed as a plain note rather than refused. There is only
+    # one right answer, and handing it back as an error made the model ask which
+    # role the mail was for instead of filing it.
     filed = job.notes.find_by(id: email&.job_triage&.[](:job_note_id))
     twin  = job.notes.where(tag: :scheduled, follow_up_at: at).where.not(id: filed&.id)
     if tag.to_s == "scheduled" && twin.exists?
-      raise "#{job.company} is already booked for then - log the words as a plain note instead"
+      tag = :note
+      at  = nil
     end
 
     # A SECOND acknowledgement on one row is nearly always a second ROLE.

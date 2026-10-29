@@ -5,6 +5,7 @@
 #  id                 :bigint           not null, primary key
 #  occurred_at        :datetime
 #  speakers           :jsonb            not null
+#  tidied_at          :datetime
 #  title              :string
 #  turns              :jsonb            not null
 #  created_at         :datetime         not null
@@ -71,6 +72,23 @@ class JobTranscript < ApplicationRecord
 
   def reading?
     reading.present?
+  end
+
+  # The other pass, on the words rather than on who said them.
+  def tidying
+    @tidying ||= BackgroundProcess.live_find(job_application.user, Transcripts::Tidy.key_for(self))
+  end
+
+  def tidying?
+    tidying.present?
+  end
+
+  # A turn the recorder misheard carries `heard` - what it wrote before the
+  # words were put right. Counting them is how the page says what a pass
+  # actually did: "gone over" and "gone over and found eleven things" are
+  # different facts about a recording.
+  def mended
+    turns.count { |turn| turn["heard"].present? }
   end
 
   # The labels a turn can be moved to. The same list, plus whatever a turn has

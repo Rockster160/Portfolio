@@ -14,49 +14,40 @@
 # up quietly on anything since deleted - or on a transcript whose speakers were
 # settled in the meantime, which `Speakers.call` refuses.
 class TranscriptSpeakersWorker
-  include Sidekiq::Worker
+  include Sidekiq::Worker, TranscriptPass
 
   sidekiq_options queue: :low, retry: 1
 
+  NAME = "Reading the recording".freeze
+
   # The chip is up for as long as the calls are running, so a pass that takes a
   # minute is something that can be SEEN happening rather than guessed at from
-  # a page that has not changed yet. Keyed per transcript: two of them read at
-  # once must not take each other's chip down.
+  # a page that has not changed yet.
+  #
+  # The words themselves are gone over for mishearings straight afterwards and
+  # not in here. That pass reads the turns THIS one writes - a wall of text has
+  # to be cut into turns before there is anything to read word by word - and
+  # the two under one chip would be one count over two jobs of different
+  # lengths.
   def perform(transcript_id)
     transcript = JobTranscript.find_by(id: transcript_id)
     return if transcript.nil?
 
-    watched(transcript) { |progress|
+    watched(transcript, key: Transcripts::Speakers.key_for(transcript), name: NAME) { |progress|
       report(transcript, Transcripts::Speakers.call(transcript, &progress))
     }
+    queue_tidy(transcript)
   end
 
   private
 
-  # The chip goes up before the first call, because the first call is the
-  # longest wait and a chip that appears once something has finished says the
-  # opposite of what it is for. Every call after it moves the count, which is
-  # the difference between working and hung, visible without opening a log.
-  def watched(transcript)
-    note(transcript)
-    yield(->(done, total) { note(transcript, current: done, total: total) })
-  ensure
-    BackgroundProcess.clear(
-      user: transcript.job_application.user,
-      key:  Transcripts::Speakers.key_for(transcript),
-    )
-  end
-
-  def note(transcript, **moved)
-    BackgroundProcess.note(
-      user:   transcript.job_application.user,
-      key:    Transcripts::Speakers.key_for(transcript),
-      name:   "Reading the recording",
-      detail: transcript.job_application.company,
-      links:  [{ label: "📝", url: transcript_url(transcript) }],
-      source: :rails,
-      **moved,
-    )
+  # A queue that is not there must not turn a finished reading into a failed
+  # one. The conversation is on the page either way, and the words in it stay
+  # whatever the recorder heard until this runs.
+  def queue_tidy(transcript)
+    TranscriptTidyWorker.perform_async(transcript.id)
+  rescue StandardError => e
+    Rails.logger.warn("transcript tidy enqueue failed: #{e.class}: #{e.message}")
   end
 
   def report(transcript, result)
@@ -64,9 +55,5 @@ class TranscriptSpeakersWorker
       "[TranscriptSpeakers] ##{transcript.id} #{result.ok ? "read" : "failed"} " \
       "placed=#{result.placed} unplaced=#{result.unplaced} error=#{result.error}",
     )
-  end
-
-  def transcript_url(transcript)
-    "/interviews/#{transcript.job_application_id}/transcripts/#{transcript.id}"
   end
 end

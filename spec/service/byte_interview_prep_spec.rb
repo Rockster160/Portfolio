@@ -321,6 +321,38 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).not_to include("WHAT WAS SAID ON THE EARLIER CALLS")
     end
 
+    # The brief was written off the answer bank, which is how an answer READS.
+    # How it reads is not how it went, and the only record of how it went is
+    # the recordings of the interviews it was already given in.
+    it "carries his own answers out of recordings on other applications" do
+      other = user.job_applications.create!(company: "Bluestaq", role: "Principal Engineer")
+      recorded = other.transcripts.create!(
+        title: "Hiring manager",
+        turns: [
+          { "speaker" => "Speaker 1", "text" => "Tell me about the mail one." },
+          { "speaker" => "Speaker 2", "text" => "The last big one was a mail consolidation. #{"It ran four inboxes into one place and I rebuilt the sending half of it. " * 4}" },
+        ],
+      )
+      recorded.rename_speakers!(
+        "Speaker 1" => { "name" => "Todor" },
+        "Speaker 2" => { "name" => "Rocco", "me" => "1" },
+      )
+
+      expect(prompt).to include("HOW I ACTUALLY TELL THESE STORIES")
+      expect(prompt).to include("**Bluestaq**: The last big one was a mail consolidation.")
+      expect(prompt).not_to include("Tell me about the mail one.")
+    end
+
+    it "leaves out the short turns, and the section with nothing but those in it" do
+      other = user.job_applications.create!(company: "Bluestaq")
+      recorded = other.transcripts.create!(
+        turns: [{ "speaker" => "Speaker 2", "text" => "Yeah, exactly." }],
+      )
+      recorded.rename_speakers!("Speaker 2" => { "name" => "Rocco", "me" => "1" })
+
+      expect(prompt).not_to include("HOW I ACTUALLY TELL THESE STORIES")
+    end
+
     # The board's own page answers on localhost, which a tool call cannot fetch
     # at all; the CLI reads the same row and needs nothing listening.
     it "points at the local posting with a command rather than a localhost link" do

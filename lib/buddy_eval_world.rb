@@ -315,6 +315,14 @@ class BuddyEvalWorld
         reward_pebbles: 3, recurrence: { freq: :relative, unit: :week, interval: 2 }
       )
     }
+    # A chore named for a game, so a thing done IN the game has a chore beside it
+    # that only shares the subject.
+    @game = reuse(live.detect { |chore| chore.name.match?(/acnh|animal crossing/i) }) {
+      Chore.create!(
+        created_by_user: user, chore_household: household, name: "ACNH Chores",
+        reward_pebbles: 1, recurrence: { freq: :daily }
+      )
+    }
     completion!(@water)
     completion!(@recycling)
   end

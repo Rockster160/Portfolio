@@ -18,16 +18,45 @@ module JobTranscriptsHelper
     said.sub(/\A0:/, "")
   end
 
-  # What the pass is doing, while it is doing it. The count only appears once
-  # the first call has come back, because until then how many there will be is
-  # not known - and "1 of 1" invented for the wait before the first answer
-  # would be wrong on every transcript that takes more than one call.
+  # What a pass is doing, while it is doing it. The count only appears once the
+  # first call has come back, because until then how many there will be is not
+  # known - and "1 of 1" invented for the wait before the first answer would be
+  # wrong on every transcript that takes more than one call.
   def transcript_reading(transcript)
-    reading = transcript.reading
-    return nil if reading.nil?
+    pass_said("Working out who was talking", transcript.reading)
+  end
 
-    moved = (" — pass #{reading.current} of #{reading.total}" if reading.current && reading.total)
-    "Working out who was talking#{moved}."
+  def transcript_tidying(transcript)
+    pass_said("Checking what was actually said", transcript.tidying)
+  end
+
+  # What was put right, once a pass has been over the words. Said as a count
+  # rather than a tick, because the two facts a reader wants are different
+  # ones: that the recording has been gone over at all, and whether it needed
+  # much doing to it.
+  def transcript_mended(transcript)
+    return nil if transcript.tidied_at.nil?
+
+    mended = transcript.mended
+    return "words checked" if mended.zero?
+
+    "#{pluralize(mended, "turn")} put right"
+  end
+
+  # What the recorder wrote, on a turn whose words were put right. Nothing at
+  # all on the rest, so the attribute is absent rather than empty - an empty
+  # title on every turn of a transcript is a tooltip that opens on nothing.
+  def heard_title(turn)
+    return nil if turn["heard"].blank?
+
+    "As the recorder heard it: #{turn["heard"]}"
+  end
+
+  def pass_said(said, pass)
+    return nil if pass.nil?
+
+    moved = (" — pass #{pass.current} of #{pass.total}" if pass.current && pass.total)
+    "#{said}#{moved}."
   end
 
   # The side of the conversation a turn sits on. Three, not two: his own, the
