@@ -1764,6 +1764,73 @@
   }
 }
 
+// WHAT THEY ASKED HIM TO PREPARE.
+//
+// The one block on this page that is somebody else's homework, so it is drawn
+// as an instruction rather than as another section of a timeline: the accent
+// down the left edge, and the words themselves at reading size instead of the
+// 13px everything around it is in. A mail quoted at the size of a meta line is
+// a mail nobody reads twice.
+.job-asks {
+  .count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--job-color, #{$base-blue});
+    color: #fff;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .ask-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    > li {
+      margin-bottom: 14px;
+      padding: 2px 0 2px 12px;
+      border-left: 3px solid var(--job-color, #{$base-blue});
+
+      &:last-child { margin-bottom: 0; }
+    }
+  }
+
+  .ask-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  // Which round it names, which is the whole question when one mail lays out
+  // four of them. Quiet: it is a reading, and a reading drawn as loudly as the
+  // words it is about reads as a fact.
+  .ask-round {
+    padding: 1px 7px;
+    border: 1px solid var(--iv-line);
+    border-radius: 9px;
+    color: var(--iv-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .ask-beat {
+    color: var(--iv-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .note-body {
+    font-size: 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+}
+
 // THE BRIEF WRITTEN BEFORE AN INTERVIEW.
 //
 // Read in the ten minutes before a call, on a phone, standing up — so this is

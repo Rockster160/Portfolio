@@ -72,6 +72,31 @@ module ByteInterviewPrep
       ].compact.join("\n")
     end
 
+    # WHAT THEY THEMSELVES SAID TO PREPARE.
+    #
+    # The interview, written down by the person booking it. "To make the most
+    # of this conversation, come ready to walk through:" and then the three
+    # things he will be asked - and it was already on the board, three
+    # paragraphs into one of the twelve mails below, read for who and when.
+    #
+    # Hoisted rather than left in the timeline, and it is in both on purpose:
+    # here it is an instruction to carry out, down there it is the mail it
+    # arrived in. The other shape of it - a rundown of all four rounds, sent
+    # once at the start - is thirty beats old by the time the round it
+    # describes is booked, and no timeline window reaches it. See InterviewAsks.
+    def asks_section(application, item, user)
+      found = InterviewAsks.for(application, event: item)
+      return nil if found.empty?
+
+      [
+        "",
+        "WHAT THEY TOLD ME TO PREPARE",
+        "Lifted out of their own mail, in their words. This is the interview as the person booking it described it, so it outranks anything you work out from the title on the row. Every one of these that is about THIS conversation has to come through into the brief ANSWERED: the thing they asked for as a question in section 4, in their words, with my answer under it in full. One that is plainly about a later round is not this hour's work - one line at the end, or nothing. Where none of them is marked as this round, work out what this conversation is first and then decide which of them belong to it.",
+        "",
+        found.map { |ask| ask.as_row(user) }.join("\n\n"),
+      ].join("\n")
+    end
+
     # The timeline, newest first, which is the order it reads as a story
     # working backwards from "and now there is an interview".
     def timeline_block(application, user)
@@ -288,6 +313,7 @@ module ByteInterviewPrep
         #{job_block(application)}
 
         #{people_block(application)}
+        #{asks_section(application, item, user)}
 
         WHAT HAS HAPPENED SO FAR
         Newest first, and each beat is the message ITSELF rather than a summary of it - a confirmation mail carries the agenda and the interviewer's name, a rejection carries whatever reason they gave. Read them; this is the whole of what I have written down about them.

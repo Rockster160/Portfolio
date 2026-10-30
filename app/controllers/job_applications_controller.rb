@@ -72,6 +72,9 @@ class JobApplicationsController < ApplicationController
     @notes = @job.notes.recent.to_a
     @transcripts = @job.transcripts.to_a
     @preps = @job.preps.to_a
+    # What their own mail told him to prepare, found in the beats rather than
+    # typed - see InterviewAsks.
+    @asks = InterviewAsks.for(@job)
     # NOT through `@job.notes`. An unsaved note built into the association joins
     # the collection every reading on this page takes: it is the newest beat on
     # the row, it carries no tag, and the banner above the form read whose move

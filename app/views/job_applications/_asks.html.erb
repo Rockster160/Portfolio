@@ -1,0 +1,42 @@
+<%# WHAT THEY TOLD HIM TO PREPARE, read back out of their own mail.
+
+   Open, and above the prep: it is the one thing on this page that is work
+   somebody else assigned, and it is the only part of a timeline that has a
+   deadline on it. Nothing here is typed — the passages are found in the beats,
+   so this appears when a mail actually asked for something and not otherwise.
+   See InterviewAsks.
+
+   Each one says which round it names, because that is the whole question with
+   a rundown of four rounds sent in one mail at the start: not what they asked
+   for, but which conversation they asked for it in. %>
+<% if asks.any? %>
+  <details class="job-details job-asks" open>
+    <summary>
+      What they asked you to prepare
+      <span class="count"><%= asks.size %></span>
+    </summary>
+
+    <ul class="ask-list">
+      <% asks.each do |ask| %>
+        <li>
+          <div class="ask-head">
+            <%= link_to "##{ask.note.id}", "#note-#{ask.note.id}", class: "ask-beat",
+                  title: "The beat it arrived in" %>
+            <span class="note-tag note-tag-<%= ask.note.tag %>"><%= ask.note.tag_label %></span>
+            <span class="note-when">
+              <%= ask.occurred_at.strftime("%b %-d, %Y") %>
+            </span>
+            <% ask.round_labels.each do |round| %>
+              <span class="ask-round"><%= round %></span>
+            <% end %>
+          </div>
+
+          <%# Verbatim, and printed the way a beat's body is - the indentation
+             and the bullets are how the instruction was written, and HTML
+             collapses both on sight. %>
+          <div class="note-body"><%= note_body(ask.said) %></div>
+        </li>
+      <% end %>
+    </ul>
+  </details>
+<% end %>

@@ -1329,6 +1329,54 @@ RSpec.describe "Interview tracker", type: :request do
 
   # The index answers this for the whole board. This page is the one open while
   # something is being written down, and it used to answer none of it.
+  # "I got an availability check from Podium which included notes of what to
+  # prepare." Found in the mail rather than typed, and shown where the work is.
+  describe "what they asked you to prepare" do
+    let(:job) { user.job_applications.create!(company: "Podium") }
+
+    it "reads the ask back out of the beat it arrived in" do
+      job.notes.create!(
+        tag:         :availability,
+        occurred_at: 1.day.ago,
+        body:        <<~MAIL,
+          A 30-minute Zoom interview with the hiring manager, Evelyn Sharp.
+
+          To make the most of this conversation, come ready to walk through:
+
+          * An AI system you've built or shipped that takes action.
+        MAIL
+      )
+
+      get interview_path(job)
+
+      expect(response.body).to include("What they asked you to prepare")
+      expect(response.body).to include("come ready to walk through")
+      expect(response.body).to include("An AI system you&#39;ve built or shipped that takes action")
+    end
+
+    # Which round it belongs to is the whole question when one mail lays out
+    # four of them.
+    it "says which round the ask names" do
+      job.notes.create!(
+        tag:         :recruiter_call,
+        occurred_at: 2.days.ago,
+        body:        "What to expect:\n\n1. A technical screen, an hour of live coding.",
+      )
+
+      get interview_path(job)
+
+      expect(response.body).to include("Technical interview")
+    end
+
+    it "says nothing on an application nobody has asked anything of" do
+      job.notes.create!(tag: :applied, occurred_at: 2.days.ago, body: "Applied on their site.")
+
+      get interview_path(job)
+
+      expect(response.body).not_to include("What they asked you to prepare")
+    end
+  end
+
   describe "the standing banner on one application" do
     # Only the terms strip. The edit form below the panel carries a label for
     # each of these fields, so a bare search of the page finds "Location" on a

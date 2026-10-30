@@ -237,6 +237,72 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).to include("Dana")
     end
 
+    # "I got an availability check from Podium which included notes of what to
+    # prepare." The interview, written down by the person booking it, three
+    # paragraphs into a mail that was read for who and when.
+    describe "what they said to prepare" do
+      before do
+        job.notes.create!(
+          tag:         :availability,
+          occurred_at: 2.days.ago,
+          body:        <<~MAIL,
+            Hi Rocco,
+
+            Our team is excited to move you forward to the next step, a 30-minute Zoom interview with the hiring manager, Evelyn Sharp.
+
+            To make the most of this conversation, come ready to walk through:
+
+            * An AI system you've built or shipped that takes action, and how you measured its quality.
+            * A time you disagreed with a teammate, what you did next, and lessons learned.
+
+            Regards,
+
+            Tyler
+          MAIL
+        )
+      end
+
+      it "hoists it out of the mail into a section of its own" do
+        expect(prompt).to include("WHAT THEY TOLD ME TO PREPARE")
+        expect(prompt).to include("An AI system you've built or shipped that takes action")
+        expect(prompt).to include("A time you disagreed with a teammate")
+      end
+
+      it "says which beat it arrived in and which round it is about" do
+        expect(prompt).to include("Availability beat")
+        expect(prompt).to include("about the hiring manager interview")
+      end
+
+      # The row says "45 minutes with Casey, the hiring manager", so this ask
+      # is about the hour coming up rather than about a later round.
+      it "says when the booking being prepared for is that round" do
+        expect(prompt).to include("and that is the round being prepared for")
+      end
+
+      # A brief that mentions what they asked for and answers something else is
+      # the one failure this section exists to stop.
+      it "asks for each of them answered rather than noted" do
+        expect(prompt).to include("has to come through into the brief ANSWERED")
+      end
+
+      # A rundown of the whole process arrives once, at the start, and is older
+      # than any timeline window by the time the round it describes is booked.
+      it "reaches an ask older than the beats the timeline carries" do
+        job.notes.create!(
+          tag:         :recruiter_call,
+          occurred_at: 90.days.ago,
+          body:        "What to expect:\n\n1. A technical screen, one hour of live coding.",
+        )
+        20.times { |at| job.notes.create!(tag: :note, occurred_at: at.hours.ago, body: "Nothing.") }
+
+        expect(prompt).to include("one hour of live coding")
+      end
+    end
+
+    it "leaves the section out when nobody has asked for anything" do
+      expect(prompt).not_to include("WHAT THEY TOLD ME TO PREPARE")
+    end
+
     it "says plainly when there is nothing written down yet" do
       expect(prompt).to include("Nothing is logged against this one yet")
     end
