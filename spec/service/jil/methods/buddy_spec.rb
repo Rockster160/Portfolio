@@ -696,6 +696,72 @@ RSpec.describe Jil::Methods::Buddy do
   # standing marker on the hero itself while a condition is true, gone the
   # moment it isn't. Backed by BackgroundProcess, same rows the process chips
   # ride on.
+  describe "#notice" do
+    let(:owner) { User.me }
+    let!(:convo) { owner.byte_conversations.create!(mode: :buddy, name: "Byte") }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(WebPushNotifications).to receive(:send_to_byte)
+    end
+
+    def run(code)
+      Jil::Executor.call(owner, code, {})
+    end
+
+    it "validates" do
+      code = <<~'JIL'
+        a1 = Buddy.notice("Print started")::Boolean
+        a2 = Buddy.notice("Car: Arrived at Home", {
+          i = Keyword.icon("🚗")::String
+          c = Keyword.color("green")::String
+          p = Keyword.push(true)::Boolean
+        })::Boolean
+      JIL
+
+      expect { Jil::Validator.validate!(code) }.not_to raise_error
+    end
+
+    it "posts a banner that isn't unread and doesn't buzz, its opening glyph as the icon" do
+      ctx = run(<<~'JIL')
+        ok = Buddy.notice("🚗 Car: Arrived at **Home**")::Boolean
+      JIL
+
+      expect(ctx.ctx[:vars][:ok][:value]).to be(true)
+      notice = convo.byte_messages.last
+      expect(notice.body).to eq("Car: Arrived at **Home**")
+      expect(notice.metadata).to include("kind" => "buddy_notice", "icon" => "🚗", "source" => "jil")
+      expect(convo.byte_messages.readable).not_to include(notice)
+      expect(WebPushNotifications).not_to have_received(:send_to_byte)
+    end
+
+    it "takes an icon, a colour and a push from its block" do
+      run(<<~'JIL')
+        ok = Buddy.notice("Print started", {
+          i = Keyword.icon("🖨️")::String
+          c = Keyword.color("amber")::String
+          p = Keyword.push(true)::Boolean
+        })::Boolean
+      JIL
+
+      notice = convo.byte_messages.last
+      expect(notice.body).to eq("Print started")
+      expect(notice.metadata).to include("icon" => "🖨️", "color" => "#d29922")
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(hash_including(title: "🖨️ Print started"))
+    end
+
+    it "reaches nobody for a name nobody goes by" do
+      ctx = run(<<~'JIL')
+        ok = Buddy.notice("Print started", {
+          w = Keyword.who("Nobody")::String
+        })::Boolean
+      JIL
+
+      expect(ctx.ctx[:vars][:ok][:value]).to be(false)
+      expect(convo.byte_messages).to be_empty
+    end
+  end
+
   describe "#miniAlert / #clearMiniAlert" do
     let(:owner) { User.me }
 

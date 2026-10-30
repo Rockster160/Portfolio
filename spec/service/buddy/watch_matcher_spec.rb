@@ -529,6 +529,18 @@ RSpec.describe Buddy::WatchMatcher do
           expect(lines.last).to eq("🚗 Car: Departed Costco")
         end
 
+        it "posts a banner watch as a notice, led by its glyph, instead of a message" do
+          watch = make_watch(
+            trigger_scope: "travel", listener: "travel source::OR(phone tesla)",
+            body: template, one_shot: false, metadata: { "banner" => true }
+          )
+
+          expect { described_class.dispatch(user, :travel, phone) }.not_to(change { lines.length })
+          notice = convo.byte_messages.last
+          expect(notice.body).to eq("Phone: Arrived at Home")
+          expect(notice.metadata).to include("kind" => "buddy_notice", "icon" => "📱", "watch_id" => watch.id)
+        end
+
         it "keeps the car out of a watch that only names the phone" do
           travel_watch("travel source::phone")
           described_class.bust_scope_cache!

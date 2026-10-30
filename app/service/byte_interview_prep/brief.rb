@@ -151,6 +151,65 @@ module ByteInterviewPrep
       ["", "WHAT WAS SAID ON THE EARLIER CALLS", "What they actually told me, and what I actually said. `ME` is me.", "", said].join("\n")
     end
 
+    # WHAT THE LAST ROUND WITH THESE PEOPLE ALREADY SAID TO FIX.
+    #
+    # The recordings above are what was said; this is what was read back off
+    # them afterwards - the answers that cost him, the sentence to say instead,
+    # and what he was told to carry into the next one. The next one is this
+    # one, which makes it the single most actionable thing in the brief: an
+    # interview where the same answer arrives thin a second time is the
+    # expensive kind of repeat.
+    #
+    # Only this application's recordings. A debrief is a reading of one
+    # conversation with one set of people, and a note about how a call with
+    # another company went is advice about a room he is not walking into.
+    def debriefed(application)
+      application.transcripts.select(&:debriefed?)
+    end
+
+    def debrief_rows(transcript)
+      said = transcript.debrief
+      [
+        ("- How it went: #{said["read"]}" if said["read"].present?),
+        *Array(said["cost"]).map { |note|
+          [
+            "- What cost me#{debrief_clock(transcript, note["turn"])}: #{note["what"]}",
+            ("  - The sentence to say instead: #{note["instead"]}" if note["instead"].present?),
+          ].compact.join("\n")
+        },
+        *Array(said["missed"]).map { |note|
+          where = (" (#{note["where"]})" if note["where"].present?)
+          "- Never said#{where}: #{note["what"]}"
+        },
+        *Array(said["next"]).map { |note| "- To do differently: #{note}" },
+      ].compact
+    end
+
+    def debrief_clock(transcript, number)
+      turn = transcript.said_at(number)
+      return nil if turn.nil? || turn["at"].blank?
+
+      " at #{(turn["at"].to_i / 60)} minutes in"
+    end
+
+    def debrief_section(application)
+      found = debriefed(application)
+      return nil if found.empty?
+
+      said = found.map { |transcript|
+        head = [transcript.label, transcript.occurred_at&.strftime("%b %-d")].compact_blank.join(", ")
+        "#{head}:\n\n#{debrief_rows(transcript).join("\n").indent(2)}"
+      }
+
+      [
+        "",
+        "WHAT THE EARLIER ROUNDS SAID TO FIX",
+        "Read back off the recordings above after they happened. Where one of these is still unfixed and the conversation being prepared for is likely to ask the same thing, say so in the brief - in the section the question belongs to, beside the answer, not as a list of its own.",
+        "",
+        said.join("\n\n"),
+      ].join("\n")
+    end
+
     # HIS OWN ANSWERS, FROM EVERY OTHER RECORDING THERE IS.
     #
     # The recordings on this application are the conversation so far; these are
@@ -235,6 +294,7 @@ module ByteInterviewPrep
 
         #{timeline_block(application, user)}
         #{recordings_section(application)}
+        #{debrief_section(application)}
         #{spoken_section(application, user)}
 
         WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST

@@ -8978,6 +8978,64 @@ $board-cell-max: 200px;
   }
 }
 
+// Notice banner (Buddy::Notice) - something that happened, posted by Jil or a
+// watch. The receipt's pill, told apart by what leads it: its own glyph rather
+// than a ✓, a neutral tint rather than Buddy's accent (or the colour it was
+// sent with), and its time at the end.
+.byte-msg.byte-msg-kind-buddy_notice {
+  --notice-accent: rgba(231, 238, 251, 0.7);
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  max-width: 90%;
+  margin: 6px 0;
+  padding: 4px 12px 5px;
+  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--notice-accent) 10%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid color-mix(in srgb, var(--notice-accent) 30%, transparent);
+  border-radius: 14px;
+  box-shadow: none;
+
+  .byte-msg-meta,
+  .byte-msg-attachments,
+  .byte-msg-thoughts,
+  .byte-msg-actions { display: none; }
+
+  [data-body] {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 7px;
+    font-size: 82%;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.35;
+    color: rgba(231, 238, 251, 0.82);
+    color: color-mix(in srgb, var(--bs-text-buddy) 70%, var(--notice-accent));
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .byte-notice-icon {
+    flex: none;
+    font-size: 110%;
+    line-height: 1;
+  }
+
+  .byte-notice-text { min-width: 0; }
+
+  .byte-notice-time {
+    flex: none;
+    font-size: 88%;
+    font-weight: 400;
+    opacity: 0.55;
+    white-space: nowrap;
+  }
+}
+
 // A Buddy reply whose prose came back empty (it emitted only a marker) still
 // hosts its checklist, but the empty text line must not render as a hollow
 // bubble. Collapse the padding/background to nothing so only the checklist

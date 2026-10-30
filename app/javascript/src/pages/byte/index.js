@@ -717,6 +717,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       // clearly not a message - via CSS. Markdown because receipts bold the
       // thing they acted on, and rendering that literally showed the asterisks.
       bodyEl.innerHTML = renderMarkdown(message.body || "");
+    } else if (kind === "buddy_notice") {
+      // A banner from Jil or a watch (Buddy::Notice): the receipt's pill, led
+      // by its own glyph instead of the ✓, with the time inside it because the
+      // usual stamp row is hidden on a pill and "arrived home" needs a when.
+      const meta = message.metadata || {};
+      const time = formatTime(message.created_at);
+      bodyEl.innerHTML =
+        `<span class="byte-notice-icon" aria-hidden="true">${escapeHtml(meta.icon || "🔔")}</span>` +
+        `<span class="byte-notice-text">${renderMarkdown(message.body || "")}</span>` +
+        (time ? `<span class="byte-notice-time">${escapeHtml(time)}</span>` : "");
+      if (meta.color) node.style.setProperty("--notice-accent", meta.color);
+      else node.style.removeProperty("--notice-accent");
     } else if (
       kind === "buddy_reply" ||
       kind === "buddy" ||

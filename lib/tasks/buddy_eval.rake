@@ -546,6 +546,14 @@ BUDDY_EDGE_PROBES = [
     note:  "the hour is a condition on the watch, not a reminder at 10pm",
   },
   {
+    case:  "banner: a feed noted, not announced",
+    say:   "Every time my phone or the car arrives or leaves somewhere, just show it as a banner instead of a message",
+    tool:  :remind_when,
+    avoid: %i[schedule_reminder request_feature],
+    args:  { remind_when: { trigger: "travel", repeat: true, banner: true } },
+    note:  "banner: true on the travel watch, not a plain message watch",
+  },
+  {
     case:  "plans: cancel the whole thing",
     say:   "forget the whole garage plan",
     tool:  :edit_plan,

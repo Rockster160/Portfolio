@@ -1315,6 +1315,139 @@
     }
   }
 
+  // HOW IT WENT, read back off the recording. A panel rather than a page of
+  // its own: it is read against the conversation it is about, and every note
+  // in it links down into the turns below.
+  //
+  // Each kind of note wears its own accent, because they are read for
+  // different reasons - what cost him is what he opens this for, what he never
+  // said is a gap rather than a mistake, and what landed is the only part he
+  // is meant to repeat.
+  .transcript-debrief {
+    margin: 0 0 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--iv-line);
+    border-left: 3px solid var(--job-color, var(--iv-booked));
+    border-radius: 0 8px 8px 0;
+    background: var(--iv-surface);
+
+    > summary {
+      color: var(--iv-text);
+      font-weight: 600;
+      cursor: pointer;
+    }
+  }
+
+  .db-read {
+    margin: 10px 0 0;
+    color: var(--iv-text);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .db-head {
+    margin: 20px 0 8px;
+    color: var(--iv-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .db-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .db-note {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--iv-line);
+    border-radius: 0 6px 6px 0;
+  }
+
+  .db-cost .db-note {
+    border-left-color: var(--iv-waiting);
+    background: var(--iv-waiting-soft);
+  }
+
+  .db-missed .db-note {
+    border-left-color: var(--iv-booked);
+    background: var(--iv-booked-soft);
+  }
+
+  .db-landed .db-note {
+    border-left-color: var(--tt-mine-line);
+    background: var(--tt-mine);
+  }
+
+  // The clock reading, which is also the way down to the turn itself.
+  .db-at {
+    color: var(--iv-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // What he actually said, quoted short. Set apart from the note about it, so
+  // the two are never read as one sentence.
+  .db-quote {
+    margin: 4px 0 8px;
+    padding-left: 10px;
+    border-left: 2px solid var(--iv-line);
+    color: var(--iv-muted);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  .db-why,
+  .db-where {
+    margin: 0;
+    color: var(--iv-text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .db-where {
+    margin-top: 4px;
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+
+  // THE SENTENCE TO SAY NEXT TIME. The one line on the page he is meant to
+  // leave with, so it is the one thing drawn as a quote he owns rather than as
+  // another note about him.
+  .db-instead {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--iv-sheet);
+    color: var(--iv-text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .db-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--iv-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .db-next {
+    li {
+      margin: 0 0 8px;
+      padding-left: 14px;
+      border-left: 2px solid var(--iv-line);
+      color: var(--iv-text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+  }
+
   .danger-link {
     color: $danger;
   }

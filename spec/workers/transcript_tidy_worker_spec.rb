@@ -18,6 +18,10 @@ RSpec.describe TranscriptTidyWorker do
     BackgroundProcess.live_find(user, Transcripts::Tidy.key_for(transcript))
   end
 
+  # The read of how it went runs straight after this one, and a queue is inline
+  # here - left alone it would be a model call on every example in this file.
+  before { allow(TranscriptDebriefWorker).to receive(:perform_async) }
+
   it "raises its own chip and moves it as the calls land" do
     seen = []
     allow(Transcripts::Tidy).to receive(:call) { |_transcript, **_moved, &progress|
@@ -40,6 +44,21 @@ RSpec.describe TranscriptTidyWorker do
     described_class.new.perform(transcript.id, true)
 
     expect(Transcripts::Tidy).to have_received(:call).with(transcript, again: true)
+  end
+
+  # The three passes run one after the other because each reads what the one
+  # before it wrote. A second pass over the words carries through as a second
+  # reading of how it went: the words that reading would be made of just
+  # changed.
+  it "hands the recording on to the read of how it went" do
+    allow(Transcripts::Tidy).to receive(:call)
+      .and_return(Transcripts::Tidy::Result.new(ok: true, mended: 1, turns: 1))
+
+    described_class.new.perform(transcript.id)
+    described_class.new.perform(transcript.id, true)
+
+    expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id, false)
+    expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id, true)
   end
 
   it "does nothing at all for a transcript that has since been deleted" do

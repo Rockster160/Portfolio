@@ -74,9 +74,9 @@ class ByteMessage < ApplicationRecord
   # times over. `failed` is terminal and does count — it's something to see.
   SETTLED_STATES = %i[sent delivered failed].freeze
 
-  # Receipt chips, tapped-action pills and hidden trigger seeds ride the same
-  # table as real messages and are not things anyone reads.
-  SILENT_KINDS = %w[buddy_activity action_chip buddy_trigger].freeze
+  # Receipt chips, notice banners, tapped-action pills and hidden trigger seeds
+  # ride the same table as real messages and are not things anyone reads.
+  SILENT_KINDS = %w[buddy_activity buddy_notice action_chip buddy_trigger].freeze
 
   # Rows that exist so something else has an anchor, and are never drawn: a
   # trigger seed the reply hangs on, a quick-action post that gives the Mac

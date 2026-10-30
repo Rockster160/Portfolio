@@ -249,7 +249,9 @@ module Buddy
       when "alarm"
         sound_alarm!(watch)
       when "prompt"
-        if templated?(watch)
+        if watch.banner?
+          banner!(watch, payload)
+        elsif templated?(watch)
           announce!(watch, payload)
         else
           Buddy::CompanionDelivery.deliver_prompt(
@@ -300,6 +302,19 @@ module Buddy
         # Glyph and all: on a deploy it's the outcome, and the lock screen is
         # exactly where reading that first is worth something.
         push_title:   text,
+      )
+    end
+
+    # The same rendered line as `announce!`, as a banner rather than a message.
+    def banner!(watch, payload)
+      icon, text = Buddy::Notice.split_glyph(Buddy::WatchMessage.for(watch, payload))
+      text = "Correction — #{text}" if correcting?(watch, payload)
+      Buddy::Notice.post!(
+        user:         watch.user,
+        conversation: watch.byte_conversation,
+        body:         text,
+        icon:         icon,
+        metadata:     { source: :watch, watch_id: watch.id },
       )
     end
 

@@ -189,6 +189,14 @@ Buddy::Tools.register(
     template when they've said something a sentence can't do - where the detail
     goes, what to strip off it, or which of two things to say.
 
+    `banner: true` posts it as a small banner in the thread - the pill a
+    receipt is - instead of a message: `text` exactly as written, never
+    composed, never unread, and nothing buzzing the phone. For a feed they want
+    noted rather than announced: "show my phone and car arriving and leaving
+    as banners", "just a banner, not a notification". A glyph opening `text`
+    becomes the banner's icon. It is a way of SAYING something, so it doesn't
+    combine with `notify`, `run`, `timer`, `routine` or `steps`.
+
     `notify` (optional) sends it to a household member instead of the user:
     "whenever I add to our agenda, let Rocco know" → notify="Rocco". It reaches
     them as a message FROM this person, delivered the same way `message_partner`
@@ -309,6 +317,7 @@ Buddy::Tools.register(
     when_phrase:   { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
     past_phrase:   { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
     repeat:        { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
+    banner:        { type: :boolean, required: false, description: "Post `text` as a banner in the thread instead of a message: no push, never unread." },
     notify:        { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:           { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
     run_args:      { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
@@ -408,6 +417,12 @@ Buddy::Tools.register(
       timer_seconds = timer_seconds.clamp(1, Buddy::Timers::MAX_SECONDS)
     end
 
+    banner = ActiveModel::Type::Boolean.new.cast(payload[:banner]) == true
+    if banner
+      raise "a banner shows in your own thread, so it can't go to someone else" if payload[:notify].to_s.strip.present?
+      raise "a watch either posts a banner or does something, not both" if run_task || sequence || timer_seconds.positive?
+    end
+
     every = ActiveModel::Type::Boolean.new.cast(payload[:repeat])
     human = Buddy::WatchCondition.repeating_phrase(human) if every
 
@@ -443,6 +458,8 @@ Buddy::Tools.register(
       "Run #{runs}#{" #{delay}s after" if delay.positive?} #{human}"
     elsif timer_seconds.positive?
       "Start a #{Buddy::Timers.humanize_seconds(timer_seconds)} timer #{human}"
+    elsif banner
+      "Post a banner #{human}"
     elsif to_self
       "Remind you #{human}"
     else
@@ -492,6 +509,7 @@ Buddy::Tools.register(
         run_steps:      sequence&.dig(:steps),
         run_delay:      delay,
         timer_seconds:  timer_seconds,
+        banner:         banner,
         expires_at_iso: expires_at&.iso8601,
         condition:      gate,
       },
@@ -542,6 +560,7 @@ Buddy::Tools.register(
         "run_steps"      => payload[:run_steps].presence,
         "run_delay"      => payload[:run_delay].to_i,
         "timer_seconds"  => payload[:timer_seconds].to_i.positive? ? payload[:timer_seconds].to_i : nil,
+        "banner"         => (true if payload[:banner] == true),
       }.compact,
     )
     {
@@ -553,6 +572,7 @@ Buddy::Tools.register(
       run_task_name:  watch.run_task_name,
       run_delay:      watch.run_delay,
       timer_seconds:  watch.timer_seconds,
+      banner:         watch.banner?,
       expires_at:     watch.expires_at&.iso8601,
       only_if:        ScheduleCondition.describe(watch.condition),
     }
@@ -571,6 +591,8 @@ Buddy::Tools.register(
         "#{name} will run **#{result[:run_task_name]}** #{result[:human_when]}#{after}"
       elsif result[:timer_seconds].to_i.positive?
         "#{name} will start a #{Buddy::Timers.humanize_seconds(result[:timer_seconds])} timer #{result[:human_when]}"
+      elsif result[:banner]
+        "#{name} will post a banner #{result[:human_when]}"
       elsif result[:recipient_name].present?
         "#{name} will let #{result[:recipient_name]} know #{result[:human_when]}"
       else

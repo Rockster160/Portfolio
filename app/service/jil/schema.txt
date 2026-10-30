@@ -545,6 +545,7 @@
   #deliver(Text)::Boolean
 [Buddy]
   #say(Text)::Boolean
+  #notice("Message" Text BR content([who:[%WHO%] icon:String color:String push:Boolean]))::Boolean // A banner in the thread, like a tool receipt, instead of a message: not unread, no push unless push is on. A message opening with a glyph uses it as the icon. color: green/blue/purple/amber/red or a hex.
   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean

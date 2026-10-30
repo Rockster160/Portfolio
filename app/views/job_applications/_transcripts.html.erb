@@ -26,6 +26,11 @@
             <% if transcript.reading? %>
               <span class="transcript-reading-tag">reading…</span> ·
             <% end %>
+            <%# And once it has been read back, that there is something in
+               there worth opening it for. %>
+            <% if transcript.debriefed? %>
+              <span class="transcript-reading-tag">read back</span> ·
+            <% end %>
             <%= pluralize(transcript.turns.size, "turn") %>
             <% if transcript.spoken_minutes %>
               · <%= transcript.spoken_minutes %> min

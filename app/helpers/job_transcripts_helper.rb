@@ -30,6 +30,33 @@ module JobTranscriptsHelper
     pass_said("Checking what was actually said", transcript.tidying)
   end
 
+  def transcript_debriefing(transcript)
+    pass_said("Reading how the conversation went", transcript.debriefing)
+  end
+
+  # The line a note in the debrief is about, quoted. Cut short on purpose: the
+  # note is the point and the whole turn is on the page below, linked - a note
+  # carrying four hundred words of what he said is the answer printed twice.
+  def debrief_quote(transcript, number, limit: 240)
+    turn = transcript.said_at(number)
+    return nil if turn.nil?
+
+    turn["text"].to_s.truncate(limit)
+  end
+
+  # Where to jump to. The turns carry these ids, so a note about minute
+  # thirty-four opens the sentence it is about rather than describing it.
+  def debrief_anchor(number)
+    "#t#{number.to_i}"
+  end
+
+  def debrief_at(transcript, number)
+    turn = transcript.said_at(number)
+    return nil if turn.nil?
+
+    transcript_clock(turn["at"]).presence || "turn #{number.to_i}"
+  end
+
   # What was put right, once a pass has been over the words. Said as a count
   # rather than a tick, because the two facts a reader wants are different
   # ones: that the recording has been gone over at all, and whether it needed

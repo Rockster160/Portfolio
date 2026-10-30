@@ -3,6 +3,8 @@
 # Table name: job_transcripts
 #
 #  id                 :bigint           not null, primary key
+#  debrief            :jsonb            not null
+#  debriefed_at       :datetime
 #  occurred_at        :datetime
 #  speakers           :jsonb            not null
 #  tidied_at          :datetime
@@ -81,6 +83,39 @@ class JobTranscript < ApplicationRecord
 
   def tidying?
     tidying.present?
+  end
+
+  # The third pass, on how the conversation went rather than on what is in it.
+  def debriefing
+    @debriefing ||= BackgroundProcess.live_find(
+      job_application.user,
+      Transcripts::Debrief.key_for(self),
+    )
+  end
+
+  def debriefing?
+    debriefing.present?
+  end
+
+  def debriefed?
+    debriefed_at.present? && debrief["read"].present?
+  end
+
+  # Is anybody marked as him? Nothing can be said about how he did until this
+  # is true, because until it is, there is no telling which half of the
+  # conversation is his - so it is the one thing the page asks for before it
+  # offers to read the recording back to him.
+  def placed_me?
+    turns.any? { |turn| mine?(turn["speaker"].to_s) }
+  end
+
+  # The turn a note in the debrief is about, by the number the page shows -
+  # which is the number the note came back carrying, counted from one.
+  def said_at(number)
+    at = number.to_i - 1
+    return nil if at.negative?
+
+    turns[at]
   end
 
   # A turn the recorder misheard carries `heard` - what it wrote before the

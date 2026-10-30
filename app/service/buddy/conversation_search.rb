@@ -26,7 +26,7 @@ module Buddy
     # action, the receipt chip that renders one, a watch firing on its own.
     # Searching these is how "what did I say about the airport" comes back with
     # quick-action seeds nobody wrote.
-    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger].freeze
+    SKIP_KINDS = %w[action_chip buddy_activity buddy_notice buddy_trigger].freeze
 
     # `scope: :thread` for this conversation only, `:all` for every Buddy thread
     # this person has. Never anyone else's — the user filter is applied to

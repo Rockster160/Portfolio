@@ -119,6 +119,10 @@ class BuddyWatch < ApplicationRecord
   # How long the countdown runs each time this trips.
   def timer_seconds = metadata.to_h["timer_seconds"].to_i
 
+  # Posted as a notice banner (Buddy::Notice) instead of a message: the body is
+  # rendered as written, with no model turn, and nothing buzzes.
+  def banner? = metadata.to_h["banner"] == true
+
   # The scopes the NAMED triggers use (arrive/depart, chore, event, deploy,
   # agenda). A custom listener isn't limited to these: it names whatever scope
   # its syntax says, and `Jil::Executor.trigger` only ever fires a scope in the

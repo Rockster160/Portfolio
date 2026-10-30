@@ -47,6 +47,12 @@
              because who was talking is half of what places a word. %>
           <%= link_to "Check the words", tidy_interview_transcript_path(@job, @transcript),
                 method: :post %>
+          <%# Reading it back for how it went. Pressed rather than repeated for
+             the same reason as the words - and worth pressing once the
+             speakers are right, because a reading of how he did that does not
+             know which half of the conversation is his is no reading at all. %>
+          <%= link_to((@transcript.debriefed? ? "Read it again" : "How did I do"),
+                debrief_interview_transcript_path(@job, @transcript), method: :post) %>
           <%= link_to "Delete", interview_transcript_path(@job, @transcript),
                 method: :delete, class: "danger-link",
                 data: { confirm: "Delete this transcript? The file goes with it." } %>
@@ -58,7 +64,7 @@
            between them is the whole question of whether to wait or to start
            correcting it by hand. It reloads itself because what ends the wait
            is a worker finishing, which this page has no other way to hear. %>
-        <% if @transcript.reading? || @transcript.tidying? %>
+        <% if @transcript.reading? || @transcript.tidying? || @transcript.debriefing? %>
           <% content_for :head do %>
             <meta http-equiv="refresh" content="8">
           <% end %>
@@ -81,6 +87,105 @@
             <strong>Going back over the words.</strong>
             <%= transcript_tidying(@transcript) %>
             This page refreshes itself.
+          </p>
+        <% end %>
+
+        <%# The third pass, on how it went. Last of the three because it reads
+           what the other two leave behind. %>
+        <% if @transcript.debriefing? %>
+          <p class="transcript-reading">
+            <strong>Reading it back.</strong>
+            <%= transcript_debriefing(@transcript) %>
+            This page refreshes itself.
+          </p>
+        <% end %>
+
+        <%# HOW IT WENT, ABOVE THE CONVERSATION.
+           The recording is the evidence and this is the thing he opened the
+           page for, so it is not at the bottom of half an hour of talking.
+           Open by default and collapsible: it is read once properly and then
+           got out of the way to go back over the turns themselves.
+
+           Every note that judges him carries the line it is about, quoted and
+           linked. That is the whole difference between a debrief and an
+           article about interviewing - a note he cannot trace back to
+           something he said is one he has no way to check. %>
+        <% if @transcript.debriefed? %>
+          <details class="transcript-debrief" open>
+            <summary>How it went</summary>
+
+            <p class="db-read"><%= @transcript.debrief["read"] %></p>
+
+            <% if @transcript.debrief["cost"].present? %>
+              <h4 class="db-head">What cost me, and what to say instead</h4>
+              <ol class="db-list db-cost">
+                <% @transcript.debrief["cost"].each do |note| %>
+                  <li class="db-note">
+                    <%= link_to debrief_at(@transcript, note["turn"]),
+                          debrief_anchor(note["turn"]), class: "db-at" %>
+                    <blockquote class="db-quote">
+                      <%= debrief_quote(@transcript, note["turn"]) %>
+                    </blockquote>
+                    <p class="db-why"><%= note["what"] %></p>
+                    <% if note["instead"].present? %>
+                      <p class="db-instead">
+                        <span class="db-label">Say instead</span>
+                        <%= note["instead"] %>
+                      </p>
+                    <% end %>
+                  </li>
+                <% end %>
+              </ol>
+            <% end %>
+
+            <% if @transcript.debrief["missed"].present? %>
+              <h4 class="db-head">What I never said</h4>
+              <ul class="db-list db-missed">
+                <% @transcript.debrief["missed"].each do |note| %>
+                  <li class="db-note">
+                    <p class="db-why"><%= note["what"] %></p>
+                    <% if note["where"].present? %>
+                      <p class="db-where"><%= note["where"] %></p>
+                    <% end %>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+
+            <% if @transcript.debrief["strongest"].present? %>
+              <h4 class="db-head">What landed</h4>
+              <ul class="db-list db-landed">
+                <% @transcript.debrief["strongest"].each do |note| %>
+                  <li class="db-note">
+                    <%= link_to debrief_at(@transcript, note["turn"]),
+                          debrief_anchor(note["turn"]), class: "db-at" %>
+                    <blockquote class="db-quote">
+                      <%= debrief_quote(@transcript, note["turn"]) %>
+                    </blockquote>
+                    <p class="db-why"><%= note["why"] %></p>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+
+            <% if @transcript.debrief["next"].present? %>
+              <h4 class="db-head">Next time</h4>
+              <ul class="db-list db-next">
+                <% @transcript.debrief["next"].each do |said| %>
+                  <li><%= said %></li>
+                <% end %>
+              </ul>
+            <% end %>
+          </details>
+        <% end %>
+
+        <%# Nothing can be said about how he did until somebody is marked as
+           him, so the page asks for that instead of offering a reading it
+           would have to refuse. %>
+        <% if !@transcript.debriefed? && !@transcript.debriefing? && !@transcript.placed_me? %>
+          <p class="field-hint">
+            Tick which speaker is you below and save, then ask how it went —
+            reading the recording back means knowing which half of it is yours.
           </p>
         <% end %>
 
@@ -146,7 +251,8 @@
 
           <ol class="transcript-turns">
             <% @transcript.turns.each_with_index do |turn, index| %>
-              <li class="tt-turn <%= transcript_side(@transcript, turn) %>" data-turn>
+              <li class="tt-turn <%= transcript_side(@transcript, turn) %>" data-turn
+                  id="t<%= index + 1 %>">
                 <div class="tt-head">
                   <span class="tt-name" data-turn-text>
                     <%= @transcript.name_for(turn["speaker"]) %>

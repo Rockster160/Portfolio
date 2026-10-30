@@ -460,9 +460,11 @@ Rails.application.routes.draw do
     patch :rubric, on: :member
     resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
     resources :transcripts, controller: :job_transcripts, except: [:index, :new, :edit] do
-      # Another pass over the words. A member route because it is a thing done
-      # to one recording rather than a page about it.
+      # Another pass over the words, and another reading of how it went. Member
+      # routes because each is a thing done to one recording rather than a page
+      # about it.
       post :tidy, on: :member
+      post :debrief, on: :member
     end
     # The brief written before an interview. Generated rather than typed, so
     # there is nothing to create here - it arrives, it is read, it gets

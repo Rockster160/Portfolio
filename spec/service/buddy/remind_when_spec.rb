@@ -69,6 +69,22 @@ RSpec.describe "remind_when tool" do
     it "refuses a place, which is arrive or depart" do
       expect { confirm(text: "x", trigger: "travel", target: "Costco") }.to raise_error(/"phone", "car" or "both"/)
     end
+
+    it "posts as a banner when asked, and says so" do
+      run(text: "{{ source }}: {{ action }}", trigger: "travel", repeat: true, banner: true)
+
+      expect(BuddyWatch.last).to be_banner
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).to match(/will post a banner every time your phone or the car/)
+    end
+
+    it "keeps a banner in their own thread" do
+      household_member = create(:user)
+      allow(ctx).to receive(:resolve_household_user).and_return(household_member)
+
+      expect { confirm(text: "x", trigger: "travel", banner: true, notify: "Chelsea") }
+        .to raise_error(/banner shows in your own thread/)
+    end
   end
 
   # Prod watch 13: "Let me know each time the doorbell sees somebody today"

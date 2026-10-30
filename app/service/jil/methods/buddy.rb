@@ -5,7 +5,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Methods whose last argument is a block of named settings - `who`, `face` -
   # one line each, written as `Keyword.who("me")` and shown as just "who".
-  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button miniAlert].freeze
+  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button miniAlert notice].freeze
   # Settings a block may give more than once, each line adding to the list.
   LISTED_SETTINGS = %i[who groups].freeze
   # Calls a block may hold besides its named lines, each collected under its
@@ -22,6 +22,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # [Buddy]
   #   #say(Text)::Boolean
+  #   #notice("Message" Text BR content([who:[%WHO%] icon:String color:String push:Boolean]))::Boolean
   #   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
@@ -44,6 +45,30 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
     deliver(text)
     true
+  end
+
+  # A banner in the thread instead of a message: the centered pill a tool
+  # receipt uses, for news that only needs noting - the car arriving, a print
+  # starting. It isn't unread and doesn't buzz the phone unless `push` is on.
+  #
+  # The block is optional: `who` as for `alert`, `icon` for the glyph at its
+  # front (a message opening with one gives it up), `color` (green, blue,
+  # purple, amber, red, or a hex) and `push`.
+  #
+  # Returns false when it reached nobody.
+  def notice(message, options=nil)
+    opts = options.to_h
+    posted = recipients_for(Array(opts[:who]).join(",")).count { |user|
+      ::Buddy::Notice.post!(
+        user:     user,
+        body:     message,
+        icon:     opts[:icon],
+        color:    opts[:color],
+        push:     opts[:push] == true || opts[:push].to_s == "true",
+        metadata: { source: :jil },
+      ).present?
+    }
+    posted.positive?
   end
 
   # The same fixed message, but delivered to whoever the EVENT belongs to

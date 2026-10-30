@@ -321,6 +321,42 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).not_to include("WHAT WAS SAID ON THE EARLIER CALLS")
     end
 
+    # What the last round with THESE people already said to fix. The next round
+    # is the one being prepared for, which makes an unfixed note from the last
+    # one the most actionable thing in the brief.
+    it "carries what the earlier rounds said to fix" do
+      recorded = job.transcripts.create!(
+        title:        "Recruiter screen",
+        occurred_at:  3.days.ago,
+        debriefed_at: 2.days.ago,
+        turns:        [{ "speaker" => "Speaker 2", "at" => 240.0, "text" => "About four." }],
+        debrief:      {
+          "read"   => "You never gave them a number.",
+          "cost"   => [{
+            "turn"    => 1,
+            "what"    => "The mail story arrived without the scale in it.",
+            "instead" => "Four inboxes, about twenty thousand a day.",
+          }],
+          "missed" => [{ "what" => "Never asked what happens next.", "where" => "at the end" }],
+          "next"   => ["Carry one number for every story."],
+        },
+      )
+      recorded.rename_speakers!("Speaker 2" => { "name" => "Rocco", "me" => "1" })
+
+      expect(prompt).to include("WHAT THE EARLIER ROUNDS SAID TO FIX")
+      expect(prompt).to include("How it went: You never gave them a number.")
+      expect(prompt).to include("What cost me at 4 minutes in: The mail story arrived")
+      expect(prompt).to include("The sentence to say instead: Four inboxes")
+      expect(prompt).to include("Never said (at the end): Never asked what happens next.")
+      expect(prompt).to include("To do differently: Carry one number for every story.")
+    end
+
+    it "leaves that section out for a recording nobody has read back" do
+      job.transcripts.create!(turns: [{ "speaker" => "Speaker 2", "text" => "Hello." }])
+
+      expect(prompt).not_to include("WHAT THE EARLIER ROUNDS SAID TO FIX")
+    end
+
     # The brief was written off the answer bank, which is how an answer READS.
     # How it reads is not how it went, and the only record of how it went is
     # the recordings of the interviews it was already given in.

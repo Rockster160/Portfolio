@@ -4,7 +4,7 @@
 class JobTranscriptsController < ApplicationController
   before_action :authorize_user
   before_action :load_job
-  before_action :load_transcript, only: [:show, :update, :destroy, :tidy]
+  before_action :load_transcript, only: [:show, :update, :destroy, :tidy, :debrief]
 
   # The page, or the conversation as data.
   #
@@ -70,6 +70,25 @@ class JobTranscriptsController < ApplicationController
       notice: "Going back over the words. The page will say when it is done."
   rescue StandardError => e
     Rails.logger.warn("transcript tidy enqueue failed: #{e.class}: #{e.message}")
+    redirect_to interview_transcript_path(@job, @transcript),
+      alert: "That could not be started just now."
+  end
+
+  # How the conversation went, read back to him.
+  #
+  # It runs by itself once a recording has been split and its words mended, and
+  # the press is for after he has corrected either of those: a reading that did
+  # not know which half of the conversation was his, or one written off words
+  # the recorder got wrong, is a reading of an interview he did not have.
+  #
+  # `true` because pressing it is the whole instruction - `Debrief.call`
+  # refuses a recording it has already read unless it is asked twice.
+  def debrief
+    TranscriptDebriefWorker.perform_async(@transcript.id, true)
+    redirect_to interview_transcript_path(@job, @transcript),
+      notice: "Reading it back. The page will say when it is done."
+  rescue StandardError => e
+    Rails.logger.warn("transcript debrief enqueue failed: #{e.class}: #{e.message}")
     redirect_to interview_transcript_path(@job, @transcript),
       alert: "That could not be started just now."
   end

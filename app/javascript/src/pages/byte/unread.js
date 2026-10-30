@@ -14,11 +14,11 @@
 // and it's something the person needs to see.
 const SETTLED_STATES = new Set(["delivered", "sent", "failed"]);
 
-// Receipt chips, tapped-action pills and the hidden trigger seeds are not
+// Receipt chips, notice banners, tapped-action pills and the hidden trigger seeds are not
 // things anyone reads. They ride the same broadcast as real messages, and
 // they're the other half of why a working Claude session ran the badge up:
 // every tool call posts one.
-const SILENT_KINDS = new Set(["buddy_activity", "action_chip", "buddy_trigger"]);
+const SILENT_KINDS = new Set(["buddy_activity", "buddy_notice", "action_chip", "buddy_trigger"]);
 
 export function countsAsUnread(msg) {
   if (!msg || msg.direction !== "inbound") return false;

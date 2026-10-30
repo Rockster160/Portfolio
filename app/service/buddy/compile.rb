@@ -62,7 +62,7 @@ module Buddy
     # the same reason: a doorbell notification should not get a vote on what the
     # conversation was about. `jarvis` is a "." aside — a house command said
     # past the companion, and no more a fact about the person than the doorbell.
-    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger buddy_receipt jarvis].freeze
+    SKIP_KINDS = %w[action_chip buddy_activity buddy_notice buddy_trigger buddy_receipt jarvis].freeze
 
     # Sources that are the APP asking or announcing, not the conversation.
     #
