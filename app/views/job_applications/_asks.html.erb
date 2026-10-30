@@ -1,16 +1,23 @@
 <%# WHAT THEY TOLD HIM TO PREPARE, read back out of their own mail.
 
-   Open, and above the prep: it is the one thing on this page that is work
-   somebody else assigned, and it is the only part of a timeline that has a
-   deadline on it. Nothing here is typed — the passages are found in the beats,
-   so this appears when a mail actually asked for something and not otherwise.
-   See InterviewAsks.
+   Closed, like every other section on this page. The count on the summary is
+   what says there is something in here; the passages themselves are a page of
+   somebody else's mail, and they belong to a round that is usually weeks off.
+   Nothing here is typed — the passages are found in the beats, so the section
+   appears when a mail actually asked for something and not otherwise. See
+   InterviewAsks.
 
-   Each one says which round it names, because that is the whole question with
+   Each one says which round it is FOR, because that is the whole question with
    a rundown of four rounds sent in one mail at the start: not what they asked
-   for, but which conversation they asked for it in. %>
+   for, but which conversation they asked for it in.
+
+   NOTHING IN THE HEAD IS A STATUS. The chip is which mail the ask came out of
+   and the round beside it is one nobody has booked yet, so both are drawn
+   hollow — a filled chip on this page means the application IS there, and an
+   availability request that read as a booked interview is the one thing this
+   panel must not say. %>
 <% if asks.any? %>
-  <details class="job-details job-asks" open>
+  <details class="job-details job-asks">
     <summary>
       What they asked you to prepare
       <span class="count"><%= asks.size %></span>
@@ -27,7 +34,7 @@
               <%= ask.occurred_at.strftime("%b %-d, %Y") %>
             </span>
             <% ask.round_labels.each do |round| %>
-              <span class="ask-round"><%= round %></span>
+              <span class="ask-round">for the <%= round.downcase %></span>
             <% end %>
           </div>
 

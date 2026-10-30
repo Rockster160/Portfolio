@@ -1355,8 +1355,9 @@ RSpec.describe "Interview tracker", type: :request do
     end
 
     # Which round it belongs to is the whole question when one mail lays out
-    # four of them.
-    it "says which round the ask names" do
+    # four of them - and it is said as what the ask is FOR, because a round in
+    # a chip reads as a round that has been booked.
+    it "says which round the ask is for" do
       job.notes.create!(
         tag:         :recruiter_call,
         occurred_at: 2.days.ago,
@@ -1365,7 +1366,21 @@ RSpec.describe "Interview tracker", type: :request do
 
       get interview_path(job)
 
-      expect(response.body).to include("Technical interview")
+      expect(response.body).to include("for the technical interview")
+    end
+
+    # It is a page of somebody else's mail about a round that is usually weeks
+    # off. The count on the summary is what says there is something in here.
+    it "stays closed" do
+      job.notes.create!(
+        tag:         :availability,
+        occurred_at: 1.day.ago,
+        body:        "Come ready to walk through:\n\n* An AI system you shipped.",
+      )
+
+      get interview_path(job)
+
+      expect(response.body).to include('<details class="job-details job-asks">')
     end
 
     it "says nothing on an application nobody has asked anything of" do

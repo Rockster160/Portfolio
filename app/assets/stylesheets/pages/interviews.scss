@@ -1244,10 +1244,15 @@
 
   // Type chips. Colour carries the shape of an application at a glance — the
   // beats that move it forward read warm, the ones that end it read flat.
+  // THE COLOUR IS A VARIABLE, NOT THE FILL. A chip means two different things
+  // in two places: in a timeline it is the state of the application and it is
+  // filled, and where an ask was found it is only which mail the ask came out
+  // of - see `.job-asks`, which draws the same chip hollow off the same
+  // `--tag-ink`.
   .note-tag {
     display: inline-block;
     border-radius: 4px;
-    background: var(--iv-muted);
+    background: var(--tag-ink, var(--iv-muted));
     padding: 1px 7px;
     color: white;
     font-size: 11px;
@@ -1256,27 +1261,27 @@
     white-space: nowrap;
   }
 
-  .note-tag-applied { background: $base-blue; }
+  .note-tag-applied { --tag-ink: #{$base-blue}; }
   // The machine's receipt for it — the same blue, drained, so it reads as a
   // quieter echo of the beat above rather than as news of its own.
-  .note-tag-acknowledged { background: #4c6a8a; }
+  .note-tag-acknowledged { --tag-ink: #4c6a8a; }
   // Their move and yours: the same hue, the outbound one darker, so a glance
   // down the thread shows who it's waiting on.
-  .note-tag-heard_back { background: #34d0e0; }
+  .note-tag-heard_back { --tag-ink: #34d0e0; }
   // Them coming to him first: the same family as hearing back, since it is
   // the same thing - a person on their side waiting on his reply.
-  .note-tag-reached_out { background: #2f9fd8; }
-  .note-tag-responded { background: #1a8b96; }
-  .note-tag-recruiter_call { background: #a371f7; }
+  .note-tag-reached_out { --tag-ink: #2f9fd8; }
+  .note-tag-responded { --tag-ink: #1a8b96; }
+  .note-tag-recruiter_call { --tag-ink: #a371f7; }
   // Deliberately NOT in the booked amber it sits next to: the whole point of
   // the tag is that nothing is booked yet and the next move is his.
-  .note-tag-availability { background: #d44e7d; }
-  .note-tag-scheduled { background: var(--iv-booked); color: var(--iv-booked-ink); }
-  .note-tag-interview { background: #3fb950; }
-  .note-tag-take_home { background: #e3b341; color: $grey-dark; }
-  .note-tag-offer { background: $base-complementary; }
-  .note-tag-rejected { background: $danger; }
-  .note-tag-withdrew { background: $grey-dark; }
+  .note-tag-availability { --tag-ink: #d44e7d; }
+  .note-tag-scheduled { --tag-ink: var(--iv-booked); color: var(--iv-booked-ink); }
+  .note-tag-interview { --tag-ink: #3fb950; }
+  .note-tag-take_home { --tag-ink: #e3b341; color: $grey-dark; }
+  .note-tag-offer { --tag-ink: #{$base-complementary}; }
+  .note-tag-rejected { --tag-ink: #{$danger}; }
+  .note-tag-withdrew { --tag-ink: #{$grey-dark}; }
 
 }
 
@@ -1920,17 +1925,30 @@
     margin-bottom: 6px;
   }
 
-  // Which round it names, which is the whole question when one mail lays out
-  // four of them. Quiet: it is a reading, and a reading drawn as loudly as the
-  // words it is about reads as a fact.
+  // HOLLOW, AND THAT IS THE WHOLE POINT. The same chip filled is a state: a
+  // filled amber Scheduled says there is an interview on the books. Here it
+  // says nothing of the kind - it is which mail the ask was found in, and the
+  // round it asks about is one nobody has booked yet. So the hue stays, as the
+  // outline, and the fill goes: it reads as a reference to a beat rather than
+  // as a status of its own. The words stay muted because an 11px line in cyan
+  // or amber on a pale card cannot be read.
+  .ask-head .note-tag {
+    border: 1px solid var(--tag-ink, var(--iv-line));
+    background: none;
+    color: var(--iv-muted);
+  }
+
+  // Which round it is FOR, which is the whole question when one mail lays out
+  // four of them. In words and in sentence case rather than as another
+  // upper-case pill: "hiring manager interview" set like a chip is read as a
+  // round that exists, and the usual case for this panel is a round that has
+  // not been booked yet.
   .ask-round {
     padding: 1px 7px;
-    border: 1px solid var(--iv-line);
+    border: 1px dashed var(--iv-line);
     border-radius: 9px;
     color: var(--iv-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-size: 12px;
   }
 
   .ask-beat {
