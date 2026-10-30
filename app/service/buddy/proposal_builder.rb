@@ -1206,7 +1206,9 @@ module Buddy
 
         if outcomes.all? { |o| o[:ok] }
           data    = outcomes.first[:data].is_a?(Hash) ? outcomes.first[:data] : {}
-          reverts = outcomes.filter_map { |o| o[:data].is_a?(Hash) ? (o[:data][:revert] || o[:data]["revert"]) : nil }
+          # Every outcome's descriptors, whether the tool returned one `revert`
+          # or several `reverts` (a job row plus the mail it filed).
+          reverts = outcomes.flat_map { |o| o[:data].is_a?(Hash) ? Buddy::Reverter.descriptors(o[:data]) : [] }
           base.merge(
             "status"   => "executed",
             "result"   => stringify(data).merge("reverts" => reverts),

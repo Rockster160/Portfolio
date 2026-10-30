@@ -23,6 +23,23 @@ RSpec.describe "add_job_application tool" do
     expect(tool[:level]).to eq(2)
   end
 
+  it "arrives pre-checked with a way back, and unticking takes the row away" do
+    msg = conversation.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok")
+    allow(Buddy::Features).to receive_messages(allows_tool?: true, allows_payload?: true)
+
+    action = Buddy::ProposalBuilder.create(
+      user: user, byte_message: msg,
+      markers: [{ tool_name: :add_job_application, payload: { company: "Pellworth Dynamics", tag: "heard_back" }, span: [0, 0] }],
+    )[:action]
+    row = action.reload.buttons.first
+
+    expect(row).to include("status" => "executed", "undoable" => true)
+    expect(row.dig("result", "reverts")).to include(include("model" => "JobApplication"))
+
+    Buddy::Reverter.perform!(action.id, row["id"])
+    expect(user.job_applications.where(company: "Pellworth Dynamics")).to be_empty
+  end
+
   it "creates the row with its first beat, timestamped when the mail came in" do
     arrived = 2.days.ago.change(usec: 0)
 
