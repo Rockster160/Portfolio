@@ -54,15 +54,28 @@ class ListItem < ApplicationRecord
     find_by(formatted_name: format_name(name))
   end
 
-  def self.by_name_then_update(params)
-    old_item = by_data(params)
+  # Find-then-create isn't atomic: two deliveries of the same add a few hundred
+  # ms apart both miss the row and both create it. Holding the parent list's row
+  # lock serializes adds to one list, so the second finds what the first made.
+  def self.locking_list
+    list_id = new.list_id
+    return yield if list_id.nil?
 
-    if old_item.present?
+    transaction {
+      List.lock.find_by(id: list_id)
+      yield
+    }
+  end
+
+  def self.by_name_then_update(params)
+    item = locking_list {
+      old_item = by_data(params)
+      next create(params) if old_item.blank?
+
       old_item.update(params.merge(deleted_at: nil, sort_order: nil))
-      old_item.notify_jil(:added)
-    else
-      create(params).notify_jil(:added)
-    end
+      old_item
+    }
+    item.notify_jil(:added)
   end
 
   def self.by_data(params, deleted: true)
@@ -85,17 +98,17 @@ class ListItem < ApplicationRecord
     item_name = full_item_name.sub(/\[#{section_name}\]\s*/, "").squish if section.present?
     item_name ||= full_item_name
 
-    old_item = by_data(item_name)
-    old_item ||= by_data(full_item_name) if item_name != full_item_name
-    old_item.section = section if old_item.present? && section.present?
+    item = locking_list {
+      old_item = by_data(item_name)
+      old_item ||= by_data(full_item_name) if item_name != full_item_name
+      next create(name: item_name, section: section) if old_item.blank?
 
-    if old_item.present?
+      old_item.section = section if section.present?
       old_item.update(name: item_name, deleted_at: nil, sort_order: nil) if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
       old_item.update(section: section) if old_item.section != section && section.present?
-      old_item.notify_jil(:added)
-    else
-      create(name: item_name, section: section).notify_jil(:added)
-    end
+      old_item
+    }
+    item.notify_jil(:added)
   end
 
   def self.remove(item_name)

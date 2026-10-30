@@ -153,6 +153,7 @@ module BuddyEvalNeeds
     orchard_home_drive:   { label: "an event with a drive home to be back from", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/orchard/i) && i.travel_home_seconds.present? } } },
     plunge_to_move:       { label: "an event to move to another date", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/plunge/i) } } },
     ours_calendar:        { label: "a second calendar to move something to", check: ->(u) { u.agendas.reload.any? { |a| a.name.to_s.match?(/ours/i) } } },
+    carlos_address:       { label: "a contact named Carlos with an address", check: ->(u) { Address.joins(:contact).where(contacts: { user_id: u.id }).exists?(["contacts.name ILIKE ?", "carlos"]) } },
     camping_tote:         { label: "a camping tote in the inventory", check: ->(u) { box(u, /camping tote/i) } },
     camp_stove_filed:     { label: "a camp stove filed in the inventory", check: ->(u) { box(u, /camp stove/i) } },
     headlamp_filed:       { label: "a headlamp filed in the inventory", check: ->(u) { box(u, /headlamp/i) } },

@@ -141,7 +141,9 @@ class TeslaControl
   # Resolution order:
   #   1. Contact name match (highest priority — e.g. "Sarah" → her address).
   #      AddressBook#match_contact handles possessive/plural normalization
-  #      ("Sarah's", "Sarahs", "Sarah's house", "Sarah's place", etc.).
+  #      ("Sarah's", "Sarahs", "Sarah's house", "Sarah's place", etc.), then
+  #      a contact named inside the phrase ("Herriman DMV") via
+  #      AddressBook#address_in_phrase, which picks the labelled address.
   #   2. Bare "lat,lng" pair (e.g. "40.4804,-111.998")
   #   3. A fuzzy place name resolved to a real formatted address via Places,
   #      biased to where we are now.
@@ -152,7 +154,9 @@ class TeslaControl
     text = input.to_s.strip
     return text if text.empty?
 
-    contact_address = User.me.address_book.match_contact(text)&.primary_address&.street
+    address_book = User.me.address_book
+    contact_address = address_book.match_contact(text)&.primary_address&.street
+    contact_address ||= address_book.address_in_phrase(text)&.street
     return contact_address if contact_address.present?
 
     return text.gsub(/\s/, "") if text.match?(/\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/)

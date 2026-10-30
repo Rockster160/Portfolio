@@ -26,6 +26,45 @@ RSpec.describe AddressBook do
     end
   end
 
+  describe "#address_in_phrase" do
+    let(:user) { create(:user) }
+    let(:book) { described_class.new(user) }
+
+    def contact_with(name, addresses, nickname: nil)
+      user.contacts.create!(name: name, nickname: nickname).tap { |contact|
+        addresses.each { |label, street, primary|
+          contact.addresses.create!(user: user, label: label, street: street, primary: primary)
+        }
+      }
+    end
+
+    before {
+      contact_with("DMV", [["Herriman", "5278 W Anthem Peak Ln", true], ["Riverton", "12830 S Redwood Rd", false]])
+      contact_with("Home", [[nil, "1 Home St", true]])
+      contact_with("Home Depot", [[nil, "2 Depot Way", true]])
+      contact_with("Momentum", [["Lehi", "3 Lehi Rd", true], ["Sandy", "4 Sandy Blvd", false]], nickname: "Climbing")
+    }
+
+    {
+      "Herriman DMV"        => "5278 W Anthem Peak Ln",
+      "the DMV in Riverton" => "12830 S Redwood Rd",
+      "the DMV"             => "5278 W Anthem Peak Ln",
+      "Momentum Sandy"      => "4 Sandy Blvd",
+      "climbing in sandy"   => "4 Sandy Blvd",
+      "the Home Depot"      => "2 Depot Way",
+    }.each do |phrase, street|
+      it "reads #{phrase.inspect} as #{street}" do
+        expect(book.address_in_phrase(phrase)&.street).to eq(street)
+      end
+    end
+
+    ["Trader Joe's near home", "DMV", "Herriman", "the DMV in Draper"].each do |phrase|
+      it "leaves #{phrase.inspect} alone" do
+        expect(book.address_in_phrase(phrase)).to be_nil
+      end
+    end
+  end
+
   describe "#to_traveltime_param" do
     let(:book) { described_class.new(User.me) }
 

@@ -71,6 +71,31 @@ class AddressBook
       .find(&:present?)
   end
 
+  PHRASE_FILLER = %w[the a an in at on by near to].freeze
+
+  # A contact named inside a longer phrase, where everything else in it is
+  # filler or one of that contact's address labels: "Herriman DMV" and "the DMV
+  # in Riverton" each pick a DMV address, "Momentum Sandy" the Sandy gym. Any
+  # other word left over means the phrase is about something else ("Trader
+  # Joe's near home"), so it returns nil and the caller goes on to Places.
+  # The longest matching name wins, so "Home Depot" beats "Home".
+  def address_in_phrase(text)
+    words = self.class.phrase_words(text)
+    return if words.length < 2
+
+    found = contacts.includes(:addresses).flat_map { |contact|
+      contact_names(contact).filter_map { |name|
+        address = address_for_rest(contact, words, self.class.phrase_words(name))
+        [name.length, address] if address.present?
+      }
+    }
+    found.max_by(&:first)&.last
+  end
+
+  def self.phrase_words(text)
+    text.to_s.downcase.gsub(/['’]s\b/, "").scan(/[a-z0-9]+/)
+  end
+
   # Strings the Distance Matrix API can't (and shouldn't) be billed for:
   # video-conf URLs, raw phone numbers, "tbd"/"online"/"virtual" placeholders.
   # Caller responsibility to early-out when this returns true — keeps the
@@ -486,5 +511,29 @@ class AddressBook
   rescue StandardError => e
     ::SlackNotifier.err(e, "reverse_geocode failed: (#{loc}): [#{e.class}]:#{e.message}", user: @user)
     nil
+  end
+
+  private
+
+  def contact_names(contact)
+    [contact.name, *contact.nickname.to_s.split(",")].map(&:strip).compact_blank
+  end
+
+  # The address a phrase means once the contact's name is taken out of it: the
+  # one whose label covers what's left, or the primary when only filler is.
+  def address_for_rest(contact, words, name_words)
+    return if name_words.empty? || name_words.length > words.length
+
+    start = (0..(words.length - name_words.length)).find { |i| words[i, name_words.length] == name_words }
+    return if start.nil?
+
+    rest = words.dup.tap { |w| w.slice!(start, name_words.length) } - PHRASE_FILLER
+    addresses = contact.addresses.to_a
+    return addresses.find(&:primary) || addresses.first if rest.empty?
+
+    addresses.find { |address|
+      label_words = self.class.phrase_words(address.label)
+      label_words.any? && (rest - label_words).empty?
+    }
   end
 end

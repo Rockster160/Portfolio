@@ -141,6 +141,7 @@ class BuddyEvalWorld
     photos!
     job_hunt!
     mail!
+    contacts!
     self
   end
 
@@ -280,6 +281,16 @@ class BuddyEvalWorld
         subject:            "Re: Pickles' bloodwork",
         blurb:              "Hi! Pickles' bloodwork came back and everything looks normal.",
       )
+    }
+  end
+
+  # A person with an address saved on them, for "what's Carlos' address?".
+  def contacts!
+    contact = reuse(Contact.where(user: user).where("name ILIKE ?", "carlos").first) {
+      Contact.create!(user: user, name: "Carlos")
+    }
+    reuse(Address.where(contact: contact).first) {
+      Address.create!(user: user, contact: contact, street: "2848 W 7500 S, West Jordan, UT", primary: true)
     }
   end
 

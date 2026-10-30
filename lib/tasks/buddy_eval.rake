@@ -326,6 +326,9 @@ BUDDY_TOOL_PROBES = {
     },
   },
   ask_me:                 "add whatever I say next to my grocery list - ask me what it is first",
+  # `avoid: search_agenda` because an evening at their place is on the calendar
+  # with the location as typed - just the name - which reads as "no address".
+  contact_address:        { say: "what's Carlos' address?", avoid: %i[search_agenda], needs: :carlos_address },
 
   # --- deliveries ---
   track_delivery:         "I ordered a bookshelf, should be here Friday",
@@ -989,6 +992,39 @@ BUDDY_EDGE_PROBES = [
         metadata:  { "kind" => "buddy" },
         body:      "Vantrice Labs invited you to a phone interview on Thursday at 12pm. " \
                    "Which Vantrice Labs role is this for?",
+      )
+    },
+  },
+  # The calendar invite for an interview the confirmation mail had already
+  # booked on that row, a minute earlier. The booking already being there is
+  # what the mail confirms, not a clash to ask about.
+  {
+    case:  "prod 9457",
+    say:   "[nothing was said to you - this fired on its own] Job mail just arrived for a " \
+           "company that is on their board 2 times, for different jobs.\n\n" \
+           "Company: Vantrice Labs\nOn the board:\n" \
+           "  - Staff Data Engineer <- filed here\n  - Senior Backend Engineer\n" \
+           "What happened: Interview invite for Vantrice Labs with Google Meet details\n" \
+           "Kind: interview scheduling\n" \
+           "Calendar invite, booked for: Tuesday 3:00pm for 45 minutes at " \
+           "https://meet.google.com/abc-defg-hij\n" \
+           "Subject: Invitation: Interview with Vantrice Labs @ Tue 5pm - 5:45pm (EST)\n\n" \
+           "Say in ONE short sentence what this says. Then CALL add_job_note with `role` " \
+           "naming WHICH of those jobs it is. Where the mail genuinely does not say, name the " \
+           "row it is already filed on and SAY which one you went with.",
+    tool:  :add_job_note,
+    args:  { add_job_note: { role: /data/i } },
+    needs: :vantrice_two_roles,
+    note:  "pushed \"I need which of the three roles this one belongs to\" because the row " \
+           "already held the booking the invite was for",
+    seed:  ->(user, _convo) {
+      job = JobApplication.where(user: user).detect { |j| j.company.to_s.match?(/vantrice/i) && j.role.to_s.match?(/data/i) }
+      next if job.nil?
+
+      at = Date.current.next_occurring(:tuesday).in_time_zone(user.timezone) + 15.hours
+      JobNote.create!(
+        job_application: job, tag: :scheduled, occurred_at: 1.minute.ago, follow_up_at: at,
+        duration_minutes: 45, summary: "Video interview confirmed for Tue at 3pm",
       )
     },
   },
@@ -2492,6 +2528,21 @@ BUDDY_EDGE_PROBES = [
     needs: :navigate_fn,
     note:  "scheduled Tesla Navigate at the event's booked end (5:59pm) because " \
            "remind_when's run couldn't carry a destination",
+  },
+  # The first leg is a drive now; every leg after it waits on leaving the last.
+  {
+    case:  "prod 9506",
+    say:   "Take me to the DMV and then Trader Joes, and then home.",
+    tool:  :remind_when,
+    args:  { remind_when: { trigger: "depart", run: /navigate/i, run_args: /trader/i } },
+    needs: :navigate_fn,
+    note:  "navigated to the DMV, promised Trader Joe's and home after it, and held neither",
+  },
+  {
+    case:  "prod 9517",
+    say:   "So make a note. Route planning doesn't work at all.",
+    tool:  :stash_idea,
+    note:  "answered \"I'll keep that in mind for this thread\" and wrote nothing down",
   },
   # Tesla Navigate picks the next place itself when the destination is blank,
   # so a bare "take me" is a call, not a question about where.

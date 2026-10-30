@@ -3,7 +3,8 @@
 // or a status ring that runs out (its `sound`, see buddy/rings.js) lands here
 // as a key, and we play the matching tune. These are the Whisper PWA's
 // named beeps, ported so the board that replaces it makes the same sounds —
-// nap, wake, birthday, alarm, and a default chirp for anything else.
+// nap, wake, birthday, alarm, a short chime, and a default chirp for anything
+// else.
 //
 // Honours the pet's own mute (buddy:muted) so the wall tablet's "shush" quiets
 // a Jil sound the same way it quiets the timer alarm; the two share the key.
@@ -50,6 +51,13 @@ function playAlarmBeeps() {
     [300, 440, volume - 0.3, "sine"],
   ];
   beeps([...pulse, [400, 0, 0, null], ...pulse]);
+}
+
+function playChimeBeeps() {
+  beeps([
+    [320, 523, volume - 0.35, "sine"],
+    [220, 392, volume - 0.3, "sine"],
+  ]);
 }
 
 function playHappyBirthdayBeeps() {
@@ -107,5 +115,6 @@ export function playBoardSound(key) {
   if (key === "wake") return playWakeBeeps();
   if (key === "birthday") return playHappyBirthdayBeeps();
   if (key === "alarm") return playAlarmBeeps();
+  if (key === "chime") return playChimeBeeps();
   return playDefaultBeeps();
 }

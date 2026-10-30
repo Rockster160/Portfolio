@@ -53,7 +53,15 @@ RSpec.describe TeslaControl do
 
     before do
       allow(User).to receive(:me).and_return(instance_double(User, address_book: address_book))
-      allow(address_book).to receive_messages(match_contact: nil, nearest_from_name: nil)
+      allow(address_book).to receive_messages(match_contact: nil, address_in_phrase: nil, nearest_from_name: nil)
+    end
+
+    it "uses a contact named inside the phrase before asking Places" do
+      address = instance_double(Address, street: "5278 W Anthem Peak Ln")
+      allow(address_book).to receive(:address_in_phrase).with("Herriman DMV").and_return(address)
+
+      expect(described_class.resolve_destination("Herriman DMV")).to eq("5278 W Anthem Peak Ln")
+      expect(address_book).not_to have_received(:nearest_from_name)
     end
 
     it "returns a matched contact's street address first" do
@@ -97,7 +105,7 @@ RSpec.describe TeslaControl do
       # raw text. Stubbed here because the call is wrapped in `rescue nil`, and a
       # verifying double raises an Exception that a StandardError rescue misses —
       # so an unstubbed call fails the example instead of the lookup.
-      allow(address_book).to receive(:nearest_from_name).and_return(nil)
+      allow(address_book).to receive_messages(nearest_from_name: nil, address_in_phrase: nil)
     end
 
     context "when AddressBook returns a contact match" do

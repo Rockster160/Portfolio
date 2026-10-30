@@ -108,6 +108,30 @@ RSpec.describe ListItem do
       end
     end
 
+    # Two deliveries of the same add arriving together must not both miss the
+    # row and both create it — the lookup runs under the list's row lock.
+    describe "adding under the list lock" do
+      def list_locks
+        sql = []
+        callback = ->(*, payload) { sql << payload[:sql] if payload[:sql].match?(/FROM "lists".*FOR UPDATE/m) }
+        ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { yield }
+        sql
+      end
+
+      it "locks the list for .add and .by_name_then_update" do
+        expect(list_locks { list.list_items.add("Milk") }).to be_one
+        expect(list_locks { list.add_items(name: "Eggs") }).to be_one
+      end
+
+      it "still reuses the existing row" do
+        first = list.list_items.add("Milk")
+        list.list_items.add("milk")
+        list.add_items(name: "Milk")
+
+        expect(list.list_items.pluck(:id)).to eq([first.id])
+      end
+    end
+
     describe ".remove" do
       it "fires :item removed" do
         list.list_items.add("Bread")
