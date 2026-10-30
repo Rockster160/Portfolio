@@ -160,7 +160,7 @@ module Transcripts
         [
           Speakers::Prompt.context(transcript),
           ("The recording is #{transcript.spoken_minutes} minutes long." if transcript.spoken_minutes),
-          ("What the listing said it pays: #{job.pay}." if job.pay.present?),
+          ("What the listing said it pays: #{job.pay}." if job&.pay.present?),
         ].compact.join(" ")
       end
 
@@ -177,7 +177,8 @@ module Transcripts
       MOST_AIMING = 1_200
 
       def aiming(transcript)
-        note = transcript.job_note || transcript.job_application.notes.recent.first
+        notes = transcript.job_application&.notes
+        note = transcript.job_note || notes&.recent&.first
         return nil if note.nil?
 
         said = note.body.to_s.strip

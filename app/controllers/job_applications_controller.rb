@@ -63,6 +63,20 @@ class JobApplicationsController < ApplicationController
     load_upcoming
     @in_play = JobApplication.in_play_for(current_user)
     @silence = JobApplication.silence_for(current_user)
+    load_unfiled
+  end
+
+  # RECORDINGS WAITING TO BE FILED, and the sources that are no longer recorded.
+  #
+  # Here rather than on a page of their own because a recording nobody has
+  # placed is a thing to DO, and this is the page that already says what those
+  # are. The candidates are worked out per row: a booking mail that arrives
+  # overnight makes an unanswerable recording answerable, and a list computed
+  # when it landed would still be saying nobody knows.
+  def load_unfiled
+    @unfiled = current_user.job_transcripts.unfiled.ordered.to_a
+    @unfiled_near = @unfiled.index_with { |transcript| Transcripts::Filing.candidates(transcript) }
+    @skips = current_user.recording_skips.ordered.to_a
   end
 
   # Newest first. The page is read to answer "where is this now", and the answer

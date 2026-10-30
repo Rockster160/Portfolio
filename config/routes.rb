@@ -453,6 +453,19 @@ Rails.application.routes.draw do
 
   # Interview tracker — one row per place you applied, a timeline of notes
   # under each. `/interviews` rather than `/job_applications` because the page
+  # RECORDINGS THAT ARE NOT ON AN INTERVIEW YET. The laptop posts a call here
+  # the moment it ends, before anything knows which interview it was - so these
+  # cannot be nested under one. Filing, deleting, and refusing a source are all
+  # done from the interview index, which is where they wait.
+  resources :transcripts, only: [:create, :destroy] do
+    post :attach, on: :member
+    post :skip, on: :member
+    collection do
+      get :skips
+      delete "skips/:skip_id", action: :unskip, as: :unskip
+    end
+  end
+
   # is the thing you open during a search, not the record it stores.
   resources :interviews, controller: :job_applications, except: [:new, :edit] do
     post :merge, on: :member

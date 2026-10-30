@@ -23,22 +23,27 @@ module TranscriptPass
     note(transcript, key, name)
     yield(->(done, total) { note(transcript, key, name, current: done, total: total) })
   ensure
-    BackgroundProcess.clear(user: transcript.job_application.user, key: key)
+    BackgroundProcess.clear(user: transcript.owner, key: key)
   end
 
   def note(transcript, key, name, **moved)
     BackgroundProcess.note(
-      user:   transcript.job_application.user,
+      user:   transcript.owner,
       key:    key,
       name:   name,
-      detail: transcript.job_application.company,
+      detail: transcript.job_application&.company || transcript.source_label,
       links:  [{ label: "📝", url: transcript_url(transcript) }],
       source: :rails,
       **moved,
     )
   end
 
+  # A recording nobody has filed has no page of its own: what there is to do
+  # with it is on the interview index, which is where the panel asking about it
+  # lives.
   def transcript_url(transcript)
+    return "/interviews" unless transcript.filed?
+
     "/interviews/#{transcript.job_application_id}/transcripts/#{transcript.id}"
   end
 end

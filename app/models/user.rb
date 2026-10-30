@@ -24,6 +24,8 @@ class User < ApplicationRecord
   attr_accessor :should_require_current_password, :current_password
 
   has_many :api_keys, dependent: :destroy
+  has_many :recording_skips, dependent: :destroy
+  has_many :job_transcripts, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
   has_many :device_login_tokens, dependent: :delete_all

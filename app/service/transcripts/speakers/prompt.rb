@@ -45,12 +45,17 @@ module Transcripts
         does a candidate answering, pausing and carrying on.
       TEXT
 
+      # A recording that has not been filed yet knows nothing about the company,
+      # because which interview it was is still an open question - so it says
+      # so rather than inventing one. Everything here is a hint; the pass works
+      # off the words either way.
       def context(transcript)
         job = transcript.job_application
         [
-          "The candidate is #{job.user.first_name}.",
-          "The company interviewing them is #{job.company}.",
-          ("The role is #{job.role}." if job.role.present?),
+          ("The candidate is #{transcript.owner.first_name}." if transcript.owner),
+          ("The company interviewing them is #{job.company}." if job),
+          ("The role is #{job.role}." if job&.role.present?),
+          ("Which company this call was with has not been established yet." if job.nil?),
           people(transcript),
           ("The conversation is a #{transcript.job_note.tag_label.downcase}." if transcript.job_note),
         ].compact.join(" ")
@@ -61,6 +66,8 @@ module Transcripts
       # settles a handover outright - but only as a hint, since the person named
       # may never speak.
       def people(transcript)
+        return nil if transcript.job_application.nil?
+
         named = transcript.job_application.notes.filter_map { |note| note.spoke_to.presence }
         return nil if named.empty?
 

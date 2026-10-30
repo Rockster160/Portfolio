@@ -23,6 +23,12 @@ module Transcripts
   # how an interview went will say it went well, at length, about an interview
   # it has partly imagined. A note has to point at something he said.
   #
+  # AND IT HAS TO BE FILED FIRST. A recording off the laptop arrives before
+  # anybody knows which interview it was, and this pass is a reading of the
+  # conversation AGAINST the job it was for - the company, the role, the round,
+  # what the last mail said. Without those it is generic interview advice, so
+  # it waits, and filing the recording is what starts it.
+  #
   # AND HE HAS TO BE PLACED FIRST. Nobody marked as him means no turns are
   # his, which means every note would be dropped and the call paid for anyway,
   # so it refuses before it spends anything and the page asks him to tick which
@@ -69,6 +75,7 @@ module Transcripts
     def call(transcript, again: false, &progress)
       turns = Array(transcript.turns)
       return Result.new(ok: false, notes: 0, error: :thin) if turns.size < LEAST_TURNS
+      return Result.new(ok: false, notes: 0, error: :unfiled) if transcript.job_application.nil?
       return Result.new(ok: false, notes: 0, error: :done) if done?(transcript, again)
       return Result.new(ok: false, notes: 0, error: :unplaced) unless placed?(transcript)
 

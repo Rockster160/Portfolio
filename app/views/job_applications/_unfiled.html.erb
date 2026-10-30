@@ -1,0 +1,83 @@
+<%# RECORDINGS THE LAPTOP MADE THAT NOBODY HAS PLACED.
+
+   Everything is recorded and the junk is thrown away here - that way round,
+   because a recording of something irrelevant costs a glance and one press,
+   and an interview that was never recorded cannot be got back.
+
+   Each row is written to be RECOGNISED: when it happened, how long it ran,
+   where it came from, and how it opened. The picker opens on what the clock
+   suggested, so the question is "which of these two" rather than "search your
+   whole board" - and the two presses that end a row are right there, because a
+   row nobody can clear is a row that stays forever. %>
+<% if @unfiled.any? %>
+  <div class="interview-unfiled">
+    <h3>Recordings to file</h3>
+    <ul>
+      <% @unfiled.each do |transcript| %>
+        <li class="unfiled-row">
+          <div class="unfiled-head">
+            <span class="unfiled-when"><%= recording_said(transcript) %></span>
+            <% if transcript.reading? || transcript.tidying? %>
+              <span class="transcript-reading-tag">reading…</span>
+            <% end %>
+          </div>
+
+          <% if recording_opening(transcript) %>
+            <p class="unfiled-opening">“<%= recording_opening(transcript) %>”</p>
+          <% end %>
+
+          <%# The first few turns, folded away. Enough to know which call it was
+             when the opening alone is "hey, can you hear me". %>
+          <details class="unfiled-more">
+            <summary>Read the start</summary>
+            <ol class="unfiled-turns">
+              <% transcript.opening.each do |turn| %>
+                <li>
+                  <span class="unfiled-who"><%= transcript.name_for(turn["speaker"]) %></span>
+                  <%= turn["text"] %>
+                </li>
+              <% end %>
+            </ol>
+          </details>
+
+          <div class="unfiled-actions">
+            <%= form_with url: attach_transcript_path(transcript), method: :post,
+                  local: true, class: "unfiled-attach" do %>
+              <%= select_tag :interview_id,
+                    options_for_select(recording_choices(@unfiled_near[transcript], @live_jobs)),
+                    include_blank: "Which interview was this?" %>
+              <%= submit_tag "File it" %>
+            <% end %>
+
+            <%= link_to "Delete", transcript_path(transcript), method: :delete,
+                  class: "danger-link",
+                  data: { confirm: "Delete this recording? The words go with it." } %>
+
+            <%# The same decision as deleting it, when the reason it is junk is
+               where it came from. One press, because it is one thought. %>
+            <% if transcript.source_key.present? %>
+              <%= link_to "Delete, and stop recording #{transcript.source_label}",
+                    skip_transcript_path(transcript), method: :post, class: "danger-link",
+                    data: { confirm: "Delete this and never record from #{transcript.source_label} again?" } %>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<%# Undoable, and visible without being asked for. A denial nobody can see is
+   how an interview silently stops being recorded. %>
+<% if @skips.any? %>
+  <p class="interview-skips">
+    Not recording from:
+    <% @skips.each do |skip| %>
+      <span class="skip-row">
+        <%= skip.label_or_key %>
+        <%= link_to "×", unskip_transcripts_path(skip_id: skip.id), method: :delete,
+              title: "Record from #{skip.label_or_key} again" %>
+      </span>
+    <% end %>
+  </p>
+<% end %>

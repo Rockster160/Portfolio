@@ -137,6 +137,19 @@ RSpec.describe Transcripts::Debrief do
       expect(asked).to be_empty
     end
 
+    # The read is of the conversation AGAINST the job it was for - the company,
+    # the role, the round. A recording off the laptop arrives before anybody
+    # knows which interview it was, so it waits for filing rather than being
+    # read generically.
+    it "refuses, and pays for nothing, until the recording is on an interview" do
+      transcript = transcript!
+      transcript.update!(job_application: nil, user: user)
+      model_says(said)
+
+      expect(described_class.call(transcript).error).to eq(:unfiled)
+      expect(asked).to be_empty
+    end
+
     it "refuses, and pays for nothing, for a conversation too short to judge" do
       transcript = transcript!("Hello.", "Hi there.")
       model_says(said)

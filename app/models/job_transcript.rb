@@ -6,18 +6,28 @@
 #  debrief            :jsonb            not null
 #  debriefed_at       :datetime
 #  occurred_at        :datetime
+#  source             :jsonb            not null
 #  speakers           :jsonb            not null
 #  tidied_at          :datetime
 #  title              :string
 #  turns              :jsonb            not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
-#  job_application_id :bigint           not null
+#  job_application_id :bigint
 #  job_note_id        :bigint
+#  user_id            :bigint
 #
 class JobTranscript < ApplicationRecord
-  belongs_to :job_application
+  # UNATTACHED IS A REAL STATE. A recording arrives off the laptop the moment a
+  # call ends, and which interview it was is something worked out afterwards
+  # from the clock - sometimes with no answer, because the call was not an
+  # interview at all. A recording that has not been placed is still a recording;
+  # it waits on the interview index to be filed or thrown away.
+  belongs_to :job_application, optional: true
   belongs_to :job_note, optional: true
+  # Whose it is, on the row, because an unattached one has no application to
+  # reach a user through.
+  belongs_to :user, optional: true
 
   # The file as it was dropped in, kept whatever happens to the parse. The
   # turns below are a reading of it and they are edited by hand; the upload is
@@ -26,7 +36,10 @@ class JobTranscript < ApplicationRecord
 
   validates :turns, presence: true
 
+  before_validation :settle_owner
+
   scope :ordered, -> { order(Arel.sql("COALESCE(occurred_at, created_at) DESC")) }
+  scope :unfiled, -> { where(job_application_id: nil) }
 
   # What a recorder calls a voice it could not place. Two different people land
   # under it, so it is the one label that must never be treated as a person -
@@ -63,13 +76,53 @@ class JobTranscript < ApplicationRecord
     TranscriptParser.speakers_in(turns).size <= 1
   end
 
+  # Whose recording this is. The column is the answer, and an application is
+  # the fallback for the rows that predate it - that is where their user lived
+  # until the backfill ran, and nothing about reading one should depend on when
+  # that happened.
+  def owner
+    user || job_application&.user
+  end
+
+  def filed?
+    job_application_id.present?
+  end
+
+  # Where the recording came from: the app that was making the noise, and for a
+  # browser the site, because the app alone is no use - the same browser carries
+  # the interviews and everything else. One of those is the key the skip list
+  # matches on, so it is the site first.
+  def source_key
+    [source["host"], source["bundle"], source["app"]].compact_blank.first
+  end
+
+  def source_label
+    [source["host"], source["app"]].compact_blank.first
+  end
+
+  # Did only one side of it make a sound? His microphone hot with nothing
+  # coming back is usually dictation or a room, not a call - though it is also
+  # a phone on speaker, which is why it is marked rather than thrown away.
+  def one_sided?
+    sides = turns.map { |turn| mine?(turn["speaker"].to_s) }.uniq
+    sides.size <= 1
+  end
+
+  # The opening of it, for recognising which call this was without filing it
+  # first. A conversation is recognised from how it STARTS - the introductions
+  # and the first question - so it is the top of the recording and not a
+  # summary of the middle.
+  def opening(count: 6)
+    turns.first(count)
+  end
+
   # The pass, while it is on this transcript - the same chip the worker raises,
   # found by the same key. A row here is the one honest answer to "is it
   # actually doing something": the alternative is a column on this table that
   # says a pass started and goes on saying it after the worker that set it
   # died.
   def reading
-    @reading ||= BackgroundProcess.live_find(job_application.user, Transcripts::Speakers.key_for(self))
+    @reading ||= BackgroundProcess.live_find(owner, Transcripts::Speakers.key_for(self))
   end
 
   def reading?
@@ -78,7 +131,7 @@ class JobTranscript < ApplicationRecord
 
   # The other pass, on the words rather than on who said them.
   def tidying
-    @tidying ||= BackgroundProcess.live_find(job_application.user, Transcripts::Tidy.key_for(self))
+    @tidying ||= BackgroundProcess.live_find(owner, Transcripts::Tidy.key_for(self))
   end
 
   def tidying?
@@ -87,10 +140,7 @@ class JobTranscript < ApplicationRecord
 
   # The third pass, on how the conversation went rather than on what is in it.
   def debriefing
-    @debriefing ||= BackgroundProcess.live_find(
-      job_application.user,
-      Transcripts::Debrief.key_for(self),
-    )
+    @debriefing ||= BackgroundProcess.live_find(owner, Transcripts::Debrief.key_for(self))
   end
 
   def debriefing?
@@ -191,7 +241,24 @@ class JobTranscript < ApplicationRecord
     ((last - first) / 60).round
   end
 
+  # Filed onto the interview it was. The recording's own clock stays as it is:
+  # it knows when the call actually happened, and the booking only knows when
+  # it was meant to.
+  def file!(application, note: nil)
+    update!(
+      job_application: application,
+      job_note:        note,
+      user:            application.user,
+    )
+  end
+
   def label
     title.presence || "Transcript"
+  end
+
+  private
+
+  def settle_owner
+    self.user ||= job_application&.user
   end
 end

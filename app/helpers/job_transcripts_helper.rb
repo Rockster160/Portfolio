@@ -30,6 +30,41 @@ module JobTranscriptsHelper
     pass_said("Checking what was actually said", transcript.tidying)
   end
 
+  # A RECORDING NOBODY HAS FILED, on one line, written to be RECOGNISED rather
+  # than reasoned about. Which call this was is a question the clock could not
+  # answer, so the answer has to come off the words - and what identifies a
+  # conversation is when it happened, how long it ran, and how it opened.
+  def recording_said(transcript)
+    [
+      interview_day(transcript.occurred_at),
+      (pluralize(transcript.spoken_minutes, "minute") if transcript.spoken_minutes),
+      ("one side only" if transcript.one_sided?),
+      transcript.source_label.presence,
+    ].compact_blank.join(" · ")
+  end
+
+  # How it starts. The introductions and the first question, which is where a
+  # company says its own name.
+  def recording_opening(transcript, limit: 180)
+    said = transcript.turns.first.to_h["text"].to_s.strip
+    return nil if said.blank?
+
+    said.truncate(limit)
+  end
+
+  # What the clock thinks it was, named. A picker that opens on the two
+  # candidates it found is a different question from a picker that opens on
+  # forty applications: the first one is "which of these", and that is
+  # answerable standing up.
+  def recording_choices(candidates, jobs)
+    near = Array(candidates).map { |note|
+      ["#{note.job_application.company} — #{interview_day(note.occurred_at)}", note.job_application_id]
+    }
+    rest = jobs.reject { |job| near.any? { |(_said, id)| id == job.id } }
+
+    near + rest.map { |job| [job.company, job.id] }
+  end
+
   def transcript_debriefing(transcript)
     pass_said("Reading how the conversation went", transcript.debriefing)
   end

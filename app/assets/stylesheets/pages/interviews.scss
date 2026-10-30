@@ -61,6 +61,121 @@
   // its own colour — because it is the half of the page that is a to-do list.
   // Red rather than amber: amber is the booked interview's, and these two must
   // never be mistaken for each other at a glance.
+  // RECORDINGS WAITING TO BE FILED. Its own strip above everything, in the
+  // booked colour rather than the waiting red: nothing is wrong, there is just
+  // a thing to put away - and the longer it sits the harder it is to say which
+  // call it was, which is the only reason it is at the top.
+  .interview-unfiled {
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--iv-booked);
+    border-left: 4px solid var(--iv-booked);
+    border-radius: 10px;
+    background: var(--iv-booked-soft);
+
+    h3 {
+      margin: 0 0 6px;
+      color: var(--iv-booked);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+  }
+
+  .unfiled-row {
+    padding: 8px 0;
+
+    + .unfiled-row {
+      border-top: 1px solid var(--iv-line);
+    }
+  }
+
+  .unfiled-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+  }
+
+  .unfiled-when {
+    color: var(--iv-text);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  // How it opened, which is what actually identifies the call.
+  .unfiled-opening {
+    margin: 4px 0 0;
+    color: var(--iv-muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .unfiled-more {
+    margin-top: 6px;
+
+    > summary {
+      color: var(--iv-muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+  }
+
+  .unfiled-turns {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      margin: 0 0 4px;
+      color: var(--iv-text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+  }
+
+  .unfiled-who {
+    color: var(--iv-muted);
+    font-weight: 600;
+  }
+
+  // The two presses that end a row, and the picker between them. Wrapping
+  // rather than scrolling: on a phone the picker is the widest thing here and
+  // it is the one part that must not get cut off.
+  .unfiled-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .unfiled-attach {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  // What is no longer recorded, said plainly and undoable in one press.
+  .interview-skips {
+    margin: 0 0 8px;
+    color: var(--iv-muted);
+    font-size: 12px;
+
+    .skip-row {
+      margin-right: 10px;
+      white-space: nowrap;
+    }
+  }
+
   .interview-waiting {
     margin-bottom: 8px;
     border: 1px solid var(--iv-waiting);

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_30_200054) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1423,7 +1423,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
   end
 
   create_table "job_transcripts", force: :cascade do |t|
-    t.bigint "job_application_id", null: false
+    t.bigint "job_application_id"
     t.bigint "job_note_id"
     t.string "title"
     t.datetime "occurred_at"
@@ -1434,8 +1434,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
     t.datetime "tidied_at"
     t.jsonb "debrief", default: {}, null: false
     t.datetime "debriefed_at"
+    t.bigint "user_id"
+    t.jsonb "source", default: {}, null: false
     t.index ["job_application_id"], name: "index_job_transcripts_on_job_application_id"
     t.index ["job_note_id"], name: "index_job_transcripts_on_job_note_id"
+    t.index ["user_id"], name: "index_job_transcripts_on_user_id"
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|
@@ -1706,6 +1709,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
     t.index "user_id, source_kind, lower(source_name), COALESCE(lower(source_scope), ''::text), target_kind, lower(target_name), COALESCE(lower(target_scope), ''::text)", name: "index_record_links_uniqueness", unique: true
     t.index ["user_id", "source_kind", "source_name"], name: "index_record_links_on_source"
     t.index ["user_id", "target_kind", "target_name"], name: "index_record_links_on_target"
+  end
+
+  create_table "recording_skips", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "key", null: false
+    t.string "label"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "key"], name: "index_recording_skips_on_user_id_and_key", unique: true
+    t.index ["user_id"], name: "index_recording_skips_on_user_id"
   end
 
   create_table "rlcraft_map_locations", id: :serial, force: :cascade do |t|
@@ -2179,6 +2192,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
   add_foreign_key "job_notes", "job_applications"
   add_foreign_key "job_transcripts", "job_applications"
   add_foreign_key "job_transcripts", "job_notes"
+  add_foreign_key "job_transcripts", "users"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"
@@ -2190,6 +2204,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_29_235722) do
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "recording_skips", "users"
   add_foreign_key "scheduled_triggers", "agenda_items", column: "source_item_id", on_delete: :cascade
   add_foreign_key "scheduled_triggers", "anchor_occurrences", on_delete: :cascade
   add_foreign_key "sections", "lists"
