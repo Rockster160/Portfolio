@@ -9,6 +9,14 @@ export function faceUrlFor(theme, expression) {
   return faces[expression] || faces[aliases[expression]] || faces.neutral || null;
 }
 
+// The first of `expressions` this pet was actually drawn with, for a moment
+// that names its faces in order of preference. A pet drawn with none of them
+// gets the first, which then resolves to its nearest face like any other ask.
+export function drawnFace(theme, expressions) {
+  const faces = theme?.faces || {};
+  return expressions.find((expression) => faces[expression]) || expressions[0];
+}
+
 // The face a pet rests on when nothing has moved it (Buddy::Faces.default). A
 // dream's face only shows over this one.
 export const IDLE_FACE = "neutral";

@@ -90,7 +90,10 @@ module Buddy
       QUOTA_RX = /insufficient[_ ]quota|no credits|billing|payment|exceeded your current quota/i
 
       def ping
-        result = stream(instructions: PING_INSTRUCTIONS, input: [], tools: [])
+        # The Responses API rejects an empty `input`, so a ping with no message
+        # would never succeed and the house would stay asleep for good.
+        input = [{ role: :user, content: "ping" }]
+        result = stream(instructions: PING_INSTRUCTIONS, input: input, tools: [])
         # `ok: false` also covers "the model said nothing", which is a perfectly
         # healthy account having a quiet moment. Only an ERROR means still down.
         { ok: result[:error].nil?, error: result[:error], kind: result[:error_kind] }

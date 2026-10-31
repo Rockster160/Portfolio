@@ -377,6 +377,15 @@ RSpec.describe Buddy::GPT::Client do
       })
     end
 
+    it "gives the ping a message, which the API requires" do
+      stub_sse(sse(text_delta("ok"), completed))
+
+      expect(described_class.new.ping[:ok]).to be(true)
+      expect(WebMock).to(have_requested(:post, endpoint).with { |req|
+        JSON.parse(req.body)["input"].present?
+      })
+    end
+
     it "defaults the model from the environment" do
       expect(described_class.new.model).to eq("gpt-5.4-mini")
     end

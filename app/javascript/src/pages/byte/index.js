@@ -84,7 +84,7 @@ import { initChoreBoard, iconNode } from "./buddy/chore_board";
 import { initBoardAlert } from "./buddy/board_alert";
 import { initOwnMoods } from "./buddy/own_moods";
 import { initBoardDream, paceFromMeta } from "./buddy/dream";
-import { faceUrlFor } from "./buddy/face_url";
+import { drawnFace, faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted, alarmStoppedAt } from "./buddy/alarm";
 import { initSoundToggle } from "./buddy/sound_toggle";
 import { initReloadCountdown, updateWanted } from "./reload_countdown";
@@ -2726,7 +2726,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     app,
     conversationIdFn: () => currentConversationId,
     sayText: (text) => buddyKiosk?.sayText(text),
-    flashFace: (face) => buddyHero?.flashExpression?.(face),
+    // A face, or several in order of preference for the pet showing.
+    flashFace: (faces) => {
+      const theme = buddyThemes[heroEl?.dataset.buddyTheme];
+      buddyHero?.flashExpression?.(drawnFace(theme, [].concat(faces)));
+    },
     // Repointing the board's groups (here) also re-scopes the rings, sounds and
     // alerts, which read the watched set off app.dataset.boardTags that the chore
     // board just rewrote. Keeps every surface on the same groups in one move.

@@ -52,7 +52,7 @@ const TASK_PRESS_URL = (id) => `/byte/board/tasks/${id}/press`;
 const LIST_CHECK_URL = (id) => `/byte/board/list_items/${id}/check`;
 
 // A task press is the pet DOING something, so it puts on its working face for
-// a moment: one of these.
+// a moment: the first of these it was drawn with.
 const TASK_FACES = ["nerd", "focused"];
 
 // Managing credit buttons: list/create at the collection, update/delete at one.
@@ -1173,7 +1173,7 @@ export function initChoreBoard({
   // sound, an alert).
   function taskPress(id) {
     if (!find(id, "task")) return;
-    flashFace?.(TASK_FACES[Math.floor(Math.random() * TASK_FACES.length)]);
+    flashFace?.(TASK_FACES);
     return enqueue("task", id, [{ url: TASK_PRESS_URL(id), method: "POST", body: { conversation_id: boardParam() } }]);
   }
 
