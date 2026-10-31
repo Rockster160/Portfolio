@@ -23,8 +23,11 @@ class AddressBook
     @contacts ||= @user.contacts
   end
 
+  # A fresh query every time. `User.me` and its address book live as long as
+  # the process does, so a loaded association never sees an address saved after
+  # the first read.
   def addresses
-    @addresses ||= @user.addresses
+    ::Address.where(user_id: @user.id)
   end
 
   def home
@@ -331,7 +334,7 @@ class AddressBook
 
     loc = loc.map(&:to_f)
     name = agenda_place_near(loc)
-    name ||= find_contact_near(loc)&.name.presence
+    name ||= find_contact_near(loc, within: establishments ? STOP_CONTACT_RADIUS : NEAR_RADIUS)&.name.presence
     name ||= nearest_establishment(loc) if establishments
     name || reverse_geocode(loc, get: :city)
   end
@@ -385,6 +388,24 @@ class AddressBook
   ESTABLISHMENT_RADIUS_METERS = 150
   # Answers about an area rather than a business.
   NOT_ESTABLISHMENT_TYPES = %w[locality political route neighborhood premise street_address].freeze
+  # A listing with no category beyond these is usually a business registered at
+  # someone's house, which is what a stop in a neighborhood finds.
+  GENERIC_PLACE_TYPES = %w[point_of_interest establishment].freeze
+  # Trades that go to the customer. Their listed address is an office or a
+  # house, never somewhere a person stops.
+  SERVICE_AREA_TYPES = %w[
+    roofing_contractor
+    general_contractor
+    plumber
+    electrician
+    painter
+    locksmith
+    moving_company
+    real_estate_agency
+    insurance_agency
+    lawyer
+    accounting
+  ].freeze
 
   def nearest_establishment(loc)
     return unless Rails.env.production?
@@ -401,9 +422,7 @@ class AddressBook
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
-      json[:results].to_a.reject { |place|
-        place[:geometry].blank? || place[:types].to_a.intersect?(NOT_ESTABLISHMENT_TYPES)
-      }.min_by { |place|
+      json[:results].to_a.select { |place| stoppable_place?(place) }.min_by { |place|
         distance(loc, place.dig(:geometry, :location).values_at(:lat, :lng))
       }&.dig(:name)
     }
@@ -412,22 +431,37 @@ class AddressBook
     nil
   end
 
-  # The nearest of their addresses within `near?` of [lat,lng]. Two saved
+  def stoppable_place?(place)
+    return false if place[:geometry].blank?
+
+    types = place[:types].to_a
+    return false if types.intersect?(NOT_ESTABLISHMENT_TYPES) || types.intersect?(SERVICE_AREA_TYPES)
+
+    (types - GENERIC_PLACE_TYPES).any?
+  end
+
+  # How close a saved address has to be to count as being there.
+  NEAR_RADIUS = 0.001
+  # The same, for where they've stopped: as wide as the business lookup, so a
+  # saved place the car parked down the street from still beats any business.
+  STOP_CONTACT_RADIUS = 0.0015
+
+  # The nearest of their addresses within `within` of [lat,lng]. Two saved
   # places can sit inside one radius - a neighbour two doors down - and the
   # first row the table returns is not the one they're at.
-  def find_address_near(coord)
+  def find_address_near(coord, within: NEAR_RADIUS)
     return unless coord.compact.length == 2
 
     addresses.select { |details|
       next unless details.loc&.compact&.length == 2
 
-      near?(details.loc, coord)
+      near?(details.loc, coord, within)
     }.min_by { |details| distance(details.loc, coord) }
   end
 
   # Find contact at [lat,lng]
-  def find_contact_near(coord)
-    find_address_near(coord)&.contact
+  def find_contact_near(coord, within: NEAR_RADIUS)
+    find_address_near(coord, within: within)&.contact
   end
 
   def nonnil_cache(key, &block)

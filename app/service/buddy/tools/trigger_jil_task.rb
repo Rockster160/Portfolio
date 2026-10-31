@@ -37,19 +37,19 @@ Buddy::Tools.register(
 
     Worked examples:
 
-      listener: `event:add name::Transaction`
-      call:     name="Transaction Categorize Prompt", data="action:add name:Transaction"
+      listener: `event:add name::<Event>`
+      call:     name=<the trigger's name>, data="action:add name:<Event>"
 
-      listener: `hass-button:device_name::"Laundry Button"`
-      call:     name="Laundry Button", data="device_name:Laundry Button"
+      listener: `<scope>:device_name::"<Device Name>"`
+      call:     name=<the trigger's name>, data="device_name:<Device Name>"
 
-      listener: `fan-high`
-      call:     name="Fan High"
+      listener: `<bare-word>`
+      call:     name=<the trigger's name>
 
     If a value itself contains spaces or colons, send `data` as a JSON
     object instead - that is accepted too:
 
-      data='{"name":"Tech Stand-Up: Daily","action":"add"}'
+      data='{"<key>":"<value with: a colon>","action":"add"}'
 
     If the listener filters on something you cannot work out from what
     the person said, ask a short follow-up rather than guessing. If

@@ -37,10 +37,8 @@ Buddy::Tools.register(
     walk out of the door, and `at` is always the START. Pass `leave_at` and the
     start is worked back from the item's own drive time and how early they like
     to arrive - which is a number this app HAS and you do not. Do not compute it
-    yourself and do not quote a drive time from memory: asked to move an event
-    so they could leave at 4, the reply said "about 20 minutes of drive" for a
-    32-minute one and set the start to 4:00, and the correction after it set the
-    start to the OLD leave time (prod 5144-5147).
+    yourself, do not quote a drive time from memory, and never set the start to
+    the leave time.
 
     "We want to leave at 4", "set it so I'm out the door by 8:30", "I need to
     leave by quarter past" - all `leave_at`. "Move it to 4", "start at 4",
@@ -53,20 +51,18 @@ Buddy::Tools.register(
     They are different things: `leave_at` is a clock time to walk out of the
     door and is worked back through the drive, while `arrive_early` is a plain
     number of minutes stored on the row - the app's own "min early" setting -
-    and it needs no drive time, no address, and no arithmetic. Told "yes, I
-    want to arrive 10 minutes early. There is a setting for that", the reply
-    was *"it doesn't have a drive time on it yet, so I can't set the
-    10-minute-early part from here"* and asked for a start time instead (prod
-    5341). Nothing about being early depends on knowing the drive.
+    and it needs no drive time, no address, and no arithmetic. Nothing about
+    being early depends on knowing the drive, so a missing drive time is never
+    a reason to leave it unset.
 
     **"Once she's back from X" is a LEAVE time you can work out.** Items carry
     `home_by` - the clock time that thing puts them back through their own front
     door, the drive home already added to its end. It is there on a partner's
     item too, because when she is home is a fact about THEIR day. So "I want to
-    leave once Chelsea's back from yoga" is `leave_at` set to her `home_by`, not
-    a question to ask them. Look it up with `search_agenda` if it isn't in front
-    of you; asking a person for a time the app already knows is the failure here
-    (prod 5266).
+    leave once she's back from <thing>" is `leave_at` set to that item's
+    `home_by`, not a question to ask them. Look it up with `search_agenda` if it
+    isn't in front of you; asking a person for a time the app already knows is
+    the failure here.
 
     For v1, only edits local (non-Google-synced) items.
   TXT
@@ -94,7 +90,7 @@ Buddy::Tools.register(
                    "row keeps the buffer it has. Never a number worked out to make a `leave_at` come out " \
                    "right - passing `leave_at` alone already does that. Not the same as `leave_at`",
     },
-    calendar:     { type: :string, required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
+    calendar:     { type: :string, required: false, description: "Move it to this calendar, by the name they used" },
     kind:         {
       type:        :enum,
       required:    false,

@@ -8,9 +8,9 @@ Buddy::Tools.register(
     tappable buttons; tapping one sends that choice back to you.
 
     `to` is who to ask. `question` is the prompt, and it is READ BY them, so
-    "you" means THEM and your own person gets named: "ask if he'll learn
-    mahjong with me" goes out as "Will you learn mahjong with Chelsea?" - never
-    "with you", which asks him to do it with himself. `options` is a
+    "you" means THEM and your own person gets named: "ask if they'll do
+    <it> with me" goes out as "Will you do <it> with <your person's first
+    name>?" - never "with you", which asks them to do it with themselves. `options` is a
     COMMA-SEPARATED list of the choices (at least two), e.g.
     options="dishes, mop". Do NOT use brackets or quotes inside the list.
     For a select-all / pick-any question, use ask_partner_multi instead.
@@ -19,9 +19,9 @@ Buddy::Tools.register(
     everything queued behind this holds until they tap one, and what they picked
     is filed under that name for a later step to use as `{{that_name}}`.
 
-      ask_partner_choice(to: "Chelsea", question: "Dinner?", options: "tacos, curry",
-                         await_reply: true, var: "hers")
-      run_jil_task(name: "Dinner Planner", meal: "{{hers}}")
+      ask_partner_choice(to: <who>, question: <their question>, options: <the choices>,
+                         await_reply: true, var: "theirs")
+      run_jil_task(name: <the task>, <its arg>: "{{theirs}}")
 
     Use it only when something really is downstream of the answer - a person is
     not a countdown, and anything behind the wait sits there until they reply.
@@ -35,14 +35,12 @@ Buddy::Tools.register(
 
     ## What YOU say back
 
-    That you've asked, in one short line - "asked him, I'll let you know". The
+    That you've asked, in one short line. The
     card goes out on its own and leaves its own receipt, so that's all that's
     left to say.
 
-    NEVER answer the question yourself. "Ask Rocco if he can change the logo on
-    the lights app to a simple house logo" came back as the single word "yes"
-    (prod 3459-3460) - which reads as his answer, arrived instantly, and it was
-    nothing of the kind. The whole point of relaying a question is that the
+    NEVER answer the question yourself. An answer from you reads as theirs,
+    arriving instantly, and it is nothing of the kind. The whole point of relaying a question is that the
     reply comes from the person it was put to.
   TXT
   feature:     :relay,

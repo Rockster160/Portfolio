@@ -8,12 +8,10 @@ Buddy::Tools.register(
     hit the edge of your tools.
 
     **CALLING IT IS THE OFFER.** It writes the row and leaves a receipt in one
-    move, so you say "I can't do that one yet, so I've put it on the list" -
-    past tense, because by then you have. Asked "can you order me a pizza?", a
-    companion answered "I can't place the order from here, but I can put the
-    idea on your list if you want" and called nothing: the offer was made, the
-    row was not, and the person now has to ask a second time for the thing
-    they'd already asked for. There is nothing here to get permission for.
+    move, so your reply says you can't do it yet and that it's on the list -
+    past tense, because by then it is. Offering to file it instead of filing it
+    makes them ask a second time for the thing they'd already asked for. There
+    is nothing here to get permission for.
 
     This is the honest answer, and it is a better one than either of the two
     you'd otherwise pick from. Saying no and stopping leaves them with nothing.
@@ -70,18 +68,13 @@ Buddy::Tools.register(
     something you can otherwise handle, and stopping at the wall leaves them
     with nothing when they could have had most of it. Make the calls for the
     part that works, write down the part that doesn't, and say which is which
-    in one sentence: "I've set the 30-minute check-ins, and put the
-    stop-when-it-finishes part on the list." Never offer them a choice between
+    in one sentence. Never offer them a choice between
     the request and the doable half - do the half.
 
-    **FILING IS NOT THE HALF.** Asked for "45 minutes before any Interview
-    event, send me a link to the company", a companion called this and nothing
-    else. The reminder was entirely available - `schedule_reminder` with
-    `anchor: "agenda:interview-45m"` - and the row it wrote even says so, in
-    its own words: "I can anchor reminders to interview events, but I don't
-    have a way to attach a company link." It knew, wrote it down, and left
-    them with no reminder before either interview that day. Writing a row is
-    the record of what you couldn't do; it is never the thing you did instead.
+    **FILING IS NOT THE HALF.** When the row you are writing says what you
+    CAN do, that part is a call you still owe them, in this same reply.
+    Writing a row is the record of what you couldn't do; it is never the
+    thing you did instead.
 
     **WRITE DOWN THE PART THAT DOESN'T WORK, not the whole request.** If you
     can set a repeat but not its ending, the request is the ending. A row
@@ -99,11 +92,10 @@ Buddy::Tools.register(
     worth saying, because "you've asked for that before" is a real answer.
 
     **WHEN IT MERGES, SAY WHICH ROW IT WENT ONTO** - by the title you get back.
-    "Done, I've put the request in" over a receipt reading "Added that to
-    **Chain actions onto running timers**" leaves two sentences disagreeing in
-    front of them, and the one they have no reason to doubt is the wrong one.
-    "That went onto the <title> row" is the whole fix, and it is also their one
-    chance to tell you it belongs somewhere else.
+    A reply that says a new request went in, over a receipt naming an existing
+    row, leaves two sentences disagreeing in front of them. Name the row it
+    went onto; that is also their one chance to tell you it belongs somewhere
+    else.
 
     **"THAT'S NOT WHAT I MEANT" IS NOT A SECOND FILING.** When they tell you the
     row you just wrote is wrong, sending the same words again writes nothing at

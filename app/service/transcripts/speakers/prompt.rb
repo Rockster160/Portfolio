@@ -133,7 +133,7 @@ module Transcripts
         Break it into turns - one per stretch of one side talking - and reply
         with a single JSON object:
 
-        {"turns": [{"who": "m", "starts": "<the first 8-12 words of this turn, copied EXACTLY>"}, ...]}
+        {"turns": [{"who": "<m or t>", "starts": "<the first 8-12 words of this turn, copied EXACTLY>"}, ...]}
 
         Rules for `starts`:
 
@@ -144,8 +144,9 @@ module Transcripts
         - In order, from the start of the text to the end, and the first entry
           starts at the very beginning of the text.
 
-        Cover the whole stretch. Expect dozens of turns in a passage this long,
-        not three.
+        Cover the whole stretch, with one entry per handover. Real
+        conversations hand over often, so a long stretch with only a few
+        entries is usually missing cuts.
       TEXT
 
       # The file named people. Which of those labels is the candidate is the one
@@ -159,7 +160,7 @@ module Transcripts
         says it (somebody introduces themselves, or is thanked or addressed by
         name). Reply with a single JSON object:
 
-        {"labels": [{"label": "<exactly as it appears>", "side": "m", "name": "<a name actually said, or empty>"}, ...]}
+        {"labels": [{"label": "<exactly as it appears>", "side": "<m or t>", "name": "<a name actually said, or empty>"}, ...]}
 
         Exactly one label is `m` - there is one candidate. Every other label is
         `t`, however many of them there are. A name you are not sure was said

@@ -8,10 +8,10 @@ Buddy::Tools.register(
     `jil_functions` or `jil_triggers`. Same name, same arguments or data as
     `run_jil_task` - this one just happens later.
 
-    "Play Whisper Nap sound at 11" is this: `name: "Whisper Sound"`,
-    `sound: "nap"`, `at:` eleven tonight. `run_jil_task` would play it the
-    moment you called it, sixteen minutes early, in a real room (prod 3562) -
-    so the second they say WHEN, this is the tool.
+    A request with a time on it is this: `name:` the task from the index, its
+    arguments, and `at:` the time they said. `run_jil_task` would do it the
+    moment you called it, in a real room, so the second they say WHEN, this
+    is the tool.
 
     ## Which of the "later" tools
 
@@ -42,7 +42,7 @@ Buddy::Tools.register(
                 morning at 7, play the wake sound" is one row, not seven.
       until   - stop repeating after this date (YYYY-MM-DD).
       note    - what to put in the thread when it runs. Write it as the line
-                THEY should read at that moment ("Nap sound for Whisper"), not
+                THEY should read at that moment, naming the thing it did, not
                 as a description of the plumbing.
 
     ## What it will and won't do

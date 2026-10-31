@@ -23,15 +23,13 @@ Buddy::Tools.register(
     **A weekday whose time has already gone today means NEXT week.** "Dinner
     with Sam Thursday at 7", said at nine on a Thursday evening, is next
     Thursday - nobody schedules a thing for two hours ago. Add it there and
-    say which Thursday you took it for. Asked instead ("has already gone by
-    tonight, so I need to know if you mean next Thursday") it costs them a
-    whole extra exchange to confirm the only reading that made sense.
+    say which Thursday you took it for. Asking instead costs them a whole extra
+    exchange to confirm the only reading that made sense.
 
     **"NEXT Wednesday" said before Wednesday means the FOLLOWING week's.**
-    Plain "Wednesday" is the one coming up; "next" is there to skip it. Said on
-    Monday 10/19, "next Wednesday" is 10/28, not 10/21 - it went on 10/21 once
-    and he had to move it (prod 8564). Name the date in the reply ("Wed
-    10/28"), never "next Wednesday" back, so a wrong reading shows.
+    Plain "Wednesday" is the one coming up; "next" is there to skip it, so said
+    early in a week it lands nine days out, not two. Name the actual date in
+    the reply, never "next Wednesday" back, so a wrong reading shows.
 
     Pull the PLACE into `location`, not the title: "coffee at Lucky Ones"
     → title "Coffee", location "Lucky Ones". "dentist" with no place →
@@ -47,25 +45,22 @@ Buddy::Tools.register(
     walk out of the door, and `at` is always the START. Pass `leave_at` and the
     start is worked back from the drive and how early they like to arrive -
     which is arithmetic this app HAS and you do not. Never both in one call, and
-    never do the sum yourself: "Add Insidious movie today, leaving at 4:15"
-    became a 4:40 start with `arrive_early: 25` and no drive time anywhere in
-    the 25 (prod 5935-5939). A leave time needs somewhere to drive TO, so pass
-    `location` with it.
+    never do the sum yourself, and never fold the drive into `arrive_early`. A
+    leave time needs somewhere to drive TO, so pass `location` with it.
 
     **"Let's be 10 minutes early" is `arrive_early`, and nothing else.** It is a
     plain number of minutes on the row, it needs no drive time and no address,
     and it is what the app's own "min early" setting holds. Leave it out and
-    they get 5, which is the default a person means by not saying. Asked to
-    "add an Eye Follow Up tomorrow at 11:40, and let's be 10 minutes early",
-    the reply added it and then asked whether 11:40 was the check-in or the
-    appointment (prod 5338-5339) - there was no argument to put the 10 in.
+    they get their own setting, which is what a person means by not saying.
+    The number they said goes here; it never needs a question about which time
+    it applies to.
 
     **They said nothing about a buffer? Then the argument isn't in the call.**
     Not a filled-in one, not a stated absence - out. A buffer nobody named is
     an OMISSION, and only an omission reaches the setting they chose for
-    themselves; anything passed here overrides it with a guess (prod 5725).
+    themselves; anything passed here overrides it with a guess.
 
-    `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
+    `calendar`: which calendar to add to, by the name they used for it.
     Matches the person's own + shared-editable LOCAL calendars. Omit for
     their default. (Google-synced calendars still need the app's add flow.)
 
@@ -118,7 +113,7 @@ Buddy::Tools.register(
     },
     kind:         { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
     all_day:      { type: :string,       required: false, description: "'true' for all-day" },
-    calendar:     { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
+    calendar:     { type: :string,       required: false, description: "Which calendar/agenda to add to, by the name they used; omit for default" },
     repeat:       { type: :string,       required: false, description: "Recurrence spec, making this a series: daily / weekdays / weekly:<days> / monthly:<dom> / monthly:<nth>-<weekday> / every:<n>-<unit> / yearly" },
     until:        { type: :string,       required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
   },

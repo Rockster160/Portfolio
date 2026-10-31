@@ -42,12 +42,10 @@ module Transcripts
 
         WHAT TO FIX, AND NOTHING ELSE:
 
-        - A word the machine misheard, where the conversation tells you what it
-          was. "hand coating everything now" in a conversation about writing
-          software is "hand coding everything now".
+        - A word the machine misheard as a different, ordinary word that sounds
+          like it, where the conversation makes the intended term unmistakable.
         - Two words the machine ran together or cut in the wrong place, where
-          that is plainly what happened: "a sink" for "async", "side kick" for
-          "Sidekiq", "post grass" for "Postgres".
+          that is plainly what happened.
         - A name - a person, a company, a product, a tool - spelled as it
           sounds instead of as it is, where the conversation says what it is.
         - A short word the machine DROPPED, where the sentence cannot be read
@@ -61,21 +59,16 @@ module Transcripts
         to it - a window with two fixes in it is a normal window.
       TEXT
 
-      # The vocabulary these conversations are in. Here because the mishearings
-      # that matter are concentrated in it: a term the model is not expecting
-      # is a term it reads as the ordinary word that sounds like it, and the
-      # ordinary word is exactly what the recorder already wrote. Not a list of
-      # allowed fixes - it is the shape of the talking, so a name not on it is
-      # as fixable as one that is.
+      # The world these conversations are in, because the mishearings that
+      # matter are concentrated in it: a term the model is not expecting is a
+      # term it reads as the ordinary word that sounds like it. No list of
+      # terms: a fixed vocabulary is one muddy stretch of audio gets "corrected"
+      # toward, whether or not anybody in this conversation said it.
       WORDS = <<~TEXT.freeze
-        These are software engineering conversations, so the words most often
-        misheard are the ones out of that world: Ruby, Rails, ActiveRecord,
-        Sidekiq, Redis, Postgres, Elasticsearch, SendGrid, Twilio, S3, AWS,
-        React, TypeScript, Node, Python, GraphQL, REST, Kubernetes, Docker,
-        Terraform, RSpec, CI, async, idempotent, webhook, cron, enum, ORM,
-        OAuth, JWT, API, SDK, repo, PR, staging, schema, migration, queue,
-        cache, latency, throughput. Names of companies and of their products
-        come up constantly and are misheard as often as not.
+        These are software engineering conversations, so technical terms and
+        the names of companies and their products are the words most often
+        misheard. Only a term the conversation itself makes unmistakable is a
+        fix.
       TEXT
 
       BEFORE_SAID = <<~TEXT.freeze
@@ -87,7 +80,7 @@ module Transcripts
       OUTPUT = <<~TEXT.freeze
         Reply with a single JSON object, and nothing else:
 
-        {"fixes": [{"turn": 12, "was": "<the words exactly as they appear above>", "now": "<what was actually said>"}]}
+        {"fixes": [{"turn": <number>, "was": "<the words exactly as they appear above>", "now": "<what was actually said>"}]}
 
         - `turn` is the number at the front of the line the words are in.
         - `was` is copied EXACTLY out of that line, with its own punctuation

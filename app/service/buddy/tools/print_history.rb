@@ -12,13 +12,12 @@ Buddy::Tools.register(
     because the printer is the authority on its own filenames and may hold ones
     that have never run before. Come here when `print_again` says it doesn't
     recognise the name: the printer knows a file by something nobody says out
-    loud (`game_tray-vase`, `Wall_mount_phone_holder_v2`), and this is where you
+    loud, with underscores, dashes and version suffixes, and this is where you
     find out what that is so you can send it again. Never guess a file name; a
     wrong guess ties the machine up for hours.
 
-    `query` matches on WORDS, in any order, however they're written - "game
-    tray" finds `game_tray-vase`, and "phone holder" finds
-    `Wall_mount_phone_holder_v2`. Pass what they called it and let the match
+    `query` matches on WORDS, in any order, however they're written - the words
+    they said find a file whose name runs them together. Pass what they called it and let the match
     sort it out; omit it for the recent ones. `days` bounds how far back
     (default 60).
 

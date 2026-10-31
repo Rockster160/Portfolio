@@ -17,10 +17,8 @@ Buddy::Tools.register(
     late for.
 
     **One or the other, never both.** An alarm alongside a reminder for the
-    same moment is two things going off, and the reply then describes the
-    quiet one: "wake me at 6:30 tomorrow" came back as an alarm AND a reminder,
-    announced as "you've got a wake-up reminder" - so the thing that would
-    actually wake them went unmentioned and the thread carried a duplicate.
+    same moment is two things going off, and a reply that describes the quiet
+    one leaves the thing that will actually wake them unmentioned.
 
     Say when in exactly ONE of three ways:
       `at`      - a clock time, as an ISO datetime. "6:30 tomorrow", "at 7pm".
@@ -36,8 +34,7 @@ Buddy::Tools.register(
     countdown they're watching (pasta, a rotation); an alarm is a moment they
     want to be interrupted at. Both ring - follow the word they used.
 
-    `label` is what the alarm is for, in their words - "Wake up", "Washer's
-    done", "Leave for the airport". It is what they'll see on the lock screen
+    `label` is what the alarm is for, in their words. It is what they'll see on the lock screen
     and what's read out when it goes off, so write the finished thing rather
     than a description of the request ("remind me about the washer" is not it).
     Open it with a glyph only if it adds something; one is added for you.
@@ -64,11 +61,10 @@ Buddy::Tools.register(
     not optional here.** It returns the real listeners off their own automations,
     and copying a key path out of one is the difference between an alarm that
     goes off and one that never does. Both failures look the same from outside:
-    silence. A listener that PARSES is not a listener that FIRES - `laundry` is
-    a real scope with a real `action` key, and `laundry:action:stop` was still
-    an alarm that could never ring, because nothing ever fires that scope with
-    that value. Read what the payloads actually carry; don't reason about what
-    they ought to.
+    silence. A listener that PARSES is not a listener that FIRES - a real scope
+    with a real key can still never ring, when nothing ever fires it with that
+    value. Copy scope, key and value from what `payloads` actually carry; don't
+    reason about what they ought to.
 
     `when_phrase` (custom only) says what that listener MEANS in their words -
     "when the washer stops". It's what they'll read in their reminders list.
@@ -80,7 +76,7 @@ Buddy::Tools.register(
     applies to a clock or duration alarm, which goes off once.
   TXT
   args: {
-    label:       { type: :string,  required: true,  description: "What the alarm is for, as they'll read it when it goes off (\"Wake up\")" },
+    label:       { type: :string,  required: true,  description: "What the alarm is for, as they'll read it when it goes off" },
     at:          { type: :string,  required: false, description: "Clock time to go off, as an ISO datetime. Within 24 hours." },
     seconds:     { type: :integer, required: false, description: "Go off this many seconds from now (\"in 20 minutes\" = 1200)" },
     trigger:     { type: :enum,    required: false, values: Buddy::WatchCondition::TRIGGERS, description: "Condition type, when the alarm hangs off something happening rather than a time" },

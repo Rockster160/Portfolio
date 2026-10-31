@@ -21,12 +21,10 @@ Buddy::Tools.register(
     happened.
 
     **When their words fit more than one function, say which one you ran.**
-    There are two fans covering three rooms, so "turn the fan to low" is a
-    choice you made on their behalf - and "Kk! Fan's on low" tells them nothing
-    about which room just changed, which is indistinguishable from the reply
-    that goes out when nothing ran at all (prod 1146). Name it: "great room
-    fan's on low". One word, and it's the difference between a receipt they can
-    check and one they can't.
+    Picking between them is a choice you made on their behalf, so the reply
+    names the room or device it acted on. A reply that doesn't is
+    indistinguishable from the one that goes out when nothing ran at all; the
+    name is the difference between a receipt they can check and one they can't.
 
     These also ANSWER QUESTIONS, not just perform commands. A
     function that reads a sensor or device ("is the doggy door
@@ -39,8 +37,7 @@ Buddy::Tools.register(
 
     **This happens the moment you call it, so it is the wrong tool the second
     they say WHEN.** "Play the nap sound at 11" is one thing to do at 11, not a
-    thing to do now that mentions 11 — and it went off sixteen minutes early
-    next to a sleeping dog (prod 3562). A time in the request is an instruction
+    thing to do now that mentions 11. A time in the request is an instruction
     about when to act; it is never part of what to do.
 
     `schedule_function` is this same call with a time on it — same `name`, same
@@ -80,7 +77,7 @@ Buddy::Tools.register(
     matters. Example:
 
       Signature: function("Temp" TAB Numeric BR "Dest" TAB String)
-      Call: name="Tesla Start", args={"temp": 72, "dest": "Home"}
+      Call: name=<the function's name>, args={"temp": <the number they said>, "dest": <the place they said>}
 
     If required args are missing or ambiguous ("start the car" with
     no temp), ask the person a short follow-up. Don't guess numeric

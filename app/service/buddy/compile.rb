@@ -154,9 +154,9 @@ module Buddy
       Keep something when a person reading it back in six months would be glad
       it was there:
 
-      - Things that happened to them, especially with a lesson attached. What
-        went wrong on a trip is worth keeping precisely because it is useless
-        until the next trip.
+      - Things that happened to them, especially with a lesson attached. A
+        lesson that only pays off the next time the same thing comes round is
+        worth keeping for exactly that reason.
       - What they are going through: an illness, a job situation, a strained
         relationship, a big project, a worry they voiced.
       - Facts about their world - people, pets, places, how things work at their
@@ -238,13 +238,11 @@ module Buddy
 
       How much this matters to their life, NOT how interesting it is.
 
-      - 0-15   trivia and conveniences. A preference about mug size.
-      - 16-40  ordinary life. A project they're enjoying, a mild annoyance.
-      - 41-70  things that weigh on someone. Money worry, a rough patch, a
-               relationship strain, a health thing that isn't dangerous.
-      - 71-100 the big ones. Serious illness, bereavement, losing a job, a
-               relationship ending. Reserve the top for what genuinely
-               dominates a life.
+      - 0-15   trivia and small conveniences.
+      - 16-40  ordinary life: something they're enjoying, a mild annoyance.
+      - 41-70  things that weigh on someone but aren't dangerous.
+      - 71-100 the big ones. Reserve the top for what genuinely dominates a
+               life.
 
       CHECKING IN
 
@@ -257,10 +255,10 @@ module Buddy
       for the event is how a companion is absent for the part that is actually
       hard.
 
-      - The big ones - job loss, illness, bereavement, a relationship ending:
-        1 or 2. They are the SOONEST, not the furthest out.
-      - A sick pet, a hard day, a hospital visit: 0 (later today) or 1.
-      - A project, an interview, something they were excited about: 3 to 14.
+      - The big ones, whatever dominates a life right now: 1 or 2. They are
+        the SOONEST, not the furthest out.
+      - Something hard but passing, today: 0 (later today) or 1.
+      - Something they're working on or looking forward to: 3 to 14.
 
       A DATE IN THE FUTURE IS `relevant_days`, NOT `check_in_days`. They are
       different questions, and a heavy thing dated ahead wants both.

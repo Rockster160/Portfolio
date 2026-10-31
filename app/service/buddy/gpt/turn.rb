@@ -84,8 +84,8 @@ module Buddy
       WAITING_ACK = {
         status: "queued",
         note:   "Lined up BEHIND the wait you just set. It has NOT run, and nothing here needs " \
-                "them - it happens on its own the moment that timer is up. Say what you'll do and " \
-                "when (\"then I'll preheat it\"). Never say it's done, never say it's in progress, " \
+                "them - it happens on its own the moment that timer is up. Say what you'll do, " \
+                "naming it, and when. Never say it's done, never say it's in progress, " \
                 "and never offer it back to them as something you COULD do - it's already set to " \
                 "happen. #{AGAIN}",
       }.freeze
@@ -97,8 +97,8 @@ module Buddy
       ROUTINE_WAITING_ACK = {
         status: "waiting",
         note:   "The routine is running. Everything up to its wait has happened; the rest goes on " \
-                "its own the moment that timer is up, and needs nothing from them. Say what ran and " \
-                "what's still coming (\"printer's on, and I'll preheat it once the minute's up\"). " \
+                "its own the moment that timer is up, and needs nothing from them. Say what ran, " \
+                "naming it, and what the wait will release and when. " \
                 "Never offer the remaining steps back as something you COULD do. #{AGAIN}",
       }.freeze
 
@@ -1441,8 +1441,8 @@ module Buddy
 
         Do ONE of these now:
         - If the thing is doable, call the tool. Check `jil_functions` and
-          `jil_triggers` before deciding you can't - a fan, light, scene, or car
-          command usually lives in one of them.
+          `jil_triggers` before deciding you can't - a device or scene command
+          usually lives in one of them.
         - If it genuinely isn't doable, say so plainly and say what you'd need.
 
         Do not repeat the claim.
@@ -2732,8 +2732,8 @@ module Buddy
 
           A camera holds what it already saw as well as what it can see now, and
           both are yours to pull. "Show me the last person that rang", "who was
-          at the door yesterday morning" - these are asking for the FRAME, and
-          the function that reads a past sighting takes the time they named.
+          at the door yesterday morning" - these are asking for the FRAME. If
+          one of those functions reads a past sighting, pass it the time they named.
 
           "Who" is a request to see. Recognising a person is a question about a
           face, and a face is only ever in a picture.

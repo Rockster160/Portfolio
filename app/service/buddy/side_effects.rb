@@ -113,8 +113,8 @@ module Buddy
               type:        :integer,
               required:    false,
               description: "Days from now to come back to THEM about it, unprompted, on top of " \
-                           "holding it. For news you would ask a friend about later - a job lost, " \
-                           "a diagnosis, something they are dreading or waiting on. THE HEAVIER " \
+                           "holding it. For news you would ask a friend about later - something " \
+                           "hard, something they are dreading or waiting on. THE HEAVIER " \
                            "IT IS THE SOONER: 1 or 2 for the big ones, never the date the thing " \
                            "happens. Omit it for an ordinary fact, which is most of them",
             },

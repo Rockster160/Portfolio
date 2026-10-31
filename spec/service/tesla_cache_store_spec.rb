@@ -122,7 +122,7 @@ RSpec.describe TeslaCacheStore do
 
     it "resolves trip.destination.name from the address book (used by the dashboard route line)" do
       home = double(name: "Home", present?: true)
-      allow_any_instance_of(AddressBook).to receive(:find_contact_near).with([40.5, -111.5]).and_return(home)
+      allow_any_instance_of(AddressBook).to receive(:find_contact_near).with([40.5, -111.5], any_args).and_return(home)
       described_class.record_endpoint(drive_state: {
         active_route_latitude:           40.5,
         active_route_longitude:          -111.5,

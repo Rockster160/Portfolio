@@ -458,8 +458,8 @@ module Buddy
     # all — the wall clock is what it already knows, and the parser applies the
     # person's zone (see cast_value's parse_iso).
     TYPE_HINTS = {
-      iso_time:     "ISO8601 in the person's LOCAL wall-clock time, 24-hour, " \
-                    "e.g. 2pm is \"2026-08-03T14:00:00\". Never convert to UTC and never write a Z",
+      iso_time:     "ISO8601 in the person's LOCAL wall-clock time, 24-hour, with no offset. " \
+                    "Never convert to UTC and never write a Z",
       duration_min: "Whole minutes",
     }.freeze
 

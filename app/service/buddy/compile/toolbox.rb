@@ -27,9 +27,9 @@ module Buddy
       # "Stands alone" was already there and is evidently not enough - a
       # sentence with "tomorrow" in it reads as standing alone, right up until
       # it is read on a different day. So the failures get named.
-      MEMORY_CONTENT_DATES = "Write every date and time ABSOLUTELY - " \
-                             "\"on Tue 25 Aug at 10:00 AM\", never \"tomorrow\", " \
-                             "\"tonight\", \"next week\" or \"today\". " \
+      MEMORY_CONTENT_DATES = "Write every date and time ABSOLUTELY - the weekday, day, " \
+                             "month and clock time, as a calendar shows them - never " \
+                             "\"tomorrow\", \"tonight\", \"next week\" or \"today\". " \
                              "This row will be read on a day that is not this one.".freeze
       MEMORY_CONTENT = "The whole fact, as one sentence that stands alone. #{MEMORY_CONTENT_DATES}".freeze
 
@@ -111,7 +111,7 @@ module Buddy
               summary:       { type: :string, description: "Three to six words" },
               severity:      { type: :integer, description: "0-100" },
               tags:          { type: :array, items: { type: :string } },
-              check_in_days: { type: :integer, description: "Days until you'd ask THEM about it, unprompted. The heavier it is the SOONER - a job loss or a bereavement is 1 or 2, never the date it happens. Omit for none." },
+              check_in_days: { type: :integer, description: "Days until you'd ask THEM about it, unprompted. The heavier it is the SOONER - what dominates a life right now is 1 or 2, never the date it happens. Omit for none." },
               relevant_days: { type: :integer, description: "Days until the thing it is about has happened. A date in the future goes HERE and never in check_in_days; nothing asks before it. Omit for now." },
               expires_days:  { type: :integer, description: "Days until it stops being true. Omit for a lasting fact." },
             },

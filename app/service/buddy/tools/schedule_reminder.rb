@@ -31,10 +31,9 @@ Buddy::Tools.register(
     **`text` is what they'll READ when it goes off, not what they said to get
     it set.** Their words are a request aimed at you; the reminder is a nudge
     aimed at them, and the two are almost never the same sentence. "Please ping
-    me when it's time to do that!" stored verbatim arrives at noon as "Reminder:
-    Ping me when it's time to do the plant check." - a message asking them to
-    ask you, at the moment they were supposed to be told what to do (prod 3449).
-    Write the thing itself: "Check the bamboo and water the plants."
+    me when it's time to do that!" stored verbatim arrives as a message asking
+    them to ask you, at the moment they were supposed to be told what to do.
+    Write the action itself, as the nudge they'll read.
 
     `notify` aims it at SOMEBODY ELSE in the house, and that makes it a MESSAGE
     from this person that leaves later. "Send Chelsea a cute note in 10
@@ -53,7 +52,7 @@ Buddy::Tools.register(
     else. A time inside the note is part of the note. "Tell Rocco I'll make
     supper at 6:00" is a message to pass along right now that happens to
     mention 6:00 - taking the 6:00 as the send time delivers the news at the
-    moment it stops being news, which is what happened in prod 3303. If the
+    moment it stops being news. If the
     only clock time in the request sits inside what they want said, this is the
     wrong tool: use `message_partner`.
 
@@ -67,11 +66,10 @@ Buddy::Tools.register(
     `alarm`, which rings out loud until it's acknowledged. It reaches 24 hours
     ahead; further out, or on a recurrence, this is still the tool.
 
-    **Never alongside an alarm for the same moment.** "Wake me at 6:30
-    tomorrow" came back as an alarm AND one of these, and the reply then
-    described the reminder - "wake-up reminder's set" - so the thing that would
-    actually wake them went unmentioned and the thread carried a duplicate that
-    fires beside it. Pick the one that does the job and say what it is.
+    **Never alongside an alarm for the same moment.** Setting both leaves a
+    duplicate firing beside the alarm, and a reply that describes the reminder
+    leaves the thing that will actually wake them unmentioned. Pick the one
+    that does the job and say what it is.
 
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
@@ -135,8 +133,8 @@ Buddy::Tools.register(
                     (the "if it isn't done yet" shape), `found` for the
                     opposite ("once I've logged a workout, ...")
 
-    **QUOTE ANY VALUE CONTAINING A SPACE.** `name:"Charge Villager Car"` is one
-    term; `name:Charge Villager Car` is `name:Charge` plus two loose words, and
+    **QUOTE ANY VALUE CONTAINING A SPACE.** `name:"<Two Words>"` is one
+    term; `name:<Two Words>` is `name:<Two>` plus a loose word, and
     matches things nobody asked about. This is the single easiest way to write
     a condition that looks right and answers the wrong question.
 
@@ -202,8 +200,8 @@ Buddy::Tools.register(
       agenda:interview-30m        half an hour before the next interview
       agenda:birthdays-10d        ten days before the next birthday
       agenda:leave-5m             five minutes before the next leave-by
-      agenda:end[1289]+10m        ten minutes after THAT item ends
-      chore:shower+7h             11am on a day the shower is due
+      agenda:end[<id>]+10m        ten minutes after THAT item ends
+      chore:<name>+7h             7 hours past 4am on a day that chore is due
       trigger:start-15m           a quarter hour before a one-off they scheduled
 
     Under `agenda:`, three words are the item's own edges - `start`, `end` and
@@ -213,18 +211,18 @@ Buddy::Tools.register(
     appointments. You do not have to ask whether a key exists; writing one
     creates it.
 
-    **THE DOMAIN IS THE ONE THEY NAMED.** The shower can be both a chore and an
+    **THE DOMAIN IS THE ONE THEY NAMED.** One thing can be both a chore and an
     item they put on the calendar by hand on the days it matters, and those are
-    two different rules. "When Shower comes up on the agenda" / "on my
-    calendar" is `agenda:shower` - it fires only on days an item is there, and
-    that is the point. "When the Shower chore is due" / "on the chore list" is
-    `chore:shower`. Never swap one for the other because it would fire more
+    two different rules. "When <it> comes up on the agenda" / "on my
+    calendar" is `agenda:<name>` - it fires only on days an item is there, and
+    that is the point. "When the <it> chore is due" / "on the chore list" is
+    `chore:<name>`. Never swap one for the other because it would fire more
     often. Said neither way, and both exist, ask which.
 
     A chore has no clock time - it comes due for the whole DAY - so the hour is
-    the offset, counted from 4am when the chore day turns over: `chore:bins+18h`
-    is 10pm, `chore:pills+8h` is noon. An offset is therefore almost always
-    wanted; bare `chore:shower` is 4am and is nearly never what they meant.
+    the offset, counted from 4am when the chore day turns over:
+    `chore:<name>+<hours>h`. An offset is therefore almost always wanted; a
+    bare `chore:<name>` is 4am and is nearly never what they meant.
 
     THE HOUR IS THEIRS AND IT IS A JUDGEMENT, not a default to be carried over
     from the arithmetic above. The offset has to land late enough that not
@@ -289,16 +287,16 @@ Buddy::Tools.register(
     `only_if` is a JSON array of plain objects, and the reminder speaks only if
     EVERY one holds when it fires (`only_if_any: true` for any one of them):
 
-      {"device": "Garage Door", "state": "open"}       what a device reports
-      {"device": "Porch Light", "state": "on", "expect": "is_not"}
+      {"device": <name in device_states>, "state": <its state>}   what a device reports
+      {"device": <name in device_states>, "state": <its state>, "expect": "is_not"}
       {"after": "22:00", "before": "06:00"}           a window of the day
       {"days": "weekdays"}                            or "weekends", "mon,wed"
       {"place": "home", "expect": "away"}             where they are
-      {"find": "chore_completions", "query": "name:\\"Trash\\" is:today", "expect": "missing"}
-      {"task": "Is The Car Plugged In", "expect": "falsy"}
+      {"find": "chore_completions", "query": "name:\\"<Chore Name>\\" is:today", "expect": "missing"}
+      {"task": <a checking function from jil_functions>, "expect": "falsy"}
 
     "At 11 tonight, if the garage is still open and I'm not home, tell me" is
-    `at` plus `only_if: [{"device":"Garage Door","state":"open"},
+    `at` plus `only_if: [{"device":<the garage, as device_states names it>,"state":"open"},
     {"place":"home","expect":"away"}]`. A device is named the way it reports
     in (`device_states` in context has them). Use this instead of the single
     `check_*` arguments whenever there's more than one thing to check.
@@ -310,9 +308,9 @@ Buddy::Tools.register(
       template:    true,
       description: "What to remind them of. ALWAYS name the thing itself - this fires hours or " \
                    "days later, out of any context, and it is the whole message they get. " \
-                   "\"Leave for the dentist\" over \"time to go\"; \"Get ready for the 1:40 " \
-                   "doctor appointment\" over \"get ready\". A nudge that doesn't say what it " \
-                   "is for makes them come and ask you.",
+                   "Name the thing, and its time if it has one, never a bare \"time to go\" or " \
+                   "\"get ready\". A nudge that doesn't say what it is for makes them come and " \
+                   "ask you.",
     },
     at:            { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
     anchor:        {

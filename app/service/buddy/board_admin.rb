@@ -46,7 +46,7 @@ module Buddy
         Setting it up:
         - To put a NEW chore on this board, create it with `groups` set to one of this board's groups (create_chore files it under this board's groups when you leave `groups` out). Assign it with `assignee`.
         - To put an EXISTING chore on this board for good, pin it (pin_chore). To file it under a group instead, edit_chore with `groups`.
-        - A credit button is for a chore people mark done for someone else ("Dishes, by Chelsea"): add_credit_button.
+        - A credit button is for a chore people mark done on someone else's behalf, labelled with the chore and the person it credits: add_credit_button.
         - Changing which groups the board watches is set_board_groups, with the FULL list it should watch.
         - Anything the board can't do yet - a new kind of button, a layout change, a setting that doesn't exist - is a feature request (request_feature). Say plainly that it isn't something you can do yet and that you've asked for it.
       TXT

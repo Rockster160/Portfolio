@@ -7,7 +7,7 @@ Buddy::Tools.register(
     they haven't been tracking yet to become a repeating (or one-off) chore.
     Do NOT use to just complete something they already did - that's
     `complete_chore`. And when a chore for it ALREADY exists - "we need to trim
-    Fae's claws tomorrow" with Trim Kitty Nails on the list - that's
+    Fae's claws tomorrow" with a chore for it on the list - that's
     `edit_chore` with `due`, not a second chore.
 
     Optional details, only pass the ones the user actually gives:

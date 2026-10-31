@@ -22,10 +22,8 @@ Buddy::Tools.register(
     **When they name a carrier, pass it.** A tracking number is only useful
     next to the company that issued it: `carrier` is what turns the number into
     a link they can tap and what gets read back when they ask what's coming.
-    'the "Computer Desk" tracking number is FedEx: #532572111399' filed the
-    number and dropped the word FedEx into the confirmation sentence and
-    nowhere else (prod 3495), leaving a row that knows the number and can't
-    track it. The carrier is almost always sitting right next to the number in
+    Filing the number and leaving the carrier only in your reply leaves a row
+    that knows the number and can't track it. The carrier is almost always sitting right next to the number in
     what they said.
   TXT
   feature:     :deliveries,

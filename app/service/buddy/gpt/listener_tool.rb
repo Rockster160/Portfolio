@@ -89,8 +89,7 @@ module Buddy
            fires through here: house sensors, buttons, cameras, doorbells and
            anything else an integration posts in all arrive as Jil triggers, and
            none of it is listed anywhere else you can see. **So call this before
-           telling anyone you can't watch something.** "I don't have a doorbell
-           watch to hook into" was wrong - there are three.
+           telling anyone you can't watch something.**
         2. **Writing the listener once you know it's there.** `payloads` is
            what each kind of event REALLY carries - its fields, and for the
            fields with a knowable set, the exact values they take
@@ -102,8 +101,7 @@ module Buddy
            `remind_when` or `alarm` with trigger="custom".
 
            A scope named after the thing you want is NOT evidence it reports
-           what you want. "The washer finished" is not `laundry` - that scope
-           is a button and has only ever fired a start.
+           what you want. Check which values it has actually fired with.
 
         `scope` pulls one kind of event's examples to the front when you already
         know which you want ("item" for lists, "hass-sensor" for house sensors).

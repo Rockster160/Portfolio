@@ -21,8 +21,8 @@ Buddy::Tools.register(
 
       name: the routine, fuzzy, matched against `routines` in get_context.
       step: WHICH step, counting from 1 down the `steps` list of that entry.
-      set:  a JSON object of the arguments to change on that step, e.g.
-            {"scene":"darkness"}. Only the keys you name are touched; the rest
+      set:  a JSON object of the arguments to change on that step,
+            {"<arg>":"<new value>"}. Only the keys you name are touched; the rest
             of that step's arguments stay as they were.
 
     The changed step is re-checked before anything is stored, exactly as a
@@ -35,7 +35,7 @@ Buddy::Tools.register(
     **A correction is a tool call.** They told you a saved routine is wrong;
     saying you fixed the wording without calling this leaves the routine armed
     with the value they just told you was wrong, and now they think it's
-    handled. (This one really happened - prod routine 4, the lockdown scene.)
+    handled.
 
     **A ROUTINE THEY SAY IS BROKEN MAY ALREADY BE RIGHT.** If this comes back
     saying the step is already set that way, that is the answer: do not try
@@ -48,7 +48,7 @@ Buddy::Tools.register(
   args:        {
     name: { type: :string,  required: true, description: "Routine name, fuzzy" },
     step: { type: :integer, required: true, description: "Which step to change, 1-based, in the order `routines` lists them" },
-    set:  { type: :string,  required: true, description: "JSON object of arguments to change on that step, e.g. {\"scene\":\"darkness\"}" },
+    set:  { type: :string,  required: true, description: "JSON object of arguments to change on that step, {\"<arg>\":\"<new value>\"}" },
   },
   # Same level as save_routine: a correction they just asked for out loud, on a
   # record that is only ever read when they run it. Waiting on a tap would leave

@@ -43,7 +43,7 @@ module Buddy
           {
             hook:  "data-byte-actions-toggle",
             label: "The ⚡ lightning bolt",
-            does:  "Opens your five buttons. Picking one that has its own options replaces the " \
+            does:  "Opens the actions menu: their saved routines, then the built-in actions. Picking one that has its own options replaces the " \
                    "list with those, and tapping outside closes it.",
           },
           {

@@ -241,6 +241,22 @@ RSpec.describe Buddy::Features do
       expect(seed).to include("Jobs listed under one name are one job")
     end
 
+    # A sample day in the rule was read as a fact about the day it went out on.
+    it "names no day of its own in the rule" do
+      seed = seed_with(jobs: [{ id: 1, name: "Fold laundry", group: "laundry" }])
+
+      expect(seed).to include("Jobs listed under one name are one job")
+      expect(seed).not_to include("trash")
+    end
+
+    it "has no group to say the day as when the jobs are single" do
+      seed = seed_with(jobs: [{ id: 1, name: "Refill Kitty Food" }])
+
+      expect(seed).to include("- Refill Kitty Food")
+      expect(seed).not_to include("Jobs listed under one name")
+      expect(seed).not_to include("trash")
+    end
+
     it "says nothing about them at all on a day with none" do
       seed = seed_with({})
 

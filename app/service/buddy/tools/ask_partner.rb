@@ -16,8 +16,8 @@ Buddy::Tools.register(
     phrased it is part of what they're asking.
 
     Either way it is READ BY the person being asked, so "you" means THEM. Your
-    own person gets named: "ask if he'll come with me" goes out as "Will you
-    come with Chelsea?", never "with you".
+    own person gets named: "ask if they'll come with me" goes out naming
+    your person by first name, never "with you".
 
     For a pick-ONE question use ask_partner_choice; for a pick-ANY /
     select-all question use ask_partner_multi.
@@ -30,9 +30,9 @@ Buddy::Tools.register(
     their answer is filed under `var` for a later step to reference as
     `{{that_name}}`.
 
-      ask_partner(to: "Chelsea", question: "What do you want for dinner?",
-                  await_reply: true, var: "hers")
-      run_jil_task(name: "Dinner Planner", hers: "{{hers}}")
+      ask_partner(to: <who>, question: <their question>,
+                  await_reply: true, var: "theirs")
+      run_jil_task(name: <the task>, <its arg>: "{{theirs}}")
 
     Use it only when something really is downstream of the answer. A person is
     not a countdown: they may take hours, or never reply at all, and everything
@@ -46,13 +46,12 @@ Buddy::Tools.register(
     when it isn't a yes/no - `continue_if: "pizza"`. An answer that's neither
     one thing nor the other stops it too, and says so.
 
-    Without `continue_if` the dinner goes on the agenda whether she wanted it or
-    not, so put one on every "if they say" sequence.
+    Without `continue_if` the follow-up runs whatever they answered, so put one
+    on every "if they say" sequence.
 
     ## What YOU say back
 
-    That you've asked, in one short line - "asked her, I'll pass on what she
-    says". This tool sends the question and leaves its own receipt, so that's
+    That you've asked, in one short line. This tool sends the question and leaves its own receipt, so that's
     all that's left to say.
 
     Never answer the question yourself and never read it back. A reply that

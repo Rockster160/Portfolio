@@ -14,8 +14,8 @@
 Buddy::Tools.register(
   name:             :run_jil_task,
   summary:          "Run one of their automations by name, right now - lights, the car, the printer, " \
-                    "cameras, scenes, fans. A name below that says what they asked is the call: \"skip the " \
-                    "next nap\" is Whisper Skip Nap, not a reminder to cancel.",
+                    "cameras, scenes, fans. A name or description below that says what they asked is the " \
+                    "call, even when the request sounds like cancelling a reminder.",
   roster:           ->(user) { Buddy::Tools.jil_function_names(user) + Buddy::Tools.jil_trigger_names(user) },
   description:      <<~TXT,
     Run a Jil automation by name. Everything in the `jil_functions` and
@@ -46,14 +46,14 @@ Buddy::Tools.register(
     the arg name, IN SIGNATURE ORDER:
 
       signature: function("Temp" TAB Numeric BR "Dest" TAB String)
-      call:      name="Tesla Start", args={"temp": 72, "dest": "Home"}
+      call:      name=<the task's name>, args={"temp": <the number they said>, "dest": <the place they said>}
 
     A `function()` takes nothing - leave `args` empty. If a required value is
     missing or ambiguous ("start the car" with no temp), ask a short follow-up.
     Don't guess numbers.
 
-    A `jil_triggers` entry has a `listener`. When it is a bare word
-    (`fan-high`) send no `data`. When it has colons, everything after the scope
+    A `jil_triggers` entry has a `listener`. When it is a bare word send no
+    `data`. When it has colons, everything after the scope
     is a FILTER and `data` has to satisfy it, or nothing runs:
 
       * `scope:word`       - a bare word is a VALUE the data must contain. Pair
@@ -61,12 +61,12 @@ Buddy::Tools.register(
                              `event:add` -> data="action:add".
       * `scope:key::Value` - that key must equal Value: data="key:Value".
 
-      listener: `hass-button:device_name::"Laundry Button"`
-      call:     name="Laundry Button", data="device_name:Laundry Button"
+      listener: `<scope>:device_name::"<Device Name>"`
+      call:     name=<the trigger's name>, data="device_name:<Device Name>"
 
     `data` is space-separated `key:value` pairs, every piece with a colon, or a
     JSON object when a value has spaces or colons in it:
-    data='{"name":"Tech Stand-Up: Daily","action":"add"}'. If the listener
+    data='{"<key>":"<value with: a colon>","action":"add"}'. If the listener
     filters on something you can't work out from what they said, ask.
 
     A wrong shape is refused before anything runs, and the refusal says what
@@ -86,9 +86,9 @@ Buddy::Tools.register(
     the closest match is a command, it isn't an answer - say you can't check
     that one. `expect_result: true` on one is refused.
 
-    **When their words fit more than one task, say which one you ran.** "Turn
-    the fan to low" with two fans is a choice you made for them - name it:
-    "great room fan's on low".
+    **When their words fit more than one task, say which one you ran.** Picking
+    between them is a choice you made for them, so the reply names the room or
+    device it acted on.
 
     ## Not now
 

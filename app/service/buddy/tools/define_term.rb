@@ -11,14 +11,13 @@ Buddy::Tools.register(
     companions get the word too.
 
     That last part is a fact about the plumbing, not a line to say back. Somebody
-    teaching you their word wants YOU to have it; "tucked in for everyone, so
-    nobody has to puzzle over it again" answers a question nobody asked, and it
-    turns a bit of family shorthand into a comprehension problem that needed
+    teaching you their word wants YOU to have it; telling them the whole house
+    has it now answers a question nobody asked, and it turns a bit of family shorthand into a comprehension problem that needed
     solving. Say it the way you'd say it to a friend who just let you in on
     something - the receipt already shows it was kept.
 
     This is for VOCABULARY - a word and what it points at. A fact about the
-    person ("she hates cilantro") is `remember` instead. Something to do is a
+    person - what they like, what they can't stand - is `remember` instead. Something to do is a
     chore, an agenda item, or `stash_idea`.
 
     `aliases` are the other ways they say the same thing, comma-separated
@@ -28,13 +27,11 @@ Buddy::Tools.register(
     a second one.
 
     **CALLING THIS IS THE THANK-YOU.** Somebody teaching you a word wants it
-    kept, and warm words about keeping it are not keeping it. "That one's going
-    in the little bird pile" over no call at all is the worst answer available:
-    it reads exactly like the real thing, so nobody finds out until they use the
-    word again and you don't know it. If you say a word has been tucked away,
-    this call is what made that true. Prod: Eve taught four Afrikaans phrases in
-    ninety seconds, was told twice they were being kept, and one of them was
-    never written anywhere.
+    kept, and warm words about keeping it are not keeping it. Saying it's kept
+    over no call at all is the worst answer available: it reads exactly like
+    the real thing, so nobody finds out until they use the word again and you
+    don't know it. If you say a word has been kept, this call is what made that
+    true - one call per word, however many arrive at once.
 
     CHECK THE GLOSSARY FIRST. It's already in your context. A word that's in
     there is one they taught you before, and the honest answer is that you have
@@ -45,22 +42,17 @@ Buddy::Tools.register(
     **A CORRECTION CAN ARRIVE AS A FACT, NOT AN INSTRUCTION.** "That is
     Afrikaans, not Dutch" reads like conversation; "change it to Afrikaans"
     reads like a request. They are the same thing and both of them are a
-    correction - call this again with the fix and say what you learned. Prod:
-    a phrase was learned with `notes: "Dutch phrase"`, she said one minute later
-    "That is Afrikaans. The language from South Africa", and the reply agreed
-    warmly and called nothing. The glossary kept the wrong language on a word
-    the person had corrected out loud, and the whole house reads it.
+    correction - call this again with the fix and say what you learned. Agreeing
+    without the call leaves the glossary holding what they just corrected out
+    loud, and the whole house reads it.
 
     This is the one case that OUTRANKS everything above about not re-writing a
     word that is already in. A correction replaces; it does not pile up, and it
     is not "agreeing" even when the sentence around it is friendly.
 
     **AGREEING IS NOT TEACHING.** "You got it!", "yep, that's it", a thumbs up -
-    those close the subject, they don't reopen it. Prod: `dealeo` was learned,
-    refined fifty seconds later when she described the sing-song, and then
-    written a THIRD time on a bare "You got it!" - same meaning, same aliases,
-    nothing changed - which put a third card up and a third thank-you under it.
-    Once a word is in and right, the next warm thing said about it is words, not
+    those close the subject, they don't reopen it. Writing the same meaning
+    again puts another card up and another thank-you under it. Once a word is in and right, the next warm thing said about it is words, not
     a call.
   TXT
   args:        {

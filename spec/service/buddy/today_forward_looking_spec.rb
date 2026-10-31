@@ -242,7 +242,7 @@ RSpec.describe "Buddy Today forward-looking" do
     # what the day IS.
     it "asks for a group of jobs to be said as the day, not as a task" do
       expect(seed).to include("the job is what the DAY is")
-      expect(seed).to include("it's trash day")
+      expect(seed).to include("as the day it makes")
     end
 
     it "gives chores as the job rather than as the rows" do
@@ -481,7 +481,7 @@ RSpec.describe "Buddy Today forward-looking" do
     # it, and the rule for them is only about saying them once.
     it "asks for a job to be said once, as the job" do
       expect(seed).to include("Jobs listed under one name are one job")
-      expect(seed).to include("trash day")
+      expect(seed).to include("say the name once")
     end
 
     # The pin no longer puts a job on the list at all (see
@@ -490,7 +490,8 @@ RSpec.describe "Buddy Today forward-looking" do
     # aside on that job, not a beat of its own.
     it "treats a multiplier as a bonus on a job that is already being said" do
       expect(seed).to include("pays that much over the odds today")
-      expect(seed).to include("double points")
+      expect(seed).to include("the multiplier exactly as the line gives it")
+      expect(seed).not_to include("double points")
     end
 
     it "asks for an emoji that's about something" do

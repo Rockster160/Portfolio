@@ -12,10 +12,8 @@ Buddy::Tools.register(
     **Call this when you need a number you haven't got.** `edit_agenda_item`
     refuses a `leave_at` on an item with no drive time rather than guessing one,
     and something Buddy has only just created has no drive time yet - this is
-    how that gets unstuck, in the same turn, without asking them anything. Asked
-    to move an event so they could leave at 4, a companion said "I don't have a
-    drive time for that" and stopped, on an event it had itself put on the
-    calendar ninety seconds earlier (prod 5268).
+    how that gets unstuck, in the same turn, without asking them anything,
+    including on an item you put on the calendar yourself.
 
     Also for "how far is that", "how long will it take me to get there", "when
     do I need to leave", "when will I be home".
@@ -24,8 +22,8 @@ Buddy::Tools.register(
     the time they are through their own front door, given a few minutes to
     actually arrive, rounded to something a person would say out loud. Use it as
     the `at` or `leave_at` of the thing that comes next rather than doing the
-    arithmetic yourself - "leave once she's back from yoga" is `leave_at` set to
-    the yoga's `follow_on`.
+    arithmetic yourself - "leave once she's back from <thing>" is `leave_at` set
+    to that item's `follow_on`.
 
     Somebody else's item is fine to look up. Their drive home is a fact about
     when the house is theirs again, which is a fact about the asker's day.

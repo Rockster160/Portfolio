@@ -300,11 +300,21 @@ module ByteInterviewPrep
       ].join("\n")
     end
 
+    # How far off the interview is when the brief is written, from the row
+    # itself, so a brief kicked off by hand or late is told the real gap.
+    def lead_line(item, now: Time.current)
+      minutes = ((item.start_at - now) / 60).round if item&.start_at
+      return "I have an interview coming up." if minutes.nil? || minutes <= 0
+      return "I have an interview in about #{minutes} minutes." if minutes < 90
+
+      "I have an interview in about #{(minutes / 60.0).round} hours."
+    end
+
     def text(application, item, user: nil)
       user ||= application.user
 
       <<~TXT
-        I have an interview in about an hour. Write me the brief.
+        #{lead_line(item)} Write me the brief.
 
         THE CONVERSATION
         #{event_block(item, user)}
@@ -324,7 +334,7 @@ module ByteInterviewPrep
         #{spoken_section(application, user)}
 
         WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST
-        Everything else follows from it, and the material above is what decides it - the title on the row, who it is with, how long it is, and what the last beat on the timeline said. A 30 minute first call with a recruiter is not a technical screen, and a brief that prepares me for the wrong one is worse than no brief.
+        Everything else follows from it, and the material above is what decides it - the title on the row, who it is with, how long it is, and what the last beat on the timeline said. A short first call with a recruiter is not a technical screen, and a brief that prepares me for the wrong one is worse than no brief.
 
         - **A recruiter or screening call**: what the company does, in a sentence I could say back. Why the role exists. What they are likely to ask (notice period, salary, why them) and what I should ask back. No algorithms.
         - **A technical interview**: the stack it will be in, the two or three things in it I should go over before I sit down, and the shape of the exercise if the material says anything about it. Be specific - "brush up on X" is worth nothing without saying what about X.
@@ -360,7 +370,7 @@ module ByteInterviewPrep
         6. **Anything odd** - a bad sign, a gap in what I know, something in the timeline worth raising. One line each, and leave the section out if there is nothing in it.
 
         WHATEVER THE BRIEF NAMES, THE BRIEF CARRIES
-        Nothing in it may need a second page to be worth anything. If it names something I keep written down - a behavioral answer, a number, a line out of my own notes - the thing goes in, not a pointer to it. "Use #3" has sent me to another page to do the one job the brief exists to do, and at T-10 minutes on a phone I am not going to go and open `interview-answers.md` to find out what #3 was. That is the difference between a brief and an index.
+        Nothing in it may need a second page to be worth anything. If it names something I keep written down - a behavioral answer, a number, a line out of my own notes - the thing goes in, not a pointer to it. Never point at an entry by its number or name; carry its text. Right before the call, on a phone, I am not going to go and open `interview-answers.md` to find out what an entry was. That is the difference between a brief and an index.
 
         AN ANSWER SITS UNDER ITS QUESTION
         Not in a section of its own further down. The answers used to be collected at the end and named from section 4, so reading one meant scrolling between the question and the answer and losing my place in both. Every question in section 4 is followed by the answer to THAT question, whole, before the next question starts. If one written answer is honestly the answer to two of the questions, use it once: keep the question it fits best and drop the other, rather than printing the same story twice or sending me back up the page to find it.
@@ -369,14 +379,14 @@ module ByteInterviewPrep
         Never wrap a line to a width. I read this on a phone and the phone does its own wrapping, so a newline in the middle of a sentence is rendered as a break: a paragraph wrapped at eighty characters arrives as four separate blocks of two lines each with a gap between them, and the answer I am trying to read is in pieces. Breaks BETWEEN paragraphs, bullets and sections are right and wanted - it is the ones inside a paragraph that are never needed. This covers the quoted answers too: one `>` line per paragraph, however long that line gets.
 
         EVERY TERM IS EXPLAINED WHERE IT IS USED
-        In brackets, at first use, in the sentence it appears in - not in a glossary at the top, which is the same scroll as the answers were. It applies to all of them and not only the exotic ones: the shorthand everybody in the industry is assumed to know is exactly the one that goes past me bare, and "IC" and "VC" both have. So would ARR, RIF, FTE, Series B, SOC 2, TS/SCI, IDIQ, and anything out of their own product line or their stack. Write "IC (individual contributor - hands-on, nobody reporting to me)" the first time and plain English after it. A word I have to go and look up in the ten minutes I do not have is a word the brief did not carry.
+        In brackets, at first use, in the sentence it appears in - not in a glossary at the top, which is the same scroll as the answers were. It applies to every acronym and piece of jargon, and not only the exotic ones: the shorthand everybody in the industry is assumed to know is exactly the one that goes past me bare. Gloss it in plain English in brackets the first time, and use plain English after it. A word I have to go and look up right before the call is a word the brief did not carry.
 
         For the written answers specifically:
         - **Verbatim, as the file has it.** They are already written to be spoken. Tightening one here is a second opinion on a sentence I have already said out loud. Verbatim is the WORDS: the file wraps its own lines at about eighty characters and those wraps are not part of the answer, so join them back up and give me each paragraph as one line.
         - **The cut that fits, not the whole entry.** Several of them have an alternate or a system-design cut; carry the one the question it is sitting under actually asks for, and say which it is.
         - **Only the part I would say.** The `Why it works`, `Backing`, `Use this one when` and `[need number]` notes are mine for maintaining the file. They are not the answer and they do not go in the brief.
 
-        I am reading this in the ten minutes before I join the call, on a phone. Write it to be read standing up: short paragraphs, no preamble, no restating the question back at me, no telling me I will do great. A written answer is as long as it is written and that is not a reason to shorten it, nor licence for the sections around it to sprawl. Say where something is a guess rather than stating it flatly - a confident wrong fact about the company said out loud in the call is the one failure that is worse than a thin brief.
+        I am reading this right before I join the call, on a phone. Write it to be read standing up: short paragraphs, no preamble, no restating the question back at me, no telling me I will do great. A written answer is as long as it is written and that is not a reason to shorten it, nor licence for the sections around it to sprawl. Say where something is a guess rather than stating it flatly - a confident wrong fact about the company said out loud in the call is the one failure that is worse than a thin brief.
       TXT
     end
   end

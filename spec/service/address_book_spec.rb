@@ -307,9 +307,22 @@ RSpec.describe AddressBook do
     end
 
     it "falls back to the nearest contact" do
-      allow(book).to receive(:find_contact_near).with(here).and_return(Contact.new(name: "Home"))
+      allow(book).to receive(:find_contact_near).with(here, any_args).and_return(Contact.new(name: "Home"))
 
       expect(book.place_name(here, establishments: true)).to eq("Home")
+    end
+
+    # The car parks down the street from the saved address, past `near?` but
+    # well inside the business radius, and the nearest business is a stranger's.
+    it "takes a saved place a stop is parked down the street from over a business" do
+      book = described_class.new(user)
+      allow(book).to receive_messages(nearest_establishment: "Frank Kidd Roofing", reverse_geocode: "Taylorsville")
+      contact = user.contacts.create!(name: "Nathan")
+      contact.addresses.create!(user: user, label: "Tavern", street: "5719 Easton St", lat: 40.6473989, lng: -111.9557654)
+      parked = [40.648564, -111.9562]
+
+      expect(book.place_name(parked, establishments: true)).to eq("Nathan")
+      expect(book.place_name(parked)).to eq("Taylorsville")
     end
 
     it "falls back to the nearest business only when asked for one" do
@@ -333,6 +346,40 @@ RSpec.describe AddressBook do
       allow(book).to receive(:addresses).and_return([far, close])
 
       expect(book.find_address_near([40.5, -111.9])).to eq(close)
+    end
+
+    # `User.me` and its address book outlive any one request.
+    it "sees an address saved after the first lookup" do
+      user = create(:user)
+      book = described_class.new(user)
+      expect(book.find_address_near([40.5, -111.9])).to be_nil
+
+      contact = user.contacts.create!(name: "Nathan")
+      address = contact.addresses.create!(user: user, label: "Tavern", street: "1 Main", lat: 40.5, lng: -111.9)
+
+      expect(book.find_address_near([40.5, -111.9])).to eq(address)
+    end
+  end
+
+  describe "#stoppable_place?" do
+    let(:book) { described_class.new(create(:user)) }
+
+    def place(*types) = { geometry: { location: { lat: 40.5, lng: -111.9 } }, types: types }
+
+    it "takes a business with a category" do
+      expect(book.stoppable_place?(place("bar", "point_of_interest", "establishment"))).to be(true)
+    end
+
+    it "skips a listing with no category, which is usually someone's house" do
+      expect(book.stoppable_place?(place("point_of_interest", "establishment"))).to be(false)
+    end
+
+    it "skips a trade that goes to the customer" do
+      expect(book.stoppable_place?(place("roofing_contractor", "point_of_interest", "establishment"))).to be(false)
+    end
+
+    it "skips an answer about an area" do
+      expect(book.stoppable_place?(place("neighborhood", "political"))).to be(false)
     end
   end
 end

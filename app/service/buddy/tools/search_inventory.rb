@@ -4,7 +4,7 @@ Buddy::Tools.register(
   description: <<~TXT,
     Find a PHYSICAL thing, or find out what's in a box. The inventory is the
     labelled boxes and bins around the house and everything filed inside them,
-    several levels deep - "Basement > Tool Cubes > Batteries > AA".
+    several levels deep: a room, a box in it, a box in that.
 
     Use it for "where's the tent", "which bin are the christmas lights in",
     "do we still have any AA batteries", "what's in the camping tote", "what

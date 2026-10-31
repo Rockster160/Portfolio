@@ -19,7 +19,7 @@ Buddy::Tools.register(
     `query` takes the emails page's own search syntax. Bare words match the
     subject, the opening lines, either person's name or address, and tags - not
     the full body. `from:vet`, `to:chelsea`, `subject:"lab results"`,
-    `after:2026-10-01`, `before:2026-10-15` (before is exclusive), `has:attachment`,
+    `after:YYYY-MM-DD`, `before:YYYY-MM-DD` (before is exclusive), `has:attachment`,
     `is:unread`, `in:sent` for mail they sent. `OR`, `-` to exclude, parens to
     group, quotes around anything with a space. `from`, `to`, `subject`, `after`
     and `before` can go in as their own fields instead - they compile into the
@@ -28,7 +28,7 @@ Buddy::Tools.register(
     Search for words that would LITERALLY be in the mail: a name, a company, the
     thing it's about (`bloodwork`, `invoice`, `reservation`). A category word
     they used - "the vet", "the bank", "my landlord" - is rarely in the sender's
-    name, so `from:vet` misses "Brightwater Animal Clinic". One or two words
+    name, so `from:vet` misses a clinic that signs with its own name. One or two words
     beat a long OR chain; widen by dropping words, not adding them.
 
     Matches come back in this same turn, newest first, with an id each. When

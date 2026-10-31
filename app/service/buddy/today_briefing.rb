@@ -756,12 +756,15 @@ module Buddy
       partner:   "A line whose title starts with a name is that person's. Say it as theirs, in that order - who, what, when - so it lands as news about somebody they care about. One clause is plenty, and their own day is what the message is about.",
       all_day:   "Something marked all day is simply ON today. Name it and say today; the clock has nothing to add to a date.",
       cancelled: "A cancelled thing is one of the most useful lines in a briefing: a normal thing NOT happening is a real heads-up. Say it plainly.",
-      jobs:      "Jobs listed under one name are one job, and the job is what the DAY is: several bin chores make it trash day, so say \"it's trash day\".",
+      # No quoted sentence and no sample group: a fixed example was read as a
+      # fact about the day it was sent on, and a group is any word two chore
+      # names share, so filling one in can quote a word that is no kind of day.
+      jobs:      "Jobs listed under one name are one job, and the job is what the DAY is: say the name once, as the day it makes.",
       # It rides on a job that is already being mentioned; it never puts one
       # there. A multiplier is worth a few words of "and there's extra in it for
       # you", not a line of its own and not a reason the job came up - see
       # Buddy::Context#build_chore_buckets, where the pin decides nothing.
-      hot:       "A job with a multiplier on it pays that much over the odds today. Tack it onto the job in a few words, the way you'd point out there's extra in it for them - double points for getting that one done.",
+      hot:       "A job with a multiplier on it pays that much over the odds today. Tack it onto the job in a few words, with the multiplier exactly as the line gives it, the way you'd point out there's extra in it for them.",
       # Carries WEATHER_DIRECTIVE verbatim, and has to: Buddy::GPT::Turn decides
       # whether the briefing was GIVEN a forecast by looking for that exact
       # string in the seed, and reads the figures back off the reply on the
@@ -781,7 +784,7 @@ module Buddy
       # so the figures in it are never the model's to drop or reorder. Rain is
       # named as ordinary because, handed a wet week, briefings cast it as a
       # nuisance to be put up with, and here it isn't one.
-      forecast:  "Their forecast goes under your message as a table - today's high and low, the week, and Alpine - so the figures and the days are already covered. Leave them to it. If today's sky changes what they'd do, a few plain words; otherwise the weather needs nothing from you. Rain is good news to them - welcome weather, never a nuisance or something to get through.",
+      forecast:  "Their forecast goes under your message as a table, so the figures and the days are already covered. Leave them to it. If today's sky changes what they'd do, a few plain words; otherwise the weather needs nothing from you. Rain is good news to them - welcome weather, never a nuisance or something to get through.",
       plunge:    "One of the Alpine lines calls out a good window for a plunge. Float it once and lightly, as something the day has room for, in the hours it actually names.",
       waiting:   "Somebody in the house asked them something and it's still sitting there. Say who asked and what, so they can answer it.",
       # NOT a cap. `facts[:week]` is already `upcoming_notable`, narrowed to the
@@ -797,7 +800,7 @@ module Buddy
       # "All of it reaches them" sat three bullets above. The section is down
       # to one line now (Buddy::BriefingFacts::STASH_FLOAT), so there is
       # nothing left to select.
-      stash:     "Occasionally, and not most days, float the thing they stashed a while back and haven't come back to. Lightly, easy to wave off, and in the words it's written in, with how long it's been sitting. A thought from a fortnight ago, renamed and read back without its age, arrives as a job somebody set them this morning.",
+      stash:     "Occasionally, and not most days, float the thing they stashed a while back and haven't come back to. Lightly, easy to wave off, and in the words it's written in, with how long it's been sitting. Renamed and read back without its age, an old thought arrives as a job somebody set them this morning.",
     }.freeze
 
     def applicable_rules(facts)
@@ -806,7 +809,8 @@ module Buddy
       rules << :partner   if facts[:today].any? { |i| i[:mine] == false }
       rules << :all_day   if facts[:today].any? { |i| i[:all_day] }
       rules << :cancelled if (facts[:today] + facts[:week]).any? { |i| i[:cancelled] }
-      rules << :jobs      if facts[:jobs].any?
+      # Only a group is said as the day; a lone job is just named.
+      rules << :jobs      if facts[:jobs].any? { |job| job[:group].present? }
       rules << :hot       if facts[:jobs].any? { |j| j[:hot].present? }
       # On the HIGH, not on the block. Past mid-afternoon the figures are dropped
       # and only the week's outlook is left, and a rule asking for a high there
@@ -841,7 +845,7 @@ module Buddy
         HOW TO SAY IT
         - All of it reaches them. Trim the words around a thing and keep the thing: a quiet day is two lines because the day is quiet, and a full one runs as long as the day does.
         - Only what's above. If it isn't there, it isn't happening today.
-        - Call each thing by its name. Whose birthday, which meeting, who they're collecting - the name is the part they couldn't have guessed, and a category in its place sends them to the app to find out what you meant. Work in the place when the place is the point, and a time when it changes what they'd do.
+        - Call each thing by its name. The name is the part they couldn't have guessed, and a category in its place sends them to the app to find out what you meant. Work in the place when the place is the point, and a time when it changes what they'd do.
         - Round odd clock times. Say "tomorrow" for the next day, and a weekday name from two days out.
         #{applicable_rules(facts)}
 

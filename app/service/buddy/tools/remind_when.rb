@@ -104,30 +104,26 @@ Buddy::Tools.register(
                  places and calendars, and a hand-written listener is not. This
                  is for what they don't cover.
 
-    `listener` (custom only) is a Jil listener string, e.g.
-    `item:action:added item:list:name:/^Groceries$/`. **Call
+    `listener` (custom only) is a Jil listener string, shaped like
+    `item:action:added item:list:name:/^<List Name>$/`. **Call
     `read_listener_guide` before writing one, every time** - it returns the
     syntax plus the listeners already running on their own automations, and
     copying a real key path from those is the difference between a watch that
     fires and one that silently never does. Do not guess at payload keys.
 
     **Not knowing the format is never a reason to decline.** The guide is a
-    tool call, in this same turn, and it costs the person nothing. Asked to
-    watch the front door and to watch for someone getting home, a companion
-    answered "I can't wire that watch from here yet" and "I need the house
-    listener format and I don't have it in front of me right now" - both
-    without calling the one tool that hands it over. It read as a missing
-    feature and it was a lookup that hadn't happened yet. Read the guide, then
-    set the watch.
+    tool call, in this same turn, and it costs the person nothing. Declining
+    without calling it reads as a missing feature when it is a lookup that
+    hasn't happened yet. Read the guide, then set the watch.
 
     That tool is also how you find out whether something is watchable in the
     first place, by passing what they called it (`about: "doorbell"`). The house
     sensors and cameras appear NOWHERE else you can see - not in `jil_triggers`,
     not in any context section - so your not knowing about a thing is not
     evidence it isn't there. **Search before you tell anyone you can't watch
-    something.** Answering "I don't have a doorbell watch to hook into" while
-    three doorbell automations were running is the failure this exists to
-    prevent, and repeating it after they say it's set up is worse.
+    something.** Saying there's nothing to watch while automations for it are
+    running is the failure this exists to prevent, and repeating it after they
+    say it's set up is worse.
 
     `when_phrase` (custom only) says what that listener MEANS, in their words:
     "when something is added to the Claude list", "when the car parks at home".
@@ -139,8 +135,7 @@ Buddy::Tools.register(
     `past_phrase` (custom only) is that same condition once it HAS happened:
     "The print finished", "The car parked at home". It's read back in the
     sentence saying whatever this was holding has now stopped, where the
-    "when..." form doesn't fit - prod 4339 went out as "when the print finishes
-    - I've stopped the check-ins." The built-in triggers already know their own
+    "when..." form doesn't fit. The built-in triggers already know their own
     past tense; a custom listener only has the words you give it.
 
     `text` is what to remind them of. It fires ONCE by default (the next time
@@ -162,8 +157,8 @@ Buddy::Tools.register(
     intent. A REPEATING one is delivered exactly as written, every single time,
     without you in the loop - it's a feed, and a feed doesn't need you to say
     it in a fresh way sixty times a day. So write those as the finished
-    sentence they'll read: "🔔 Claude list got a new item in Ocs-Backend", not
-    "ping me when the Claude list gets an item". Whatever the trigger carries -
+    sentence they'll read, naming the thing that happened, not a restatement of
+    what they asked for. Whatever the trigger carries -
     the item, the title - is appended for you, so don't try to write it in.
     **Open it with a glyph**, since nothing adds one for you and these land on
     a lock screen where the first character is what's read first.
@@ -209,13 +204,14 @@ Buddy::Tools.register(
 
     `run` turns this from a nudge into an automation: name a Jil task from
     `jil_triggers` and it FIRES when the condition hits, with nothing said to
-    anyone. "Trigger whisper-quiet the next time the doggy door opens" is
-    `trigger: "custom"` with the sensor's listener and `run: "Whisper Quiet"`.
+    anyone. "Trigger <task> the next time the doggy door opens" is
+    `trigger: "custom"` with the sensor's listener and `run:` that task's name
+    from `jil_triggers`.
 
     `run` can also name a FUNCTION from `jil_functions`, with its arguments in
     `run_args` - the same arguments `run_jil_task` takes. "Once I leave
-    the event, navigate me to Petsmart" is `trigger: "depart"` with
-    `run: "Tesla Navigate"`, `run_args: { destination: "Petsmart" }`. That is
+    the event, navigate me to <place>" is `trigger: "depart"` with `run:` the
+    navigate function's name and `run_args:` its arguments. That is
     the shape whenever the thing should happen when they GET somewhere or LEAVE
     somewhere, not at a time: `schedule_function` guesses a clock time off the
     calendar, and the event never ends on the minute it was booked to.
@@ -224,8 +220,7 @@ Buddy::Tools.register(
     running it - "ten seconds after the doggy door" is `delay: 10`. It only
     applies with `run`.
 
-    This is a real capability, so don't decline it. "I can watch the sensor but
-    I can't make it wait ten seconds after" was wrong: one call sets the watch,
+    This is a real capability, so don't decline it: one call sets the watch,
     the wait and the trigger. Use `run` only when they want a THING to happen;
     if they want to be told, that's `text` as usual. `notify` and `run` don't
     combine - one is a message to a person, the other isn't a message at all.
@@ -237,20 +232,15 @@ Buddy::Tools.register(
     order, waits (`set_timer` with `then_continue: true`) and all. Either one
     runs the whole chain when the condition hits, with no model in the loop:
 
-      "When I start the printer, wait 2 minutes, then preheat it"
-        trigger: "custom", listener: <the printer starting>,
-        steps: [{"tool_name":"set_timer","payload":{"minutes":2,"then_continue":true}},
-                {"tool_name":"run_jil_task","payload":{"name":"Printer - Preheat"}}]
-
-      "When I log coffee, turn on chill mode, then start a 90-minute focus timer"
-        trigger: "event", target: "Coffee",
-        steps: [{"tool_name":"run_jil_task","payload":{"name":"Chill Mode"}},
-                {"tool_name":"set_timer","payload":{"minutes":90,"label":"Focus"}}]
+      "When <thing happens>, wait <minutes they said>, then <task>"
+        trigger: <the trigger>, listener or target: <the thing happening>,
+        steps: [{"tool_name":"set_timer","payload":{"minutes":<minutes they said>,"then_continue":true}},
+                {"tool_name":"run_jil_task","payload":{"name":<the task from jil_triggers>}}]
 
     A single timer with nothing else is still `timer` on its own.
 
-      "Run my wind-down the next time I get home" -> trigger: "arrive",
-        target: "home", routine: "Wind Down"
+      "Run my <routine> the next time I get home" -> trigger: "arrive",
+        target: "home", routine: <that routine's saved name>
 
     These are one-offs unless they say every time, exactly like a reminder.
     Use `steps` for anything more than a single task; `run` is still the one
@@ -259,11 +249,9 @@ Buddy::Tools.register(
     here. `delay` applies to these too. They don't combine with `run`,
     `timer` or `notify`, and `text` is the line posted above what ran.
 
-    `timer` starts a COUNTDOWN each time the condition hits - "set a 1 second
-    timer every time something comes into the Claude list" is `timer: 1` on a
-    custom listener. **When they say timer, they mean a timer.** A reminder is
-    a message they have to be looking at; a timer alarms out loud, which is the
-    whole reason to ask for a one-second one. `set_timer` only counts down from
+    `timer` starts a COUNTDOWN each time the condition hits, for the number of
+    seconds they said. **When they say timer, they mean a timer.** A reminder
+    is a message they have to be looking at; a timer alarms out loud. `set_timer` only counts down from
     now, and that is not a reason to talk them into a reminder instead - this
     arg is how a timer hangs off a condition. Like `run`, it says nothing and
     doesn't combine with `notify`.
@@ -287,12 +275,12 @@ Buddy::Tools.register(
     watch stays armed for the next time - "when the garage opens after 10pm"
     at 3pm isn't the garage opening after 10pm.
 
-      {"device": "Garage Door", "state": "open"}       what a device reports
-      {"device": "Porch Light", "state": "on", "expect": "is_not"}
+      {"device": <name in device_states>, "state": <its state>}   what a device reports
+      {"device": <name in device_states>, "state": <its state>, "expect": "is_not"}
       {"after": "22:00", "before": "06:00"}           a window of the day
       {"days": "weekdays"}                            or "weekends", "mon,wed"
       {"place": "home", "expect": "away"}             where THEY are
-      {"find": "chore_completions", "query": "name:\\"Trash\\" is:today", "expect": "missing"}
+      {"find": "chore_completions", "query": "name:\\"<Chore Name>\\" is:today", "expect": "missing"}
 
     "If the garage opens after 10 and I'm not home, message me" is
     `trigger: "custom"` on the garage sensor with `only_if:
@@ -314,13 +302,13 @@ Buddy::Tools.register(
     target:        { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
     except:        { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },
     listener:      { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
-    when_phrase:   { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
+    when_phrase:   { type: :string,  required: false, description: "Plain-language meaning of the listener, in their words, starting with \"when\". Required for trigger=custom." },
     past_phrase:   { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
     repeat:        { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     banner:        { type: :boolean, required: false, description: "Post `text` as a banner in the thread instead of a message: no push, never unread." },
     notify:        { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:           { type: :string,  required: false, description: "Jil task (from jil_triggers) or function (from jil_functions) to RUN when the condition hits, instead of saying anything. Verbatim." },
-    run_args:      { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them ({\"destination\": \"Petsmart\"})." },
+    run_args:      { type: :object,  required: false, description: "With `run` naming a function: its arguments, exactly as run_jil_task takes them." },
     routine:       { type: :string,  required: false, description: "A saved routine to run when the condition hits, by name." },
     steps:         { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order, run when the condition hits - save_routine's shape, written for this watch alone." },
     delay:         { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run`, `routine` or `steps`." },

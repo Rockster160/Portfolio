@@ -30,8 +30,8 @@ Buddy::Tools.register(
     This is a POSITION, reported by their phone and their car, and it is only
     as fresh as the last time one of them said something. It comes back with
     how long ago that was. If it is hours old, say so rather than reading it
-    out as though it were now - "your phone last put you at home about four
-    hours ago" is true, and "you're at home" might not be.
+    out as though it were now: give how old the reading is alongside where it
+    puts them.
 
     A phone that has never reported is not an error and not a refusal: say
     plainly that nothing has come in yet.

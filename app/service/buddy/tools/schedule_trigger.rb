@@ -36,8 +36,8 @@ Buddy::Tools.register(
     Same shape as `schedule_reminder`, and the reason to reach for this at all:
 
       check / check_query / check_expect  - a search. QUOTE ANY VALUE WITH A
-              SPACE: `name:"Charge Villager Car"` is one term, and
-              `name:Charge Villager Car` is a term plus two loose words that
+              SPACE: `name:"<Two Words>"` is one term, and
+              `name:<Two Words>` is a term plus a loose word that
               match things nobody asked about.
       check_task / check_expect           - ask one of their Jil functions
               instead, and read what it says.
@@ -62,7 +62,7 @@ Buddy::Tools.register(
   TXT
   feature:     :jil,
   args:        {
-    scope:        { type: :string, required: true,  description: "Listener scope to fire, e.g. villager:car:charged" },
+    scope:        { type: :string, required: true,  description: "Listener scope to fire, exactly as they or the listener guide gave it" },
     data:         { type: :string, required: false, description: "Extra key:value data, or a JSON object" },
     at:           { type: :string, required: true,  description: "When to fire (ISO datetime)" },
     check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },

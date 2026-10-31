@@ -31,12 +31,10 @@ Buddy::Tools.register(
     asked for it; the person receiving it has never seen the old version, so a
     note about what MOVED tells them about a correction to something they were
     never told existed. Send the fact as it now stands - what it is, when,
-    where. Asked to let Chelsea know about a party after fixing its location,
-    the note that went was the fix rather than the party, and she had no idea
-    there was a party (prod 5057-5060). And "once you finish" is SEQUENCING: it
+    where. And "once you finish" is SEQUENCING: it
     says WHEN to send, never what to say.
 
-    `to` is who it's for (a first name like "Chelsea", or "my wife"/"Rocco").
+    `to` is who it's for (a first name, or how they refer to them - "my wife").
     It must be someone in the user's household - if you don't recognize the
     name, say you're not sure who they mean rather than guessing.
 
@@ -56,7 +54,7 @@ Buddy::Tools.register(
     until then is how it arrives too late to be any use:
     - "Tell Rocco I'll make supper at 6:00 tonight" - send it NOW. The 6:00 is
       when supper is. Delivering this at 6:00 tells him at supper time that
-      supper is at supper time. (This one really happened - prod 3303.)
+      supper is at supper time.
     - "Tell Chelsea I'm leaving at 4" - now, it's content.
     - "Remind Chelsea at 4 that I'm leaving" - `schedule_reminder`, it's framing.
     - "Let mom know the flight lands tomorrow" - now.
@@ -67,22 +65,17 @@ Buddy::Tools.register(
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).
 
     **"Tell her X and ask if Y" is ONE ask, never this plus an ask.** The
-    question carries both halves - "You left the garage open. Want me to close
-    it?" - and goes out once. Sent as a message_partner AND an ask_partner, the
-    same words reached her phone twice, and she answered in a thread the
-    question never came from (prod 8509).
+    question carries both halves and goes out once. Sent as a message_partner
+    AND an ask_partner, the same words reach their phone twice, and they answer
+    in a thread the question never came from.
 
     ## What YOU say back
 
-    A short confirmation in your own voice - "sent", "she'll see it in a sec".
+    A short confirmation in your own voice.
     That's the whole job. This tool sends the note and leaves its own receipt,
     so there is nothing left for your reply to carry.
 
-    NEVER the note itself. "Tell Rocco I'm making salmon teriyaki bowls for
-    supper, it'll be started at 6:00" came back as exactly that sentence, word
-    for word, with the relay copy underneath it - so the same words appeared
-    three times on her screen and not one of them said it had gone (prod
-    3413-3417). Reading the note back tells them what they just typed and
+    NEVER the note itself. Reading the note back tells them what they just typed and
     nothing about whether it left.
   TXT
   feature:     :relay,

@@ -16,7 +16,7 @@ Buddy::Tools.register(
                did each chore, it asks).
       groups - comma-separated groups it belongs to. Leave out to file it
                under this board's groups, which is what puts it on this board.
-      color  - optional hex colour like "#16A34A".
+      color  - optional hex colour, "#RRGGBB".
   TXT
   feature:     :chores,
   board:       true,
@@ -26,7 +26,7 @@ Buddy::Tools.register(
     credit: { type: :string, required: true,  description: "Who it credits: first name, 'me', or 'whoever'" },
     label:  { type: :string, required: false, description: "What the button says; short" },
     groups: { type: :string, required: false, description: "Comma-separated groups; omit for this board's" },
-    color:  { type: :string, required: false, description: "Hex colour, e.g. #16A34A" },
+    color:  { type: :string, required: false, description: "Hex colour, #RRGGBB" },
   },
   confirm:     ->(payload, ctx) {
     board = Buddy::BoardAdmin.board!(ctx)
@@ -43,7 +43,7 @@ Buddy::Tools.register(
     raise "#{board.display_name} watches no groups yet - set its groups first, or say which group" if groups.empty?
 
     color = payload[:color].to_s.strip.presence
-    raise "#{color.inspect} isn't a hex colour like #16A34A" if color && !color.match?(/\A#\h{6}\z/)
+    raise "#{color.inspect} isn't a hex colour like #RRGGBB" if color && !color.match?(/\A#\h{6}\z/)
 
     label = payload[:label].to_s.strip.presence || [chore.short_name.presence || chore.name, credited&.first_name&.upcase_first].compact.join(", ")
     {

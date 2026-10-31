@@ -6,7 +6,7 @@ Buddy::Tools.register(
     Wire two things together so one following the other stops being manual. Use
     it when they describe a pairing: "logging coffee should tick off the coffee
     chore", "when I finish the RX chore take it off the Chores list", "taking my
-    Cymbalta should check off the Cymbalta task".
+    meds should check off the meds task".
 
     **The cascade only ever runs downhill:**
 
@@ -19,13 +19,11 @@ Buddy::Tools.register(
     If they ask for one of those, say it runs the wrong way rather than making
     a link that will be refused.
 
-    The two ends do NOT need the same name, and usually don't: chore "Focus"
-    pairs with event "D-Amphetamine", chore "Check Softener Salt" with list item
-    "Check Salt".
+    The two ends do NOT need the same name, and usually don't. Read both names
+    off what's really there; never assume they match.
 
     `source_notes` narrows an event by its notes, which is the only thing
-    separating several chores that share one event name ("Fae" with notes
-    "Litter" vs "Food"). `target_list` says which list, and is required for a
+    separating several chores that share one event name. `target_list` says which list, and is required for a
     list item.
 
     `match` decides how forgiving the source is: `exactly` (default),

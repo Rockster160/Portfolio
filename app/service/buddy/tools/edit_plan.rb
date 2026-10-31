@@ -11,8 +11,8 @@ Buddy::Tools.register(
     "push the garage stuff back an hour", "only do that on weekdays", "have it
     tell Chelsea instead" and "forget the whole thing" are each ONE call.
 
-    `plan` is that id (`p4821`), or words from any of its parts, for the whole
-    plan. A row's own id (`412`) aims at that one part alone - which is also
+    `plan` is that id (the `p`-prefixed one), or words from any of its parts,
+    for the whole plan. A row's own numeric id aims at that one part alone - which is also
     how a reminder with no `plan` tag is changed here.
 
     Change only what they mentioned; everything else stays as it is.

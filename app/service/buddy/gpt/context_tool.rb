@@ -148,7 +148,7 @@ module Buddy
           about them, with `logged` on each message saying whether it is
           already on the board. Fetch it before add_job_note, and whenever they
           ask where something stands - "did I hear back from anyone", "what's
-          happening with Netflix". A beat they mention that isn't on the board
+          happening with <company>". A beat they mention that isn't on the board
           is worth offering to log.
         - recent_actions: what you actually RAN in this thread, newest first.
           Request it the moment they say you didn't do something, or ask

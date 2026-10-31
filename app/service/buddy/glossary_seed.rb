@@ -98,7 +98,7 @@ module Buddy
         meaning: "Shortly, in a little while. NOT immediately.",
         aliases: ["just now"],
         kind:    :shorthand,
-        notes:   "The opposite of what it sounds like - treat it as \"soon\", never as \"right this second\".",
+        notes:   "The opposite of what it sounds like - treat it as \"soon\", never as \"right this second\". Only when they say it about something still ahead; something already logged or done \"just now\" happened a moment ago.",
       },
       {
         term:    "Holding thumbs",

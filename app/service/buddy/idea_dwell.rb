@@ -155,8 +155,8 @@ module Buddy
       It reaches you because some of your idea's words turned up in the
       transcript, and that is all. Ordinary words turn up everywhere, so a
       conversation can share several of them with an idea it has nothing to do
-      with - a run of people saying "tell me" is not a conversation about a
-      sensor that tells you something. Read what they were actually working on.
+      with, so a shared word is not evidence. Read what they were actually
+      working on.
       If it is a different subject, reply with exactly: #{NOTHING}
 
       That is a correct answer and a common one, not a last resort. A note filed
@@ -168,8 +168,8 @@ module Buddy
       Once you are sure it is yours:
 
       - Only what is NEW. Never restate the seed or anything already in a note.
-      - Keep the reasons. "Ruled out a pressure mat" is half of it; "ruled out a
-        pressure mat as overkill for the price" is the note.
+      - Keep the reasons. A decision without its why is half a note: what they
+        ruled out AND why, what they chose AND why.
       - A correction is the most valuable thing in a stretch. If they fixed
         something that was wrong, keep it and keep it plain.
       - The conversation may weave between more than one thing they're holding,

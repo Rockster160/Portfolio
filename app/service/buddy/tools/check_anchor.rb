@@ -1,16 +1,16 @@
 Buddy::Tools.register(
   name:        :check_anchor,
-  summary:     "When a named recurring moment happens next - sunset, sunrise, trash pickup, or " \
-               "another anchor they set up.",
+  summary:     "When a named recurring moment happens next - sunset, sunrise, or another anchor " \
+               "they set up.",
   description: <<~TXT,
-    Look up when a named recurring moment happens next - sunset, sunrise, trash
-    pickup, or anything else they've set up as an "anchor". Use when they ask
+    Look up when a named recurring moment happens next - sunset, sunrise, or
+    anything else they've set up as an "anchor". Use when they ask
     when one of these is ("when's sunset?", "when do the bins go out?", "how
     long until sunrise?"), or when you need the time to answer something else
     ("do I have time for a walk before dark?").
 
-    `key` is the anchor's name and looks like `domain:event` - `sun:sunset`,
-    `trash:pickup`. Omit it to get every anchor's next time at once, which is
+    `key` is the anchor's name and looks like `domain:event`. Omit it to get
+    every anchor's next time at once, which is
     also how you find out which ones exist. Don't guess at a key you haven't
     seen; call it with no key first and use what comes back.
 
@@ -26,7 +26,7 @@ Buddy::Tools.register(
     key:    {
       type:        :string,
       required:    false,
-      description: "Anchor name like sun:sunset; omit to list them all",
+      description: "Anchor name, exactly as a call with no key listed it; omit to list them all",
     },
     offset: {
       type:        :string,

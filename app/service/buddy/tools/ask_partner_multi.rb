@@ -11,7 +11,7 @@ Buddy::Tools.register(
     the full set comes back to you.
 
     `to` is who to ask. `question` is the prompt, and it is READ BY them, so
-    "you" means THEM and your own person gets named ("...with Chelsea?", never
+    "you" means THEM and your own person gets named (by their first name, never
     "...with me" or "...with you"). `options` is a COMMA-SEPARATED list of the
     choices (at least two), e.g. options="words, time, touch, service, gifts".
     No brackets. For a pick-ONE question use ask_partner_choice; for a

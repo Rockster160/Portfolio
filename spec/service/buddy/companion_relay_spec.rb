@@ -535,11 +535,14 @@ RSpec.describe "Buddy companion relay" do
         end
       }
 
-      it "works the case out in the prompt, with the sentence that broke" do
+      # Described, never quoted: a sentence held up as the failure is still a
+      # sentence in front of the model.
+      it "works the case out in the prompt without the sentence that broke" do
         convo = User.me.byte_conversations.create!(mode: :buddy)
         prompt = Buddy::Personality.for(User.me, conversation: convo)
 
-        expect(prompt).to include("Will you learn American mahjong with you?")
+        expect(prompt).to include("\"with me\" → \"with <your person's name>\"")
+        expect(prompt).not_to include("mahjong with you")
         expect(prompt).to include("\"you\" is the recipient and nobody else")
       end
     end

@@ -18,7 +18,7 @@ Buddy::Tools.register(
     in one of its arguments:
 
       ask_me(question: "What do you want for dinner?", var: "dinner")
-      run_jil_task(name: "Dinner Planner", meal: "{{dinner}}")
+      run_jil_task(name: <the task>, <its arg>: "{{dinner}}")
 
     Pass `choices` (comma-separated) when the answer is one of a few known
     things - a tap beats typing, and it keeps the value predictable for whatever

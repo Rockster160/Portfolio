@@ -18,9 +18,9 @@ Buddy::Tools.register(
       `{"tool_name": "...", "payload": {...}}` using the same arguments you'd
       send to call that tool directly. Example:
 
-        [{"tool_name":"run_jil_task","payload":{"name":"Printer - Power On"}},
-         {"tool_name":"set_timer","payload":{"seconds":60,"then_continue":true}},
-         {"tool_name":"run_jil_task","payload":{"name":"Printer - Preheat"}}]
+        [{"tool_name":"run_jil_task","payload":{"name":<a task from jil_triggers>}},
+         {"tool_name":"set_timer","payload":{"seconds":<the wait they said>,"then_continue":true}},
+         {"tool_name":"run_jil_task","payload":{"name":<the next task>}}]
 
     A WAIT between two steps is `set_timer` with `then_continue: true`, same as
     in a live sequence - the routine pauses there and picks itself back up.
@@ -39,8 +39,8 @@ Buddy::Tools.register(
     then send both to the dinner planner" is:
 
       [{"tool_name":"ask_me","payload":{"question":"What do you want for dinner?","var":"mine"}},
-       {"tool_name":"ask_partner","payload":{"to":"Chelsea","question":"What do you want for dinner?","await_reply":true,"var":"hers"}},
-       {"tool_name":"run_jil_task","payload":{"name":"Dinner Planner","mine":"{{mine}}","hers":"{{hers}}"}}]
+       {"tool_name":"ask_partner","payload":{"to":<who>,"question":"What do you want for dinner?","await_reply":true,"var":"theirs"}},
+       {"tool_name":"run_jil_task","payload":{"name":<the planner task>,"mine":"{{mine}}","theirs":"{{theirs}}"}}]
 
     Every `{{name}}` must be collected by an EARLIER step - a routine can't use
     an answer it hasn't asked for yet, and one that tries is rejected here. Only

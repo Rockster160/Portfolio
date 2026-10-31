@@ -20,7 +20,7 @@ Buddy::Tools.register(
     `location` is OPTIONAL:
       - omit it for home / local weather ("what's it like out?").
       - pass a place for anywhere else - a saved spot ("the gym"), an
-        appointment location ("TMS"), or a general place / city ("Moab",
+        appointment's location, or a general place / city ("Moab",
         "Salt Lake"). It resolves saved places first, then looks the place up.
 
     Home is a FIXED point and nothing here can move it. If they say the forecast

@@ -17,14 +17,13 @@ Buddy::Tools.register(
     **Name the company they named, or name none.** `company` is matched against
     what is really on the board, and if you pass something they didn't say, the
     row offers to change the wrong application's history. Passing a DIFFERENT
-    company because the one they named isn't on the board is the specific
-    failure: it settled CSC Generation as rejected when the sentence was about
-    Corporate Tools, whose row wasn't visible because it was already closed. If
-    what they named isn't there, say so and ask - an application you can't see
+    company because the one they named isn't visible is the specific failure:
+    it changes another application's history. If what they named isn't there,
+    say so and ask - an application you can't see
     is not the same thing as an application that isn't theirs.
 
-    `company` is fuzzy - the name off an email footer is fine, "CSC Generation,
-    Inc." finds "CSC Generation". SETTLED applications match too: one they were
+    `company` is fuzzy - the name off an email footer is fine, a legal suffix
+    like "Inc." still finds the row. SETTLED applications match too: one they were
     rejected from is still a thing that happened to them and still takes a note.
 
     **One company can hold several applications.** Applying to three jobs at one
@@ -86,11 +85,10 @@ Buddy::Tools.register(
     they sat down and talked to a person. Mail is NEVER an `interview` beat: a
     mail can book one (`scheduled`), ask for their times (`availability`), call
     one off (`cancelled`), or follow one up (`heard_back`) - it is not the thing
-    itself. The subject line is the trap. "Interview with Acme" is an INVITATION,
-    and Neighbor's technical video interview was filed as `interview` off exactly
-    that: it put a conversation on the timeline that had not happened, and
-    because `interview` books nothing, the interview that WAS being arranged
-    never reached the calendar. `recruiter_call` is the same rule for a call that
+    itself. The subject line is the trap. "Interview with Acme" is an INVITATION.
+    Filed as `interview` it puts a conversation on the timeline that has not
+    happened, and because `interview` books nothing, the interview that IS
+    being arranged never reaches the calendar. `recruiter_call` is the same rule for a call that
     actually took place.
 
     **A booking called off is `cancelled`, and that is the whole of it.** It is
@@ -158,8 +156,7 @@ Buddy::Tools.register(
     with no time says an interview exists and cannot say when, which is the one
     shape this tool refuses. Read the time off the mail, with the zone the mail
     states. An invite names the sender's zone ("EDT", "Eastern", "Central"), so
-    pass `follow_up_at` with that zone's offset (`2026-10-22T12:00:00-04:00`),
-    never theirs. Only a time with no zone written beside it is in their own.
+    pass `follow_up_at` with that zone's offset, never theirs. Only a time with no zone written beside it is in their own.
     A zone names a REGION, not a season: "MST", "MT" and "Mountain" all mean
     Mountain time as it stands on the interview's date (-06:00 in October,
     -07:00 in January), and "EST"/"Eastern" and the rest work the same way.
@@ -181,15 +178,15 @@ Buddy::Tools.register(
     `summary` is one line saying what the note SAYS, and it exists so `note`
     never has to be shortened. It is what the card shows them; `note` is what
     gets kept. When you are logging a message word for word, the card reading
-    "Hi Rocco," tells them nothing - put the gist here and leave the words
+    a greeting tells them nothing - put the gist here and leave the words
     where they belong.
 
     **It is KEPT, and it is what the timeline reads.** Every beat holds the
     whole message, so the application's page shows this line and keeps the
     message itself behind an arrow - which makes this the sentence he sees when
     he looks back at the row in three weeks. Write it as a fact about the
-    application ("hiring manager round booked for Tue 3pm with Erik Brown"),
-    not as a note about mail arriving ("an email from brightwheel").
+    application - what was booked or decided, when, and with whom, as the
+    message states them - not as a note that mail arrived.
   TXT
   args:        {
     company:          { type: :string, required: true, description: "Which application - fuzzy, the company name" },

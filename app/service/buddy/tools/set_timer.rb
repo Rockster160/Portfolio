@@ -17,7 +17,7 @@ Buddy::Tools.register(
 
     When they say ALARM, use `alarm`. It reaches a clock time as well as a
     duration, and what goes off says what it was set for rather than that a
-    timer is up - "Wake up" instead of "your Wake up timer's done". Follow the
+    timer is up. Follow the
     word they used; "timer" is this one.
 
     It's also how you WAIT, and it is the ONLY way to make something happen

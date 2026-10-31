@@ -340,8 +340,21 @@ RSpec.describe ByteInterviewPrep do
     # and a glossary at the top is the same scroll the answers were.
     it "asks for every term to be explained where it is used" do
       expect(prompt).to include("EVERY TERM IS EXPLAINED WHERE IT IS USED")
-      expect(prompt).to include("IC")
-      expect(prompt).to include("VC")
+      expect(prompt).to include("every acronym and piece of jargon")
+    end
+
+    # A fixed list of acronyms gets brought into the brief as facts about the
+    # company, so the rule names none.
+    it "names no sample terms to gloss" do
+      expect(prompt).not_to include("TS/SCI")
+      expect(prompt).not_to include("Series B")
+    end
+
+    it "tells the session the real time to the interview" do
+      lead = ByteInterviewPrep::Brief.lead_line(Struct.new(:start_at).new(45.minutes.from_now))
+
+      expect(lead).to eq("I have an interview in about 45 minutes.")
+      expect(ByteInterviewPrep::Brief.lead_line(nil)).to eq("I have an interview coming up.")
     end
 
     # 400 characters is a greeting and the first paragraph, so the brief was

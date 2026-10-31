@@ -179,7 +179,7 @@ module ByteStandupPrep
     )
 
     <<~TXT
-      Standup is in about fifteen minutes. Write me the brief.
+      Standup is coming up. Write me the brief.
 
       Cover **#{stamp(span.first)}** through **#{stamp(span.last)}** (America/Denver) — that's "yesterday", stretched back over the weekend when there was one.
 

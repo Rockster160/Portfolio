@@ -14,9 +14,8 @@ Buddy::Tools.register(
 
     `match` is a substring of the text OR the numeric id from
     `upcoming_reminders` / `active_watches`. **Prefer the id.** Several of these
-    can carry word-for-word identical text - two doorbell watches both reading
-    "Someone's at the doorbell" differ only in what they listen for - and a
-    substring cannot tell those apart. When it can't, this refuses and lists
+    can carry word-for-word identical text, differing only in what they listen
+    for, and a substring cannot tell those apart. When it can't, this refuses and lists
     them rather than guessing, and you pick by id.
 
     A row carrying a `plan` id is one part of something bigger - a watch, a

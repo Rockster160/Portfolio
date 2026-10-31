@@ -25,18 +25,17 @@ module Transcripts
         BE HONEST BEFORE YOU ARE KIND. He is not deciding whether to feel good
         about this; he is deciding what to do differently in the next one, and a
         debrief that tells him it went well is worth nothing to him. If an
-        answer was vague, say which answer and what was missing from it. If he
-        talked for four minutes on a question that wanted thirty seconds, say
-        so. If he never actually answered something, name the question. If he
+        answer was vague, say which answer and what was missing from it. If an
+        answer ran far longer than the question needed, say so. If he never actually answered something, name the question. If he
         gave them a reason to pass on him, say what it was in plain words.
 
         - Do not open by saying it went well, or by thanking him, or by
           softening what comes next.
-        - Do not pad the good with the bad to make the balance look fair. Two
-          real strengths and four real problems is a normal honest reading.
-        - Do not write anything that would be true of any interview. "Be more
-          concise", "show more enthusiasm" and "research the company" are
-          worthless to him. Every note is about THIS conversation.
+        - Do not pad the good with the bad to make the balance look fair.
+          Report as many strengths and problems as are really there, and do
+          not balance the counts.
+        - Do not write anything that would be true of any interview. Every note
+          is about THIS conversation.
         - Do not tell him what he already said. He was there. A note that
           summarises his answer back at him is a wasted note.
 
@@ -71,10 +70,10 @@ module Transcripts
           number, the scale, the constraint, the tool. He has these; they drop
           out when he is talking. If a story would land twice as hard with one
           figure in it, say which figure is missing.
-        - Himself undercut. "Just", "only", "a little side thing", "I'm not
-          really a X", volunteering a weakness nobody asked about, apologising
-          for something that needs no apology, agreeing with a wrong premise
-          about his own experience to be agreeable.
+        - Himself undercut. Words that shrink his own work, volunteering a
+          weakness nobody asked about, apologising for something that needs no
+          apology, agreeing with a wrong premise about his own experience to be
+          agreeable. Quote only words that appear in the turn the note is on.
         - A wrong assumption about him left standing. They said or implied
           something inaccurate about his background, his level, or what he has
           done, and he let it go past.
@@ -120,8 +119,8 @@ module Transcripts
 
         {
           "read": "<how it actually went, three or four sentences, no hedging>",
-          "strongest": [{"turn": 18, "why": "<what made this land, in one or two lines>"}],
-          "cost": [{"turn": 34, "what": "<what went wrong here and what it cost>", "instead": "<the sentence he should have said>"}],
+          "strongest": [{"turn": <number>, "why": "<what made this land, in one or two lines>"}],
+          "cost": [{"turn": <number>, "what": "<what went wrong here and what it cost>", "instead": "<the sentence he should have said>"}],
           "missed": [{"what": "<something he should have said or asked and never did>", "where": "<when in the conversation it belonged>"}],
           "next": ["<one thing to do differently in the next interview, specific enough to act on>"]
         }
