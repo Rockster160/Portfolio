@@ -2624,6 +2624,15 @@ BUDDY_EDGE_PROBES = [
     note:  "said it couldn't find a matching task and asked for the wording - Whisper Skip Nap was " \
            "on the roster the whole time",
   },
+  {
+    case:  "prod 9635",
+    say:   "skip whisper nap",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /skip nap/i } },
+    needs: :skip_nap_fn,
+    note:  "answered \"nothing's queued for Whisper's nap, so there's nothing to skip\" without " \
+           "running Whisper Skip Nap",
+  },
   # The same sentence again, over the thread where it was refused three times.
   {
     case:  "prod 8737",

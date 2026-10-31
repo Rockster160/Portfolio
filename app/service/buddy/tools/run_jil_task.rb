@@ -33,6 +33,11 @@ Buddy::Tools.register(
     it went - wait for the answer and say what actually came back. Many report
     real outcomes, including "that was already the case, so I did nothing".
 
+    The task does its own checking, so don't look first. Finding no timer,
+    reminder or schedule for the thing they named is not an answer: a task
+    keeps its own state, and running it is how you find out whether there was
+    anything to do.
+
     ## What to pass
 
     A `jil_functions` entry has a `signature` (raw Jil, e.g.
