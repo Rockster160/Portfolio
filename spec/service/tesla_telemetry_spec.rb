@@ -214,7 +214,7 @@ RSpec.describe TeslaTelemetry do
   end
 
   describe "#check_tire_pressure" do
-    let(:chores) { instance_double(List, add: nil, remove: nil) }
+    let(:chores) { instance_double(List, ensure_item: nil, remove: nil) }
 
     before { allow(user).to receive(:list_by_name).with(:Chores).and_return(chores) }
 
@@ -230,7 +230,7 @@ RSpec.describe TeslaTelemetry do
         tpms_soft_warning_rr: false,
       })
       process(ChargeState: "Idle")
-      expect(chores).not_to have_received(:add)
+      expect(chores).not_to have_received(:ensure_item)
     end
 
     it "flags only the soft-warned + truly-low tire" do
@@ -245,8 +245,8 @@ RSpec.describe TeslaTelemetry do
         tpms_soft_warning_rr: false,
       })
       process(ChargeState: "Idle")
-      expect(chores).to have_received(:add).with("Back Left tire pressure low")
-      expect(chores).not_to have_received(:add).with(/Front/)
+      expect(chores).to have_received(:ensure_item).with("Back Left tire pressure low")
+      expect(chores).not_to have_received(:ensure_item).with(/Front/)
     end
   end
 

@@ -115,6 +115,55 @@ $(document).ready(function() {
       }
     })
 
+    // The dashboard figure as each bucket opened. It gets an axis of its own
+    // on the right: a balance in the tens of thousands on the spending scale
+    // would flatten every bar to a sliver. The in/out stacks still share one.
+    const balance = payload.balance || []
+    const hasBalance = balance.some(function(v) { return v !== null && v !== undefined })
+    if (hasBalance) {
+      datasets.push({
+        type: "line",
+        label: "Balance at start",
+        data: balance,
+        yAxisID: "balance",
+        borderColor: "#E6EDF3",
+        backgroundColor: "#E6EDF3",
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        tension: 0.2,
+        spanGaps: false,
+        // Drawn over the bars rather than behind them.
+        order: -1,
+      })
+    }
+
+    const scales = {
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        ticks: { color: "#C9D1D9", callback: function(v) { return unit + v } },
+        grid: { color: "rgba(255,255,255,0.05)" },
+      },
+      x: {
+        stacked: true,
+        ticks: { color: "#C9D1D9", maxRotation: 0, autoSkip: true },
+        grid: { color: "rgba(255,255,255,0.05)" },
+      },
+    }
+    if (hasBalance) {
+      scales.balance = {
+        position: "right",
+        stacked: false,
+        ticks: {
+          color: "#E6EDF3",
+          callback: function(v) { return unit + Math.round(v / 1000) + "k" },
+        },
+        // Its gridlines would cross the spending axis's at unrelated values.
+        grid: { drawOnChartArea: false },
+      }
+    }
+
     return {
       type: "bar",
       data: { labels: payload.labels || [], datasets: datasets },
@@ -122,19 +171,7 @@ $(document).ready(function() {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
-        scales: {
-          y: {
-            stacked: true,
-            beginAtZero: true,
-            ticks: { color: "#C9D1D9", callback: function(v) { return unit + v } },
-            grid: { color: "rgba(255,255,255,0.05)" },
-          },
-          x: {
-            stacked: true,
-            ticks: { color: "#C9D1D9", maxRotation: 0, autoSkip: true },
-            grid: { color: "rgba(255,255,255,0.05)" },
-          },
-        },
+        scales: scales,
         plugins: {
           legend: { display: false },
           tooltip: {

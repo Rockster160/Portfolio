@@ -25,6 +25,9 @@ $t-danger:    #f85149;
   font-size: 14px;
   line-height: 1.5;
   box-sizing: border-box;
+  // Nothing on the board is meant to be scrolled to sideways; a stray
+  // wide child would otherwise drag the whole page off the left edge.
+  overflow-x: clip;
 
   *, *::before, *::after { box-sizing: border-box; }
   .hidden { display: none !important; }
@@ -47,11 +50,14 @@ $t-danger:    #f85149;
 
 // ---------- header ----------
 
+// The actions drop under the title when both won't fit on one line —
+// a phone with a long page name — rather than pushing off the screen.
 .timers-app-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px 16px;
   margin-bottom: 20px;
 
   .timers-app-title {
@@ -59,12 +65,24 @@ $t-danger:    #f85149;
     font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.01em;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 
 .timers-app-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 600px) {
+  .timers-app { padding: 12px; }
+  .timers-app-header { margin-bottom: 14px; column-gap: 10px; }
+  .timers-app-actions { gap: 5px; }
+  .timers-app .timers-app-actions .timers-icon-btn { width: 34px; height: 34px; }
+  .timers-quick-row { margin-bottom: 16px; }
 }
 
 .timers-app .timers-icon-btn {
@@ -375,24 +393,41 @@ $t-danger:    #f85149;
   align-content: flex-start;
 }
 
-// Phone-width sizing: two countdowns/counters per row, dials full-width.
-// The desktop rules above use clamp() + flex-basis to soft-wrap; on a
-// narrow viewport that lets a counter and a dial sit side-by-side and
-// produces awkward leftover space. Lock both shapes explicitly here.
-@media (max-width: 600px) {
-  .timers-board { gap: 10px; }
+// Edit mode's page-wide size picker, and the same segmented control in
+// each card's menu.
+.timers-size-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
 
-  .timer-card.timer-card-countdown,
-  .timer-card.timer-card-counter {
-    width: calc(50% - 5px);
-    max-width: calc(50% - 5px);
-    flex: 0 0 calc(50% - 5px);
-  }
+  .timers-size-bar-label { color: $t-muted; font-size: 13px; }
+}
 
-  .timer-card.timer-card-dial {
-    width: 100%;
-    max-width: 100%;
-    flex: 0 0 100%;
+.timers-size-picker,
+.timers-card-menu-popup .menu-size {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: $t-bg;
+  border: 1px solid $t-border;
+  border-radius: 8px;
+
+  button {
+    flex: 1 1 auto;
+    background: transparent !important;
+    border: 0 !important;
+    color: $t-muted !important;
+    padding: 6px 10px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    cursor: pointer;
+
+    &:hover { background: $t-card-hi !important; color: $t-text !important; }
+    &.is-selected { background: $t-primary !important; color: #fff !important; }
   }
 }
 
@@ -403,8 +438,10 @@ $t-danger:    #f85149;
   border: 1px solid $t-border;
   border-radius: 12px;
   padding: 16px 12px 14px;
-  width: clamp(180px, 100%, 240px);
-  flex: 0 1 240px;
+  --card-w: 220px;
+  width: var(--card-w);
+  max-width: 100%;
+  flex: 0 1 var(--card-w);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -455,8 +492,14 @@ $t-danger:    #f85149;
     .timer-card-name { color: $t-muted; }
   }
 
-  &.timer-card-counter { width: clamp(170px, 100%, 200px); flex: 0 1 200px; }
-  &.timer-card-dial    { width: clamp(220px, 100%, 320px); flex: 0 1 320px; }
+  &[data-size="s"]    { --card-w: 160px; }
+  &[data-size="l"]    { --card-w: 320px; }
+  &[data-size="full"] { --card-w: 100%; }
+
+  &.timer-card-dial                  { --card-w: 320px; }
+  &.timer-card-dial[data-size="s"]   { --card-w: 240px; }
+  &.timer-card-dial[data-size="l"]   { --card-w: 440px; }
+  &.timer-card-dial[data-size="full"] { --card-w: 100%; }
 
   .timer-card-name {
     font-size: 14px;
@@ -515,6 +558,27 @@ $t-danger:    #f85149;
   }
 }
 
+// Card widths come from the size scale (sizes.js). Phones lay the
+// sizes out as columns instead: three small or two medium to a row,
+// large and full on a row of their own; dials need the room, so they
+// go one step bigger.
+@media (max-width: 600px) {
+  .timers-board { gap: 10px; }
+
+  .timer-card,
+  .timer-card.timer-card-dial[data-size="s"] { --card-w: calc((100% - 10px) / 2); }
+
+  .timer-card[data-size="s"] { --card-w: calc((100% - 20px) / 3); }
+
+  .timer-card[data-size="l"],
+  .timer-card[data-size="full"],
+  .timer-card.timer-card-dial,
+  .timer-card.timer-card-dial[data-size="m"],
+  .timer-card.timer-card-dial[data-size="l"] { --card-w: 100%; }
+
+  .timer-card { flex: 0 0 var(--card-w); padding: 14px 8px 12px; }
+}
+
 @keyframes timer-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.45); }
   50%      { box-shadow: 0 0 0 8px rgba(248, 81, 73, 0); }
@@ -535,9 +599,14 @@ $t-danger:    #f85149;
 
 // ---------- countdown ring ----------
 
+// The ring fills its card, so the card's size IS the ring's size. Its
+// text is sized off the ring (cqi) to stay in proportion at any width;
+// the vh cap keeps a full-width ring on a wide screen from outgrowing
+// the window.
 .timer-ring {
-  width: 170px;
-  height: 170px;
+  width: calc(min(100%, 70vh));
+  aspect-ratio: 1;
+  container-type: inline-size;
   position: relative;
   display: grid;
   place-items: center;
@@ -561,7 +630,7 @@ $t-danger:    #f85149;
 
   .ring-label {
     position: absolute;
-    font-size: 26px;
+    font-size: 16cqi;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: $t-text;
@@ -569,12 +638,18 @@ $t-danger:    #f85149;
 
   .ring-sublabel {
     position: absolute;
-    bottom: 38px;
-    font-size: 10px;
+    bottom: 22%;
+    font-size: calc(max(9px, 6cqi));
     color: $t-muted;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
+}
+
+// A small ring has no room for "tap to start" — the dimmed card already
+// says it hasn't started. The paused glyph stays; it's the only sign.
+@container (max-width: 130px) {
+  .timer-card:not(.is-paused) .ring-sublabel { display: none; }
 }
 
 .timer-card.is-paused {
@@ -583,7 +658,7 @@ $t-danger:    #f85149;
     .ring-sublabel {
       color: $t-primary-hi;
       font-weight: 700;
-      font-size: 22px;       // ⏸ glyph — larger than the time-text sub label.
+      font-size: 13cqi;      // ⏸ glyph — larger than the time-text sub label.
       letter-spacing: 0;
       line-height: 1;
     }
@@ -602,7 +677,10 @@ $t-danger:    #f85149;
   // Vertical: value-ring on top, ± buttons centered below, bounds last.
   // Avoids horizontal overflow on narrow viewports — the card width is
   // driven by the ring only, not by `[−] value [+]` in one row.
+  // Everything scales off the card's width (cqi), so a small counter
+  // keeps both buttons on the card and a large one grows to match.
   width: 100%;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -611,8 +689,8 @@ $t-danger:    #f85149;
 
   .timer-counter-display {
     position: relative;
-    width: 120px;
-    height: 120px;
+    width: calc(min(72cqi, 50vh));
+    aspect-ratio: 1;
     display: grid;
     place-items: center;
   }
@@ -636,7 +714,7 @@ $t-danger:    #f85149;
 
   .timer-counter-value {
     position: relative;
-    font-size: 34px;
+    font-size: calc(min(20cqi, 14vh));
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     text-align: center;
@@ -645,7 +723,7 @@ $t-danger:    #f85149;
 
   .timer-counter-controls {
     display: flex;
-    gap: 18px;
+    gap: calc(min(8cqi, 24px));
 
     .timer-counter-btn {
       // Held, these open the bulk-adjust sheet — so the OS must not put
@@ -654,11 +732,11 @@ $t-danger:    #f85149;
       background: $t-card-hi !important;
       border: 1px solid $t-border !important;
       color: $t-text !important;
-      width: 52px;
-      height: 52px;
+      width: calc(clamp(34px, 34cqi, 76px));
+      height: calc(clamp(34px, 34cqi, 76px));
       border-radius: 50% !important;
       padding: 0 !important;
-      font-size: 24px !important;
+      font-size: calc(clamp(18px, 14cqi, 34px)) !important;
       font-weight: 600 !important;
       cursor: pointer;
       display: inline-flex !important;
@@ -684,8 +762,7 @@ $t-danger:    #f85149;
 // ---------- dial ----------
 
 .timer-dial {
-  width: 100%;
-  max-width: 280px;
+  width: calc(min(100%, 70vh));
   aspect-ratio: 1;
   cursor: pointer;
 
@@ -736,7 +813,7 @@ $t-danger:    #f85149;
   border: 1px solid $t-border;
   border-radius: 8px;
   padding: 4px;
-  min-width: 140px;
+  min-width: 190px;
   display: flex;
   flex-direction: column;
   gap: 2px;

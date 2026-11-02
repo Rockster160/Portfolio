@@ -20,6 +20,7 @@ import { flushQueue, saveStoreSnapshot, loadStoreSnapshot, lastSyncTs } from "./
 import { defaultLabelForSeconds } from "./duration";
 import { stopAllSounds, armAudioWarmup } from "./audio";
 import { ALL_COLORS } from "./colors";
+import { CARD_SIZES, pageCardSize } from "./sizes";
 import { track, watchPresses } from "./press_feedback";
 
 function csrfToken() {
@@ -130,6 +131,7 @@ function bootOwner(root) {
     store,
     actions,
     getActivePageId: activePageId,
+    getActivePage,
     onCardMenu: (id, btn) => cardMenu.open(id, btn),
     onCounterBulk: (id, sign) => bulkModal.open(id, sign),
   });
@@ -142,7 +144,7 @@ function bootOwner(root) {
   root.querySelector("[data-timers-new]")?.addEventListener("click", () => editModal.open());
   root.querySelector("[data-timers-library]")?.addEventListener("click", () => libraryModal.open());
   root.querySelector("[data-timers-pages]")?.addEventListener("click", () => pagesModal.open());
-  wireEditToggle(root, board);
+  wireEditToggle(root, board, store, actions, getActivePage);
   wireQuickRow(root, store, actions, activePageId);
   wireQuickRowLive(root, store, actions, activePageId);
   wirePageButtons(root, store, getActivePage);
@@ -204,9 +206,10 @@ function bootOwner(root) {
   store.subscribe(() => saveStoreSnapshot(store));
 }
 
-function wireEditToggle(root, board) {
+function wireEditToggle(root, board, store, actions, getActivePage) {
   const btn = root.querySelector("[data-timers-edit-toggle]");
   if (!btn) return;
+  const sizeBar = wirePageSizeBar(root, store, actions, getActivePage);
   btn.addEventListener("click", () => {
     if (board.editMode) {
       board.exitEditMode();
@@ -217,7 +220,46 @@ function wireEditToggle(root, board) {
       btn.classList.add("is-active");
       btn.setAttribute("title", "Done editing");
     }
+    sizeBar.toggle(board.editMode);
   });
+}
+
+// Edit mode's page-wide card size. Only a saved page has somewhere to
+// keep it, so Home goes without the bar and its cards sit at the
+// default unless a timer picks its own size.
+function wirePageSizeBar(root, store, actions, getActivePage) {
+  const bar = root.querySelector("[data-timers-size-bar]");
+  const picker = bar?.querySelector("[data-timers-size-picker]");
+  if (!bar || !picker) return { toggle: () => {} };
+
+  let shown = false;
+  const paint = () => {
+    const page = getActivePage();
+    bar.classList.toggle("hidden", !(shown && page));
+    if (!page) return;
+    const current = pageCardSize(page);
+    picker.innerHTML = CARD_SIZES.map((s) => `
+      <button type="button" data-size="${s.value}" title="${s.title}"
+              class="${s.value === current ? "is-selected" : ""}">${s.label}</button>
+    `).join("");
+  };
+
+  picker.addEventListener("click", (e) => {
+    const choice = e.target.closest("button[data-size]");
+    const page = getActivePage();
+    if (!choice || !page) return;
+    const size = parseInt(choice.dataset.size, 10);
+    if (size === pageCardSize(page)) return;
+    // `meta` is replaced wholesale on save, so it goes back with every
+    // other key it already holds.
+    actions.updatePage(page.id, { meta: { ...(page.meta || {}), card_size: size } });
+  });
+
+  store.subscribe((kind) => { if (kind === "page" || kind === "bootstrap" || kind === "sync") paint(); });
+
+  return {
+    toggle: (on) => { shown = on; paint(); },
+  };
 }
 
 // Reset the server-rendered quick row on every change to the store's

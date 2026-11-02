@@ -8,15 +8,17 @@
 // "update in place" that would leave the card on the wrong page.
 
 import { renderTimerCard } from "./renderers";
+import { timerCardSize, cardSizeKey } from "./sizes";
 import Sortable from "../../../jil/Sortable.min.js";
 
 export class Board {
-  constructor({ root, store, actions, getActivePageId, onCardMenu, onCounterBulk, app }) {
+  constructor({ root, store, actions, getActivePageId, getActivePage, onCardMenu, onCounterBulk, app }) {
     this.root = root;
     this.app = app;
     this.store = store;
     this.actions = actions;
     this.getActivePageId = getActivePageId;
+    this.getActivePage = getActivePage;
     this.onCardMenu = onCardMenu;
     this.onCounterBulk = onCounterBulk;
     this.renderers = new Map();
@@ -66,6 +68,7 @@ export class Board {
   mount(timer) {
     const r = renderTimerCard(timer, this.actions, { onCounterBulk: this.onCounterBulk });
     this.renderers.set(timer.id, r);
+    this.applySize(r.node, timer);
     // Mark home-page cards so CSS can selectively show the X-to-delete
     // button when the timer finishes. Custom pages don't get the X.
     if (this.getActivePageId() == null) r.node.classList.add("on-home");
@@ -90,6 +93,10 @@ export class Board {
     }
     if (anchor) this.root.insertBefore(r.node, anchor);
     else this.root.appendChild(r.node);
+  }
+
+  applySize(node, timer) {
+    node.dataset.size = cardSizeKey(timerCardSize(timer, this.getActivePage?.()));
   }
 
   unmount(id) {
@@ -170,6 +177,8 @@ export class Board {
       if (handled === false) {
         this.unmount(payload.id);
         this.mount(t);
+      } else {
+        this.applySize(existing.node, t);
       }
       return;
     }

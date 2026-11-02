@@ -1,7 +1,10 @@
 // Per-card action menu. Reordering is the dedicated edit-mode + drag
 // flow on the Board — NOT a menu item. Counter cards get a "Set value"
 // entry that prompts for a target and dispatches the delta as an
-// increment (which respects min/max).
+// increment (which respects min/max). The size row sets this card's own
+// size; "Auto" hands it back to the page's.
+
+import { CARD_SIZES } from "./sizes";
 
 export function setupCardMenu({ root, store, actions, openEdit }) {
   const menu = document.createElement("div");
@@ -19,7 +22,15 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
   function rebuild(timer) {
     const isCounter = timer.kind === "counter";
     const disableLabel = timer.disabled ? "Enable" : "Disable";
+    const ownSize = parseInt(timer.width, 10) || 0;
+    const sizes = [{ value: 0, label: "Auto", title: "Same as the page" }, ...CARD_SIZES];
     menu.innerHTML = `
+      <div class="menu-size" role="group" aria-label="Size">
+        ${sizes.map((s) => `
+          <button type="button" data-action="size" data-size="${s.value}" title="${s.title}"
+                  class="${s.value === ownSize ? "is-selected" : ""}">${s.label}</button>
+        `).join("")}
+      </div>
       <button type="button" data-action="edit">Edit</button>
       <button type="button" data-action="duplicate">Duplicate</button>
       ${isCounter ? '<button type="button" data-action="set-value">Set value…</button>' : ""}
@@ -83,6 +94,11 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
     }
     if (action === "reset") {
       await actions.reset(timer.id);
+      return;
+    }
+    if (action === "size") {
+      const size = parseInt(btn.dataset.size, 10);
+      if (size !== (parseInt(timer.width, 10) || 0)) await actions.update(timer.id, { width: size });
       return;
     }
     if (action === "toggle-disabled") {

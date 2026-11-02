@@ -189,6 +189,13 @@ class List < ApplicationRecord
   delegate :remove, to: :list_items
   delegate :toggle, to: :list_items
 
+  # `add` on an item that's already on the list still re-saves it to the top
+  # and fires :added. For a caller that re-asserts the same item on every
+  # check, this leaves a present item alone and only adds a missing one.
+  def ensure_item(name)
+    list_items.by_formatted_name(name) || add(name)
+  end
+
   def sort_items!(sort=nil, order=:asc)
     return if sort.blank?
 

@@ -341,7 +341,7 @@ class TeslaTelemetry
       soft  = tires[:"#{tire}_soft"] == true
       label = "#{tire_label(tire)} tire pressure low"
       if soft && psi < TIRE_PRESSURE_LOW
-        chores.add(label)
+        chores.ensure_item(label)
       else
         chores.remove(label)
       end

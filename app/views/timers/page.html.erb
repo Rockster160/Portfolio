@@ -93,6 +93,12 @@
     </section>
   <% end %>
 
+  <%# Edit mode only: how big this page's cards are, unless a timer sets its own. %>
+  <section class="timers-size-bar hidden" data-timers-size-bar>
+    <span class="timers-size-bar-label">Card size</span>
+    <div class="timers-size-picker" data-timers-size-picker></div>
+  </section>
+
   <main class="timers-board" data-timers-board>
     <% if @timers.empty? %>
       <p class="timers-empty">No timers yet. Tap a quick-add above or “New timer” to create one.</p>

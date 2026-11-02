@@ -47,6 +47,7 @@ class BankChart
       {
         labels:   starts.map { |start| label_for(start) },
         datasets: datasets,
+        balance:  balance,
         bucket:   @bucket,
         unit:     "$",
       }
@@ -91,6 +92,15 @@ class BankChart
         stack: (total.negative? ? OUT : IN),
         data:  starts.map { |start| ((totals[[category, start]] || 0).abs / 100.0).round(2) },
       }
+    }
+  end
+
+  # The dashboard figure as each bucket opened. Not the search's rows: it is
+  # the whole balance whatever the search narrowed to, so a "groceries" view
+  # still shows what there was to spend it from.
+  def balance
+    ::SimpleFin::DashboardCache.projected_cents_at(starts).map { |cents|
+      (cents / 100.0).round(2) unless cents.nil?
     }
   end
 

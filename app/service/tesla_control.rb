@@ -246,8 +246,8 @@ class TeslaControl
       truly_low = psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
       label = "#{tire_label(tire)} tire pressure low"
 
-      tires[:"#{tire}_soft"] && truly_low ? chores.add(label) : chores.remove(label)
-      tires[:"#{tire}_hard"] && truly_low ? todo.add(label)   : todo.remove(label)
+      tires[:"#{tire}_soft"] && truly_low ? chores.ensure_item(label) : chores.remove(label)
+      tires[:"#{tire}_hard"] && truly_low ? todo.ensure_item(label)   : todo.remove(label)
     end
   end
 

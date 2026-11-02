@@ -108,6 +108,29 @@ RSpec.describe ListItem do
       end
     end
 
+    describe "List#ensure_item" do
+      it "leaves an item already on the list untouched and silent" do
+        item = list.ensure_item("Back Left tire pressure low")
+        stamp = item.reload.updated_at
+        fired.clear
+
+        expect(list.ensure_item("Back Left tire pressure low")).to eq(item)
+        expect(item.reload.updated_at).to eq(stamp)
+        expect(fired).to be_empty
+      end
+
+      it "adds it back once it has been checked off" do
+        item = list.ensure_item("Back Left tire pressure low")
+        list.list_items.remove(item.name)
+        fired.clear
+
+        list.ensure_item("Back Left tire pressure low")
+
+        expect(item.reload).not_to be_deleted
+        expect(last_fire[2][:action]).to eq(:added)
+      end
+    end
+
     # Two deliveries of the same add arriving together must not both miss the
     # row and both create it — the lookup runs under the list's row lock.
     describe "adding under the list lock" do

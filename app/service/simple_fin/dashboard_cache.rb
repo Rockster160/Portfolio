@@ -148,6 +148,38 @@ module SimpleFin
         accounts.sum(&:projected_cents)
       end
 
+      # What the published figure stood at at each of `times`, walked back from
+      # today's: the figure now, less every row on an included account since.
+      #
+      # Walked rather than read from BankBalanceSnapshot because the snapshots
+      # only begin in Aug 2026 and the transactions go back two years. Against
+      # the snapshots it lands within a few hundred dollars — close enough for a
+      # line drawn in thousands.
+      #
+      # `not_voided` rather than `countable`: an account's balance moves with
+      # its transfers too. Two halves of a move between included accounts cancel
+      # by themselves, and a payment to the mortgage is money that really left.
+      #
+      # Nil for a time before the history begins (there is nothing to walk back
+      # over, so the answer would just be today's figure) and for one still to
+      # come.
+      def projected_cents_at(times)
+        current = projected_cents
+        return times.map { nil } if current.nil?
+
+        rows = ::BankTransaction.not_voided.where(bank_account_id: included_accounts.select(:id))
+        earliest = rows.minimum(:occurred_at)
+        return times.map { nil } if earliest.nil?
+
+        now = ::Time.current
+        moves = rows.where(occurred_at: times.min..).pluck(:occurred_at, :amount_cents)
+        times.map { |time|
+          next nil if time < earliest || time > now
+
+          current - moves.sum { |at, cents| at >= time ? cents : 0 }
+        }
+      end
+
       # The gap between the two, which is what makes the estimate an estimate.
       def unsettled_cents
         cents = projected_cents
