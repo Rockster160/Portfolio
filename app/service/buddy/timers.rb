@@ -8,7 +8,13 @@ module Buddy
   module Timers
     module_function
 
-    PAGE_SLUG = "buddy".freeze
+    # Underscores never survive a page name turned into a slug, so this can't
+    # collide with a page the person makes - "buddy" stays theirs to use.
+    PAGE_SLUG = "__buddy".freeze
+    # Finished timers are archived once they're this old. Nothing shows them,
+    # and a rotation or cycle reading back the one that just ended is done
+    # with it well inside this.
+    FINISHED_KEPT_FOR = 1.day
     PAGE_NAME = "Buddy".freeze
     MAX_SECONDS = 24 * 60 * 60
 
@@ -253,7 +259,15 @@ module Buddy
       raise "timer failed to start (fire scheduling unavailable?)" unless timer&.persisted? && timer.running?
 
       timer.broadcast(reason: :created)
+      archive_finished!(page)
       timer
+    end
+
+    # Buddy timers that ended and were acknowledged keep their row, since
+    # confirm! doesn't archive. Swept here, on the way to making the next one.
+    def archive_finished!(page)
+      finished = page.timers.live.where(started_at: nil, paused_at: nil)
+      finished.where(updated_at: ...FINISHED_KEPT_FOR.ago).update_all(archived_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # Buddy timers the hero should actually SHOW on hydrate: only ones that are

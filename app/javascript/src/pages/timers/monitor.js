@@ -39,6 +39,9 @@ export function subscribeTimersChannel({ store, api, onBeep, onSound, onReconnec
     // names the ones that went with it.
     (data.timer_ids || []).forEach((id) => store.removeTimer(id));
 
+    // Buddy's timers live in the chat, not on these pages.
+    if (data.timer?.buddy) return;
+
     if (data.timer && data.timer.id != null) {
       // force:true — the broadcast carries server-authoritative state.
       // Without this, a fresh-but-locally-stale Date.parse on existing

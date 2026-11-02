@@ -24,8 +24,16 @@ class TimerPage < ApplicationRecord
   has_many :quick_buttons, class_name: "TimerQuickButton", dependent: :destroy
 
   validates :slug, presence: true, uniqueness: { scope: :user_id, message: "is already used by another page" }
+  validates :slug, exclusion: { in: [Buddy::Timers::PAGE_SLUG] }, unless: :buddy?
 
   scope :ordered, -> { order(:sort_order, :id) }
+  # The pages a person made. Buddy keeps its timers on a page of its own,
+  # which never shows among them.
+  scope :listed,  -> { where.not(slug: Buddy::Timers::PAGE_SLUG) }
+
+  def buddy?
+    slug == Buddy::Timers::PAGE_SLUG && meta.to_h["buddy"].present?
+  end
 
   # Shallow-merge into `meta` so callers can patch a subset without
   # nuking unrelated keys. Keys are stringified by jsonb anyway; we

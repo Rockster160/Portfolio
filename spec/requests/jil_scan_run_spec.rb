@@ -28,7 +28,11 @@ RSpec.describe "Task short links and run-on-scan", type: :request do
   it "opens the trigger page by short key, in any case, and by the old numeric id" do
     get "/t/#{task.short_key.downcase}"
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Trigger Now", task.scan_run_url)
+    expect(response.body).to include("Trigger Now")
+    expect(response.body).not_to include(task.scan_run_url)
+
+    get "/jil/tasks/#{task.id}"
+    expect(response.body).to include(%(data-url="https://#{task.short_url}"), %(data-url="https://#{task.scan_run_url}"))
 
     get "/t/#{task.id}"
     expect(response).to have_http_status(:ok)

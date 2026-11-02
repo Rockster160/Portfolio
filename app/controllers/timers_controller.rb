@@ -15,7 +15,7 @@ class TimersController < ApplicationController
   # GET /timers/page/:slug
   def page
     @active_view = :page
-    @active_page = current_user.timer_pages.find_by!(slug: params[:slug])
+    @active_page = current_user.timer_pages.listed.find_by!(slug: params[:slug])
     load_page_data
     render :page
   end
@@ -29,7 +29,7 @@ class TimersController < ApplicationController
   # Serving a slug-scoped manifest here gives each page its own id, scope,
   # and start_url so it launches back into itself.
   def page_manifest
-    page = current_user.timer_pages.find_by!(slug: params[:slug])
+    page = current_user.timer_pages.listed.find_by!(slug: params[:slug])
     label = page.name.presence || page.slug
 
     render json: {
@@ -53,8 +53,8 @@ class TimersController < ApplicationController
   def sync
     since_ts = parse_iso(params[:since])
 
-    timers_scope = current_user.timers.unscope(where: :archived_at)
-    pages_scope  = current_user.timer_pages
+    timers_scope = current_user.timers.unscope(where: :archived_at).listed
+    pages_scope  = current_user.timer_pages.listed
     quick_scope  = current_user.timer_quick_buttons
 
     if since_ts
@@ -108,7 +108,7 @@ class TimersController < ApplicationController
   # trips through the new-timer modal; and a per-timer POST would leave a
   # half-built page behind the moment one of them failed.
   def bulk_create
-    page = params[:timer_page_id].presence && current_user.timer_pages.find(params[:timer_page_id])
+    page = params[:timer_page_id].presence && current_user.timer_pages.listed.find(params[:timer_page_id])
     rows = Array(params[:timers])
     return render(json: { timers: [], server_ts: Time.current.iso8601(3) }) if rows.empty?
 
@@ -249,8 +249,8 @@ class TimersController < ApplicationController
   private
 
   def load_page_data
-    @timers = current_user.timers.ordered.to_a
-    @pages  = current_user.timer_pages.ordered.to_a
+    @timers = current_user.timers.listed.ordered.to_a
+    @pages  = current_user.timer_pages.listed.ordered.to_a
     # Always seed user defaults so Home has something to show; then
     # ensure the current page (if any) has its own copy. Quick buttons
     # are sent in full to the FE; the renderer filters by active page.

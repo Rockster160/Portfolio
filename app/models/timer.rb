@@ -58,6 +58,8 @@ class Timer < ApplicationRecord
 
   scope :live,    -> { where(archived_at: nil) }
   scope :running, -> { live.where.not(started_at: nil).where(paused_at: nil) }
+  # Home's timers and those on the person's own pages — never Buddy's.
+  scope :listed,  -> { where(timer_page_id: nil).or(where(timer_page_id: TimerPage.listed.select(:id))) }
   # Board order: pos_y DESC means HIGHER values display first. New
   # timers are stamped with max+1 on create, so they naturally land at
   # the top of the board with zero writes to existing rows. id DESC is
@@ -579,7 +581,7 @@ class Timer < ApplicationRecord
   end
 
   def notification_url
-    timer_page&.slug ? "/timers/page/#{timer_page.slug}" : "/timers"
+    timer_page&.slug && !timer_page.buddy? ? "/timers/page/#{timer_page.slug}" : "/timers"
   end
 
   # Broadcasts to owner-side MonitorChannel only. Public share viewers

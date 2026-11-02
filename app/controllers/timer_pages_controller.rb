@@ -40,7 +40,7 @@ class TimerPagesController < ApplicationController
   # come across unstarted, so the copy is a fresh board rather than a
   # snapshot of one mid-play.
   def duplicate
-    source = current_user.timer_pages.find(params[:id])
+    source = current_user.timer_pages.listed.find(params[:id])
     copy = nil
 
     TimerPage.transaction do
@@ -120,7 +120,7 @@ class TimerPagesController < ApplicationController
   end
 
   def set_page
-    @page = current_user.timer_pages.find(params[:id])
+    @page = current_user.timer_pages.listed.find(params[:id])
   end
 
   def page_params

@@ -245,9 +245,29 @@ RSpec.describe Buddy::Timers do
     describe ".page_for" do
       it "creates a single hidden Buddy page and reuses it" do
         page = described_class.page_for(user)
-        expect(page.slug).to eq("buddy")
+        expect(page.slug).to eq("__buddy")
         expect(described_class.page_for(user)).to eq(page)
-        expect(user.timer_pages.where(slug: "buddy").count).to eq(1)
+        expect(user.timer_pages.where(slug: Buddy::Timers::PAGE_SLUG).count).to eq(1)
+      end
+
+      it "leaves a page of the person's own called buddy alone" do
+        theirs = user.timer_pages.create!(name: "Buddy", slug: "buddy")
+        expect(described_class.page_for(user)).not_to eq(theirs)
+      end
+    end
+
+    describe ".archive_finished!" do
+      it "archives acknowledged timers a day old, keeping running and recent ones" do
+        page    = described_class.page_for(user)
+        old     = create(:timer, user: user, timer_page: page, updated_at: 2.days.ago)
+        recent  = create(:timer, user: user, timer_page: page)
+        running = create(:timer, user: user, timer_page: page, started_at: 3.days.ago, updated_at: 2.days.ago)
+
+        described_class.archive_finished!(page)
+
+        expect(old.reload.archived_at).to be_present
+        expect(recent.reload.archived_at).to be_nil
+        expect(running.reload.archived_at).to be_nil
       end
     end
 

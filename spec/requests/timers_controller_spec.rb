@@ -110,6 +110,33 @@ RSpec.describe TimersController do
     end
   end
 
+  describe "Buddy's timers" do
+    let!(:buddy_page) { Buddy::Timers.page_for(user) }
+    let!(:buddy_timer) { create(:timer, user: user, timer_page: buddy_page, name: "Pasta") }
+    let!(:home_timer) { create(:timer, user: user, name: "Laundry") }
+
+    it "leaves Buddy's page and timers out of the timers app" do
+      get timers_sync_path, as: :json
+      json = response.parsed_body
+      expect(json["timers"].pluck("id")).to eq([home_timer.id])
+      expect(json["pages"].pluck("id")).not_to include(buddy_page.id)
+    end
+
+    it "has no page to open at Buddy's slug" do
+      get timer_page_path(slug: Buddy::Timers::PAGE_SLUG)
+      expect(response).not_to have_http_status(:ok)
+      expect(response.body).not_to include("Pasta")
+    end
+
+    it "leaves the buddy slug free for a page of the person's own" do
+      theirs = user.timer_pages.create!(name: "Buddy", slug: "buddy")
+      get timer_page_path(slug: "buddy")
+      expect(response).to have_http_status(:ok)
+      get timers_sync_path, as: :json
+      expect(response.parsed_body["pages"].pluck("id")).to include(theirs.id)
+    end
+  end
+
   describe "GET /timers/page/:slug/manifest.webmanifest" do
     let!(:page) { user.timer_pages.create!(slug: "slime-colony", name: "Slime Colony") }
 
