@@ -212,6 +212,25 @@ RSpec.describe TimersController do
       expect(page.timers.first.callbacks.first["then"]["chime"]).to eq("soft")
     end
 
+    it "keeps a row's card size" do
+      bulk(%w[Rocco], width: 3)
+      expect(page.timers.first.width).to eq(3)
+    end
+
+    it "builds a dial from a row's sections" do
+      post timer_routes_bulk_items_path,
+        params: {
+          timer_page_id: page.id,
+          timers:        [{
+            kind:        :dial,
+            name:        "Turn",
+            dial_config: { sections: [{ name: "Rocco", subs: [] }, { name: "Eve", subs: [] }], start_offset: 0 },
+          }],
+        },
+        as: :json
+      expect(page.timers.first.dial_config["sections"].pluck("name")).to eq(%w[Rocco Eve])
+    end
+
     it "writes nothing to a page belonging to someone else" do
       other = create(:timer_page, user: create(:user))
       post timer_routes_bulk_items_path,

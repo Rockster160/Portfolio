@@ -451,12 +451,15 @@ class TimersController < ApplicationController
   def bulk_timer_attrs(row)
     attrs = row.is_a?(ActionController::Parameters) ? row : ActionController::Parameters.new(row.to_h)
     permitted = attrs.permit(
-      :name, :kind, :color, :section_id, :disabled,
+      :name, :kind, :color, :section_id, :disabled, :width,
       :duration_ms, :repeat,
-      :value, :step, :min_value, :max_value, :reset_value
+      :value, :step, :min_value, :max_value, :reset_value,
+      :dial_step_index
     )
     lifted = lift_callbacks(attrs[:callbacks])
     permitted[:callbacks] = lifted if lifted
+    raw_dial = attrs[:dial_config]
+    permitted[:dial_config] = raw_dial.to_unsafe_h if raw_dial.is_a?(ActionController::Parameters)
     permitted
   end
 

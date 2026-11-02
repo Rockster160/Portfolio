@@ -145,6 +145,7 @@ function bootOwner(root) {
   root.querySelector("[data-timers-library]")?.addEventListener("click", () => libraryModal.open());
   root.querySelector("[data-timers-pages]")?.addEventListener("click", () => pagesModal.open());
   wireEditToggle(root, board, store, actions, getActivePage);
+  wireSyntaxHelp(root);
   wireQuickRow(root, store, actions, activePageId);
   wireQuickRowLive(root, store, actions, activePageId);
   wirePageButtons(root, store, getActivePage);
@@ -204,6 +205,21 @@ function bootOwner(root) {
   });
 
   store.subscribe(() => saveStoreSnapshot(store));
+}
+
+// Every box that takes the line syntax has an (i) beside it; they all
+// open the same help, over whatever modal they sit in.
+function wireSyntaxHelp(root) {
+  const help = root.querySelector("[data-timers-syntax-help]");
+  if (!help) return;
+  help.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
+    b.addEventListener("click", () => help.close());
+  });
+  root.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-timers-syntax-info]")) return;
+    e.preventDefault();
+    help.showModal();
+  });
 }
 
 function wireEditToggle(root, board, store, actions, getActivePage) {

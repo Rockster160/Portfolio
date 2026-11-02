@@ -1,8 +1,8 @@
-// Pages modal — every page with click-to-navigate, plus the builder that
-// makes one. The builder takes a LIST of names and creates a timer per
-// line, so a scoreboard for six players is one action instead of six
-// trips through the new-timer modal. Pointed at the page you're already
-// on, the same list just adds to it (a seventh player showing up late).
+// Pages modal — every page with click-to-navigate. "New page" and "Add
+// to this page" open the builder, its own modal: one line per timer in
+// the quick_lines syntax, with a live readout of what each line makes,
+// so a scoreboard for six players is one action instead of six trips
+// through the new-timer modal.
 //
 // Page templates are pages: Duplicate copies a board — timers, quick
 // buttons, page buttons — with counters back at their start value. Build
@@ -10,35 +10,17 @@
 // is the throwaway version of the same thing: it carries a Temp flag so
 // it's obvious which rows are safe to delete afterwards.
 
-import { parseDuration, humanizeSeconds } from "./duration";
+import { linesToTimers, previewLines, describeLine, displayName } from "./quick_lines";
 import { ALL_COLORS } from "./colors";
-
-const DEFAULT_COUNTDOWN_SECONDS = 300;
-
-// One name per line, or comma-separated on one — people type both.
-export function parseNames(text) {
-  return String(text || "")
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export function setupPagesModal({ root, store, actions, activePageSlug, getActivePage }) {
   const dialog = root.querySelector("[data-timers-pages-modal]");
   if (!dialog) return { open: () => {} };
 
-  const list      = dialog.querySelector("[data-timers-pages-modal-list]");
-  const targetSel = dialog.querySelector("[data-timers-pages-modal-target]");
-  const nameField = dialog.querySelector("[data-timers-pages-modal-name-field]");
-  const nameInput = dialog.querySelector("[data-timers-pages-modal-name]");
-  const kindSel   = dialog.querySelector("[data-timers-pages-modal-kind]");
-  const namesEl   = dialog.querySelector("[data-timers-pages-modal-names]");
-  const argLabel  = dialog.querySelector("[data-timers-pages-modal-arg-label]");
-  const argInput  = dialog.querySelector("[data-timers-pages-modal-arg]");
-  const tempField = dialog.querySelector("[data-timers-pages-modal-temp-field]");
-  const tempInput = dialog.querySelector("[data-timers-pages-modal-temp]");
-  const addBtn    = dialog.querySelector("[data-timers-pages-modal-add]");
-  const hint      = dialog.querySelector("[data-timers-pages-modal-hint]");
+  const list    = dialog.querySelector("[data-timers-pages-modal-list]");
+  const newBtn  = dialog.querySelector("[data-timers-pages-modal-new]");
+  const hereBtn = dialog.querySelector("[data-timers-pages-modal-add-here]");
+  const builder = setupBuilder({ root, store, actions, getActivePage });
 
   dialog.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
     b.addEventListener("click", () => dialog.close());
@@ -110,111 +92,8 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
     return actionsEl;
   }
 
-  // -------- builder --------
-
-  function addingToCurrentPage() {
-    return targetSel.value === "current" && !!getActivePage?.();
-  }
-
-  function timerAttrs(name, index) {
-    const color = ALL_COLORS[index % ALL_COLORS.length];
-    if (kindSel.value === "countdown") {
-      const seconds = parseDuration(argInput.value) || DEFAULT_COUNTDOWN_SECONDS;
-      return {
-        kind:        "countdown",
-        name,
-        color,
-        duration_ms: seconds * 1000,
-        callbacks:   [{
-          id:   "cb-builder-sound",
-          when: { type: "complete" },
-          then: { type: "sound", chime: "soft", cadence: "once" },
-        }],
-      };
-    }
-    const start = parseInt(argInput.value, 10) || 0;
-    return { kind: "counter", name, color, value: start, reset_value: start };
-  }
-
-  // The builder rewrites its own labels as you change what it's pointed
-  // at — the same three fields mean different things for a countdown
-  // page than for a scoreboard, and the button says what it will make.
-  function repaintBuilder() {
-    const page = getActivePage?.();
-    targetSel.hidden = !page;
-    if (!page && targetSel.value === "current") targetSel.value = "new";
-    if (page) {
-      targetSel.querySelector('option[value="current"]').textContent =
-        `Add to ${page.name || page.slug}`;
-    }
-
-    const toCurrent = addingToCurrentPage();
-    nameField.hidden = toCurrent;
-    tempField.hidden = toCurrent;
-
-    const countdown = kindSel.value === "countdown";
-    argLabel.textContent = countdown ? "Each lasts" : "Each starts at";
-    argInput.placeholder = countdown ? "5m" : "0";
-
-    const names = parseNames(namesEl.value);
-    const noun = names.length === 1 ? (countdown ? "timer" : "counter") : (countdown ? "timers" : "counters");
-    if (toCurrent) {
-      addBtn.textContent = names.length ? `+ Add ${names.length} ${noun}` : "+ Add";
-      addBtn.disabled = names.length === 0;
-    } else {
-      addBtn.textContent = names.length ? `+ Create page with ${names.length} ${noun}` : "+ Create page";
-      addBtn.disabled = nameInput.value.trim() === "";
-    }
-
-    hint.textContent = countdown
-      ? `Each timer runs for ${humanizeSeconds(parseDuration(argInput.value) || DEFAULT_COUNTDOWN_SECONDS)}.`
-      : "";
-  }
-
-  async function submitBuilder() {
-    const names = parseNames(namesEl.value);
-    const timers = names.map(timerAttrs);
-
-    if (addingToCurrentPage()) {
-      if (timers.length === 0) return;
-      await actions.bulkCreate(getActivePage().id, timers);
-      namesEl.value = "";
-      dialog.close();
-      return;
-    }
-
-    const title = nameInput.value.trim();
-    if (!title) return;
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    // Held disabled while the request is out, so a second tap can't send a
-    // second page with the same slug.
-    addBtn.disabled = true;
-    const page = await actions.createPage({
-      name: title,
-      slug: slug || `page-${store.pages.size + 1}`,
-      meta: tempInput.checked ? { temporary: true } : {},
-    });
-    if (!page?.id) {
-      repaintBuilder();
-      alert(page?.__error ? `Couldn't create the page: ${page.__error}` : "Couldn't create the page.");
-      return;
-    }
-    if (timers.length) await actions.bulkCreate(page.id, timers);
-    // Navigate straight in — the page you just described is the one you
-    // want to be looking at.
-    window.location.href = `/timers/page/${encodeURIComponent(page.slug)}`;
-  }
-
-  [targetSel, kindSel].forEach((el) => el.addEventListener("change", repaintBuilder));
-  [nameInput, namesEl, argInput].forEach((el) => el.addEventListener("input", repaintBuilder));
-  addBtn.addEventListener("click", submitBuilder);
-  // Enter anywhere but the names box submits; in the names box it's a
-  // new line, which is the whole point of that field.
-  [nameInput, argInput].forEach((el) => {
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); submitBuilder(); }
-    });
-  });
+  newBtn.addEventListener("click", () => { dialog.close(); builder.open({ toPage: null }); });
+  hereBtn.addEventListener("click", () => { dialog.close(); builder.open({ toPage: getActivePage?.() }); });
 
   // Live re-render on any page change (added in settings, renamed,
   // deleted, etc.).
@@ -224,18 +103,125 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
     }
   });
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => (
-      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-    ));
-  }
-
   return {
     open() {
       render();
-      repaintBuilder();
+      const page = getActivePage?.();
+      hereBtn.classList.toggle("hidden", !page);
+      if (page) hereBtn.textContent = `+ Add to ${page.name || page.slug}`;
       dialog.showModal();
-      requestAnimationFrame(() => (addingToCurrentPage() ? namesEl : nameInput).focus());
     },
   };
+}
+
+function setupBuilder({ root, store, actions, getActivePage }) {
+  const dialog = root.querySelector("[data-timers-builder-modal]");
+  if (!dialog) return { open: () => {} };
+
+  const titleEl   = dialog.querySelector("[data-timers-builder-title]");
+  const nameInput = dialog.querySelector("[data-timers-builder-name]");
+  const linesEl   = dialog.querySelector("[data-timers-builder-lines]");
+  const preview   = dialog.querySelector("[data-timers-builder-preview]");
+  const tempField = dialog.querySelector("[data-timers-builder-temp-field]");
+  const tempInput = dialog.querySelector("[data-timers-builder-temp]");
+  const submitBtn = dialog.querySelector("[data-timers-builder-submit]");
+
+  // null = a new page; a page = adding to that one.
+  let toPage = null;
+
+  dialog.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
+    b.addEventListener("click", () => dialog.close());
+  });
+
+  function repaint() {
+    // Dots wear the color each timer will get: its own, or the next one
+    // round the palette, counting copies the way linesToTimers does.
+    let slot = 0;
+    preview.innerHTML = previewLines(linesEl.value).map((spec) => {
+      const color = spec.color || ALL_COLORS[slot % ALL_COLORS.length];
+      slot += spec.copies;
+      return `
+      <li>
+        <span class="preview-dot" style="background:${escapeHtml(color)}"></span>
+        <span class="preview-name">${escapeHtml(displayName(spec))}</span>
+        <span class="preview-what">${escapeHtml(describeLine(spec))}</span>
+      </li>
+    `;
+    }).join("");
+
+    const count = linesToTimers(linesEl.value).length;
+    const noun = count === 1 ? "timer" : "timers";
+    if (toPage) {
+      submitBtn.textContent = count ? `+ Add ${count} ${noun}` : "+ Add";
+      submitBtn.disabled = count === 0;
+    } else {
+      submitBtn.textContent = count ? `+ Create page with ${count} ${noun}` : "+ Create page";
+      submitBtn.disabled = nameInput.value.trim() === "";
+    }
+  }
+
+  async function submit() {
+    if (submitBtn.disabled) return;
+    const timers = linesToTimers(linesEl.value);
+
+    if (toPage) {
+      submitBtn.disabled = true;
+      await actions.bulkCreate(toPage.id, timers);
+      linesEl.value = "";
+      dialog.close();
+      return;
+    }
+
+    const title = nameInput.value.trim();
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    // Held disabled while the request is out, so a second tap can't send a
+    // second page with the same slug.
+    submitBtn.disabled = true;
+    const page = await actions.createPage({
+      name: title,
+      slug: slug || `page-${store.pages.size + 1}`,
+      meta: tempInput.checked ? { temporary: true } : {},
+    });
+    if (!page?.id) {
+      repaint();
+      alert(page?.__error ? `Couldn't create the page: ${page.__error}` : "Couldn't create the page.");
+      return;
+    }
+    if (timers.length) await actions.bulkCreate(page.id, timers);
+    // Navigate straight in — the page you just described is the one you
+    // want to be looking at.
+    window.location.href = `/timers/page/${encodeURIComponent(page.slug)}`;
+  }
+
+  [nameInput, linesEl].forEach((el) => el.addEventListener("input", repaint));
+  submitBtn.addEventListener("click", submit);
+  // Enter in the name box would submit the dialog's form and close it;
+  // it moves on to the lines instead, where Enter is a new line.
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    linesEl.focus();
+  });
+  // Cmd/Ctrl+Enter from the lines is the keyboard way to finish.
+  linesEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
+  });
+
+  return {
+    open({ toPage: target }) {
+      toPage = target || null;
+      titleEl.textContent = toPage ? `Add to ${toPage.name || toPage.slug}` : "New page";
+      nameInput.classList.toggle("hidden", !!toPage);
+      tempField.classList.toggle("hidden", !!toPage);
+      repaint();
+      dialog.showModal();
+      requestAnimationFrame(() => (toPage ? linesEl : nameInput).focus());
+    },
+  };
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
 }

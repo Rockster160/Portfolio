@@ -1,5 +1,11 @@
 // Edit / Create Timer modal. Reused for: new timer, edit existing timer,
 // AND for authoring a Quick / Saved button template (mode === "quick").
+//
+// Name is taken literally, always. Under it, the quick line holds the
+// whole timer in quick_lines syntax, the name included (quoted when it
+// would read as options). Typing in the line fills the fields; changing
+// a field — Name too — writes the line back, so it always reads as the
+// timer it will save. A new timer lands on whichever page is showing.
 
 import {
   parseDuration,
@@ -7,6 +13,8 @@ import {
   humanizeSeconds,
 } from "./duration";
 import { CHIME_NAMES, CADENCE_OPTIONS, previewChime } from "./audio";
+import { parseLine, serializeLine, soundFromSpec } from "./quick_lines";
+import { CARD_SIZES } from "./sizes";
 
 export function setupEditModal({ root, store, actions, activePageId, openSaveTo }) {
   const dialog = root.querySelector("[data-timers-edit-modal]");
@@ -29,7 +37,9 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
   const kindFieldsets = dialog.querySelectorAll("[data-when-kind]");
   const timerOnly = dialog.querySelectorAll('[data-when-mode="timer"]');
   const quickOnly = dialog.querySelectorAll('[data-when-mode="quick"]');
-  const pageSelect = form.querySelector('[data-timers-field="timer_page_id"]');
+  const lineInput = form.querySelector('[data-timers-field="line"]');
+  const nameInput = form.querySelector('[data-timers-field="name"]');
+  const callbacksCount = dialog.querySelector("[data-timers-callbacks-count]");
   const labelInput = form.querySelector('[data-timers-field="quick_label"]');
   const durationInput = form.querySelector(
     '[data-timers-field="duration_text"]',
@@ -40,6 +50,10 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
   let editingId = null;
   let editingQuickIsPinned = true;
   let onSaveQuick = null;
+  // The color the form opened with stays out of the line unless changed;
+  // copies (x3) only mean something on create.
+  let openedColor = null;
+  let lineCopies = 1;
 
   function field(name) {
     return form.querySelector(`[data-timers-field="${name}"]`);
@@ -67,19 +81,10 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     });
   }
 
-  function refreshPageOptions(selectedId) {
-    pageSelect.innerHTML = '<option value="">Home</option>';
-    Array.from(store.pages.values())
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-      .forEach((p) => {
-        const opt = document.createElement("option");
-        opt.value = String(p.id);
-        opt.textContent = p.name || p.slug;
-        if (selectedId != null && Number(selectedId) === p.id)
-          opt.selected = true;
-        pageSelect.appendChild(opt);
-      });
-  }
+  const sizeSelect = field("width");
+  sizeSelect.innerHTML = [{ value: 0, title: "Auto" }, ...CARD_SIZES]
+    .map((sz) => `<option value="${sz.value}">${sz.title}</option>`)
+    .join("");
 
   function updateDurationPreview() {
     if (!durationPreview || !durationInput) return;
@@ -107,12 +112,11 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
 
   function setFields(t) {
     field("kind").value = t.kind || "countdown";
-    field("name").value = t.name || "";
-    // Show the fallback identifier as the placeholder when the timer
-    // already exists, so the user can see what it's called in dropdowns
-    // without being forced to set a name.
-    if (t.id) field("name").placeholder = timerPlaceholderName(t);
+    nameInput.value = t.name || "";
+    lineCopies = 1;
     field("color").value = t.color || "#388BFD";
+    openedColor = field("color").value.toLowerCase();
+    sizeSelect.value = String(parseInt(t.width, 10) || 0);
     // Quick-mode templates can intentionally have no color (so each
     // spawned timer gets a fresh random one). The Random toggle is the
     // explicit signal — on load, it reflects whether the template
@@ -130,6 +134,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     field("disabled").checked = !!t.disabled;
 
     field("value").value = t.value ?? 0;
+    field("step").value = t.step || 1;
     // Empty string for nil so the placeholder ("unbounded") shows through
     // instead of stamping a 0 the user didn't pick.
     field("min_value").value = t.min_value ?? "";
@@ -138,14 +143,116 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     field("dial_text").value = dialConfigToText(t.dial_config);
     field("dial_start_offset").value = Number(t.dial_config?.start_offset) || 0;
 
-    refreshPageOptions(t.timer_page_id ?? activePageId());
-
     callbacksList.innerHTML = "";
     (t.callbacks || []).forEach((cb) =>
       appendCallbackRow(upgradeLegacyCallback(cb)),
     );
 
     setKindVisibility(t.kind || "countdown");
+    writeLine();
+  }
+
+  // ---- the line ↔ fields ----
+
+  function isFinishSound(row) {
+    const cb = readRow(row);
+    return cb.when.type === "complete" && cb.then.type === "sound";
+  }
+
+  function finishSoundRows() {
+    return Array.from(callbacksList.querySelectorAll(".timers-callback-row")).filter(isFinishSound);
+  }
+
+  function currentSound() {
+    const row = finishSoundRows()[0];
+    if (!row) return null;
+    const { chime, cadence } = readRow(row).then;
+    return { chime: chime || "soft", cadence: cadence || "once" };
+  }
+
+  // Only the "completes → sound" callback is the line's to change; any
+  // other callback is left exactly as it is.
+  function setSound(sound) {
+    const rows = finishSoundRows();
+    if (!sound) { rows.forEach((r) => r.remove()); return; }
+    const have = currentSound();
+    // "alarm" reads as every 10s, but a slower or faster repeat already
+    // set in the drawer is still an alarm — keep it.
+    const cadence = sound.cadence !== "once" && have && have.cadence !== "once" ? have.cadence : sound.cadence;
+    if (have && have.chime === sound.chime && have.cadence === cadence) return;
+    const next = appendCallbackRow({ when: { type: "complete" }, then: { type: "sound", chime: sound.chime, cadence } });
+    if (rows[0]) { callbacksList.insertBefore(next, rows[0]); rows[0].remove(); }
+  }
+
+  // The dial's sections as plain names, or null when they carry subs,
+  // weights or colors a single line can't hold.
+  function plainSections() {
+    const sections = textToDialConfig(field("dial_text").value).sections;
+    const plain = sections.every((sec) => !sec.subs.length && !sec.weight && !sec.color && !/[,:]/.test(sec.name));
+    return plain ? sections.map((sec) => sec.name) : null;
+  }
+
+  function writeLine() {
+    const kind = field("kind").value;
+    const color = field("color").value.toLowerCase();
+    const randomColor = mode === "quick" && field("color_random")?.checked;
+    lineInput.value = serializeLine({
+      kind,
+      name:     nameInput.value.trim(),
+      seconds:  parseDuration(field("duration_text").value) || 0,
+      repeat:   field("repeat").checked,
+      sound:    currentSound(),
+      value:    parseInt(field("value").value, 10) || 0,
+      step:     parseInt(field("step").value, 10) || 1,
+      min:      parseOptionalInt(field("min_value").value),
+      max:      parseOptionalInt(field("max_value").value),
+      sections: kind === "dial" ? plainSections() : null,
+      size:     parseInt(sizeSelect.value, 10) || 0,
+      color:    !randomColor && color !== openedColor ? color : null,
+      copies:   lineCopies,
+    });
+    paintCallbacksCount();
+  }
+
+  function applyLine() {
+    const spec = parseLine(lineInput.value);
+    nameInput.value = spec?.name || "";
+    lineCopies = spec?.copies || 1;
+    if (!spec) return;
+
+    const kind = spec.kindSaid ? spec.kind : field("kind").value;
+    if (kind !== field("kind").value) {
+      field("kind").value = kind;
+      field("kind").dispatchEvent(new Event("change"));
+    }
+    sizeSelect.value = String(spec.size || 0);
+    if (spec.color) {
+      field("color").value = spec.color.length === 4
+        ? `#${spec.color.slice(1).split("").map((c) => c + c).join("")}`
+        : spec.color;
+      if (field("color_random")) field("color_random").checked = false;
+      field("color").disabled = false;
+    }
+
+    if (kind === "countdown") {
+      if (spec.seconds > 0) field("duration_text").value = defaultLabelForSeconds(spec.seconds);
+      field("repeat").checked = spec.repeat;
+      setSound(soundFromSpec(spec));
+      updateDurationPreview();
+    } else if (kind === "counter") {
+      field("value").value = spec.value ?? spec.min ?? 0;
+      field("step").value = spec.step || 1;
+      field("min_value").value = spec.min ?? "";
+      field("max_value").value = spec.max ?? "";
+    } else if (spec.sections.length) {
+      field("dial_text").value = spec.sections.join("\n");
+    }
+    paintCallbacksCount();
+  }
+
+  function paintCallbacksCount() {
+    const n = callbacksList.querySelectorAll(".timers-callback-row").length;
+    callbacksCount.textContent = n === 0 ? "none" : n === 1 ? "1 callback" : `${n} callbacks`;
   }
 
   function dialConfigToText(cfg) {
@@ -228,13 +335,15 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     const randomColor = mode === "quick" && field("color_random")?.checked;
     const payload = {
       kind,
-      name: field("name").value.trim(),
+      name: nameInput.value.trim(),
       color: randomColor ? null : (field("color").value || null),
+      width: parseInt(sizeSelect.value, 10) || 0,
       callbacks: readCallbacks(),
     };
     if (mode === "timer") {
-      const pageVal = pageSelect.value;
-      payload.timer_page_id = pageVal === "" ? null : parseInt(pageVal, 10);
+      // A new timer goes on the page being looked at; an existing one
+      // stays where it is.
+      if (!editingId) payload.timer_page_id = activePageId();
       payload.disabled = field("disabled").checked;
     }
     if (kind === "countdown") {
@@ -244,6 +353,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     } else if (kind === "counter") {
       payload.value = parseInt(field("value").value, 10) || 0;
       payload.reset_value = payload.value;
+      payload.step = Math.max(1, parseInt(field("step").value, 10) || 1);
       // Blank means unbounded — explicitly send null so the server
       // clears any previously-set bound instead of preserving it.
       payload.min_value = parseOptionalInt(field("min_value").value);
@@ -338,7 +448,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
       row.innerHTML = renderCallbackRow(snapshot);
       row
         .querySelector(".timers-callback-remove")
-        .addEventListener("click", () => row.remove());
+        .addEventListener("click", () => { row.remove(); writeLine(); });
       // Each type-select repaints just the row, reading current state
       // first so both halves' other values survive.
       row.querySelectorAll("[data-cb-typeselect]").forEach((sel) => {
@@ -354,6 +464,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     }
     paint(initial);
     callbacksList.appendChild(row);
+    return row;
   }
 
   // Snapshot one row to a {id, when, then} hash. Shared between repaints
@@ -691,6 +802,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
         when: { type: "complete" },
         then: { type: b.dataset.timersCbAdd },
       });
+      writeLine();
     });
   });
 
@@ -716,6 +828,21 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     snapshots.forEach((cb) => appendCallbackRow(cb));
   });
   durationInput?.addEventListener("input", updateDurationPreview);
+
+  // The line fills the fields as it's typed, and is only rewritten in
+  // its tidy form once it's left — never under the cursor.
+  lineInput.addEventListener("input", applyLine);
+  lineInput.addEventListener("blur", writeLine);
+  [lineInput, nameInput].forEach((el) => el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); form.requestSubmit(); }
+  }));
+  // Any other field (callback rows included) writes the line back.
+  ["input", "change"].forEach((type) => {
+    form.addEventListener(type, (e) => {
+      if (e.target === lineInput || e.target === labelInput) return;
+      writeLine();
+    });
+  });
   dialog.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
     b.addEventListener("click", () => dialog.close());
   });
@@ -738,6 +865,10 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
       });
     } else if (editingId) {
       await actions.update(editingId, payload);
+    } else if (lineCopies > 1) {
+      for (let n = 1; n <= lineCopies; n += 1) {
+        await actions.create({ ...payload, name: payload.name ? `${payload.name} ${n}` : "" });
+      }
     } else {
       await actions.create(payload);
     }
@@ -801,7 +932,12 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
         },
       );
     }
+    dialog.querySelector("[data-timers-callbacks-drawer]").open = false;
     dialog.showModal();
+    requestAnimationFrame(() => {
+      nameInput.focus();
+      nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
+    });
   }
 
   return { open };

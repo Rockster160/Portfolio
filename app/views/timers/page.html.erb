@@ -113,8 +113,27 @@
         <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
       </header>
       <div class="timers-form-body">
+        <%# Name is literal. The quick line under it is the whole timer as one
+          line; each writes into the other as it changes. %>
         <fieldset>
-          <div class="field-row">
+          <div class="field">
+            <span class="field-label">Name</span>
+            <input type="text" data-timers-field="name" autocomplete="off" autocapitalize="sentences"
+                   placeholder="Optional — e.g. Tea, Rocco">
+          </div>
+          <div class="field">
+            <div class="timers-syntax-label">
+              <span class="field-label">Quick</span>
+              <button type="button" class="timers-info-btn" data-timers-syntax-info aria-label="How to write a line" title="How to write a line"><%= fa(:info) %></button>
+            </div>
+            <input type="text" class="timers-line-input" data-timers-field="line" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" placeholder="3m bell repeat">
+          </div>
+          <div class="field hidden" data-when-mode="quick" hidden>
+            <span class="field-label">Quick Label</span>
+            <input type="text" data-timers-field="quick_label" placeholder="Optional — defaults to duration">
+          </div>
+          <div class="field-row field-row-wrap">
             <div class="field">
               <span class="field-label">Type</span>
               <select data-timers-field="kind">
@@ -122,6 +141,10 @@
                 <option value="counter">Counter</option>
                 <option value="dial">Dial</option>
               </select>
+            </div>
+            <div class="field">
+              <span class="field-label">Size</span>
+              <select data-timers-field="width"></select>
             </div>
             <div class="field field-color">
               <span class="field-label">Color</span>
@@ -141,16 +164,18 @@
           </div>
           <label class="checkbox-row">
             <input type="checkbox" data-timers-field="repeat">
-            <span>Repeat — auto-restart after each fire</span>
+            <span>Repeat — start over each time it ends</span>
           </label>
         </fieldset>
         <fieldset data-when-kind="counter" hidden>
-          <div class="field"><span class="field-label">Initial value</span><input type="number" data-timers-field="value" value="0"></div>
           <div class="field-row">
-            <div class="field"><span class="field-label">Min</span><input type="number" data-timers-field="min_value" placeholder="unbounded"></div>
-            <div class="field"><span class="field-label">Max</span><input type="number" data-timers-field="max_value" placeholder="unbounded"></div>
+            <div class="field"><span class="field-label">Starts at</span><input type="number" data-timers-field="value" value="0"></div>
+            <div class="field"><span class="field-label">Step</span><input type="number" data-timers-field="step" value="1" min="1"></div>
           </div>
-          <p class="field-hint">Optional. Min &amp; max bound the progress ring and fire the <em>complete</em> callback when the counter hits either bound. Leave blank for an uncapped counter.</p>
+          <div class="field-row">
+            <div class="field"><span class="field-label">Min</span><input type="number" data-timers-field="min_value" placeholder="none"></div>
+            <div class="field"><span class="field-label">Max</span><input type="number" data-timers-field="max_value" placeholder="none"></div>
+          </div>
         </fieldset>
         <fieldset data-when-kind="dial" hidden>
           <div class="field">
@@ -169,35 +194,28 @@
             </span>
           </div>
         </fieldset>
-        <fieldset>
-          <div class="field" data-when-mode="timer">
-            <span class="field-label">Name</span>
-            <input type="text" data-timers-field="name" placeholder="Optional — e.g. Tea, Push-ups">
-          </div>
-          <div class="field hidden" data-when-mode="quick" hidden>
-            <span class="field-label">Quick Label</span>
-            <input type="text" data-timers-field="quick_label" placeholder="Optional — defaults to duration">
-          </div>
-          <div class="field" data-when-mode="timer">
-            <span class="field-label">Page</span>
-            <select data-timers-field="timer_page_id"><option value="">Home</option></select>
-          </div>
-          <label class="checkbox-row" data-when-mode="timer">
-            <input type="checkbox" data-timers-field="disabled">
-            <span>Disabled — greyed out and not tappable</span>
-          </label>
-        </fieldset>
-        <fieldset class="timers-callbacks-fieldset">
-          <h4 class="timers-fieldset-title">Callbacks</h4>
-          <p class="field-hint">What happens when this timer fires. Tap a card to silence its sound.</p>
-          <div data-timers-callbacks-list></div>
-          <div class="timers-callbacks-add">
-            <button type="button" data-timers-cb-add="sound">+ Sound</button>
-            <button type="button" data-timers-cb-add="push">+ Push notification</button>
-            <button type="button" data-timers-cb-add="jil">+ Jil trigger</button>
-            <button type="button" data-timers-cb-add="chain">+ Chain timer</button>
-          </div>
-        </fieldset>
+        <details class="timers-drawer" data-timers-callbacks-drawer>
+          <summary>
+            <span>Callbacks &amp; more</span>
+            <span class="timers-drawer-count" data-timers-callbacks-count></span>
+          </summary>
+          <fieldset class="timers-callbacks-fieldset">
+            <p class="field-hint">What happens when this timer fires. Tap a card to silence its sound.</p>
+            <div data-timers-callbacks-list></div>
+            <div class="timers-callbacks-add">
+              <button type="button" data-timers-cb-add="sound">+ Sound</button>
+              <button type="button" data-timers-cb-add="push">+ Push notification</button>
+              <button type="button" data-timers-cb-add="jil">+ Jil trigger</button>
+              <button type="button" data-timers-cb-add="chain">+ Chain timer</button>
+            </div>
+          </fieldset>
+          <fieldset data-when-mode="timer">
+            <label class="checkbox-row">
+              <input type="checkbox" data-timers-field="disabled">
+              <span>Disabled — greyed out and not tappable</span>
+            </label>
+          </fieldset>
+        </details>
       </div>
       <footer class="timers-modal-footer">
         <button type="button" class="timers-danger-btn" data-timers-delete hidden>Delete</button>
@@ -286,37 +304,88 @@
         <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
       </header>
       <div class="timers-pages-list" data-timers-pages-modal-list></div>
-      <footer class="timers-page-builder">
-        <div class="builder-row">
-          <select data-timers-pages-modal-target hidden>
-            <option value="new">New page</option>
-            <option value="current">Add to this page</option>
-          </select>
-          <span class="builder-field" data-timers-pages-modal-name-field>
-            <input type="text" placeholder="Page name" data-timers-pages-modal-name>
-          </span>
-          <select data-timers-pages-modal-kind>
-            <option value="counter">Counters</option>
-            <option value="countdown">Countdowns</option>
-          </select>
-        </div>
-        <textarea rows="3"
-                  data-timers-pages-modal-names
-                  placeholder="One name per line — Rocco, Eve, Chelsea"></textarea>
-        <div class="builder-row builder-row-end">
-          <label class="builder-inline">
-            <span data-timers-pages-modal-arg-label>Each starts at</span>
-            <input type="text" data-timers-pages-modal-arg placeholder="0">
-          </label>
-          <label class="builder-inline" data-timers-pages-modal-temp-field>
-            <input type="checkbox" data-timers-pages-modal-temp>
-            <span>Temporary</span>
-          </label>
-          <span class="spacer"></span>
-          <button type="button" class="timers-primary-btn" data-timers-pages-modal-add>+ Create page</button>
-        </div>
-        <p class="field-hint" data-timers-pages-modal-hint></p>
+      <footer class="timers-modal-footer">
+        <button type="button" class="timers-secondary-btn hidden" data-timers-pages-modal-add-here>+ Add to this page</button>
+        <span class="spacer"></span>
+        <button type="button" class="timers-primary-btn" data-timers-pages-modal-new>+ New page</button>
       </footer>
+    </form>
+  </dialog>
+
+  <%# ================= Page builder modal ================= %>
+  <dialog class="timers-modal timers-builder-modal" data-timers-builder-modal>
+    <form method="dialog" class="basic timers-form">
+      <header class="timers-modal-header">
+        <h3 data-timers-builder-title>New page</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-form-body timers-page-builder">
+        <input type="text" placeholder="Page name" data-timers-builder-name>
+        <div class="timers-syntax-label">
+          <span>Timers, one per line</span>
+          <button type="button" class="timers-info-btn" data-timers-syntax-info aria-label="How to write a line" title="How to write a line"><%= fa(:info) %></button>
+        </div>
+        <textarea rows="5" data-timers-builder-lines
+                  placeholder="One timer per line&#10;Rocco&#10;Chelsea 50&#10;Pasta 9 min"></textarea>
+        <ul class="timers-builder-preview" data-timers-builder-preview></ul>
+      </div>
+      <footer class="timers-modal-footer">
+        <label class="builder-inline" data-timers-builder-temp-field>
+          <input type="checkbox" data-timers-builder-temp>
+          <span>Temporary</span>
+        </label>
+        <span class="spacer"></span>
+        <button type="button" class="timers-primary-btn" data-timers-builder-submit>+ Create page</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <%# ================= Line syntax help ================= %>
+  <dialog class="timers-modal timers-syntax-help" data-timers-syntax-help>
+    <form method="dialog" class="basic timers-form">
+      <header class="timers-modal-header">
+        <h3>Writing a timer as a line</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-form-body timers-syntax-body">
+        <p>A name, plus any of the words below, in any order. Anything that isn't one of them is part of the name.</p>
+        <table>
+          <tr><td><code>Rocco</code></td><td>counter from 0</td></tr>
+          <tr><td><code>Chelsea 50</code></td><td>counter from 50</td></tr>
+          <tr><td><code>10s</code> · <code>Pasta 9 min</code> · <code>1h30m</code> · <code>4:30</code></td><td>countdown</td></tr>
+          <tr><td><code>Turn: Rocco, Chelsea, Eve</code></td><td>dial, one section each</td></tr>
+        </table>
+        <h4>Countdowns</h4>
+        <table>
+          <tr><td><code>repeat</code></td><td>starts over each time it ends</td></tr>
+          <tr><td><code>alarm</code></td><td>keeps ringing until stopped</td></tr>
+          <tr><td><code>quiet</code></td><td>no sound</td></tr>
+          <tr><td><code>bell</code> <code>ding</code> <code>beep</code> <code>chime</code></td><td>which sound</td></tr>
+        </table>
+        <h4>Counters</h4>
+        <table>
+          <tr><td><code>+5</code></td><td>goes up in fives</td></tr>
+          <tr><td><code>/10</code></td><td>from 0 up to 10</td></tr>
+          <tr><td><code>0..10</code> · <code>min 0</code> · <code>max 10</code></td><td>limits</td></tr>
+        </table>
+        <h4>Any timer</h4>
+        <table>
+          <tr><td><code>small</code> <code>medium</code> <code>big</code> <code>full</code></td><td>card size</td></tr>
+          <tr><td><code>#red</code> · <code>#f80</code></td><td>color</td></tr>
+          <tr><td><code>x3</code></td><td>three of them, numbered</td></tr>
+          <tr><td><code>"Big Mike"</code></td><td>quotes keep words as the name</td></tr>
+          <tr><td><code># note</code></td><td>a comment, ignored</td></tr>
+        </table>
+        <h4>Examples</h4>
+        <table>
+          <tr><td><code>Tea 3m bell</code></td><td>3 minute countdown, bell when done</td></tr>
+          <tr><td><code>Plank 45s repeat alarm</code></td><td>45 seconds, over and over, ringing</td></tr>
+          <tr><td><code>Egg 6m x4</code></td><td>Egg 1 to Egg 4, six minutes each</td></tr>
+          <tr><td><code>Score +5 /100 big</code></td><td>large counter, fives, up to 100</td></tr>
+          <tr><td><code>Rocco #green</code></td><td>green counter from 0</td></tr>
+        </table>
+        <p class="timers-syntax-note">On a single timer, the Name box is always taken as-is — the quick line wraps a name in quotes when it would read as options. A line with no duration or number keeps the type picked below it.</p>
+      </div>
     </form>
   </dialog>
 

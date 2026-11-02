@@ -186,10 +186,10 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
       row.className = "tmpl-row";
       row.innerHTML = `
         <span></span>
-        <div class="row-body">
+        <a class="row-body row-link" href="/timers/page/${encodeURIComponent(p.slug)}">
           <div class="label">${escapeHtml(p.name || p.slug)}</div>
           <div class="row-tag">/${escapeHtml(p.slug)}</div>
-        </div>
+        </a>
         <div class="row-actions">
           <button type="button" data-action="rename">Rename</button>
           <button type="button" data-action="delete" class="danger">Delete</button>
