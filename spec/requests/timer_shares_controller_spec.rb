@@ -6,7 +6,7 @@ RSpec.describe TimerSharesController do
 
   describe "GET /t/:token" do
     it "returns 410 when token is missing" do
-      get "/t/does-not-exist"
+      get "/t/does-not-exist-anywhere"
       expect(response).to have_http_status(:gone)
     end
 

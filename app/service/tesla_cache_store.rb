@@ -247,18 +247,40 @@ class TeslaCacheStore
       }.compact
     end
 
+    # Telemetry sends Location at most once a minute and only while it changes,
+    # so a car that has just parked can be carrying a fix from down the road.
+    # A poll taken since then is where it actually stopped, and is believed
+    # over the older push.
     def compose_location(ep, tel, sec_ts, prev_location=nil)
+      return compose_polled_location(ep, prev_location) if polled_location_newer?(ep, sec_ts)
+
       loc = tel[:Location]
       lat = (loc.is_a?(Hash) ? (loc[:latitude] || loc[:lat]) : nil) || ep.dig(:drive_state, :latitude)
       lng = (loc.is_a?(Hash) ? (loc[:longitude] || loc[:lng] || loc[:lon]) : nil) || ep.dig(:drive_state, :longitude)
       return nil unless lat && lng
 
       ts = sec_ts[:location] || ep.dig(:drive_state, :timestamp)
+      build_location(lat, lng, ts, tel[:GpsHeading] || ep.dig(:drive_state, :heading), prev_location)
+    end
+
+    def polled_location_newer?(ep, sec_ts)
+      drive = ep[:drive_state]
+      return false unless drive.is_a?(Hash) && drive[:latitude] && drive[:longitude] && drive[:timestamp]
+
+      sec_ts[:location].blank? || drive[:timestamp] > sec_ts[:location]
+    end
+
+    def compose_polled_location(ep, prev_location)
+      drive = ep[:drive_state]
+      build_location(drive[:latitude], drive[:longitude], drive[:timestamp], drive[:heading], prev_location)
+    end
+
+    def build_location(lat, lng, ts, heading, prev_location)
       {
         lat:      lat.to_f.round(6),
         lng:      lng.to_f.round(6),
         name:     location_name(lat, lng),
-        heading:  (tel[:GpsHeading] || ep.dig(:drive_state, :heading))&.to_f&.round(1),
+        heading:  heading&.to_f&.round(1),
         ts:       ts,
         moved_at: moved_at(prev_location, [lat.to_f, lng.to_f], ts),
       }.compact

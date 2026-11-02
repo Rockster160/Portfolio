@@ -334,9 +334,27 @@ class AddressBook
 
     loc = loc.map(&:to_f)
     name = agenda_place_near(loc)
-    name ||= find_contact_near(loc, within: establishments ? STOP_CONTACT_RADIUS : NEAR_RADIUS)&.name.presence
-    name ||= nearest_establishment(loc) if establishments
+    name ||= establishments ? stop_name(loc) : find_contact_near(loc)&.name.presence
     name || reverse_geocode(loc, get: :city)
+  end
+
+  # Within this of a saved place a stop is there, with no business lookup.
+  CONTACT_CERTAIN_RADIUS = 0.0002
+
+  # Where they've stopped, a saved place wins over a business unless the
+  # business is less than half as far: the gas station beside the storage unit
+  # is the gas station when they're parked at its pump. Home is never in
+  # question, and asking would pay for a lookup on every arrival there.
+  def stop_name(loc)
+    address = find_address_near(loc, within: STOP_CONTACT_RADIUS)
+    saved = address&.contact&.name.presence
+    saved_distance = saved && distance(address.loc.map(&:to_f), loc)
+    return saved if saved && (saved == "Home" || saved_distance <= CONTACT_CERTAIN_RADIUS)
+
+    place = nearest_establishment(loc)
+    return saved if saved && (place.nil? || distance(place[:loc], loc) * 2 >= saved_distance)
+
+    place&.dig(:name) || saved
   end
 
   # An appointment's venue is geocoded to one point and parked at another, so
@@ -407,10 +425,18 @@ class AddressBook
     accounting
   ].freeze
 
+  # A small place sharing a building with a far busier one is usually inside
+  # it: the vaccination clinic in the pet store, the post office counter in the
+  # grocery store. Their pins sit metres apart, so the busier one is taken when
+  # it is nearly as close.
+  HOST_SLACK = 0.0001
+  HOST_REVIEWS_RATIO = 5
+
+  # { name:, loc: } of the business they've stopped at.
   def nearest_establishment(loc)
     return unless Rails.env.production?
 
-    nonnil_cache("nearest_establishment(#{loc.map { |l| l.round(4) }.join(",")})") {
+    nonnil_cache("nearest_establishment_v2(#{loc.map { |l| l.round(4) }.join(",")})") {
       ::PrettyLogger.info("\b[AddressCache] Nearest establishment #{loc.join(",")}")
       params = {
         location: loc.join(","),
@@ -422,13 +448,26 @@ class AddressBook
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
-      json[:results].to_a.select { |place| stoppable_place?(place) }.min_by { |place|
-        distance(loc, place.dig(:geometry, :location).values_at(:lat, :lng))
-      }&.dig(:name)
+      pick_establishment(loc, json[:results].to_a.select { |place| stoppable_place?(place) })
     }
   rescue StandardError => e
     ::SlackNotifier.err(e, "nearest_establishment failed: (#{loc}): [#{e.class}]:#{e.message}", user: @user)
     nil
+  end
+
+  def pick_establishment(loc, places)
+    placed = places.map { |place|
+      there = place.dig(:geometry, :location).values_at(:lat, :lng).map(&:to_f)
+      { name: place[:name], loc: there, reviews: place[:user_ratings_total].to_i, away: distance(loc, there) }
+    }
+    nearest = placed.min_by { |place| place[:away] }
+    return if nearest.nil?
+
+    host = placed.select { |place|
+      place[:away] <= nearest[:away] + HOST_SLACK && place[:reviews] >= [nearest[:reviews], 1].max * HOST_REVIEWS_RATIO
+    }.max_by { |place| place[:reviews] }
+
+    (host || nearest).slice(:name, :loc)
   end
 
   def stoppable_place?(place)
@@ -443,7 +482,8 @@ class AddressBook
   # How close a saved address has to be to count as being there.
   NEAR_RADIUS = 0.001
   # The same, for where they've stopped: as wide as the business lookup, so a
-  # saved place the car parked down the street from still beats any business.
+  # saved place the car parked down the street from still beats any business
+  # that isn't much closer. See #stop_name.
   STOP_CONTACT_RADIUS = 0.0015
 
   # The nearest of their addresses within `within` of [lat,lng]. Two saved

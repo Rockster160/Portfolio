@@ -25,6 +25,12 @@ class TeslaTelemetry
     new(data).process
   end
 
+  # The leg check alone, against car_data as it stands, for a position that
+  # arrived some other way than a push.
+  def self.settle_travel
+    new({}).settle_travel
+  end
+
   def initialize(data)
     @raw = data.to_h.symbolize_keys
     @user = User.me
@@ -45,6 +51,11 @@ class TeslaTelemetry
     fire_general_trigger
 
     TeslaCommand.broadcast
+  end
+
+  def settle_travel
+    @car_data = @prev
+    detect_travel_changes
   end
 
   private
@@ -105,7 +116,18 @@ class TeslaTelemetry
     if new_shift.to_s == "P"
       payload = { shift: new_shift, previous: prev_shift }
       ::Jil.trigger(@user, :tesla_parked, payload)
+      locate_parked_car
     end
+  end
+
+  # The push that shows Park carries the last Location sent while driving, up
+  # to a minute back down the road, and the car may send no other. See
+  # TeslaParkedLocationWorker.
+  def locate_parked_car
+    return unless @user.caches.get(:car_leg).to_h[:driving]
+
+    ::TeslaParkedLocationWorker.perform_async
+    ::TeslaParkedLocationWorker.perform_in((POSITION_LAG_MS / 1000) + 5, false)
   end
 
   def gear_in_record

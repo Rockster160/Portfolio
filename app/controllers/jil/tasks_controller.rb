@@ -56,7 +56,7 @@ class Jil::TasksController < ApplicationController
   end
 
   def trigger
-    @task = current_user.tasks.find(params[:id])
+    @task = current_user.accessible_tasks.from_key(params[:id])
   end
 
   def new

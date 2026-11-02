@@ -432,6 +432,25 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:location, :lng)).to eq(-111.0)
     end
 
+    it "believes a poll taken after the last Location push" do
+      described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 })
+      described_class.record_endpoint(drive_state: {
+        latitude:  40.6,
+        longitude: -111.6,
+        heading:   90,
+        timestamp: ms_ago(-1.second),
+      })
+
+      expect(car_data[:location]).to include(lat: 40.6, lng: -111.6, heading: 90.0)
+    end
+
+    it "keeps the Location push over an older poll" do
+      described_class.record_endpoint(drive_state: { latitude: 40.6, longitude: -111.6, timestamp: ms_ago(5.minutes) })
+      described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 })
+
+      expect(car_data[:location]).to include(lat: 40.5, lng: -111.5)
+    end
+
     it "uses telemetry Location when both coords present" do
       described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 })
       expect(car_data.dig(:location, :lat)).to eq(40.5)

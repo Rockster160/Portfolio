@@ -301,22 +301,57 @@ RSpec.describe AddressBook do
 
     it "leaves a bare street address to the business lookup" do
       appointment("12723 S Park Ave, Riverton, UT 84065")
-      allow(book).to receive(:nearest_establishment).with(here).and_return("Riverton Dental")
+      allow(book).to receive(:nearest_establishment).with(here).and_return({ name: "Riverton Dental", loc: here })
 
       expect(book.place_name(here, establishments: true)).to eq("Riverton Dental")
     end
 
     it "falls back to the nearest contact" do
       allow(book).to receive(:find_contact_near).with(here, any_args).and_return(Contact.new(name: "Home"))
+      user.contacts.create!(name: "Home").addresses.create!(user: user, lat: here[0], lng: here[1])
 
+      expect(book.place_name(here)).to eq("Home")
       expect(book.place_name(here, establishments: true)).to eq("Home")
+    end
+
+    describe "a saved place beside a business" do
+      let(:unit) { [40.48870105646164, -112.01075832854691] }
+      let(:pump) { [40.48894079132537, -112.01029965964834] }
+
+      before {
+        user.contacts.create!(name: "Storage").addresses.create!(user: user, lat: unit[0], lng: unit[1])
+        allow(book).to receive(:nearest_establishment) { |at|
+          book.near?(at, pump, 0.0003) ? { name: "Holiday Oil Gas", loc: pump } : { name: "Holiday Oil Car Wash", loc: [40.48868, -112.01090] }
+        }
+      }
+
+      it "is the saved place when they're parked at it" do
+        expect(book.place_name([40.488715, -112.010735], establishments: true)).to eq("Storage")
+      end
+
+      it "is the business when they're parked at the business" do
+        expect(book.place_name([40.488925, -112.010320], establishments: true)).to eq("Holiday Oil Gas")
+      end
+
+      it "doesn't look for a business at all right on top of the saved place" do
+        book.place_name(unit, establishments: true)
+
+        expect(book).not_to have_received(:nearest_establishment)
+      end
+    end
+
+    it "never asks about a business at Home" do
+      user.contacts.create!(name: "Home").addresses.create!(user: user, lat: here[0], lng: here[1])
+
+      expect(book.place_name([here[0] + 0.0008, here[1]], establishments: true)).to eq("Home")
+      expect(book).not_to have_received(:nearest_establishment)
     end
 
     # The car parks down the street from the saved address, past `near?` but
     # well inside the business radius, and the nearest business is a stranger's.
     it "takes a saved place a stop is parked down the street from over a business" do
       book = described_class.new(user)
-      allow(book).to receive_messages(nearest_establishment: "Frank Kidd Roofing", reverse_geocode: "Taylorsville")
+      allow(book).to receive_messages(nearest_establishment: nil, reverse_geocode: "Taylorsville")
       contact = user.contacts.create!(name: "Nathan")
       contact.addresses.create!(user: user, label: "Tavern", street: "5719 Easton St", lat: 40.6473989, lng: -111.9557654)
       parked = [40.648564, -111.9562]
@@ -326,7 +361,7 @@ RSpec.describe AddressBook do
     end
 
     it "falls back to the nearest business only when asked for one" do
-      allow(book).to receive(:nearest_establishment).with(here).and_return("Costco")
+      allow(book).to receive(:nearest_establishment).with(here).and_return({ name: "Costco", loc: here })
 
       expect(book.place_name(here, establishments: true)).to eq("Costco")
       expect(book.place_name(here)).to eq("Riverton")
@@ -358,6 +393,45 @@ RSpec.describe AddressBook do
       address = contact.addresses.create!(user: user, label: "Tavern", street: "1 Main", lat: 40.5, lng: -111.9)
 
       expect(book.find_address_near([40.5, -111.9])).to eq(address)
+    end
+  end
+
+  # Distances and review counts as Google returned them at real stops.
+  describe "#pick_establishment" do
+    let(:book) { described_class.new(create(:user)) }
+    let(:stop) { [40.5, -111.9] }
+
+    def place(name, metres, reviews)
+      { name: name, user_ratings_total: reviews, geometry: { location: { lat: stop[0] + (metres / 111_000.0), lng: stop[1] } } }
+    end
+
+    def pick(*places) = book.pick_establishment(stop, places)&.dig(:name)
+
+    it "takes the nearest" do
+      expect(pick(place("CVS", 107, 165), place("Trader Joe's", 45, 26), place("Calle Tacos", 105, 45))).to eq("Trader Joe's")
+    end
+
+    it "takes the store over the clinic inside it" do
+      expect(pick(place("Hobby Lobby", 96, 2681), place("Petco", 45, 1045), place("Vetco Vaccination Clinic", 42, 16)))
+        .to eq("Petco")
+    end
+
+    it "takes the grocery store over the post office counter inside it" do
+      expect(
+        pick(place("Harmons Grocery", 30, 283), place("Harmons Pharmacy", 27, 41), place("United States Post Office", 20, 47)),
+      ).to eq("Harmons Grocery")
+    end
+
+    it "keeps a busy neighbour that isn't busy enough to be the host" do
+      expect(pick(place("LUXE Automotive", 25, 845), place("McDonald's", 25.5, 2835))).to eq("LUXE Automotive")
+    end
+
+    it "keeps the nearest when the busier place is further off" do
+      expect(pick(place("Lee's Marketplace", 36, 408), place("K-COOK STATION", 133, 1006))).to eq("Lee's Marketplace")
+    end
+
+    it "gives back where the business is" do
+      expect(book.pick_establishment(stop, [place("Petco", 45, 1045)])[:loc]).to eq([stop[0] + (45 / 111_000.0), stop[1]])
     end
   end
 

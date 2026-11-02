@@ -333,10 +333,13 @@ Rails.application.routes.draw do
     resources :shares,        controller: :timer_shares,        only: [:create, :update, :destroy]
   end
 
-  get  "/t/:token"      => "timer_shares#show", as: :timer_share
-  get  "/t/:token/sync" => "timer_shares#sync"
-  post "/t/:token/:action_kind" => "timer_shares#act",
-    constraints: { action_kind: /start|pause|resume|reset|confirm|increment|advance/ }
+  # Share tokens are long; a short `/t/...` is a task's trigger page, further down.
+  constraints(token: /[\w-]{16,}/) do
+    get  "/t/:token"      => "timer_shares#show", as: :timer_share
+    get  "/t/:token/sync" => "timer_shares#sync"
+    post "/t/:token/:action_kind" => "timer_shares#act",
+      constraints: { action_kind: /start|pause|resume|reset|confirm|increment|advance/ }
+  end
 
   # ============================================================
   # GAME TRACKER PWA
@@ -647,7 +650,9 @@ Rails.application.routes.draw do
     resources :gpt_presets, path: :gpt, except: :show
     resources :secrets, only: [:index, :create, :destroy]
   end
-  get "t/:id" => "jil/tasks#trigger"
+  get "t/:id" => "jil/tasks#trigger", as: :task_trigger
+  get "r/:id" => "jil/scan_runs#show", as: :task_scan_run
+  post "r/:id" => "jil/scan_runs#create"
   get "jil/p/:id" => "jil/pages#show", as: :jil_page
   get "jil/f/:id" => "jil/forms#show", as: :jil_form
   post "jil/f/:id" => "jil/forms#submit"

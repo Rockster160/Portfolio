@@ -22,6 +22,8 @@ RSpec.describe TeslaTelemetry do
       @triggers << [a, k]
       nil
     }
+    allow(::TeslaParkedLocationWorker).to receive(:perform_async)
+    allow(::TeslaParkedLocationWorker).to receive(:perform_in)
     allow_any_instance_of(AddressBook).to receive(:find_contact_near).and_return(nil)
     allow_any_instance_of(AddressBook).to receive(:reverse_geocode).and_return(nil)
   end
@@ -363,6 +365,63 @@ RSpec.describe TeslaTelemetry do
       travel_to(2.minutes.from_now) { process(VehicleSpeed: 0) }
 
       expect(travel_triggers.last).to include(action: :arrived, lat: away.first, lng: away.last)
+    end
+
+    describe "asking the car where it parked" do
+      def polled_at(coord)
+        TeslaCacheStore.record_endpoint(drive_state: {
+          latitude:  coord.first,
+          longitude: coord.last,
+          timestamp: (Time.current.to_f * 1000).round + 1000,
+        })
+      end
+
+      it "asks on the shift into Park at the end of a leg" do
+        drive_away!
+        shift(:P)
+
+        expect(TeslaParkedLocationWorker).to have_received(:perform_async)
+        expect(TeslaParkedLocationWorker).to have_received(:perform_in).with(95, false)
+      end
+
+      it "doesn't ask when it goes back into Park without having left" do
+        parked_at(home)
+        shift(:R)
+        shift(:P)
+
+        expect(TeslaParkedLocationWorker).not_to have_received(:perform_async)
+      end
+
+      it "arrives where the car says it is, not at the last push from the road" do
+        drive_away!
+        move_to(down_the_road)
+        shift(:P)
+
+        polled_at(away)
+        described_class.settle_travel
+
+        expect(travel_triggers.last).to include(action: :arrived, lat: away.first, lng: away.last)
+      end
+
+      it "arrives once the wait runs out for a car that went quiet after parking" do
+        drive_away!
+        move_to(away)
+        shift(:P)
+
+        travel_to(2.minutes.from_now) { described_class.settle_travel }
+
+        expect(travel_triggers.last).to include(action: :arrived, lat: away.first, lng: away.last)
+      end
+
+      it "runs the poll and then the leg check" do
+        allow(TeslaControl).to receive(:me).and_return(instance_double(TeslaControl, vehicle_data: {}))
+        allow(TeslaTelemetry).to receive(:settle_travel)
+
+        TeslaParkedLocationWorker.new.perform
+
+        expect(TeslaControl.me).to have_received(:vehicle_data)
+        expect(TeslaTelemetry).to have_received(:settle_travel)
+      end
     end
 
     # Pulled forward onto the charger or out to let the other car by.

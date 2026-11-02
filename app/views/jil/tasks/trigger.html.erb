@@ -12,7 +12,26 @@
   <div class="task-trigger-btns">
     <%= render partial: "jil/tasks/trigger", locals: { task: @task, title: "Trigger Now" } %>
   </div>
+
+  <% if @task.short_key.present? %>
+    <div class="task-short-links">
+      <div>
+        <code><%= @task.short_url %></code> opens this page
+        <%= link_to "QR", qr_labels_path(url: @task.short_url, title: @task.name), target: :_blank %>
+      </div>
+      <% unless @task.needs_inputs? %>
+        <div>
+          <code><%= @task.scan_run_url %></code> runs it when opened
+          <%= link_to "QR", qr_labels_path(url: @task.scan_run_url, title: @task.name), target: :_blank %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
 </div>
+
+<style>
+  .task-short-links { margin-top: 24px; font-size: 14px; line-height: 2; text-align: center; }
+</style>
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {

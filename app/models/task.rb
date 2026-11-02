@@ -14,6 +14,7 @@
 #  listener        :text
 #  name            :text
 #  next_trigger_at :datetime
+#  short_key       :text
 #  sort_order      :integer
 #  tree_order      :integer
 #  uuid            :uuid
@@ -33,11 +34,16 @@ class Task < ApplicationRecord
   # finding it pending and re-run it in a loop.
   validate :cron_must_be_readable, if: -> { cron.present? && cron_changed? }
 
+  # Letters only, so a key never reads as a numeric id, and no I or O to
+  # mistake for 1 or 0 when it's typed off a label.
+  SHORT_KEY_CHARS = [*"A".."Z"] - ["I", "O"]
+
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
   orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
   scope :ordered, -> { order(tree_order: :desc) } # Override Orderable: tree-aware global ordering
   before_save -> { self.tree_order ||= (user&.tasks&.maximum(:tree_order) || 0) + 1 }
+  before_create :set_short_key
 
   has_many :executions
   has_many :shared_tasks, dependent: :destroy
@@ -257,6 +263,29 @@ class Task < ApplicationRecord
     listener.to_s.split(":", 2).first.presence&.to_sym
   end
 
+  # The id or the short key: links printed before short keys existed carry
+  # the id.
+  def self.from_key(key)
+    key = key.to_s.strip
+    return find(key) if key.match?(/\A\d+\z/)
+
+    find_by!(short_key: key.upcase)
+  end
+
+  # The trigger page, with the run button
+  def short_url
+    "rdjn.me/t/#{short_key}"
+  end
+
+  # Runs the task as soon as it is opened
+  def scan_run_url
+    "rdjn.me/r/#{short_key}"
+  end
+
+  def needs_inputs?
+    function? && function_args_str.present?
+  end
+
   def function?
     listener.to_s.match?(self.class.func_regex)
   end
@@ -425,6 +454,13 @@ class Task < ApplicationRecord
   end
 
   private
+
+  def set_short_key
+    self.short_key ||= loop {
+      candidate = Array.new(4) { SHORT_KEY_CHARS.sample }.join
+      break candidate unless ::Task.exists?(short_key: candidate)
+    }
+  end
 
   def cron_must_be_readable
     complaint = ::CronParse.complaint(cron)
