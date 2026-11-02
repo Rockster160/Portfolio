@@ -612,6 +612,7 @@ Rails.application.routes.draw do
   resources :colors, only: [:index]
   resources :anonicons, only: [:index, :show], constraints: { id: /[0-9.a-zA-Z]+/ }
   resources :qr_labels, only: [:index, :show]
+  resources :short_links, only: [:index, :create, :destroy], path: :links
   get :"svg-editor", controller: :svg_editors, action: :show
 
   resource :rlcraft, only: [:show, :update]
@@ -653,6 +654,7 @@ Rails.application.routes.draw do
   get "t/:id" => "jil/tasks#trigger", as: :task_trigger
   get "r/:id" => "jil/scan_runs#show", as: :task_scan_run
   post "r/:id" => "jil/scan_runs#create"
+  get "l/:key" => "short_links#visit", as: :short_link_visit
   get "jil/p/:id" => "jil/pages#show", as: :jil_page
   get "jil/f/:id" => "jil/forms#show", as: :jil_form
   post "jil/f/:id" => "jil/forms#submit"

@@ -1,0 +1,52 @@
+.short-links-page {
+  .short-link-new,
+  .short-link-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .short-link-new {
+    border: 1px solid $base-blue;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .short-link-info {
+    display: flex;
+    flex-direction: column;
+    // Lets a long link shrink and ellipsize instead of pushing the buttons off
+    min-width: 0;
+
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.7;
+    }
+  }
+
+  .short-link-btns {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 5px;
+
+    form {
+      margin: 0;
+    }
+
+    // Same line height for <a> and <button>, so they come out the same height
+    .btn {
+      margin: 0;
+      border: none;
+      padding: 4px 10px;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+  }
+}

@@ -1,0 +1,58 @@
+<%= meta_title "Short Links" %>
+<%= meta_description "Turn any link into a short rdjn.me link." %>
+
+<div class="skinny-container short-links-page">
+  <%= form_tag short_links_path do %>
+    <div class="form-title">
+      Short Links
+    </div>
+    <div class="form-fields">
+      <div class="form-field">
+        <%= label_tag :url, "Link" %>
+        <%= url_field_tag :url, nil, placeholder: "https://example.com/some/long/page", autofocus: true, required: true %>
+      </div>
+    </div>
+    <div class="form-submission">
+      <%= submit_tag "Shorten" %>
+    </div>
+  <% end %>
+
+  <% if @short_link %>
+    <div class="short-link-new">
+      <a href="https://<%= @short_link.short_url %>" target="_blank"><%= @short_link.short_url %></a>
+      <span class="short-link-btns">
+        <button type="button" class="btn btn-copy-link" data-url="https://<%= @short_link.short_url %>">Copy</button>
+        <%= link_to "QR", qr_labels_path(url: @short_link.short_url, title: URI.parse(@short_link.url).host), class: :btn, target: :_blank %>
+      </span>
+    </div>
+  <% end %>
+
+  <% @short_links.each do |short_link| %>
+    <div class="short-link-row">
+      <div class="short-link-info">
+        <a href="https://<%= short_link.short_url %>" target="_blank"><%= short_link.short_url %></a>
+        <small title="<%= short_link.url %>"><%= short_link.url %></small>
+        <small><%= pluralize(short_link.visits, "visit") %></small>
+      </div>
+      <span class="short-link-btns">
+        <button type="button" class="btn btn-copy-link" data-url="https://<%= short_link.short_url %>">Copy</button>
+        <%= link_to "QR", qr_labels_path(url: short_link.short_url, title: URI.parse(short_link.url).host), class: :btn, target: :_blank %>
+        <%= button_to "×", short_link_path(short_link), method: :delete, class: "btn danger", form: { onsubmit: "return confirm('Delete this short link?')" } %>
+      </span>
+    </div>
+  <% end %>
+</div>
+
+<script>
+  document.querySelectorAll(".btn-copy-link").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.url);
+        btn.textContent = "Copied";
+      } catch {
+        btn.textContent = "Couldn't copy";
+      }
+      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+    });
+  });
+</script>
