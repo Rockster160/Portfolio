@@ -939,8 +939,8 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo,
     dialog.querySelector("[data-timers-callbacks-drawer]").open = false;
     dialog.showModal();
     requestAnimationFrame(() => {
-      lineInput.focus();
-      lineInput.setSelectionRange(lineInput.value.length, lineInput.value.length);
+      nameInput.focus();
+      nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
     });
   }
 

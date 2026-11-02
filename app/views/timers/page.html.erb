@@ -124,7 +124,8 @@
           <button type="button" class="timers-link-btn hidden" data-timers-bulk-add>Add several at once…</button>
           <div class="field">
             <span class="field-label">Name</span>
-            <input type="text" data-timers-field="name" autocomplete="off" autocapitalize="sentences"
+            <%# autofocus: opening the dialog lands here, past the quick line above. %>
+            <input type="text" data-timers-field="name" autofocus autocomplete="off" autocapitalize="sentences"
                    placeholder="Optional — e.g. Tea, Rocco">
           </div>
           <div class="field hidden" data-when-mode="quick" hidden>
