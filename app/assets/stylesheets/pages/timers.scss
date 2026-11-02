@@ -1483,3 +1483,58 @@ $t-danger:    #f85149;
     &:hover { background: $t-primary-hi !important; border-color: $t-primary-hi !important; }
   }
 }
+
+// ---------- press feedback ----------
+//
+// Set by press_feedback.js on whatever was pressed: pending while its request
+// is out, then a short ring for how it ended. Outline rather than box-shadow,
+// because the button reset above pins box-shadow to none.
+
+.is-press-pending {
+  cursor: progress !important;
+  animation: press-pending 0.9s ease-in-out infinite;
+}
+
+.is-press-done {
+  outline: 2px solid $t-success;
+  outline-offset: 2px;
+  animation: press-done 0.9s ease-out forwards;
+}
+
+.is-press-queued {
+  outline: 2px dashed $t-muted;
+  outline-offset: 2px;
+  animation: press-fade 1.8s ease-in forwards;
+}
+
+.is-press-failed {
+  outline: 2px solid $t-danger;
+  outline-offset: 2px;
+  animation: press-failed 0.4s ease-in-out, press-fade 1.8s ease-in forwards;
+}
+
+@keyframes press-pending {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes press-done {
+  0%   { outline-offset: 0; outline-color: $t-success; }
+  100% { outline-offset: 6px; outline-color: rgba(63, 185, 80, 0); }
+}
+
+// Only the end is given, so each state fades from its own outline color.
+@keyframes press-fade {
+  100% { outline-color: transparent; }
+}
+
+@keyframes press-failed {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-press-pending { animation: none; opacity: 0.6; }
+  .is-press-done, .is-press-queued, .is-press-failed { animation: none; }
+}

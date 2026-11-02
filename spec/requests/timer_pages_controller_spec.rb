@@ -15,6 +15,18 @@ RSpec.describe TimerPagesController do
       expect(response).to have_http_status(:created)
       expect(user.timer_pages.find_by(slug: "trivia").meta["temporary"]).to be(true)
     end
+
+    it "answers a taken slug with the reason instead of raising" do
+      create(:timer_page, user: user, name: "Potions", slug: "potions")
+
+      post timer_routes_pages_path,
+        params: { timer_page: { name: "Potions", slug: "potions", meta: {} } },
+        as:     :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["errors"]).to eq(["Slug is already used by another page"])
+      expect(user.timer_pages.where(slug: "potions").count).to eq(1)
+    end
   end
 
   describe "POST /timers/pages/:id/duplicate" do

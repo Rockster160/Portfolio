@@ -5,6 +5,7 @@
 // refresh + retry so clicks don't silently no-op.
 
 import { enqueue, getTabId } from "./offline_queue";
+import { track } from "./press_feedback";
 
 let cachedToken = null;
 
@@ -47,8 +48,21 @@ async function safeJson(res) {
   try { return await res.json(); } catch (e) { return null; }
 }
 
-async function request(url, { method = "POST", body = null, queueOnFail = true } = {}) {
+function request(url, options = {}) {
+  return track(() => send(url, options));
+}
+
+// Resolves to `{ result, outcome }` for press_feedback: `result` is what the
+// caller gets, `outcome` says how the press should end.
+async function send(url, { method = "POST", body = null, queueOnFail = true } = {}) {
   const payload = body ? { ...body, tab_id: getTabId() } : { tab_id: getTabId() };
+  const done = (result) => ({ result, outcome: "done" });
+  const failed = (result = null) => ({ result, outcome: "failed" });
+  const queue = () => {
+    if (!queueOnFail) return failed();
+    enqueue({ url, method, body: payload });
+    return { result: null, outcome: "queued" };
+  };
   try {
     let token = cachedToken || csrfMetaToken();
     let res = await fetchWith(url, method, payload, token);
@@ -61,29 +75,26 @@ async function request(url, { method = "POST", body = null, queueOnFail = true }
     if (res.status === 401 || res.status === 422) {
       const body1 = await safeJson(res);
       if (body1 && Array.isArray(body1.errors) && body1.errors.length) {
-        return { __error: body1.errors.join(", ") };
+        return failed({ __error: body1.errors.join(", ") });
       }
       const fresh = await refreshCsrf();
       if (fresh) {
         res = await fetchWith(url, method, payload, fresh);
-        if (res.ok) return res.status === 204 ? {} : await safeJson(res);
+        if (res.ok) return done(res.status === 204 ? {} : await safeJson(res));
         if (res.status === 401 || res.status === 422) {
           const body2 = await safeJson(res);
           if (body2 && Array.isArray(body2.errors) && body2.errors.length) {
-            return { __error: body2.errors.join(", ") };
+            return failed({ __error: body2.errors.join(", ") });
           }
         }
-        if (res.status >= 500 && queueOnFail) enqueue({ url, method, body: payload });
-        return null;
+        return res.status >= 500 ? queue() : failed();
       }
     }
 
-    if (res.ok) return res.status === 204 ? {} : await safeJson(res);
-    if (res.status >= 500 && queueOnFail) enqueue({ url, method, body: payload });
-    return null;
+    if (res.ok) return done(res.status === 204 ? {} : await safeJson(res));
+    return res.status >= 500 ? queue() : failed();
   } catch (e) {
-    if (queueOnFail) enqueue({ url, method, body: payload });
-    return null;
+    return queue();
   }
 }
 

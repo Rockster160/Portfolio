@@ -170,6 +170,7 @@ module BuddyEvalNeeds
     whisper_sound_fn:     { label: "the Whisper Sound function",   check: ->(u) { jil(u, /whisper sound/i) } },
     quiet_fn:             { label: "the Whisper Quiet For function", check: ->(u) { jil(u, /whisper quiet/i) } },
     skip_nap_fn:          { label: "the Whisper Skip Nap function", check: ->(u) { jil(u, /skip nap/i) } },
+    scene_fn:             { label: "the HASS Scene function", check: ->(u) { jil(u, /hass scene/i) } },
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },

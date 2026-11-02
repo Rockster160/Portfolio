@@ -5,7 +5,10 @@ class TimerPagesController < ApplicationController
   def create
     page = current_user.timer_pages.build(page_params)
     page.slug = page_params[:slug].presence || page.name.to_s.parameterize.presence || SecureRandom.hex(4)
-    page.save!
+    unless page.save
+      return render json: { errors: page.errors.full_messages }, status: :unprocessable_entity
+    end
+
     broadcast(reason: :page_created, page_id: page.id)
     render json: serialize(page), status: :created
   end

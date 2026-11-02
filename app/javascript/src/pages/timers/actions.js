@@ -60,7 +60,7 @@ export function makeActions({ api, store }) {
 
     createPage:  async (attrs) => {
       const res = await api.createPage(attrs);
-      if (res) store.upsertPage(res);
+      if (res?.id) store.upsertPage(res);
       return res;
     },
     updatePage:  async (id, attrs) => {

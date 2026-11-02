@@ -186,12 +186,19 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
     const title = nameInput.value.trim();
     if (!title) return;
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    // Held disabled while the request is out, so a second tap can't send a
+    // second page with the same slug.
+    addBtn.disabled = true;
     const page = await actions.createPage({
       name: title,
       slug: slug || `page-${store.pages.size + 1}`,
       meta: tempInput.checked ? { temporary: true } : {},
     });
-    if (!page?.id) return;
+    if (!page?.id) {
+      repaintBuilder();
+      alert(page?.__error ? `Couldn't create the page: ${page.__error}` : "Couldn't create the page.");
+      return;
+    }
     if (timers.length) await actions.bulkCreate(page.id, timers);
     // Navigate straight in — the page you just described is the one you
     // want to be looking at.

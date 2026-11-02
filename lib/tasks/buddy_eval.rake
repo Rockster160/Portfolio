@@ -2625,6 +2625,15 @@ BUDDY_EDGE_PROBES = [
            "on the roster the whole time",
   },
   {
+    case:  "prod 9719",
+    say:   "Total darkness",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /hass scene/i, scene: "total_darkness" } },
+    needs: :scene_fn,
+    note:  "read as a mood (\"that sounds bleak\") and ran nothing; the scene list in the " \
+           "description never said total darkness",
+  },
+  {
     case:  "prod 9635",
     say:   "skip whisper nap",
     tool:  :run_jil_task,

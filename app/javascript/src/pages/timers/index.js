@@ -20,6 +20,7 @@ import { flushQueue, saveStoreSnapshot, loadStoreSnapshot, lastSyncTs } from "./
 import { defaultLabelForSeconds } from "./duration";
 import { stopAllSounds, armAudioWarmup } from "./audio";
 import { ALL_COLORS } from "./colors";
+import { track, watchPresses } from "./press_feedback";
 
 function csrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -30,7 +31,10 @@ function boot() {
   if (ownerRoot) bootOwner(ownerRoot);
   const shareRoot = document.querySelector("[data-timers-share-root]");
   if (shareRoot) bootShare(shareRoot);
-  if (ownerRoot || shareRoot) armAudioWarmup();
+  if (ownerRoot || shareRoot) {
+    armAudioWarmup();
+    watchPresses();
+  }
 }
 
 function bootOwner(root) {
@@ -405,16 +409,22 @@ function bootShare(root) {
 }
 
 function makeShareActions(token, interactive, store) {
-  async function post(path, body) {
-    if (!interactive) return null;
-    const res = await fetch(`/t/${token}/${path}`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body || {}),
+  function post(path, body) {
+    if (!interactive) return Promise.resolve(null);
+    return track(async () => {
+      try {
+        const res = await fetch(`/t/${token}/${path}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(body || {}),
+        });
+        if (!res.ok) return { result: null, outcome: "failed" };
+        return { result: await res.json(), outcome: "done" };
+      } catch (e) {
+        return { result: null, outcome: "failed" };
+      }
     });
-    if (!res.ok) return null;
-    return await res.json();
   }
   function apply(res) { if (res?.timer) store.upsertTimer(res.timer); return res; }
   return {

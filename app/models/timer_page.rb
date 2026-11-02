@@ -23,7 +23,7 @@ class TimerPage < ApplicationRecord
   has_many :page_buttons, -> { order(:sort_order, :id) }, class_name: "TimerPageButton", dependent: :destroy
   has_many :quick_buttons, class_name: "TimerQuickButton", dependent: :destroy
 
-  validates :slug, presence: true, uniqueness: { scope: :user_id }
+  validates :slug, presence: true, uniqueness: { scope: :user_id, message: "is already used by another page" }
 
   scope :ordered, -> { order(:sort_order, :id) }
 

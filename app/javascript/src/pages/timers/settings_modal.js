@@ -211,12 +211,21 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
     });
   }
 
-  dialog.querySelector("[data-timers-add-page]")?.addEventListener("click", async () => {
+  dialog.querySelector("[data-timers-add-page]")?.addEventListener("click", async (e) => {
+    const button = e.currentTarget;
     const input = dialog.querySelector("[data-timers-new-page-name]");
     const name = input.value.trim();
-    if (!name) return;
+    if (!name || button.disabled) return;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `page-${Date.now()}`;
-    await actions.createPage({ name, slug });
+    // Held disabled while the request is out, so a second tap can't send a
+    // second page with the same slug.
+    button.disabled = true;
+    const res = await actions.createPage({ name, slug });
+    button.disabled = false;
+    if (!res?.id) {
+      alert(res?.__error ? `Couldn't add the page: ${res.__error}` : "Couldn't add the page.");
+      return;
+    }
     input.value = "";
     renderPagesList();
   });
