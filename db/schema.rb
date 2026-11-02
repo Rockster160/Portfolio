@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_02_185310) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_02_194934) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -316,6 +316,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_02_185310) do
     t.datetime "updated_at", null: false
     t.index ["bank_account_id", "captured_on"], name: "idx_on_bank_account_id_captured_on_bb86f1c747", unique: true
     t.index ["captured_on"], name: "index_bank_balance_snapshots_on_captured_on"
+  end
+
+  create_table "bank_total_snapshots", force: :cascade do |t|
+    t.date "captured_on", null: false
+    t.bigint "total_cents", null: false
+    t.boolean "estimated", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["captured_on"], name: "index_bank_total_snapshots_on_captured_on", unique: true
   end
 
   create_table "bank_transactions", force: :cascade do |t|
