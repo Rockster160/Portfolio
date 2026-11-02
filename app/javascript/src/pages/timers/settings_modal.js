@@ -202,7 +202,7 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
         renderPagesList();
       });
       row.querySelector('[data-action="delete"]').addEventListener("click", async () => {
-        if (!confirm(`Delete page "${p.name || p.slug}"? Timers on this page move to Home.`)) return;
+        if (!confirm(`Delete page "${p.name || p.slug}"? Its timers are deleted too.`)) return;
         await actions.destroyPage(p.id);
         renderPagesList();
         renderShareSection();

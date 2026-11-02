@@ -116,18 +116,16 @@
         <%# Name is literal. The quick line under it is the whole timer as one
           line; each writes into the other as it changes. %>
         <fieldset>
+          <div class="timers-line-row">
+            <input type="text" class="timers-line-input" data-timers-field="line" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" placeholder="3m bell repeat" aria-label="Quick line">
+            <button type="button" class="timers-info-btn" data-timers-syntax-info aria-label="How to write a line" title="How to write a line"><%= fa(:info) %></button>
+          </div>
+          <button type="button" class="timers-link-btn hidden" data-timers-bulk-add>Add several at once…</button>
           <div class="field">
             <span class="field-label">Name</span>
             <input type="text" data-timers-field="name" autocomplete="off" autocapitalize="sentences"
                    placeholder="Optional — e.g. Tea, Rocco">
-          </div>
-          <div class="field">
-            <div class="timers-syntax-label">
-              <span class="field-label">Quick</span>
-              <button type="button" class="timers-info-btn" data-timers-syntax-info aria-label="How to write a line" title="How to write a line"><%= fa(:info) %></button>
-            </div>
-            <input type="text" class="timers-line-input" data-timers-field="line" autocomplete="off"
-                   autocapitalize="off" spellcheck="false" placeholder="3m bell repeat">
           </div>
           <div class="field hidden" data-when-mode="quick" hidden>
             <span class="field-label">Quick Label</span>
@@ -305,7 +303,7 @@
       </header>
       <div class="timers-pages-list" data-timers-pages-modal-list></div>
       <footer class="timers-modal-footer">
-        <button type="button" class="timers-secondary-btn hidden" data-timers-pages-modal-add-here>+ Add to this page</button>
+        <button type="button" class="timers-secondary-btn" data-timers-pages-modal-add-here>+ Add timers here</button>
         <span class="spacer"></span>
         <button type="button" class="timers-primary-btn" data-timers-pages-modal-new>+ New page</button>
       </footer>

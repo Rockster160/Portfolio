@@ -75,6 +75,7 @@ export function makeActions({ api, store }) {
     },
     destroyPage: async (id) => {
       await api.destroyPage(id);
+      [...store.timers.values()].filter((t) => t.timer_page_id === id).forEach((t) => store.removeTimer(t.id));
       store.removePage(id);
     },
 

@@ -35,6 +35,10 @@ export function subscribeTimersChannel({ store, api, onBeep, onSound, onReconnec
       return;
     }
 
+    // Hard-deleted timers never show up in a sync, so a deleted page
+    // names the ones that went with it.
+    (data.timer_ids || []).forEach((id) => store.removeTimer(id));
+
     if (data.timer && data.timer.id != null) {
       // force:true — the broadcast carries server-authoritative state.
       // Without this, a fresh-but-locally-stale Date.parse on existing

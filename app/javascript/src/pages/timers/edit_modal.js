@@ -16,13 +16,15 @@ import { CHIME_NAMES, CADENCE_OPTIONS, previewChime } from "./audio";
 import { parseLine, serializeLine, soundFromSpec } from "./quick_lines";
 import { CARD_SIZES } from "./sizes";
 
-export function setupEditModal({ root, store, actions, activePageId, openSaveTo }) {
+export function setupEditModal({ root, store, actions, activePageId, openSaveTo, openBulkAdd }) {
   const dialog = root.querySelector("[data-timers-edit-modal]");
   if (!dialog) return { open: () => {} };
 
   const form = dialog.querySelector("[data-timers-edit-form]");
   const titleEl = dialog.querySelector("[data-timers-edit-title]");
   const deleteBtn = dialog.querySelector("[data-timers-delete]");
+  // A new timer can hand its line over to the builder, to add several.
+  const bulkAddBtn = dialog.querySelector("[data-timers-bulk-add]");
   const saveToBtn = dialog.querySelector("[data-timers-save-to]");
   const callbacksList = dialog.querySelector("[data-timers-callbacks-list]");
   // Belt-and-suspenders: if any of the modal's structural elements are
@@ -913,6 +915,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
           : "New quick button";
       deleteBtn.hidden = true;
       saveToBtn.hidden = true;
+      bulkAddBtn?.classList.add("hidden");
       setModeVisibility();
       labelInput.value = quick.label || "";
       setFields(tmpl);
@@ -923,6 +926,7 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
       titleEl.textContent = timer ? "Edit timer" : "New timer";
       deleteBtn.hidden = !timer;
       saveToBtn.hidden = false;
+      bulkAddBtn?.classList.toggle("hidden", !!timer || !openBulkAdd);
       setModeVisibility();
       setFields(
         timer || {
@@ -935,10 +939,16 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     dialog.querySelector("[data-timers-callbacks-drawer]").open = false;
     dialog.showModal();
     requestAnimationFrame(() => {
-      nameInput.focus();
-      nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
+      lineInput.focus();
+      lineInput.setSelectionRange(lineInput.value.length, lineInput.value.length);
     });
   }
+
+  bulkAddBtn?.addEventListener("click", () => {
+    const line = lineInput.value.trim();
+    dialog.close();
+    openBulkAdd?.(line);
+  });
 
   return { open };
 }

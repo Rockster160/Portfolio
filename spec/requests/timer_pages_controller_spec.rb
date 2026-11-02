@@ -29,6 +29,19 @@ RSpec.describe TimerPagesController do
     end
   end
 
+  describe "DELETE /timers/pages/:id" do
+    it "deletes the page's timers with it, leaving Home's alone" do
+      page = create(:timer_page, user: user, name: "Dice", slug: "dice")
+      create(:timer, user: user, timer_page: page, kind: :counter, duration_ms: nil, name: "d20")
+      home = create(:timer, user: user, kind: :counter, duration_ms: nil, name: "Laundry")
+
+      delete timer_routes_page_path(page), as: :json
+
+      expect(response).to have_http_status(:no_content)
+      expect(user.timers.reload).to eq([home])
+    end
+  end
+
   describe "POST /timers/pages/:id/duplicate" do
     let!(:page) { create(:timer_page, user: user, name: "Scores", slug: "scores") }
     let!(:counter) {

@@ -19,9 +19,17 @@ class TimerPagesController < ApplicationController
     render json: serialize(@page)
   end
 
+  # A page's timers go with it — left behind, they would all land on Home.
   def destroy
-    @page.destroy
-    broadcast(reason: :page_destroyed, page_id: @page.id)
+    timers = @page.timers.to_a
+    TimerPage.transaction do
+      timers.each { |timer|
+        timer.cancel_fire!
+        timer.destroy!
+      }
+      @page.destroy!
+    end
+    broadcast(reason: :page_destroyed, page_id: @page.id, timer_ids: timers.map(&:id))
     head :no_content
   end
 

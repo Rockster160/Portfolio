@@ -231,6 +231,14 @@ RSpec.describe TimersController do
       expect(page.timers.first.dial_config["sections"].pluck("name")).to eq(%w[Rocco Eve])
     end
 
+    it "puts rows sent without a page on Home" do
+      post timer_routes_bulk_items_path,
+        params: { timers: [{ kind: :counter, name: "Rocco" }, { kind: :counter, name: "Eve" }] },
+        as:     :json
+      expect(response).to have_http_status(:created)
+      expect(user.timers.where(timer_page_id: nil).pluck(:name)).to contain_exactly("Rocco", "Eve")
+    end
+
     it "writes nothing to a page belonging to someone else" do
       other = create(:timer_page, user: create(:user))
       post timer_routes_bulk_items_path,

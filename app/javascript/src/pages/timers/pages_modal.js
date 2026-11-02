@@ -84,7 +84,7 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
       if (res?.slug) window.location.href = `/timers/page/${encodeURIComponent(res.slug)}`;
     });
     actionsEl.querySelector('[data-action="delete"]').addEventListener("click", async () => {
-      if (!confirm(`Delete page "${name}"? Timers on it move to Home.`)) return;
+      if (!confirm(`Delete page "${name}"? Its timers are deleted too.`)) return;
       await actions.destroyPage(page.id);
       if (activePageSlug === page.slug) { window.location.href = "/timers"; return; }
       render();
@@ -92,8 +92,10 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
     return actionsEl;
   }
 
-  newBtn.addEventListener("click", () => { dialog.close(); builder.open({ toPage: null }); });
-  hereBtn.addEventListener("click", () => { dialog.close(); builder.open({ toPage: getActivePage?.() }); });
+  const addHere = (lines = "") => builder.open({ adding: true, page: getActivePage?.() || null, lines });
+
+  newBtn.addEventListener("click", () => { dialog.close(); builder.open({ adding: false }); });
+  hereBtn.addEventListener("click", () => { dialog.close(); addHere(); });
 
   // Live re-render on any page change (added in settings, renamed,
   // deleted, etc.).
@@ -106,11 +108,10 @@ export function setupPagesModal({ root, store, actions, activePageSlug, getActiv
   return {
     open() {
       render();
-      const page = getActivePage?.();
-      hereBtn.classList.toggle("hidden", !page);
-      if (page) hereBtn.textContent = `+ Add to ${page.name || page.slug}`;
+      hereBtn.textContent = `+ Add to ${placeName(getActivePage?.())}`;
       dialog.showModal();
     },
+    addTimers: addHere,
   };
 }
 
@@ -126,8 +127,9 @@ function setupBuilder({ root, store, actions, getActivePage }) {
   const tempInput = dialog.querySelector("[data-timers-builder-temp]");
   const submitBtn = dialog.querySelector("[data-timers-builder-submit]");
 
-  // null = a new page; a page = adding to that one.
-  let toPage = null;
+  // Adding puts timers on `page` (null is Home); otherwise it's a new page.
+  let adding = false;
+  let page = null;
 
   dialog.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
     b.addEventListener("click", () => dialog.close());
@@ -151,7 +153,7 @@ function setupBuilder({ root, store, actions, getActivePage }) {
 
     const count = linesToTimers(linesEl.value).length;
     const noun = count === 1 ? "timer" : "timers";
-    if (toPage) {
+    if (adding) {
       submitBtn.textContent = count ? `+ Add ${count} ${noun}` : "+ Add";
       submitBtn.disabled = count === 0;
     } else {
@@ -164,9 +166,9 @@ function setupBuilder({ root, store, actions, getActivePage }) {
     if (submitBtn.disabled) return;
     const timers = linesToTimers(linesEl.value);
 
-    if (toPage) {
+    if (adding) {
       submitBtn.disabled = true;
-      await actions.bulkCreate(toPage.id, timers);
+      await actions.bulkCreate(page?.id ?? null, timers);
       linesEl.value = "";
       dialog.close();
       return;
@@ -177,20 +179,20 @@ function setupBuilder({ root, store, actions, getActivePage }) {
     // Held disabled while the request is out, so a second tap can't send a
     // second page with the same slug.
     submitBtn.disabled = true;
-    const page = await actions.createPage({
+    const created = await actions.createPage({
       name: title,
       slug: slug || `page-${store.pages.size + 1}`,
       meta: tempInput.checked ? { temporary: true } : {},
     });
-    if (!page?.id) {
+    if (!created?.id) {
       repaint();
-      alert(page?.__error ? `Couldn't create the page: ${page.__error}` : "Couldn't create the page.");
+      alert(created?.__error ? `Couldn't create the page: ${created.__error}` : "Couldn't create the page.");
       return;
     }
-    if (timers.length) await actions.bulkCreate(page.id, timers);
+    if (timers.length) await actions.bulkCreate(created.id, timers);
     // Navigate straight in — the page you just described is the one you
     // want to be looking at.
-    window.location.href = `/timers/page/${encodeURIComponent(page.slug)}`;
+    window.location.href = `/timers/page/${encodeURIComponent(created.slug)}`;
   }
 
   [nameInput, linesEl].forEach((el) => el.addEventListener("input", repaint));
@@ -208,16 +210,27 @@ function setupBuilder({ root, store, actions, getActivePage }) {
   });
 
   return {
-    open({ toPage: target }) {
-      toPage = target || null;
-      titleEl.textContent = toPage ? `Add to ${toPage.name || toPage.slug}` : "New page";
-      nameInput.classList.toggle("hidden", !!toPage);
-      tempField.classList.toggle("hidden", !!toPage);
+    open({ adding: add, page: target = null, lines = "" }) {
+      adding = !!add;
+      page = target;
+      titleEl.textContent = adding ? `Add to ${placeName(page)}` : "New page";
+      nameInput.classList.toggle("hidden", adding);
+      tempField.classList.toggle("hidden", adding);
+      // A line carried over gets a fresh one under it, ready for the next.
+      if (lines) linesEl.value = `${lines}\n`;
       repaint();
       dialog.showModal();
-      requestAnimationFrame(() => (toPage ? linesEl : nameInput).focus());
+      requestAnimationFrame(() => {
+        const el = adding ? linesEl : nameInput;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
     },
   };
+}
+
+function placeName(page) {
+  return page ? (page.name || page.slug) : "Home";
 }
 
 function escapeHtml(s) {

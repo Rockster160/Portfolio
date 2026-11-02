@@ -292,6 +292,29 @@ $t-danger:    #f85149;
   &:hover { color: $t-primary-hi !important; border-color: $t-primary-hi !important; }
 }
 
+// The quick line opens the timer form with its ⓘ beside it, no label.
+.timers-line-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  input.timers-line-input { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
+  .timers-info-btn { flex: 0 0 auto; }
+}
+
+.timers-app .timers-link-btn {
+  background: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: -4px 0 10px !important;
+  color: $t-primary-hi !important;
+  font-size: 13px !important;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+}
+
 // The quick line reads as code until it's tapped into, then edits like
 // any other box.
 .timers-app .timers-form input.timers-line-input[type="text"] {
@@ -956,6 +979,11 @@ $t-danger:    #f85149;
 
   &::backdrop { background: rgba(0,0,0,0.65); }
 }
+
+// A scroll inside an open modal never reaches the page behind it: the
+// page is held still, and a list that hits its end stops there.
+html:has(.timers-modal[open]) { overflow: hidden; }
+.timers-modal, .timers-modal * { overscroll-behavior: contain; }
 
 // Bulk counter adjust — held the + or − on a counter card. The sum line
 // is the point of the sheet: it reads `43 + 18 = 61` as you type, so the

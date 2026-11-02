@@ -102,6 +102,7 @@ function bootOwner(root) {
   const editModal = setupEditModal({
     root, store, actions, activePageId,
     openSaveTo: (payload) => saveToModal.open(payload),
+    openBulkAdd: (line) => pagesModal.addTimers(line),
   });
   const settingsModal = setupSettingsModal({
     root, store, actions,
