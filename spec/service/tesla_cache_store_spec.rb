@@ -132,6 +132,37 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:trip, :destination, :name)).to eq("Home")
     end
 
+    it "heads for the route telemetry named after the last poll, not the one that poll held" do
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:  40.780523,
+        active_route_longitude: -111.899058,
+        timestamp:              ms_ago(30.minutes),
+      })
+      described_class.record_telemetry(
+        DestinationLocation: { latitude: 40.480434, longitude: -111.998186 },
+        MilesToArrival:      26.36,
+        MinutesToArrival:    36.75,
+      )
+
+      expect(car_data.dig(:trip, :destination)).to include(lat: 40.480434, lng: -111.998186)
+      expect(car_data.dig(:trip, :miles_to_arrival)).to eq(26.36)
+    end
+
+    it "keeps the poll's destination when telemetry's is older" do
+      described_class.record_telemetry(DestinationLocation: { latitude: 40.480434, longitude: -111.998186 })
+      travel_to(1.minute.from_now) do
+        described_class.record_endpoint(drive_state: {
+          active_route_latitude:           40.5,
+          active_route_longitude:          -111.5,
+          active_route_miles_to_arrival:   2.0,
+          active_route_minutes_to_arrival: 4.0,
+          timestamp:                       ms_ago(1.second),
+        })
+
+        expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
+      end
+    end
+
     it "returns no trip when nav is cleared (endpoint drops miles+minutes even if stale lat/lng linger)" do
       # Simulate a prior active route recorded in telemetry, then a nav-clear
       # reflected in the endpoint (miles/minutes gone, stale coords remain).

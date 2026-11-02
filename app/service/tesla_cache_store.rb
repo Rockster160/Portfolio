@@ -429,7 +429,7 @@ class TeslaCacheStore
       # was loaded, and a poll is taken at its word either way.
       return nil unless tel_fresher?(told_ts, poll_ts) || routing_ep
 
-      destination = trip_destination(ep, tel)
+      destination = trip_destination(ep, tel, field_ts, poll_ts)
       return nil if arrived?(location, destination)
 
       confirmed_ts = max_ts(told_ts, (poll_ts if routing_ep))
@@ -489,11 +489,14 @@ class TeslaCacheStore
     end
 
     # The endpoint's destination carries the address string Tesla resolved for
-    # it, so it leads; telemetry's bare coords answer for a route the last poll
-    # predates entirely.
-    def trip_destination(ep, tel)
-      from_ep = normalize_loc(ep_route_dest(ep), ep.dig(:drive_state, :active_route_destination))
-      from_ep || normalize_loc(tel[:DestinationLocation])
+    # it, so it leads, unless telemetry has named a destination since the poll:
+    # a poll taken on arriving still holds the route just finished, and the
+    # next route out is only ever in telemetry.
+    def trip_destination(ep, tel, field_ts, poll_ts)
+      from_tel = normalize_loc(tel[:DestinationLocation])
+      return from_tel if from_tel && tel_fresher?(field_ts[:DestinationLocation], poll_ts)
+
+      normalize_loc(ep_route_dest(ep), ep.dig(:drive_state, :active_route_destination)) || from_tel
     end
 
     def trip_still_current?(ts)
