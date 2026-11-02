@@ -6,6 +6,9 @@
     <%= link_to "Back", @page.folder || :folders, class: :btn %>
     <% if @page.user == current_user %>
       <%= link_to "Edit", [:edit, @page], class: "btn pull-right" %>
+      <% if @page.short_key.present? %>
+        <button type="button" class="btn pull-right btn-copy-link" data-url="https://<%= @page.short_url %>" title="<%= @page.short_url %>">Copy link</button>
+      <% end %>
     <% end %>
   </div>
   <div class="breadcrumbs text-center">
@@ -24,3 +27,17 @@
   <hr>
   <%= Markdown.new(@page.content, user: current_user).to_html %>
 </div>
+
+<script>
+  document.querySelectorAll(".btn-copy-link").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.url);
+        btn.textContent = "Copied";
+      } catch {
+        btn.textContent = "Couldn't copy";
+      }
+      setTimeout(() => { btn.textContent = "Copy link"; }, 1500);
+    });
+  });
+</script>

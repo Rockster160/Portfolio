@@ -6,6 +6,7 @@
 #  content            :text
 #  name               :string
 #  parameterized_name :text
+#  short_key          :text
 #  sort_order         :integer
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
@@ -25,6 +26,7 @@ class Page < ApplicationRecord
   has_many :shared_users, through: :shared_pages, source: :user
 
   before_save :assign_parameterized_name
+  before_create :set_short_key
 
   after_commit :broadcast_timestamp
 
@@ -34,6 +36,14 @@ class Page < ApplicationRecord
     return false unless user
 
     user_id == user.id || shared_users.exists?(user.id)
+  end
+
+  def self.from_key(key)
+    find_by!(short_key: key.to_s.upcase)
+  end
+
+  def short_url
+    "rdjn.me/p/#{short_key}"
   end
 
   def timestamp=(new_timestamp)
@@ -71,6 +81,13 @@ class Page < ApplicationRecord
     end
 
     self.parameterized_name = unique_name
+  end
+
+  def set_short_key
+    self.short_key ||= loop {
+      candidate = Array.new(4) { ::Task::SHORT_KEY_CHARS.sample }.join
+      break candidate unless ::Page.exists?(short_key: candidate)
+    }
   end
 
   def broadcast_timestamp

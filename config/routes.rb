@@ -690,6 +690,7 @@ Rails.application.routes.draw do
     post :shared_users, on: :member
   end
   get "/pages", to: "folders#index"
+  get "p/:key" => "pages#short_link", as: :page_short_link
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
     get :print, on: :collection

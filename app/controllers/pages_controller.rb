@@ -2,6 +2,11 @@ class PagesController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :authorize_user_or_guest, :set_page
 
+  # rdjn.me/p/KEY: the page itself decides who may read it
+  def short_link
+    redirect_to page_path(::Page.from_key(params[:key]))
+  end
+
   def show
     respond_to do |format|
       format.html
