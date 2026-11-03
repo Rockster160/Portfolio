@@ -1302,6 +1302,24 @@
     .bank-chart-controls { margin: 10px 0 8px; }
     .bank-chart-wrapper { height: 260px; padding: 12px; }
 
+    /* The chart's tooltip, on the page rather than the canvas so a long month
+       hangs below the chart instead of being clipped by it. */
+    .bank-tooltip {
+      position: absolute; z-index: 50; pointer-events: none; opacity: 0;
+      max-width: min(520px, calc(100vw - 16px)); padding: 10px 12px;
+      background: rgba(0,0,0,0.88); border-radius: 6px; color: #E2E8F0;
+      font-size: 12px; font-variant-numeric: tabular-nums; transition: opacity 0.1s;
+    }
+    .bank-tooltip-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+    .bank-tooltip-balance { color: #94A3B8; margin-bottom: 8px; }
+    .bank-tooltip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .bank-tooltip-head { display: flex; justify-content: space-between; gap: 12px; font-weight: bold;
+      padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .bank-tooltip-row { display: flex; align-items: center; gap: 6px; line-height: 1.6; }
+    .bank-tooltip-swatch { flex: 0 0 10px; height: 10px; border-radius: 2px; }
+    .bank-tooltip-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bank-tooltip-value { flex: 0 0 auto; }
+
     .bank-totals { display: flex; flex-wrap: wrap; gap: 24px; margin: 16px 0; }
     .bank-totals > div { font-size: 16px; font-variant-numeric: tabular-nums; color: #E2E8F0; }
     .bank-totals-label { display: block; font-size: 11px; text-transform: uppercase;

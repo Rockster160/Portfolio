@@ -94,6 +94,94 @@ $(document).ready(function() {
     el.style.display = message ? "flex" : "none"
   }
 
+  // --- The tooltip ----------------------------------------------------------
+
+  let tooltipEl = null
+
+  function tooltipNode() {
+    if (!tooltipEl) {
+      tooltipEl = document.createElement("div")
+      tooltipEl.className = "bank-tooltip"
+      document.body.appendChild(tooltipEl)
+    }
+    return tooltipEl
+  }
+
+  function node(tag, className, text) {
+    const el = document.createElement(tag)
+    if (className) { el.className = className }
+    if (text !== undefined) { el.textContent = text }
+    return el
+  }
+
+  // Money in and money out side by side, each headed by its total, so the
+  // month reads as two sums before it reads as a list. A category worth zero
+  // in this bucket draws nothing, so it isn't listed either.
+  function tooltipColumn(title, rows) {
+    const column = node("div", "bank-tooltip-col")
+    const total = rows.reduce(function(sum, row) { return sum + row.value }, 0)
+    const head = node("div", "bank-tooltip-head")
+    head.appendChild(node("span", null, title))
+    head.appendChild(node("span", null, fmtMoney(total)))
+    column.appendChild(head)
+
+    rows.sort(function(a, b) { return b.value - a.value }).forEach(function(row) {
+      const line = node("div", "bank-tooltip-row")
+      const swatch = node("span", "bank-tooltip-swatch")
+      swatch.style.background = row.color
+      line.appendChild(swatch)
+      line.appendChild(node("span", "bank-tooltip-label", row.label))
+      line.appendChild(node("span", "bank-tooltip-value", fmtMoney(row.value)))
+      column.appendChild(line)
+    })
+    return column
+  }
+
+  function renderTooltip(context) {
+    const tooltip = context.tooltip
+    const el = tooltipNode()
+    if (tooltip.opacity === 0 || !(tooltip.dataPoints || []).length) {
+      el.style.opacity = 0
+      return
+    }
+
+    const chart = context.chart
+    const index = tooltip.dataPoints[0].dataIndex
+    const columns = { in: [], out: [] }
+    let balance = null
+    chart.data.datasets.forEach(function(ds) {
+      const value = Number(ds.data[index])
+      if (ds.stack === "balance") { balance = ds.data[index]; return }
+      if (!columns[ds.stack] || !value) { return }
+      columns[ds.stack].push({ label: ds.label, color: ds.backgroundColor, value: value })
+    })
+
+    el.replaceChildren()
+    el.appendChild(node("div", "bank-tooltip-title", chart.data.labels[index]))
+    if (balance !== null && balance !== undefined) {
+      el.appendChild(node("div", "bank-tooltip-balance", "Balance at start: " + fmtMoney(balance)))
+    }
+    const grid = node("div", "bank-tooltip-grid")
+    grid.appendChild(tooltipColumn("In", columns.in))
+    grid.appendChild(tooltipColumn("Out", columns.out))
+    el.appendChild(grid)
+
+    // Beside the hovered column, flipping to its left when the right side
+    // would run off the screen, and top-aligned with the chart so a long list
+    // hangs down past it rather than being cut off.
+    const rect = chart.canvas.getBoundingClientRect()
+    const gap = 12
+    const width = el.offsetWidth
+    const caret = rect.left + tooltip.caretX
+    let left = caret + gap
+    if (left + width > window.innerWidth - 8) { left = caret - gap - width }
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8))
+
+    el.style.left = (left + window.scrollX) + "px"
+    el.style.top = (rect.top + window.scrollY + chart.chartArea.top) + "px"
+    el.style.opacity = 1
+  }
+
   function build() {
     const datasets = (payload.datasets || []).map(function(ds) {
       return {
@@ -162,29 +250,10 @@ $(document).ready(function() {
         },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            itemSort: function(a, b) { return b.parsed.y - a.parsed.y },
-            // A category worth zero in this bucket draws nothing, so listing it
-            // describes something that isn't there — and with 22 categories it
-            // is eighteen lines of "$0.00" pushing the four real ones off.
-            filter: function(ctx) { return !!ctx.parsed.y },
-            callbacks: {
-              label: function(ctx) { return ctx.dataset.label + ": " + fmtMoney(ctx.parsed.y) },
-              // Summed from the bucket's data rather than the tooltip items, so
-              // the totals don't depend on what the filter above lets through.
-              // The balance line has its own stack and is in neither.
-              footer: function(items) {
-                if (!items.length) { return [] }
-                const index = items[0].dataIndex
-                const sums = { in: 0, out: 0 }
-                items[0].chart.data.datasets.forEach(function(ds) {
-                  if (ds.stack !== "in" && ds.stack !== "out") { return }
-                  sums[ds.stack] += Number(ds.data[index]) || 0
-                })
-                return ["Total in: " + fmtMoney(sums.in), "Total out: " + fmtMoney(sums.out)]
-              },
-            },
-          },
+          // Drawn as HTML on the page, not on the canvas: a canvas tooltip
+          // can't grow past the chart, and a month with fifteen categories
+          // is taller than the chart is.
+          tooltip: { enabled: false, external: renderTooltip },
         },
       },
     }
