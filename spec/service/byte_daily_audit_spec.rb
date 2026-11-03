@@ -135,7 +135,7 @@ RSpec.describe ByteDailyAudit do
 
         body = described_class.prompt(user, now: now)
 
-        expect(body).to include("**2x** `google_calendar.sync`")
+        expect(body).to include("**2x** BE/rescue `google_calendar.sync`")
         expect(body).to include("StandardError: timed out")
       end
 

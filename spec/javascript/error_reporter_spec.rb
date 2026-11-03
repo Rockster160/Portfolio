@@ -13,6 +13,7 @@ RSpec.describe "Browser error reporter" do
       "message"   => "x is undefined",
       "source"    => "https://example.com/assets/application.js:10:2",
       "page"      => "/lists/42",
+      "build"     => "812",
       "keepalive" => true,
     )
     expect(result["sent"]["stack"]).to include("application.js:10:2")

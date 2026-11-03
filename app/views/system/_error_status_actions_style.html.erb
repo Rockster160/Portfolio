@@ -10,5 +10,14 @@
     .err-action-resolved:hover { border-color: #58D68D; color: #58D68D; }
     .err-badge.err-badge-resolved { background-color: rgba(88, 214, 141, 0.15); color: #58D68D; }
     .err-badge.err-badge-ignored { background-color: rgba(255, 255, 255, 0.08); color: #8B949E; }
+
+    /* Where a failure came from: FE or BE, which funnel, which environment. */
+    .err-tag {
+      font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 4px; color: #8B949E; background-color: rgba(255, 255, 255, 0.06);
+    }
+    .err-tag.err-layer-backend { color: #AF7AC5; background-color: rgba(175, 122, 197, 0.15); }
+    .err-tag.err-layer-frontend { color: #48C9B0; background-color: rgba(72, 201, 176, 0.15); }
+    .err-tag.err-env-production { color: #EC7063; background-color: rgba(236, 112, 99, 0.12); }
   </style>
 <% end %>

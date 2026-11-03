@@ -26,6 +26,14 @@ RSpec.describe Buddy::Errors do
       }
     end
 
+    it "tags the row as the backend's, from Buddy" do
+      allow(Rails.env).to receive(:development?).and_return(false)
+
+      described_class.report(section: "test.section", exception: exception, user: user)
+
+      expect(ErrorReport.last).to have_attributes(layer: "backend", tag: "buddy")
+    end
+
     it "re-raises in development so failures cannot be missed" do
       allow(Rails.env).to receive(:development?).and_return(true)
       allow(Rails.env).to receive(:production?).and_return(false)

@@ -426,6 +426,9 @@ class SystemController < ApplicationController
     scope = scope.never_announced if params[:unannounced].present?
     scope = scope.like(params[:fingerprint]) if params[:fingerprint].present?
     scope = scope.with_status(params[:status]) if ERROR_STATUSES.include?(params[:status]&.to_sym)
+    scope = scope.for_layer(params[:layer]) if ErrorReport::LAYERS.include?(params[:layer]&.to_sym)
+    scope = scope.for_tag(params[:tag]) if ErrorReport::TAGS.include?(params[:tag]&.to_sym)
+    scope = scope.for_environment(params[:environment]) if params[:environment].present?
 
     @total = scope.count
     @groups = ErrorReport.digest(@span, limit: ErrorReport::PAGE, scope: scope, by: :recent)
@@ -433,6 +436,7 @@ class SystemController < ApplicationController
     @users = User.where(id: @groups.filter_map { |row| row[:user_id] }).index_by(&:id)
     # One occurrence of each, so a group opens straight onto the newest row.
     @sections = ErrorReport.where(created_at: @span).distinct.pluck(:section).sort
+    @environments = ErrorReport.where(created_at: @span).distinct.pluck(:environment).compact.sort
   end
 
   def error

@@ -28,6 +28,7 @@ RSpec.describe ExceptionNotifier::CustomNotifier do
     expect(row.section).to eq("timer_pages#create")
     expect(row.message).to eq("POST /timers/pages\nValidation failed: Slug has already been taken")
     expect(row.user_id).to eq(user.id)
+    expect(row).to have_attributes(layer: "backend", tag: "request")
   end
 
   # The params ride in the alert, not in what it is grouped by.

@@ -17,6 +17,9 @@ globalThis.window = {
   location: { pathname: "/lists/42", href: "https://example.com/lists/42?x=1" },
   addEventListener: (name, fn) => { handlers[name] = fn; },
 };
+globalThis.document = {
+  querySelector: (sel) => (sel === 'meta[name="app-build"]' ? { content: "812" } : null),
+};
 const posts = [];
 globalThis.fetch = async (url, opts) => {
   posts.push({ ...JSON.parse(opts.body), endpoint: url, keepalive: opts.keepalive });

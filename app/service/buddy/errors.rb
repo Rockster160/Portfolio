@@ -33,7 +33,7 @@ module Buddy
         # raising, so a row that can't be written costs the LINK and never the
         # alert - the announcement is the part somebody is waiting on.
         row = ErrorReport.record!(
-          section: section, exception: exception, user: user, extra: extra,
+          section: section, exception: exception, user: user, extra: extra, tag: :buddy,
         )
         # With no row there is no history to judge by, so it goes out. A failure
         # that couldn't be written down must not also go unsaid.
@@ -84,7 +84,7 @@ module Buddy
           #{first_frame}
           ```
           extra: `#{extra.inspect}`
-          #{[repeat && ErrorReport.repeat_note(repeat), row&.slack_ref].compact_blank.join(" · ")}
+          #{[repeat && ErrorReport.repeat_note(repeat), row&.tags || Rails.env, row&.slack_ref].compact_blank.join(" · ")}
         MSG
         SlackWorker.perform_async(message.strip, SLACK_CHANNEL)
         SLACK_CHANNEL

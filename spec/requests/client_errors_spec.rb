@@ -12,6 +12,7 @@ RSpec.describe "Client errors", type: :request do
       source:  "https://example.com/assets/application.js:120:9",
       page:    "/lists/42/items/9f3c2a1b-4d5e-4f60-8a7b-1c2d3e4f5a6b",
       url:     "https://example.com/lists/42/items/9f3c2a1b-4d5e-4f60-8a7b-1c2d3e4f5a6b?tab=1",
+      build:   "812",
     }
   }
 
@@ -40,6 +41,15 @@ RSpec.describe "Client errors", type: :request do
     expect(row.extra).to include("kind" => "error", "url" => report[:url])
   end
 
+  # A page held open for days is running the build it loaded, not the server's.
+  it "tags it as the frontend's, on the build the page loaded with" do
+    sign_in
+
+    post client_errors_path, params: report, as: :json
+
+    expect(ErrorReport.last).to have_attributes(layer: "frontend", tag: "browser", environment: "test", release: "812")
+  end
+
   it "groups the same failure on another record's page with the first" do
     sign_in
 
@@ -56,7 +66,7 @@ RSpec.describe "Client errors", type: :request do
     3.times { post client_errors_path, params: report, as: :json }
 
     expect(SlackNotifier).to have_received(:deliver).once
-    expect(SlackNotifier).to have_received(:deliver).with(include("TypeError"), "#portfolio", any_args)
+    expect(SlackNotifier).to have_received(:deliver).with(include("TypeError", "frontend/browser test"), "#portfolio", any_args)
   end
 
   it "never announces one that has been ignored" do

@@ -32,6 +32,25 @@
     <span class="err-total"><%= @total %> in the last <%= @hours < 48 ? "#{@hours} hours" : "#{@hours / 24} days" %>, <%= @groups.length %> distinct</span>
   </div>
 
+  <%# Where it came from: which side of the app, which funnel, which %>
+  <%# environment. One row each, so FE and BE read apart at a glance. %>
+  <div class="err-filters err-tagging">
+    <% ErrorReport::LAYERS.each do |layer| %>
+      <% picked, path = chip.call(:layer, layer) %>
+      <%= link_to layer, path, class: "err-chip err-layer-#{layer}#{" on" if picked}" %>
+    <% end %>
+    <span class="err-sep"></span>
+    <% ErrorReport::TAGS.each do |tag| %>
+      <% picked, path = chip.call(:tag, tag) %>
+      <%= link_to tag, path, class: "err-chip#{" on" if picked}" %>
+    <% end %>
+    <span class="err-sep"></span>
+    <% @environments.each do |environment| %>
+      <% picked, path = chip.call(:environment, environment) %>
+      <%= link_to environment, path, class: "err-chip#{" on" if picked}" %>
+    <% end %>
+  </div>
+
   <div class="err-filters">
     <% %i[open resolved ignored].each do |status| %>
       <% picked, path = chip.call(:status, status) %>
@@ -59,6 +78,16 @@
     <% decided = @statuses[group[:fingerprint]] %>
     <div class="err-row<%= " quiet" unless group[:announced] %><%= " err-#{decided.status}" if decided %>">
       <div class="err-ago">
+        <span class="err-tag err-layer-<%= group[:layer] %>"><%= group[:layer] == "frontend" ? "FE" : "BE" %></span>
+        <% if group[:tag].present? %>
+          <span class="err-tag"><%= group[:tag] %></span>
+        <% end %>
+        <% if group[:environment].present? %>
+          <span class="err-tag err-env-<%= group[:environment] %>"><%= group[:environment] %></span>
+        <% end %>
+        <% if group[:release].present? %>
+          <span class="err-build" title="Build the newest occurrence ran on">build <%= group[:release] %></span>
+        <% end %>
         <%= time_ago_in_words(group[:last_at]) %> ago
         <% if decided %>
           <span class="err-badge err-badge-<%= decided.status %>"><%= decided.status %></span>
@@ -134,6 +163,9 @@
     .err-row.quiet { border-color: rgba(245, 176, 65, 0.35); }
     .err-row.err-ignored { opacity: 0.55; }
     .err-row.err-resolved { border-color: rgba(88, 214, 141, 0.35); }
+    .err-tagging { margin-bottom: 8px; }
+    .err-sep { width: 1px; height: 16px; background-color: rgba(255, 255, 255, 0.12); }
+    .err-build { font-size: 11px; color: #8B949E; }
     .err-ago { font-size: 12px; color: #C9D1D9; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
 
     .err-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }

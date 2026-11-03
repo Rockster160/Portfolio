@@ -20,7 +20,8 @@ module SlackNotifier
   # `section:` and `summary:` are for a caller that reports on behalf of
   # something else - a failed request, a failed job - whose own file and line
   # would group every failure it ever reports as one. They say where it really
-  # happened and what to group it by, in place of the ping's full text.
+  # happened and what to group it by, in place of the ping's full text. `tag:`
+  # says which of those it is (see ErrorReport::TAGS).
   def notify(
     message,
     channel: "#portfolio",
@@ -31,6 +32,7 @@ module SlackNotifier
     section: nil,
     summary: nil,
     extra: {},
+    tag: :rescue,
     exception: $ERROR_INFO)
     return deliver(message, channel, username, icon_emoji, attachments) if exception.nil?
 
@@ -39,7 +41,7 @@ module SlackNotifier
     # whether this one is worth announcing at all. `record!` answers nil rather
     # than raising, so a row that can't be written costs the link and never the
     # alert.
-    row = record_failure(summary || message, exception, user, section || caller_section, extra)
+    row = record_failure(summary || message, exception, user, section || caller_section, extra, tag)
     # With no row there is no history to judge by, so it goes out. A failure
     # that couldn't be written down must not also go unsaid.
     repeat = (row ? row.announcement : { reason: :new })
@@ -80,12 +82,17 @@ module SlackNotifier
   # The NAME does not depend on the row: an alert that can't say who a failure
   # happened for is most of the way to useless, and that must not be what a
   # failed insert costs. Only the link is the row's to give.
+  #
+  # The tags say which side and which funnel at a glance, and the environment
+  # comes from this process when there is no row to read it from.
   def trailer(user, row)
-    [ErrorReport.who(user), row&.slack_ref].compact.join(" · ").prepend("— ")
+    [ErrorReport.who(user), row&.tags || Rails.env, row&.slack_ref].compact.join(" · ").prepend("— ")
   end
 
-  def record_failure(message, exception, user, section, extra)
-    ErrorReport.record!(section: section, exception: exception, message: message, user: user, extra: extra)
+  def record_failure(message, exception, user, section, extra, tag)
+    ErrorReport.record!(
+      section: section, exception: exception, message: message, user: user, extra: extra, tag: tag,
+    )
   end
 
   def format_exception(exception)

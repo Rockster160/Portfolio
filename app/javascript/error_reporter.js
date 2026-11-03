@@ -44,6 +44,9 @@ export function reportClientError({ kind, name, message, stack, source }) {
         stack: String(stack || "").slice(0, 4000),
         source: source || "",
         page: window.location.pathname,
+        // The build this page loaded with, which a page held open for days can
+        // be well behind.
+        build: document.querySelector('meta[name="app-build"]')?.content || "",
         url: window.location.href,
       }),
     }).catch(() => {})

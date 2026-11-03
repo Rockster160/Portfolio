@@ -25,6 +25,19 @@
     </div>
 
     <div class="err-facts">
+      <span class="err-tag err-layer-<%= @error.layer %>"><%= @error.layer %></span>
+      <% if @error.tag.present? %>
+        <span class="err-tag"><%= @error.tag %></span>
+      <% end %>
+      <% if @error.environment.present? %>
+        <span class="err-tag err-env-<%= @error.environment %>"><%= @error.environment %></span>
+      <% end %>
+      <% if @error.release.present? %>
+        <span>build <%= @error.release %></span>
+      <% end %>
+    </div>
+
+    <div class="err-facts">
       <% if @status %>
         <span class="err-badge err-badge-<%= @status.status %>"><%= @status.status %></span>
         <span><%= time_ago_in_words(@status.updated_at) %> ago</span>

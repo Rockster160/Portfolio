@@ -17,6 +17,7 @@ RSpec.describe SidekiqErrors do
 
     row = ErrorReport.last
     expect(row.section).to eq("sidekiq:SimpleFinSyncWorker")
+    expect(row).to have_attributes(layer: "backend", tag: "job")
     expect(row.error_class).to eq("RuntimeError")
     expect(row.message).to include("Job SimpleFinSyncWorker failed", "upstream 502")
     expect(row.extra).to include("jid" => "abc123", "retry" => 2, "args" => "[1,\"x\"]")
@@ -37,7 +38,7 @@ RSpec.describe SidekiqErrors do
 
     described_class.report(boom, context("SlackWorker"))
 
-    expect(ErrorReport.last.section).to eq("sidekiq:SlackWorker")
+    expect(ErrorReport.last).to have_attributes(section: "sidekiq:SlackWorker", tag: "job")
     expect(SlackNotifier).not_to have_received(:deliver)
   end
 

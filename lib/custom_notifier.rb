@@ -64,6 +64,7 @@ module ExceptionNotifier
         section:     section,
         summary:     summary,
         user:        user,
+        tag:         :request,
       )
     end
 

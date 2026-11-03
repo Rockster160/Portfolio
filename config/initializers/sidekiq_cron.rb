@@ -180,6 +180,11 @@ if Rails.env.production?
       class: "DropLogTrackersWorker",
       cron:  daily_4am,
     },
+    {
+      name:  "ErrorReportSweep",
+      class: "ErrorReportSweepWorker",
+      cron:  daily_4am,
+    },
   ]
 elsif Rails.env.development?
   cron_jobs += [

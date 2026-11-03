@@ -5,11 +5,15 @@
 #  id          :bigint           not null, primary key
 #  backtrace   :text
 #  channel     :text
+#  environment :text
 #  error_class :text
 #  extra       :jsonb            not null
 #  fingerprint :text             not null
+#  layer       :text             default("backend"), not null
 #  message     :text
+#  release     :text
 #  section     :text             not null
+#  tag         :text
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  user_id     :bigint
@@ -70,6 +74,21 @@ class ErrorReport < ApplicationRecord
   # channel filling with one incident, never to let a running fire go quiet.
   REANNOUNCE_AFTER = 2.hours
 
+  # Which side of the app it happened on, and which funnel brought it in:
+  #
+  #   request  a web request that raised (ExceptionNotifier)
+  #   job      a Sidekiq job that raised
+  #   buddy    a Buddy pipeline rescue (Buddy::Errors)
+  #   rescue   any other rescue that pinged Slack
+  #   browser  an uncaught error or rejected promise on a page
+  LAYERS = %i[backend frontend].freeze
+  TAGS = %i[request job buddy rescue browser].freeze
+
+  # Rows older than this are swept (ErrorReportSweepWorker). Long enough to
+  # answer "has this happened before", short enough that a loop - or a page
+  # throwing on every load - can't grow the table forever.
+  RETAIN_FOR = 90.days
+
   scope :since, ->(time) { where(created_at: time..) }
   scope :recent, -> { order(created_at: :desc) }
   # Recorded and never announced anywhere, which makes it the kind nobody has
@@ -84,6 +103,10 @@ class ErrorReport < ApplicationRecord
     status.to_sym == :open ? where.not(fingerprint: decided) : where(fingerprint: decided.where(status: status))
   }
   scope :for_section, ->(section) { where(section: section) }
+  scope :for_layer, ->(layer) { where(layer: layer) }
+  scope :for_tag, ->(tag) { where(tag: tag) }
+  scope :for_environment, ->(environment) { where(environment: environment) }
+  scope :expired, -> { where(created_at: ...RETAIN_FOR.ago) }
   scope :for_class, ->(klass) { where(error_class: klass) }
   scope :like, ->(fingerprint) { where(fingerprint: fingerprint) }
   # `nil` is a real answer here - a failure with nobody attached to it - so a
@@ -99,6 +122,9 @@ class ErrorReport < ApplicationRecord
   #
   # `error_class:` and `backtrace:` are for a failure that arrives as text
   # rather than as a Ruby exception - one the browser reported.
+  #
+  # `release` is the build that was running: this process's own, or for a page,
+  # the build it loaded with, which a page held open for days can be well behind.
   def self.record!(
     section:,
     exception: nil,
@@ -107,7 +133,10 @@ class ErrorReport < ApplicationRecord
     extra: {},
     channel: nil,
     error_class: nil,
-    backtrace: nil)
+    backtrace: nil,
+    layer: :backend,
+    tag: :rescue,
+    release: nil)
     klass = error_class.presence || exception&.class&.name
     text  = [message.presence, exception&.message.presence].compact.uniq.join("\n")
     trace = backtrace.presence || Array(exception&.backtrace).first(BACKTRACE_FRAMES).join("\n")
@@ -120,6 +149,10 @@ class ErrorReport < ApplicationRecord
       fingerprint: fingerprint_for(section, klass, text),
       channel:     channel.presence,
       user_id:     user&.id,
+      layer:       layer,
+      tag:         tag,
+      environment: Rails.env,
+      release:     release.presence || BUILD_NUMBER,
       extra:       extra.presence || {},
     )
   rescue StandardError => e
@@ -227,6 +260,12 @@ class ErrorReport < ApplicationRecord
     ActionController::Base.helpers.distance_of_time_in_words(seconds.to_i)
   end
 
+  # "frontend/browser production", the way the page and an alert both show
+  # where a failure came from.
+  def tags
+    ["#{layer}/#{tag || :untagged}", environment].compact_blank.join(" ")
+  end
+
   # Slack's own link syntax, or just the row number where no URL can be built.
   def slack_ref
     url = page_url
@@ -268,6 +307,10 @@ class ErrorReport < ApplicationRecord
         error_class: row.error_class,
         message:     row.message,
         fingerprint: row.fingerprint,
+        layer:       row.layer,
+        tag:         row.tag,
+        environment: row.environment,
+        release:     row.release,
         # Of the GROUP, not of the newest occurrence: repeats are deliberately
         # suppressed, so the latest row of a long-running failure is normally
         # unannounced while the failure itself was announced long ago.

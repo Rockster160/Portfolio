@@ -23,6 +23,7 @@ class ClientErrorsController < ApplicationController
       name:    params[:name].to_s,
       stack:   params[:stack].to_s,
       page:    params[:page].to_s,
+      build:   params[:build].to_s,
       extra:   {
         kind:       params[:kind].to_s.first(20).presence,
         source:     params[:source].to_s.first(300).presence,

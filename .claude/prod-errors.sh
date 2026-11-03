@@ -26,6 +26,7 @@ PROD_QUERY_FLAGS="-A -t" bash .claude/prod-query.sh "
   SELECT count(*) || 'x  ' ||
          to_char(min(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') || ' to ' ||
          to_char(max(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') ||
+         '  ' || CASE min(layer) WHEN 'frontend' THEN 'FE' ELSE 'BE' END || '/' || coalesce(min(tag), '?') ||
          '  [' || min(section) || '] ' ||
          coalesce(min(error_class) || ': ', '') ||
          replace(substr(coalesce(min(message), ''), 1, 160), E'\n', ' ') ||

@@ -22,7 +22,7 @@ module SidekiqErrors
     }.compact
 
     if QUIET_JOBS.include?(klass)
-      ErrorReport.record!(section: section, exception: exception, extra: extra)
+      ErrorReport.record!(section: section, exception: exception, extra: extra, tag: :job)
     else
       SlackNotifier.notify(
         "Job #{klass} failed\n*#{exception.class}*\n#{exception.message}\n" \
@@ -31,6 +31,7 @@ module SidekiqErrors
         section:   section,
         summary:   "Job #{klass} failed",
         extra:     extra,
+        tag:       :job,
       )
     end
   rescue StandardError => e

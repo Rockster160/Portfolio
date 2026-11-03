@@ -12,6 +12,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="<%= request.original_url %>">
   <meta name="uptime" content="true">
+  <meta name="app-build" content="<%= BUILD_NUMBER %>">
   <% if content_for? :viewport_tag %>
     <%= content_for :viewport_tag %>
   <% else %>

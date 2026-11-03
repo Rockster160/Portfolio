@@ -198,7 +198,7 @@ module ByteDailyAudit
 
     rows.map { |row|
       [
-        "- **#{row[:count]}x** `#{row[:section]}`",
+        "- **#{row[:count]}x** #{row[:layer] == "frontend" ? "FE" : "BE"}/#{row[:tag] || "untagged"} `#{row[:section]}`",
         [row[:error_class], row[:message].to_s.squish.truncate(200)].compact_blank.join(": "),
         "· #{spoken_span(row, user.timezone)} · row #{row[:sample_id]}",
         ("· never announced" unless row[:announced]),

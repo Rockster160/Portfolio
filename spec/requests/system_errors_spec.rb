@@ -146,6 +146,31 @@ RSpec.describe "System errors page", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
+    it "tags each one as frontend or backend, with its funnel and environment" do
+      record(section: "sync")
+      ErrorReport.record!(section: "js:/lists", message: "x is undefined", layer: :frontend, tag: :browser)
+
+      get system_errors_path
+
+      expect(response.body).to include("err-layer-frontend\">FE<", "err-layer-backend\">BE<", ">browser<", ">rescue<", ">test<")
+    end
+
+    it "filters to one side, one funnel or one environment" do
+      record(section: "sync", message: "the backend one")
+      ErrorReport.record!(section: "js:/lists", message: "the frontend one", layer: :frontend, tag: :browser)
+
+      get system_errors_path(layer: :frontend)
+      expect(response.body).to include("the frontend one")
+      expect(response.body).not_to include("the backend one")
+
+      get system_errors_path(tag: :rescue)
+      expect(response.body).to include("the backend one")
+      expect(response.body).not_to include("the frontend one")
+
+      get system_errors_path(environment: :production)
+      expect(response.body).not_to include("the backend one", "the frontend one")
+    end
+
     it "filters by what has been decided" do
       noise = record(section: "noise", message: "the ignored one")
       record(section: "real", message: "the open one")

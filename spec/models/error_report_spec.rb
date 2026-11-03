@@ -23,6 +23,19 @@ RSpec.describe ErrorReport do
       expect(row.extra).to eq({ "tool" => "set_timer" })
     end
 
+    it "says where it came from: the side, the funnel, the environment and the build" do
+      row = described_class.record!(section: "a", exception: boom)
+
+      expect(row).to have_attributes(layer: "backend", tag: "rescue", environment: "test", release: BUILD_NUMBER)
+      expect(row.tags).to eq("backend/rescue test")
+    end
+
+    it "takes the tagging a funnel gives it" do
+      row = described_class.record!(section: "js:/", message: "x", layer: :frontend, tag: :browser, release: "812")
+
+      expect(row).to have_attributes(layer: "frontend", tag: "browser", release: "812")
+    end
+
     it "records a message with no exception behind it" do
       row = described_class.record!(section: "printer_api:103", message: "printer refused the job")
 

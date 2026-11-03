@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_03_041708) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_03_050028) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1106,8 +1106,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_041708) do
     t.jsonb "extra", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "layer", default: "backend", null: false
+    t.text "tag"
+    t.text "environment"
+    t.text "release"
     t.index ["created_at"], name: "index_error_reports_on_created_at"
     t.index ["fingerprint", "created_at"], name: "index_error_reports_on_fingerprint_and_created_at"
+    t.index ["layer"], name: "index_error_reports_on_layer"
+    t.index ["tag"], name: "index_error_reports_on_tag"
     t.index ["user_id"], name: "index_error_reports_on_user_id"
   end
 

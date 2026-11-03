@@ -10,7 +10,7 @@ module ClientErrors
   # Recorded first, so the alert can link to the row and the row's history can
   # say whether this one is worth announcing at all - the same order every other
   # funnel keeps.
-  def report(user:, message:, name:, stack:, page:, extra: {})
+  def report(user:, message:, name:, stack:, page:, build: nil, extra: {})
     section = "js:#{page_for(page)}"
     row = ErrorReport.record!(
       section:     section,
@@ -19,6 +19,9 @@ module ClientErrors
       backtrace:   stack.lines.first(ErrorReport::BACKTRACE_FRAMES).join.presence,
       user:        user,
       extra:       extra,
+      layer:       :frontend,
+      tag:         :browser,
+      release:     build.to_s.first(20).presence,
     )
     repeat = (row ? row.announcement : { reason: :new })
     return row if repeat.nil?
