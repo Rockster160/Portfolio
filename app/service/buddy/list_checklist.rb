@@ -6,9 +6,11 @@ module Buddy
   # for: the rows ARE the list, one per item, and ticking a box takes that item
   # off the list exactly the way checking it off in the app does.
   #
-  # So it reuses `buddy_proposals` wholesale rather than growing a second
-  # checklist shape - same renderer, same POST, same executor, same
-  # untick-to-put-it-back. The only thing different is who wrote the rows.
+  # So it reuses `buddy_proposals` rather than growing a second checklist shape
+  # - same renderer, same POST, same tool. What differs is that a row follows
+  # the list instead of being a one-way proposal: `check!` ticks and unticks it
+  # as often as they like, and `sync!` moves it when the list changes anywhere
+  # else.
   #
   # Those rows are `remove_list_item` proposals left PENDING, which is the one
   # part that can't be borrowed: that tool is level 2, so ProposalBuilder would
@@ -83,6 +85,123 @@ module Buddy
       )
       action.update!(byte_message_id: message.id)
       shown.size
+    end
+
+    # Only this card puts a list on a proposal checklist's input; the model's
+    # own checklists carry their queue there instead.
+    def card?(action)
+      action.tool_input.is_a?(Hash) && action.tool_input["list_id"].present?
+    end
+
+    # A row on this card is a mirror of the item, not a one-way proposal: ticked
+    # means it's off the list, unticked means it's on it, and either can follow
+    # the other as often as they like. So a tick runs the removal right here, in
+    # the request, and an untick puts the item back and leaves the row pending -
+    # never `undone`, which is the executor's word for a row that's finished.
+    #
+    # `checked` is the state they want, not a flip, so a repeat lands where the
+    # first one did.
+    def check!(action, button_id, checked)
+      action.with_lock do
+        buttons = (action.buttons || []).map(&:deep_dup)
+        btn = buttons.find { |b| b["id"].to_i == button_id.to_i }
+        next if btn.nil? || btn["status"].to_s == ::Buddy::Supersede::STATUS
+
+        ticked = btn["status"].to_s == "executed"
+        next if ticked == checked
+
+        checked ? tick(action, btn) : untick(action, btn)
+        action.update!(buttons: buttons)
+      end
+      repaint(action)
+    end
+
+    # The list changed somewhere other than the card - the app, another device,
+    # a Jil task - so every live card for it is brought back in line with what
+    # is actually on it.
+    def sync!(list)
+      # A fresh query: the item that just changed often has its list's items
+      # already loaded from before the change.
+      names = ::ListItem.where(list_id: list.id).pluck(:name).to_set { |name| ::ListItem.format_name(name) }
+      live_cards(list).each { |action|
+        changed = false
+        action.with_lock do
+          buttons = (action.buttons || []).map(&:deep_dup)
+          buttons.each { |btn|
+            next if btn["status"].to_s == ::Buddy::Supersede::STATUS
+
+            on_list = names.include?(::ListItem.format_name(btn["label"]))
+            ticked  = btn["status"].to_s == "executed"
+            next if on_list != ticked
+
+            on_list ? reset(btn) : mark_ticked(btn)
+            changed = true
+          }
+          action.update!(buttons: buttons) if changed
+        end
+        repaint(action) if changed
+      }
+    rescue StandardError => e
+      ::Buddy::Errors.report(section: "list_checklist.sync", exception: e, user: list.owner)
+      nil
+    end
+
+    def live_cards(list)
+      scope = ByteAction.active.where(tool_name: "buddy_proposals")
+      scope.where("tool_input->>'list_id' = ?", list.id.to_s)
+    end
+
+    def tick(action, btn)
+      tool = ::Buddy::Tools[ITEM_TOOL]
+      shape = { "id" => btn["id"], "payload" => btn["payload"], "tool_name" => btn["tool_name"] }
+      ctx = ::Buddy::ToolContext.new(action.user, proposal: shape, conversation: action.byte_conversation)
+      outcome = ::Buddy::Tools.dispatch(tool, btn["payload"].transform_keys(&:to_sym), ctx)
+      return btn.merge!("status" => "failed", "error_message" => outcome[:error]) unless outcome[:ok]
+
+      mark_ticked(btn)
+      btn.merge!(
+        "result"       => outcome[:data],
+        "receipt"      => tool[:receipt].call(outcome[:data], ctx).to_s,
+        "activity_ids" => [outcome[:activity_id]].compact,
+      )
+    end
+
+    # A row ticked from the app has no removal of its own to reverse, so the
+    # item is simply put back by name.
+    def untick(action, btn)
+      revert = btn.dig("result", "revert")
+      if revert.present?
+        ::Buddy::Reverter.call(revert)
+        ::BuddyActivity.mark_undone!(btn["activity_ids"], note: revert["summary"])
+      else
+        list = ::List.find(action.tool_input["list_id"])
+        list.list_items.add(btn["label"])
+      end
+      reset(btn)
+    end
+
+    def mark_ticked(btn)
+      btn.merge!("status" => "executed", "undoable" => true)
+      btn.delete("error_message")
+      btn
+    end
+
+    # Back to a fresh row: nothing left on it for the undo machinery to find.
+    def reset(btn)
+      btn.merge!("status" => "pending", "undoable" => false)
+      btn.except!("result", "receipt", "activity_ids", "error_message", "undo_note")
+    end
+
+    def repaint(action)
+      message = action.byte_message
+      return if message.nil?
+
+      message.update!(metadata: (message.metadata || {}).merge("buttons" => action.reload.buttons))
+      MonitorChannel.broadcast_to(action.user, {
+        id:      :byte,
+        channel: :byte,
+        data:    { kind: :message, message: message.as_wire },
+      })
     end
 
     def overflow_note(total)

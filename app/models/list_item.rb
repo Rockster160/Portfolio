@@ -29,6 +29,7 @@ class ListItem < ApplicationRecord
   before_save :set_sort_order, :normalize_values
   after_commit :broadcast_commit
   after_update_commit :ack_pet, if: -> { saved_change_to_deleted_at? && deleted? }
+  after_commit :sync_buddy_checklists, if: -> { previously_new_record? || saved_change_to_deleted_at? }
 
   validates :name, presence: true
 
@@ -242,6 +243,12 @@ class ListItem < ApplicationRecord
     return if label.blank?
 
     PetWorker.tell(:ack, label.split, section&.name.to_s.split)
+  end
+
+  # A Buddy card showing this list ticks the row when the item comes off it,
+  # however it came off, and unticks it when the item goes back on.
+  def sync_buddy_checklists
+    ::Buddy::ListChecklist.sync!(list)
   end
 
   # The list-wide snapshots go out through List#broadcast! rather than a second

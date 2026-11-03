@@ -83,7 +83,7 @@ RSpec.describe Buddy::ListChecklist do
 
       expect(post!).to eq(2)
 
-      expect(action.buttons.pluck("label")).to match_array(["Lock the back door", "Start the dishwasher"])
+      expect(action.buttons.pluck("label")).to contain_exactly("Lock the back door", "Start the dishwasher")
       expect(action.buttons.pluck("status").uniq).to eq(["pending"])
       expect(list.reload.list_items.count).to eq(2)
 
@@ -116,6 +116,88 @@ RSpec.describe Buddy::ListChecklist do
       expect(action.buttons.find { |b| b["id"] == row["id"] }["status"]).to eq("executed")
       expect(action.buttons.reject { |b| b["id"] == row["id"] }.pluck("status")).to eq(["pending"])
       expect(action).to be_pending
+    end
+
+    describe "ticking and unticking a row" do
+      before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+      def row(label)
+        action.reload.buttons.find { |b| b["label"] == label }
+      end
+
+      def check!(label, checked)
+        described_class.check!(action, row(label)["id"], checked)
+      end
+
+      it "goes back and forth as often as they like, the list following every time", :aggregate_failures do
+        post!
+
+        check!("Start the dishwasher", true)
+        expect(list.reload.list_items.pluck(:name)).to eq(["Lock the back door"])
+        expect(row("Start the dishwasher")).to include("status" => "executed", "undoable" => true)
+
+        check!("Start the dishwasher", false)
+        expect(list.reload.list_items.pluck(:name)).to contain_exactly("Lock the back door", "Start the dishwasher")
+        expect(row("Start the dishwasher")["status"]).to eq("pending")
+        expect(row("Start the dishwasher")).not_to have_key("result")
+
+        check!("Start the dishwasher", true)
+        expect(list.reload.list_items.pluck(:name)).to eq(["Lock the back door"])
+        expect(row("Start the dishwasher")["status"]).to eq("executed")
+        expect(action.reload).to be_pending
+      end
+
+      it "stays live with every row ticked, and a repeat of the same state changes nothing", :aggregate_failures do
+        post!
+        check!("Start the dishwasher", true)
+        check!("Lock the back door", true)
+        check!("Lock the back door", true)
+
+        expect(list.reload.list_items).to be_empty
+        expect(action.reload).to be_pending
+        expect(BuddyActivity.where(user: user).count).to eq(2)
+
+        check!("Lock the back door", false)
+        expect(list.reload.list_items.pluck(:name)).to eq(["Lock the back door"])
+      end
+    end
+
+    describe "the list changing somewhere else" do
+      before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+      def status_of(label)
+        action.reload.buttons.find { |b| b["label"] == label }["status"]
+      end
+
+      it "ticks the row when the item comes off the list, and unticks it when it goes back", :aggregate_failures do
+        post!
+
+        list.list_items.remove("Lock the back door")
+        expect(status_of("Lock the back door")).to eq("executed")
+        expect(status_of("Start the dishwasher")).to eq("pending")
+        expect(action.byte_message.reload.metadata["buttons"].pluck("status")).to include("executed")
+
+        list.list_items.add("Lock the back door")
+        expect(status_of("Lock the back door")).to eq("pending")
+      end
+
+      it "puts an item ticked off in the app back when its row is unticked" do
+        post!
+        list.list_items.remove("Lock the back door")
+
+        described_class.check!(action, action.buttons.find { |b| b["label"] == "Lock the back door" }["id"], false)
+
+        expect(list.reload.list_items.pluck(:name)).to include("Lock the back door")
+      end
+
+      it "leaves a card that has expired alone" do
+        post!
+        action.update!(expires_at: 1.minute.ago)
+
+        list.list_items.remove("Lock the back door")
+
+        expect(status_of("Lock the back door")).to eq("pending")
+      end
     end
 
     # Tonight's card and last night's point at the same items, and unticking a

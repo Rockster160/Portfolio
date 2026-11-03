@@ -97,6 +97,29 @@ RSpec.describe ByteController, type: :controller do
         expect(response).to be_successful
         expect(action.reload).to be_pending
       end
+
+      # A list card settles each tick in the request, so the answer it sends
+      # back already carries the row's new state.
+      it "ticks and unticks a list card's row in the request", :aggregate_failures do
+        allow(WebPushNotifications).to receive(:send_to_byte)
+        allow(MonitorChannel).to receive(:broadcast_to)
+        allow(Buddy::CompanionRelay).to receive(:conversation_for).and_return(buddy_convo)
+        list = create(:list, name: "Before Bed", user: user)
+        create(:list_item, list: list, name: "Lock the back door")
+        Buddy::ListChecklist.post!(user: user, list: list.reload, text: "Before Bed")
+        action = ByteAction.where(user: user, tool_name: "buddy_proposals").last
+
+        expect(Buddy::ProposalExecutorJob).not_to receive(:perform_later)
+        post :respond_action, params: { request_id: action.request_id, toggle: 1, checked: true }, as: :json
+
+        expect(response.parsed_body["buttons"].first["status"]).to eq("executed")
+        expect(list.reload.list_items).to be_empty
+
+        post :respond_action, params: { request_id: action.request_id, toggle: 1, checked: false }, as: :json
+
+        expect(response.parsed_body["buttons"].first["status"]).to eq("pending")
+        expect(list.reload.list_items.pluck(:name)).to eq(["Lock the back door"])
+      end
     end
 
     # An editable form posts VALUES, not row ids, so it can't lean on the

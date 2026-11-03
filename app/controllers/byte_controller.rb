@@ -1114,6 +1114,17 @@ class ByteController < ApplicationController
   end
 
   def respond_buddy_proposals(action)
+    # A list card's rows tick and untick as often as they like, each one
+    # settled here rather than in a job so a quick run of taps can't outpace it.
+    if params[:toggle].present? && Buddy::ListChecklist.card?(action)
+      return head(:conflict) unless action.pending? &&
+        (action.expires_at.nil? || action.expires_at.future?)
+
+      checked = ActiveModel::Type::Boolean.new.cast(params[:checked]) == true
+      Buddy::ListChecklist.check!(action, params[:toggle].to_i, checked)
+      return render json: action.reload.as_wire
+    end
+
     # Uncheck-to-undo on a Level-2 (already-executed) row. Allowed even once the
     # action is decided — undoing a done row isn't gated on pending state.
     if params[:undo].present?

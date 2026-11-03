@@ -100,7 +100,7 @@
       <button id="add-item" class="primary" type="button" class="hidden">➕</button>
       <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
 
-      <input id="search" type="search" placeholder="Search food..." autocomplete="off">
+      <input id="search" type="search" value="<%= params[:q] %>" placeholder="Search food..." autocomplete="off">
 
       <button id="submit" class="primary" data-editing=false disabled>Submit</button>
     </div>
@@ -184,7 +184,8 @@
     let oneoffSeq = 0
 
     const picked = new Map()
-    let query = ""
+    // A link can open the page already searched: ?q=chicken
+    let query = document.getElementById("search").value.trim()
     let editMode = false
 
     let preEdit = ""

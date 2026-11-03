@@ -101,6 +101,22 @@ function stillAwaiting(requestId, id, serverStatus) {
   return true;
 }
 
+// A list card's rows mirror the list: ticked is off it, unticked is on it, and
+// either way round as often as they like. What a row shows is what they last
+// set it to, as requestId -> Map(buttonId -> { checked, sending }), until its
+// requests settle — a repaint from an earlier tap must not undo a later one.
+const LIST_TOGGLES = new Map();
+
+function listTogglesFor(requestId) {
+  if (!LIST_TOGGLES.has(requestId)) LIST_TOGGLES.set(requestId, new Map());
+  return LIST_TOGGLES.get(requestId);
+}
+
+function listRowChecked(requestId, id, serverChecked) {
+  const entry = listTogglesFor(requestId).get(Number(id));
+  return entry ? entry.checked : serverChecked;
+}
+
 // An agenda item is a task, an event, or a trigger, and they are not the same
 // thing to the person reading the row — a to-do called an "Event" is simply
 // wrong, and it's the word that tells them whether the thing will occupy a span
@@ -304,6 +320,7 @@ export function renderMultiSelect(container, message) {
   // into a silent nothing.
   const expiresAt = meta.action_expires_at ? Date.parse(meta.action_expires_at) : NaN;
   const expired = Number.isFinite(expiresAt) && Date.now() > expiresAt;
+  const listCard = meta.source === "list_checklist" && !confirmMode;
 
   container.innerHTML = "";
   container.classList.add("byte-msg-multi-select");
@@ -313,8 +330,13 @@ export function renderMultiSelect(container, message) {
     // Their tap outranks a repaint that hasn't heard about it yet. See
     // IN_FLIGHT: the executor is a job, so "pending" here can simply mean the
     // answer is still on its way.
-    const awaiting = stillAwaiting(requestId, btn.id, serverStatus);
-    const status = awaiting ? "working" : serverStatus;
+    const awaiting = !listCard && stillAwaiting(requestId, btn.id, serverStatus);
+    let status = awaiting ? "working" : serverStatus;
+    // An `undone` row on a list card is just an item back on the list.
+    const listRow = listCard && !expired && ["pending", "executed", "undone"].includes(serverStatus);
+    if (listRow) {
+      status = listRowChecked(requestId, btn.id, serverStatus === "executed") ? "executed" : "pending";
+    }
     // A row is "resolved" once it has been acted on. Resolved rows stay
     // checked and locked so the checkmark persists (the user's tap is a
     // permanent record, not something that vanishes on execution). Only
@@ -325,7 +347,7 @@ export function renderMultiSelect(container, message) {
     // this way (it ran the instant Buddy proposed it); a tapped Level-3 row
     // becomes it once it executes, which is what gives `undo` a way back.
     // Everything else that's resolved stays locked.
-    const undoable = status === "executed" && !!btn.undoable;
+    const undoable = status === "executed" && (listRow || !!btn.undoable);
     const undone = status === "undone";
     // A newer ask replaced this one, so it's finished with either way: locked,
     // never re-triggerable, and never undoable — the row that replaced it owns
@@ -358,7 +380,9 @@ export function renderMultiSelect(container, message) {
     // tappable — but tapping REISSUES it (see below) rather than running the
     // stale one. One mid-flight is locked so a second tap can't double-fire it.
     cb.disabled = awaiting || superseded || ((resolved || undone) && !undoable);
-    if (awaiting) {
+    if (listRow) {
+      cb.addEventListener("change", () => toggleListRow(requestId, cb));
+    } else if (awaiting) {
       // Nothing to bind: it's already doing the thing.
     } else if (rowExpired) {
       // Tapping a stale row reissues it as a fresh checklist — no re-typing.
@@ -533,6 +557,46 @@ async function redoExpired(container, requestId, cb) {
     cb.checked = false;
     cb.disabled = false;
     if (row) row.dataset.status = "expired";
+  }
+}
+
+// One tick or untick on a list card. Never locks the box: a run of quick taps
+// across the card each go straight out, and taps on ONE row are sent one at a
+// time with only the latest state, so a tick-untick-tick ends ticked whatever
+// order the requests would otherwise have landed in.
+async function toggleListRow(requestId, cb) {
+  const id = Number(cb.value);
+  const rows = listTogglesFor(requestId);
+  const entry = rows.get(id) || { sending: false };
+  entry.checked = cb.checked;
+  rows.set(id, entry);
+
+  const row = cb.closest(".byte-msg-action-row");
+  if (row) {
+    row.dataset.status = cb.checked ? "executed" : "pending";
+    const glyph = row.querySelector(".byte-msg-action-glyph");
+    if (glyph) glyph.textContent = cb.checked ? STATUS_GLYPHS.executed : "";
+  }
+  if (entry.sending) return;
+
+  entry.sending = true;
+  try {
+    let sent;
+    do {
+      sent = entry.checked;
+      await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/respond`, "POST", {
+        toggle:  id,
+        checked: sent,
+      });
+    } while (entry.checked !== sent);
+    // Settled, so the server's word is final again — including when the list
+    // later changes somewhere else.
+    rows.delete(id);
+  } catch (e) {
+    // Back to whatever the server last said; its next repaint shows it.
+    rows.delete(id);
+    if (cb.isConnected) cb.checked = !cb.checked;
+    console.warn("[byte] list row toggle failed", e);
   }
 }
 

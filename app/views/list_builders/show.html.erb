@@ -83,7 +83,7 @@
       <button id="add-item" class="primary" type="button" class="hidden">➕</button>
       <button id="quick-edit" class="primary" type="button" class="hidden">✍️</button>
 
-      <input id="search" type="search" placeholder="Search items..." autocomplete="off">
+      <input id="search" type="search" value="<%= params[:q] %>" placeholder="Search items..." autocomplete="off">
     </div>
   </div>
 
@@ -156,7 +156,8 @@
     ).map(name => name.toLowerCase()))
     const BOOT_STAMP = Number(document.getElementById("snapshot-stamp").textContent)
 
-    let query = ""
+    // A link can open the page already searched: ?q=chicken
+    let query = document.getElementById("search").value.trim()
     let editMode = false
     let preEdit = ""
 
