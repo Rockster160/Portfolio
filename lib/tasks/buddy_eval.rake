@@ -266,6 +266,10 @@ BUDDY_TOOL_PROBES = {
   },
   alarm:                  { say: "wake me at 6:30 tomorrow", avoid: %i[schedule_reminder set_timer] },
   schedule_reminder:      { say: "remind me to call mom at 6", avoid: %i[alarm add_agenda_item] },
+  schedule_check_up:      {
+    say:   "check on my headache, cough, and throat every day at 9am and 9pm",
+    avoid: %i[schedule_reminder log_event],
+  },
   remind_when:            { say: "remind me to grab my rx next time I'm at Costco", avoid: %i[schedule_reminder] },
   move_reminder:          { say: "move the tomato reminder to 3", needs: :pending_reminder },
   cancel_reminder:        { say: "never mind the vet reminder, drop it", needs: :vet_reminder },
@@ -2003,6 +2007,70 @@ BUDDY_EDGE_PROBES = [
     note:  "no verb of seeing anywhere in it, so the camera arm never fired; " \
            "answered \"the backyard camera still isn't handing over a frame\" " \
            "with nothing called, off a thread full of yesterday's failures",
+  },
+
+  # --- asking how they are, on a schedule ------------------------------------
+  {
+    case:       "check-up: twice a day",
+    say:        "Check on my headache, cough, and throat everyday at 9am and 9pm",
+    tool:       :schedule_check_up,
+    avoid:      %i[schedule_reminder log_event],
+    args:       { schedule_check_up: { questions: /headache.*\n.*cough.*\n.*throat/im, repeat: /09:00.*\n?.*21:00/m } },
+    # A fourth line is a question they never asked for.
+    never_args: { schedule_check_up: { questions: /(?:\n[^\n]*\S){3,}/ } },
+    note:       "each thing named is its own rating, nothing added, and both times are on the one check-up",
+  },
+  {
+    case:  "check-up: mood",
+    say:   "check on my mental state every day at 9pm",
+    tool:  :schedule_check_up,
+    avoid: %i[schedule_reminder],
+    args:  { schedule_check_up: { repeat: /daily:21:00/i } },
+    note:  "a feeling only they can report, asked nightly and kept",
+  },
+  {
+    case:  "check-up: a cycle from a start date",
+    say:   "check on my period every 4 weeks starting on the 12th",
+    tool:  :schedule_check_up,
+    avoid: %i[schedule_reminder add_agenda_item],
+    args:  { schedule_check_up: { repeat: /every:4-weeks/i, starts: /-12\z/ } },
+    note:  "the start date belongs in starts, so the first asking is on the 12th",
+  },
+  {
+    case:       "check-up: changing one",
+    say:        "Headache should be 1-100 and cough should be a yes/no",
+    tool:       :schedule_check_up,
+    avoid:      %i[schedule_reminder edit_plan cancel_reminder],
+    args:       {
+      schedule_check_up: { questions: %r{(?=.*headache\s*\|\s*scale 1-100)(?=.*cough\s*\|\s*yes/no)}im },
+    },
+    never_args: { schedule_check_up: { repeat: /./ } },
+    note:       "a tweak names only what changes, and leaves the times alone",
+    seed:       ->(user, convo) {
+      tool = Buddy::Tools[:schedule_check_up]
+      ctx  = Buddy::ToolContext.new(user, conversation: convo)
+      args = { title: "Symptoms", questions: "Headache\nCough\nThroat", repeat: "daily:09:00\ndaily:21:00" }
+      made = tool[:execute].call(args.merge(tool[:confirm].call(args, ctx)[:resolved]), ctx)
+      BuddyReminder.where(id: made[:reminder_ids]).find_each { |r| r.update!(byte_conversation: convo) }
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        body: "Check on my headache, cough, and throat everyday at 9am and 9pm",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "I'll check on your headache, cough and throat every day at 9am and 9pm.",
+      )
+    },
+  },
+  # Whether a chore got done is the house's record to answer, not a question
+  # about them, so this stays a plain nudge.
+  {
+    case:  "check-up: a chore is not one",
+    say:   "check if I've done the dishes every day at 9",
+    tool:  :schedule_reminder,
+    avoid: %i[schedule_check_up],
+    needs: :dish_chores,
+    note:  "a chore being done is the household's record to check, not a form to fill in",
   },
 
   # --- a list that has to repeat -------------------------------------------
