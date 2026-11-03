@@ -377,7 +377,8 @@ module Buddy
       # Placing happens once, over everything pending, so a batch of three
       # follow-ups out of one message can't all land on the same evening.
       if box.written.any?(&:check_in_at) || box.touched.any?
-        Buddy::CheckIns.replan!(user, now: now)
+        armed = (box.written + box.touched).select { |m| m.check_in_at && m.saved_change_to_check_in_at? }
+        Buddy::CheckIns.replan!(user, now: now, armed: armed)
       end
 
       clear!(conversation, now)

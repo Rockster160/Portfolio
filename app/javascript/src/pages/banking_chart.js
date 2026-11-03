@@ -108,7 +108,10 @@ $(document).ready(function() {
         categoryPercentage: 0.7,
         barPercentage: 0.9,
         maxBarThickness: 48,
-        minBarLength: 2,
+        // No `minBarLength`: on a stacked axis Chart.js counts the padded
+        // pixels into the stack, so every zero or cents-sized category lifts
+        // the column by the dollars 2px is worth and the top stops matching
+        // the axis. A tiny category is still in the tooltip.
         // Out and in are distinct groups, so Chart.js draws them side by side
         // within the bucket and stacks each one internally.
         stack: ds.stack || "out",

@@ -143,6 +143,15 @@ RSpec.describe "BuddyMemory lifecycle" do
         expect(memory).to be_check_in_plannable
       end
 
+      it "queues the job that asks it" do
+        Sidekiq::Testing.fake! do
+          BuddyCheckInWorker.clear
+          remember("Rocco was laid off at OCS", check_in_days: 2)
+
+          expect(BuddyCheckInWorker.jobs.map { |job| job["args"] }).to eq([[BuddyMemory.last.id]])
+        end
+      end
+
       # The rule is written down twice already - "the heavier it is the SOONER",
       # and CHECK_IN_HORIZON capping how long a heavy thing may wait - so asking
       # for the weight separately is asking for the two numbers to disagree.

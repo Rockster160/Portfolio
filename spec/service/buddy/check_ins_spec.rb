@@ -205,6 +205,13 @@ RSpec.describe Buddy::CheckIns do
       expect(described_class.due(user)).to be_empty
     end
 
+    it "closes one that expired instead of asking about it" do
+      memory = followup("period is about 6 days away", check_in_at: 1.hour.ago, expires_at: 1.day.ago)
+
+      expect(described_class.due(user)).to be_empty
+      expect(described_class.fire!(memory)).to eq(:closed)
+    end
+
     it "ignores a plain memory that was never a follow-up" do
       user.buddy_memories.create!(kind: :concept, content: "cat is called Fae", severity: 90)
 
@@ -288,6 +295,18 @@ RSpec.describe Buddy::CheckIns do
 
         expect(BuddyCheckInWorker.jobs.size).to eq(1)
         expect(memory.reload.check_in_at).to eq(placed)
+      end
+    end
+
+    it "queues one for a check-in that was just armed, even though its time didn't move" do
+      Sidekiq::Testing.fake! do
+        memory = followup("the cat is in hospital", check_in_at: described_class.place(3.days.from_now, user: user))
+        BuddyCheckInWorker.clear
+
+        described_class.replan!(user, armed: [memory])
+
+        expect(BuddyCheckInWorker.jobs.size).to eq(1)
+        expect(memory.reload.check_in_at.to_i).to eq(BuddyCheckInWorker.jobs.first["at"].to_i)
       end
     end
 

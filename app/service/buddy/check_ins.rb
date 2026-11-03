@@ -95,7 +95,13 @@ module Buddy
     # has changed and the moment a new higher-severity concern should be able to
     # take the near slot. Ordering is relevance first (what is live now), then
     # severity, then how long it has been waiting.
-    def replan!(user, now: Time.current)
+    #
+    # `armed:` is the records whose `check_in_at` the caller just wrote. Arming
+    # places the time itself, so the re-plan usually lands on that same moment
+    # and reads it as unmoved - and an unmoved record is assumed to already
+    # have its job. These have none yet, so they get one either way.
+    def replan!(user, now: Time.current, armed: [])
+      armed_ids = armed.filter_map(&:id).to_set
       pending = BuddyMemory.where(user: user).check_in_pending(now).to_a
       pending += BuddyMemory.where(user: user).check_in_due(now).to_a
       pending = pending.uniq.select(&:check_in_plannable?)
@@ -131,7 +137,7 @@ module Buddy
         # pushes, one question.
         # A record that is genuinely due always moves, because `now` is in the
         # `earliest` max, so nothing that needs a job goes without one.
-        BuddyCheckInWorker.perform_at(placed, memory.id) if moved
+        BuddyCheckInWorker.perform_at(placed, memory.id) if moved || armed_ids.include?(memory.id)
         cursor = placed
       }
     end

@@ -255,7 +255,7 @@ class BuddyMemory < ApplicationRecord
   # were `kind: followup` and both now read severity instead, so that a fact
   # held inline can also be one somebody gets asked about. See the note on
   # `check_in_plannable?` for why that had to stop being a kind.
-  scope :check_in_armed, -> { live.where(severity: CHECK_IN_FLOOR..) }
+  scope :check_in_armed, -> { live.unexpired.where(severity: CHECK_IN_FLOOR..) }
 
   # Records with a check-in armed and due. `relevant_at` gates whether it is
   # live yet at all — a parent's surgery next week is severe now and worth
@@ -353,8 +353,11 @@ class BuddyMemory < ApplicationRecord
   # Severity is the gate that was always doing the work: it defaults to 0 and
   # the floor is 25, so nothing acquires a check-in by losing this clause -
   # something has to have been given weight on purpose.
+  #
+  # An expired row is a fact that has stopped being true ("about 6 days away"
+  # said seven weeks ago), so asking about it reads it out as if it still were.
   def check_in_plannable?
-    (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR
+    (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR && (expires_at.nil? || expires_at.future?)
   end
 
   # Worth ASKING about right now. Everything above, plus a `relevant_at` that

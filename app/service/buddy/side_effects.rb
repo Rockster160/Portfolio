@@ -253,7 +253,7 @@ module Buddy
 
       at = Buddy::CheckIns.place(days.to_i.days.from_now, user: memory.user)
       memory.update_columns(check_in_at: at, updated_at: Time.current)
-      Buddy::CheckIns.replan!(memory.user)
+      Buddy::CheckIns.replan!(memory.user, armed: [memory])
     rescue StandardError => e
       Rails.logger.warn("[Buddy::SideEffects] check-in arm failed: #{e.class}: #{e.message}")
     end
