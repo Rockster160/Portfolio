@@ -92,11 +92,8 @@ RSpec.describe Buddy::UsageSpool do
   end
 
   describe ".uid_for" do
-    # The id alone is not enough, and the reason is two DATABASES rather than
-    # two rows. Dev is a restore of a production backup, so the laptop's eval
-    # rows sit at ids production had already given to different calls of its
-    # own — 1925 up, in the 20 Aug restore. Sending one under a bare id would
-    # have it deduped against a real row and its spend dropped on the floor.
+    # Dev is a restore of a production backup, so a laptop row can sit at an id
+    # production already gave a different call; a bare id would dedupe it away.
     it "separates two rows that share an id but were written by different databases" do
       first  = usage
       second = usage(created_at: first.created_at - 3.hours)

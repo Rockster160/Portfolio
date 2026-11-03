@@ -1,23 +1,9 @@
 require "rails_helper"
 
-# Two things in the header flew across the screen the moment you touched them:
-# the unread count jumped from the hamburger's corner to the top-right of the
-# app, and the diagonal slash over the notifications bell stretched into a line
-# running corner to corner. (The bell has since moved into Settings; the reload
-# button's update badge stands in for it here and fails the same way.)
-#
-# Both are `position: absolute` off their button, and both buttons are
-# `position: relative` so they can be. The press reset at the top of byte.scss
-# said `position: static` — meant to undo the app-wide
-# `button:active { position: relative; top: 1px }` nudge from forms.scss, and
-# undoing the positioning along with it. At `.ctr-byte .byte-app button:active`
-# it clocks (0,3,1), which outranks every anchor in the sheet, so pressing one
-# handed its contents to `.byte-header` instead and they resolved against the
-# whole app.
-#
-# That's a fact about the resolved cascade rather than about any declaration on
-# its own, which is why it's asserted here: reading the anchor's own rule says
-# `position: relative` and tells you nothing about what happens under a finger.
+# Badges hang `position: absolute` off `position: relative` header buttons. A
+# press reset that sets `position` on `button:active` outranks every anchor, so
+# the badge resolves against the whole app the moment it is touched. That is a
+# fact about the resolved cascade, not about any one rule.
 
 # Each one an element to resolve against: what it is, and everything above it.
 anchors = {
@@ -25,10 +11,6 @@ anchors = {
     own:       "byte-drawer-toggle",
     ancestors: %w[ctr-byte byte-app byte-header],
   },
-  # The bell was the second one when this was written. It moved into Settings
-  # on 2026-09-14 and is a text row now with nothing hanging off it - but the
-  # reload button beside it carries an `!` badge the same way, so the header
-  # still has two of these and the pair still has to be checked.
   "the update badge on the reload button" => {
     own:       "byte-reload-btn",
     ancestors: %w[ctr-byte byte-app byte-header],

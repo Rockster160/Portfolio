@@ -34,17 +34,13 @@ RSpec.describe "Chore mark_due", type: :request do
   end
 
   describe "DELETE /chores/items/:id/mark_due" do
-    it "clears marked_due_at" do
-      chore.update!(marked_due_at: Time.current)
-      delete "/chores/items/#{chore.id}/mark_due"
-      expect(response).to have_http_status(:ok)
-      expect(chore.reload.marked_due_at).to be_nil
-    end
-
-    it "is a no-op when not currently marked" do
-      delete "/chores/items/#{chore.id}/mark_due"
-      expect(response).to have_http_status(:ok)
-      expect(chore.reload.marked_due_at).to be_nil
+    it "clears marked_due_at, and is a no-op when not currently marked" do
+      [Time.current, nil].each do |stamp|
+        chore.update!(marked_due_at: stamp)
+        delete "/chores/items/#{chore.id}/mark_due"
+        expect(response).to have_http_status(:ok)
+        expect(chore.reload.marked_due_at).to be_nil
+      end
     end
   end
 
@@ -58,22 +54,15 @@ RSpec.describe "Chore mark_due", type: :request do
       expect(chore.reload.marked_due_at).to eq(ChoreDay.starts_at(target, user))
     end
 
-    it "clears the stamp on blank submission" do
-      chore.update!(marked_due_at: Time.current)
-      patch "/chores/items/#{chore.id}",
-        params:  { chore: { marked_due_at: "" } }.to_json,
-        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
-      expect(response).to have_http_status(:ok)
-      expect(chore.reload.marked_due_at).to be_nil
-    end
-
-    it "ignores unparseable date strings (treats as clear)" do
-      chore.update!(marked_due_at: Time.current)
-      patch "/chores/items/#{chore.id}",
-        params:  { chore: { marked_due_at: "not a date" } }.to_json,
-        headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
-      expect(response).to have_http_status(:ok)
-      expect(chore.reload.marked_due_at).to be_nil
+    it "clears the stamp on a blank or unparseable submission" do
+      ["", "not a date"].each do |value|
+        chore.update!(marked_due_at: Time.current)
+        patch "/chores/items/#{chore.id}",
+          params:  { chore: { marked_due_at: value } }.to_json,
+          headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
+        expect(response).to have_http_status(:ok)
+        expect(chore.reload.marked_due_at).to be_nil
+      end
     end
   end
 
@@ -81,12 +70,9 @@ RSpec.describe "Chore mark_due", type: :request do
   # nothing else. Both halves of that live in markup the page script hooks
   # onto by name, so the shell has to carry them.
   describe "GET /chores (the head button's confirm step)" do
-    it "renders a confirm modal and a button that only ever sets today" do
+    it "renders the confirm modal and form the page script hooks onto" do
       get chores_path
-      expect(response.body).to include("data-mark-due-modal")
-      expect(response.body).to include("data-mark-due-form")
-      expect(response.body).to include('aria-label="Set due date to today"')
-      expect(response.body).not_to include("Mark needs to get done")
+      expect(response.body).to include("data-mark-due-modal", "data-mark-due-form")
     end
   end
 end

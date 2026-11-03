@@ -2,35 +2,16 @@ require "rails_helper"
 
 # Asking to SEE what a camera has, and getting told it can't be pulled up.
 #
-# The line is NOT the tense, and getting that wrong the first time is what this
-# file is mostly here to pin down. "When was the last time somebody was at the
-# door?" is a question about a time, and the time of the last alert answers it —
-# no camera needs consulting to say when the doorbell rang. What needs a camera
-# is the request for the PICTURE:
-#
-#   3789 "Show me the last person that rang the doorbell"
-#     → "Hm, I can't show the person itself from here."
-#   3728 "Can you show me the last person that came to the door?"
-#     → "Hm, I can't pull up a live camera view from here."
-#   3751 "Show me the last person who was at the door"
-#     → "Hm, I can't pull up the person itself from here."
-#
-# `Camera Last Seen` was in the index for all three and has never run once.
-#
-# "Who" belongs with them: identifying a person is a question about a face, and
-# a face only comes off a frame. "Who was at the door yesterday morning" wants
-# the picture without ever saying so.
-#
-# Two task-description rewrites were aimed here before the nudge, plus
-# `call_jil_function`'s own "never tell them you can't check something that has
-# a function for it". All landed; 3790 broke the newest one 26 minutes later.
+# The line is NOT the tense. "When was the last time somebody was at the door?"
+# is answered by the time of the last alert; what needs a camera is a request
+# for the PICTURE, or for "who" (a face only comes off a frame), or for what's
+# out there right now.
 RSpec.describe "a camera question that called nothing" do
   let(:user) { User.me }
   let!(:convo) {
     user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
   }
 
-  # Mirrors prod 484, the one that has never run.
   let!(:last_seen) {
     Task.create!(
       user:          user,
@@ -75,103 +56,48 @@ RSpec.describe "a camera question that called nothing" do
     nudge_sent(client).to_s.include?("They asked to SEE something")
   end
 
-  # The picture requests that were refused, verbatim, plus the two shapes that
-  # ask for a face without naming one.
-  describe "asking to see" do
+  def nudged_on?(question)
+    nudged?(run([{ text: "Hm, I can't pull that up from here." }, { text: "ok" }], text: question))
+  end
+
+  it "sends a request for the picture, a who, or a look right now back to look", :aggregate_failures do
     [
-      "Can you show me the last person that came to the door?",  # 3728
-      "Show me the last person who was at the door",             # 3751
-      "Show me the last person that rang the doorbell",          # 3789
+      "Can you show me the last person that came to the door?",
+      "Show me the last person who was at the door",
+      "Show me the last person that rang the doorbell",
       "Who was at the door yesterday morning?",
       "Who rang the doorbell?",
       "Pull up the driveway camera",
       "Send me a picture of the front door",
-    ].each do |question|
-      it "sends it back to look, on #{question.inspect}" do
-        client = run(
-          [{ text: "Hm, I can't pull that up from here." }, { text: "A courier, about 3:30." }],
-          text: question,
-        )
-
-        expect(nudged?(client)).to be(true)
-      end
-    end
-  end
-
-  # Prod 4721, and the shape with no verb of seeing in it anywhere. "What's
-  # going on in the backyard?" has no event in it, no time, and no record that
-  # could answer it - only the picture can. It missed the arm entirely, nothing
-  # was called, and the answer came off the thread's own history: "The backyard
-  # camera still isn't handing over a frame", eighteen hours after that camera
-  # started working again.
-  describe "asking what's out there right now" do
-    [
-      "What's going on in the backyard?",       # 4721
-      "What\u2019s happening out on the porch?",
+      "What's going on in the backyard?",
+      "What’s happening out on the porch?",
       "Anything going on in the driveway?",
       "Take a look at the backyard for me",
       "Check the driveway",
       "What do you see on the porch?",
-    ].each do |question|
-      it "sends it back to look, on #{question.inspect}" do
-        client = run(
-          [
-            { text: "The backyard camera still isn't handing over a frame." },
-            { text: "Quiet - just the fence and the grass." },
-          ],
-          text: question,
-        )
+    ].each { |question| expect(nudged_on?(question)).to be(true), question }
+  end
 
-        expect(nudged?(client)).to be(true)
-      end
-    end
-
-    # The nouns are what carries this arm - the verbs are ordinary English and
-    # match half of everything. A thing that is BROKEN is not a thing to look at.
+  # The nouns carry the "right now" arm - the verbs match half of everything.
+  # A question about WHEN is answered by the time it happened.
+  it "leaves questions about when, and about things that aren't cameras, alone", :aggregate_failures do
     [
       "What's going on with the garage door?",
       "Check the laundry when you get a sec",
       "What's happening today?",
-    ].each do |question|
-      it "leaves it alone, on #{question.inspect}" do
-        client = run(
-          [{ text: "Nothing on my side about that." }, { text: "ok" }],
-          text: question,
-        )
-
-        expect(nudged?(client)).to be(false)
-      end
-    end
-  end
-
-  # THE distinction, and the one this got wrong first time round. A question
-  # about WHEN something happened is answered by the time it happened. There is
-  # no picture in it, so sending it to a camera would be spending a round to
-  # answer a question that was already answered — and worse, would push a frame
-  # at someone who asked for a timestamp.
-  describe "asking what happened" do
-    [
-      "When was the last time somebody was at the door?",   # 3787
-      "When was the last time somebody came to the door?",  # 3735
-      "What about just saw a person?",                      # 3737
+      "When was the last time somebody was at the door?",
+      "When was the last time somebody came to the door?",
+      "What about just saw a person?",
       "Has anyone been to the door today?",
       "Did the doorbell ring while I was out?",
-    ].each do |question|
-      it "leaves it alone, on #{question.inspect}" do
-        client = run(
-          [{ text: "The last one was the 7:17 PM front-door alert." }, { text: "ok" }],
-          text: question,
-        )
-
-        expect(nudged?(client)).to be(false)
-      end
-    end
+      "Let me know the next time somebody comes to the door",
+      "Add doorbell batteries to the shopping list",
+    ].each { |question| expect(nudged_on?(question)).to be(false), question }
   end
 
-  # A refusal is exempted from the false-claim guard on purpose (DENIAL_RX:
-  # declining honestly is the right answer when nothing ran), which is why this
-  # needed its own arm rather than a tweak to that one.
-  it "catches the refusal shape" do
+  # A refusal is exempted from the false-claim guard on purpose (DENIAL_RX), so
+  # this needs its own arm.
+  it "catches the refusal shape, names the function, and keeps the answer from the retry" do
     client = run(
       [
         { text: "Hm, I can't show the person itself from here." },
@@ -182,22 +108,11 @@ RSpec.describe "a camera question that called nothing" do
     )
 
     expect(nudged?(client)).to be(true)
+    expect(nudge_sent(client)).to include("Camera Last Seen")
     expect(reply.body).to eq("Someone came by at 3:30 this afternoon.")
   end
 
-  it "names the function it wants called" do
-    client = run(
-      [{ text: "I can't pull up a camera." }, { text: "ok" }],
-      text: "Who was at the door?",
-    )
-
-    expect(nudge_sent(client)).to include("`Camera Last Seen`")
-    expect(nudge_sent(client)).to include("expect_result")
-  end
-
   describe "what it must leave alone" do
-    # The live view has always worked. Nudging it would spend a round telling it
-    # to do the thing it just did.
     it "says nothing when a camera function did run" do
       client = run(
         [
@@ -210,30 +125,6 @@ RSpec.describe "a camera question that called nothing" do
       expect(nudged?(client)).to be(false)
     end
 
-    # Prod 3743, "Let me know the next time somebody comes to the door" — same
-    # nouns, but it's a watch, and it got the doorbell listener correctly. The
-    # proposal normally keeps this arm out of reach; this is the turn where the
-    # watch itself failed to resolve and the nudge must not send it to a camera.
-    it "leaves a forward-looking watch request alone" do
-      client = run(
-        [{ text: "Kk! You'll get a ping when the doorbell rings." }, { text: "ok" }],
-        text: "Let me know the next time somebody comes to the door",
-      )
-
-      expect(nudged?(client)).to be(false)
-    end
-
-    it "leaves a plain doorbell mention alone" do
-      client = run(
-        [{ text: "Sure, adding that." }, { text: "ok" }],
-        text: "Add doorbell batteries to the shopping list",
-      )
-
-      expect(nudged?(client)).to be(false)
-    end
-
-    # The doorbell notification turns (prod 3749, 3753) carry the word in their
-    # own seed text and answer with no tool call by design.
     it "leaves a self-initiated notification alone" do
       seed = convo.byte_messages.create!(
         user:      user,
@@ -248,31 +139,14 @@ RSpec.describe "a camera question that called nothing" do
       expect(nudged?(client)).to be(false)
     end
 
-    # An empty index means no camera is wired here, and the refusal was the
-    # honest answer. Pointing at a function that isn't in the list would be
-    # telling it to invent a name.
-    it "stays quiet when this person has no camera function" do
-      last_seen.destroy!
-
-      client = run(
-        [{ text: "Hm, I can't pull up a camera from here." }, { text: "ok" }],
-        text: "Show me the last person that rang the doorbell",
-      )
-
-      expect(nudged?(client)).to be(false)
-    end
-
-    # Same reason: opting a task out of Buddy is a decision about whether it may
-    # be called at all.
-    it "stays quiet when the camera function isn't buddy-enabled" do
+    # Pointing at a function that isn't offered would be telling it to invent a
+    # name, so no camera function (or an opted-out one) means no nudge.
+    it "stays quiet when this person has no buddy-enabled camera function" do
       last_seen.update!(buddy_enabled: false)
+      expect(nudged_on?("Show me the last person that rang the doorbell")).to be(false)
 
-      client = run(
-        [{ text: "Hm, I can't pull up a camera from here." }, { text: "ok" }],
-        text: "Show me the last person that rang the doorbell",
-      )
-
-      expect(nudged?(client)).to be(false)
+      last_seen.destroy!
+      expect(nudged_on?("Show me the last person that rang the doorbell")).to be(false)
     end
   end
 end

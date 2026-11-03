@@ -91,10 +91,7 @@ RSpec.describe Buddy::CheckIns do
       expect(leg.reload.check_in_at).to be < cat.reload.check_in_at
     end
 
-    # MIN_GAP spaces check-ins from EACH OTHER. Seeding the cursor with `now`
-    # turned it into a flat 20-hour delay on the first one in the queue, so a
-    # check-in about a 6pm dinner, noted at 2pm the same day, was asked the
-    # NEXT evening (prod: Suki to Eve, buddy_memories 128, message 5157).
+    # MIN_GAP spaces check-ins from EACH OTHER, not from `now`.
     describe "the first one, with nothing to be spaced from" do
       # Mid-morning. "3 hours from now" has to land inside the same day for the
       # question to be about spacing at all - run in the evening it is pushed
@@ -131,61 +128,31 @@ RSpec.describe Buddy::CheckIns do
     end
   end
 
-  # No config.time_zone, so `Date.current` and `created_at.to_date` were both
-  # UTC. 6pm MDT is already midnight UTC, and BANDS puts `evening` at 18-20 and
-  # `night` at 22-23 local — so EVERY evening and night check-in counted a day
-  # too many. Prod memory 128: created 31 Aug 2:05 PM, seeded 1 Sep 6:00 PM,
-  # 28 hours apart, announced as "2 days".
   # Every time here is UTC on purpose: that is what `Time.current` hands this
-  # code in production, because there is no `config.time_zone`. A user-zoned
-  # time would hide the whole bug — `.to_date` on one of those is already the
-  # local date.
+  # code in production, because there is no `config.time_zone`. Days are
+  # counted in the person's zone, where 6pm MDT is already tomorrow in UTC.
   describe "how long it says something has been waiting" do
-    let(:zone) { ActiveSupport::TimeZone[user.timezone] }
-
-    # 31 Aug 2:05 PM MDT = 1 Sep 20:05 UTC... no: 31 Aug 20:05 UTC.
-    # 1 Sep 6:00 PM MDT  = 2 Sep 00:00 UTC — already tomorrow, in UTC.
+    # 31 Aug 2:05 PM MDT, and 1 Sep 6:00 PM MDT.
     let(:created_utc) { Time.utc(2026, 8, 31, 20, 5) }
     let(:seeded_utc)  { Time.utc(2026, 9, 2, 0, 0) }
 
-    it "the two really are one local day apart" do
-      expect(created_utc.in_time_zone(zone).to_date).to eq(Date.new(2026, 8, 31))
-      expect(seeded_utc.in_time_zone(zone).to_date).to eq(Date.new(2026, 9, 1))
-      expect(seeded_utc - created_utc).to be < 30.hours
+    it "counts local days, not UTC ones" do
+      [
+        [created_utc, seeded_utc, "since yesterday"],
+        # 9am MDT to 8pm MDT on the same day.
+        [Time.utc(2026, 9, 1, 15, 0), Time.utc(2026, 9, 2, 2, 0), "today"],
+        [Time.utc(2026, 8, 29, 20, 5), seeded_utc, "3 days"],
+      ].each { |created, at, label|
+        expect(followup("the dinner", created_at: created).waiting_label(at)).to eq(label)
+      }
     end
 
-    it "calls 28 hours across one local midnight yesterday" do
-      memory = followup("the dinner", created_at: created_utc)
-
-      expect(memory.waiting_label(seeded_utc)).to eq("since yesterday")
-    end
-
-    it "does not roll over on the same local evening" do
-      memory = followup("the dinner", created_at: Time.utc(2026, 9, 1, 15, 0))  # 9am MDT
-
-      expect(memory.waiting_label(Time.utc(2026, 9, 2, 2, 0))).to eq("today")  # 8pm MDT same day
-    end
-
-    it "still counts real days" do
-      memory = followup("the dinner", created_at: Time.utc(2026, 8, 29, 20, 5))
-
-      expect(memory.waiting_label(seeded_utc)).to eq("3 days")
-    end
-
-    it "hands the model the day it was noted and today's, so it can count from the right one" do
+    it "hands the model the local day it was noted, today's, and the same count" do
       memory = followup("the dinner", created_at: created_utc)
 
       seed = described_class.send(:seed, memory, seeded_utc)
 
-      expect(seed).to include("on Monday 31 August", "Today is Tuesday 1 September")
-    end
-
-    it "reads the same from the seed the model is handed" do
-      memory = followup("the dinner", created_at: created_utc)
-
-      seed = described_class.send(:seed, memory, seeded_utc)
-
-      expect(seed).to include("since yesterday")
+      expect(seed).to include("31 August", "1 September", "since yesterday")
       expect(seed).not_to include("2 days")
     end
   end
@@ -263,11 +230,8 @@ RSpec.describe Buddy::CheckIns do
       expect(memory.reload.check_in_at).to be > Time.current
     end
 
-    # Every seeded turn is written as an OUTBOUND message — a briefing, a watch
-    # firing, a reminder, and check-in delivery itself. Counting those as "the
-    # person just spoke" meant Buddy talking to itself looked like a live
-    # conversation, so the 8:30 briefing would push any check-in due in the hour
-    # after it, every day, and one check-in would defer the next behind it.
+    # Every seeded turn is written as an OUTBOUND message, so Buddy's own
+    # briefings and watch firings must not read as the person speaking.
     it "does not mistake Buddy's own seeded turns for the person speaking" do
       memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
       convo.byte_messages.create!(
@@ -277,14 +241,6 @@ RSpec.describe Buddy::CheckIns do
       allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
 
       expect(described_class.fire!(memory)).to eq(:fired)
-    end
-
-    it "still gets out of the way of something the person actually typed" do
-      memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
-      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hey")
-      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
-
-      expect(described_class.fire!(memory)).to eq(:deferred)
     end
 
     it "closes one that stopped being worth asking about instead of firing it" do
@@ -298,10 +254,6 @@ RSpec.describe Buddy::CheckIns do
     end
   end
 
-  # Prod 5624-5628, 7 Sep: five hidden seeds byte-identical to each other,
-  # created inside 25 ms, all carrying memory_id 141, and five differently
-  # worded asks about the same recruiter request pushed to the phone at
-  # 6:00:0x PM. Five jobs, five model calls, one question.
   describe "one question, asked once" do
     it "does not stack a second job when the re-plan settled on the same moment" do
       Sidekiq::Testing.fake! do

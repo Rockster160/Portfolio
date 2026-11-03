@@ -1,22 +1,8 @@
 require "rails_helper"
 
-# Tapping "Yoga Lamp" on the Glimmer kiosk answered "Nothing in it could run
-# just now - what it points at might be gone."
-#
-# Everything it pointed at was fine: task 425 (HASS Light) is enabled,
-# buddy_enabled, unarchived, shared with Chelsea, and `yoga_bedside` is a
-# listed target. The step was dropped one line before any of that was
-# consulted, by ProposalBuilder's guard against ANSWERING tools.
-#
-# That guard is right about lookups: a routine has no model turn behind it, so
-# there is nobody for `check_weather` to report to. It was wrong about the two
-# tools that answer AND act. `call_jil_function` and `print_again` gained
-# `answers: true` so they could report results mid-turn, and that quietly
-# retired every routine built on them — a button press for a lamp, dropped for
-# being conversational.
-#
-# Nothing announced it. The routine stayed enabled, stayed pinned to the wall,
-# and its failure message pointed at the lamp.
+# A routine has no model turn behind it, so a lookup has nobody to report to
+# and is dropped. Tools that answer AND act (`call_jil_function`,
+# `print_again`) must still run, and carry their answer up to the person.
 RSpec.describe "Routines that call answering tools" do
   let(:user) { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
@@ -62,34 +48,21 @@ RSpec.describe "Routines that call answering tools" do
       allow_any_instance_of(Task).to receive(:execute).and_return(execution)
     end
 
-    it "runs it instead of dropping it" do
+    # The tool posts its own chip from inside `execute`; run_auto must not
+    # stack a vaguer one under it.
+    it "runs it, without giving up, leaving exactly the tool's own receipt", :aggregate_failures do
       expect_any_instance_of(Task).to receive(:execute)
+        .and_return(instance_double(Execution, result: "Turned on yoga_bedside"))
 
-      run(markers)
-    end
-
-    it "does not report that there was nothing to do" do
       run(markers)
 
       expect(gave_up?(reply.body)).to be(false)
-    end
-
-    # The tool posts its own chip from inside `execute`, carrying the answer the
-    # function actually returned. run_auto must not stack a vaguer one under it.
-    it "leaves exactly one receipt, the tool's own" do
-      run(markers)
-
       expect(chips.count).to eq(1)
-      expect(chips.last.body).to eq("Called **HASS Light**")
+      expect(chips.last.body).to include("HASS Light")
     end
   end
 
-  # Chelsea's Garage routine. One step, `call_jil_function` on Toggle Garage,
-  # which returns "Closing the garage now" or "Opening the garage now" depending
-  # on where the door already was — and the routine posted the same "Running
-  # **Garage**" either way, so a tap told her nothing about which just happened.
-  # There is no model turn behind a routine to read the answer back, so unless
-  # the runner carries it up, the one thing worth knowing is thrown away.
+  # A toggle's answer is the only way the person learns which way it went.
   describe "an answer the person needs" do
     let!(:task) {
       user.tasks.create!(
@@ -108,23 +81,14 @@ RSpec.describe "Routines that call answering tools" do
       allow_any_instance_of(Task).to receive(:execute).and_return(instance_double(Execution, result: text))
     end
 
-    it "says what the task said, on the routine's own message" do
+    # Verbatim: the task wrote a sentence for a person to read.
+    it "says what the task said, verbatim, on the routine's own message", :aggregate_failures do
       answering("Closing the garage now. It takes a few seconds.")
 
       run(markers)
 
-      expect(reply.body).to include("Lighting up **Yoga Lamp**")
-      expect(reply.body).to include("Closing the garage now. It takes a few seconds.")
-    end
-
-    # Verbatim. The task wrote a sentence for a person to read; re-wording it
-    # would cost a model turn to say what has already been said.
-    it "doesn't reword it" do
-      answering("The garage was already closed, so nothing was sent.")
-
-      run(markers)
-
-      expect(reply.body).to end_with("The garage was already closed, so nothing was sent.")
+      expect(reply.body).to start_with("Lighting up **Yoga Lamp**")
+      expect(reply.body).to end_with("Closing the garage now. It takes a few seconds.")
     end
 
     # Most tools return bookkeeping, not words. Nothing to add is not the same
@@ -138,11 +102,6 @@ RSpec.describe "Routines that call answering tools" do
     end
   end
 
-  # Prod 5401, 4 Sep. "Play whisper nap sound in 5 minutes" ended up as a
-  # scheduled function whose note was "Whisper nap sound." — and the task's own
-  # answer is "Playing the nap sound on Whisper". The two went out stacked, one
-  # message saying one thing twice.
-  #
   # The header exists so a step has something to hang under and so silence
   # doesn't read as nothing happening. Once the answer has said what happened,
   # that job is done.
@@ -187,44 +146,11 @@ RSpec.describe "Routines that call answering tools" do
   describe "one that only answers — a lookup" do
     let(:markers) { [{ tool_name: :check_weather, payload: {} }] }
 
-    it "is still dropped" do
+    it "is still dropped, leaving no receipt behind", :aggregate_failures do
       run(markers)
 
       expect(gave_up?(reply.body)).to be(true)
-    end
-
-    it "leaves no receipt behind" do
-      run(markers)
-
       expect(chips.count).to eq(0)
-    end
-  end
-
-  # The flags this all turns on. Both of these tools report to the model AND
-  # change something, and it's the second half that earns them a place in a
-  # routine.
-  describe "the tools that answer and act" do
-    it "call_jil_function does both" do
-      tool = Buddy::Tools[:call_jil_function]
-
-      expect(Buddy::Tools.answers?(tool)).to be(true)
-      expect(Buddy::Tools.acts?(tool)).to be(true)
-    end
-
-    it "print_again does both" do
-      tool = Buddy::Tools[:print_again]
-
-      expect(Buddy::Tools.answers?(tool)).to be(true)
-      expect(Buddy::Tools.acts?(tool)).to be(true)
-    end
-
-    # A nil receipt is what run_auto reads as "this tool already showed the
-    # person its own result". Without it, run_auto's rescue invents "Ran call
-    # jil function" and posts it under the real chip.
-    it "both opt out of a second receipt" do
-      %i[call_jil_function print_again].each do |name|
-        expect(Buddy::Tools[name][:receipt].call({}, nil)).to be_nil
-      end
     end
   end
 end

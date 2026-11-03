@@ -5,16 +5,6 @@ RSpec.describe UrlAnalyzer do
 
   let(:url) { "github.com" }
 
-  def pretty_hash(obj)
-    return obj if obj.is_a?(::String)
-
-    ::CodeRay.scan(obj, :ruby).terminal.gsub(
-      /\e\[36m:(\w+)\e\[0m=>/i, ("\e[36m" + '\1: ' + "\e[0m") # hashrocket(sym) to colon(sym)
-    ).gsub(
-      /\e\[0m=>/, "\e[0m: " # all hashrockets to colons
-    )
-  end
-
   describe "#analyze" do
     context "localhost" do
       let(:url) { "localhost" }

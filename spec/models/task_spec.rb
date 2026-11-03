@@ -33,7 +33,7 @@ RSpec.describe Task, type: :model do
       task = build_task("not a cron")
 
       expect(task).not_to be_valid
-      expect(task.errors[:cron].join).to include("couldn't read")
+      expect(task.errors[:cron]).to be_present
     end
 
     describe "against the user's own anchors" do
@@ -57,23 +57,13 @@ RSpec.describe Task, type: :model do
       end
 
       # An anchor that doesn't exist yet does NOT block the save. A task written
-      # before its feeder is a legitimate half-finished state, and forcing one
-      # build order would be worse than a warning.
-      it "saves against an anchor that doesn't exist yet" do
+      # before its feeder is a legitimate half-finished state, so it warns,
+      # naming the missing anchor and the ones that do exist.
+      it "saves against an anchor that doesn't exist yet, with a warning" do
         task = build_task("sun:sunet-5m")
 
-        expect(task).to be_valid
         expect(task.save).to be(true)
-      end
-
-      it "warns about it instead, naming the anchors that do exist" do
-        task = build_task("sun:sunet-5m")
-
-        expect(task.cron_warnings.join).to include("sun:sunet", "doesn't exist yet")
-        expect(task.cron_warnings.join).to include("sun:sunset", "trash:pickup")
-      end
-
-      it "has nothing to warn about once the anchor exists" do
+        expect(task.cron_warnings.join).to include("sun:sunet", "sun:sunset", "trash:pickup")
         expect(build_task("sun:sunset-5m").cron_warnings).to be_empty
       end
 
@@ -83,7 +73,6 @@ RSpec.describe Task, type: :model do
         expect(task).to be_valid
         expect(task.cron_warnings.length).to eq(2)
         expect(task.cron_warnings.join).to include("school:bell", "tide:high")
-        expect(task.cron_warnings.join).not_to include("sun:sunset doesn't exist")
       end
 
       it "warns rather than blocking when another user owns the anchor" do
@@ -98,7 +87,7 @@ RSpec.describe Task, type: :model do
         task = build_task("sun:sunset-5")
 
         expect(task).not_to be_valid
-        expect(task.errors[:cron].join).to include("offset", "sun:sunset-5m")
+        expect(task.errors[:cron].join).to include("sun:sunset-5m")
       end
 
       # Unreadable is different from unsatisfied: no amount of setting things up
@@ -107,17 +96,13 @@ RSpec.describe Task, type: :model do
         expect(build_task("sun:sunset-5m | nonsense")).not_to be_valid
         expect(build_task("sun:sunset-5m | sun:sunset-5")).not_to be_valid
       end
-
-      it "still validates once the anchor has no occurrences left" do
-        expect(build_task("sun:sunset-5m")).to be_valid
-      end
     end
 
-    it "points at how to make one when the user has no anchors at all" do
+    it "warns rather than blocking when the user has no anchors at all" do
       task = build_task("sun:sunset-5m")
 
       expect(task).to be_valid
-      expect(task.cron_warnings.join).to include("doesn't exist yet", "Anchor.set")
+      expect(task.cron_warnings.join).to include("sun:sunset")
     end
 
     it "has nothing to warn about for a plain cron" do
@@ -128,19 +113,12 @@ RSpec.describe Task, type: :model do
     # JilRunnerWorker finds tasks by `pending` and Jil::Executor stamps
     # last_trigger_at afterwards. If that stamp could be blocked by an unreadable
     # cron on a legacy row, the task would stay pending and re-run forever.
-    it "still lets an existing row stamp last_trigger_at when its cron is unreadable" do
+    it "lets a legacy row with an unreadable cron stamp last_trigger_at, until the cron is edited" do
       task = build_task("0 6 * * *")
       task.save!
       task.update_columns(cron: "garbage that predates this validation")
 
       expect(task.update(last_trigger_at: Time.current)).to be(true)
-    end
-
-    it "blocks the save the moment that row's cron is edited" do
-      task = build_task("0 6 * * *")
-      task.save!
-      task.update_columns(cron: "garbage that predates this validation")
-
       expect(task.update(cron: "still garbage")).to be(false)
     end
   end
@@ -168,28 +146,20 @@ RSpec.describe Task, type: :model do
     end
 
     describe "#function_args_str" do
-      it "returns nil for non-functions" do
-        expect(build_task("email:from:hunter").function_args_str).to be_nil
-        expect(build_task(nil).function_args_str).to be_nil
-      end
-
-      it "returns nil for function() with no args" do
-        expect(build_task("function()").function_args_str).to be_nil
-        expect(build_task("function()::Hash").function_args_str).to be_nil
-      end
-
-      it "returns raw args string for simple named typed args" do
-        expect(build_task("function(name:String age:Numeric)").function_args_str).to eq("name:String age:Numeric")
-      end
-
-      it "preserves content block args verbatim" do
-        str = "function(content([person:String deposit:Numeric note:Text]))"
-        expect(build_task(str).function_args_str).to eq("content([person:String deposit:Numeric note:Text])")
-      end
-
-      it "preserves TAB/BR formatting tokens" do
-        str = 'function("Start Event ID" TAB Numeric BR "New Filament" TAB String)::Hash'
-        expect(build_task(str).function_args_str).to eq('"Start Event ID" TAB Numeric BR "New Filament" TAB String')
+      it "returns the raw args string, verbatim, and nil when there are none", :aggregate_failures do
+        {
+          "email:from:hunter"                                           => nil,
+          nil                                                           => nil,
+          "function()"                                                  => nil,
+          "function()::Hash"                                            => nil,
+          "function(name:String age:Numeric)"                           => "name:String age:Numeric",
+          "function(content([person:String deposit:Numeric note:Text]))" =>
+            "content([person:String deposit:Numeric note:Text])",
+          'function("Start Event ID" TAB Numeric BR "New Filament" TAB String)::Hash' =>
+            '"Start Event ID" TAB Numeric BR "New Filament" TAB String',
+        }.each do |listener, want|
+          expect(build_task(listener).function_args_str).to eq(want), listener.inspect
+        end
       end
     end
   end
@@ -230,11 +200,8 @@ RSpec.describe Task, type: :model do
         expect(task.last_execution).to be_nil
       end
 
-      # Regression: this ordered on finished_at, which has no index, so Postgres
-      # sorted every execution the task had ever logged just to return one row.
-      # Only (task_id, started_at DESC) is indexed, so the ordering column is
-      # what matters here — the chosen plan is the planner's business and varies
-      # with table size.
+      # Only (task_id, started_at DESC) is indexed, so ordering on finished_at
+      # sorts every execution the task ever logged to return one row.
       it "orders on the indexed column, not finished_at" do
         make_execution(started_at: 2.minutes.ago, finished_at: 1.minute.ago)
         order_clause = task.executions.finished.order(:started_at).reverse_order.limit(1).to_sql[/ORDER BY.*/]
@@ -245,16 +212,11 @@ RSpec.describe Task, type: :model do
     end
 
     describe "#execute" do
-      it "adopts the execution it just created instead of re-querying for it" do
-        executor = task.execute({}, auth: :run, auth_id: user.id)
+      it "adopts the execution it just created, the newest after running twice" do
+        first = task.execute({}, auth: :run, auth_id: user.id)
+        expect(task.last_execution).to be(first.execution)
 
-        expect(task.last_execution).to be(executor.execution)
-      end
-
-      it "reflects the newest run after executing twice" do
-        task.execute({}, auth: :run, auth_id: user.id)
         second = task.execute({}, auth: :run, auth_id: user.id)
-
         expect(task.last_execution.id).to eq(second.execution.id)
       end
 

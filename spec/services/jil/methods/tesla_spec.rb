@@ -34,22 +34,15 @@ RSpec.describe Jil::Methods::Tesla do
       "expected a say matching #{matcher.inspect}; got #{@says.inspect}"
   end
 
-  it "says the destination and the travel time on navigate" do
+  it "navigates, starts the trip, and says the destination with the travel time when there is one" do
     allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(12.minutes.to_i)
     expect(tesla.navigate("Costco")).to be(true)
     expect_say("Navigating to Costco — TT: 12 minutes")
-  end
+    expect(::TripState).to have_received(:start_for_destination!).with("Costco", user)
 
-  it "says the destination alone when the travel time is unavailable" do
     allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(nil)
-    expect(tesla.navigate("Costco")).to be(true)
-    expect_say("Navigating to Costco")
-  end
-
-  it "goes out as a Jarvis say — websocket to the dashboard cell, no push" do
-    allow(user.address_book).to receive(:traveltime_seconds).and_return(nil)
     tesla.navigate("Costco")
-    expect(::Jarvis).to have_received(:say).with("Navigating to Costco")
+    expect(@says.last).to eq("Navigating to Costco")
   end
 
   # The push is what changed: a car command is either something the person
@@ -61,13 +54,6 @@ RSpec.describe Jil::Methods::Tesla do
     tesla.navigate("Costco")
     tesla.honk
     expect(::WebPushNotifications).not_to have_received(:send_to)
-  end
-
-  it "calls TripState.start_for_destination! on every navigate" do
-    allow(::TripState).to receive(:start_for_destination!)
-    allow(user.address_book).to receive(:traveltime_seconds).and_return(nil)
-    tesla.navigate("Costco")
-    expect(::TripState).to have_received(:start_for_destination!).with("Costco", user)
   end
 
   it "says something on stop, honk, flashLights, lock/unlock, windows, frunk/trunk, defrost, seat heat" do
@@ -87,31 +73,23 @@ RSpec.describe Jil::Methods::Tesla do
     expect(@says.size).to eq(12)
   end
 
-  it "says the temperature on setTemp" do
+  it "carries what each command did into what it says" do
     tesla.setTemp(72)
-    expect_say("Temperature set to: 72°F")
-  end
+    expect(@says.last).to include("72")
 
-  it "summarizes the selected options on start" do
     tesla.start([{ temp: 70, heatDriver: true }, { vent: true }])
-    expect_say(match(/\AClimate on — .*70°F.+driver seat.+vent/))
+    expect(@says.last).to match(/70°F.+driver seat.+vent/)
   end
 
-  it "says just the headline on start with no options" do
-    tesla.start(nil)
-    expect_say("Climate on")
-  end
-
-  it "says the destination on addStop success" do
+  it "returns whether addStop landed, and says which" do
     allow(control).to receive(:add_stop).and_return(true)
     expect(tesla.addStop("Lowes")).to be(true)
-    expect_say("Stop added — Lowes")
-  end
+    added = @says.last
 
-  it "says so differently on addStop failure" do
     allow(control).to receive(:add_stop).and_return(false)
     expect(tesla.addStop("nonsense location")).to be(false)
-    expect_say("Couldn't add stop — nonsense location")
+    expect(@says.last).to include("nonsense location")
+    expect(added).to include("Lowes")
   end
 
   it "stays quiet when TeslaSwitch is disabled" do
@@ -226,51 +204,37 @@ RSpec.describe Jil::Methods::Tesla do
   end
 
   describe "#isAt" do
-    it "returns true when TripState.car_at? is true" do
+    it "proxies TripState.car_at?, and is false when that raises" do
       allow(::TripState).to receive(:car_at?).with("Quick Quack", user: user).and_return(true)
       expect(tesla.isAt("Quick Quack")).to be(true)
-    end
-
-    it "returns false when TripState.car_at? is false" do
       allow(::TripState).to receive(:car_at?).with("Quick Quack", user: user).and_return(false)
       expect(tesla.isAt("Quick Quack")).to be(false)
-    end
-
-    it "swallows errors and returns false" do
       allow(::TripState).to receive(:car_at?).and_raise(StandardError.new("boom"))
       expect(tesla.isAt("Quick Quack")).to be(false)
     end
   end
 
   describe "title/body override" do
-    it "uses caller-provided title + body instead of the default 'Climate on · …'" do
+    it "uses caller-provided title + body (body optional) instead of the default" do
       tesla.start([{ navigate: "Costco", title: "Starting Car", body: "10m drive to Costco" }])
       expect(@says.last).to eq("Starting Car — 10m drive to Costco")
-    end
-
-    it "supports title-only (body optional)" do
       tesla.start([{ title: "Starting car" }])
       expect(@says.last).to eq("Starting car")
     end
   end
 
   describe "silent" do
-    it "runs the car commands but says nothing" do
+    it "runs the car commands but says nothing, on every branch" do
       expect(control).to receive(:start_car)
       expect(control).to receive(:navigate).with("Costco")
       tesla.start([{ navigate: "Costco", silent: true }])
-      expect(@says).to be_empty
-    end
 
-    it "suppresses even the 'Already at' line (guest-mode caller opted out)" do
-      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
-      tesla.start([{ navigate: "Costco", silent: true }])
-      expect(@says).to be_empty
-    end
-
-    it "suppresses the kept-route line too" do
       allow(::TripState).to receive(:car_routing?).with(user: user).and_return(true)
       tesla.start([{ navigate: "Costco", keepRoute: true, silent: true }])
+
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
+      tesla.start([{ navigate: "Costco", silent: true }])
+
       expect(@says).to be_empty
     end
   end

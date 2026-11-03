@@ -21,7 +21,8 @@ RSpec.describe TranscriptSpeakersWorker do
   # here - left alone it would be a model call on every example in this file.
   before { allow(TranscriptTidyWorker).to receive(:perform_async) }
 
-  it "raises a chip before the first call and moves it as the calls land" do
+  # The pass over the words runs next because it reads the turns this one writes.
+  it "raises a chip before the first call, moves it as the calls land, then hands on" do
     seen = []
     allow(Transcripts::Speakers).to receive(:call) { |_transcript, &progress|
       seen << [chip&.current, chip&.total]
@@ -33,6 +34,7 @@ RSpec.describe TranscriptSpeakersWorker do
     described_class.new.perform(transcript.id)
 
     expect(seen).to eq([[nil, nil], [1, 3]])
+    expect(TranscriptTidyWorker).to have_received(:perform_async).with(transcript.id)
   end
 
   it "takes the chip down when the pass is over, however it went" do
@@ -42,17 +44,6 @@ RSpec.describe TranscriptSpeakersWorker do
     described_class.new.perform(transcript.id)
 
     expect(chip).to be_nil
-  end
-
-  # The two passes run one after the other because the second one reads the
-  # turns the first one writes.
-  it "hands the recording on to the pass over the words" do
-    allow(Transcripts::Speakers).to receive(:call)
-      .and_return(Transcripts::Speakers::Result.new(ok: true, placed: 1, unplaced: 0))
-
-    described_class.new.perform(transcript.id)
-
-    expect(TranscriptTidyWorker).to have_received(:perform_async).with(transcript.id)
   end
 
   it "does nothing at all for a transcript that has since been deleted" do

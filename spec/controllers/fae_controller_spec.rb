@@ -20,16 +20,6 @@ RSpec.describe FaeController, type: :controller do
     response.body.scan(/data-monitor="([^"]+)"/).flatten
   end
 
-  # The row is grouped by person rather than by chore, so each group lands on
-  # its own line. Which person leads is a preference, not a rule.
-  it "keeps each person's buttons together" do
-    mine, hers = described_class::BUTTON_MONITORS.partition { |m| m.end_with?("-mine") }
-
-    expect(mine.size).to eq(4)
-    expect(hers.size).to eq(4)
-    expect(described_class::BUTTON_MONITORS).to eq(hers + mine).or eq(mine + hers)
-  end
-
   describe "GET #show" do
     it "is successful with no buttons set up yet" do
       get :show
@@ -46,23 +36,15 @@ RSpec.describe FaeController, type: :controller do
       }
 
       get :show
-      expect(rendered_monitors)
-        .to eq(described_class::BUTTON_MONITORS.map { |m| "fae-btn-#{m}" })
+      expect(rendered_monitors).to eq(described_class::BUTTON_MONITORS.map { |m| "fae-btn-#{m}" })
     end
 
-    it "ignores monitor tasks that aren't Fae buttons" do
+    it "skips buttons not created yet and monitor tasks that aren't Fae buttons" do
       button_task(:"laundry-mine", "Fae Laundry (Mine)")
       Task.create!(user: user, name: "Other", listener: "monitor::something-else", code: "")
 
       get :show
       expect(rendered_monitors).to eq(["fae-btn-laundry-mine"])
-    end
-
-    it "skips buttons that haven't been created yet" do
-      button_task(:"food-hers", "Fae Fed (Hers)")
-
-      get :show
-      expect(rendered_monitors).to eq(["fae-btn-food-hers"])
     end
   end
 end

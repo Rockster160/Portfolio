@@ -31,12 +31,11 @@ RSpec.describe "Running a Jil task over HTTP" do
     response.parsed_body
   end
 
-  it "runs the task and hands back its return value" do
-    expect(get_task(task.uuid)["data"]).to eq(7)
-  end
+  it "runs the task and hands back its return value, naming the task that answered" do
+    body = get_task(task.uuid)
 
-  it "names the task it ran, so a caller can tell which answered" do
-    expect(get_task(task.uuid).dig("task", "name")).to eq("Answer Something")
+    expect(body["data"]).to eq(7)
+    expect(body.dig("task", "name")).to eq("Answer Something")
   end
 
   # A POST body does NOT arrive where a `/jil/trigger/<scope>` body arrives.

@@ -9,12 +9,8 @@ RSpec.describe "Jil: Anchor", type: :service do
     let(:tz) { ActiveSupport::TimeZone[user.timezone] }
     let(:tonight) { tz.local(2026, 8, 19, 20, 24) }
 
-    # Every date in here is written out in full, so the wall clock has to be
-    # pinned or the file only means what it says on one particular afternoon.
-    # `next_trigger_at` answers with the next occurrence STILL AHEAD: the pickup
-    # example below passed until the real clock reached the morning it names, and
-    # from that moment it was going to fail on every run forever. Three examples
-    # already pinned their own clock for this reason; now the file does it once.
+    # Every date in here is written out in full, so the wall clock is pinned:
+    # `next_trigger_at` answers with the next occurrence STILL AHEAD.
     noon = ActiveSupport::TimeZone["America/Denver"].local(2026, 8, 19, 12, 0)
 
     around { |example| travel_to(noon) { example.run } }
@@ -194,15 +190,11 @@ RSpec.describe "Jil: Anchor", type: :service do
         expect(trigger.offset_seconds).to eq(-300)
       end
 
-      it "updates rather than stacking when scheduled again" do
-        travel_to(tz.local(2026, 8, 19, 12, 0)) { 3.times { schedule } }
-
-        expect(user.scheduled_triggers.reload.count).to eq(1)
-      end
-
-      it "keeps separate names apart on the same occurrence" do
+      it "updates rather than stacking when scheduled again, keeping separate names apart" do
         travel_to(tz.local(2026, 8, 19, 12, 0)) do
-          schedule("sun:sunset-5m", "porch-lights")
+          3.times { schedule }
+          expect(user.scheduled_triggers.reload.count).to eq(1)
+
           schedule("sun:sunset-1h", "close-blinds")
         end
 
@@ -292,31 +284,17 @@ RSpec.describe "Jil: Anchor", type: :service do
         JilRunnerWorker.new.perform(user.id)
       end
 
-      it "fires the listening task once its moment arrives" do
-        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
-
-        travel_to(tonight - 5.minutes + 1.second) { run_worker }
-
-        expect(listener.executions.count).to eq(1)
-      end
-
-      it "does not fire early" do
+      it "fires the listening task once its moment arrives, and only once" do
         travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
 
         travel_to(tonight - 20.minutes) { run_worker }
-
         expect(listener.executions.count).to eq(0)
         expect(user.scheduled_triggers.reload.sole).not_to be_started
-      end
-
-      it "completes the trigger rather than leaving it to re-fire" do
-        travel_to(tz.local(2026, 8, 19, 12, 0)) { schedule }
 
         travel_to(tonight - 5.minutes + 1.second) do
           run_worker
           run_worker
         end
-
         expect(listener.executions.count).to eq(1)
         expect(user.scheduled_triggers.reload.sole).to be_completed
       end

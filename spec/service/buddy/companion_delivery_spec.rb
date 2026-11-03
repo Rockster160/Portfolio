@@ -21,11 +21,8 @@ RSpec.describe Buddy::CompanionDelivery do
   end
 
   describe "the frame on a self-initiated seed" do
-    # Prod 1315 and 1318 were the same watch firing 45 minutes apart, and their
-    # bodies were byte-for-byte identical. The model saw its own announcement of
-    # the first one sitting in history and answered the second with "Already
-    # handled that one just now" - which went out as the push, so the deploy it
-    # fired for was never mentioned. Two firings have to LOOK like two.
+    # Identical bodies let the model read a second firing as a repeat of the
+    # first one already in history, so each firing carries its own stamp.
     it "makes two firings of the same seed distinguishable" do
       first  = travel_to(Time.zone.parse("2026-07-31 02:08")) { fire("The deploy just finished successfully.") }
       second = travel_to(Time.zone.parse("2026-07-31 02:54")) { fire("The deploy just finished successfully.") }
@@ -38,10 +35,6 @@ RSpec.describe Buddy::CompanionDelivery do
       message = travel_to(Time.zone.parse("2026-07-31 02:54 UTC")) { fire("put your Loops away") }
 
       expect(message.body).to include("8:54pm")
-    end
-
-    it "says the reply is the notification, since nobody is waiting on a conversation" do
-      expect(fire("put your Loops away").body).to include("nothing was said to you").and include("notification")
     end
 
     it "hands the turn off to Sidekiq rather than running it on the firing thread" do

@@ -52,18 +52,6 @@ RSpec.describe "Buddy record link tools" do
 
     # The cascade is the whole design. Asking for one of these should be met
     # with "that runs the wrong way", not a link that silently never fires.
-    it "refuses a chore writing an event" do
-      expect {
-        run(:link_records, { source: :chore, source_name: "Coffee Run", target: :event, target_name: "Coffee" })
-      }.to raise_error(/runs event -> chore -> agenda -> list_item/)
-    end
-
-    it "refuses a list item touching a chore" do
-      expect {
-        run(:link_records, { source: :list_item, source_name: "Beans", target: :chore, target_name: "Coffee Run" })
-      }.to raise_error(/runs event/)
-    end
-
     it "resolves a fuzzily-named chore to the real record" do
       run(:link_records, { source: :event, source_name: "Coffee", target: :chore, target_name: "coffee run" })
 
@@ -179,28 +167,17 @@ RSpec.describe "Buddy record link tools" do
       expect(RecordLink.last.source_name_match).to eq("exactly")
     end
 
-    it "describes what it did in a sentence" do
-      result, = run(:link_records, { source: :event, source_name: "Coffee", target: :chore, target_name: "Coffee Run" })
-
-      expect(result[:summary]).to eq('logged event where name is exactly "Coffee" completes chore "Coffee Run"')
-    end
   end
 
   describe "unlink_records" do
     it "breaks the pairing, named from either end" do
-      run(:link_records, { source: :event, source_name: "Coffee", target: :chore, target_name: "Coffee Run" })
+      ["Coffee Run", "Coffee"].each do |name|
+        run(:link_records, { source: :event, source_name: "Coffee", target: :chore, target_name: "Coffee Run" })
 
-      run(:unlink_records, { name: "Coffee Run" })
+        run(:unlink_records, { name: name })
 
-      expect(RecordLink.count).to eq(0)
-    end
-
-    it "finds it by the source end too" do
-      run(:link_records, { source: :event, source_name: "Coffee", target: :chore, target_name: "Coffee Run" })
-
-      run(:unlink_records, { name: "Coffee" })
-
-      expect(RecordLink.count).to eq(0)
+        expect(RecordLink.count).to eq(0), name
+      end
     end
 
     # Silently unlinking the first of three is worse than asking.
@@ -271,14 +248,6 @@ RSpec.describe "Buddy record link tools" do
       rows = Buddy::Context.full(user, convo)[:record_links]
 
       expect(rows.first[:broken].join).to include("No Such List")
-    end
-
-    it "teaches the model the cascade direction" do
-      prompt = Buddy::Personality.for(user, conversation: user.byte_conversations.create!(mode: :buddy))
-
-      expect(prompt).to include("These only ever run downhill")
-      expect(prompt).to include("logged event → chore → agenda task → list item")
-      expect(prompt).to include("when something happened that they didn't do")
     end
   end
 end

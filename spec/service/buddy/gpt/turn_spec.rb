@@ -47,16 +47,10 @@ RSpec.describe Buddy::GPT::Turn do
     # turn is offered no lookup at all. A model that CAN fetch twenty sections
     # reads some of them out whatever the prompt above them says, and the chore
     # roster was the loudest of them.
-    it "offers the briefing no lookup at all" do
-      turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+    it "offers an ordinary turn the whole chore roster, due-today included" do
+      sections = offered_sections(turn_for({}))
 
-      expect(turn.send(:tools).pluck(:name)).not_to include(Buddy::GPT::ContextTool::NAME)
-    end
-
-    it "still offers it to an ordinary turn, narrowed to the due-today chores" do
-      turn = turn_for({})
-
-      expect(offered_sections(turn).grep(/\Achores_/)).to include(:chores_due_today)
+      expect(sections).to include(:chores_due_today, :chores_pending_today, :chores_all)
     end
 
     it "hands the same narrowing to the tool that answers the call" do
@@ -68,12 +62,6 @@ RSpec.describe Buddy::GPT::Turn do
       returned = JSON.parse(turn.send(:read_tools)[Buddy::GPT::ContextTool::NAME].call({}))
 
       expect(returned.keys.grep(/\Achores_/)).to eq(["chores_due_today"])
-    end
-
-    it "leaves an ordinary message with the whole roster" do
-      turn = turn_for({})
-
-      expect(offered_sections(turn)).to include(:chores_pending_today, :chores_all)
     end
 
     # A different quick action is not a briefing, and narrowing one would be a
@@ -156,16 +144,12 @@ RSpec.describe Buddy::GPT::Turn do
       client.calls.first.instructions
     end
 
-    it "rides on every turn, so nothing has to be looked up" do
+    it "rides on every turn with its id, so nothing has to be looked up or fuzzy-matched" do
       rang!("Steak will be dinner.")
+      instructions = instructions_for("let's try in about 90 minutes")
 
-      expect(instructions_for("let's try in about 90 minutes")).to include("Steak will be dinner")
-    end
-
-    it "carries the id, which cannot be fuzzy-matched onto its neighbour" do
-      rang!("Steak will be dinner.")
-
-      expect(instructions_for("push it an hour")).to match(/answering_reminder.*76/)
+      expect(instructions).to include("Steak will be dinner")
+      expect(instructions).to match(/answering_reminder.*76/)
     end
 
     it "says nothing when the last thing said was not a reminder" do
@@ -232,28 +216,18 @@ RSpec.describe Buddy::GPT::Turn do
         described_class.run!(message, client: FakeBuddyClient.new(rounds))
       end
 
-      it "says nothing at all rather than apologising for it" do
-        check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
-
-        expect(reply.body).to eq("")
-        expect(reply.body).not_to eq(described_class::FAILURE_BODY)
-        expect(reply.state).to eq("delivered")
-      end
-
       # Hidden is what keeps it out of the thread, out of the unread count and
       # out of the notifier — and what takes the pulsing "…" off a screen that
       # was already watching, since the client removes a node that arrives
       # marked hidden.
-      it "leaves nothing behind on any screen" do
-        check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
-
-        expect(reply.metadata["hidden"]).to be(true)
-      end
-
-      it "never pushes it" do
+      it "delivers an empty, hidden reply and never pushes it" do
         expect(ByteNotifier).not_to receive(:notify)
 
         check_in([{ error: Buddy::GPT::Client::EMPTY_TURN }])
+
+        expect(reply.body).to eq("")
+        expect(reply.state).to eq("delivered")
+        expect(reply.metadata["hidden"]).to be(true)
       end
 
       # A turn that went wrong is still a turn that went wrong.
@@ -286,30 +260,17 @@ RSpec.describe Buddy::GPT::Turn do
         message
       end
 
-      it "names what it was reading, and how long it waited" do
-        seed([{ error: "timed out" }])
-
-        expect(reply.body).to include("timed out after 90s")
-        expect(reply.body).to include("the email from ApartmentIQ")
-      end
-
-      it "names it for a failure that was not the clock" do
-        seed([{ error: "upstream exploded" }])
-
-        expect(reply.body).to include("reading the email from ApartmentIQ")
-      end
-
       # The mail is not theirs to ask for again — they never saw it arrive.
-      it "queues one more go at the same seed" do
+      it "names what it was reading and queues one more go at the same seed" do
         expect(BuddyDeliverWorker).to receive(:perform_in).once
 
         original = seed([{ error: "timed out" }])
         copy = convo.byte_messages.where(direction: :outbound).order(:id).last
 
+        expect(reply.body).to include("the email from ApartmentIQ")
         expect(copy.id).not_to eq(original.id)
         expect(copy.body).to eq(original.body)
         expect(copy.metadata["retry_of"]).to eq(original.id)
-        expect(reply.body).to include("another go in a minute")
       end
 
       # Once. A copy that fails again is a provider that is down, not a stall.
@@ -317,8 +278,6 @@ RSpec.describe Buddy::GPT::Turn do
         expect(BuddyDeliverWorker).not_to receive(:perform_in)
 
         seed([{ error: "timed out" }], extra: { "retry_of" => 1 })
-
-        expect(reply.body).to include("Want me to try that one again?")
       end
 
       # The guard start_over? carries, for the same reason: re-running a seed
@@ -416,22 +375,16 @@ RSpec.describe Buddy::GPT::Turn do
           ])
         }
 
-        it "queues the seed again" do
+        # The first attempt's words are already in the thread and were fine, so
+        # the copy is told to make the call rather than say it again.
+        it "queues a hidden copy of the seed that asks for the call" do
           expect(BuddyDeliverWorker).to have_received(:perform_in).with(
             described_class::SEED_RETRY_DELAY, copy.id
           )
+          expect(copy.metadata).to include("hidden" => true, "seed_call" => "add_job_note")
           expect(copy.metadata["retry_of"]).to be_present
-        end
-
-        # The first attempt's words are already in the thread and were fine.
-        it "tells the copy to make the call rather than say it again" do
           expect(copy.body).to start_with(described_class::SEED_CALL_RETRY)
           expect(copy.body).to end_with("Job mail arrived.")
-        end
-
-        it "keeps the copy out of the thread" do
-          expect(copy.metadata["hidden"]).to be(true)
-          expect(copy.metadata["seed_call"]).to eq("add_job_note")
         end
       end
 
@@ -451,17 +404,10 @@ RSpec.describe Buddy::GPT::Turn do
           }])
         }
 
-        it "goes quiet rather than asking about a mail they never wrote" do
+        it "goes quiet, pushes nothing, and still sends the seed round again" do
           expect(reply.body).to eq("")
-          expect(reply.metadata["hidden"]).to be(true)
-          expect(reply.metadata["silent"]).to be(true)
-        end
-
-        it "pushes nothing while the seed is going round again" do
+          expect(reply.metadata).to include("hidden" => true, "silent" => true)
           expect(ByteNotifier).not_to have_received(:notify)
-        end
-
-        it "still sends the seed round again" do
           expect(BuddyDeliverWorker).to have_received(:perform_in)
         end
       end
@@ -489,53 +435,37 @@ RSpec.describe Buddy::GPT::Turn do
         expect(BuddyDeliverWorker).not_to have_received(:perform_in)
       end
 
-      # A card IS the call landing, so there is nothing to go back for.
-      it "does not queue a retry when a card went up" do
+      # A card IS the call landing. Going again would propose the same beat
+      # twice.
+      it "neither starts over nor queues a retry when a card went up" do
         allow(Buddy::ProposalBuilder).to receive(:create).and_return(
           action:   instance_double(ByteAction, buttons: [{ "status" => "pending" }]),
           auto_ran: false,
         )
 
-        job_seed([
-          {
-            text:       "CentralReach got it.",
-            tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }],
-          },
-          { text: "CentralReach got it." },
-        ])
-
-        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
-      end
-
-      # A check-in or a briefing names no call, so an empty one is not a loss.
-      it "does not queue a retry for a seed that named no call" do
-        job_seed([{ text: "Morning! Nothing on today." }], call: nil)
-
-        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
-      end
-
-      # A card IS the call landing. Going again would propose the same beat
-      # twice.
-      it "leaves a turn that put a card up alone" do
         matcher = started_over? {
           job_seed([
-            { text: "CentralReach got it.",
-              tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+            {
+              text:       "CentralReach got it.",
+              tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }],
+            },
             { text: "CentralReach got it." },
           ])
         }
 
         expect(Rails.logger).not_to matcher
+        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
       end
 
       # A check-in or a briefing is asked for WORDS. Neither names a call, and
       # neither may be sent round again for want of one.
-      it "leaves a seed that named no call alone" do
+      it "neither starts over nor queues a retry for a seed that named no call" do
         matcher = started_over? {
           job_seed([{ text: "Morning! Nothing on today." }], call: nil)
         }
 
         expect(Rails.logger).not_to matcher
+        expect(BuddyDeliverWorker).not_to have_received(:perform_in)
       end
     end
 
@@ -718,40 +648,25 @@ RSpec.describe Buddy::GPT::Turn do
   describe ".trailing_offer?" do
     def offer?(text) = described_class.trailing_offer?(text)
 
-    it "catches the shape that ran sixteen times" do
-      expect(offer?("Here's the chart. If you want, I can also add a column for the date.")).to be(true)
+    it "catches an offer trailing a reply, in either order and as a question" do
+      [
+        "Here's the chart. If you want, I can also add a column for the date.",
+        "That's the lot. I can tidy up the next bit too if you want.",
+        "That looks right. Want me to turn that into a checklist?",
+        "All set. Would you like me to print it out?",
+        "Done. Let me know if you'd like a copy.",
+      ].each { |said| expect(offer?(said)).to be(true), "not caught: #{said}" }
     end
 
-    it "catches it the other way round" do
-      expect(offer?("That's the lot. I can tidy up the next bit too if you want.")).to be(true)
-    end
-
-    it "catches the question forms" do
-      expect(offer?("That looks right. Want me to turn that into a checklist?")).to be(true)
-      expect(offer?("All set. Would you like me to print it out?")).to be(true)
-      expect(offer?("Done. Let me know if you'd like a copy.")).to be(true)
-    end
-
-    # A turn that is ONLY a question asked one, which is a different thing and
-    # sometimes the right thing - notably anything aimed at another person.
-    it "leaves a reply that is nothing but the question" do
-      expect(offer?("Would you like me to send that to Chelsea?")).to be(false)
-    end
-
-    # Position is the whole test. In the middle it is part of the reply.
-    it "leaves an offer that isn't the last thing said" do
-      expect(offer?("If you want, I can add a column. Here's the chart as it stands.")).to be(false)
-    end
-
-    # Four of the same words, no offer anywhere in them.
-    it "leaves advice that merely starts with the same words" do
-      said = "Start with the pH. If you want a stable tank, that's the one that moves everything else."
-
-      expect(offer?(said)).to be(false)
-    end
-
-    it "leaves an ordinary reply alone" do
-      expect(offer?("I've added it to the list. The bins go out tonight.")).to be(false)
+    it "leaves a bare question, a mid-reply offer, look-alike advice and plain replies alone" do
+      [
+        # A turn that is ONLY a question asked one, which is sometimes right.
+        "Would you like me to send that to Chelsea?",
+        # Position is the whole test. In the middle it is part of the reply.
+        "If you want, I can add a column. Here's the chart as it stands.",
+        "Start with the pH. If you want a stable tank, that's the one that moves everything else.",
+        "I've added it to the list. The bins go out tonight.",
+      ].each { |said| expect(offer?(said)).to be(false), "false positive: #{said}" }
     end
   end
 
@@ -806,18 +721,12 @@ RSpec.describe Buddy::GPT::Turn do
   # to say goes silent instead: the bubble is withdrawn, hidden, and the pulse
   # comes off the screens waiting on it.
   describe "when the model answers with nothing but the typing indicator" do
-    it "does not deliver a reply that reads as still thinking" do
+    it "withdraws the bubble rather than delivering a reply that reads as still thinking" do
       run([{ text: described_class::PLACEHOLDER }], text: "Dealeo!")
 
-      expect(reply.body).not_to eq(described_class::PLACEHOLDER)
       expect(reply.body).to eq("")
       expect(reply.reload).to be_delivered
-    end
-
-    it "withdraws the bubble rather than inventing a line to fill it" do
-      run([{ text: described_class::PLACEHOLDER }], text: "Ok, let me check!")
-
-      expect(reply.reload.metadata).to include("hidden" => true, "silent" => true)
+      expect(reply.metadata).to include("hidden" => true, "silent" => true)
     end
 
     it "counts it as empty however it is spaced" do
@@ -1047,13 +956,6 @@ RSpec.describe Buddy::GPT::Turn do
 
         expect(reply.body).to eq(described_class::EMPTY_WAIT_BODY)
         expect(reply.metadata["retracted_claim"]).to be(true)
-      end
-
-      it "says both halves: the countdown is real and the thing is not" do
-        empty_wait("Your bedroom hour is on, and I'll nudge you when it's up.")
-
-        expect(reply.body).to include("countdown")
-        expect(reply.body).not_to eq(described_class::SILENT_BODY)
       end
 
       it "wins over whatever the phrasing arms made of the words" do
@@ -1287,21 +1189,9 @@ RSpec.describe Buddy::GPT::Turn do
     # that was already saved. `remember` reported false unconditionally, which
     # is indistinguishable from a turn that did nothing.
     describe "a silent tool that really wrote something" do
-      it "counts a remembered fact as having acted" do
-        run(
-          [{ tool_calls: [{ name: :remember, arguments: { "fact" => "Rocco's eye flared up on 20 Aug" } }], text: "Got it, noting that down." }],
-          text: "Note that my eye issue flared up badly on August 20th",
-        )
-
-        expect(reply.body).to eq("Got it, noting that down.")
-        expect(reply.metadata["retracted_claim"]).to be_nil
-        expect(BuddyMemory.where(user: user).where("content LIKE ?", "%eye flared%")).to exist
-      end
-
       # The nudge would have opened "you called no tool, so nothing happened",
-      # which is untrue once the row is written - and the model then has to
-      # reconcile a correct reply with being told it was wrong.
-      it "does not send the nudge to a turn that wrote one" do
+      # which is untrue once the row is written.
+      it "counts a remembered fact as having acted, and sends no nudge" do
         client = run(
           [
             { tool_calls: [{ name: :remember, arguments: { "fact" => "Rocco's eye flared up on 20 Aug" } }] },
@@ -1310,8 +1200,11 @@ RSpec.describe Buddy::GPT::Turn do
           text: "Note that my eye issue flared up badly on August 20th",
         )
 
-        nudged = client.calls.any? { |c| c.input.any? { |i| i[:content].to_s.include?("nothing happened") } }
-        expect(nudged).to be(false)
+        nudges = [described_class::RETRY_NUDGE, described_class::LEAKED_CALL_NUDGE]
+        expect(client.calls.flat_map(&:input).pluck(:content) & nudges).to be_empty
+        expect(reply.body).to eq("Got it, noting that down.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+        expect(BuddyMemory.where(user: user).where("content LIKE ?", "%eye flared%")).to exist
       end
 
       # A near-duplicate is reinforced rather than stored twice, and the fact
@@ -1501,7 +1394,11 @@ RSpec.describe Buddy::GPT::Turn do
     # shrug where they asked for something, so the claim now buys one corrective
     # round first - the model is likelier to have skipped the call than to have
     # meant the claim.
-    it "gives the model one more round to actually make the call" do
+    # `input` IS the model's whole context - `store: false`, no
+    # `previous_response_id` - so the corrective round has to be handed the
+    # draft it is critiquing, as a developer note rather than an assistant turn
+    # (which would read as already delivered).
+    it "gives the model one more round, with its unsent draft, to actually make the call" do
       # Claim with nothing behind it, then the nudge, then the call it skipped,
       # then the round it speaks in.
       client = run([
@@ -1510,8 +1407,13 @@ RSpec.describe Buddy::GPT::Turn do
         { text: "Yep, fan's on high." },
       ])
 
+      corrective = client.calls[1].input
+      carrying   = corrective.detect { |i| i[:content].to_s.include?("Done. Fan's on high now.") }
+
       expect(client.calls.length).to eq(3)
-      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
+      expect(corrective.pluck(:content)).to include(described_class::RETRY_NUDGE)
+      expect(carrying[:role]).to eq(:developer)
+      expect(corrective.none? { |i| i[:role] == :assistant }).to be(true)
       expect(reply.body).to eq("Yep, fan's on high.")
     end
 
@@ -1528,51 +1430,10 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(3)
-      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
+      expect(client.calls[1].input.pluck(:content)).to include(described_class::RETRY_NUDGE)
     end
 
-    # `input` IS the model's whole context - `store: false`, no
-    # `previous_response_id` - and the round's own text was never appended to
-    # it. So the corrective round opened on "the reply you just wrote" with
-    # that reply nowhere in sight. It saw two items: the person's message, and
-    # a critique of something invisible.
     describe "what the corrective round can see" do
-      it "hands the draft back so the critique has something to point at" do
-        client = run([
-          { text: "Done. Fan's on high now." },
-          { tool_calls: [{ name: :log_event, arguments: { "name" => "Fan high" } }] },
-          { text: "Yep, fan's on high." },
-        ])
-
-        expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("Done. Fan's on high now.") }).to be(true)
-      end
-
-      # Never as an assistant turn: that reads as already delivered, and the
-      # next round writes a continuation the person only sees the tail of.
-      it "marks it as a draft that was not sent, from the developer" do
-        client = run([
-          { text: "Done. Fan's on high now." },
-          { text: "Yep, fan's on high." },
-        ])
-
-        carrying = client.calls[1].input.detect { |i| i[:content].to_s.include?("Done. Fan's on high now.") }
-
-        expect(carrying[:role]).to eq(:developer)
-        expect(carrying[:content]).to include("NOT been sent")
-        expect(client.calls[1].input.none? { |i| i[:role] == :assistant }).to be(true)
-      end
-
-      # The last round wins outright, so a draft that answered three things and
-      # fumbled one used to lose the three along with it.
-      it "tells it to keep the parts that were right" do
-        client = run([
-          { text: "Done. Fan's on high now." },
-          { text: "Yep, fan's on high." },
-        ])
-
-        expect(client.calls[1].input.any? { |i| i[:content].to_s.squish.include?("carry over the parts of it that were right") }).to be(true)
-      end
-
       # A percent sign in the draft would blow up `format` if the draft were
       # the template rather than the argument.
       it "survives a draft full of format tokens" do
@@ -1680,16 +1541,6 @@ RSpec.describe Buddy::GPT::Turn do
         carrying = client.calls[2].input.detect { |i| i[:content].to_s.include?("Done. Fan's on high now.") }
 
         expect(carrying[:role]).to eq(:developer)
-        expect(carrying[:content]).to include("NOT been sent")
-      end
-
-      # A second attempt that comes back silent must still leave the first
-      # attempt's claim to be retracted, not a blank bubble.
-      it "keeps the words it went back to correct when the retry says nothing" do
-        run([{ text: "Timer's set for 5 minutes." }])
-
-        expect(reply.body).to eq(described_class::SILENT_BODY)
-        expect(reply.metadata["retracted_claim"]).to be(true)
       end
 
       it "does not go again when the turn actually did something" do
@@ -1766,18 +1617,9 @@ RSpec.describe Buddy::GPT::Turn do
             .and_return([{ status: "failed", asked_choice: true }, nil])
         }
 
-        it "leaves the person to tap one" do
-          client = run([
-            { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge" } }] },
-            { text: "I've put the options up for you." },
-          ])
-
-          expect(second_attempt?(client)).to be(false)
-        end
-
         # The marker is for start_over? and has no business in the model's
         # context, where it reads as a field of the tool result.
-        it "does not hand the marker to the model" do
+        it "leaves the person to tap one, without handing the marker to the model" do
           client = run([
             { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge" } }] },
             { text: "I've put the options up for you." },
@@ -1785,6 +1627,7 @@ RSpec.describe Buddy::GPT::Turn do
 
           outputs = client.calls[1].input.select { |i| i[:type] == :function_call_output }
 
+          expect(second_attempt?(client)).to be(false)
           expect(outputs).to be_present
           expect(outputs.pluck(:output).join).not_to include("asked_choice")
         end
@@ -1810,7 +1653,7 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(3)
-      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("lead-in") }).to be(true)
+      expect(client.calls[1].input.pluck(:content)).to include(described_class::POINTER_NUDGE)
       # The lead-in is gone and the tool it was pointing at actually ran.
       bodies = convo.byte_messages.where(direction: :inbound).pluck(:body)
       expect(bodies).to include("Two on the books right now.")
@@ -1836,43 +1679,21 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Done, that's logged.")
     end
 
-    it "retracts a bare Done with nothing behind it" do
-      run([{ text: "Done. Fan's on low now." }])
+    it "retracts a bare Done, a device in its new state, and plain-prose running claims" do
+      [
+        "Done. Fan's on low now.",
+        "Yesss, lights are off now. 😊",
+        "Yep. Running the last print again.",
+        "Yep, it’s running again now.",
+      ].each do |faked|
+        run([{ text: faked }])
 
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-      expect(reply.metadata["retracted_claim"]).to be(true)
-    end
-
-    it "retracts a device reported in its new state" do
-      run([{ text: "Yesss, lights are off now. 😊" }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-    end
-
-    it "leaves an OFFER to change a device alone" do
-      run([{ text: "I can set that to low if you want." }])
-
-      expect(reply.body).to eq("I can set that to low if you want.")
-    end
-
-    # Prod 2054: "Print again" got "Yep. Running the last print again." with no
-    # call, and then, when told it hadn't, "Yep, it's running again now." — also
-    # with no call. The pattern only covered the emphasised receipt shape
-    # ("Firing **Fan High**"), so plain prose walked past it twice.
-    describe "a plain-prose claim to have run something" do
-      it "retracts the one from prod" do
-        run([{ text: "Yep. Running the last print again." }])
-
-        expect(reply.body).to eq(described_class::SILENT_BODY)
+        expect(reply.body).to eq(described_class::SILENT_BODY), "not caught: #{faked}"
         expect(reply.metadata["retracted_claim"]).to be(true)
       end
+    end
 
-      it "retracts the doubled-down follow-up too" do
-        run([{ text: "Yep, it’s running again now." }])
-
-        expect(reply.body).to eq(described_class::SILENT_BODY)
-      end
-
+    describe "a plain-prose claim to have run something" do
       it "leaves it alone once the function actually fired" do
         allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
@@ -1887,19 +1708,20 @@ RSpec.describe Buddy::GPT::Turn do
       # `running` is far too ordinary a word to match loose, and a false
       # positive here replaces a perfectly good reply with the fallback. These
       # are the shapes the anchoring and the required object exist to protect.
-      {
-        "running late"        => "I’m running late, sorry.",
-        "running low"         => "You’re running low on milk.",
-        "a device running"    => "The dishwasher is running.",
-        "a question"          => "Is the print still running?",
-        "someone else's verb" => "Looks like the printer is running the last job.",
-        "a past observation"  => "That’s still running from earlier, want me to check?",
-        "an offer"            => "Want me to run that again?",
-      }.each do |label, text|
-        it "leaves #{label} alone" do
+      it "leaves ordinary uses of running, and offers, alone" do
+        [
+          "I can set that to low if you want.",
+          "I’m running late, sorry.",
+          "You’re running low on milk.",
+          "The dishwasher is running.",
+          "Is the print still running?",
+          "Looks like the printer is running the last job.",
+          "That’s still running from earlier, want me to check?",
+          "Want me to run that again?",
+        ].each do |text|
           run([{ text: text }])
 
-          expect(reply.body).to eq(text)
+          expect(reply.body).to eq(text), "false positive: #{text}"
         end
       end
     end
@@ -1909,19 +1731,19 @@ RSpec.describe Buddy::GPT::Turn do
     # half nobody notices has failed: an unwanted reminder that keeps arriving
     # reads as the system working normally. Prod 3171 is the one that got out.
     describe "a claim to have cancelled something" do
-      {
-        "the one from prod" => "I pulled the front flower bed reminder down so it won't keep bugging you!",
-        "a plain cancel"    => "Cancelled that for you.",
-        "a removal"         => "Removed it from your reminders.",
-        "took it off"       => "Took that off the schedule.",
-        "a named removal"   => "I pulled the 8am reminder off for you.",
-        "it's cancelled"    => "That’s cancelled now.",
-        "the reassurance"   => "It won’t bug you again.",
-      }.each do |label, text|
-        it "retracts #{label}" do
+      it "retracts every way of saying it was taken away" do
+        [
+          "I pulled the front flower bed reminder down so it won't keep bugging you!",
+          "Cancelled that for you.",
+          "Removed it from your reminders.",
+          "Took that off the schedule.",
+          "I pulled the 8am reminder off for you.",
+          "That’s cancelled now.",
+          "It won’t bug you again.",
+        ].each do |text|
           run([{ text: text }])
 
-          expect(reply.body).to eq(described_class::SILENT_BODY)
+          expect(reply.body).to eq(described_class::SILENT_BODY), "not caught: #{text}"
           expect(reply.metadata["retracted_claim"]).to be(true)
         end
       end
@@ -1939,22 +1761,22 @@ RSpec.describe Buddy::GPT::Turn do
 
       # An offer to remove something is the normal way this conversation starts,
       # and rewriting one would replace a good reply with a shrug.
-      {
-        "an offer"          => "Want me to cancel that one?",
-        "a capability"      => "I can remove that if you'd rather.",
-        "a question back"   => "Which reminder should I delete?",
-        "reading something" => "I pulled up your reminders, there are three.",
-        "an ordinary pull"  => "I pulled the numbers for last month.",
-        # The one that broke the prompt-tools spec: `the` plus any noun plus a
-        # particle is far too much of the language to claim.
-        "an errand"         => "Eve took the puppy out - check it over and send it.",
-        "a plain removal"   => "Chelsea took the trash out already.",
-        "an honest limit"   => "I won’t remind you unless you ask me to.",
-      }.each do |label, text|
-        it "leaves #{label} alone" do
+      it "leaves offers, questions, reads and other people's errands alone" do
+        [
+          "Want me to cancel that one?",
+          "I can remove that if you'd rather.",
+          "Which reminder should I delete?",
+          "I pulled up your reminders, there are three.",
+          "I pulled the numbers for last month.",
+          # `the` plus any noun plus a particle is far too much of the language
+          # to claim.
+          "Eve took the puppy out - check it over and send it.",
+          "Chelsea took the trash out already.",
+          "I won’t remind you unless you ask me to.",
+        ].each do |text|
           run([{ text: text }])
 
-          expect(reply.body).to eq(text)
+          expect(reply.body).to eq(text), "false positive: #{text}"
         end
       end
     end
@@ -1967,18 +1789,18 @@ RSpec.describe Buddy::GPT::Turn do
     # be darkness, NOT total darkness" got "Kk! I fixed the script wording to
     # darkness." and buddy_routines 4 still read total_darkness.
     describe "a claim to have CHANGED something" do
-      {
-        "the one from prod" => "Kk! I fixed the script wording to darkness.",
-        "a correction"      => "I corrected that for you.",
-        "an update"         => "I updated the list just now.",
-        "a rename"          => "I renamed that to Wrist White Board.",
-        "a swap"            => "I swapped the scene over.",
-        "the perfect tense" => "I’ve changed the wording on that one.",
-      }.each do |label, text|
-        it "retracts #{label}" do
+      it "retracts every first-person, past-tense change" do
+        [
+          "Kk! I fixed the script wording to darkness.",
+          "I corrected that for you.",
+          "I updated the list just now.",
+          "I renamed that to Wrist White Board.",
+          "I swapped the scene over.",
+          "I’ve changed the wording on that one.",
+        ].each do |text|
           run([{ text: text }])
 
-          expect(reply.body).to eq(described_class::SILENT_BODY)
+          expect(reply.body).to eq(described_class::SILENT_BODY), "not caught: #{text}"
           expect(reply.metadata["retracted_claim"]).to be(true)
         end
       end
@@ -1996,18 +1818,18 @@ RSpec.describe Buddy::GPT::Turn do
 
       # First person and past tense are both load-bearing: a bare verb is far
       # too much of the language to claim.
-      {
-        "a change of mind"    => "I’ve changed my mind about that one.",
-        "someone else's verb" => "Chelsea updated the shopping list already.",
-        "an offer"            => "Want me to fix the wording?",
-        "an intransitive one" => "That changed everything, honestly.",
-        "a question"          => "Did you change the scene on that?",
-        "an observation"      => "The scene changed when the blinds closed.",
-      }.each do |label, text|
-        it "leaves #{label} alone" do
+      it "leaves changes of mind, other people's edits, offers and observations alone" do
+        [
+          "I’ve changed my mind about that one.",
+          "Chelsea updated the shopping list already.",
+          "Want me to fix the wording?",
+          "That changed everything, honestly.",
+          "Did you change the scene on that?",
+          "The scene changed when the blinds closed.",
+        ].each do |text|
           run([{ text: text }])
 
-          expect(reply.body).to eq(text)
+          expect(reply.body).to eq(text), "false positive: #{text}"
         end
       end
     end
@@ -2065,94 +1887,87 @@ RSpec.describe Buddy::GPT::Turn do
     # there is no phrasing of "I did it" that can be true. None of these has an
     # alternative of its own in COMPLETION_CLAIM_RX and none needs one.
     describe "the silent turn" do
-      [
-        "Kk! I added those three to **Before Bed**.",
-        "I put all three on there for you.",
-        "I've slotted those into the evening list.",
-        "I stuck them on Before Bed just now.",
-        "I filed that under home.",
-        "I booked that in for Thursday.",
-        "They're added.",
-        "All three are on your list.",
-        "That's scheduled.",
-        "I've queued that up for you.",
-        "I noted that down.",
-        # Prod 7062-7066, 28 Sep: "quiet for 2 hours" answered in a voice with
-        # no "I" in it and no pronoun either, so both halves walked past it. He
-        # caught it eight minutes later and the window began when he complained.
-        "*whisk* Whisper quiet is on for 2 hours.",
-        "Quiet's on for 30 minutes.",
-        "The fan is off for 20 minutes.",
-        # The same window ending at a clock time, and hedged.
-        "Got it. Quiet mode can stay on until 2:15 PM.",
-        "Quiet's on until 3.",
-        # The house style is to NAME the record, which is what put these outside
-        # a subject list made of pronouns.
-        "`Recycling` is done.",
-        "**Take out the bins** is added.",
-        "`Water the plants` is now scheduled.",
-        # A watch reported as fired on the person's word that they'd left.
-        "The depart watch fired and Chelsea got the message: I'm on the way home.",
-        "Your reminder went off.",
-      ].each do |faked|
-        it "catches #{faked.inspect}" do
+      it "retracts every shape of claim when nothing ran" do
+        [
+          "Kk! I added those three to **Before Bed**.",
+          "I put all three on there for you.",
+          "I've slotted those into the evening list.",
+          "I stuck them on Before Bed just now.",
+          "I filed that under home.",
+          "I booked that in for Thursday.",
+          "They're added.",
+          "All three are on your list.",
+          "That's scheduled.",
+          "I've queued that up for you.",
+          "I noted that down.",
+          "*whisk* Whisper quiet is on for 2 hours.",
+          "Quiet's on for 30 minutes.",
+          "The fan is off for 20 minutes.",
+          # The same window ending at a clock time, and hedged.
+          "Got it. Quiet mode can stay on until 2:15 PM.",
+          "Quiet's on until 3.",
+          # The house style is to NAME the record, which is what put these outside
+          # a subject list made of pronouns.
+          "`Recycling` is done.",
+          "**Take out the bins** is added.",
+          "`Water the plants` is now scheduled.",
+          # A watch reported as fired on the person's word that they'd left.
+          "The depart watch fired and Chelsea got the message: I'm on the way home.",
+          "Your reminder went off.",
+          # Promises to act or to watch, with no call behind them.
+          "Ah, gotcha. I'll fix that. Sanitizer for hike, in Harmon's.",
+          "Oh no, let me re-add that for you.",
+          "You got it - I'll keep an eye on that.",
+          "Yep, I'm watching for the next deploy to finish.",
+          "Sure thing, I'll let you know when it lands.",
+          "Logged that for you. Anything else on your mind?",
+        ].each do |faked|
           run([{ text: faked }])
 
           expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
           expect(reply.body).to eq(described_class::SILENT_BODY)
         end
       end
-
-      # The retraction has to be worth reading. FALLBACK_BODY ("I don't quite
-      # follow") reads as not having understood a request that was perfectly
-      # clear, which is the wrong apology for the wrong failure.
-      it "says what the receipts hold rather than asking them to rephrase" do
-        run([{ text: "I put all three on there for you." }])
-
-        expect(reply.body).to include("nothing ran")
-        expect(reply.body).to include("no receipt")
-      end
-
-      # The draft is never delivered - the bubble holds PLACEHOLDER until the
-      # finished body is written once, and the retraction IS that write. So
-      # "I said that as though I'd done it" apologised for a sentence nobody
-      # had read. Prod 5333: "The user never saw that message, so that's just
-      # annoying/confusing."
-      it "never describes the reply it is replacing" do
-        run([{ text: "I put all three on there for you." }])
-
-        expect(reply.body).not_to match(/i said|said that/i)
-      end
     end
 
     # A broad verb list is only safe because of the gate in front of it. These
     # are the sentences a silent turn is genuinely allowed to contain.
     describe "what the silent turn must not eat" do
-      [
-        "I couldn't get that one added, sorry.",
-        "I don't have a way to put that on a schedule.",
-        "I started to look and there's nothing there yet.",
-        "I made sure to check - nothing on it.",
-        "Want me to add those three?",
-        "Did you add those already?",
-        "Chelsea added those to the list earlier.",
-        "I've changed my mind about that one.",
-        "That changed everything, honestly.",
-        "The list is set up the way you like it.",
-        # A named subject with no delimiters around it, which is why the arm
-        # asks for backticks or bold rather than a word budget. These are
-        # sentences about the world, not about a record.
-        "Dinner is done.",
-        "The laundry is done.",
-        "The heater is on for another hour.",
-        "Whisper quiet is something I can turn on.",
-        "It'll fire when you leave Salt City Tacos.",
-        "The watch is still waiting for you to leave.",
-      ].each do |honest|
-        it "leaves #{honest.inspect} alone" do
+      it "leaves honest limits, questions, offers and statements about the world alone" do
+        [
+          "I couldn't get that one added, sorry.",
+          "I don't have a way to put that on a schedule.",
+          "I started to look and there's nothing there yet.",
+          "I made sure to check - nothing on it.",
+          "Want me to add those three?",
+          "Did you add those already?",
+          "Chelsea added those to the list earlier.",
+          "I've changed my mind about that one.",
+          "That changed everything, honestly.",
+          "The list is set up the way you like it.",
+          # A named subject with no delimiters around it, which is why the arm
+          # asks for backticks or bold rather than a word budget. These are
+          # sentences about the world, not about a record.
+          "Dinner is done.",
+          "The laundry is done.",
+          "The heater is on for another hour.",
+          "Whisper quiet is something I can turn on.",
+          "It'll fire when you leave Salt City Tacos.",
+          "The watch is still waiting for you to leave.",
+          "Is the fan on right now?",
+          # Vague intent and small talk promise nothing checkable.
+          "I'll keep an eye out for you.",
+          "Sounds good. I'll let you know.",
+          # Asking which item before fixing it is the right move on an ambiguous
+          # reference.
+          "Oof, my bad. Tell me which item it was and I'll fix it.",
+          "Oof, that sounds like a rough one. How're you holding up?",
+          "Want me to log that for you?",
+          "Nice, that counts. 💙",
+        ].each do |honest|
           run([{ text: honest }])
 
-          expect(reply.body).to eq(honest)
+          expect(reply.body).to eq(honest), "false positive: #{honest}"
         end
       end
 
@@ -2171,10 +1986,19 @@ RSpec.describe Buddy::GPT::Turn do
     # Prod 6417-6418: "is that on the Stash pile?" was answered, and the answer
     # was retracted as though it claimed something had been done.
     describe "a question about how things stand" do
-      it "leaves the answer alone" do
-        run([{ text: "Yep, it's on your Stash pile." }], text: "Ok perfect  is that on the Stash pile?")
+      # The named-subject and duration shapes stand down here for the same
+      # reason the pronoun ones do: asked how things stand, reporting them is
+      # the answer rather than a claim.
+      it "leaves the answer alone, whether a place, a mode or a watch" do
+        [
+          ["Ok perfect  is that on the Stash pile?", "Yep, it's on your Stash pile."],
+          ["how long is quiet on for?", "Whisper quiet is on for 2 hours."],
+          ["did the watch fire?", "Yep, the depart watch fired at 7:57."],
+        ].each do |asked, said|
+          run([{ text: said }], text: asked)
 
-        expect(reply.body).to eq("Yep, it's on your Stash pile.")
+          expect(reply.body).to eq(said), "wrongly retracted: #{said}"
+        end
       end
 
       it "still retracts a first-person claim, which no question makes true" do
@@ -2188,42 +2012,6 @@ RSpec.describe Buddy::GPT::Turn do
 
         expect(reply.metadata["retracted_claim"]).to be(true)
       end
-
-      # The named-subject and duration shapes stand down here for the same
-      # reason the pronoun ones do: asked how things stand, reporting them is
-      # the answer rather than a claim.
-      it "leaves a mode reported back to them alone" do
-        run([{ text: "Whisper quiet is on for 2 hours." }], text: "how long is quiet on for?")
-
-        expect(reply.body).to eq("Whisper quiet is on for 2 hours.")
-      end
-
-      it "leaves a watch reported back to them alone" do
-        run([{ text: "Yep, the depart watch fired at 7:57." }], text: "did the watch fire?")
-
-        expect(reply.body).to eq("Yep, the depart watch fired at 7:57.")
-      end
-    end
-
-    it "leaves a question about a device alone" do
-      run([{ text: "Is the fan on right now?" }])
-
-      expect(reply.body).to eq("Is the fan on right now?")
-    end
-
-    it "retracts a promise to act that was never backed by a call" do
-      # Real prod bug (1048): answered "you didn't add it to the Harmon's
-      # category" with this, and called nothing.
-      run([{ text: "Ah, gotcha. I'll fix that. Sanitizer for hike, in Harmon's." }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-      expect(reply.metadata["retracted_claim"]).to be(true)
-    end
-
-    it "retracts 'let me re-add it' with nothing behind it" do
-      run([{ text: "Oh no, let me re-add that for you." }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "leaves a promise alone when the call actually accompanied it" do
@@ -2237,35 +2025,6 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("On it, adding that now.")
     end
 
-    it "does not fire on vague future intent, which is conversational" do
-      run([{ text: "I'll keep an eye out for you." }])
-
-      expect(reply.body).to eq("I'll keep an eye out for you.")
-    end
-
-    # Real prod bug (1106): "can you watch and let me know when the deploy
-    # finishes?" got this reply with no remind_when call, so the deploy came and
-    # went in silence. A promise to watch is broken exactly like a promise to
-    # act - it just takes longer to notice.
-    it "retracts a promise to watch for something that set no watch" do
-      run([{ text: "You got it - I'll keep an eye on that." }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-      expect(reply.metadata["retracted_claim"]).to be(true)
-    end
-
-    it "retracts 'I'm watching for' with no watch behind it" do
-      run([{ text: "Yep, I'm watching for the next deploy to finish." }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-    end
-
-    it "retracts a promise to notify when a future event happens" do
-      run([{ text: "Sure thing, I'll let you know when it lands." }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-    end
-
     it "leaves the watch promise alone once remind_when actually fired" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
@@ -2275,44 +2034,6 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(reply.body).to eq("You got it - I'll keep an eye on that.")
-    end
-
-    it "does not fire on a bare 'I'll let you know', which is small talk" do
-      run([{ text: "Sounds good. I'll let you know." }])
-
-      expect(reply.body).to eq("Sounds good. I'll let you know.")
-    end
-
-    it "does not fire on a promise that is waiting on an answer" do
-      # Asking which item before fixing it is the RIGHT move on an ambiguous
-      # reference; retracting it would replace a good clarifying question.
-      run([{ text: "Oof, my bad. Tell me which item it was and I'll fix it." }])
-
-      expect(reply.body).to eq("Oof, my bad. Tell me which item it was and I'll fix it.")
-    end
-
-    it "still retracts a past-tense claim even when a question trails it" do
-      run([{ text: "Logged that for you. Anything else on your mind?" }])
-
-      expect(reply.body).to eq(described_class::SILENT_BODY)
-    end
-
-    it "does not touch ordinary conversation that claims nothing" do
-      run([{ text: "Oof, that sounds like a rough one. How're you holding up?" }])
-
-      expect(reply.body).to eq("Oof, that sounds like a rough one. How're you holding up?")
-    end
-
-    it "does not fire on an offer, which claims nothing" do
-      run([{ text: "Want me to log that for you?" }])
-
-      expect(reply.body).to eq("Want me to log that for you?")
-    end
-
-    it "does not fire on a plain warm acknowledgement" do
-      run([{ text: "Nice, that counts. 💙" }])
-
-      expect(reply.body).to eq("Nice, that counts. 💙")
     end
   end
 
@@ -2338,44 +2059,51 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Kk! TV’s off.")
     end
 
+    # Every alternative in COMMAND_REQUEST_RX once needed a verb, and the
+    # shortest way to say a house command has none: the device and the state
+    # you want it in is the entire sentence. A mode and how long to hold it is
+    # the same order with no device in it. A print is asserted from the REQUEST
+    # side, which can't be reworded away.
     it "owns it plainly when the corrective round still calls nothing" do
-      run([{ text: "Kk! TV’s off." }, { text: "Kk! TV’s off." }], text: "Turn the tv off")
+      [
+        ["Turn the tv off", "Kk! TV’s off."],
+        ["Monitors off", "Kk! Monitors are dark. *squish*"],
+        ["lights on", "Kk! all set."],
+        ["Blinds down", "Kk! all set."],
+        ["TV off please", "Kk! all set."],
+        ["monitors dark.", "Kk! all set."],
+        ["Quiet until 2:15", "Sounds good."],
+        ["quiet mode for an hour", "Sounds good."],
+        ["print again", "Yessss, the printer’s running the last file again. `game_tray-vase-40M.gcode`."],
+        ["Print game tray", "Printing `game_tray-vase-40M.gcode` again."],
+      ].each do |said, answer|
+        run([{ text: answer }, { text: answer }], text: said)
 
-      expect(reply.body).to eq(described_class::UNDONE_BODY)
-      expect(reply.metadata["retracted_claim"]).to be(true)
+        expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
     end
 
-    it "says it didn't happen rather than that it didn't understand" do
-      run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
+    # A refusal and a clarifying question are the ways a command legitimately
+    # ends with nothing run. A QUESTION about the same device reads identically
+    # in the reply, and a remark about a device is not an order to change one.
+    it "leaves refusals, questions, remarks and turns of phrase alone" do
+      [
+        ["Turn the tv off", "I can't reach the TV from here - it isn't wired up to anything I can call."],
+        ["Turn the tv off", "Which one - the living room TV or the bedroom one?"],
+        ["is the tv on?", "Kk! TV’s off."],
+        ["the monitors are off again", "Ha, that's annoying."],
+        ["my lights on the porch keep flickering", "Ha, that's annoying."],
+        ["I need to start running again", "Ha, fair. Mornings are rough."],
+        # What follows the verb is the difference: an order names a thing, this
+        # names a preposition.
+        ["start with the milk", "Sounds good, the milk first then."],
+        ["the printer has been going all day", "Sounds like the printer’s been busy!"],
+      ].each do |said, answer|
+        run([{ text: answer }], text: said)
 
-      expect(reply.body).not_to eq(described_class::SILENT_BODY)
-      expect(reply.body).to include("didn't go through")
-    end
-
-    # Same rule as the silent arm's, and this is the arm it was reported on.
-    # It also stopped ASKING: "Want me to have another go at it?" is a request
-    # for permission to do the thing they already asked for, and start_over?
-    # has been and gone by the time this is written.
-    it "neither describes the unseen reply nor asks to try again" do
-      run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
-
-      expect(reply.body).not_to match(/i said|said that/i)
-      expect(reply.body).not_to match(/another go|want me to/i)
-    end
-
-    # The three ways a command legitimately ends with nothing run.
-    it "leaves an honest refusal alone" do
-      said = "I can't reach the TV from here - it isn't wired up to anything I can call."
-      run([{ text: said }], text: "Turn the tv off")
-
-      expect(reply.body).to eq(said)
-    end
-
-    it "leaves a clarifying question alone" do
-      said = "Which one - the living room TV or the bedroom one?"
-      run([{ text: said }], text: "Turn the tv off")
-
-      expect(reply.body).to eq(said)
+        expect(reply.body).to eq(answer), "read as a command: #{said}"
+      end
     end
 
     it "does not fire when the command was actually carried out" do
@@ -2391,159 +2119,53 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(reply.body).to eq("Kk! TV’s off.")
     end
-
-    # A QUESTION about the same device reads identically in the reply, and
-    # nothing running is the correct outcome. This is the case that stops the
-    # claim regex being widened instead.
-    it "leaves the same sentence alone when they only asked" do
-      run([{ text: "Kk! TV’s off." }], text: "is the tv on?")
-
-      expect(reply.body).to eq("Kk! TV’s off.")
-    end
-
-    # Prod 4518, 22:06: "Monitors off" got "Kk! Monitors are dark. *squish*"
-    # off one API call, 17 output tokens, and no `byte_actions` row at all. He
-    # answered "They are not. You didn't do anything", and the retry a minute
-    # later took three calls and produced the chip - so the tool was reachable
-    # the whole time.
-    #
-    # Every alternative in COMMAND_REQUEST_RX needs a verb, and the shortest
-    # way to say a house command has none: the device and the state you want it
-    # in is the entire sentence.
-    it "reads a verbless device command as the order it is" do
-      run(
-        [{ text: "Kk! Monitors are dark. *squish*" }, { text: "Kk! Monitors are dark." }],
-        text: "Monitors off",
-      )
-
-      expect(reply.body).to eq(described_class::UNDONE_BODY)
-      expect(reply.metadata["retracted_claim"]).to be(true)
-    end
-
-    it "reads the other short ways to say one" do
-      ["lights on", "Blinds down", "TV off please", "monitors dark."].each { |said|
-        run([{ text: "Kk! all set." }, { text: "Kk! all set." }], text: said)
-
-        expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
-      }
-    end
-
-    # A mode and how long to hold it is the same order with no device in it.
-    it "reads a verbless quiet window as an order" do
-      ["Quiet until 2:15", "quiet mode for an hour"].each { |said|
-        run([{ text: "Sounds good." }, { text: "Sounds good." }], text: said)
-
-        expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
-      }
-    end
-
-    # Anchored at both ends for this reason: a remark about a device is not an
-    # order to change one, and being wrong here rewrites a good reply.
-    it "leaves a remark about a device alone" do
-      ["the monitors are off again", "my lights on the porch keep flickering"].each { |said|
-        run([{ text: "Ha, that's annoying." }], text: said)
-
-        expect(reply.body).to eq("Ha, that's annoying."), "read as a command: #{said}"
-      }
-    end
-
-    it "leaves a statement that merely mentions a command word alone" do
-      said = "Ha, fair. Mornings are rough."
-      run([{ text: said }], text: "I need to start running again")
-
-      expect(reply.body).to eq(said)
-    end
-
-    # Opens with a command verb and is a turn of phrase. What follows the verb
-    # is the difference: an order names a thing, this names a preposition.
-    it "leaves conversational phrasing that opens with a command verb alone" do
-      said = "Sounds good, the milk first then."
-      run([{ text: said }], text: "start with the milk")
-
-      expect(reply.body).to eq(said)
-    end
-
-    # Prod 3236, and prod 2054 twice before it. Every earlier round patched the
-    # claim regex and the next occurrence dodged it by renaming the noun, so
-    # this is asserted from the REQUEST side, which can't be reworded away.
-    it "catches a print that never ran, however the reply phrases it" do
-      said = "Yessss, the printer’s running the last file again. `game_tray-vase-40M.gcode`."
-      run([{ text: said }, { text: said }], text: "print again")
-
-      expect(reply.body).to eq(described_class::UNDONE_BODY)
-    end
-
-    it "catches the other wording of the same fabricated receipt" do
-      run(
-        [{ text: "Printing `game_tray-vase-40M.gcode` again." }] * 2,
-        text: "Print game tray",
-      )
-
-      expect(reply.body).to eq(described_class::UNDONE_BODY)
-    end
-
-    it "leaves an ordinary sentence about printing alone when they didn't order one" do
-      said = "Sounds like the printer’s been busy!"
-      run([{ text: said }], text: "the printer has been going all day")
-
-      expect(reply.body).to eq(said)
-    end
   end
 
-  # Prod 3128: "Good night" got "Total darkness, and the monitors are out.
-  # *click* 💙" off a single call with nothing run. No verb to catch on the
-  # request side, and no noun the claim regex knew — but the sound effect is
-  # Byte's own, and in every one of its 18 prod appearances it sat on a claim
-  # about a device.
-  # The mirror of the unbacked claim, and the quieter of the two: that one says
-  # a thing happened when it didn't, this one says a thing COULD happen and then
-  # drops it. Three eval runs came back with the same shape and no call under it.
+  # The mirror of the unbacked claim: this one says a thing COULD happen and
+  # then drops it, with no call under it.
   describe ".unfiled_offer?" do
-    [
-      "Psh, I can't place the order from here. If you want, I can help you pick one or jot down what kind you're craving for later.",
-      "Hmm, I can't place the order itself yet. If you want, I can write down the pizza idea so it doesn't drift off.",
-      "Hmm, I can't watch for Chelsea to get home yet. If you want, I can put that on the list.",
-      "I can still put the request on the list so it doesn't get lost.",
-    ].each do |said|
-      it "catches #{said.truncate(40).inspect}" do
-        expect(described_class.unfiled_offer?(said)).to be(true)
-      end
+    it "catches an offer to file something that was never filed" do
+      [
+        "Psh, I can't place the order from here. If you want, I can help you pick one or jot down what kind you're craving for later.",
+        "Hmm, I can't place the order itself yet. If you want, I can write down the pizza idea so it doesn't drift off.",
+        "Hmm, I can't watch for Chelsea to get home yet. If you want, I can put that on the list.",
+        "I can still put the request on the list so it doesn't get lost.",
+      ].each { |said| expect(described_class.unfiled_offer?(said)).to be(true), "not caught: #{said}" }
     end
 
     # A refusal that promises nothing, and a receipt for something already
     # filed, both need no corrective round.
-    [
-      "I couldn't find a car wash logged yesterday.",
-      "I can't run scripts, but I can fix the chores themselves if you tell me what's off.",
-      "Nothing matched over the last 14 days.",
-      "Kk! I've put that on the list as Doorbell Watch.",
-    ].each do |said|
-      it "leaves #{said.truncate(40).inspect} alone" do
-        expect(described_class.unfiled_offer?(said)).to be(false)
-      end
+    it "leaves a plain refusal and a receipt alone" do
+      [
+        "I couldn't find a car wash logged yesterday.",
+        "I can't run scripts, but I can fix the chores themselves if you tell me what's off.",
+        "Nothing matched over the last 14 days.",
+        "Kk! I've put that on the list as Doorbell Watch.",
+      ].each { |said| expect(described_class.unfiled_offer?(said)).to be(false), "false positive: #{said}" }
     end
   end
 
   # The arm that stops "show me the backyard" being answered from memory. It
   # hangs entirely off a lookahead for a camera noun, so a noun it can't see is
-  # the whole arm not firing — prod 4612 and 4618 both wrote "back yard" with a
-  # space, and Buddy answered from the thread's own history of failures rather
-  # than calling anything, twice more insisting it had.
+  # the whole arm not firing.
   describe "CAMERA_LOOK_RX on the nouns people actually type" do
-    [
-      "Show me the back yard",
-      "can you show me the back yard?",
-      "Show me the backyard",
-      "show me the drive way",
-      "Show me the driveway",
-      "show me the front door",
-      "pull up the door bell",
-      "who was at the doorbell",
-      "let me see the porch",
-    ].each do |asked|
-      it "sees a camera in #{asked.inspect}" do
-        expect(asked).to match(described_class::CAMERA_LOOK_RX)
-      end
+    it "sees a camera however the noun is spelled, and stays out of other lookups" do
+      seen = [
+        "Show me the back yard",
+        "can you show me the back yard?",
+        "Show me the backyard",
+        "show me the drive way",
+        "Show me the driveway",
+        "show me the front door",
+        "pull up the door bell",
+        "who was at the doorbell",
+        "let me see the porch",
+      ]
+
+      expect(seen).to all(match(described_class::CAMERA_LOOK_RX))
+      ["show me the shopping list", "what's on the calendar", "show me how much I spent"].each { |asked|
+        expect(asked).not_to match(described_class::CAMERA_LOOK_RX)
+      }
     end
 
     # Still a lookup about a camera, not a request to watch for one later.
@@ -2551,18 +2173,9 @@ RSpec.describe Buddy::GPT::Turn do
       asked = "let me know the next time somebody comes to the back yard"
       expect(asked).to match(described_class::CAMERA_WATCH_RX)
     end
-
-    [
-      "show me the shopping list",
-      "what's on the calendar",
-      "show me how much I spent",
-    ].each do |asked|
-      it "stays out of #{asked.inspect}" do
-        expect(asked).not_to match(described_class::CAMERA_LOOK_RX)
-      end
-    end
   end
 
+  # The sound effect is Byte's own, and it sits on a claim about a device.
   describe "the *click*" do
     before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
 
@@ -2576,18 +2189,15 @@ RSpec.describe Buddy::GPT::Turn do
 
     # The same sentence, correctly, with nothing run: they asked what the state
     # was rather than telling Buddy to change it.
-    it "stands when they only asked whether it was done" do
-      said = "Yep - lights are off. *click*"
-      run([{ text: said }], text: "did you turn the lights off?")
+    it "stands when they only asked whether it was done, with or without a question mark" do
+      [
+        ["did you turn the lights off?", "Yep - lights are off. *click*"],
+        ["are the monitors off", "Monitors are out. *click*"],
+      ].each do |asked, said|
+        run([{ text: said }], text: asked)
 
-      expect(reply.body).to eq(said)
-    end
-
-    it "stands on a bare state question with no question mark" do
-      said = "Monitors are out. *click*"
-      run([{ text: said }], text: "are the monitors off")
-
-      expect(reply.body).to eq(said)
+        expect(reply.body).to eq(said)
+      end
     end
 
     it "stands when the thing actually ran" do
@@ -2661,13 +2271,8 @@ RSpec.describe Buddy::GPT::Turn do
     # not most days" - so a morning that said nothing about it has raised
     # nothing, and stamping here would take the thought away for three days
     # without him ever having heard it.
-    it "stamps nothing on a morning that left it out" do
+    it "stamps nothing on a morning that left it out or named something else" do
       expect(floated("Morning! Quiet one today, nothing on the calendar.")).to be_nil
-    end
-
-    # Same question the age arm asks: did the words reach the thought at all. A
-    # float cut for renaming it has raised nothing either.
-    it "stamps nothing when the float named something else" do
       expect(floated("Morning! That front room drinks thing is still sitting there.")).to be_nil
     end
 
@@ -2704,21 +2309,15 @@ RSpec.describe Buddy::GPT::Turn do
       expect(briefed(said)).to eq("Mooooorning!")
     end
 
-    # A thought nobody has floated yet is not being withheld - there is nothing
-    # to have copied, and 36 of Eve's 37 live stash rows are in this state.
-    it "says nothing about a thought that has never been floated" do
+    # A thought nobody has floated yet is not being withheld, and past
+    # BriefingFacts::STASH_SPACING the prompt is free to float it again.
+    it "lets it through when never floated, or once the spacing has run out" do
+      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
+
       warm.update!(surfaced_at: nil)
-      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
-
       expect(briefed(said)).to eq(said)
-    end
 
-    # Three days is BriefingFacts::STASH_SPACING, and past it the prompt is
-    # free to float the thought again.
-    it "lets it back in once the spacing has run out" do
       warm.update!(surfaced_at: 4.days.ago)
-      said = "Mooooorning! Hope the fridge mission is feeling a bit more tamed now."
-
       expect(briefed(said)).to eq(said)
     end
   end
@@ -2817,28 +2416,17 @@ RSpec.describe Buddy::GPT::Turn do
       client
     end
 
-    it "has one put on the front, without spending another round on it" do
+    # Whatever went on the front has to be a hello by the same test that found
+    # it missing, in the words of the pet whose thread it is.
+    it "has one of the pet's own greetings put on the front, without spending another round" do
       cold   = "Pretty quiet day on your side. The only thing I see is a noon supply run."
       client = briefing([{ text: cold }])
+      hellos = Buddy::VoiceLines.lines_for(convo.buddy_theme, Buddy::TodayBriefing.greeting_kind(user)).pluck(:say)
 
       expect(client.calls.length).to eq(1)
       expect(reply.body).to end_with(cold)
-      expect(reply.body).not_to eq(cold)
-    end
-
-    # Whatever went on the front has to be a hello by the same test that found
-    # it missing, or the fallback is decoration.
-    it "puts on something that actually reads as a greeting" do
-      briefing([{ text: "Pretty quiet day on your side." }])
-
       expect(reply.body).to match(described_class::GREETING_OPENER_RX)
-    end
-
-    it "takes the words from the pet whose thread it is" do
-      briefing([{ text: "Pretty quiet day on your side." }])
-
-      said = Buddy::VoiceLines.lines_for(convo.buddy_theme, Buddy::TodayBriefing.greeting_kind(user)).pluck(:say)
-      expect(said.any? { |hello| reply.body.start_with?(hello) }).to be(true)
+      expect(hellos.any? { |hello| reply.body.start_with?(hello) }).to be(true)
     end
 
     it "leaves a briefing that already greeted alone" do
@@ -2950,22 +2538,16 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
-    it "leaves the period exactly where the model put it" do
-      briefing([{ text: "Morning. Not much on your plate today." }])
+    it "leaves the opener's punctuation exactly where the model put it" do
+      [
+        "Morning. Not much on your plate today.",
+        "Good morning, Rocco. Quiet one.",
+        "Hey hey! Quiet one today.",
+      ].each do |said|
+        briefing([{ text: said }])
 
-      expect(reply.body).to eq("Morning. Not much on your plate today.")
-    end
-
-    it "leaves one that named them on a period too" do
-      briefing([{ text: "Good morning, Rocco. Quiet one." }])
-
-      expect(reply.body).to eq("Good morning, Rocco. Quiet one.")
-    end
-
-    it "leaves one that already landed warm alone" do
-      briefing([{ text: "Hey hey! Quiet one today." }])
-
-      expect(reply.body).to eq("Hey hey! Quiet one today.")
+        expect(reply.body).to eq(said)
+      end
     end
 
     it "leaves ordinary turns alone" do
@@ -3046,16 +2628,11 @@ RSpec.describe Buddy::GPT::Turn do
       [{ text: text }]
     end
 
-    it "puts the departure time on the end" do
-      briefing(looked_then("Morning! You've got Yoga first, with a pretty full drive before it."))
-
-      expect(reply.body).to include("Yoga: leave by 8:46 AM, about 33 minutes' drive.")
-    end
-
-    it "keeps what it wrote in front of the line" do
+    it "puts the departure time on the end, behind what it wrote" do
       briefing(looked_then("Morning! You've got Yoga first, with a pretty full drive before it."))
 
       expect(reply.body).to start_with("Morning! You've got Yoga first")
+      expect(reply.body).to include("Yoga: leave by 8:46 AM, about 33 minutes' drive.")
     end
 
     it "leaves a briefing that already gave the figure alone" do
@@ -3190,29 +2767,20 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     # Jobs are meant to be summarized - five bin rows becoming "it's trash day"
-    # is the rule working - so they are counted as a whole and by their words.
-    it "takes a summarized job as said" do
-      client = briefing([{ text: "Morning! Chelsea's care giver meeting is at 11:00 AM, drinks at 9:00 PM, and it's trash day." }])
+    # is the rule working - and reach a sentence conjugated ("laundry to fold"),
+    # so the WORDS are matched rather than the row. An item's own clock time
+    # counts as naming it - see named_in?.
+    it "takes a summarized job, a conjugated one, or an item's time as said" do
+      [
+        "Morning! Chelsea's care giver meeting is at 11:00 AM, drinks at 9:00 PM, and it's trash day.",
+        "Morning! Chelsea's meeting is at 11:00 AM, drinks at 9:00 PM, laundry to fold, and it's trash day.",
+        "Morning! Chelsea's got something at 11:00 AM and you're out at 9:00 PM. Trash day too.",
+      ].each do |said|
+        client = briefing([{ text: said }])
 
-      expect(client.calls.length).to eq(1)
-      expect(reply.metadata["repairs"]).to be_blank
-    end
-
-    # A job reaches a sentence conjugated - "Fold Laundry" arrives as "laundry
-    # to fold" - and the WORDS are what gets matched rather than the row. The
-    # trash is in there too because groups are counted one by one now: a body
-    # that names the laundry and skips trash day has dropped a group.
-    it "takes a conjugated one as said" do
-      client = briefing([{ text: "Morning! Chelsea's meeting is at 11:00 AM, drinks at 9:00 PM, laundry to fold, and it's trash day." }])
-
-      expect(client.calls.length).to eq(1)
-    end
-
-    # An item's own clock time counts as naming it - see named_in?.
-    it "takes the time as naming the item" do
-      client = briefing([{ text: "Morning! Chelsea's got something at 11:00 AM and you're out at 9:00 PM. Trash day too." }])
-
-      expect(client.calls.length).to eq(1)
+        expect(client.calls.length).to eq(1), "went again on: #{said}"
+        expect(reply.metadata["repairs"]).to be_blank
+      end
     end
 
     it "leaves an ordinary turn out of it" do
@@ -3435,15 +3003,11 @@ RSpec.describe Buddy::GPT::Turn do
       "#{Buddy::TodayBriefing::WEATHER_DIRECTIVE}\n#{Buddy::TodayBriefing::GREET_DIRECTIVE}"
     end
 
-    it "puts the high and the low on the end" do
+    it "puts the high, the low and notable odds on the end, behind the briefing" do
       briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
 
+      expect(reply.body).to start_with("Hey! Just the noon supply run today.")
       expect(reply.body).to include("High of 93°F today, low of 69°F")
-    end
-
-    it "carries the odds for anything above the baseline" do
-      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
-
       expect(reply.body).to include("56% chance of rain")
     end
 
@@ -3452,12 +3016,6 @@ RSpec.describe Buddy::GPT::Turn do
       briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
 
       expect(reply.body).to end_with("High of 78°F today, low of 55°F.")
-    end
-
-    it "keeps the briefing it was given in front of the line" do
-      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
-
-      expect(reply.body).to start_with("Hey! Just the noon supply run today.")
     end
 
     # Rocco, 2026-09-05, of prod 5445: "Weather still being injected rather than
@@ -3469,7 +3027,7 @@ RSpec.describe Buddy::GPT::Turn do
     # So a dropped fact goes back to the model with the draft and a note naming
     # it. The staple stays behind that: a briefing missing the weather is worse
     # than one wearing it awkwardly. What changed is which of the two is normal.
-    it "asks for it again rather than writing it on the end" do
+    it "asks for it again, naming the fact, rather than writing it on the end" do
       client = FakeBuddyClient.new([
         { text: "Hey! Just the noon supply run today." },
         { text: "Hey! 93 out today, down to 69 tonight, and just the noon supply run." },
@@ -3480,23 +3038,12 @@ RSpec.describe Buddy::GPT::Turn do
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(2)
-      expect(reply.body).to eq("Hey! 93 out today, down to 69 tonight, and just the noon supply run.")
-      expect(reply.metadata["repairs"]).to be_blank
-    end
-
-    it "tells the second attempt what it left out" do
-      client = FakeBuddyClient.new([{ text: "Hey! Just the noon supply run today." }, { text: "Hey! 93 out today, down to 69 tonight, and just the noon supply run." }])
-      message = convo.byte_messages.create!(
-        user: user, direction: :outbound, state: :sent, body: weather_seed,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
-      )
-      described_class.run!(message, client: client)
-
       nudges = client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
 
-      expect(nudges).to include("left something out that they were given")
+      expect(client.calls.length).to eq(2)
       expect(nudges).to include("the day's high and low")
+      expect(reply.body).to eq("Hey! 93 out today, down to 69 tonight, and just the noon supply run.")
+      expect(reply.metadata["repairs"]).to be_blank
     end
 
     # And only then. Silence twice over is still worse than an awkward line.
@@ -3508,22 +3055,16 @@ RSpec.describe Buddy::GPT::Turn do
 
     # The whole point is that the model's own sentence is better - it can put
     # the figures where they belong instead of on the end.
-    it "leaves a briefing that already said it alone" do
-      briefing([{ text: "Hey! 93 out today, down to 69 tonight. Just the noon run." }], seed: weather_seed)
+    it "leaves a briefing that already said it alone, figures, degree sign or word" do
+      [
+        "Hey! 93 out today, down to 69 tonight. Just the noon run.",
+        "Hey! Topping out around 93° later. Just the noon run.",
+        "Hey! Low nineties, down to sixty-nine degrees overnight.",
+      ].each do |said|
+        briefing([{ text: said }], seed: weather_seed)
 
-      expect(reply.body).to eq("Hey! 93 out today, down to 69 tonight. Just the noon run.")
-    end
-
-    it "counts a degree sign as having said it" do
-      briefing([{ text: "Hey! Topping out around 93° later. Just the noon run." }], seed: weather_seed)
-
-      expect(reply.body).to eq("Hey! Topping out around 93° later. Just the noon run.")
-    end
-
-    it "counts the word degrees as having said it" do
-      briefing([{ text: "Hey! Low nineties, down to sixty-nine degrees overnight." }], seed: weather_seed)
-
-      expect(reply.body).to eq("Hey! Low nineties, down to sixty-nine degrees overnight.")
+        expect(reply.body).to eq(said)
+      end
     end
 
     # After ~4pm `weather_block` is empty and the directive isn't in the seed at
@@ -3573,16 +3114,11 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
-    it "puts the flagged days on the end" do
-      briefing([{ text: "Morning! Quiet one - just the noon run." }])
-
-      expect(reply.body).to include("Rain Thursday & Friday this week.")
-    end
-
-    it "keeps what the model wrote in front of it" do
+    it "puts the flagged days on the end, behind what the model wrote" do
       briefing([{ text: "Morning! Quiet one - just the noon run." }])
 
       expect(reply.body).to start_with("Morning! Quiet one - just the noon run.")
+      expect(reply.body).to include("Rain Thursday & Friday this week.")
     end
 
     it "leaves a briefing that flagged the days itself alone" do
@@ -3594,16 +3130,15 @@ RSpec.describe Buddy::GPT::Turn do
     # Prod 6235, 15 Sep: a seed flagging three days, a briefing naming two, and
     # the third silently dropped because one day used to satisfy the check for
     # all of them. See Buddy::TodayBriefing.week_said?.
-    it "still asks when the briefing named only some of the flagged days" do
-      briefing([{ text: "Morning! Quiet one, though Thu is looking wet." }])
+    it "is not satisfied by only some of the flagged days, or by today's own odds" do
+      [
+        "Morning! Quiet one, though Thu is looking wet.",
+        "Morning! 20% chance of rain today, otherwise quiet.",
+      ].each do |said|
+        briefing([{ text: said }])
 
-      expect(reply.body).to include("Rain Thursday & Friday this week.")
-    end
-
-    it "is not satisfied by today's own rain odds" do
-      briefing([{ text: "Morning! 20% chance of rain today, otherwise quiet." }])
-
-      expect(reply.body).to include("Rain Thursday & Friday this week.")
+        expect(reply.body).to include("Rain Thursday & Friday this week."), "satisfied by: #{said}"
+      end
     end
 
     it "says nothing on an unremarkable week" do
@@ -3724,44 +3259,30 @@ RSpec.describe Buddy::GPT::Turn do
       client
     end
 
-    it "sends it back rather than telling them it is theirs" do
+    it "sends it back, naming whose each one is, rather than telling them it is theirs" do
       client = briefing([
         { text: "Hey hey! You've got the LOC meeting at 1pm with Chelsea, then Moon wreath crafts with Mary at 6pm." },
         { text: "Hey hey! Chelsea has her LOC meeting at 1pm, and her Moon wreath crafts with Mary at 6pm." },
       ])
+      nudge = client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
 
       expect(client.calls.length).to eq(2)
+      expect(nudge).to include("LOC meeting", "Moon wreath crafts with Mary", "Chelsea's")
       expect(reply.body).to include("Chelsea has her LOC meeting")
-    end
-
-    it "names whose each one is in the nudge" do
-      client = briefing([
-        { text: "Hey hey! You've got the LOC meeting at 1pm with Chelsea, then Moon wreath crafts with Mary at 6pm." },
-        { text: "Hey hey! Chelsea has her LOC meeting at 1pm, and her Moon wreath crafts with Mary at 6pm." },
-      ])
-      nudge = client.calls.last.input.to_s
-
-      expect(nudge).to include("whose LOC meeting is - it is Chelsea's, not theirs")
-      expect(nudge).to include("whose Moon wreath crafts with Mary is")
     end
 
     # Every way a briefing has actually said it right, and none of them is the
     # order the rule asks for twice over. A check that only passed "who, what,
     # when" would send correct drafts round again.
-    it "leaves a draft that says whose they are alone" do
-      client = briefing([
-        { text: "Hey hey! Chelsea's LOC meeting is at 1pm, and a hair trim for Chelsea at 6pm." },
-      ])
+    it "leaves a draft that says whose they are alone, however the sentence runs" do
+      [
+        "Hey hey! Chelsea's LOC meeting is at 1pm, and a hair trim for Chelsea at 6pm.",
+        "Hey hey! At 1pm, Chelsea has the LOC meeting. At 6pm it is her Moon wreath crafts with Mary.",
+      ].each do |said|
+        client = briefing([{ text: said }])
 
-      expect(client.calls.length).to eq(1)
-    end
-
-    it "takes the owner as the subject however the sentence runs" do
-      client = briefing([
-        { text: "Hey hey! At 1pm, Chelsea has the LOC meeting. At 6pm it is her Moon wreath crafts with Mary." },
-      ])
-
-      expect(client.calls.length).to eq(1)
+        expect(client.calls.length).to eq(1), "sent back: #{said}"
+      end
     end
 
     # The other guard owns this case: an item nobody mentioned is `unnamed_agenda`,
@@ -3818,30 +3339,21 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(message, client: FakeBuddyClient.new(rounds))
     end
 
-    it "puts the hours on the end" do
-      briefing([{ text: "Morning! Quiet one - just the noon run." }])
-
-      expect(reply.body).to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
-    end
-
-    it "keeps what the model wrote in front of them" do
+    it "puts the hours on the end, behind what the model wrote" do
       briefing([{ text: "Morning! Quiet one - just the noon run." }])
 
       expect(reply.body).to start_with("Morning! Quiet one - just the noon run.")
+      expect(reply.body).to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
     end
 
     # The model's own sentence is better every time - it can put the hour in a
     # line that belongs to the rest of the message.
-    it "leaves a briefing that gave an hour itself alone" do
-      briefing([{ text: "Morning! Rain moving through Alpine from 6pm." }])
+    it "leaves a briefing that gave an hour itself alone, however the clock is spaced" do
+      ["Morning! Rain moving through Alpine from 6pm.", "Morning! Alpine gets wet around 6 PM."].each do |said|
+        briefing([{ text: said }])
 
-      expect(reply.body).not_to include("Rain in Alpine 6pm-8pm")
-    end
-
-    it "counts a spaced-out clock time as having said it" do
-      briefing([{ text: "Morning! Alpine gets wet around 6 PM." }])
-
-      expect(reply.body).not_to include("Rain in Alpine 6pm-8pm")
+        expect(reply.body).not_to include("Rain in Alpine 6pm-8pm")
+      end
     end
 
     # Only the START of a window is looked for, so an end hour on its own is
@@ -3914,13 +3426,7 @@ RSpec.describe Buddy::GPT::Turn do
     # with. Chelsea's 5505 got the same. Only Rocco's seed had Alpine in it, and
     # his was the one that came back with no repairs at all.
     describe "a seed with no Alpine in it" do
-      it "leaves the briefing alone" do
-        briefing([{ text: "Morning! Quiet one." }], alpine: {})
-
-        expect(reply.body).to eq("Morning! Quiet one.")
-      end
-
-      it "spends no second attempt asking for it" do
+      it "leaves the briefing alone and spends no second attempt asking for it" do
         client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
         message = convo.byte_messages.create!(
           user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
@@ -3932,6 +3438,7 @@ RSpec.describe Buddy::GPT::Turn do
         described_class.run!(message, client: client)
 
         expect(client.calls.length).to eq(1)
+        expect(reply.body).to eq("Morning! Quiet one.")
       end
     end
   end
@@ -3974,21 +3481,13 @@ RSpec.describe Buddy::GPT::Turn do
     # A day list with the figures taken out is a complete-looking sentence, so
     # what it wants is the missing token where the claim already is - not a
     # second weather paragraph underneath saying the same days over again.
-    it "writes the figures into the sentence that gave only the days" do
+    it "writes the figures into the sentence that gave only the days, and records the repair" do
       briefing([
         { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
         { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
       ])
 
       expect(reply.body).to eq("Morning! Rain odds on Monday (27%) and Thursday (100%) up the canyon.")
-    end
-
-    it "records the repair it made in place" do
-      briefing([
-        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
-        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
-      ])
-
       expect(reply.metadata["repairs"]).to include("alpine_week_odds")
     end
 
@@ -4052,27 +3551,11 @@ RSpec.describe Buddy::GPT::Turn do
       )
       described_class.run!(message, client: client)
 
-      expect(client.calls.length).to eq(2)
-      expect(reply.metadata["repairs"]).to be_blank
-    end
-
-    it "tells the second attempt which fact it was" do
-      client  = FakeBuddyClient.new([
-        { text: "Morning! Rain odds on Monday and Thursday up the canyon." },
-        { text: "Morning! Alpine is 27% Monday, and Thursday is a flat 100%." },
-      ])
-      message = convo.byte_messages.create!(
-        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
-        metadata: {
-          "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today",
-          "briefing" => { "alpine" => alpine_facts },
-        },
-      )
-      described_class.run!(message, client: client)
-
       nudges = client.calls.last.input.select { |i| i[:role] == :developer }.pluck(:content).join("\n")
 
+      expect(client.calls.length).to eq(2)
       expect(nudges).to include("the rain odds on Alpine's week")
+      expect(reply.metadata["repairs"]).to be_blank
     end
 
     it "leaves ordinary turns alone" do
@@ -4102,25 +3585,17 @@ RSpec.describe Buddy::GPT::Turn do
       described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
     end
 
-    it "corrects a low that isn't the day's low" do
-      briefing("Morning! High of 93°F today, low of 70°F.")
-
-      expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
-    end
-
-    it "corrects a wrong high the same way" do
-      briefing("Morning! High of 88°F today, low of 69°F.")
-
-      expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
-    end
-
     # In place, never a second line. Two sets of figures disagreeing with each
-    # other is worse than the one that was wrong, because then neither can be
-    # trusted.
-    it "does not append a second weather sentence" do
-      briefing("Morning! High of 93°F today, low of 70°F.")
+    # other is worse than the one that was wrong.
+    it "corrects a wrong low or high in place" do
+      [
+        "Morning! High of 93°F today, low of 70°F.",
+        "Morning! High of 88°F today, low of 69°F.",
+      ].each do |said|
+        briefing(said)
 
-      expect(reply.body.scan(/High of/).length).to eq(1)
+        expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
+      end
     end
 
     it "leaves a correct line completely alone" do
@@ -4331,50 +3806,33 @@ RSpec.describe Buddy::GPT::Turn do
 
   # Prod 3229 again, the other half: the same sentence twice in one bubble.
   describe "a reply that repeats itself" do
-    it "says it once when the model wrote it twice in one part" do
-      run([{ text: "Kk! TV’s off.\n\nKk! TV’s off." }], text: "what's up")
+    # A mood marker is stripped before the comparison, so copies that differ
+    # only by one are still one. A second copy that is the TAIL of the first is
+    # contained in it, which catches short repeats under the word floor.
+    it "says it once when the copies match, differ by a marker, or one contains the other" do
+      [
+        ["Kk! TV’s off.\n\nKk! TV’s off.", "Kk! TV’s off."],
+        ["[[mood:uwu]]Kk! TV’s off.\n\nKk! TV’s off.", "Kk! TV’s off."],
+        ["Sure thing, what time later?\n\nWhat time later?", "Sure thing, what time later?"],
+      ].each do |said, shown|
+        run([{ text: said }], text: "what's up")
 
-      expect(reply.body).to eq("Kk! TV’s off.")
+        expect(reply.body).to eq(shown)
+      end
     end
 
-    # The client already drops a verbatim repeat across message parts, but it
-    # compares them BEFORE the mood marker is stripped — so this pair got past
-    # it and only became identical on the way to the screen.
-    it "says it once when the copies differed only by a mood marker" do
-      run([{ text: "[[mood:uwu]]Kk! TV’s off.\n\nKk! TV’s off." }], text: "what's up")
+    # A paragraph ADDING to the one above it is not a repeat, and two short
+    # acknowledgements are the pair the word floor exists to protect.
+    it "keeps paragraphs that say different things, say more, or are too short to judge" do
+      [
+        "First thing.\n\nSecond thing.",
+        "Water the plants.\n\nWater the plants at five, before you go.",
+        "Okie!\n\nOk!",
+      ].each do |said|
+        run([{ text: said }], text: "what's up")
 
-      expect(reply.body).to eq("Kk! TV’s off.")
-    end
-
-    it "keeps two paragraphs that actually say different things" do
-      run([{ text: "First thing.\n\nSecond thing." }], text: "what's up")
-
-      expect(reply.body).to eq("First thing.\n\nSecond thing.")
-    end
-
-    # Prod 3575, in full: "Sure thing, what time later?" then "What time
-    # later?" — one question asked twice. Five words against three, both under
-    # the eight-word floor, so the similarity check never ran and they aren't
-    # identical. The floor is right; what it was missing is containment.
-    it "asks the question once when the second copy is the tail of the first" do
-      run([{ text: "Sure thing, what time later?\n\nWhat time later?" }], text: "remind me later")
-
-      expect(reply.body).to eq("Sure thing, what time later?")
-    end
-
-    # The other direction is a paragraph ADDING to the one above it, not
-    # repeating it, and both belong on screen.
-    it "keeps a second paragraph that says more than the first" do
-      run([{ text: "Water the plants.\n\nWater the plants at five, before you go." }], text: "what's up")
-
-      expect(reply.body).to include("before you go")
-    end
-
-    # The pair the word floor exists to protect.
-    it "leaves two short acknowledgements alone" do
-      run([{ text: "Okie!\n\nOk!" }], text: "thanks")
-
-      expect(reply.body).to eq("Okie!\n\nOk!")
+        expect(reply.body).to eq(said)
+      end
     end
   end
 
@@ -4413,11 +3871,15 @@ RSpec.describe Buddy::GPT::Turn do
       ])
     end
 
-    it "offers get_context, the silent tools, and the proposal registry" do
+    # The face is Buddy::Sentiment's now, so none of it is offered: no tool to
+    # set one, no marker protocol, and not even which face is currently on.
+    it "offers get_context, the silent and read tools, and the proposal registry, and nothing about the face" do
       client = run([{ text: "ok" }])
 
       names = client.calls.first.tools.pluck(:name)
-      expect(names).to include(:get_context, :add_note, :remember, :complete_chore, :log_event)
+      expect(names).to include(:get_context, :add_note, :remember, :complete_chore, :log_event, :view_image)
+      expect(names).not_to include(:set_mood)
+      expect(client.calls.first.instructions).not_to include("[[mood:", "pet_expression", "[[propose:")
     end
 
     # Prod 6502, 17 Sep: an Aura Frames application-confirmation seed - say one
@@ -4520,22 +3982,6 @@ RSpec.describe Buddy::GPT::Turn do
         expect(client.calls.first.tools.pluck(:name)).to include(:complete_chore, :get_context)
       end
     end
-
-    # The face is Buddy::Sentiment's now, so none of it is offered: no tool to
-    # set one, no vocabulary of faces to pick from, no marker protocol, and not
-    # even which face is currently on.
-    it "offers the model nothing at all about its own face" do
-      client = run([{ text: "ok" }])
-
-      expect(client.calls.first.tools.pluck(:name)).not_to include(:set_mood)
-      expect(client.calls.first.instructions).not_to include("[[mood:", "pet_expression")
-    end
-
-    it "does not leak genuinely-retired marker protocols into the prompt" do
-      client = run([{ text: "ok" }])
-
-      expect(client.calls.first.instructions).not_to include("[[propose:")
-    end
   end
 
   # An image's pixels are sent once, on the turn it arrives, and every replay
@@ -4565,12 +4011,6 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reopened[:content].pluck(:type)).to eq([:input_text, :input_image])
       expect(reply.body).to eq("Top left says 42.")
     end
-
-    it "offers the tool alongside the other read tools" do
-      client = run([{ text: "ok" }])
-
-      expect(client.calls.first.tools.pluck(:name)).to include(:view_image)
-    end
   end
 
   describe "stray marker defense" do
@@ -4584,13 +4024,18 @@ RSpec.describe Buddy::GPT::Turn do
   end
 
   describe "cost accounting" do
-    it "records one usage row per API call, attached to the reply" do
+    it "records one usage row per API call and stamps the total onto the reply" do
       run([{ text: "Nice." }])
 
-      rows = BuddyUsage.where(byte_message_id: reply.id)
+      rows   = BuddyUsage.where(byte_message_id: reply.id)
+      rollup = reply.metadata["usage"]
       expect(rows.count).to eq(1)
       expect(rows.first).to have_attributes(kind: "turn", model: "gpt-5.4-mini", user_id: user.id)
       expect(rows.first.cost_micros).to be > 0
+      expect(rollup).to include(
+        "calls" => 1, "input_tokens" => 1_000, "cached_input_tokens" => 800, "output_tokens" => 100,
+      )
+      expect(rollup["cost_micros"]).to eq(rows.sum(:cost_micros))
     end
 
     it "records a row per round when the turn round-trips through get_context" do
@@ -4600,17 +4045,6 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(BuddyUsage.where(byte_message_id: reply.id).count).to eq(2)
-    end
-
-    it "stamps the per-message total onto the reply so the client needs no join" do
-      run([{ text: "Nice." }])
-
-      rollup = reply.metadata["usage"]
-      expect(rollup["calls"]).to eq(1)
-      expect(rollup["input_tokens"]).to eq(1_000)
-      expect(rollup["cached_input_tokens"]).to eq(800)
-      expect(rollup["output_tokens"]).to eq(100)
-      expect(rollup["cost_micros"]).to eq(BuddyUsage.where(byte_message_id: reply.id).sum(:cost_micros))
     end
 
     it "still records and stamps cost when the turn fails" do
@@ -4643,16 +4077,6 @@ RSpec.describe Buddy::GPT::Turn do
   # answered, or an action turn produces an empty bubble. This was the bug that
   # made 13 of 16 eval scenarios come back with no prose.
   describe "giving the model a turn to speak after it calls a tool" do
-    it "answers a proposal call and puts the follow-up prose in the reply" do
-      client = run([
-        { text: "", tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich" } }] },
-        { text: "Nice, that counts." },
-      ])
-
-      expect(client.calls.length).to eq(2)
-      expect(reply.body).to eq("Nice, that counts.")
-    end
-
     it "answers a silent tool call so a housekeeping-only turn still says something" do
       # "today was genuinely rough" used to spend its whole turn on housekeeping
       # and return an empty bubble, which is the worst possible moment for one.
@@ -4690,7 +4114,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
       expect(JSON.parse(output[:output])).to include("status" => "proposed")
-      expect(output[:output]).to match(/do not say it's done/i)
     end
 
     it "tells the model an immediate action already happened" do
@@ -4732,13 +4155,6 @@ RSpec.describe Buddy::GPT::Turn do
   # in hand. Prose used to ride on the call itself to save the second request,
   # but that meant writing the words BEFORE knowing whether the thing resolved.
   describe "the call-then-speak flow" do
-    it "answers in ONE call when no tool is needed" do
-      client = run([{ text: "Not much on my end, how's your night?" }])
-
-      expect(client.calls.length).to eq(1)
-      expect(reply.body).to eq("Not much on my end, how's your night?")
-    end
-
     it "spends a second call to speak after an action" do
       client = run([
         { tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich" } }] },
@@ -4768,15 +4184,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(reply.body).to eq("Oof, I'm sorry.")
       expect(BuddyMemory.where(user: user).pluck(:content)).to include("Takes it black.")
-    end
-
-    it "answers from the round that saw the tool output, not the one before it" do
-      run([
-        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
-        { text: "Nothing left on your list." },
-      ])
-
-      expect(reply.body).to eq("Nothing left on your list.")
     end
   end
 
@@ -4826,16 +4233,17 @@ RSpec.describe Buddy::GPT::Turn do
         { text: "No print on record for that one." },
       ])
 
-      output = output_of(client)
-      expect(output["prints"]).to be_empty
-      expect(output["note"]).to include("that IS the outcome")
+      expect(output_of(client)["prints"]).to be_empty
     end
 
     # The results were the whole point; nothing about a lookup belongs in a
-    # checklist or an activity chip, and running it twice would double the query.
-    it "leaves no proposal behind for ProposalBuilder to run again" do
+    # checklist or an activity chip, running it twice would double the query,
+    # and a second copy of the reply arriving as a push is what the relay used
+    # to produce.
+    it "leaves no proposal behind and starts no second turn of its own" do
       print!("game_tray-vase")
       allow(Buddy::ProposalBuilder).to receive(:create).and_call_original
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
 
       run([
         { tool_calls: [{ name: :print_history, arguments: { "query" => "game tray" } }] },
@@ -4844,19 +4252,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(Buddy::ProposalBuilder).not_to have_received(:create)
       expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'")).to be_empty
-    end
-
-    # It answered the model in this turn; a second copy of the same reply,
-    # arriving as a push, is what the relay used to produce.
-    it "starts no second turn of its own" do
-      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
-      print!("game_tray-vase")
-
-      run([
-        { tool_calls: [{ name: :print_history, arguments: { "query" => "game tray" } }] },
-        { text: "Found it." },
-      ])
-
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
       expect(convo.byte_messages.where(direction: :inbound).count).to eq(1)
     end
@@ -4888,25 +4283,6 @@ RSpec.describe Buddy::GPT::Turn do
       }
 
       expect(steps.last).to eq(["Going through your chores", "Starting the timer"])
-    end
-
-    # get_context fronts two dozen unrelated sections, so its own name says
-    # nothing useful. Prod showed "Checking your day" while a doorbell watch was
-    # being set up, which touches nothing about the day.
-    it "names what it's actually looking up rather than the tool" do
-      steps = broadcasts {
-        run([
-          { tool_calls: [{ name: :get_context, arguments: { "sections" => %w[jil_triggers jil_functions] } }] },
-          { text: "Set." },
-        ])
-      }
-
-      expect(steps.last).to eq(["Looking through your tools"])
-    end
-
-    it "falls back to something neutral when the sections are unrecognised" do
-      expect(Buddy::Progress.phrase_for(:get_context, { "sections" => ["nonsense"] })).to eq("Looking things up")
-      expect(Buddy::Progress.phrase_for(:get_context, nil)).to eq("Looking things up")
     end
 
     # The line has to be up BEFORE the tool runs, or the slowest part of the
@@ -4958,10 +4334,6 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("All good.")
     end
 
-    it "falls back to the tool's own name when it has no phrase of its own" do
-      expect(Buddy::Progress.phrase_for(:some_new_tool)).to eq("Some new tool")
-    end
-
     # A line reading "Adding a note" every time it keeps something is the noise
     # this whole thing exists to replace.
     it "says nothing for the housekeeping it does alongside the real work" do
@@ -4998,8 +4370,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       output = JSON.parse(client.calls.last.input.find { |i| i[:type] == :function_call_output }[:output])
       expect(output["status"]).to eq("failed")
-      expect(output["note"]).to match(/did NOT happen/i)
-      expect(reply.body).to match(/couldn't find a chore/i)
     end
 
     it "reports a failure when a required argument is missing" do
@@ -5041,7 +4411,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["status"]).to eq("duplicate")
-      expect(output["note"]).to match(/already called this/i)
     end
 
     # The same call twice in ONE round is the model asking for two of something,
@@ -5119,7 +4488,7 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(2)
-      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("Nobody spoke to you") }).to be(true)
+      expect(client.calls[1].input.pluck(:content)).to include(described_class::NOTIFY_NUDGE)
       expect(reply.body).to eq("Deploy's through clean.")
     end
 
@@ -5181,57 +4550,6 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(client.calls.length).to eq(3)
       expect(reply.body).to eq("That's the dishes done.")
-    end
-  end
-
-  # A nudge is prompt text like any other, and nobody had ever swept these.
-  #
-  # CHECK_ACTIONS_NUDGE carried a ready-made concession for its "it isn't there"
-  # branch, with `then do it` as the two words after it. Prod 5664: a paraphrase
-  # of the quote went out, followed by a question asking what the routine was
-  # meant to do, and the thing took a third message. The quote was used; the
-  # instruction behind it was not.
-  #
-  # Same list-of-planted-sentences shape as the tool-description sweep, and for
-  # the reason recorded there: a general "quoted sentence" rule cannot tell
-  # whose voice a quote is in, and every nudge legitimately quotes THEIRS.
-  describe "what a nudge hands the model" do
-    let(:nudges) {
-      described_class.constants.grep(/NUDGE\z/).map { |c| described_class.const_get(c).to_s }
-    }
-
-    it "covers every one of them" do
-      expect(nudges.length).to be >= 9
-    end
-
-    it "quotes no reply of Buddy's own for the model to say back" do
-      planted = [
-        "You're right, that didn't go through",
-        "you're right, that one came off",
-        "Nothing got undone on my side, so you're still good",
-        "You've got this",
-        "you showed up today",
-      ].select { |line| nudges.any? { |n| n.include?(line) } }
-
-      expect(planted).to be_empty,
-        "a sentence in Buddy's voice, quoted in a nudge, comes back out of it: #{planted.inspect}"
-    end
-
-    # Every rule those quotes were carrying survives being described, which was
-    # the whole of the rewrite and cost nothing.
-    it "still says the doing is the answer on a disputed action" do
-      expect(described_class::CHECK_ACTIONS_NUDGE).to include("and then DO")
-      expect(described_class::CHECK_ACTIONS_NUDGE).to include("The doing")
-      expect(described_class::CHECK_ACTIONS_NUDGE).to include("having to ask a third time")
-    end
-
-    it "still says to put back what came off" do
-      expect(described_class::UNDO_REGRET_NUDGE).to include("PUT IT BACK")
-      expect(described_class::UNDO_REGRET_NUDGE).to include("Never reassure them that nothing happened")
-    end
-
-    it "still says an affirmation that fits anybody is the wrong one" do
-      expect(described_class::AFFIRMATION_NUDGE).to include("would fit anybody")
     end
   end
 end

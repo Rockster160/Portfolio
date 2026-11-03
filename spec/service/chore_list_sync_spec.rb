@@ -55,83 +55,27 @@ RSpec.describe ChoreListSync do
   end
 
   describe "chores appearing on the list" do
-    it "puts a chore that is due today on the list" do
+    # Almost every Dailies pin is `freq: daily`, so it IS due today every day,
+    # and a chore that comes round every single day is a standing routine,
+    # pinned or not — except a single task carrying a daily recurrence, whose
+    # schedule exists to keep it on the list until it's done once.
+    it "carries what is due or overdue, and none of the routines, Today-only rows, or finished occurrences" do
       chore!("Water Plants", one_off: true, starts_on: day)
-
-      described_class.push(user)
-
-      expect(item_names).to include("Water Plants")
-    end
-
-    it "puts an overdue carryover on the list" do
-      chore!("Vacuum")
-      chore = Chore.find_by(name: "Vacuum")
-      chore.update!(marked_due_at: ChoreDay.starts_at(day - 3, user) + 1.hour)
-
-      described_class.push(user)
-
-      expect(item_names).to include("Vacuum")
-    end
-
-    # Almost every Dailies pin is `freq: daily`, so it IS due today every day.
-    # The pin still wins — the list is what needs doing, not a copy of Today.
-    it "leaves off a daily chore the viewer has pinned to Dailies" do
-      chore = chore!("8oz Water", recurrence: { freq: :daily })
-      ChoreDaily.create!(user: user, chore: chore)
-
-      described_class.push(user)
-
-      expect(item_names).not_to include("8oz Water")
-    end
-
-    # The recurrence says the same thing the pin does. A chore that comes round
-    # every single day is a standing routine, pinned or not.
-    it "leaves off a daily-recurring chore that is not pinned" do
-      chore!("Kitty Litter", recurrence: { freq: :daily })
-
-      described_class.push(user)
-
-      expect(item_names).not_to include("Kitty Litter")
-    end
-
-    # A single task carrying a daily recurrence is the exception to the rule
-    # above: the schedule exists precisely to keep it on the list until it's
-    # completed once, so the daily rule doesn't evict it.
-    it "keeps a single task carrying a daily recurrence" do
+      chore!("Vacuum").update!(marked_due_at: ChoreDay.starts_at(day - 3, user) + 1.hour)
       chore!("Renew Registration", one_off: true, recurrence: { freq: :daily })
-
-      described_class.push(user)
-
-      expect(item_names).to include("Renew Registration")
-    end
-
-    it "leaves off a chore that is on Today but not due" do
+      ChoreDaily.create!(user: user, chore: chore!("8oz Water", recurrence: { freq: :daily }))
+      chore!("Kitty Litter", recurrence: { freq: :daily })
       chore!("Tidy Desk", show_on_today_view: :always)
-
-      described_class.push(user)
-
-      expect(item_names).not_to include("Tidy Desk")
-    end
-
-    it "leaves off a chore that has already been done today" do
-      chore = chore!("Dishes", one_off: true, starts_on: day)
-      ChoreCompleter.new(chore, user).call
-
-      described_class.push(user)
-
-      expect(item_names).not_to include("Dishes")
-    end
-
-    it "leaves off an occurrence that was skipped" do
-      chore = chore!("Mop", one_off: true, starts_on: day)
+      ChoreCompleter.new(chore!("Dishes", one_off: true, starts_on: day), user).call
       ChoreCompletion.create!(
-        chore: chore, user: user, completed_at: Time.current, day_key: day,
+        chore: chore!("Mop", one_off: true, starts_on: day), user: user, completed_at: Time.current, day_key: day,
         payout_skipped: true, anonymous: true, occurrence_skipped: true,
       )
 
       described_class.push(user)
 
-      expect(item_names).not_to include("Mop")
+      expect(item_names).to include("Water Plants", "Vacuum", "Renew Registration")
+      expect(item_names).not_to include("8oz Water", "Kitty Litter", "Tidy Desk", "Dishes", "Mop")
     end
 
     it "takes the item off again once the chore is completed" do
@@ -176,18 +120,6 @@ RSpec.describe ChoreListSync do
 
         [obj[:object].name, obj[:items].map(&:name)]
       }
-    end
-
-    it "files each item under Today or Overdue" do
-      chore!("Fresh Job", one_off: true, starts_on: day)
-      chore!("Stale Job", one_off: true, starts_on: day - 4)
-
-      described_class.push(user)
-
-      expect(section_layout).to eq([
-        ["Today", ["Fresh Job"]],
-        ["Overdue", ["Stale Job"]],
-      ])
     end
 
     # A row predating the mirror, or one whose chore has since gone. Typing onto

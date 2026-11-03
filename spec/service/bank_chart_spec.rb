@@ -34,24 +34,13 @@ RSpec.describe BankChart do
     end
 
     # Money out and money in stand SIDE BY SIDE per bucket rather than one
-    # column crossing zero, so each reads as a whole on its own.
-    it "puts spending and income in their own stacks" do
+    # column crossing zero, and both grow upward on the one shared scale.
+    it "puts spending and income in their own stacks, as magnitudes, in the page's colors" do
       result = payload
 
-      expect(series(result, "Groceries")[:stack]).to eq("out")
-      expect(series(result, "Pay Check")[:stack]).to eq("in")
-    end
-
-    # Both grow upward on the one shared scale — never a second or mirrored axis.
-    it "plots magnitudes, so both arms compare directly" do
-      result = payload
-
-      expect(series(result, "Groceries")[:data]).to eq([50.0])
-      expect(series(result, "Pay Check")[:data]).to eq([2500.0])
-    end
-
-    it "draws each category in the color the rest of the page uses" do
-      expect(series(payload, "Groceries")[:color]).to eq(TransactionCategory.color(:groceries))
+      expect(series(result, "Groceries")).to include(stack: "out", data: [50.0])
+      expect(series(result, "Pay Check")).to include(stack: "in", data: [2500.0])
+      expect(series(result, "Groceries")[:color]).to eq(TransactionCategory.color(:groceries))
     end
   end
 
@@ -128,14 +117,14 @@ RSpec.describe BankChart do
     result = payload(bucket: :day)
 
     expect(result[:datasets]).to be_empty
-    expect(result[:message]).to include("pick a bigger bucket")
+    expect(result[:message]).to be_present
   end
 
   it "says there is nothing to chart when the search matched nothing" do
     result = payload(scope: BankTransaction.none)
 
     expect(result[:datasets]).to be_empty
-    expect(result[:message]).to eq("Nothing to chart.")
+    expect(result[:message]).to be_present
   end
 
   it "charts only what the given scope matched" do

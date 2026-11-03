@@ -39,45 +39,21 @@ RSpec.describe Buddy::WebPage do
     HTML
   end
 
-  it "hands back the page's own text" do
+  # The date in the path is one of several the page lists, which is why the
+  # page gets read rather than the URL; and a date, time and place on three
+  # lines must arrive on three lines.
+  it "hands back the page's own text, every date, its line breaks, and none of the chrome", :aggregate_failures do
     stub_page(events_html)
 
     page = described_class.read("https://example.com/events/yappy-hour/")
+    text = page[:text]
 
     expect(page[:title]).to eq("Yappy Hour | Events")
     expect(page[:description]).to eq("A dog-friendly gathering in the park.")
-    expect(page[:text]).to include("Date: October 8")
-    expect(page[:text]).to include("Location: Jordan Park, 1060 S 900 W")
-  end
-
-  # The date in the path is one of several the page lists, which is the whole
-  # reason the page gets read rather than the URL.
-  it "keeps every date the page lists rather than the one in the link" do
-    stub_page(events_html)
-
-    text = described_class.read("https://example.com/events/yappy-hour/")[:text]
-
-    expect(text).to include("June 11, 2026")
-    expect(text).to include("October 8")
-  end
-
-  it "leaves out the chrome that surrounds the page" do
-    stub_page(events_html)
-
-    text = described_class.read("https://example.com/events/yappy-hour/")[:text]
-
+    expect(text).to include("June 11, 2026", "Date: October 8", "Location: Jordan Park, 1060 S 900 W")
+    expect(text).to match(/Date: October 8\n+Time: 6:00 p\.m\./)
     expect(text).not_to include("var tracking")
     expect(text).not_to include("Copyright the city")
-  end
-
-  # A date, a time and a place written on three lines have to arrive on three
-  # lines; run together they read as one sentence and the place loses its label.
-  it "keeps the page's own line breaks" do
-    stub_page(events_html)
-
-    text = described_class.read("https://example.com/events/yappy-hour/")[:text]
-
-    expect(text).to match(/Date: October 8\n+Time: 6:00 p\.m\./)
   end
 
   it "says which page it ended up on" do
@@ -112,12 +88,9 @@ RSpec.describe Buddy::WebPage do
         .to raise_error(/isn't a web link/)
     end
 
-    it "refuses the loopback by name" do
+    it "refuses the loopback by name and a literal private address", :aggregate_failures do
       expect { described_class.read("http://localhost:8790/jobs/1488") }
         .to raise_error(/machine on the network/)
-    end
-
-    it "refuses a literal private address" do
       expect { described_class.read("http://192.168.1.4/admin") }
         .to raise_error(/machine on the network/)
     end

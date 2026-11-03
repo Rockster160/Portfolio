@@ -1,11 +1,8 @@
 require "rails_helper"
 
-# A travel epoch left behind by a previous placement.
-#
-# Prod 15 Sep, item 1081 "Plunge with Wil": a Tuesday 2:45 PM event whose whole
-# travel hash was Monday's. Both briefings read it out as "leave by 2:49pm" —
-# four minutes AFTER the thing began — because every reader formats these
-# through Buddy::Clock, which prints a clock time and drops the date.
+# A travel epoch left behind by a previous placement of the item. Every reader
+# formats these through Buddy::Clock, which prints a clock time and drops the
+# date, so a stale one reads as a plausible time on the wrong day.
 RSpec.describe AgendaItem do
   let(:user)     { create(:user) }
   let(:agenda)   { user.agendas.create!(name: "Personal") }
@@ -21,37 +18,21 @@ RSpec.describe AgendaItem do
     )
   end
 
-  # The real row, verbatim: leave_at is Mon 14 Sep 2:49 PM MDT and
-  # post_arrive_at is Mon 14 Sep 5:26 PM MDT, against a Tue 15 Sep event.
-  describe "the one that shipped" do
-    let(:stale) {
-      {
-        "leave_at"            => 1_789_418_975,
-        "post_arrive_at"      => 1_789_428_394,
-        "travel_seconds"      => 2757,
-        "travel_minutes"      => 46,
-        "post_travel_seconds" => 2794,
-        "post_travel_minutes" => 47,
-      }
-    }
+  # A departure from the day before and an arrival home from the same stale
+  # placement, against a Tue 15 Sep event.
+  it "refuses a day-stale stamp and falls back to arithmetic", :aggregate_failures do
+    row = item({
+      "leave_at"            => 1_789_418_975,
+      "post_arrive_at"      => 1_789_428_394,
+      "travel_seconds"      => 2757,
+      "travel_minutes"      => 46,
+      "post_travel_seconds" => 2794,
+      "post_travel_minutes" => 47,
+    })
 
-    it "refuses a departure from the day before" do
-      expect(item(stale).leave_at).to be_nil
-    end
-
-    # Not nil: `home_at` has always had arithmetic to fall back on, and an
-    # incoherent stamp is treated as no stamp — which is a state it handles.
-    it "computes the way home rather than trusting a stale arrival" do
-      row = item(stale)
-
-      expect(row.home_at).to eq(Time.zone.at(row.end_at.to_i + 2794))
-    end
-
-    # What the person actually reads. `leave_by` blank is what lets
-    # briefing_facts fall through to the bare drive time.
-    it "says nothing about a leave-by rather than saying the wrong one" do
-      expect(Buddy::Context.send(:leave_by, item(stale), user)).to be_nil
-    end
+    expect(row.leave_at).to be_nil
+    expect(row.home_at).to eq(Time.zone.at(row.end_at.to_i + 2794))
+    expect(Buddy::Context.send(:leave_by, row, user)).to be_nil
   end
 
   describe "an epoch that belongs to its event" do
@@ -60,23 +41,17 @@ RSpec.describe AgendaItem do
       { "leave_at" => leave, "travel_seconds" => 2757, "post_travel_seconds" => 2794 }
     }
 
-    it "keeps it" do
-      expect(item(good).leave_at).to eq(Time.zone.at(good["leave_at"]))
-    end
+    # `now:` because `leave_by` also asks whether the departure is still ahead,
+    # and the event itself is in the past.
+    it "keeps it and reads it out" do
+      row = item(good)
 
-    # `now:` because this is about whether the epoch BELONGS to the event, and
-    # `leave_by` now also asks whether the departure is still ahead - the event
-    # itself is three weeks in the past, so without a clock to read it against
-    # the two questions can't be told apart.
-    it "reads it out" do
-      at = Buddy::Context.send(:leave_by, item(good), user, now: start_at - 1.hour)
-
-      expect(at).to be_present
+      expect(row.leave_at).to eq(Time.zone.at(good["leave_at"]))
+      expect(Buddy::Context.send(:leave_by, row, user, now: start_at - 1.hour)).to be_present
     end
   end
 
-  # The bound is what catches a day-stale stamp, and 23 hours is what the real
-  # one was — so a window of a whole day would have let it straight through.
+  # A window of a whole day would let a day-stale stamp straight through.
   it "rejects a departure further ahead than any journey it plans" do
     row = item({ "leave_at" => (start_at - 13.hours).to_i, "travel_minutes" => 46 })
 
@@ -93,26 +68,18 @@ RSpec.describe AgendaItem do
   # real cross-day drive (not a 46-min one 13h early) keeps its leave-by. A 14h
   # drive leaving 14h ahead is coherent; the stale case above stays rejected
   # because its drive was short.
-  it "keeps a long lead when the drive itself is that long" do
+  it "keeps a long lead when the drive itself is that long, and names the day it leaves" do
     drive = 14.hours.to_i
     row = item({ "leave_at" => (start_at - 14.hours).to_i, "travel_seconds" => drive })
 
     expect(row.leave_at).to eq(Time.zone.at(row.travel_hash["leave_at"]))
-  end
-
-  # The departure is the night before, so the reader names the day rather than a
-  # bare clock time that would read as the event's own day.
-  it "names the day when a long drive leaves the day before" do
-    drive = 14.hours.to_i
-    row = item({ "leave_at" => (start_at - 14.hours).to_i, "travel_seconds" => drive })
 
     said = Buddy::Context.send(:leave_by, row, user, now: start_at - 15.hours)
     expect(said).to eq(Buddy::Clock.day_at(row.leave_at, zone: user.timezone))
     expect(said).to match(/\A[A-Z][a-z]{2} /) # "Sun 12:45am"
   end
 
-  # A departure AFTER the start is the shape that shipped, and it is never
-  # right whatever the gap.
+  # A departure AFTER the start is never right whatever the gap.
   it "rejects a departure after the thing has started" do
     row = item({ "leave_at" => (start_at + 4.minutes).to_i, "travel_minutes" => 46 })
 

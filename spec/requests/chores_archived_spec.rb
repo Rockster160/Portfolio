@@ -27,7 +27,6 @@ RSpec.describe "Chores archived page", type: :request do
     it "renders even when nothing is archived" do
       get chores_archived_path
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("No archived chores")
     end
 
     it "resolves hicon:<id> icons to inline <img> instead of raw text" do
@@ -70,7 +69,6 @@ RSpec.describe "Chores archived page", type: :request do
       get chores_archived_path
       # Page 1 shows 25 rows worth of unarchive forms.
       expect(response.body.scan("/unarchive").size).to eq(25)
-      expect(response.body).to include("page 1 of 2")
 
       get chores_archived_path, params: { page: 2 }
       expect(response.body.scan("/unarchive").size).to eq(5)

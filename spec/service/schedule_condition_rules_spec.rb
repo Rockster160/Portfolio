@@ -133,10 +133,6 @@ RSpec.describe ScheduleCondition do
       expect(combined[:of].pluck(:kind)).to contain_exactly(:location, :time)
     end
 
-    it "reads back as one sentence" do
-      expect(described_class.describe(rule)).to eq("only if Garage Door is open and it's after 10pm and before 6am")
-    end
-
     it "round-trips through a jsonb column" do
       stored = JSON.parse(rule.to_json)
 

@@ -32,28 +32,15 @@ RSpec.describe ByteMessageIntake do
       )
     end
 
-    it "creates one row when the same send arrives twice" do
-      first = send!("Also add light covers")
-
-      expect { send!("Also add light covers") }.not_to change(ByteMessage, :count)
-      expect(send!("Also add light covers").id).to eq(first.id)
-    end
-
     # The duplicate turn is what actually cost something: two replies, and the
     # task on the agenda twice.
-    it "runs the turn once" do
-      send!("Also add light covers")
-      send!("Also add light covers")
-
-      expect(BuddyDeliverWorker).to have_received(:perform_async).once
-    end
-
-    it "hands back the row the client is waiting for, not nil" do
+    it "creates one row and runs one turn when the same send arrives twice, handing the row back" do
+      again = nil
       first = send!("Also add light covers")
-      again = send!("Also add light covers")
 
-      expect(again).to be_a(ByteMessage)
-      expect(again.body).to eq(first.body)
+      expect { again = send!("Also add light covers") }.not_to change(ByteMessage, :count)
+      expect(again.id).to eq(first.id)
+      expect(BuddyDeliverWorker).to have_received(:perform_async).once
     end
 
     # A retry can carry different text only if something is badly wrong; the id is
@@ -238,15 +225,10 @@ RSpec.describe ByteMessageIntake do
     end
 
     describe "dispatch" do
-      it "sends it to Jarvis instead of Buddy" do
-        send!(".garage door open")
-
+      it "sends it to Jarvis instead of Buddy, marking the bubble as Jarvis's" do
+        expect(send!(".garage door open").metadata["kind"]).to eq("jarvis")
         expect(ByteJarvisWorker).to have_received(:perform_async)
         expect(BuddyDeliverWorker).not_to have_received(:perform_async)
-      end
-
-      it "marks the bubble so the thread and Buddy both know what it was" do
-        expect(send!(".garage door open").metadata["kind"]).to eq("jarvis")
       end
 
       it "still sends an ordinary message to Buddy" do

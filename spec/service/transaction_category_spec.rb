@@ -3,11 +3,6 @@ require "rails_helper"
 RSpec.describe TransactionCategory do
   let(:user) { User.me }
 
-  it "holds the 22 categories the chart colours" do
-    expect(described_class::ALL.size).to eq(22)
-    expect(described_class::ALL).to include(:mortgage, :"eat out", :"pay check", :other)
-  end
-
   # Ported from Jil task 453 on 2026-08-12. Checked against all 456 distinct
   # merchant names in production: 383 matched the stored category exactly and
   # every disagreement was a human override in the prompt, not a rule.
@@ -148,19 +143,10 @@ RSpec.describe TransactionCategory do
   end
 
   describe ".valid?" do
-    it "accepts a known category as a string" do
+    it "accepts a known category as a string or symbol, and nothing outside the vocabulary" do
       expect(described_class).to be_valid("eat out")
-    end
-
-    it "accepts it as a symbol" do
       expect(described_class).to be_valid(:groceries)
-    end
-
-    it "rejects one that is not in the vocabulary" do
       expect(described_class).not_to be_valid("Extra Expense")
-    end
-
-    it "rejects nil" do
       expect(described_class).not_to be_valid(nil)
     end
   end

@@ -111,7 +111,11 @@ RSpec.describe Jarvis do
   end
 
   context "with lists" do
-    it "can add items to a list with elaborate text" do
+    it "can add items to a named list however it is phrased" do
+      ["add miter saw to home depot", "add miter saw home depot"].each { |words|
+        expect(jarvis(words)).to eq("Home Depot:\n - miter saw"), words
+        @other_list.reload.list_items.destroy_all
+      }
       expect(jarvis("add miter saw to my home depot list")).to eq("Home Depot:\n - miter saw")
       # `@other_list` is built in before(:context) and outlives every example,
       # so its association cache can still hold rows another example loaded and
@@ -119,18 +123,10 @@ RSpec.describe Jarvis do
       expect(@other_list.reload.list_items.pluck(:name)).to include("miter saw")
     end
 
-    specify { expect(jarvis("add miter saw to home depot")).to eq("Home Depot:\n - miter saw") }
-    specify { expect(jarvis("add miter saw home depot")).to eq("Home Depot:\n - miter saw") }
-
-    it "can retrieve lists" do
+    it "can retrieve lists, by name or as a question" do
       @other_list.list_items.create(name: "Hammer")
 
       expect(jarvis("home depot")).to eq("Home Depot:\n - Hammer")
-    end
-
-    it "can retrieve lists with a question" do
-      @other_list.list_items.create(name: "Hammer")
-
       expect(jarvis("What's on my Home Depot list?")).to eq("Home Depot:\n - Hammer")
     end
 
@@ -150,13 +146,6 @@ RSpec.describe Jarvis do
   end
 
   context "with car" do
-    # turn the ac|heater on in my car|at home
-    let(:tesla_control) { double("TeslaControl", vin: 1, vehicle_data: {}, cached_vehicle_data: {}) }
-
-    before do
-      allow(TeslaControl).to receive(:new).and_return(tesla_control)
-    end
-
     address = "123 fake street"
     actions = {
       start_car:  {
@@ -275,20 +264,27 @@ RSpec.describe Jarvis do
       },
     }
 
+    def stub_control(name)
+      double(name, vin: 1, vehicle_data: {}, cached_vehicle_data: {}).tap { |control|
+        allow(TeslaControl).to receive(:new).and_return(control)
+        allow(control).to receive(:loc)
+        allow(control).to receive(:start_car)
+      }
+    end
+
     actions.each do |action, data|
       action = action.to_s.gsub(/x+_/, "").to_sym
-      data[:opts].each do |opt|
-        it "can #{opt}" do
-          allow(tesla_control).to receive(:loc)
-          allow(tesla_control).to receive(:start_car)
+      it "can #{action} from each phrasing", :aggregate_failures do
+        data[:opts].each do |opt|
+          control = stub_control("TeslaControl for #{opt.inspect}")
           data[:others]&.each do |k, args|
-            expect(tesla_control).to receive(k).with(*args) if args.present?
-            expect(tesla_control).to receive(k) if args.blank?
+            expect(control).to receive(k).with(*args) if args.present?
+            expect(control).to receive(k) if args.blank?
           end
           unless data[:others]&.any? { |o| o.is_a?(Array) ? o[0] == action : o == action }
-            expect(tesla_control).to receive(action) unless data[:skip]
+            expect(control).to receive(action) unless data[:skip]
           end
-          expect(jarvis(opt)).to eq(data[:res])
+          expect(jarvis(opt)).to eq(data[:res]), opt
         end
       end
     end
@@ -312,46 +308,14 @@ RSpec.describe Jarvis do
       },
     }
 
-    specific_actions.each do |action, data|
-      it "can #{action}" do
-        allow(tesla_control).to receive(:loc)
-        allow(tesla_control).to receive(:start_car)
-        data[:stub]&.each do |k, args|
-          expect(tesla_control).to receive(k).with(args) if args
-          expect(tesla_control).to receive(k) unless args
-        end
-        expect(jarvis(action)).to eq(data[:res])
+    it "navigates to named places at their stored address", :aggregate_failures do
+      specific_actions.each do |action, data|
+        control = stub_control("TeslaControl for #{action.inspect}")
+        data[:stub].each { |k, args| expect(control).to receive(k).with(args) }
+        expect(jarvis(action)).to eq(data[:res]), action
       end
     end
   end
-
-  # Garage is now a task, so would have to pull that in to get it working.
-  # context "with garage" do
-  #   before do
-  #     allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
-  #   end
-  #
-  #   actions = {
-  #     "open my garage"   => "Opening the garage",
-  #     "Open the garage"  => "Opening the garage",
-  #     "open garage"      => "Opening the garage",
-  #     "garage open"      => "Opening the garage",
-  #
-  #     "garage"           => "Toggling the garage",
-  #     "garage toggle"    => "Toggling the garage",
-  #
-  #     "close my garage"  => "Closing the garage",
-  #     "Close the garage" => "Closing the garage",
-  #     "close garage"     => "Closing the garage",
-  #     "garage close"     => "Closing the garage",
-  #   }
-  #
-  #   actions.each do |action, res|
-  #     it "can #{action}" do
-  #       expect(jarvis(action)).to eq(res)
-  #     end
-  #   end
-  # end
 
   context "with texts" do
     actions = {
@@ -361,17 +325,14 @@ RSpec.describe Jarvis do
       "Text me go do something"                     => "Go do something",
     }
 
-    actions.each do |action, msg|
-      it "can #{action}" do
-        expect(SmsWorker).to receive(:perform_async).with("3852599640", msg)
-        expect(jarvis(action)).to eq("Sending you a text saying: #{msg}")
-      end
-    end
+    it "texts the message out of each phrasing, or nil when there is none", :aggregate_failures do
+      sent = []
+      allow(SmsWorker).to receive(:perform_async) { |*args| sent << args }
 
-    it "can Text me" do
-      # When no message content, @args is nil after parsing
-      expect(SmsWorker).to receive(:perform_async).with("3852599640", nil)
-      expect(jarvis("Text me")).to eq("Sending you a text saying: ")
+      actions.merge("Text me" => nil).each do |action, msg|
+        expect(jarvis(action)).to eq("Sending you a text saying: #{msg}"), action
+        expect(sent.last).to eq(["3852599640", msg]), action
+      end
     end
   end
 
@@ -402,59 +363,25 @@ RSpec.describe Jarvis do
       "Ping me The garage was left open." => "The garage was left open.",
     }
 
-    actions.each do |action, msg|
-      it "can #{action}" do
-        expect(jarvis(action)).to eq("Sending you a ping saying: #{msg}")
-        expect($ping_calls.last).to be_present
+    it "pings the parsed title to the user for each phrasing", :aggregate_failures do
+      @admin.lists.find_or_create_by(name: "Shopping")
+
+      actions.merge(
+        "Ping me"                                                             => nil,
+        # Quoted content is the payload: never a list command, never a schedule.
+        'Ping me "add fries to shopping"'                                     => "Add fries to shopping",
+        "Ping me \u201Cadd fries to shopping\u201D"                           => "Add fries to shopping",
+        'Ping me "Not done: buy groceries at 3pm, finish report by tomorrow"' => "Not done: buy groceries at 3pm, finish report by tomorrow",
+        # Inch marks survive, inside or outside a quoted span.
+        'Ping me Baby Gate 3\'4 ⅞"'                                           => "Baby Gate 3'4 ⅞\"",
+        'Ping me cut board 11" x 12 1/4"'                                     => 'Cut board 11" x 12 1/4"',
+        'Ping me "Not done: Baby Gate 3\'4 ⅞"'                                => "Not done: Baby Gate 3'4 ⅞",
+      ).each do |action, msg|
+        expect(jarvis(action)).to eq("Sending you a ping saying: #{msg}"), action
         expect($ping_calls.last[0]).to be_a(User)
-        expect($ping_calls.last[1][:title]).to eq(msg)
+        expect($ping_calls.last[1][:title]).to eq(msg), action
       end
-    end
-
-    it "can Ping me" do
-      # When no message content, @args is nil after parsing
-      expect(jarvis("Ping me")).to eq("Sending you a ping saying: ")
-      expect($ping_calls.last).to be_present
-      expect($ping_calls.last[0]).to be_a(User)
-      expect($ping_calls.last[1][:title]).to be_nil
-    end
-
-    it "does not trigger List when quoted content contains list keywords" do
-      @admin.lists.find_or_create_by(name: "Shopping")
-      result = jarvis('Ping me "add fries to shopping"')
-      expect(result).to eq("Sending you a ping saying: Add fries to shopping")
-      expect($ping_calls.last[1][:title]).to eq("Add fries to shopping")
-    end
-
-    it "does not trigger List when round/curly quotes are used" do
-      @admin.lists.find_or_create_by(name: "Shopping")
-      result = jarvis("Ping me \u201Cadd fries to shopping\u201D")
-      expect(result).to eq("Sending you a ping saying: Add fries to shopping")
-      expect($ping_calls.last[1][:title]).to eq("Add fries to shopping")
-    end
-
-    it "preserves lone double quotes in measurements" do
-      result = jarvis('Ping me Baby Gate 3\'4 ⅞"')
-      expect(result).to eq("Sending you a ping saying: Baby Gate 3'4 ⅞\"")
-      expect($ping_calls.last[1][:title]).to eq("Baby Gate 3'4 ⅞\"")
-    end
-
-    it "preserves multiple measurement quotes" do
-      result = jarvis('Ping me cut board 11" x 12 1/4"')
-      expect(result).to eq('Sending you a ping saying: Cut board 11" x 12 1/4"')
-      expect($ping_calls.last[1][:title]).to eq('Cut board 11" x 12 1/4"')
-    end
-
-    it "unwraps quotes but preserves inner measurement quotes" do
-      result = jarvis('Ping me "Not done: Baby Gate 3\'4 ⅞"')
-      expect(result).to eq("Sending you a ping saying: Not done: Baby Gate 3'4 ⅞")
-      expect($ping_calls.last[1][:title]).to eq("Not done: Baby Gate 3'4 ⅞")
-    end
-
-    it "does not schedule when time-like text is inside quotes" do
-      result = jarvis('Ping me "Not done: buy groceries at 3pm, finish report by tomorrow"')
-      expect(result).to eq("Sending you a ping saying: Not done: buy groceries at 3pm, finish report by tomorrow")
-      expect($ping_calls.last[1][:title]).to eq("Not done: buy groceries at 3pm, finish report by tomorrow")
+      expect(@admin.lists.find_by(name: "Shopping").list_items).to be_empty
     end
 
     it "does not schedule when quoted content contains newlines with time-like text" do
@@ -487,12 +414,14 @@ RSpec.describe Jarvis do
       "home printer"                => ["Homing printer head", :home],
     }
 
-    actions.each do |action, (msg, *cmds)|
-      it "can #{action}" do
-        Array.wrap(cmds).each do |cmd|
-          expect(PrinterApi).to receive(cmd)
-        end
-        expect(jarvis(action)).to eq(msg)
+    it "sends the printer the commands each phrasing asks for", :aggregate_failures do
+      calls = []
+      %i[pre cool move home].each { |cmd| allow(PrinterApi).to receive(cmd) { calls << cmd } }
+
+      actions.each do |action, (msg, *cmds)|
+        calls.clear
+        expect(jarvis(action)).to eq(msg), action
+        expect(calls).to eq(cmds), action
       end
     end
   end
@@ -565,26 +494,6 @@ RSpec.describe Jarvis do
       expect(jarvis("trigger whisper-quiet")).to eq("Triggered whisper-quiet")
     end
 
-    it "trigger works through the executor :command fallback" do
-      broadcasts = []
-      allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
-
-      schedule = @admin.scheduled_triggers.create!(
-        trigger:    :command,
-        execute_at: Time.current,
-        data:       { words: "trigger whisper-quiet" },
-      )
-
-      ::Jil.trigger(
-        schedule.user, schedule.trigger,
-        { timestamp: schedule.execute_at }.merge(schedule.data)
-      )
-
-      jarvis_response = broadcasts.find { |b| b[:say].present? }
-      expect(jarvis_response).to be_present, "Expected a Jarvis broadcast but got: #{broadcasts.inspect}"
-      expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
-    end
-
     it "full roundtrip: schedule then execute via JilRunnerWorker path" do
       broadcasts = []
       allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
@@ -608,35 +517,6 @@ RSpec.describe Jarvis do
       jarvis_response = broadcasts.find { |b| b[:say].present? }
       expect(jarvis_response).to be_present, "Expected a Jarvis broadcast but got: #{broadcasts.inspect}"
       expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
-    end
-
-    it "roundtrip at realistic time with real user data" do
-      # Use current time (no Timecop freeze) to match production conditions
-      Timecop.return
-
-      broadcasts = []
-      allow(JarvisChannel).to receive(:broadcast_to) { |_user, data| broadcasts << data }
-
-      # Schedule like ScheduleParser does
-      schedule = @admin.scheduled_triggers.create!(
-        trigger:    :command,
-        execute_at: Time.current,
-        data:       { words: "trigger whisper-quiet" },
-      )
-
-      # Execute like JilRunnerWorker does
-      schedule.started!
-      ::Jil.trigger(
-        schedule.user, schedule.trigger,
-        { timestamp: schedule.execute_at }.merge(schedule.data)
-      )
-      schedule.completed!
-
-      jarvis_response = broadcasts.find { |b| b[:say].present? }
-      expect(jarvis_response).to be_present
-      expect(jarvis_response[:say]).to eq("Triggered whisper-quiet")
-    ensure
-      Timecop.freeze(Time.zone.local(2022, 6, 24, 5, 45))
     end
   end
 
@@ -702,15 +582,13 @@ RSpec.describe Jarvis do
       "october 23 25 at 9"         => [[2025, 10, 23, 9, 0], "on Thu, Oct 23, 2025 at 9am"],
     }
 
-    actions.each do |time_words, (ts_args, rel_time)|
-      it "can schedule #{time_words}" do
-        timestamp = Time.zone.local(*ts_args)
-        expect(::Jil::Schedule).to receive(:add_schedule).with(@admin.id, timestamp, :command, { words: "Do thing" })
-        if rel_time.present?
-          expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing #{rel_time}")
-        else
-          expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing on #{timestamp.strftime("%a, %b %-d at %-l:%M%P")}")
-        end
+    it "parses each time phrase into the scheduled time", :aggregate_failures do
+      scheduled = []
+      allow(::Jil::Schedule).to receive(:add_schedule) { |*args| scheduled << args }
+
+      actions.each do |time_words, (ts_args, rel_time)|
+        expect(jarvis("Do thing #{time_words}")).to eq("I'll do thing #{rel_time}"), time_words
+        expect(scheduled.last).to eq([@admin.id, Time.zone.local(*ts_args), :command, { words: "Do thing" }]), time_words
       end
     end
   end

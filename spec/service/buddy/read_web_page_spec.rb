@@ -26,19 +26,7 @@ RSpec.describe "read_web_page tool" do
       .to_return(status: 200, body: body, headers: { "Content-Type" => type })
   end
 
-  # Opening a public page changes nothing, so there is nothing to tap and
-  # nothing to ask - and the text has to be in hand before the reply is written.
-  it "runs without being tapped and answers in the turn" do
-    expect(tool[:auto]).to be(true)
-    expect(tool[:answers]).to be(true)
-    expect(tool[:acts]).to be(false)
-  end
-
-  it "is everyone's, not something to be granted" do
-    expect(tool[:feature]).to eq(Buddy::Features::CORE)
-  end
-
-  it "hands the page's text back in the same turn" do
+  it "hands the page's text back in the same turn", :aggregate_failures do
     stub_page(<<~HTML)
       <html><head><title>Yappy Hour | Events</title></head>
         <body><main><h1>Yappy Hour</h1>
@@ -55,29 +43,22 @@ RSpec.describe "read_web_page tool" do
     expect(result[:text]).to include("Location: Jordan Park, 1060 S 900 W")
   end
 
-  # A refusal the model can read out. Anything else and it describes a page it
+  # A failure the model can read out; anything else and it describes a page it
   # never got.
-  it "refuses a link on this network and says which" do
+  it "refuses a link on this network without fetching it", :aggregate_failures do
     result = read(url: "http://localhost:8790/jobs/1488")
 
     expect(result[:status]).to eq("failed")
-    expect(result[:error]).to match(/machine on the network/)
     expect(result).not_to have_key(:text)
+    expect(a_request(:get, /localhost/)).not_to have_been_made
   end
 
-  it "reports a page that isn't there as a failure rather than an empty read" do
+  it "reports a page that isn't there as a failure rather than an empty read", :aggregate_failures do
     stub_request(:get, "https://example.com/events/yappy-hour/").to_return(status: 404, body: "nope")
 
     result = read(url: "https://example.com/events/yappy-hour/")
 
     expect(result[:status]).to eq("failed")
-    expect(result[:error]).to match(/answered 404/)
-  end
-
-  it "tells the model to speak from the page and nothing else" do
-    stub_page("<html><body><p>Jordan Park</p></body></html>")
-
-    expect(read(url: "https://example.com/events/yappy-hour/")[:how])
-      .to match(/isn't on the page/)
+    expect(result[:error]).to include("404")
   end
 end

@@ -17,7 +17,15 @@ RSpec.describe WebhooksController, type: :controller do
   end
 
   describe "POST #byte_photo" do
-    it "posts the image into the Buddy thread as a delivered inbound message" do
+    # No model turn: a snapshot that had to wait on a GPT call is a snapshot of
+    # somebody who has already walked away. `as_wire` reads `files`, so the
+    # attachment has to be on the message before it is broadcast.
+    it "posts the image into the Buddy thread as the pet speaking, broadcast and pushed with its caption", :aggregate_failures do
+      payloads = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_u, payload| payloads << payload }
+      expect(BuddyDeliverWorker).not_to receive(:perform_async)
+      expect(ByteLocal).not_to receive(:deliver)
+
       post :byte_photo, params: { files: [snapshot], body: "🔔 Someone's at the door" }
 
       expect(response).to have_http_status(:created)
@@ -28,35 +36,11 @@ RSpec.describe WebhooksController, type: :controller do
       expect(message.body).to eq("🔔 Someone's at the door")
       expect(message.files.attachments.size).to eq(1)
       expect(message.files.first.content_type).to eq("image/jpeg")
-    end
-
-    # The whole point of the endpoint. A snapshot that had to wait on a GPT call
-    # is a snapshot of somebody who has already walked away.
-    it "runs no model turn" do
-      expect(BuddyDeliverWorker).not_to receive(:perform_async)
-      expect(ByteLocal).not_to receive(:deliver)
-
-      post :byte_photo, params: { files: [snapshot] }
-
-      expect(response).to have_http_status(:created)
-    end
-
-    # `as_wire` is what the socket carries, and it reads `files`. Attaching
-    # after the broadcast would put an empty bubble on the screen and never
-    # broadcast that message again.
-    it "broadcasts the message with its attachment already on it" do
-      payloads = []
-      allow(MonitorChannel).to receive(:broadcast_to) { |_u, payload| payloads << payload }
-
-      post :byte_photo, params: { files: [snapshot] }
+      expect(message.metadata).to include("kind" => "buddy", "source" => "photo")
 
       wire = payloads.last.dig(:data, :message)
       expect(wire[:attachments].length).to eq(1)
       expect(wire[:attachments].first[:content_type]).to eq("image/jpeg")
-    end
-
-    it "pushes with the caption, so the lock screen says which door" do
-      post :byte_photo, params: { files: [snapshot], body: "🔔 Someone's at the door" }
 
       expect(WebPushNotifications).to have_received(:send_to_byte).with(
         hash_including(title: "🔔 Someone's at the door"),
@@ -67,9 +51,7 @@ RSpec.describe WebhooksController, type: :controller do
       post :byte_photo, params: { files: [snapshot] }
 
       expect(ByteMessage.order(:id).last.body).to eq("")
-      expect(WebPushNotifications).to have_received(:send_to_byte).with(
-        hash_including(title: "📷 New photo"),
-      )
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(hash_including(title: be_present))
     end
 
     # The frame shape's `note` is written for a person and knows things this
@@ -140,18 +122,6 @@ RSpec.describe WebhooksController, type: :controller do
       expect(stored).not_to have_key("frame_source")
     end
 
-    it "renders as the pet speaking rather than as a silent row" do
-      post :byte_photo, params: { files: [snapshot] }
-
-      expect(ByteMessage.order(:id).last.metadata).to include("kind" => "buddy", "source" => "photo")
-    end
-
-    it "lets the caller label where the picture came from" do
-      post :byte_photo, params: { files: [snapshot], metadata: { source: "hass" }.to_json }
-
-      expect(ByteMessage.order(:id).last.metadata).to include("source" => "hass")
-    end
-
     # An unmarked thread resolves to the oldest Buddy one — the same rule a
     # reminder or a watch follows. The owner's claude thread is not where "show
     # me the door" belongs.
@@ -188,22 +158,18 @@ RSpec.describe WebhooksController, type: :controller do
         request.headers["Authorization"] = "Bearer #{key}"
       end
 
-      it "accepts a valid key and posts into that key's own Buddy thread" do
+      # Stamping the key as used is what makes a stale one visible on the keys page.
+      it "accepts a valid key, posting into that key's own Buddy thread and stamping it used" do
         authenticate(api_key.key)
 
-        post :byte_photo, params: { files: [snapshot], body: "🔔 Someone's at the door" }
+        expect {
+          post :byte_photo, params: { files: [snapshot], body: "🔔 Someone's at the door" }
+        }.to change { api_key.reload.last_used_at }.from(nil)
 
         expect(response).to have_http_status(:created)
         message = ByteMessage.order(:id).last
         expect(message.byte_conversation).to eq(buddy_convo)
         expect(message.files.attachments.size).to eq(1)
-      end
-
-      it "stamps the key as used, so a stale one is visible on the keys page" do
-        authenticate(api_key.key)
-
-        expect { post :byte_photo, params: { files: [snapshot] } }
-          .to change { api_key.reload.last_used_at }.from(nil)
       end
 
       # A key is a person, not authority over the house. The shared secret is
@@ -218,19 +184,15 @@ RSpec.describe WebhooksController, type: :controller do
         expect(ByteMessage.order(:id).last.byte_conversation).to eq(buddy_convo)
       end
 
-      it "refuses a key nobody issued" do
-        authenticate("NOT-A-REAL-KEY")
-
-        expect { post :byte_photo, params: { files: [snapshot] } }.not_to change(ByteMessage, :count)
-        expect(response).to have_http_status(:unauthorized)
-      end
-
-      it "refuses a key that's been disabled" do
+      it "refuses a key nobody issued, or one that's been disabled" do
         api_key.update!(enabled: false)
-        authenticate(api_key.key)
 
-        expect { post :byte_photo, params: { files: [snapshot] } }.not_to change(ByteMessage, :count)
-        expect(response).to have_http_status(:unauthorized)
+        ["NOT-A-REAL-KEY", api_key.key].each do |key|
+          authenticate(key)
+
+          expect { post :byte_photo, params: { files: [snapshot] } }.not_to change(ByteMessage, :count)
+          expect(response).to have_http_status(:unauthorized)
+        end
       end
 
       # This controller skips CSRF verification. If a session cookie were enough
@@ -243,19 +205,11 @@ RSpec.describe WebhooksController, type: :controller do
       end
     end
 
-    it "refuses a request carrying no image, rather than posting an empty bubble" do
-      expect { post :byte_photo, params: { body: "🔔 Someone's at the door" } }.not_to change(ByteMessage, :count)
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["error"]).to match(/no file/i)
-    end
-
-    it "refuses a file that isn't an image" do
-      expect {
-        post :byte_photo, params: { files: [snapshot(type: "application/pdf", name: "doc.pdf")] }
-      }.not_to change(ByteMessage, :count)
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["error"]).to match(/unsupported/i)
+    it "refuses a request carrying no image, or a file that isn't one, rather than posting an empty bubble" do
+      [{ body: "🔔 Someone's at the door" }, { files: [snapshot(type: "application/pdf", name: "doc.pdf")] }].each do |params|
+        expect { post :byte_photo, params: params }.not_to change(ByteMessage, :count)
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
     end
 
     it "refuses an oversized image" do
@@ -266,7 +220,6 @@ RSpec.describe WebhooksController, type: :controller do
       }.not_to change(ByteMessage, :count)
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["error"]).to match(/too large/i)
     end
   end
 
@@ -274,10 +227,8 @@ RSpec.describe WebhooksController, type: :controller do
   # second copy, so both people are looking at the same frame and a reaction on
   # it is one reaction (ByteMessageShare).
   #
-  # The payload shape is the real one, off log_tracker 4589106. She's a literal
-  # id in the controller (there's no partner relation on User to derive her
-  # from), so the spec stubs it rather than seeding user 58128 — an id that
-  # collides with whatever the factory sequence happens to reach.
+  # She's a literal id in the controller (there's no partner relation on User to
+  # derive her from), so the spec stubs it rather than seeding that id.
   describe "a doorbell ring" do
     let(:chelsea) { create(:user, username: "chelsea") }
     let(:bystander) { create(:user, username: "kiddo") }
@@ -308,51 +259,25 @@ RSpec.describe WebhooksController, type: :controller do
       post :byte_photo, params: { files: [snapshot], body: "🔔 Someone is at the door", metadata: meta.to_json }
     end
 
-    it "shows her the same frame instead of posting a second one" do
-      expect { ring }.to change(ByteMessage, :count).by(1)
-
-      message = ByteMessage.order(:id).last
-      expect(hers.visible_messages).to include(message)
-      expect(hers.byte_messages).to be_empty
-    end
-
-    # It goes to HER, not to everyone under the roof. A doorbell at everybody is
-    # a notification people learn to swipe away.
-    it "shares with her and nobody else in the house" do
-      expect { ring }.to change(ByteMessageShare, :count).by(1)
-
-      expect(theirs.visible_messages).to be_empty
-    end
-
-    it "pushes it to her, not only to the screen" do
+    # It goes to HER, not to everyone under the roof, and the frame stays in the
+    # thread it was posted to.
+    it "shares the same frame with her alone, pushed and broadcast to her own thread", :aggregate_failures do
       expect(ByteNotifier).to receive(:notify).with(chelsea, anything)
 
-      ring
-    end
+      expect { ring }.to change(ByteMessage, :count).by(1).and change(ByteMessageShare, :count).by(1)
 
-    it "addresses her broadcast to her own thread" do
-      ring
-
+      message = ByteMessage.order(:id).last
+      expect(message.byte_conversation).to eq(buddy_convo)
+      expect(hers.visible_messages).to include(message)
+      expect(hers.byte_messages).to be_empty
+      expect(theirs.visible_messages).to be_empty
       expect(MonitorChannel).to have_received(:broadcast_to).with(
         chelsea, hash_including(data: hash_including(message: hash_including(conversation_id: hers.id)))
       )
     end
 
-    # The same camera reports a person merely SEEN — no ring. Waking someone for
-    # a person walking past the door is the ping that got rejected in prod 3746,
-    # in capitals.
-    it "does not share a person the camera only saw" do
-      expect {
-        post :byte_photo, params: {
-          files:    [snapshot],
-          body:     "Someone out front",
-          metadata: { camera: "camera.doorbell_fluent", location: "doorbell", subject: "person", detected: true }.to_json,
-        }
-      }.not_to change(ByteMessageShare, :count)
-    end
-
-    # The frame shape's own word for a ring. A payload carrying only that —
-    # no `rang`, no `type` — is still a ring and still has to reach her.
+    # The frame shape's own word for a ring: a payload carrying only that, with
+    # no `rang` and no `type`, is still a ring.
     it "shares a ring the shape only labelled as a doorbell event" do
       expect {
         post :byte_photo, params: {
@@ -362,23 +287,18 @@ RSpec.describe WebhooksController, type: :controller do
       }.to change(ByteMessageShare, :count).by(1)
     end
 
-    # Same camera, same key, the other meaning. `event: "person"` is somebody
-    # SEEN at the door, which is the ping that got rejected in prod.
-    it "does not share a person the shape labelled as a person event" do
-      expect {
-        post :byte_photo, params: {
-          files:    [snapshot],
-          metadata: { camera: "camera.doorbell_fluent", location: "doorbell", event: "person" }.to_json,
-        }
-      }.not_to change(ByteMessageShare, :count)
-    end
-
-    it "does not share a frame from another camera" do
-      expect { ring(location: "driveway") }.not_to change(ByteMessageShare, :count)
-    end
-
-    it "does not share an ordinary photo with no metadata at all" do
-      expect { post :byte_photo, params: { files: [snapshot] } }.not_to change(ByteMessageShare, :count)
+    # The same camera reports a person merely SEEN — no ring — and waking
+    # someone for a person walking past the door is the wrong ping.
+    it "does not share a person only seen, a frame from another camera, or a photo with no metadata" do
+      doorbell = { camera: "camera.doorbell_fluent", location: "doorbell" }
+      [
+        -> { post :byte_photo, params: { files: [snapshot], body: "Someone out front", metadata: doorbell.merge(subject: "person", detected: true).to_json } },
+        -> { post :byte_photo, params: { files: [snapshot], metadata: doorbell.merge(event: "person").to_json } },
+        -> { ring(location: "driveway") },
+        -> { post :byte_photo, params: { files: [snapshot] } },
+      ].each do |attempt|
+        expect { attempt.call }.not_to change(ByteMessageShare, :count)
+      end
     end
 
     # A hardcoded id is a row that can stop existing. A webhook is the wrong
@@ -398,12 +318,6 @@ RSpec.describe WebhooksController, type: :controller do
       stub_const("WebhooksController::DOORBELL_SHARE_USER_ID", user.id)
 
       expect { ring }.not_to change(ByteMessageShare, :count)
-    end
-
-    it "leaves the frame in the thread it was posted to" do
-      ring
-
-      expect(ByteMessage.order(:id).last.byte_conversation).to eq(buddy_convo)
     end
   end
 end

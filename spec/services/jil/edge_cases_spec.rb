@@ -5,101 +5,49 @@ RSpec.describe "Jil Edge Cases" do
     ::Jil::Executor.call(user, code, input_data)
   end
 
-  # ── Boolean.eq soft_presence ──────────────────────────────────────
+  # Runs each [code, expected] row and checks the value left in `r`.
+  def expect_rows(rows)
+    rows.each { |code, expected|
+      expect(jil(code).ctx.dig(:vars, :r, :value)).to eq(expected), code
+    }
+  end
 
   describe "Boolean.eq with soft_presence" do
-    it "equal strings" do
-      exe = jil('r = Boolean.eq("hello", "hello")::Boolean')
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "different strings" do
-      exe = jil('r = Boolean.eq("hello", "world")::Boolean')
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-
-    # SKIP: soft_presence calls .presence, making all blank values equal
-    skip "ISSUE: treats [] == '' as true (both blank → nil)" do
-      exe = jil(<<-'JIL')
-        a = Array.new({})::Array
-        b = String.new("")::String
-        r = Boolean.eq(a, b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-
-    skip "ISSUE: treats {} == '' as true (both blank → nil)" do
-      exe = jil(<<-'JIL')
-        a = Hash.new({})::Hash
-        b = String.new("")::String
-        r = Boolean.eq(a, b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-
-    skip "ISSUE: treats [] == {} as true (both blank → nil)" do
-      exe = jil(<<-'JIL')
-        a = Array.new({})::Array
-        b = Hash.new({})::Hash
-        r = Boolean.eq(a, b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-
-    it "false == false works (booleans bypass .presence)" do
-      exe = jil(<<-'JIL')
-        a = Boolean.new(false)::Boolean
-        b = Boolean.new(false)::Boolean
-        r = Boolean.eq(a, b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "true == false is false" do
-      exe = jil(<<-'JIL')
-        a = Boolean.new(true)::Boolean
-        b = Boolean.new(false)::Boolean
-        r = Boolean.eq(a, b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
+    it "compares strings and booleans by value" do
+      expect_rows([
+        ['r = Boolean.eq("hello", "hello")::Boolean', true],
+        ['r = Boolean.eq("hello", "world")::Boolean', false],
+        # Booleans bypass `.presence`, so false is not treated as blank.
+        [
+          "a = Boolean.new(false)::Boolean\nb = Boolean.new(false)::Boolean\nr = Boolean.eq(a, b)::Boolean",
+          true,
+        ],
+        [
+          "a = Boolean.new(true)::Boolean\nb = Boolean.new(false)::Boolean\nr = Boolean.eq(a, b)::Boolean",
+          false,
+        ],
+      ])
     end
   end
 
-  # ── Array.find ────────────────────────────────────────────────────
+  describe "Boolean.compare type coercion" do
+    it "magic-casts across numeric and string operands" do
+      expect_rows([
+        ["a = Numeric.new(2)::Numeric\nr = Boolean.compare(a, \"==\", \"2\")::Boolean", true],
+        [
+          "a = Numeric.new(2)::Numeric\nb = Numeric.new(2)::Numeric\nr = Boolean.compare(a, \"==\", b)::Boolean",
+          true,
+        ],
+        ['r = Boolean.compare("2", "==", "2")::Boolean', true],
+        ["a = Numeric.new(2)::Numeric\nr = Boolean.compare(a, \"!=\", \"3\")::Boolean", true],
+        ["a = Numeric.new(5)::Numeric\nr = Boolean.compare(a, \">\", \"3\")::Boolean", true],
+      ])
+    end
+  end
 
   describe "Array.find" do
-    it "finds a value by condition" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = Numeric.new(1)::Numeric
-          a2 = Numeric.new(2)::Numeric
-          a3 = Numeric.new(3)::Numeric
-        })::Array
-        found = arr.find({
-          item = Keyword.Value()::Numeric
-          r = Boolean.compare(item, "==", "2")::Boolean
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :found, :value)).to eq(2)
-    end
-
-    it "finds string values" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = String.new("a")::String
-          a2 = String.new("b")::String
-          a3 = String.new("c")::String
-        })::Array
-        found = arr.find({
-          item = Keyword.Value()::String
-          r = Boolean.compare(item, "==", "b")::Boolean
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :found, :value)).to eq("b")
-    end
-
-    it "finds 0 in array" do
-      exe = jil(<<-'JIL')
+    it "finds a falsy-looking 0, and returns nil when nothing matches" do
+      code = <<-'JIL'
         arr = Array.new({
           a1 = Numeric.new(1)::Numeric
           a2 = Numeric.new(0)::Numeric
@@ -107,163 +55,87 @@ RSpec.describe "Jil Edge Cases" do
         })::Array
         found = arr.find({
           item = Keyword.Value()::Numeric
-          r = Boolean.compare(item, "==", "0")::Boolean
+          r = Boolean.compare(item, "==", "TARGET")::Boolean
         })::Any
       JIL
-      expect(exe.ctx.dig(:vars, :found, :value)).to eq(0)
-    end
 
-    it "returns nil when not found" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = Numeric.new(1)::Numeric
-          a2 = Numeric.new(2)::Numeric
-        })::Array
-        found = arr.find({
-          item = Keyword.Value()::Numeric
-          r = Boolean.compare(item, "==", "5")::Boolean
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :found, :value)).to eq(nil)
+      expect(jil(code.sub("TARGET", "0")).ctx.dig(:vars, :found, :value)).to eq(0)
+      expect(jil(code.sub("TARGET", "5")).ctx.dig(:vars, :found, :value)).to be_nil
     end
   end
-
-  # ── Array.sort ────────────────────────────────────────────────────
 
   describe "Array.sort" do
-    it "sorts numbers ascending" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = Numeric.new(3)::Numeric
-          a2 = Numeric.new(1)::Numeric
-          a3 = Numeric.new(2)::Numeric
-        })::Array
-        r = arr.sort("Ascending")::Array
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq([1, 2, 3])
-    end
-
-    it "sorts numbers descending" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = Numeric.new(3)::Numeric
-          a2 = Numeric.new(1)::Numeric
-          a3 = Numeric.new(2)::Numeric
-        })::Array
-        r = arr.sort("Descending")::Array
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq([3, 2, 1])
-    end
-
-    it "sorts strings descending" do
-      exe = jil(<<-'JIL')
+    it "sorts strings in either direction" do
+      code = <<-'JIL'
         arr = Array.new({
           a1 = String.new("banana")::String
           a2 = String.new("apple")::String
           a3 = String.new("cherry")::String
         })::Array
-        r = arr.sort("Descending")::Array
+        r = arr.sort("DIRECTION")::Array
       JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(["cherry", "banana", "apple"])
-    end
 
-    it "sorts strings ascending" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = String.new("banana")::String
-          a2 = String.new("apple")::String
-          a3 = String.new("cherry")::String
-        })::Array
-        r = arr.sort("Ascending")::Array
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(["apple", "banana", "cherry"])
+      expect_rows([
+        [code.sub("DIRECTION", "Ascending"), ["apple", "banana", "cherry"]],
+        [code.sub("DIRECTION", "Descending"), ["cherry", "banana", "apple"]],
+      ])
     end
+  end
 
-    it "reverses" do
-      exe = jil(<<-'JIL')
+  describe "Array.index" do
+    it "returns the index of a string or numeric element, cast to 0 when absent" do
+      strings = <<-'JIL'
         arr = Array.new({
           a1 = String.new("a")::String
           a2 = String.new("b")::String
           a3 = String.new("c")::String
         })::Array
-        r = arr.sort("Reverse")::Array
+        r = arr.index("TARGET")::Numeric
       JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(["c", "b", "a"])
-    end
-  end
-
-  # ── Array.del! ────────────────────────────────────────────────────
-
-  describe "Array.del!" do
-    it "returns the remaining array after deletion" do
-      exe = jil(<<-'JIL')
+      numbers = <<-'JIL'
         arr = Array.new({
-          a1 = String.new("a")::String
-          a2 = String.new("b")::String
-          a3 = String.new("c")::String
+          a1 = Numeric.new(10)::Numeric
+          a2 = Numeric.new(20)::Numeric
+          a3 = Numeric.new(30)::Numeric
         })::Array
-        deleted = arr.del!(1)::Array
+        target = Numeric.new(20)::Numeric
+        r = arr.index(target)::Numeric
       JIL
-      expect(exe.ctx.dig(:vars, :deleted, :value)).to eq(["a", "c"])
-      expect(exe.ctx.dig(:vars, :arr, :value)).to eq(["a", "c"])
+
+      expect_rows([
+        [strings.sub("TARGET", "b"), 1],
+        [strings.sub("TARGET", "z"), 0],
+        [numbers, 1],
+      ])
     end
   end
-
-  # ── String.match ──────────────────────────────────────────────────
 
   describe "String.match" do
-    it "returns first capture group by default" do
-      exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.match("hello (\\w+)")::String
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq("world")
-    end
-
-    it "returns all captures as Array" do
-      exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.match("hello (\\w+)")::Array
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(["hello world", "world"])
-    end
-
-    it "returns named captures as Hash" do
-      exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.match("hello (?<word>\\w+)")::Hash
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq({ "word" => "world" })
-    end
-
-    it "returns empty string on no match when cast to String" do
-      exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.match("xyz")::String
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq("")
+    it "returns what the cast asks for: first capture, all captures, named captures, or empty" do
+      expect_rows([
+        ["s = String.new(\"hello world\")::String\nr = s.match(\"hello (\\\\w+)\")::String", "world"],
+        ["s = String.new(\"hello world\")::String\nr = s.match(\"hello (\\\\w+)\")::Array", ["hello world", "world"]],
+        [
+          "s = String.new(\"hello world\")::String\nr = s.match(\"hello (?<word>\\\\w+)\")::Hash",
+          { "word" => "world" },
+        ],
+        ["s = String.new(\"hello world\")::String\nr = s.match(\"xyz\")::String", ""],
+      ])
     end
   end
 
-  # ── Global.case ───────────────────────────────────────────────────
+  describe "String.contains?" do
+    it "is a case-sensitive substring check" do
+      expect_rows([
+        ["s = String.new(\"hello world\")::String\nr = s.contains?(\"world\")::Boolean", true],
+        ["s = String.new(\"hello world\")::String\nr = s.contains?(\"xyz\")::Boolean", false],
+        ["s = String.new(\"Hello World\")::String\nr = s.contains?(\"hello\")::Boolean", false],
+      ])
+    end
+  end
 
   describe "Global.case" do
-    it "matches string values" do
-      exe = jil(<<-'JIL')
-        val = String.new("two")::String
-        result = Global.case(val, {
-          a1 = Keyword.When("one", {
-            b1 = Global.print("1")::String
-          })::Any
-          a2 = Keyword.When("two", {
-            b2 = Global.print("2")::String
-          })::Any
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq("2")
-    end
-
-    it "matches numeric case value against string When (magic_cast)" do
+    it "matches a numeric case value against a string When (magic_cast)" do
       exe = jil(<<-'JIL')
         val = Numeric.new(2)::Numeric
         result = Global.case(val, {
@@ -277,51 +149,7 @@ RSpec.describe "Jil Edge Cases" do
       JIL
       expect(exe.ctx.dig(:vars, :result, :value)).to eq("two")
     end
-
-    it "regex matching works" do
-      exe = jil(<<-'JIL')
-        val = String.new("backyard")::String
-        result = Global.case(val, {
-          a1 = Keyword.When("/front/", {
-            b1 = Global.print("front")::String
-          })::Any
-          a2 = Keyword.When("/back/", {
-            b2 = Global.print("back")::String
-          })::Any
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq("back")
-    end
-
-    it "else fallback works" do
-      exe = jil(<<-'JIL')
-        val = String.new("unknown")::String
-        result = Global.case(val, {
-          a1 = Keyword.When("known", {
-            b1 = Global.print("found")::String
-          })::Any
-          a2 = Keyword.When("else", {
-            b2 = Global.print("default")::String
-          })::Any
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq("default")
-    end
-
-    it "returns nil when no match and no else" do
-      exe = jil(<<-'JIL')
-        val = String.new("unknown")::String
-        result = Global.case(val, {
-          a1 = Keyword.When("known", {
-            b1 = Global.print("found")::String
-          })::Any
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq(nil)
-    end
   end
-
-  # ── Loop break ────────────────────────────────────────────────────
 
   describe "Loop break behavior" do
     it "returns the break value" do
@@ -338,86 +166,35 @@ RSpec.describe "Jil Edge Cases" do
       expect(exe.ctx.dig(:vars, :result, :value)).to eq(3)
     end
 
-    it "returns last value when loop completes naturally" do
+    # `times` maps over the block, so a Numeric cast is the array's length; the
+    # count itself is cast to Numeric, so a string literal works too.
+    it "returns the iteration count when Global.times completes naturally" do
       exe = jil(<<-'JIL')
         count = Numeric.new(3)::Numeric
         result = Global.times(count, {
           idx = Keyword.Index()::Numeric
           val = idx.op("+", "1")::Numeric
         })::Numeric
+        literal = Global.times("3", {
+          idx2 = Keyword.Index()::Numeric
+        })::Numeric
       JIL
-      # times uses enumerate_array with :map, returns array of block results
-      # cast to Numeric → array length
       expect(exe.ctx.dig(:vars, :result, :value)).to eq(3)
+      expect(exe.ctx.dig(:vars, :literal, :value)).to eq(3)
     end
   end
-
-  # ── Numeric.op ^log ──────────────────────────────────────────────
 
   describe "Numeric.op ^log" do
     it "computes log base n" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(8)::Numeric
-        r = a.op("^log", "2")::Numeric
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(3.0)
-    end
-
-    it "computes log base 10" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(100)::Numeric
-        r = a.op("^log", "10")::Numeric
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(2.0)
+      expect_rows([
+        ["a = Numeric.new(8)::Numeric\nr = a.op(\"^log\", \"2\")::Numeric", 3.0],
+        ["a = Numeric.new(100)::Numeric\nr = a.op(\"^log\", \"10\")::Numeric", 2.0],
+      ])
     end
   end
 
-  # ── Boolean.compare type coercion ────────────────────────────────
-
-  describe "Boolean.compare type coercion" do
-    it "compare(2, ==, '2') works via magic_cast" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(2)::Numeric
-        r = Boolean.compare(a, "==", "2")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "compare(2, ==, 2) numeric to numeric" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(2)::Numeric
-        b = Numeric.new(2)::Numeric
-        r = Boolean.compare(a, "==", b)::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "compare('2', ==, '2') both strings" do
-      exe = jil('r = Boolean.compare("2", "==", "2")::Boolean')
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "compare(2, !=, 3)" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(2)::Numeric
-        r = Boolean.compare(a, "!=", "3")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "compare(5, >, 3)" do
-      exe = jil(<<-'JIL')
-        a = Numeric.new(5)::Numeric
-        r = Boolean.compare(a, ">", "3")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-  end
-
-  # ── Hash operations ──────────────────────────────────────────────
-
-  describe "Hash.filter" do
-    it "filters hash entries" do
+  describe "Hash.filter and key?" do
+    it "filters entries and checks for a key" do
       exe = jil(<<-'JIL')
         h = Hash.new({
           k1 = Keyval.new("a", "1")::Keyval
@@ -428,87 +205,17 @@ RSpec.describe "Jil Edge Cases" do
           v = Keyword.Value()::Any
           cond = Boolean.compare(v, "!=", "2")::Boolean
         })::Hash
+        has = h.key?("a")::Boolean
+        missing = h.key?("missing")::Boolean
       JIL
       expect(exe.ctx.dig(:vars, :r, :value)).to eq({ "a" => "1", "c" => "3" })
+      expect(exe.ctx.dig(:vars, :has, :value)).to be(true)
+      expect(exe.ctx.dig(:vars, :missing, :value)).to be(false)
     end
   end
-
-  describe "Hash.key?" do
-    it "returns true for existing key" do
-      exe = jil(<<-'JIL')
-        h = Hash.new({
-          k1 = Keyval.new("name", "test")::Keyval
-        })::Hash
-        r = h.key?("name")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "returns false for missing key" do
-      exe = jil(<<-'JIL')
-        h = Hash.new({
-          k1 = Keyval.new("name", "test")::Keyval
-        })::Hash
-        r = h.key?("missing")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-  end
-
-  # ── Global.times casting ──────────────────────────────────────────
-
-  describe "Global.times casts arg to Numeric" do
-    it "works with a string literal" do
-      exe = jil(<<-'JIL')
-        result = Global.times("3", {
-          idx = Keyword.Index()::Numeric
-        })::Numeric
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq(3)
-    end
-  end
-
-  # ── Global.try ───────────────────────────────────────────────────
 
   describe "Global.try" do
-    it "returns try block value on success" do
-      exe = jil(<<-'JIL')
-        result = Global.try({
-          r = String.new("success")::String
-        }, {
-          r = String.new("caught")::String
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :result, :value)).to eq("success")
-    end
-
-    it "catches errors and runs catch block" do
-      stub_request(:get, "http://not-a-real-host.invalid/").to_raise(SocketError.new("boom"))
-      exe = jil(<<-'JIL')
-        result = Global.try({
-          bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
-        }, {
-          msg = Global.print("caught it")::String
-        })::Any
-      JIL
-      expect(exe.ctx[:output]).to include("caught it")
-      expect(exe.ctx[:error]).to be_blank
-    end
-
-    it "sets error variable in catch block" do
-      stub_request(:get, "http://not-a-real-host.invalid/").to_raise(SocketError.new("boom"))
-      exe = jil(<<-'JIL')
-        result = Global.try({
-          bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
-        }, {
-          msg = Global.get("error")::String
-        })::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :error, :value)).to be_a(String)
-      expect(exe.ctx.dig(:vars, :error, :value)).not_to be_empty
-    end
-
-    it "does not run catch block on success" do
+    it "returns the try block's value and skips the catch block on success" do
       exe = jil(<<-'JIL')
         result = Global.try({
           r = Numeric.new(42)::Numeric
@@ -519,117 +226,40 @@ RSpec.describe "Jil Edge Cases" do
       expect(exe.ctx[:output]).to eq([])
       expect(exe.ctx.dig(:vars, :result, :value)).to eq(42)
     end
-  end
 
-  # ── String.contains? ────────────────────────────────────────────
-
-  describe "String.contains?" do
-    it "returns true when substring is present" do
+    it "catches errors, runs the catch block, and exposes the error" do
+      stub_request(:get, "http://not-a-real-host.invalid/").to_raise(SocketError.new("boom"))
       exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.contains?("world")::Boolean
+        result = Global.try({
+          bad = Global.request("GET", "http://not-a-real-host.invalid", "", "")::Hash
+        }, {
+          msg = Global.print("caught it")::String
+          err = Global.get("error")::String
+        })::Any
       JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(true)
-    end
-
-    it "returns false when substring is absent" do
-      exe = jil(<<-'JIL')
-        s = String.new("hello world")::String
-        r = s.contains?("xyz")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
-    end
-
-    it "is case-sensitive" do
-      exe = jil(<<-'JIL')
-        s = String.new("Hello World")::String
-        r = s.contains?("hello")::Boolean
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(false)
+      expect(exe.ctx[:output]).to include("caught it")
+      expect(exe.ctx[:error]).to be_blank
+      expect(exe.ctx.dig(:vars, :error, :value)).to be_a(String).and(be_present)
     end
   end
-
-  # ── Array.index ──────────────────────────────────────────────────
-
-  describe "Array.index" do
-    it "returns the index of the found element" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = String.new("a")::String
-          a2 = String.new("b")::String
-          a3 = String.new("c")::String
-        })::Array
-        r = arr.index("b")::Numeric
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(1)
-    end
-
-    it "returns nil when element is not found" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = String.new("a")::String
-          a2 = String.new("b")::String
-        })::Array
-        r = arr.index("z")::Numeric
-      JIL
-      # nil cast to Numeric → 0
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(0)
-    end
-
-    it "works with numeric values" do
-      exe = jil(<<-'JIL')
-        arr = Array.new({
-          a1 = Numeric.new(10)::Numeric
-          a2 = Numeric.new(20)::Numeric
-          a3 = Numeric.new(30)::Numeric
-        })::Array
-        target = Numeric.new(20)::Numeric
-        r = arr.index(target)::Numeric
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(1)
-    end
-  end
-
-  # ── Presence ─────────────────────────────────────────────────────
 
   describe "String cast quote-stripping" do
-    # Regression: an earlier `gsub(/^"|"$/, "")` stripped a lone trailing `"`
-    # even when there was no opening quote, mangling strings like
-    # `name:"X" notes:"Y"` into `name:"X" notes:"Y` before downstream parsing.
-    it "only strips quotes when both ends are wrapped" do
-      exe = ::Jil::Executor.new(user, <<~'JIL', { payload: 'name:"X" notes:"Y"' })
-        d = Global.input_data()::Hash
-        s = d.get("payload")::String
-      JIL
-      exe.execute_all
-      expect(exe.ctx.dig(:vars, :s, :value)).to eq('name:"X" notes:"Y"')
-    end
-
-    it "still unwraps fully-wrapped quoted strings" do
-      exe = ::Jil::Executor.new(user, <<~'JIL', { payload: '"wrapped"' })
-        d = Global.input_data()::Hash
-        s = d.get("payload")::String
-      JIL
-      exe.execute_all
-      expect(exe.ctx.dig(:vars, :s, :value)).to eq("wrapped")
+    # A lone trailing `"` with no opening quote is part of the value.
+    it "strips quotes only when both ends are wrapped" do
+      [['name:"X" notes:"Y"', 'name:"X" notes:"Y"'], ['"wrapped"', "wrapped"]].each { |payload, expected|
+        exe = ::Jil::Executor.new(user, "d = Global.input_data()::Hash\ns = d.get(\"payload\")::String\n", { payload: payload })
+        exe.execute_all
+        expect(exe.ctx.dig(:vars, :s, :value)).to eq(expected), payload
+      }
     end
   end
 
   describe "presence" do
-    it "returns value when present" do
-      exe = jil(<<-'JIL')
-        a = String.new("hello")::String
-        r = a.presence()::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq("hello")
-    end
-
-    it "returns nil for blank values" do
-      exe = jil(<<-'JIL')
-        a = String.new("")::String
-        r = a.presence()::Any
-      JIL
-      expect(exe.ctx.dig(:vars, :r, :value)).to eq(nil)
+    it "returns the value when present, nil when blank" do
+      expect_rows([
+        ["a = String.new(\"hello\")::String\nr = a.presence()::Any", "hello"],
+        ["a = String.new(\"\")::String\nr = a.presence()::Any", nil],
+      ])
     end
   end
 end

@@ -2,12 +2,7 @@ require "rails_helper"
 
 # Making a chore, and changing one, run the moment Byte proposes them — a
 # pre-checked row that unticks back off rather than an empty box waiting on a
-# tap. They'd already asked for it, and a chore is both visible and reversible,
-# so the confirmation was a toll on the common case.
-#
-# The row is only honest if the undo works, which is the half these cover: a
-# chore was never in Buddy::Reverter at all before this, so "level 2" without
-# teaching it about chores would have been a promise nothing could keep.
+# tap. The row is only honest if the undo works.
 RSpec.describe "Buddy chore writes" do
   let(:user)       { create(:user) }
   let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
@@ -33,44 +28,28 @@ RSpec.describe "Buddy chore writes" do
     Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
   end
 
-  describe "making one" do
-    it "exists without anyone tapping anything" do
-      expect { propose!({ tool_name: :create_chore, payload: { name: "Dust shelves" } }) }
-        .to change { household.chores.where(name: "Dust shelves").count }.by(1)
-    end
+  # Unticking archives rather than destroys: a chore owns its completions and
+  # streak history, and the Chores app archives for "delete" too.
+  it "makes one without a tap, leaves an undoable ticked row, and archives it on untick" do
+    result = nil
+    expect { result = propose!({ tool_name: :create_chore, payload: { name: "Dust shelves" } }) }
+      .to change { household.chores.where(name: "Dust shelves").count }.by(1)
 
-    it "leaves a row that's already ticked, and can be unticked" do
-      row = propose!({ tool_name: :create_chore, payload: { name: "Dust shelves" } })[:action].buttons.first
+    row = result[:action].buttons.first
+    expect(row["status"]).to eq("executed")
+    expect(row["undoable"]).to be(true)
 
-      expect(row["status"]).to eq("executed")
-      expect(row["undoable"]).to be(true)
-    end
+    untick!(result)
 
-    # Archived, not destroyed. A chore owns its completions and its streak
-    # history, and undoing "you just made this" mustn't take a month of someone's
-    # record with it — the Chores app archives for "delete" too.
-    it "archives it rather than destroying it when unticked" do
-      result = propose!({ tool_name: :create_chore, payload: { name: "Dust shelves" } })
-
-      untick!(result)
-
-      chore = household.chores.find_by(name: "Dust shelves")
-      expect(chore).to be_present
-      expect(chore).to be_archived
-    end
+    expect(household.chores.find_by(name: "Dust shelves")).to be_archived
   end
 
   describe "changing one" do
     let!(:chore) { create(:chore, name: "Vacuum", created_by_user: user) }
 
-    it "lands the change on arrival" do
-      propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", name: "Hoover" } })
-
-      expect(chore.reload.name).to eq("Hoover")
-    end
-
-    it "puts the old values back when unticked" do
+    it "lands the change on arrival and puts the old values back when unticked" do
       result = propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", name: "Hoover" } })
+      expect(chore.reload.name).to eq("Hoover")
 
       untick!(result)
 
@@ -105,8 +84,11 @@ RSpec.describe "Buddy chore writes" do
       ChoreDay.current(user, at: chore.reload.marked_due_at)
     end
 
-    it "lands on the day they named, not the evening before it" do
+    it "lands on the day they named, not the evening before it, and leaves the recurrence alone" do
+      before_rec = chore.recurrence
+
       expect(due_day_after({ chore: "Vacuum", due: "2026-08-05" })).to eq(Date.new(2026, 8, 5))
+      expect(chore.reload.recurrence).to eq(before_rec)
     end
 
     it "keeps the hour when one is actually given" do
@@ -115,14 +97,6 @@ RSpec.describe "Buddy chore writes" do
       }
 
       expect(chore.reload.marked_due_at.in_time_zone(zone).hour).to eq(18)
-    end
-
-    it "leaves the recurrence alone — a due date is a one-off, not a schedule" do
-      before_rec = chore.recurrence
-
-      Timecop.freeze(now) { propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", due: "2026-08-05" } }) }
-
-      expect(chore.reload.recurrence).to eq(before_rec)
     end
 
     it "clears one on request" do

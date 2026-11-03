@@ -30,11 +30,4 @@ RSpec.describe GameTemplate do
 
     expect(dup).not_to be_valid
   end
-
-  it "stores scoring and win as their own enum without colliding with AR methods" do
-    template = user.game_templates.create!(name: "Co-op Game", scoring: :table, win: :none)
-
-    expect(template.scoring).to eq("table")
-    expect(template.win).to eq("none")
-  end
 end

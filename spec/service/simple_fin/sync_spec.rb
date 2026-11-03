@@ -191,42 +191,20 @@ RSpec.describe SimpleFin::Sync do
 
     before { described_class.call(payload([account_data])) } # lays down the account
 
-    it "folds the bank's version into the row the alert made" do
+    # A merge is not new history: the backfill reads `created` to decide
+    # whether there is anything older left to fetch.
+    it "folds the bank's figures into the alert's row, keeping its category, without counting it created", :aggregate_failures do
       row = alert!
-
-      described_class.call(payload([account_data("transactions" => [transaction_data])]))
-
-      expect(BankTransaction.count).to eq(1)
-      expect(row.reload.simplefin_id).to eq("TRN-0001")
-    end
-
-    it "keeps the category the alert was given" do
-      alert!
-
-      described_class.call(payload([account_data("transactions" => [transaction_data])]))
-
-      expect(BankTransaction.first.category).to eq("home")
-    end
-
-    it "takes the bank's figures over the alert's" do
-      alert!
-
-      described_class.call(payload([account_data("transactions" => [transaction_data])]))
-
-      row = BankTransaction.first
-      expect(row.payee).to eq("Lowe's Credit Card by Synchrony")
-      expect(row.posted_at).to eq(Time.at(posted).utc)
-      expect(row.amount_cents).to eq(-23_842)
-    end
-
-    # A merge is not new history. The backfill reads `created` to decide
-    # whether there is anything older left to fetch, and counting a row it
-    # already held would keep the walk going against an empty window.
-    it "does not count a merge as a row created" do
-      alert!
 
       result = described_class.call(payload([account_data("transactions" => [transaction_data])]))
 
+      expect(BankTransaction.count).to eq(1)
+      row.reload
+      expect(row.simplefin_id).to eq("TRN-0001")
+      expect(row.category).to eq("home")
+      expect(row.payee).to eq("Lowe's Credit Card by Synchrony")
+      expect(row.posted_at).to eq(Time.at(posted).utc)
+      expect(row.amount_cents).to eq(-23_842)
       expect(result.created).to be_zero
     end
 

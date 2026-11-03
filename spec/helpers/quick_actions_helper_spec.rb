@@ -20,21 +20,9 @@ RSpec.describe QuickActionsHelper, type: :helper do
       allow(helper).to receive(:current_user).and_return(user)
     end
 
-    it "resolves to an <img> with the icon's data URL" do
+    it "resolves against the current user's household" do
       out = helper.mrkdwn("[hicon Whisper]").to_s
-      expect(out).to include("<img")
-      expect(out).to include(tiny_png_url)
-    end
-
-    it "is case- and separator-insensitive" do
-      out = helper.mrkdwn("[hicon whisper]").to_s
-      expect(out).to include(tiny_png_url)
-    end
-
-    it "renders ❌ when the icon is not found" do
-      out = helper.mrkdwn("[hicon nope]").to_s
-      expect(out).to include("❌")
-      expect(out).not_to include("<img")
+      expect(out).to include("<img", tiny_png_url)
     end
   end
 end

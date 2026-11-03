@@ -29,23 +29,15 @@ RSpec.describe IndexController, type: :controller do
       expect(::Jarvis).not_to have_received(:command)
     end
 
-    it "still calls Jarvis.command when no :sms task stops propagation" do
-      passive_task = instance_double(Task, stop_propagation?: false)
-      stub_trigger(returning: [passive_task])
+    it "still calls Jarvis.command when no :sms task stops propagation, or none match" do
+      [[instance_double(Task, stop_propagation?: false)], []].each do |tasks|
+        stub_trigger(returning: tasks)
 
-      post :talk, params: sms_params
+        post :talk, params: sms_params
 
-      expect(response).to have_http_status(:ok)
-      expect(::Jarvis).to have_received(:command).with(user, "chore washed dishes")
-    end
-
-    it "still calls Jarvis.command when no :sms tasks match at all" do
-      stub_trigger(returning: [])
-
-      post :talk, params: sms_params
-
-      expect(response).to have_http_status(:ok)
-      expect(::Jarvis).to have_received(:command).with(user, "chore washed dishes")
+        expect(response).to have_http_status(:ok)
+      end
+      expect(::Jarvis).to have_received(:command).with(user, "chore washed dishes").twice
     end
   end
 end

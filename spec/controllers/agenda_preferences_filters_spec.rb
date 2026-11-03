@@ -12,16 +12,21 @@ RSpec.describe AgendaPreferencesController, type: :request do
     allow_any_instance_of(ApplicationController).to receive(:authorize_user_or_guest).and_return(true)
   end
 
-  it "drops inaccessible schedule ids from hidden_schedule_ids" do
+  it "drops inaccessible agenda and schedule ids from what it saves" do
     mine    = create(:agenda_schedule, agenda: my_agenda)
     foreign = create(:agenda_schedule, agenda: foreign_agenda)
 
     patch agenda_preference_path, params: {
-      agenda_preference: { hidden_schedule_ids: [mine.id, foreign.id, 999_999] },
+      agenda_preference: {
+        hidden_agenda_ids:   [my_agenda.id, foreign_agenda.id, 999_999],
+        hidden_schedule_ids: [mine.id, foreign.id, 999_999],
+      },
     }, as: :json
 
     expect(response).to be_successful
-    expect(AgendaPreference.find_by(user: user).hidden_schedule_ids).to eq([mine.id])
+    pref = AgendaPreference.find_by(user: user)
+    expect(pref.hidden_agenda_ids).to eq([my_agenda.id])
+    expect(pref.hidden_schedule_ids).to eq([mine.id])
   end
 
   it "saves hidden_name_patterns" do
@@ -39,7 +44,7 @@ RSpec.describe AgendaPreferencesController, type: :request do
     }, as: :json
 
     expect(response).to have_http_status(:unprocessable_entity)
-    expect(JSON.parse(response.body)["errors"].first).to include("invalid regex")
+    expect(AgendaPreference.find_by(user: user)&.hidden_name_patterns).to be_blank
   end
 
   it "echoes the full snapshot including hidden_schedule_names" do

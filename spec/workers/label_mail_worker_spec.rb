@@ -52,25 +52,15 @@ RSpec.describe LabelMailWorker do
     expect { described_class.new.perform(email.id) }.not_to raise_error
   end
 
-  # The first version reported a Gmail no-op as success and the mail sat in the
-  # inbox looking filed. Anything short of done has to be findable.
-  it "warns when the label did not go on" do
-    allow(ByteLocal).to receive(:label_mail)
-      .and_return({ ok: true, state: "nolabel", note: "no such mailbox" })
-    expect(PrettyLogger).to receive(:warn).with(/NOT labelled \(nolabel\)/)
-
+  # Anything short of done has to be findable: a Gmail no-op is not success.
+  it "warns when the label did not go on, and only then" do
+    allow(PrettyLogger).to receive(:warn)
+    allow(ByteLocal).to receive(:label_mail).and_return({ ok: true, state: "labelled", note: "tagged" })
     described_class.new.perform(email.id)
-  end
+    expect(PrettyLogger).not_to have_received(:warn)
 
-  it "stays quiet when the label really went on" do
-    allow(ByteLocal).to receive(:label_mail)
-      .and_return({ ok: true, state: "labelled", note: "tagged" })
-    expect(PrettyLogger).not_to receive(:warn)
-
+    allow(ByteLocal).to receive(:label_mail).and_return({ ok: true, state: "nolabel", note: "no such mailbox" })
     described_class.new.perform(email.id)
-  end
-
-  it "never retries" do
-    expect(described_class.sidekiq_options["retry"]).to be(false)
+    expect(PrettyLogger).to have_received(:warn).once
   end
 end

@@ -18,17 +18,11 @@ RSpec.describe FireDueAgendaTriggersWorker do
       expect(item.completed_at).to be_nil
     end
 
-    it "skips a trigger whose start_at is still in the future" do
-      _item = create(:agenda_item, agenda: agenda, kind: :trigger,
+    it "skips a trigger still in the future, and one already completed" do
+      create(:agenda_item, agenda: agenda, kind: :trigger,
         start_at: 5.minutes.from_now, trigger_expression: "later")
-      expect(::Jil).not_to receive(:trigger)
-      described_class.new.perform
-    end
-
-    it "skips a trigger that's already completed" do
-      _item = create(:agenda_item, agenda: agenda, kind: :trigger,
-        start_at: 1.minute.ago, completed_at: Time.current,
-        trigger_expression: "done")
+      create(:agenda_item, agenda: agenda, kind: :trigger,
+        start_at: 1.minute.ago, completed_at: Time.current, trigger_expression: "done")
       expect(::Jil).not_to receive(:trigger)
       described_class.new.perform
     end

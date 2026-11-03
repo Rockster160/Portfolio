@@ -44,10 +44,10 @@ RSpec.describe "Buddy thread replies" do
   end
 
   describe "replying to something relayed from the other person" do
-    it "sends it back to them, verbatim, without going near Buddy" do
+    it "sends it back verbatim without going near Buddy, leaving their words on screen once", :aggregate_failures do
       _relay, incoming = relayed
 
-      reply!("make it 6:30", to: incoming)
+      message = reply!("make it 6:30", to: incoming)
 
       back = BuddyRelay.where(from_user: rocco, to_user: chelsea).last
       expect(back).to have_attributes(kind: "notify", status: "delivered", body: "make it 6:30")
@@ -56,13 +56,16 @@ RSpec.describe "Buddy thread replies" do
       landed = back.to_conversation.byte_messages.order(:created_at).last
       expect(landed.body).to eq("make it 6:30")
       expect(landed.metadata.dig("relay_peer", "name")).to eq("Byte")
+
+      # The typed row IS the outgoing record; a second bubble would print it twice.
+      expect(convo.byte_messages.where(body: "make it 6:30").count).to eq(1)
+      expect(message.reload).to have_attributes(direction: "outbound", state: "sent")
+      expect(message.metadata.dig("relay_peer", "name")).to eq("Moss")
+      expect(message.metadata["relay_id"]).to eq(back.id)
     end
 
-    # Chelsea sent one from her SECOND companion and the reply came back from
-    # the first. `pass_along!` was handed no destination, so it fell through to
-    # `conversation_for`, and with nothing pinned `primary_among` answers the
-    # LOWEST id - a thread she had not been talking in, wearing the wrong pet.
-    # The twin of the message being answered knows the right one.
+    # With nothing pinned, `conversation_for` answers her LOWEST-id thread; the
+    # twin of the message being answered knows the right one.
     it "goes back to the thread she wrote from, not the first one she owns" do
       first  = ByteConversation.create!(user: chelsea, mode: :buddy, name: "Moss")
       second = ByteConversation.create!(user: chelsea, mode: :buddy, name: "Kumoko")
@@ -83,19 +86,6 @@ RSpec.describe "Buddy thread replies" do
       expect(back.to_conversation).to eq(second)
       expect(second.byte_messages.where(body: "Hello there!")).to be_present
       expect(first.byte_messages).to be_empty
-    end
-
-    it "leaves their own words on screen ONCE, wearing where they went" do
-      _relay, incoming = relayed
-
-      message = reply!("make it 6:30", to: incoming)
-
-      # The typed row IS the outgoing record - a second bubble here would be
-      # their own reply printed twice, one of them as though it were incoming.
-      expect(convo.byte_messages.where(body: "make it 6:30").count).to eq(1)
-      expect(message.reload).to have_attributes(direction: "outbound", state: "sent")
-      expect(message.metadata.dig("relay_peer", "name")).to eq("Moss")
-      expect(message.metadata["relay_id"]).to eq(BuddyRelay.last.id)
     end
 
     it "needs the relay row itself to ANSWER, and passes a note along without it" do
@@ -163,26 +153,17 @@ RSpec.describe "Buddy thread replies" do
       expect(BuddyRelay.where(from_user: rocco, to_user: chelsea).last.body).to eq("about 20 minutes")
     end
 
-    # Prod 4376: "I love you the most!" typed straight at a note from Chelsea.
-    # The menu offered "Reply to Moss" off the peer identity on the bubble, the
-    # server read `relay_id` and found nothing, and Byte answered it instead.
-    # Every one of the 69 bridged messages in prod that day had a twin and not
-    # one had a relay_id.
-    it "still reaches them when the bridged row predates relay_id" do
+    # Bridged rows that predate `relay_id` still carry a twin.
+    it "still reaches them when the bridged row predates relay_id, reading the peer off the twin", :aggregate_failures do
       _relay, incoming = relayed
       incoming.update!(metadata: incoming.metadata.except("relay_id"))
+
+      expect(Buddy::ThreadReply.route_for(rocco, incoming)).to include(peer: chelsea, relay: nil)
 
       reply!("I love you the most!", to: incoming)
 
       expect(BuddyRelay.where(from_user: rocco, to_user: chelsea).last.body).to eq("I love you the most!")
       expect(BuddyDeliverWorker.jobs).to be_empty
-    end
-
-    it "reads the peer off the twin's owner rather than inferring it" do
-      _relay, incoming = relayed
-      incoming.update!(metadata: incoming.metadata.except("relay_id"))
-
-      expect(Buddy::ThreadReply.route_for(rocco, incoming)).to include(peer: chelsea, relay: nil)
     end
 
     it "routes nowhere when the bridge left no partner at all" do

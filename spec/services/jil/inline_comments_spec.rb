@@ -89,19 +89,15 @@ RSpec.describe "Jil: inline comments", type: :service do
     end
 
     describe "depth-based commenting" do
-      it "tracks depth from multi-# prefix" do
-        lines = Jil::Parser.from_code("# # x = String.new(\"a\")::String\n")
+      it "tracks depth from multi-# prefix and round-trips it through to_s" do
+        code = "# # x = String.new(\"a\")::String"
+        lines = Jil::Parser.from_code("#{code}\n")
         expect(lines.first.commented_depth).to eq(2)
         expect(lines.first).to be_commented
+        expect(lines.first.to_s.strip).to eq(code)
       end
 
-      it "round-trips a depth-2 commented line through to_s" do
-        code = "# # x = String.new(\"a\")::String"
-        lines = Jil::Parser.from_code(code)
-        expect(lines.first.to_s.strip).to eq("# # x = String.new(\"a\")::String")
-      end
-
-      it "preserves per-line depth across an outer commented block" do
+      it "preserves per-line depth across an outer commented block, and round-trips it" do
         code = <<~'JIL'
           # outer = Array.new({
             # # inner1 = String.new("a")::String
@@ -112,21 +108,8 @@ RSpec.describe "Jil: inline comments", type: :service do
         expect(lines.first.commented_depth).to eq(1)
         inner = lines.first.args.first
         expect(inner.map(&:commented_depth)).to eq([2, 1])
-      end
 
-      it "round-trips outer + inner commented state via to_s" do
-        # When parser re-serializes, every line in a commented scope keeps its full
-        # # x depth prefix. After parse, uncommenting the outer (depth -= 1 on all
-        # descendants) leaves an inner self-commented line at depth 1.
-        code = <<~'JIL'
-          # outer = Array.new({
-            # # inner1 = String.new("a")::String
-            # inner2 = String.new("b")::String
-          # })::Array
-        JIL
-        lines = Jil::Parser.from_code(code)
-        reserialized = lines.map(&:to_s).join("\n") + "\n"
-        expect(reserialized).to eq(code)
+        expect(lines.map(&:to_s).join("\n") + "\n").to eq(code)
       end
 
       it "skips depth>0 lines at runtime" do
@@ -190,10 +173,8 @@ RSpec.describe "Jil: inline comments", type: :service do
     end
   end
 
-  # Regression: commented lines inside `{...}` blocks used to yield `nil` into
-  # `evalargs`, which then exploded the receiver's `hash_wrap` with
-  # `TypeError: no implicit conversion of nil into Hash`. Now `evalargs` filters
-  # commented parsers out of nested arrays before evaluating.
+  # `evalargs` filters commented parsers out of nested arrays, so a receiver's
+  # `hash_wrap` never sees a nil.
   describe "commented lines inside blocks" do
     let(:user) { create(:user) }
 

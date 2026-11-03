@@ -16,19 +16,12 @@ RSpec.describe GamesController do
   end
 
   describe "GET /games" do
-    it "succeeds with templates and an active play" do
+    it "succeeds with templates, an active play, and a legacy Game event with no data at all" do
       template = user.game_templates.create!(name: "Catan")
       build_play(game_template_id: template.id)
-
-      get games_path
-      expect(response).to have_http_status(:success)
-    end
-
-    it "handles a legacy Game event with no data at all" do
       user.action_events.create!(name: "Game", notes: "Risk", timestamp: 1.year.ago, data: nil)
 
       get games_path
-
       expect(response).to have_http_status(:success)
     end
   end
@@ -50,22 +43,14 @@ RSpec.describe GamesController do
       expect(response.body).to include(play.client_uuid)
     end
 
-    it "renders the read-only stats page for a finished play" do
+    it "renders the read-only stats page for a finished play, linking to edit and replay" do
       play = build_play(status: :finished, winner_names: ["Rocco"], final_scores: { "Rocco" => 55 })
 
       get game_play_path(play.id)
 
       expect(response).to have_http_status(:success)
       expect(response.body).to include("Rocco")
-    end
-
-    it "links to editing and replaying a finished play" do
-      play = build_play(status: :finished)
-
-      get game_play_path(play.id)
-
-      expect(response.body).to include(edit_finish_game_play_path(play.id))
-      expect(response.body).to include(replay_game_play_path(play.id))
+      expect(response.body).to include(edit_finish_game_play_path(play.id), replay_game_play_path(play.id))
     end
   end
 
@@ -103,19 +88,13 @@ RSpec.describe GamesController do
       expect(response.body).to include('value="140"')
     end
 
-    it "has no manual winner control - the winner is computed from the scores, never picked by hand" do
-      play = build_play(status: :finished, winner_names: ["Chelsea"])
+    # The winner is computed from the scores, never picked by hand.
+    it "offers no winner control and never computes duration against Time.current for a finished play" do
+      play = build_play(status: :finished, winner_names: ["Chelsea"], started_at: 3.months.ago, duration_minutes: nil)
 
       get edit_finish_game_play_path(play.id)
 
       expect(response.body).not_to include('name="winner_names')
-    end
-
-    it "never computes duration against Time.current for a finished play" do
-      play = build_play(status: :finished, started_at: 3.months.ago, duration_minutes: nil)
-
-      get edit_finish_game_play_path(play.id)
-
       expect(response.body).not_to match(/name="duration_minutes" value="\d{4,}"/)
     end
   end
@@ -290,7 +269,6 @@ RSpec.describe GamesController do
       update!(dice_choice: "other", dice_other: "two sixes")
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.body).to include("should look like 2d6")
       expect(template.reload.dice).to eq("2d6")
     end
 

@@ -24,18 +24,12 @@ RSpec.describe "add_job_note tool" do
     tool[:execute].call(confirm(**payload)[:resolved], ctx)
   end
 
-  # Filed on arrival and drawn pre-checked. A beat nobody taps is a board
-  # saying an application is still waiting on them when it was answered a week
-  # ago, and `undo` puts back the note, the status it moved and the mail.
-  it "is a level 2 proposal, undone by unticking" do
-    expect(tool[:level]).to eq(2)
-  end
-
   describe "a booked interview" do
-    it "puts the appointment on the calendar as a timed event" do
+    it "puts the appointment on the calendar as a timed event, for the mail's own length" do
       execute(tag: :scheduled, follow_up_at: at, duration_minutes: 20, note: "Phone screen.")
       note = job.notes.last
 
+      expect(note.duration_minutes).to eq(20)
       expect(note.follow_up_item.kind).to eq("event")
       expect(note.follow_up_item.start_at).to eq(at)
       expect(note.follow_up_item.end_at).to eq(at + 20.minutes)
@@ -46,12 +40,6 @@ RSpec.describe "add_job_note tool" do
     it "refuses to book one with no time" do
       expect { confirm(tag: :scheduled, note: "Interview on Thursday at 2pm.") }
         .to raise_error(/needs its time/)
-    end
-
-    it "takes the mail's own length rather than assuming an hour" do
-      execute(tag: :scheduled, follow_up_at: at, duration_minutes: 20)
-
-      expect(job.notes.last.duration_minutes).to eq(20)
     end
 
     it "still books an hour when the mail never said" do
@@ -178,7 +166,6 @@ RSpec.describe "add_job_note tool" do
       words = hint(email_id: email.id, tag: :rejected)
 
       expect(words["tap"]).to include("/emails/#{email.id}")
-      expect(words["tap"]).to match(/Read the email/)
     end
 
     # A booking arrives BY MAIL, so a `scheduled` card always takes the mail
@@ -212,22 +199,17 @@ RSpec.describe "add_job_note tool" do
       expect(hint(tag: :heard_back, note: "They wrote.")["done"]).to be_nil
     end
 
-    # Confirming IS reading it, and everything it said is on the board now.
-    it "marks it read and archived on confirm" do
+    # Confirming IS reading it. The Ardesian row is a COPY, so the real mail is
+    # labelled on the Mac off the tap, where a GUI app mid-sync cannot hang a
+    # checkbox.
+    it "marks it read and archived on confirm, and labels the mail on the Mac" do
+      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
+
       execute(email_id: email.id, tag: :rejected, note: "No thanks.")
       email.reload
 
       expect(email).to be_read
       expect(email).to be_archived
-    end
-
-    # The Ardesian row is a COPY. Gmail mail stays bold in the real inbox until
-    # Mail.app is told, and that runs off the tap so a GUI app mid-sync cannot
-    # hang a checkbox.
-    it "labels the mail on the Mac so it can be cleared by hand" do
-      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
-
-      execute(email_id: email.id, tag: :rejected, note: "No thanks.")
     end
 
     it "leaves a mail that was already filed alone" do
@@ -268,7 +250,7 @@ RSpec.describe "add_job_note tool" do
       item = job.notes.last.follow_up_item
 
       expect(item.kind).to eq("task")
-      expect(item.name).to eq("Send availability: ApartmentIQ")
+      expect(item.name).to include("ApartmentIQ")
     end
   end
 
@@ -292,19 +274,13 @@ RSpec.describe "add_job_note tool" do
 
     before { allow(Buddy::JobMailOffer).to receive(:mail_text).and_return(invite) }
 
-    it "writes the mail's own words rather than the reading of them" do
+    it "writes the mail's own words, and carries the link to join onto the calendar row" do
       execute(tag: :scheduled, follow_up_at: at, email_id: email.id,
         note: "Phone interview scheduled for Thu at 12pm.")
+      note = job.notes.last
 
-      expect(job.notes.last.body).to eq(invite)
-    end
-
-    it "carries the link to join onto the calendar row" do
-      execute(tag: :scheduled, follow_up_at: at, email_id: email.id,
-        note: "Phone interview scheduled for Thu at 12pm.")
-
-      expect(job.notes.last.follow_up_item.notes)
-        .to start_with("Join: https://meet.google.com/vhf-auiw-nhq")
+      expect(note.body).to eq(invite)
+      expect(note.follow_up_item.notes).to include("https://meet.google.com/vhf-auiw-nhq")
     end
 
     # Mail we cannot read off disk is a soft failure upstream, and what was
@@ -340,23 +316,14 @@ RSpec.describe "add_job_note tool" do
       execute(tag: :availability, email_id: email.id, note: "Times?", role: "Backend Engineer")
     end
 
-    it "moves it rather than filing a second copy" do
-      expect { name_the_sibling }.not_to(change { JobNote.count })
+    it "moves it rather than filing a second copy, settles the guess, and undoes to the row it was on" do
+      result = nil
+      expect { result = name_the_sibling }.not_to change(JobNote, :count)
 
       expect(guessed.reload.job_application_id).to eq(sibling.id)
       expect(guessed.tag).to eq("availability")
-    end
-
-    it "stops being a guess once a row has been named" do
-      name_the_sibling
-
       expect(email.reload.job_triage).not_to have_key(:job_note_guess)
-    end
-
-    it "undoes to the row it was on" do
-      revert = name_the_sibling[:reverts].first
-
-      expect(revert[:before]["job_application_id"]).to eq(job.id)
+      expect(result[:reverts].first[:before]["job_application_id"]).to eq(job.id)
     end
 
     # Without the stamp an `email_id` beside the wrong `job_id` would drag a

@@ -41,32 +41,17 @@ RSpec.describe "Post-login forwarding", type: :request do
   # these were filtered, a PWA polling through a session expiry left its data
   # endpoint as the forwarding url, and login dropped you on raw JSON.
   describe "non-page requests" do
-    it "does not store a request for a .json path" do
-      get "/api_keys.json"
-      expect(session[:forwarding_url]).to be_nil
-    end
-
-    it "does not store a fetch() for a JSON endpoint with no extension" do
-      get "/chores/icons/signature", headers: {
-        "HTTP_ACCEPT"    => "application/json",
-        "Sec-Fetch-Dest" => "empty",
-      }
-      expect(session[:forwarding_url]).to be_nil
-    end
-
-    it "does not store a fetch() that forgot its Accept header" do
-      get api_keys_path, headers: { "Sec-Fetch-Dest" => "empty" }
-      expect(session[:forwarding_url]).to be_nil
-    end
-
-    it "does not store an XHR" do
-      get api_keys_path, xhr: true
-      expect(session[:forwarding_url]).to be_nil
-    end
-
-    it "does not store an iframe load" do
-      get api_keys_path, headers: { "Sec-Fetch-Dest" => "iframe" }
-      expect(session[:forwarding_url]).to be_nil
+    it "does not store a .json path, a fetch(), an XHR, or an iframe load" do
+      [
+        ["/api_keys.json", {}],
+        ["/chores/icons/signature", { headers: { "HTTP_ACCEPT" => "application/json", "Sec-Fetch-Dest" => "empty" } }],
+        [api_keys_path, { headers: { "Sec-Fetch-Dest" => "empty" } }],
+        [api_keys_path, { xhr: true }],
+        [api_keys_path, { headers: { "Sec-Fetch-Dest" => "iframe" } }],
+      ].each do |path, opts|
+        get(path, **opts)
+        expect(session[:forwarding_url]).to be_nil, "#{path} #{opts}"
+      end
     end
 
     it "still stores a real browser navigation" do
@@ -90,14 +75,11 @@ RSpec.describe "Post-login forwarding", type: :request do
   # The QR page mints a fresh single-use token every visit and the scan link
   # burns on use, so neither is a destination worth returning to.
   describe "device login pages" do
-    it "does not store the scan link" do
-      get device_login_claim_path("nope")
-      expect(session[:forwarding_url]).to be_nil
-    end
-
-    it "does not store the QR page" do
-      get device_login_path
-      expect(session[:forwarding_url]).to be_nil
+    it "does not store the scan link or the QR page" do
+      [device_login_claim_path("nope"), device_login_path].each do |path|
+        get path
+        expect(session[:forwarding_url]).to be_nil, path
+      end
     end
   end
 end

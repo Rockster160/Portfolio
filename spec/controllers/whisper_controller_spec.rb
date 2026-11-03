@@ -46,24 +46,13 @@ RSpec.describe WhisperController, type: :controller do
       sign_in owner
       get :show
 
-      expect(rendered_monitors)
-        .to eq(described_class::BUTTON_MONITORS.map { |m| "whisper-btn-#{m}" })
+      expect(rendered_monitors).to eq(described_class::BUTTON_MONITORS.map { |m| "whisper-btn-#{m}" })
     end
 
-    # There are other `monitor::whisper-btn-*` tasks in prod (whisper-btn-walk,
-    # -stay, -call...) that were never on the page.
-    it "ignores whisper-btn tasks that aren't in the allowlist" do
+    # Other `monitor::whisper-btn-*` tasks exist that were never on the page.
+    it "skips buttons not created yet and whisper-btn tasks outside the allowlist" do
       button_task(:water, "Whisper Water")
       button_task(:walk, "Whisper Walk")
-
-      sign_in owner
-      get :show
-
-      expect(rendered_monitors).to eq(["whisper-btn-water"])
-    end
-
-    it "skips buttons that haven't been created yet" do
-      button_task(:water, "Whisper Water")
 
       sign_in owner
       get :show

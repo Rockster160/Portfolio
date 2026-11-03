@@ -15,12 +15,20 @@ RSpec.describe BuddyExpressionResetWorker do
     convo
   end
 
-  it "rests a face left behind by a conversation that went quiet" do
+  # Resetting writes with update_column so it doesn't bump activity and re-arm
+  # itself on the next sweep.
+  it "rests a face left behind by a quiet conversation, tells the client, and leaves activity alone" do
     convo = buddy_convo(expression: "happy", last_message_at: 10.minutes.ago)
+    was = convo.last_message_at
 
     described_class.new.perform
 
     expect(convo.reload.buddy_expression).to eq("neutral")
+    expect(convo.last_message_at).to be_within(1.second).of(was)
+    expect(MonitorChannel).to have_received(:broadcast_to).with(
+      user,
+      hash_including(data: hash_including(kind: :buddy_expression, expression: "neutral", transient: false)),
+    )
   end
 
   it "leaves a live conversation's face exactly where it is" do
@@ -39,17 +47,6 @@ RSpec.describe BuddyExpressionResetWorker do
     expect(convo.reload.buddy_expression).to eq("sad")
   end
 
-  it "tells the client so the face rests without waiting for a refresh" do
-    buddy_convo(expression: "happy", last_message_at: 10.minutes.ago)
-
-    described_class.new.perform
-
-    expect(MonitorChannel).to have_received(:broadcast_to).with(
-      user,
-      hash_including(data: hash_including(kind: :buddy_expression, expression: "neutral", transient: false)),
-    )
-  end
-
   it "says nothing about a face already resting" do
     buddy_convo(expression: "neutral", last_message_at: 10.minutes.ago)
 
@@ -65,16 +62,5 @@ RSpec.describe BuddyExpressionResetWorker do
     described_class.new.perform
 
     expect(convo.reload.buddy_expression).to eq("happy")
-  end
-
-  # Resetting writes with update_column precisely so it doesn't bump activity
-  # and re-arm itself on the next sweep.
-  it "does not count its own reset as activity" do
-    convo = buddy_convo(expression: "happy", last_message_at: 10.minutes.ago)
-    was = convo.last_message_at
-
-    described_class.new.perform
-
-    expect(convo.reload.last_message_at).to be_within(1.second).of(was)
   end
 end

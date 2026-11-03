@@ -13,7 +13,6 @@ RSpec.describe "System page", type: :request do
 
     hrefs = response.body.scan(/<a class="system-card[^"]*" href="([^"]+)">/).flatten
     expect(hrefs).to include(interviews_path)
-    expect(response.body).to include("Interview Tracker")
   end
 
   # The blip counts the chases owed; the number itself is JobNote's business

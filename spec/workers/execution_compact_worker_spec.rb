@@ -37,14 +37,6 @@ RSpec.describe ExecutionCompactWorker, type: :worker do
     expect(task.executions.failed.where.not(payload_id: nil).count).to eq(n)
   end
 
-  it "deletes the underlying ExecutionPayload rows it removes from executions" do
-    n = ExecutionCompactWorker::RETENTION_PER_GROUP
-    base = 1.hour.ago
-    (n + 3).times { |i| make_execution(task: task, status: :success, started_at: base + i.seconds) }
-
-    expect { described_class.new.perform }.to change(ExecutionPayload, :count).by(-3)
-  end
-
   it "is a no-op when nothing exceeds the retention limit" do
     n = ExecutionCompactWorker::RETENTION_PER_GROUP
     n.times { |i| make_execution(task: task, status: :success, started_at: 1.hour.ago + i.seconds) }

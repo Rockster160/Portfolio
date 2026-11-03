@@ -92,7 +92,8 @@ RSpec.describe Buddy::Alerts do
   describe "the same condition, seen again" do
     before { described_class.raise!(user: user, key: "gate", body: "The gate is open") }
 
-    it "rewrites the one bubble instead of posting another" do
+    it "rewrites the one bubble in place, counts it, and does not buzz again", :aggregate_failures do
+      captured = frames
       expect { described_class.raise!(user: user, key: "gate", body: "The gate is still open") }
         .not_to change(ByteMessage, :count)
 
@@ -100,19 +101,7 @@ RSpec.describe Buddy::Alerts do
       expect(alert.raised_count).to eq(2)
       expect(alert.byte_message.reload.body).to eq("The gate is still open")
       expect(alert.byte_message.metadata.dig("alert", "count")).to eq(2)
-    end
-
-    # They were told when it opened and the bubble has said so ever since. A
-    # count on the record is what keeps the recurrence from being invisible.
-    it "does not buzz again for something already on screen" do
-      described_class.raise!(user: user, key: "gate", body: "The gate is open")
-
       expect(WebPushNotifications).to have_received(:send_to_byte).once
-    end
-
-    it "tells the client this is the same message moving, not a new one" do
-      captured = frames
-      described_class.raise!(user: user, key: "gate", body: "The gate is open")
 
       repaint = captured.select { |f| f.dig(:data, :kind) == :message }.last
       expect(repaint.dig(:data, :update)).to be(true)
@@ -128,7 +117,7 @@ RSpec.describe Buddy::Alerts do
   describe "resolving one" do
     before { described_class.raise!(user: user, key: "gate", body: "The gate is open") }
 
-    it "rewrites the bubble it already owns rather than adding a second" do
+    it "rewrites the bubble it already owns, in silence, rather than adding a second" do
       expect { described_class.resolve!(user: user, key: "gate", body: "Gate is shut") }
         .not_to change(ByteMessage, :count)
 
@@ -137,6 +126,7 @@ RSpec.describe Buddy::Alerts do
       expect(alert.resolved_at).to be_present
       expect(alert.byte_message.reload.body).to eq("Gate is shut")
       expect(alert.byte_message.metadata.dig("alert", "status")).to eq("resolved")
+      expect(WebPushNotifications).to have_received(:send_to_byte).once
     end
 
     it "keeps its own words when the resolve brings none" do
@@ -144,12 +134,6 @@ RSpec.describe Buddy::Alerts do
 
       expect(ByteMessage.last.body).to eq("The gate is open")
       expect(ByteMessage.last.metadata.dig("alert", "status")).to eq("resolved")
-    end
-
-    it "clears in silence - the good news is on the bubble, not on the lock screen" do
-      described_class.resolve!(user: user, key: "gate")
-
-      expect(WebPushNotifications).to have_received(:send_to_byte).once
     end
 
     # How a check that runs on a schedule tells "I just cleared something" from

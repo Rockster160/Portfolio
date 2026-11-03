@@ -67,58 +67,28 @@ RSpec.describe Jil::Methods::Interview do
   describe "#prep when someone else set off a task of his" do
     before { allow(ByteInterviewPrep).to receive(:dispatch).and_return(:sent) }
 
-    it "refuses another person pressing Run on a shared task" do
-      expect(ByteInterviewPrep).not_to receive(:dispatch)
-
-      ctx = run(owner, code, auth: :run, auth_id: other.id)
-      expect(value(ctx, :started)).to be(false)
-    end
-
-    it "refuses another person's companion firing a shared task" do
-      expect(ByteInterviewPrep).not_to receive(:dispatch)
-
-      ctx = run(owner, code, auth: :buddy, auth_id: other.id)
-      expect(value(ctx, :started)).to be(false)
-    end
-
     # FireDueAgendaTriggersWorker fires as `item.user`, so an interview on HER
-    # calendar could match a task of his that is shared with her.
-    it "refuses another person's agenda item firing a shared task" do
-      expect(ByteInterviewPrep).not_to receive(:dispatch)
+    # calendar could match a task of his that is shared with her. An
+    # actor-bearing execution that cannot name its actor is refused too.
+    it "refuses another person's Run, companion, or agenda item, and an unnamed actor" do
       item = FactoryBot.create(:agenda_item, agenda: FactoryBot.create(:agenda, user: other))
-
-      ctx = run(owner, code, auth: :agenda, auth_id: item.id)
-      expect(value(ctx, :started)).to be(false)
+      [[:run, other.id], [:buddy, other.id], [:agenda, item.id], [:run, nil]].each do |auth, auth_id|
+        ctx = run(owner, code, auth: auth, auth_id: auth_id)
+        expect(value(ctx, :started)).to be(false), "#{auth}/#{auth_id.inspect}"
+      end
+      expect(ByteInterviewPrep).not_to have_received(:dispatch)
     end
 
-    it "refuses an actor-bearing execution that cannot name its actor" do
-      expect(ByteInterviewPrep).not_to receive(:dispatch)
-
-      ctx = run(owner, code, auth: :run, auth_id: nil)
-      expect(value(ctx, :started)).to be(false)
-    end
-
-    it "still allows him pressing Run on his own task" do
-      ctx = run(owner, code, auth: :run, auth_id: owner.id)
-      expect(value(ctx, :started)).to be(true)
-    end
-
-    # What the -60 minute trigger itself arrives as: no acting person at all,
-    # so the owner check is the whole answer. The automation has to work.
-    it "still allows the trigger that fires it an hour before" do
-      ctx = run(owner, code, auth: :trigger, auth_id: 1234)
-      expect(value(ctx, :started)).to be(true)
-    end
-
-    it "still allows a cron-fired task of his" do
-      ctx = run(owner, code, auth: :cron, auth_id: nil)
-      expect(value(ctx, :started)).to be(true)
+    # The -60 minute trigger arrives with no acting person at all, so the owner
+    # check is the whole answer.
+    it "still allows his own Run, the trigger, and cron" do
+      [[:run, owner.id], [:trigger, 1234], [:cron, nil]].each do |auth, auth_id|
+        ctx = run(owner, code, auth: auth, auth_id: auth_id)
+        expect(value(ctx, :started)).to be(true), "#{auth}/#{auth_id.inspect}"
+      end
     end
   end
 
-  # What the live task sends, exactly as the prodExec script writes it. Both
-  # halves: the one that hangs the trigger off the event, and the one the
-  # trigger fires an hour later.
   describe "the tasks that use it" do
     let(:schedule_code) {
       <<~JIL
@@ -156,7 +126,7 @@ RSpec.describe Jil::Methods::Interview do
 
     # An hour before, and it has to FOLLOW the event: an interview moved by an
     # hour is the commonest thing that happens to one.
-    it "hangs a -60 minute trigger off the event itself" do
+    it "hangs a -60 minute trigger off the event, carrying its id through to the prep" do
       agenda = FactoryBot.create(:agenda, user: owner)
       item = FactoryBot.create(
         :agenda_item,
@@ -169,31 +139,12 @@ RSpec.describe Jil::Methods::Interview do
 
       expect(trigger.trigger).to eq("interview-prep")
       expect(trigger.execute_at).to be_within(1.second).of(item.start_at - 1.hour)
-    end
-
-    # The fired payload is `{ timestamp: }` merged with the trigger's own data
-    # and nothing else - the source item does not ride along - so the id has to
-    # be put in the data when the trigger is made.
-    it "carries the event id through to the prep" do
-      agenda = FactoryBot.create(:agenda, user: owner)
-      item = FactoryBot.create(
-        :agenda_item,
-        agenda: agenda, kind: :event, name: "Interview: Bluestaq",
-        start_at: 3.days.from_now, end_at: 3.days.from_now + 1.hour
-      )
-
-      Jil::Executor.call(owner, schedule_code, { id: item.id })
-      trigger = owner.scheduled_triggers.find_by(source_item_id: item.id, name: "interview-prep")
-
       expect(trigger.data["id"]).to eq(item.id)
 
       expect(ByteInterviewPrep).to receive(:dispatch).with(owner, item.id)
       Jil::Executor.call(owner, prep_code, { timestamp: trigger.execute_at }.merge(trigger.data))
     end
 
-    # `trigger_for` refuses outright once the mark has passed rather than
-    # firing on creation - so an interview booked inside the hour gets no
-    # brief, which is better than one arriving as he joins the call.
     it "writes no trigger for an interview already inside the hour" do
       agenda = FactoryBot.create(:agenda, user: owner)
       item = FactoryBot.create(

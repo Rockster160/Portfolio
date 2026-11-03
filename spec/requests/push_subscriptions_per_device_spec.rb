@@ -1,18 +1,8 @@
 require "rails_helper"
 
-# A push subscription belongs to a DEVICE. The endpoint is what identifies it —
-# it's the address the push service delivers to — so one row per (user, channel,
-# endpoint) is the only shape that lets a phone and a desktop both be subscribed
-# at once.
-#
-# This used to be one row per (user, channel), with the endpoint overwritten on
-# every sync. WebPushNotifications.send_to had already been changed to fan a push
-# out to every registered subscription on the channel, and that fan-out could
-# never reach more than one device, because there was never more than one row.
-# The two devices took turns: opening Byte on the desktop pointed the row at the
-# desktop and the phone went quiet, until the phone was opened and evicted the
-# desktop in its turn. Re-subscribing on open — which Byte already does on every
-# visibilitychange — could not fix it, because each device was undoing the other.
+# A push subscription belongs to a DEVICE. The endpoint is the address the push
+# service delivers to, so one row per (user, channel, endpoint) is what lets a
+# phone and a desktop both be subscribed at once and both reached by the fan-out.
 RSpec.describe "Push subscription registration", type: :request do
   let(:user) { create(:user) }
 
@@ -39,26 +29,12 @@ RSpec.describe "Push subscription registration", type: :request do
   def byte_subs = user.push_subs.for_channel(:byte)
 
   describe "two devices on one channel" do
-    it "keeps a row for each instead of one overwriting the other" do
+    it "keeps a registered row for each instead of one overwriting the other", :aggregate_failures do
       subscribe(phone)
       subscribe(desktop)
 
       expect(byte_subs.pluck(:endpoint)).to contain_exactly(phone, desktop)
-    end
-
-    it "leaves both registered, so a push reaches both" do
-      subscribe(phone)
-      subscribe(desktop)
-
       expect(user.all_push_subs_for_channel(:byte).pluck(:endpoint)).to contain_exactly(phone, desktop)
-    end
-
-    # The symptom: the phone opens Byte, everything works, then the desktop is
-    # opened and the phone silently stops receiving anything.
-    it "doesn't take the phone off the list when the desktop opens" do
-      subscribe(phone)
-      subscribe(desktop)
-
       expect(byte_subs.find_by(endpoint: phone).registered_at).to be_present
     end
 
@@ -103,11 +79,7 @@ RSpec.describe "Push subscription registration", type: :request do
 
   # The endpoint is the device's ADDRESS, not its name. iOS revokes a push
   # subscription whenever a push arrives that shows no notification, and the
-  # device comes back with a fresh endpoint — so keyed on the endpoint alone,
-  # one phone filed itself as a new device every few hours. Twenty-one live rows
-  # accumulated for one person across three real devices, and since the fan-out
-  # is serial, the eighteen dead addresses were eighteen timeouts standing in
-  # front of the live one.
+  # device comes back with a fresh endpoint, so a device_id keeps it one row.
   describe "a device whose endpoint was re-issued" do
     let(:phone_id) { "device-abcdef" }
 
@@ -162,9 +134,7 @@ RSpec.describe "Push subscription registration", type: :request do
   end
 
   # `PushSubscription#toJSON` nests the keys and most of the PWAs post that
-  # straight through, but the Timers PWA builds its body by hand and sends them
-  # flat. That raised NoMethodError on nil and 500'd every attempt, which is why
-  # the timers channel has never held a single row.
+  # straight through, but the Timers PWA builds its body by hand and sends them flat.
   it "accepts keys sent flat rather than nested" do
     post "/push_notification_subscribe",
       params:  { endpoint: phone, channel: "timers", auth: "a", p256dh: "p" }.to_json,

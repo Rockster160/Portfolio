@@ -94,17 +94,14 @@ RSpec.describe Timer do
       end
     end
 
-    it "resets a counter to reset_value" do
-      timer = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 7, reset_value: 0)
-      timer.reset!
-      expect(timer.value).to eq(0)
-    end
-
-    it "resets a dial to step 0" do
-      timer = create(:timer, user: user, kind: :dial, duration_ms: nil, dial_step_index: 3,
-                             dial_config: { sections: [{ name: "a" }, { name: "b" }] })
-      timer.reset!
-      expect(timer.dial_step_index).to eq(0)
+    it "resets a counter to reset_value and a dial to step 0" do
+      counter = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 7, reset_value: 0)
+      dial = create(:timer, user: user, kind: :dial, duration_ms: nil, dial_step_index: 3,
+                            dial_config: { sections: [{ name: "a" }, { name: "b" }] })
+      counter.reset!
+      dial.reset!
+      expect(counter.value).to eq(0)
+      expect(dial.dial_step_index).to eq(0)
     end
   end
 
@@ -112,15 +109,10 @@ RSpec.describe Timer do
     it "counts all subs as separate steps and wraps only at the true total" do
       sections = 8.times.map { |i| { name: "S#{i}", subs: %w[a b c] } }
       timer = create(:timer, user: user, kind: :dial, duration_ms: nil, dial_config: { sections: sections })
-      24.times { |i| timer.advance_dial!(by: 1) }
-      expect(timer.dial_step_index).to eq(0) # wrap after exactly 24 advances
-    end
-
-    it "does not wrap early (regression: 8x3 dials hit 12 and wrapped)" do
-      sections = 8.times.map { |i| { name: "S#{i}", subs: %w[a b c] } }
-      timer = create(:timer, user: user, kind: :dial, duration_ms: nil, dial_config: { sections: sections })
       12.times { timer.advance_dial!(by: 1) }
       expect(timer.dial_step_index).to eq(12)
+      12.times { timer.advance_dial!(by: 1) }
+      expect(timer.dial_step_index).to eq(0)
     end
 
     it "fires dial_step callbacks only when the when.section matches" do
@@ -168,32 +160,21 @@ RSpec.describe Timer do
   describe "#apply_increment!" do
     let(:timer) { create(:timer, user: user, kind: :counter, duration_ms: nil, value: 0, step: 1) }
 
-    it "increments by step" do
-      timer.apply_increment!(by: 1)
-      expect(timer.value).to eq(1)
-    end
-
-    it "allows overflow when no bounds are set" do
-      timer.apply_increment!(by: -1)
-      expect(timer.value).to eq(-1)
-    end
-
-    it "scales `by` through the counter's step" do
-      timer.update!(step: 3)
-      timer.apply_increment!(by: 1)
-      expect(timer.value).to eq(3)
-    end
-
-    it "takes `amount` as a raw delta, unscaled by step" do
-      timer.update!(step: 3, value: 43)
-      timer.apply_increment!(amount: 18)
-      expect(timer.value).to eq(61)
-    end
-
-    it "treats a negative `amount` as a subtraction" do
-      timer.update!(value: 10)
-      timer.apply_increment!(amount: -4)
-      expect(timer.value).to eq(6)
+    # `by` is scaled through the counter's step, `amount` is a raw delta, and
+    # max_value is display-only.
+    it "applies `by` through the step and `amount` raw, unbounded", :aggregate_failures do
+      [
+        [{ step: 1, value: 0 }, { by: 1 }, 1],
+        [{ step: 1, value: 0 }, { by: -1 }, -1],
+        [{ step: 3, value: 0 }, { by: 1 }, 3],
+        [{ step: 3, value: 43 }, { amount: 18 }, 61],
+        [{ step: 1, value: 10 }, { amount: -4 }, 6],
+        [{ step: 1, value: 2, max_value: 2 }, { by: 1 }, 3],
+      ].each do |attrs, args, want|
+        timer.update!(attrs)
+        timer.apply_increment!(**args)
+        expect(timer.value).to eq(want), "#{attrs} #{args}"
+      end
     end
 
     it "reports the direction of an `amount` to counter_reaches clauses" do
@@ -206,12 +187,6 @@ RSpec.describe Timer do
 
       timer.apply_increment!(amount: -6)
       expect(target.reload.value).to eq(1)
-    end
-
-    it "lets the value go past max_value (display-only bound)" do
-      timer.update!(max_value: 2)
-      3.times { timer.apply_increment!(by: 1) }
-      expect(timer.value).to eq(3)
     end
 
     it "fires complete callback once when the counter exactly hits max" do
@@ -247,24 +222,16 @@ RSpec.describe Timer do
   end
 
   describe "#fire_callbacks!" do
-    it "only dispatches when the `when` clause matches the event" do
+    it "dispatches only the callbacks whose `when` matches, legacy shape included" do
       timer = create(:timer,
         user:      user,
         callbacks: [
           { id: "a", when: { type: "complete" }, then: { type: "push" } },
           { id: "b", when: { type: "confirm"  }, then: { type: "push" } },
+          { id: "leg", event: "complete", type: "push" },
         ],
       )
-      expect(WebPushNotifications).to receive(:send_to).once
-      timer.fire_callbacks!(event: :complete)
-    end
-
-    it "interprets legacy {event, type, ...} callbacks via the adapter" do
-      timer = create(:timer,
-        user:      user,
-        callbacks: [{ id: "leg", event: "complete", type: "push" }],
-      )
-      expect(WebPushNotifications).to receive(:send_to).once
+      expect(WebPushNotifications).to receive(:send_to).twice
       timer.fire_callbacks!(event: :complete)
     end
   end
@@ -283,30 +250,23 @@ RSpec.describe Timer do
       expect(::Jil).to have_received(:trigger).with(user, :test_scope, hash_including(timer_id: timer.id), auth: :trigger)
     end
 
-    it "chains :increment to a counter target" do
-      target = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 0)
-      allow(MonitorChannel).to receive(:broadcast_to)
-      timer.dispatch_then(type: :chain, target_timer_id: target.id, op: :increment, by: 3)
-      expect(target.reload.value).to eq(3)
-    end
-
-    it "chains :increment against a dial target advances the dial step" do
-      target = create(:timer,
+    it "chains :increment to a counter or a dial target, broadcasting the target" do
+      counter = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 0)
+      dial = create(:timer,
         user:        user,
         kind:        :dial,
         duration_ms: nil,
         dial_config: { sections: [{ name: "a" }, { name: "b" }, { name: "c" }] })
       allow(MonitorChannel).to receive(:broadcast_to)
-      timer.dispatch_then(type: :chain, target_timer_id: target.id, op: :increment, by: 1)
-      expect(target.reload.dial_step_index).to eq(1)
-    end
 
-    it "chain broadcasts the target so the page sees the change" do
-      target = create(:timer, user: user, kind: :counter, duration_ms: nil, value: 0)
-      expect(MonitorChannel).to receive(:broadcast_to).with(
-        user, hash_including(data: hash_including(reason: :chained, timer_id: target.id)),
+      timer.dispatch_then(type: :chain, target_timer_id: counter.id, op: :increment, by: 3)
+      timer.dispatch_then(type: :chain, target_timer_id: dial.id, op: :increment, by: 1)
+
+      expect(counter.reload.value).to eq(3)
+      expect(dial.reload.dial_step_index).to eq(1)
+      expect(MonitorChannel).to have_received(:broadcast_to).with(
+        user, hash_including(data: hash_including(reason: :chained, timer_id: counter.id)),
       )
-      timer.dispatch_then(type: :chain, target_timer_id: target.id, op: :increment, by: 1)
     end
 
     it "chain :goto parks a dial target at the named section" do
@@ -356,19 +316,10 @@ RSpec.describe Timer do
   end
 
   describe "#fire_and_maybe_repeat!" do
-    it "sets fired_at and broadcasts when not repeating" do
-      timer = create(:timer, user: user, repeat: false)
-      allow(MonitorChannel).to receive(:broadcast_to)
-      timer.fire_and_maybe_repeat!
-      expect(timer.reload.fired_at).to be_present
-    end
-
     it "fires callbacks for a repeating timer but does NOT auto-restart server-side" do
-      # The client now drives the restart of repeating timers on its
-      # fire-detection. The model just fires :complete callbacks and
-      # broadcasts :fired same as a non-repeat — this removes the race
-      # between worker-restart and client-restart and lets repeats work
-      # even when Sidekiq isn't actively restarting things.
+      # The client drives the restart of repeating timers on its own
+      # fire-detection, so the model only fires :complete callbacks and
+      # broadcasts :fired, the same as a non-repeat.
       push_called = false
       allow(WebPushNotifications).to receive(:send_to) { push_called = true }
       allow(MonitorChannel).to receive(:broadcast_to)
@@ -387,12 +338,17 @@ RSpec.describe Timer do
       expect(timer.reload.started_at).to be_nil
     end
 
-    it "confirm! returns the timer to a neutral starting state" do
+    it "clears the fire job when it runs, and confirm! returns to a neutral starting state" do
       timer = create(:timer, user: user, duration_ms: 60_000)
+      allow(MonitorChannel).to receive(:broadcast_to)
       Sidekiq::Testing.fake! do
         timer.start!
+        expect(timer.fire_jid).to be_present
         timer.fire_and_maybe_repeat!
-        expect(timer.reload.fired_at).to be_present
+        timer.reload
+        expect(timer.fired_at).to be_present
+        expect(timer.fire_jid).to be_nil
+        expect(timer.fire_scheduled_for).to be_nil
         timer.confirm!
       end
       timer.reload
@@ -401,18 +357,6 @@ RSpec.describe Timer do
       expect(timer.end_at).to be_nil
       expect(timer.paused_at).to be_nil
       expect(timer.fired_at).to be_nil
-    end
-
-    it "clears fire_jid and fire_scheduled_for after the job runs" do
-      timer = create(:timer, user: user, duration_ms: 60_000)
-      allow(MonitorChannel).to receive(:broadcast_to)
-      Sidekiq::Testing.fake! do
-        timer.start!
-        expect(timer.fire_jid).to be_present
-        timer.fire_and_maybe_repeat!
-        expect(timer.reload.fire_jid).to be_nil
-        expect(timer.reload.fire_scheduled_for).to be_nil
-      end
     end
   end
 end

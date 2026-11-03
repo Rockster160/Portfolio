@@ -1,19 +1,9 @@
 require "rails_helper"
 
-# On a full-height desktop window, clicking anywhere in the message thread
-# reshuffled Buddy and his chips into the phone layout — character and buttons
-# side by side — and clicking off the page put them back.
-#
-# The compact row has two triggers, and the second one had no condition on it
-# beyond `[data-byte-input]:focus`. It exists to make room for the on-screen
-# keyboard, but a mouse doesn't have one, and index.js focuses the composer on
-# any click in empty thread space (deliberately, and only for a fine pointer).
-# So the two behaviors met in the middle: a click meant as "focus the box" was
-# read as "the keyboard just opened."
-#
-# Asserted against the COMPILED cascade, like byte_font_scale_spec: what went
-# wrong isn't in any declaration, it's in the conditions a rule does or doesn't
-# sit under, which is the part a diff of the rule body cannot show.
+# The compact hero row (character and chips side by side) is for a short window
+# or an on-screen keyboard. The keyboard trigger keys on composer focus, which a
+# mouse click also causes, so it has to be gated to coarse pointers. Asserted
+# against the COMPILED cascade: the conditions a rule sits under are the point.
 RSpec.describe "Byte Buddy hero compact layout" do
   # Every rule that can flip the hero sideways.
   let(:triggers) {

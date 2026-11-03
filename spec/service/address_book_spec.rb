@@ -14,11 +14,11 @@ RSpec.describe AddressBook do
       "Sarah's place"   => ["Sarah's place", "Sarah"],
       "Sarah’s house"   => ["Sarah’s house", "Sarah"],
       "Sarahs"          => %w[Sarahs Sarah],
-    }.each do |input, expected|
-      it "expands #{input.inspect} to #{expected.inspect}" do
-        expect(described_class.name_variants(input)).to eq(expected)
+    }.then { |table|
+      it "expands possessives, places and plurals back to the bare name" do
+        table.each { |input, expected| expect(described_class.name_variants(input)).to eq(expected), input.inspect }
       end
-    end
+    }
 
     it "returns [] for blank input" do
       expect(described_class.name_variants("")).to eq([])
@@ -52,15 +52,15 @@ RSpec.describe AddressBook do
       "Momentum Sandy"      => "4 Sandy Blvd",
       "climbing in sandy"   => "4 Sandy Blvd",
       "the Home Depot"      => "2 Depot Way",
-    }.each do |phrase, street|
-      it "reads #{phrase.inspect} as #{street}" do
-        expect(book.address_in_phrase(phrase)&.street).to eq(street)
+    }.then { |table|
+      it "reads a contact plus a branch, nickname or article as that address" do
+        table.each { |phrase, street| expect(book.address_in_phrase(phrase)&.street).to eq(street), phrase.inspect }
       end
-    end
+    }
 
-    ["Trader Joe's near home", "DMV", "Herriman", "the DMV in Draper"].each do |phrase|
-      it "leaves #{phrase.inspect} alone" do
-        expect(book.address_in_phrase(phrase)).to be_nil
+    it "leaves a bare name, a bare branch, an unknown branch, or a nearby-place phrase alone" do
+      ["Trader Joe's near home", "DMV", "Herriman", "the DMV in Draper"].each do |phrase|
+        expect(book.address_in_phrase(phrase)).to be_nil, phrase.inspect
       end
     end
   end

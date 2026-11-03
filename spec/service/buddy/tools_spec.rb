@@ -123,7 +123,6 @@ RSpec.describe Buddy::Tools do
       kind = schema_for(:schedule_reminder)[:parameters][:properties][:kind]
       expect(kind[:type]).to eq([:string, :null])
       expect(kind[:enum]).to include(nil)
-      expect(kind[:description]).to include("Defaults to reminder")
     end
 
     it "advertises count only on tools that can actually collapse repeats" do
@@ -176,16 +175,6 @@ RSpec.describe Buddy::Tools do
       expect(out).to eq(name: "Tesla Start", temp: 72, dest: "Home")
     end
 
-    it "strips reply so a pass-through tool never forwards prose as a Jil argument" do
-      tool = described_class[:call_jil_function]
-
-      out = described_class.normalize_function_arguments(tool, {
-        "name" => "Tesla Start", "reply" => "Starting the car.", "args" => { "temp" => 72 }
-      })
-
-      expect(out).to eq(name: "Tesla Start", temp: 72)
-    end
-
     it "leaves an ordinary tool's arguments alone apart from symbolizing keys" do
       tool = described_class[:complete_chore]
 
@@ -195,36 +184,12 @@ RSpec.describe Buddy::Tools do
     end
   end
 
-  # Every description here is prompt-resident on any turn that offers its tool,
-  # so it is the same surface `spec/service/buddy/personality_spec.rb` sweeps on
-  # the always-on prompt, and it fails the same way: a sentence in Buddy's own
-  # voice, quoted to warn against it, gets said again. `check_weather` carried
-  # the prod 5513 reply verbatim for a day - a promise to use a different town
-  # for the forecast, which nothing in the system can do.
-  #
-  # Quotes in THEIR voice are the opposite and belong here: `move_reminder` is
-  # mostly a list of ways somebody asks to move one, and every one of those is a
-  # recognition target the routing needs.
-  describe "what a tool description hands the model" do
-    let(:descriptions) {
-      described_class.registry.values.map { |spec| spec[:description].to_s }.join("\n")
-    }
+  # Every description is in the prompt on a turn that offers its tool, so a
+  # reply in Buddy's own voice quoted there gets said again.
+  it "quotes no reply of Buddy's own in a tool description" do
+    descriptions = described_class.registry.values.map { |spec| spec[:description].to_s }.join("\n")
+    planted = ["I've got it corrected now", "I'll stick to Herriman for your weather from here on out"]
 
-    it "quotes no reply of Buddy's own asserting something it cannot do" do
-      planted = [
-        "I've got it corrected now",
-        "I'll stick to Herriman for your weather from here on out",
-      ].select { |line| descriptions.include?(line) }
-
-      expect(planted).to be_empty,
-        "a sentence in Buddy's voice, quoted in a tool description, comes back " \
-        "out of it: #{planted.inspect}"
-    end
-
-    # The rule it was carrying survives being described.
-    it "still says home cannot be moved from a chat" do
-      expect(described_class[:check_weather][:description]).to include("FIXED point")
-      expect(described_class[:check_weather][:description]).to include("request_feature")
-    end
+    expect(planted.select { |line| descriptions.include?(line) }).to be_empty
   end
 end

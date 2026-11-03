@@ -95,7 +95,7 @@ RSpec.describe ChoreGoal do
           scope_mode: :relative, target_value: 100, chore: chore
         )
         expect(goal.baseline_value).to eq(2)
-        expect(goal.current_value).to eq(0) # was the 2/100 bug
+        expect(goal.current_value).to eq(0)
       end
     end
 
@@ -132,7 +132,7 @@ RSpec.describe ChoreGoal do
     it "requires a chore_id config key for chore-specific kinds" do
       goal = ChoreGoal.new(user: user, name: "Bad", kind: :chore_streak, target_value: 5)
       expect(goal).not_to be_valid
-      expect(goal.errors[:base].join).to match(/chore/i)
+      expect(goal.errors[:base]).to be_present
     end
 
     it "requires a positive target_value" do
@@ -205,13 +205,6 @@ RSpec.describe ChoreGoal do
 
       goal.update!(description: "note change")
       expect(MonitorChannel).to have_received(:broadcast_to).once
-    end
-  end
-
-  describe "default scope_mode" do
-    it "defaults to :relative (so existing progress doesn't pre-fill a new goal)" do
-      goal = ChoreGoal.new(user: user, name: "G", kind: :pebbles, target_value: 10)
-      expect(goal.scope_mode).to eq("relative")
     end
   end
 

@@ -35,7 +35,7 @@ RSpec.describe "Jil schema access", type: :request do
 
   # She is already looking at the code that names the class; keeping the
   # definition is what lets the page draw it.
-  it "keeps a class the shared task on screen actually uses" do
+  it "keeps a class the shared task on screen uses and withholds the rest", :aggregate_failures do
     task = owner_task("nav = Tesla.navigate(dest)::Boolean")
     task.shared_tasks.create!(user: other)
     sign_in_as(other)
@@ -44,15 +44,6 @@ RSpec.describe "Jil schema access", type: :request do
 
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("[Tesla]")
-  end
-
-  it "still withholds the classes that shared task does not use" do
-    task = owner_task("nav = Tesla.navigate(dest)::Boolean")
-    task.shared_tasks.create!(user: other)
-    sign_in_as(other)
-
-    get jil_task_path(task)
-
     expect(response.body).not_to include("[Mac]")
   end
 end

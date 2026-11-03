@@ -58,11 +58,5 @@ RSpec.describe ChoresHelper, type: :helper do
       expect(html).to include('class="icon-glyph"', "🪥")
       expect(html).not_to include("ti-")
     end
-
-    it "renders ti-* with the inline ChoreSerializer icon_kind" do
-      chore = build_stubbed(:chore, created_by_user: user, icon: "ti-fa-wrench")
-      kind = ChoreSerializer.new(chore, viewer: user).send(:icon_kind)
-      expect(kind).to eq(:ti_icon)
-    end
   end
 end

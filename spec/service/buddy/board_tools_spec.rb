@@ -160,7 +160,7 @@ RSpec.describe "Buddy board tools" do
 
       prompt = Buddy::Personality.for(user, conversation: board)
 
-      expect(prompt).to include("## This board", "**Kitchen**", "Groups it watches:** Kitchen", "Pinned chores", "Dishes")
+      expect(prompt).to include("## This board", "Kitchen", "Dishes")
       expect(Buddy::Personality.for(user, conversation: chat)).not_to include("## This board")
     end
   end

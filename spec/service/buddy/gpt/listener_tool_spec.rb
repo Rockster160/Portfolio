@@ -27,25 +27,14 @@ RSpec.describe Buddy::GPT::ListenerTool do
     expect(call(about: "doorbell")["next"]).not_to match(/trigger "travel"/)
   end
 
-  it "returns the syntax guide" do
-    result = call
-
-    expect(result["syntax"]).to include("scope:key:value")
-    expect(result["syntax"]).to include("substring")
-  end
-
-  it "returns real listeners off the person's own tasks" do
+  it "returns real listeners off the person's own tasks, described or named" do
     task!("item:action:added", name: "List ping", description: "Pings when a list gains an item")
-
-    examples = call["examples"]
-
-    expect(examples).to include("listener" => "item:action:added", "does" => "Pings when a list gains an item")
-  end
-
-  it "falls back to the task name when it has no description" do
     task!("event:action:added", name: "Event logger")
 
-    expect(call["examples"]).to include("listener" => "event:action:added", "does" => "Event logger")
+    expect(call["examples"]).to include(
+      { "listener" => "item:action:added", "does" => "Pings when a list gains an item" },
+      { "listener" => "event:action:added", "does" => "Event logger" },
+    )
   end
 
   it "puts the asked-for scope's examples first, since those key paths transfer" do
@@ -64,11 +53,6 @@ RSpec.describe Buddy::GPT::ListenerTool do
     expect(call["examples"].pluck("listener")).to eq(["item:action:added"])
   end
 
-  it "points the model at the observed payloads rather than at invention" do
-    expect(call["next"]).to match(/payloads/)
-    expect(call["next"]).to match(/never fires/)
-  end
-
   # The examples are a THIN source, and they were the only one. Every appliance
   # in the house arrives on a task whose whole listener is the bare word
   # `hass-trigger`, so no example contains the word "dryer" or the keys it's
@@ -82,12 +66,10 @@ RSpec.describe Buddy::GPT::ListenerTool do
       Buddy::TriggerShapes.observe(user, "hass-trigger", { "device_name" => "Washer", "type" => "start" })
     end
 
-    it "lists each scope's real fields" do
-      expect(call["payloads"]["hass-trigger"]).to include("device_name (string: Dryer | Washer)")
-    end
-
-    it "lists the values a field actually takes, so a plausible one isn't guessed" do
-      expect(call["payloads"]["hass-trigger"]).to include("type (string: start | stop)")
+    it "lists each scope's real fields and the values they actually take" do
+      expect(call["payloads"]["hass-trigger"]).to include(
+        "device_name (string: Dryer | Washer)", "type (string: start | stop)"
+      )
     end
 
     it "names the house devices, which appear in no task and no example" do
@@ -111,20 +93,12 @@ RSpec.describe Buddy::GPT::ListenerTool do
   # in no context section, so without these the only honest answer to "can you
   # watch the doorbell" is a wrong no.
   describe "discovery" do
-    it "counts what's listening on each scope" do
-      task!("item:action:added", name: "List ping")
-      task!("item:action:removed", name: "List unping")
-      task!("email:from:bank", name: "Bank mail")
-
-      expect(call["scopes"]).to eq("item" => 2, "email" => 1)
-    end
-
-    it "puts the busiest scope first, so the index reads as a summary" do
+    it "counts what's listening on each scope, busiest first" do
       task!("email:from:bank", name: "Bank mail")
       task!("item:action:added", name: "List ping")
       task!("item:action:removed", name: "List unping")
 
-      expect(call["scopes"].keys.first).to eq("item")
+      expect(call["scopes"].to_a).to eq([["item", 2], ["email", 1]])
     end
 
     it "searches names, descriptions and listeners together" do

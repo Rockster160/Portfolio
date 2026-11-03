@@ -12,25 +12,14 @@ RSpec.describe "Buddy chore resolution" do
     create(:chore, created_by_user: user, chore_household: household, name: name, aliases: aliases)
   end
 
-  # Prod 4705, 11:51. "Mark refill drinks done an hour ago" wrote chore_completions
-  # 2671 against chore 83, `Refill Item`. He meant 42, `Restock Soda`, and its
-  # `aliases` column reads ["refill", "drinks", "fridge"] - both of his words, in
-  # the column, verbatim. The column has been on the model, in the serializer and
-  # in the chore form the whole time and the matcher only ever looked at `name`.
   describe "the other names a chore goes by" do
     let!(:soda)    { chore!("Restock Soda", aliases: %w[refill drinks fridge]) }
     let!(:refill)  { chore!("Refill Item", aliases: ["refill", "stock", "restock", "replace items"]) }
     let!(:protein) { chore!("Restock Protein", aliases: ["refill", "protein drinks", "coffee"]) }
 
-    it "finds the chore whose aliases account for every word they said" do
+    it "finds the chore whose aliases account for every word, a unique alias, or a two-word alias" do
       expect(ctx.resolve_chore("refill drinks")).to eq(soda)
-    end
-
-    it "reaches one by a single alias nothing else answers to" do
       expect(ctx.resolve_chore("fridge")).to eq(soda)
-    end
-
-    it "matches an alias that is itself two words" do
       expect(ctx.resolve_chore("replace items")).to eq(refill)
     end
 
@@ -47,20 +36,14 @@ RSpec.describe "Buddy chore resolution" do
       expect(ctx.resolve_chore("refill drinks")).not_to eq(protein)
     end
 
-    # "refill" alone is an alias of three of these in prod. Picking the lowest
-    # id out of a tie is the false record FUZZY_TOLERANCE exists to prevent, so
-    # a shared alias resolves to nothing and comes out as the pick-one card.
+    # Picking the lowest id out of a tie is the false record FUZZY_TOLERANCE
+    # exists to prevent, so a shared alias resolves to nothing and both come
+    # back as near misses for the pick-one card.
     it "declines rather than picking one when several answer to the same word" do
       soda.update!(aliases: soda.aliases_array + ["pop"])
       chore!("Buy Snacks", aliases: %w[pop chips])
 
       expect(ctx.resolve_chore("pop")).to be_nil
-    end
-
-    it "puts an alias match in the near misses when nothing resolved" do
-      soda.update!(aliases: soda.aliases_array + ["pop"])
-      chore!("Buy Snacks", aliases: %w[pop chips])
-
       expect(ctx.chore_suggestions("pop")).to include("Restock Soda", "Buy Snacks")
     end
 
@@ -82,21 +65,14 @@ RSpec.describe "Buddy chore resolution" do
     expect(ctx.resolve_chore("water")).to eq(exact)
   end
 
-  # Prod 1357-1363: "water" matched both "Wash Water Bowls" (id 5) and "8oz
-  # Water" (id 9), enumeration order picked the lower id, and someone logging
-  # that they drank something got three bowl-washings marked off.
   describe "when several names contain what they said" do
-    it "picks the one the word is mostly ABOUT, not the one that mentions it" do
-      chore!("Wash Water Bowls")
+    it "picks the one the word is mostly ABOUT, whichever was created first" do
       drink = chore!("8oz Water")
+      chore!("Wash Water Bowls")
 
       expect(ctx.resolve_chore("water")).to eq(drink)
-    end
-
-    it "doesn't depend on which was created first" do
+      drink.destroy!
       drink = chore!("8oz Water")
-      chore!("Wash Water Bowls")
-
       expect(ctx.resolve_chore("water")).to eq(drink)
     end
 
@@ -108,18 +84,15 @@ RSpec.describe "Buddy chore resolution" do
     end
   end
 
-  # Prod 4495, 09:25. Chelsea said "Log load dishwasher" and Moss answered "I
-  # marked the dishwasher one off.. it landed on **Unload Dishwasher**" -
-  # `chore_completions` 2626, chore 78. Loading and unloading are opposite jobs
-  # and it wrote the opposite one, because "unload dishwasher" contains "load
-  # dishwasher".
+  # "unload dishwasher" contains "load dishwasher", and they are opposite jobs.
   describe "a name glued to the front of a longer word" do
-    it "does not read as the shorter word" do
+    it "does not read as the shorter word, and names the ones they might have meant" do
       chore!("Unload Dishwasher")
       chore!("Light Load Dishes")
       chore!("Medium~Normal Load Dishes")
 
       expect(ctx.resolve_chore("load dishwasher")).to be_nil
+      expect(ctx.no_chore_error("load dishwasher")).to include("Light Load Dishes", "Medium~Normal Load Dishes")
     end
 
     # The Levenshtein fallback is the other route to the same row - two edits
@@ -128,14 +101,6 @@ RSpec.describe "Buddy chore resolution" do
       chore!("Unload Dishwasher")
 
       expect(ctx.resolve_chore("load dishwasher")).to be_nil
-    end
-
-    it "names the ones she might have meant instead of guessing" do
-      chore!("Unload Dishwasher")
-      chore!("Light Load Dishes")
-      chore!("Medium~Normal Load Dishes")
-
-      expect(ctx.no_chore_error("load dishwasher")).to include("Light Load Dishes", "Medium~Normal Load Dishes")
     end
 
     it "still finds the row when they say the whole thing" do
@@ -186,33 +151,23 @@ RSpec.describe "Buddy chore resolution" do
     expect(ctx.resolve_chore(nil)).to be_nil
   end
 
-  # "Another water" is water, again. The extra word says HOW MANY, and matching
-  # only ever asked whether a chore NAME contains what was said - so bare
-  # "water" resolved and every phrase built around it missed.
-  #
-  # Prod 3800-3808. "Water cup yesterday" landed two waters because the model
-  # passed the exact name; forty seconds later "Add it as one more" and "No,
-  # mark another water done yesterday" both came back "that didn't match a
-  # water chore name", and the attempt in between gave up on chores entirely
-  # and wrote an ActionEvent, reported as though the chore had been ticked.
+  # "Another water" is water, again: the extra word says HOW MANY.
   describe "a repeat of something already named" do
     before do
       chore!("8oz Water")
       chore!("Wash Water Bowls")
     end
 
-    [
-      "another water",
-      "one more water",
-      "water again",
-      "1 more water",
-      "an extra water",
-      "more water",
-      "waters",
-    ].each do |phrasing|
-      it "reads #{phrasing.inspect} as the water chore" do
-        expect(ctx.resolve_chore(phrasing)&.name).to eq("8oz Water")
-      end
+    it "reads a repeat phrasing as the chore it repeats" do
+      [
+        "another water",
+        "one more water",
+        "water again",
+        "1 more water",
+        "an extra water",
+        "more water",
+        "waters",
+      ].each { |phrasing| expect(ctx.resolve_chore(phrasing)&.name).to eq("8oz Water"), phrasing }
     end
 
     # The repeat word is only stripped once the name AS GIVEN has failed, so a
@@ -233,20 +188,9 @@ RSpec.describe "Buddy chore resolution" do
     end
   end
 
-  # Containment runs one way only: it asks whether a chore NAME contains what
-  # was said, never the reverse. So bare "water" resolves and every phrase
-  # BUILT on it misses, which is the shape a person's own words arrive in.
-  #
-  # Prod 3800-3808, inside 75 seconds. "Water cup yesterday" worked because the
-  # model happened to pass the exact name; then "Add it as one more" and "No,
-  # mark another water done yesterday" both failed, and the attempt between them
-  # gave up on chores altogether and wrote an ActionEvent (msg 3805), reported
-  # as though the chore had been ticked. 8/14 is still one water short.
-  #
-  # Loosening the match is the wrong fix and the comment on FUZZY_TOLERANCE is
-  # why - a completion written against the wrong chore is a false record that
-  # looks exactly like a true one. What was missing is a failure the model can
-  # act on.
+  # Containment runs one way only, so a phrase BUILT on a name misses. Loosening
+  # the match would write false records (see FUZZY_TOLERANCE); instead the miss
+  # carries suggestions the model can act on.
   describe "the failure a miss reports" do
     before do
       chore!("8oz Water")
@@ -263,45 +207,22 @@ RSpec.describe "Buddy chore resolution" do
       expect(ctx.resolve_chore("the cup thing")).to be_nil
     end
 
-    it "names what they might have meant" do
+    it "suggests near misses, ranked by shared words then by shortness" do
       expect(ctx.chore_suggestions("one more water")).to include("8oz Water")
-    end
-
-    it "ranks the shortest name first when they all share one word" do
       expect(ctx.chore_suggestions("water cup").first).to eq("8oz Water")
-    end
-
-    it "ranks a name sharing TWO words above one sharing a single word" do
       expect(ctx.chore_suggestions("wash the bowls").first).to eq("Wash Water Bowls")
     end
 
-    it "suggests nothing when the words have no chore in them" do
+    # Filler words ("it", "a") would otherwise match every chore containing them.
+    it "suggests nothing for unrelated words, filler, or a blank" do
       expect(ctx.chore_suggestions("helicopter")).to eq([])
-    end
-
-    # Otherwise "add it as one more" suggests every chore whose name happens to
-    # contain "it" or "a".
-    it "suggests nothing from filler alone" do
       expect(ctx.chore_suggestions("add it as one more")).to eq([])
-    end
-
-    it "handles a blank without raising" do
       expect(ctx.chore_suggestions(nil)).to eq([])
     end
 
     describe "the message the tools raise" do
-      it "carries the near misses and says to call again" do
-        message = ctx.no_chore_error("one more water")
-
-        expect(message).to include("no chore matching")
-        expect(message).to include("8oz Water")
-        expect(message).to include("Call again")
-      end
-
-      # The third attempt in prod reached for log_event and told the person the
-      # chore was done. Whatever else a miss leads to, it can't be that.
-      it "rules out swapping in another tool" do
-        expect(ctx.no_chore_error("one more water")).to include("Never substitute another tool")
+      it "carries the near misses" do
+        expect(ctx.no_chore_error("one more water")).to include("8oz Water")
       end
 
       it "stays a plain miss when there's nothing to suggest" do

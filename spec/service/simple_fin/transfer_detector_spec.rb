@@ -30,65 +30,37 @@ RSpec.describe SimpleFin::TransferDetector do
     )
   end
 
-  it "pairs a payment leaving one account with its arrival in another" do
+  # A card payoff must not read as a second purchase.
+  it "pairs a payment with its arrival in another account, marking both transfers out of the totals", :aggregate_failures do
     out = row(checking, -139_325, payee: "JPMORGAN CHASE ACH")
     into = row(mortgage, 139_325)
+    groceries = row(checking, -8_210, payee: "Costco")
 
     result = described_class.call
 
+    expect(result.paired).to eq(1)
     expect(out.reload.transfer_counterpart).to eq(into)
     expect(into.reload.transfer_counterpart).to eq(out)
-    expect(result.paired).to eq(1)
-  end
-
-  it "marks both halves as transfers" do
-    out = row(checking, -139_325)
-    into = row(mortgage, 139_325)
-    described_class.call
-
-    expect(out.reload).to be_transfer
-    expect(into.reload).to be_transfer
-  end
-
-  # The whole point: a card payoff must not read as a second purchase.
-  it "keeps a paired movement out of spending and income totals" do
-    row(checking, -139_325)
-    row(mortgage, 139_325)
-    groceries = row(checking, -8_210, payee: "Costco")
-    described_class.call
-
+    expect(out).to be_transfer
+    expect(into).to be_transfer
     expect(BankTransaction.real_money.spending.sum(:amount_cents)).to eq(-8_210)
     expect(BankTransaction.real_money.income.sum(:amount_cents)).to be_zero
     expect(BankTransaction.real_money).to contain_exactly(groceries)
   end
 
-  it "does not pair two rows on the same account" do
-    row(checking, -5_000)
-    row(checking, 5_000)
+  it "pairs nothing on one account, of differing amounts, two outflows, or across a long gap" do
+    [
+      [[checking, -5_000], [checking, 5_000]],
+      [[checking, -5_000], [mortgage, 4_999]],
+      [[checking, -5_000], [mortgage, -5_000]],
+      [[checking, -5_000, 30.days.ago], [mortgage, 5_000, 1.day.ago]],
+    ].each do |pair|
+      BankTransaction.delete_all
+      pair.each { |account, cents, at| row(account, cents, at: at || 1.day.ago) }
 
-    expect(described_class.call.paired).to be_zero
-    expect(BankTransaction.paired).to be_empty
-  end
-
-  it "does not pair amounts that differ" do
-    row(checking, -5_000)
-    row(mortgage, 4_999)
-
-    expect(described_class.call.paired).to be_zero
-  end
-
-  it "does not pair two outflows" do
-    row(checking, -5_000)
-    row(mortgage, -5_000)
-
-    expect(described_class.call.paired).to be_zero
-  end
-
-  it "does not pair across a long gap" do
-    row(checking, -5_000, at: 30.days.ago)
-    row(mortgage, 5_000, at: 1.day.ago)
-
-    expect(described_class.call.paired).to be_zero
+      expect(described_class.call.paired).to be_zero, pair.map { |a, c, _| [a.name, c] }.inspect
+      expect(BankTransaction.paired).to be_empty
+    end
   end
 
   # Mislabelling a real expense as a transfer erases it from spending, which is

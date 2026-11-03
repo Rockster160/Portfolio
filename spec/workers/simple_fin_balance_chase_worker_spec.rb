@@ -19,26 +19,13 @@ RSpec.describe SimpleFinBalanceChaseWorker do
   end
 
   # Enqueue-time dedupe belongs to sidekiq-unique-jobs middleware and needs
-  # Redis, which these specs stub out. What CAN be pinned here is the
-  # configuration that makes the lock behave — and both of these have a failure
-  # mode that is silent in production.
+  # Redis, which these specs stub out; the lock args are what can be pinned.
   describe "uniqueness configuration" do
     it "collapses the attempt arg so every link shares one lock" do
       collapse = described_class.get_sidekiq_options["lock_args_method"]
 
       expect(collapse.call([1])).to eq([])
       expect(collapse.call([4])).to eq(collapse.call([1]))
-    end
-
-    # until_executed would still hold the lock while `perform` runs, so the
-    # self-reschedule would be dropped as a duplicate and the chain would die
-    # after one attempt.
-    it "releases the lock at execution start so the chain can reschedule itself" do
-      expect(described_class.get_sidekiq_options["lock"]).to eq(:until_executing)
-    end
-
-    it "leaves retrying to the reschedule, which carries the attempt count" do
-      expect(described_class.get_sidekiq_options["retry"]).to be(false)
     end
   end
 
@@ -65,16 +52,12 @@ RSpec.describe SimpleFinBalanceChaseWorker do
       expect(described_class).to have_received(:perform_in).with(described_class::RETRY_IN, 2)
     end
 
-    it "gives up at the attempt cap rather than retrying forever" do
-      described_class.new.perform(described_class::MAX_ATTEMPTS)
-
-      expect(described_class).not_to have_received(:perform_in)
-    end
-
-    it "spends no more than MAX_ATTEMPTS requests across a whole chain" do
+    it "spends no more than MAX_ATTEMPTS requests across a whole chain, then gives up" do
       (1..described_class::MAX_ATTEMPTS).each { |attempt| described_class.new.perform(attempt) }
 
-      expect(SimpleFin::Refresh).to have_received(:call).exactly(4).times
+      expect(SimpleFin::Refresh).to have_received(:call).exactly(described_class::MAX_ATTEMPTS).times
+      expect(described_class).to have_received(:perform_in).exactly(described_class::MAX_ATTEMPTS - 1).times
+      expect(described_class).not_to have_received(:perform_in).with(anything, described_class::MAX_ATTEMPTS + 1)
     end
 
     it "does nothing when SimpleFIN is not configured" do

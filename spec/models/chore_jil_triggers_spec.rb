@@ -4,64 +4,24 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
   describe "chore + completion" do
     let(:user) { create(:user) }
 
-    it "creating a chore fires `chore` trigger with action: :created" do
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :created && attrs[:name] == "Vacuum" }
-      )
-      create(:chore, created_by_user: user, name: "Vacuum")
-    end
+    # A completion fires its own :chore_completion trigger; the mark it leaves
+    # is cleared at the next-day rollover without firing :unmarked_due.
+    it "fires `chore` with the action each lifecycle write stands for" do
+      fired = []
+      allow(::Jil).to receive(:trigger) { |_u, scope, payload, **|
+        fired << [payload[:action], payload[:name]] if scope == :chore
+      }
 
-    it "updating a chore fires action: :updated" do
       chore = create(:chore, created_by_user: user, name: "V")
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :updated }
-      )
       chore.update!(name: "Vacuum")
-    end
-
-    it "stamping marked_due_at fires action: :marked_due (not :updated)" do
-      chore = create(:chore, created_by_user: user, name: "V")
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :marked_due && attrs[:name] == "V" }
-      )
       chore.update!(marked_due_at: Time.current)
-    end
-
-    it "clearing marked_due_at via user update fires action: :unmarked_due" do
-      chore = create(:chore, created_by_user: user, name: "V", marked_due_at: 1.hour.ago)
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :unmarked_due }
-      )
-      chore.update!(marked_due_at: nil)
-    end
-
-    it "completion does NOT fire :unmarked_due (mark is held until daily reset)" do
-      chore = create(:chore, created_by_user: user, name: "V", marked_due_at: 1.hour.ago)
-      # The completion fires its own :chore_completion :completed trigger.
-      # The mark is held until the next-day rollover (ChoreDailyResetWorker),
-      # which clears it without firing a Jil trigger — a system cleanup
-      # is not the same as a user-driven unmark.
-      allow(::Jil).to receive(:trigger)
-      expect(::Jil).not_to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :unmarked_due }
-      )
       create(:chore_completion, chore: chore, user: user)
-    end
-
-    it "archiving a chore (archived_at flip) fires action: :archived" do
-      chore = create(:chore, created_by_user: user, name: "V")
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :archived }
-      )
+      chore.update!(marked_due_at: nil)
       chore.update!(archived_at: Time.current)
-    end
-
-    it "destroying a chore fires action: :destroyed" do
-      chore = create(:chore, created_by_user: user, name: "V")
-      expect(::Jil).to receive(:trigger).with(
-        user, :chore, satisfy { |attrs| attrs[:action] == :destroyed }
-      )
       chore.destroy!
+
+      expect(fired.map(&:first)).to eq(%i[created updated marked_due unmarked_due archived destroyed])
+      expect(fired.first.last).to eq("V")
     end
 
     it "creating a completion fires `chore_completion` action: :completed" do
@@ -136,26 +96,17 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
       }
     }
 
-    it "fires :completed on create with jil_attrs payload" do
+    it "fires ONLY :completed on create, carrying who completed it" do
       chore.chore_completions.create!(
         user: user, completed_at: Time.current, day_key: ChoreDay.current(user),
       )
 
+      expect(fired.map { |_t, _s, attrs| attrs[:action] }).to eq([:completed])
       _target, scope, attrs = fired.first
       expect(scope).to eq(:chore_completion)
-      expect(attrs[:action]).to eq(:completed)
       expect(attrs[:chore_name]).to eq("Wordle")
       expect(attrs[:completed_by_user_id]).to eq(user.id)
       expect(attrs[:completed_by_username]).to eq(user.username)
-    end
-
-    it "fires ONLY :completed on create (no :edited double-fire from after_update_commit)" do
-      chore.chore_completions.create!(
-        user: user, completed_at: Time.current, day_key: ChoreDay.current(user),
-      )
-
-      actions = fired.map { |_target, _scope, attrs| attrs[:action] }
-      expect(actions).to eq([:completed])
     end
 
     it "fires :edited on update with saved_changes included" do
@@ -240,10 +191,8 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
         expect(completion_targets).to eq([other.id])
       end
 
-      # Prod, 04 Sep: a personal "Pickup RX" marked done and credited to a
-      # housemate sent the trigger to HER alone. She owns no RecordLinks, so
-      # the item stayed on the Chores list and the chore looked undone.
-      # Crediting somebody must not hand them your automations.
+      # Crediting somebody must not hand them your automations: the credited
+      # user and the recorder both hear about it, and the credit stays theirs.
       describe "a personal chore marked done on somebody else's behalf" do
         let!(:personal) {
           Chore.create!(
@@ -252,38 +201,18 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
           )
         }
 
-        def credit_other!
-          ChoreCompleter.new(personal, other, at: Time.current, recorded_by: user).call
-        end
+        it "fires for the credited user and the recorder only, saying who did which", :aggregate_failures do
+          third = create(:user, chore_household: household)
 
-        it "fires for the credited user AND the person who recorded it" do
-          credit_other!
+          completion = ChoreCompleter.new(personal, other, at: Time.current, recorded_by: user).call.completion
 
           expect(completion_targets).to match_array([other.id, user.id])
-        end
-
-        it "does NOT reach the rest of the household" do
-          third = create(:user, chore_household: household)
-          credit_other!
-
           expect(completion_targets).not_to include(third.id)
-        end
-
-        it "says who was credited and who marked it" do
-          credit_other!
-
-          expect(completion_attrs[:completed_by_user_id]).to eq(other.id)
-          expect(completion_attrs[:completed_by_username]).to eq(other.username)
-          expect(completion_attrs[:recorded_by_user_id]).to eq(user.id)
-          expect(completion_attrs[:recorded_by_username]).to eq(user.username)
-          expect(completion_attrs[:credited_to_other]).to be(true)
-        end
-
-        # The credit still belongs to them — this changes who HEARS about it,
-        # not who did it.
-        it "leaves the credit with the person named" do
-          completion = credit_other!.completion
-
+          expect(completion_attrs).to include(
+            completed_by_user_id: other.id, completed_by_username: other.username,
+            recorded_by_user_id: user.id, recorded_by_username: user.username,
+            credited_to_other: true,
+          )
           expect(completion.user_id).to eq(other.id)
           expect(completion.recorded_by_user_id).to eq(user.id)
           expect(completion.paid_pebbles).to be > 0

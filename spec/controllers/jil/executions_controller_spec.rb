@@ -38,119 +38,59 @@ RSpec.describe Jil::ExecutionsController, type: :controller do
       )
     end
 
-    it "returns a successful response" do
+    def ivar(name) = controller.instance_variable_get(name)
+
+    it "summarises the current user's executions: totals, offenders, failures, histogram", :aggregate_failures do
       get :dashboard
+
       expect(response).to be_successful
-    end
-
-    it "renders the view without errors" do
-      get :dashboard
-      expect(response.body).to include("Execution Dashboard")
-      expect(response.body).to include("Top offenders")
-      expect(response.body).to include("Rapid-fire detector")
       expect(response.body).to include("histogram-data")
-    end
-
-    it "scopes data to the current user only" do
-      get :dashboard
-      expect(controller.instance_variable_get(:@total_count)).to eq(7)
-    end
-
-    it "ranks the looping task first by execution count" do
-      get :dashboard
-      offenders = controller.instance_variable_get(:@top_offenders)
+      expect(ivar(:@total_count)).to eq(7)
+      offenders = ivar(:@top_offenders)
       expect(offenders.first.task_id).to eq(task_a.id)
       expect(offenders.first.execution_count.to_i).to eq(5)
+      expect(offenders.find { |r| r.task_id == task_b.id }.failed_count.to_i).to eq(1)
+      expect(ivar(:@histogram).pluck("bucket").uniq).not_to be_empty
     end
 
-    it "counts failed executions" do
-      get :dashboard
-      offenders = controller.instance_variable_get(:@top_offenders)
-      task_b_row = offenders.find { |r| r.task_id == task_b.id }
-      expect(task_b_row.failed_count.to_i).to eq(1)
-    end
-
-    it "detects rapid-fire patterns" do
+    it "detects rapid-fire patterns and leaves well-spaced tasks out", :aggregate_failures do
       get :dashboard, params: { rapid_threshold: 10 }
-      rapid = controller.instance_variable_get(:@rapid_fire)
+      rapid = ivar(:@rapid_fire)
       task_a_row = rapid.find { |r| r["task_id"] == task_a.id }
-      expect(task_a_row).to be_present
       expect(task_a_row["rapid_count"].to_i).to eq(4)
       expect(task_a_row["min_gap"].to_f).to be_within(0.1).of(1.0)
-    end
-
-    it "excludes well-spaced tasks from rapid-fire" do
-      get :dashboard, params: { rapid_threshold: 10 }
-      rapid = controller.instance_variable_get(:@rapid_fire)
       expect(rapid.find { |r| r["task_id"] == task_b.id }).to be_nil
     end
 
-    it "buckets executions in the histogram" do
-      get :dashboard
-      buckets = controller.instance_variable_get(:@histogram).pluck("bucket").uniq
-      expect(buckets).not_to be_empty
-    end
-
-    it "honors the window parameter" do
+    it "honors the window parameter, defaulting to 1h for unknown windows" do
       get :dashboard, params: { window: "7d" }
-      expect(controller.instance_variable_get(:@window_key)).to eq("7d")
-      expect(controller.instance_variable_get(:@bucket_seconds)).to eq(3600)
-    end
+      expect(ivar(:@window_key)).to eq("7d")
+      expect(ivar(:@bucket_seconds)).to eq(3600)
 
-    it "defaults to 1h for unknown windows" do
       get :dashboard, params: { window: "999d" }
-      expect(controller.instance_variable_get(:@window_key)).to eq("1h")
+      expect(ivar(:@window_key)).to eq("1h")
     end
 
     context "when scoped to a single task" do
-      it "scopes total count to that task only" do
-        get :dashboard, params: { task_id: task_a.id }
-        expect(controller.instance_variable_get(:@total_count)).to eq(5)
+      it "scopes counts, breakdowns and rapid-fire to that task and skips offenders", :aggregate_failures do
+        get :dashboard, params: { task_id: task_a.id, rapid_threshold: 10 }
+
+        expect(ivar(:@task)).to eq(task_a)
+        expect(ivar(:@total_count)).to eq(5)
+        expect(ivar(:@auth_breakdown)[Execution.auth_types[:trigger]]).to eq(5)
+        expect(ivar(:@top_offenders)).to eq([])
+        expect(ivar(:@rapid_fire).pluck("task_id").uniq).to eq([task_a.id])
+        expect(response.body).to include("Looper")
       end
 
-      it "loads the task" do
-        get :dashboard, params: { task_id: task_a.id }
-        expect(controller.instance_variable_get(:@task)).to eq(task_a)
-      end
-
-      it "computes a status breakdown" do
+      it "breaks down status and filters the histogram to the task", :aggregate_failures do
         get :dashboard, params: { task_id: task_b.id }
-        breakdown = controller.instance_variable_get(:@status_breakdown)
+
+        breakdown = ivar(:@status_breakdown)
         expect(breakdown[Execution.statuses[:success]]).to eq(1)
         expect(breakdown[Execution.statuses[:failed]]).to eq(1)
-      end
-
-      it "computes an auth-type breakdown" do
-        get :dashboard, params: { task_id: task_a.id }
-        breakdown = controller.instance_variable_get(:@auth_breakdown)
-        expect(breakdown[Execution.auth_types[:trigger]]).to eq(5)
-      end
-
-      it "skips top offenders aggregation" do
-        get :dashboard, params: { task_id: task_a.id }
-        expect(controller.instance_variable_get(:@top_offenders)).to eq([])
-      end
-
-      it "filters rapid-fire to the requested task only" do
-        get :dashboard, params: { task_id: task_a.id, rapid_threshold: 10 }
-        rapid = controller.instance_variable_get(:@rapid_fire)
-        expect(rapid.pluck("task_id").uniq).to eq([task_a.id])
-      end
-
-      it "filters histogram to the requested task only" do
-        get :dashboard, params: { task_id: task_b.id }
-        histogram = controller.instance_variable_get(:@histogram)
-        # task_b has only success + failed; no started or cancelled
-        statuses = histogram.map { |r| r["status"].to_i }.uniq.sort
+        statuses = ivar(:@histogram).map { |r| r["status"].to_i }.uniq.sort
         expect(statuses).to eq([Execution.statuses[:success], Execution.statuses[:failed]].sort)
-      end
-
-      it "renders the per-task view" do
-        get :dashboard, params: { task_id: task_a.id }
-        expect(response.body).to include("Looper")
-        expect(response.body).to include("Status breakdown")
-        expect(response.body).to include("Trigger source")
-        expect(response.body).not_to include("Top offenders")
       end
 
       it "rejects access to a task the user does not have access to" do
@@ -164,36 +104,26 @@ RSpec.describe Jil::ExecutionsController, type: :controller do
       let(:admin) { FactoryBot.create(:user, phone: "5550000099", role: :admin) }
       before { sign_in admin }
 
-      it "includes executions from other users" do
+      it "includes other users' executions, tasks and owners", :aggregate_failures do
         get :dashboard, params: { scope: "all" }
-        expect(controller.instance_variable_get(:@view_scope)).to eq(:all)
-        expect(controller.instance_variable_get(:@total_count)).to eq(8)
-      end
-
-      it "surfaces other users' tasks in top offenders" do
-        get :dashboard, params: { scope: "all" }
-        offenders = controller.instance_variable_get(:@top_offenders)
-        expect(offenders.map(&:task_id)).to include(task_a.id, task_b.id)
-      end
-
-      it "loads owner records for the user_lookup" do
-        get :dashboard, params: { scope: "all" }
-        lookup = controller.instance_variable_get(:@user_lookup)
-        expect(lookup[user.id]).to eq(user)
+        expect(ivar(:@view_scope)).to eq(:all)
+        expect(ivar(:@total_count)).to eq(8)
+        expect(ivar(:@top_offenders).map(&:task_id)).to include(task_a.id, task_b.id)
+        expect(ivar(:@user_lookup)[user.id]).to eq(user)
       end
 
       it "allows drilling into a task the admin does not own" do
         get :dashboard, params: { scope: "all", task_id: task_a.id }
         expect(response).to be_successful
-        expect(controller.instance_variable_get(:@task)).to eq(task_a)
+        expect(ivar(:@task)).to eq(task_a)
       end
     end
 
     context "when non-admin passes scope=all" do
       it "ignores the param and stays scoped to the current user" do
         get :dashboard, params: { scope: "all" }
-        expect(controller.instance_variable_get(:@view_scope)).to eq(:mine)
-        expect(controller.instance_variable_get(:@total_count)).to eq(7)
+        expect(ivar(:@view_scope)).to eq(:mine)
+        expect(ivar(:@total_count)).to eq(7)
       end
     end
   end

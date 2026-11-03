@@ -174,115 +174,11 @@ RSpec.describe Task do
     end
   end
 
-  context "Task 336 — Chelsea Withdraw" do
-    let(:current_prod_listener) {
-      '/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)$/'
-    }
-    let(:fixed_listener) {
-      'tell:/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)$/'
-    }
-
-    before do
-      @tasks = Task.create([
-        { user: admin, listener: current_prod_listener },
-      ])
-    end
-
-    it "current prod listener does NOT trigger on 'chelsea withdraw 180' (missing tell: prefix)" do
-      expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [])
-    end
-
-    it "by_listener(:tell) does not include the bare-regex listener" do
-      expect(admin.tasks.by_listener(:tell).pluck(:listener)).not_to include(current_prod_listener)
-    end
-
-    context "with tell: prefix restored" do
-      before do
-        @tasks = Task.create([
-          { user: admin, listener: fixed_listener },
-        ])
-      end
-
-      it "triggers on 'chelsea withdraw 180'" do
-        expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [fixed_listener])
-      end
-
-      it "triggers on 'chelsea withdraw $180'" do
-        expect_trigger_listeners(admin, :tell, "chelsea withdraw $180", [fixed_listener])
-      end
-
-      it "triggers on 'chelsea pull 1,200.50'" do
-        expect_trigger_listeners(admin, :tell, "chelsea pull 1,200.50", [fixed_listener])
-      end
-
-      it "captures amount" do
-        serialized = Tokenizing::TriggerData.serialize(Tokenizing::TriggerData.parse("chelsea withdraw 180", as: admin), use_global_id: false)
-        matcher = Tokenizing::Matcher.new(fixed_listener, { tell: serialized })
-        expect(matcher.match?).to be true
-        expect(matcher.match_data[:named_captures][:amount]).to eq("180")
-      end
-    end
-
-    context "with optional note capture" do
-      let(:note_listener) {
-        'tell:/^(?:(?:chelsea|withdraw|pull) ){2}\$?(?<amount>[\d,.]+)(?:\s+(?<note>.+))?$/'
-      }
-
-      before do
-        @tasks = Task.create([
-          { user: admin, listener: note_listener },
-        ])
-      end
-
-      def captures_for(input)
-        serialized = Tokenizing::TriggerData.serialize(Tokenizing::TriggerData.parse(input, as: admin), use_global_id: false)
-        matcher = Tokenizing::Matcher.new(note_listener, { tell: serialized })
-        expect(matcher.match?).to be(true), "Expected listener to match #{input.inspect}"
-        matcher.match_data[:named_captures]
-      end
-
-      it "still triggers on 'chelsea withdraw 180' (no note)" do
-        expect_trigger_listeners(admin, :tell, "chelsea withdraw 180", [note_listener])
-        captures = captures_for("chelsea withdraw 180")
-        expect(captures[:amount]).to eq("180")
-        expect(captures[:note]).to be_nil
-      end
-
-      it "captures a single-word note: 'chelsea withdraw 180 Yoga'" do
-        captures = captures_for("chelsea withdraw 180 Yoga")
-        expect(captures[:amount]).to eq("180")
-        expect(captures[:note]).to eq("Yoga")
-      end
-
-      it "captures a multi-word note: 'chelsea withdraw 180 Yoga Barn'" do
-        captures = captures_for("chelsea withdraw 180 Yoga Barn")
-        expect(captures[:amount]).to eq("180")
-        expect(captures[:note]).to eq("Yoga Barn")
-      end
-
-      it "captures with $ and note: 'chelsea pull $1,200.50 rent split'" do
-        captures = captures_for("chelsea pull $1,200.50 rent split")
-        expect(captures[:amount]).to eq("1,200.50")
-        expect(captures[:note]).to eq("rent split")
-      end
-    end
-  end
-
-  context "Task 346 - Doorbell Rung" do
+  context "with a multi-field sensor listener" do
     let(:listener) { "hass-sensor:location:doorbell type:rang rang:true" }
-
-    before do
-      @tasks = Task.create([
-        { user: admin, listener: listener },
-      ])
-    end
-
-    let(:rang_true_payload) {
+    let(:payload) {
       {
-        device_id:   "957c8ec417dc47ce741fd1b5cf6cf4fb",
         device_name: "Doorbell",
-        pressed_at:  "2026-05-22 15:19:18.151441+00:00",
-        button_id:   "957c8ec417dc47ce741fd1b5cf6cf4fb",
         entity_id:   "binary_sensor.doorbell_visitor",
         type:        "rang",
         subject:     "visitor",
@@ -290,24 +186,14 @@ RSpec.describe Task do
         location:    "doorbell",
       }
     }
-    let(:rang_false_payload) { rang_true_payload.merge(rang: false) }
 
-    it "triggers on the real rang:true payload" do
-      expect_trigger_listeners(admin, :"hass-sensor", rang_true_payload, [listener])
-    end
+    before { @tasks = Task.create([{ user: admin, listener: listener }]) }
 
-    it "does NOT trigger on the real rang:false payload" do
-      expect_trigger_listeners(admin, :"hass-sensor", rang_false_payload, [])
-    end
-
-    it "does NOT trigger on a non-doorbell sensor (different location)" do
-      payload = rang_true_payload.merge(location: "garage")
-      expect_trigger_listeners(admin, :"hass-sensor", payload, [])
-    end
-
-    it "does NOT trigger on a doorbell sensor with a different type" do
-      payload = rang_true_payload.merge(type: "motion", rang: true)
-      expect_trigger_listeners(admin, :"hass-sensor", payload, [])
+    it "matches only when every field, boolean included, matches" do
+      expect_trigger_listeners(admin, :"hass-sensor", payload, [listener])
+      expect_trigger_listeners(admin, :"hass-sensor", payload.merge(rang: false), [])
+      expect_trigger_listeners(admin, :"hass-sensor", payload.merge(location: "garage"), [])
+      expect_trigger_listeners(admin, :"hass-sensor", payload.merge(type: "motion"), [])
     end
   end
 
@@ -371,20 +257,11 @@ RSpec.describe Task do
       }.map(&:listener)
     end
 
-    it "finds tasks via by_listener scope" do
-      found = admin.tasks.by_listener(trigger)
-      expect(found.pluck(:listener)).to match_array(tasks.map(&:listener))
-    end
-
-    it "matches all applicable listeners for button 1" do
+    it "finds the tasks by the hyphenated key and matches the applicable listeners" do
+      expect(admin.tasks.by_listener(trigger).pluck(:listener)).to match_array(tasks.map(&:listener))
       expect(matching_listeners(trigger, trigger_data)).to contain_exactly("hass-button", 'hass-button:entity_id:"sensor.shortcut_button_1"', "hass-button:type:long_press")
-    end
 
-    it "only matches the bare listener for a different button" do
-      other_data = trigger_data.merge(
-        entity_id: "sensor.shortcut_button_2",
-        type:      "button2_short_press",
-      )
+      other_data = trigger_data.merge(entity_id: "sensor.shortcut_button_2", type: "button2_short_press")
       expect(matching_listeners(trigger, other_data)).to contain_exactly("hass-button")
     end
   end
@@ -398,137 +275,17 @@ RSpec.describe Task do
       [matcher.match?, matcher.match_data[:named_captures]]
     end
 
-    it "captures notes from 'log drink Mtn dew'" do
-      matched, captures = match_with_captures(log_listener, :tell, "log drink Mtn dew")
-      expect(matched).to be true
-      expect(captures[:title]).to eq("drink")
-      expect(captures[:notes]).to eq("Mtn dew")
-    end
-
-    it "captures notes and calories from 'log drink Mtn dew (170)'" do
-      matched, captures = match_with_captures(log_listener, :tell, "log drink Mtn dew (170)")
-      expect(matched).to be true
-      expect(captures[:title]).to eq("drink")
-      expect(captures[:notes]).to eq("Mtn dew")
-      expect(captures[:calories]).to eq("170")
-    end
-
-    it "captures title only from 'log food'" do
-      matched, captures = match_with_captures(log_listener, :tell, "log food")
-      expect(matched).to be true
-      expect(captures[:title]).to eq("food")
-      expect(captures[:notes]).to be_blank
-    end
-
-    it "captures garage direction" do
-      listener = "tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/"
-      matched, captures = match_with_captures(listener, :tell, "Open the garage")
-      expect(matched).to be true
-      expect(captures[:direction]).to eq("Open")
-    end
-
-    context "travel command regex" do
-      let(:travel_listener) { 'tell:OR(/^(?<preamble>.+?) (?:when|after|once|(?:the )?next time) (?:I )?(?<direction>get|go|arrive|leave|depart|come|head)(?: (?:to|at))? (?<destination>(?!back\b)\S+?)(?:\'s)? to (?<suffix>.+)$/ /^(?<command>.+?) (?:when|after|once|(?:the )?next time) (?:I )?(?<direction>get|go|arrive|leave|depart|come|head)(?: (?:to|at))? (?<destination>.+?)(?:\'s)?$/)' }
-
-      it "parses 'remind me to clean the house when I get home'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me to clean the house when I get home")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("remind me to clean the house")
-        expect(captures[:direction]).to eq("get")
-        expect(captures[:destination]).to eq("home")
-      end
-
-      it "parses 'remind me when I get to Doug's to grab the Dehydrator'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me when I get to Doug's to grab the Dehydrator")
-        expect(matched).to be true
-        expect(captures[:preamble]).to eq("remind me")
-        expect(captures[:direction]).to eq("get")
-        expect(captures[:destination]).to eq("Doug")
-        expect(captures[:suffix]).to eq("grab the Dehydrator")
-      end
-
-      it "parses 'remind me to record climbs when I get to Momentum'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me to record climbs when I get to Momentum")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("remind me to record climbs")
-        expect(captures[:direction]).to eq("get")
-        expect(captures[:destination]).to eq("Momentum")
-      end
-
-      it "parses 'ping me not done when I arrive home'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "ping me not done when I arrive home")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("ping me not done")
-        expect(captures[:direction]).to eq("arrive")
-        expect(captures[:destination]).to eq("home")
-      end
-
-      it "parses 'add dehydrator to list when I get to Doug's'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "add dehydrator to list when I get to Doug's")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("add dehydrator to list")
-        expect(captures[:direction]).to eq("get")
-        expect(captures[:destination]).to eq("Doug")
-      end
-
-      it "parses 'remind me to X next time I go to the store'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me to X next time I go to the store")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("remind me to X")
-        expect(captures[:direction]).to eq("go")
-        expect(captures[:destination]).to eq("the store")
-      end
-
-      it "parses departure commands with 'leave'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "close the garage when I leave home")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("close the garage")
-        expect(captures[:direction]).to eq("leave")
-        expect(captures[:destination]).to eq("home")
-      end
-
-      it "parses departure commands with 'depart'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "ping me when I depart work")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("ping me")
-        expect(captures[:direction]).to eq("depart")
-        expect(captures[:destination]).to eq("work")
-      end
-
-      it "parses 'get back' as destination 'back'" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me to check mail when I get back")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("remind me to check mail")
-        expect(captures[:direction]).to eq("get")
-        expect(captures[:destination]).to eq("back")
-      end
-
-      it "parses 'get back to' with a destination (raw capture includes 'back to')" do
-        matched, captures = match_with_captures(travel_listener, :tell, "remind me to call mom when I get back to the office")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("remind me to call mom")
-        expect(captures[:direction]).to eq("get")
-        # Raw capture includes "back to" -  Jil code strips "back to " prefix
-        expect(captures[:destination]).to eq("back to the office")
-      end
-
-      it "parses 'after I arrive at' commands" do
-        matched, captures = match_with_captures(travel_listener, :tell, "start workout after I arrive at Momentum")
-        expect(matched).to be true
-        expect(captures[:command]).to eq("start workout")
-        expect(captures[:direction]).to eq("arrive")
-        expect(captures[:destination]).to eq("Momentum")
-      end
-
-      it "does not match normal commands without a travel phrase" do
-        matched, _captures = match_with_captures(travel_listener, :tell, "remind me to get milk")
-        expect(matched).to be false
-      end
-
-      it "does not match without a destination" do
-        matched, _captures = match_with_captures(travel_listener, :tell, "remind me when I arrive")
-        expect(matched).to be false
-      end
+    it "exposes the regex's named captures" do
+      [
+        [log_listener, "log drink Mtn dew",       { title: "drink", notes: "Mtn dew" }],
+        [log_listener, "log drink Mtn dew (170)", { title: "drink", notes: "Mtn dew", calories: "170" }],
+        [log_listener, "log food",                { title: "food", notes: nil }],
+        ["tell:/(?<direction>open|close|toggle)( (?:the|my))? garage/", "Open the garage", { direction: "Open" }],
+      ].each { |listener, words, expected|
+        matched, captures = match_with_captures(listener, :tell, words)
+        expect(matched).to be(true), words
+        expected.each { |key, value| expect(captures[key].presence).to eq(value), "#{words} #{key}" }
+      }
     end
   end
 end

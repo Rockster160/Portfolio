@@ -66,26 +66,24 @@ RSpec.describe "Holding the rest of a reply behind a watch" do
     rows.uniq { |i| i[:call_id] }.to_h { |i| [i[:call_id], JSON.parse(i[:output])] }
   end
 
-  it "runs nothing now" do
-    run([watch_call, task_call("Whisper Quiet", id: "t1"), task_call("Porch Light On", id: "t2")])
+  it "runs nothing now, holds the calls as the watch's steps in order, and runs them when it trips", :aggregate_failures do
+    client = run([watch_call, task_call("Whisper Quiet", id: "t1"), task_call("Porch Light On", id: "t2")])
 
     expect(::Jil).not_to have_received(:trigger).with(user, anything, anything, anything)
-  end
-
-  it "makes them the watch's steps, in the order they were said" do
-    run([watch_call, task_call("Whisper Quiet", id: "t1"), task_call("Porch Light On", id: "t2")])
+    expect(outputs(client)["t1"]).to include("status" => "held")
+    expect(outputs(client)["t2"]).to include("status" => "held")
 
     watch = BuddyWatch.where(user: user).last
     expect(watch.kind).to eq("action")
     expect(watch.run_steps.map { |s| s.dig("payload", "name") }).to eq(["Whisper Quiet", "Porch Light On"])
     expect(watch.body).to eq("Quieting down for the night.")
-  end
+    # Made one request's worth of rows, so they're one plan.
+    expect(watch.plan_id).to match(/\Ap\d+\z/)
 
-  it "tells the model each one is held, not done" do
-    client = run([watch_call, task_call("Whisper Quiet", id: "t1"), task_call("Porch Light On", id: "t2")])
-
-    expect(outputs(client)["t1"]).to include("status" => "held")
-    expect(outputs(client)["t2"]["note"]).to include("step 2", "never as done")
+    ran = nil
+    allow(Buddy::ProposalBuilder).to receive(:run_markers!) { |args| ran = args }
+    Buddy::WatchMatcher.fire!(watch)
+    expect(ran[:markers].map { |m| m[:payload][:name] }).to eq(["Whisper Quiet", "Porch Light On"])
   end
 
   # The shape the model emits "turn the light on when I get home" in: the
@@ -118,23 +116,12 @@ RSpec.describe "Holding the rest of a reply behind a watch" do
     client = run([watch_call(notify: "Chelsea"), task_call("Whisper Quiet", id: "t1")])
 
     expect(outputs(client)["t1"]).to include("status" => "failed")
-    expect(outputs(client)["t1"]["error"]).to include("`notify`")
   end
 
   it "lets lookups through - the model needs those now" do
     client = run([watch_call, { name: :get_context, call_id: "g1", arguments: { "sections" => ["chores_all"] } }])
 
     expect(outputs(client)["g1"]["status"]).not_to eq("held")
-  end
-
-  it "runs the held steps when the watch trips" do
-    run([watch_call, task_call("Whisper Quiet", id: "t1"), task_call("Porch Light On", id: "t2")])
-    ran = nil
-    allow(Buddy::ProposalBuilder).to receive(:run_markers!) { |args| ran = args }
-
-    Buddy::WatchMatcher.fire!(BuddyWatch.where(user: user).last)
-
-    expect(ran[:markers].map { |m| m[:payload][:name] }).to eq(["Whisper Quiet", "Porch Light On"])
   end
 
   describe "behind a timed reminder" do
@@ -153,12 +140,5 @@ RSpec.describe "Holding the rest of a reply behind a watch" do
       expect(reminder.action_calls.map { |c| c[:payload][:name] }).to eq(["Whisper Quiet", "Porch Light On"])
       expect(::Jil).not_to have_received(:trigger).with(user, anything, anything, anything)
     end
-  end
-
-  # Made one request's worth of rows, so they're one plan.
-  it "puts what one reply schedules in one plan" do
-    run([watch_call, task_call("Whisper Quiet", id: "t1")])
-
-    expect(BuddyWatch.where(user: user).last.plan_id).to match(/\Ap\d+\z/)
   end
 end

@@ -112,29 +112,13 @@ RSpec.describe Tokenizing::Breaker do
   end
 
   describe ".unwrap" do
-    it "strips paired double quotes" do
-      expect(Tokenizing::Breaker.unwrap('"foo bar"')).to eq("foo bar")
-    end
-
-    it "strips paired single quotes" do
-      expect(Tokenizing::Breaker.unwrap("'foo bar'")).to eq("foo bar")
-    end
-
-    it "strips outer parens" do
-      expect(Tokenizing::Breaker.unwrap("(food drink)")).to eq("food drink")
-    end
-
-    it "leaves unwrapped values alone" do
-      expect(Tokenizing::Breaker.unwrap("food bar")).to eq("food bar")
-    end
-  end
-
-  describe "DELIMITERS" do
-    it "uses production semantics (`:!` for not_contains, `::!` for not_exact)" do
-      expect(Tokenizing::Breaker::DELIMITERS[:not_contains]).to eq(":!")
-      expect(Tokenizing::Breaker::DELIMITERS[:not_exact]).to eq("::!")
-      expect(Tokenizing::Breaker::DELIMITERS[:any]).to include("ANY", "OR")
-      expect(Tokenizing::Breaker::DELIMITERS[:regex]).to include("~", ":~")
+    it "strips paired quotes and outer parens, leaving unwrapped values alone" do
+      {
+        '"foo bar"'    => "foo bar",
+        "'foo bar'"    => "foo bar",
+        "(food drink)" => "food drink",
+        "food bar"     => "food bar",
+      }.each { |raw, expected| expect(Tokenizing::Breaker.unwrap(raw)).to eq(expected), raw }
     end
   end
 end

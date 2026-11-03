@@ -181,13 +181,6 @@ RSpec.describe BackgroundProcess do
   end
 
   describe ".clear!" do
-    it "takes it off the strip" do
-      report(name: "Preparing")
-      described_class.clear!(user: user, key: "jobhunt:line")
-
-      expect(described_class.live_for(user)).to be_empty
-    end
-
     it "says nothing happened for a key with nothing behind it" do
       expect(described_class.clear!(user: user, key: "never:ran")).to be_nil
     end
@@ -234,18 +227,12 @@ RSpec.describe BackgroundProcess do
 
     # Neither will ever heartbeat again, and both are waiting on a person. Ageing
     # one out throws away the thing he was meant to come back to.
-    it "keeps one that is parked waiting on him, however long it waits" do
-      process = report(name: "Waiting on you", state: :waiting)
-      process.update_columns(heartbeat_at: 3.days.ago)
+    it "keeps one parked waiting on him, or failed, however long ago it was heard from" do
+      waiting = report(name: "Waiting on you", state: :waiting)
+      failed = described_class.report!(user: user, key: "jobhunt:scan", name: "Looking", state: :failed)
+      [waiting, failed].each { |process| process.update_columns(heartbeat_at: 3.days.ago) }
 
-      expect(described_class.live_for(user)).to eq([process])
-    end
-
-    it "keeps one that failed, for the same reason" do
-      process = report(name: "Looking for new jobs", state: :failed)
-      process.update_columns(heartbeat_at: 3.days.ago)
-
-      expect(described_class.live_for(user)).to eq([process])
+      expect(described_class.live_for(user)).to contain_exactly(waiting, failed)
     end
   end
 

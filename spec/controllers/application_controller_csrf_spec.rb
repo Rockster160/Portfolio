@@ -26,17 +26,7 @@ RSpec.describe ApplicationController, type: :controller do
     describe "stale CSRF token handling" do
       let(:user) { create(:user) }
 
-      it "returns 422 JSON with stale_csrf instead of re-raising for a normal user" do
-        sign_in user
-        allow(controller).to receive(:current_ip_spamming?).and_return(false)
-
-        post :create, format: :json
-
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)).to eq("error" => "stale_csrf")
-      end
-
-      it "stays silent for a single stale-token hit (normal client recovery)" do
+      it "returns 422 stale_csrf JSON for a normal user, silently on a single hit" do
         sign_in user
         allow(controller).to receive(:current_ip_spamming?).and_return(false)
         allow(SlackNotifier).to receive(:notify)
@@ -45,6 +35,7 @@ RSpec.describe ApplicationController, type: :controller do
         post :create, format: :json
 
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(JSON.parse(response.body)).to eq("error" => "stale_csrf")
         expect(SlackNotifier).not_to have_received(:notify)
       end
 
@@ -109,22 +100,17 @@ RSpec.describe ApplicationController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it "lets Chelsea through even when the shared home IP is banned" do
+    it "lets a perma-safe user through the banned shared IP, treated as whitelisted" do
       sign_in(User.chelsea)
       get :index
       expect(response).to have_http_status(:ok)
+      expect(controller.send(:ip_whitelisted?)).to be(true)
     end
 
-    it "lets Eve through even when the shared home IP is banned" do
+    it "lets Eve through the banned shared IP too" do
       sign_in(User.eve)
       get :index
       expect(response).to have_http_status(:ok)
-    end
-
-    it "treats perma-safe users as whitelisted so they never get banned" do
-      sign_in(User.chelsea)
-      get :index
-      expect(controller.send(:ip_whitelisted?)).to be(true)
     end
   end
 end

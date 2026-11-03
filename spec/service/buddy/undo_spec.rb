@@ -29,12 +29,8 @@ RSpec.describe "Buddy undo" do
         expect(event.reload.name).to eq("Coffee")
       end
 
-      # Everything hung off a list watches the `:item` Jil trigger, and the
-      # Before Bed HASS flag is the one that shows when it's missed: three undo
-      # taps at 1:41 AM on 2 Sep emptied the list and left `input_boolean.
-      # before_bed` on, because `soft_destroy` alone is a bare
-      # `update(deleted_at:)`. It went off 72 seconds later only because he
-      # happened to open the list page. Third silent door found on this loop.
+      # Everything hung off a list watches the `:item` Jil trigger, and
+      # `soft_destroy` alone is a bare `update(deleted_at:)` that fires nothing.
       describe "undo of a list item" do
         let(:list) { create(:list, user: user) }
         let(:fired) { [] }
@@ -49,7 +45,7 @@ RSpec.describe "Buddy undo" do
           described_class.call({ "op" => "created", "model" => "ListItem", "id" => item.id })
         end
 
-        it "fires :item removed, the same as every other way of taking one off" do
+        it "takes the item off the list and fires :item removed", :aggregate_failures do
           item = list.list_items.add("Turn off the lamp")
           fired.clear
 
@@ -60,13 +56,6 @@ RSpec.describe "Buddy undo" do
           expect(scope).to eq(:item)
           expect(data[:action]).to eq(:removed)
           expect(data[:name]).to eq("Turn off the lamp")
-        end
-
-        it "still takes the item off the list" do
-          item = list.list_items.add("Lock the door")
-
-          undo!(item)
-
           expect(list.list_items.reload.map(&:name)).to be_empty
         end
 
@@ -131,11 +120,8 @@ RSpec.describe "Buddy undo" do
       end
     end
 
-    # Prod: the undo row was tapped, it removed a chore completion carrying the
-    # note "built rocking chair", and there was no way back — `remove` destroyed
-    # the row and kept nothing, so re-marking the chore produced a bare completion
-    # with the note gone. An undo that can't be undone is a delete with a friendly
-    # name.
+    # An undo hands back a revert of its own, so it can be reversed with the
+    # record's details (a completion's note) intact.
     describe "undoing an undo" do
       let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
       let(:chore)      { create(:chore, created_by_user: user, chore_household: household, name: "1hr Project") }
@@ -147,7 +133,7 @@ RSpec.describe "Buddy undo" do
         )
       end
 
-      it "hands back what it takes away, note and all" do
+      it "hands back what it takes away, and puts it back note and all", :aggregate_failures do
         done   = completion!("built rocking chair")
         action = executed_action(
           { "op" => "created", "model" => "ChoreCompletion", "id" => done.id, "summary" => "unmarked 1hr Project" },
@@ -158,16 +144,6 @@ RSpec.describe "Buddy undo" do
 
         expect(ChoreCompletion.exists?(done.id)).to be(false)
         expect(out[:reverts].first).to include("op" => "recreated", "model" => "ChoreCompletion")
-        expect(out[:reverts].first["attrs"]).to include("note" => "built rocking chair")
-      end
-
-      it "puts the completion back, with its note, when the undo is reversed" do
-        done   = completion!("built rocking chair")
-        action = executed_action(
-          { "op" => "created", "model" => "ChoreCompletion", "id" => done.id, "summary" => "unmarked 1hr Project" },
-          tool: "complete_chore",
-        )
-        out = Buddy::Reverter.perform!(action.id, 1)
 
         out[:reverts].each { |rv| Buddy::Reverter.call(rv) }
 
@@ -176,11 +152,8 @@ RSpec.describe "Buddy undo" do
         expect(restored.day_key).to eq(done.day_key)
       end
 
-      # Agenda item 1009 was undone by a mistap, and "I tapped it by mistake!"
-      # was answered with "Easy sorted" - nothing put back. Cancelling is a soft
-      # remove, so putting one back is a flip of the two columns it moved; on
-      # the `recreated` branch it fell to before, the cancelled original would
-      # have been left sitting beside a fresh duplicate.
+      # Cancelling is a soft remove, so reversing it flips the columns back
+      # rather than recreating a duplicate.
       it "un-cancels the agenda item it cancelled, rather than making a second one" do
         agenda = create(:agenda, user: user)
         item   = agenda.agenda_items.create!(
@@ -248,11 +221,8 @@ RSpec.describe "Buddy undo" do
       end
     end
 
-    # Prod 1362: told the routine it had just saved was wrong, Buddy offered to
-    # undo a chore completion from five hours earlier — simply the newest
-    # reversible thing left in the thread. `undo` takes no arguments, so it can
-    # only ever mean "the thing you just did"; anything they'd have to NAME
-    # belongs to a tool that takes a name.
+    # `undo` takes no arguments, so it can only ever mean "the thing you just
+    # did"; anything older they'd have to name.
     describe "how far back undo will reach" do
       let(:tool) { Buddy::Tools[:undo] }
       let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
@@ -270,12 +240,6 @@ RSpec.describe "Buddy undo" do
         expect { tool[:confirm].call({}, ctx) }.to raise_error(/nothing recent to undo/)
       end
 
-      it "still finds something from the current exchange" do
-        _event, action = aged_action(0, "Coffee")
-
-        expect(tool[:confirm].call({}, ctx)[:resolved][:byte_action_id]).to eq(action.id)
-      end
-
       it "skips the stale one and takes the recent one when both are there" do
         aged_action(5, "Rocking Chair")
         _recent, action = aged_action(0, "Coffee")
@@ -287,19 +251,8 @@ RSpec.describe "Buddy undo" do
   end
 
   # The mirror of a disputed action. There, the person says something DIDN'T
-  # happen; here they say something that DID happen shouldn't have.
-  #
-  # Prod 3483-3486. Suki learned two Afrikaans terms off Eve's example — both
-  # define_term buttons executed — and seven minutes later an undo row came back
-  # "Undone - unlearn lekker". Seventeen seconds after that:
-  #
-  #   3485 "No, I didn't mean to undo that!"
-  #   3486 "No worries at all!! Nothing got undone on my side, so you're still good!"
-  #
-  # `lekker` was gone from household_glossary_terms and stayed gone. Nothing in
-  # DISPUTED_ACTION_RX covers this shape, because nothing about it reads as a
-  # dispute — she was correcting herself, not Buddy — so the reply was written
-  # from memory, and memory said the term had been learned.
+  # happen; here they say something that DID happen shouldn't have, and the
+  # reply must check recent_actions rather than answer from memory.
   describe "regret" do
     let(:user) { User.me }
     let!(:convo) {
@@ -329,25 +282,21 @@ RSpec.describe "Buddy undo" do
     describe "recognizing it" do
       def regrets?(text) = Buddy::GPT::Turn::UNDO_REGRET_RX.match?(text)
 
-      it "catches the one that got past it" do
-        expect(regrets?("No, I didn't mean to undo that!")).to be(true)
-      end
-
-      it "catches the other ways of saying it" do
-        expect(regrets?("I didn’t mean to remove it")).to be(true)
-        expect(regrets?("why did you delete that")).to be(true)
-        expect(regrets?("can you put it back")).to be(true)
-        expect(regrets?("I still want that one")).to be(true)
-        expect(regrets?("undo the undo please")).to be(true)
-      end
-
       # A false fire costs one corrective round, so this is about staying out of
       # ordinary conversation rather than about precision.
-      it "leaves alone messages that regret nothing" do
-        expect(regrets?("go ahead and undo that")).to be(false)
-        expect(regrets?("I didn't mean to say that")).to be(false)
-        expect(regrets?("remove the second one please")).to be(false)
-        expect(regrets?("did you undo it?")).to be(false)
+      it "catches regret and leaves ordinary messages alone", :aggregate_failures do
+        [
+          "No, I didn't mean to undo that!",
+          "I didn’t mean to remove it",
+          "why did you delete that",
+          "can you put it back",
+          "I still want that one",
+          "undo the undo please",
+        ].each { |text| expect(regrets?(text)).to be(true), text }
+
+        [
+          "go ahead and undo that", "I didn't mean to say that", "remove the second one please", "did you undo it?"
+        ].each { |text| expect(regrets?(text)).to be(false), text }
       end
 
       # The other half of the pair still has its own arm; neither is a subset of

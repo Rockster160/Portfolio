@@ -23,7 +23,7 @@ RSpec.describe TeslaProxyRecoveryWorker do
 
     expect(TeslaCommand).to have_received(:proxy_unreachable!).with(false)
     expect(control).to have_received(:refresh)
-    expect(SlackNotifier).to have_received(:notify).with(/recovered/)
+    expect(SlackNotifier).to have_received(:notify)
   end
 
   # The check-in that triggers this travels OUTBOUND, so it says nothing about

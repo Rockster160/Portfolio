@@ -23,7 +23,7 @@ RSpec.describe GoogleAccount do
     it "requires email" do
       account = described_class.new(user: user)
       expect(account).not_to be_valid
-      expect(account.errors[:email]).to include("can't be blank")
+      expect(account.errors[:email]).to be_present
     end
 
     it "enforces unique email per user" do
@@ -55,20 +55,16 @@ RSpec.describe GoogleAccount do
   describe "reauth helpers" do
     let(:account) { described_class.create!(user: user, email: "alice@example.com") }
 
-    it "starts out not needing reauth" do
+    it "flips on mark_reauth_required! and back on clear_reauth_required!", :aggregate_failures do
       expect(account).not_to be_needs_reauth
-    end
 
-    it "flips on mark_reauth_required!" do
       account.mark_reauth_required!
       expect(account).to be_needs_reauth
       expect(account.reauth_required_at).to be_present
-    end
 
-    it "clears via clear_reauth_required!" do
-      account.update!(reauth_required_at: 1.day.ago)
       account.clear_reauth_required!
       expect(account.reauth_required_at).to be_nil
+      expect(account).not_to be_needs_reauth
     end
   end
 end

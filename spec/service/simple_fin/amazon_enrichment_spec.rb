@@ -40,23 +40,20 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     )
   end
 
-  it "writes the order number and item id onto the charge" do
+  # The category it chose is recorded alongside, so a later writer can tell it
+  # from a hand-picked one: the backfill refuses to correct a hand-picked one.
+  it "writes the order, item id, tidied name and its own category onto the charge", :aggregate_failures do
     board(delivery)
     row = charge
 
     described_class.apply(row)
 
-    expect(row.reload.metadata.dig("amazon", "order_id")).to eq("112-6608200-0828238")
+    row.reload
+    expect(row.metadata.dig("amazon", "order_id")).to eq("112-6608200-0828238")
     expect(row.metadata.dig("amazon", "asins")).to eq(["B0C1XLC962"])
-  end
-
-  it "names the item in the memo, tidied the same way the backfill did" do
-    board(delivery)
-    row = charge
-
-    described_class.apply(row)
-
-    expect(row.reload.memo).to eq("Dogcator Dog Pee Pads Extra Large")
+    expect(row.memo).to eq("Dogcator Dog Pee Pads Extra Large")
+    expect(row.category).to eq("pets")
+    expect(row.metadata.dig("amazon", "category")).to eq("pets")
   end
 
   # The board is editable and renaming a row is the point of it. What somebody
@@ -68,15 +65,6 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     described_class.apply(row)
 
     expect(row.reload.memo).to eq("Puppy Pads, the big ones")
-  end
-
-  it "moves it off the merchant's blanket shopping" do
-    board(delivery)
-    row = charge
-
-    described_class.apply(row)
-
-    expect(row.reload.category).to eq("pets")
   end
 
   # An AmazonOrder's `item_id` is the ORDER ID when the SKU is not known yet.
@@ -102,24 +90,9 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     expect(row.reload.metadata.dig("amazon", "asins")).to eq([])
   end
 
-  # The purchase should be traceable from either side.
-  it "stamps the order number and ASINs onto the alert as well" do
-    board(delivery)
-    event = ActionEvent.create!(
-      user: user, name: "Transaction", timestamp: at, notes: "AMAZON MKTPLACE PMTS",
-      data: { amount: 24.99, account: "(...7283)", category: "shopping" }
-    )
-    row = charge
-    row.update!(action_event: event)
-
-    described_class.apply(row)
-
-    expect(event.reload.data.dig("amazon", "order_id")).to eq("112-6608200-0828238")
-    expect(event.data.dig("amazon", "asins")).to eq(["B0C1XLC962"])
-  end
-
-  # The event owns its own category and notes; this only adds identifiers.
-  it "leaves everything else on the alert alone" do
+  # Traceable from either side, but the event owns its own category and notes;
+  # this only adds identifiers.
+  it "stamps the order number and ASINs onto the alert, leaving the rest of it alone", :aggregate_failures do
     board(delivery)
     event = ActionEvent.create!(
       user: user, name: "Transaction", timestamp: at, notes: "Puppy Bed Treats",
@@ -131,21 +104,11 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     described_class.apply(row)
 
     event.reload
+    expect(event.data.dig("amazon", "order_id")).to eq("112-6608200-0828238")
+    expect(event.data.dig("amazon", "asins")).to eq(["B0C1XLC962"])
     expect(event.notes).to eq("Puppy Bed Treats")
     expect(event.data["category"]).to eq("shopping")
     expect(event.data["amount"]).to eq(24.99)
-  end
-
-  # Recorded alongside being set, exactly as the order-history backfill does.
-  # Without it a category this service chose would look like a hand-picked one,
-  # and the backfill would refuse to correct it later.
-  it "records the category it chose so a later writer can tell it apart" do
-    board(delivery)
-    row = charge
-
-    described_class.apply(row)
-
-    expect(row.reload.metadata.dig("amazon", "category")).to eq("pets")
   end
 
   # A title is search spam and mentions everything the thing could be near.

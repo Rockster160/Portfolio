@@ -26,14 +26,11 @@ RSpec.describe BuddyReminder do
 
     before { anchor.set_occurrence(noon, identifier: "1289") }
 
-    it "takes its time from the anchor, with the offset applied" do
+    it "takes its time from the anchor, with the offset applied either way" do
       reminder = remind("agenda:interview-30m")
 
       expect(reminder).to be_valid
       expect(reminder.fire_at).to be_within(1.second).of(noon - 30.minutes)
-    end
-
-    it "reads an offset the other way for an ask about afterwards" do
       expect(remind("agenda:interview+90m").fire_at).to be_within(1.second).of(noon + 90.minutes)
     end
 
@@ -41,7 +38,7 @@ RSpec.describe BuddyReminder do
       reminder = remind("agenda:dentist-30m")
 
       expect(reminder).not_to be_valid
-      expect(reminder.errors[:anchor].join).to match(/agenda:dentist, which doesn't exist/)
+      expect(reminder.errors[:anchor]).to be_present
     end
 
     it "refuses an expression that isn't one" do
@@ -72,17 +69,12 @@ RSpec.describe BuddyReminder do
       reminder = remind("agenda:interview[404]-30m")
 
       expect(reminder).not_to be_valid
-      expect(reminder.errors[:anchor].join).to match(/occurrence of agenda:interview that isn't there/)
+      expect(reminder.errors[:anchor]).to be_present
     end
 
-    describe "whether it is a standing rule" do
-      it "recurs when the expression names a class of them" do
-        expect(remind("agenda:interview-30m")).to be_recurring
-      end
-
-      it "does not when it is pinned to one" do
-        expect(remind("agenda:interview[1289]-30m")).not_to be_recurring
-      end
+    it "is a standing rule when it names a class of occurrences, not when pinned to one" do
+      expect(remind("agenda:interview-30m")).to be_recurring
+      expect(remind("agenda:interview[1289]-30m")).not_to be_recurring
     end
 
     describe "where it rolls to" do

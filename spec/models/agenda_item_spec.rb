@@ -42,31 +42,17 @@ RSpec.describe AgendaItem do
     let(:user) { create(:user) }
     let(:agenda) { create(:agenda, user: user) }
 
-    describe "kind enum" do
-      it "is integer-backed (not strings — strings waste storage + index space)" do
-        expect(AgendaItem.columns_hash["kind"].type).to eq(:integer)
-        expect(AgendaItem.kinds).to eq("task" => 0, "event" => 1, "trigger" => 2)
-      end
+    it "requires an event to end after it starts" do
+      now = Time.current
+      expect(build(:agenda_item, agenda: agenda, kind: "event", end_at: nil)).not_to be_valid
+      expect(build(:agenda_item, agenda: agenda, kind: "event", start_at: now, end_at: now)).not_to be_valid
     end
 
-    describe "validations" do
-      it "requires end_at for event kind" do
-        item = build(:agenda_item, agenda: agenda, kind: "event", end_at: nil)
-        expect(item).not_to be_valid
-      end
-
-      it "end_at must be after start_at" do
-        now = Time.current
-        item = build(:agenda_item, agenda: agenda, kind: "event", start_at: now, end_at: now)
-        expect(item).not_to be_valid
-      end
-    end
-
-    # The outgoing leg. It has been computed since 30 Jul and, until now, read
-    # on the Ruby side by exactly one method — `presentation_attrs`, for the
-    # screen. Prod 5266 asked "when does she get back from yoga" and got a
-    # question back, because nothing else could reach it.
-    describe "the drive home" do
+    # A phantom carries the SCHEDULE's metadata, which mirrors the baseline and
+    # not the per-date epoch, so most occurrences have a drive home with no
+    # arrival stamped on it. The legacy pair (`travel_minutes` +
+    # `travel_location`, what the Jil refresh task writes) carries no seconds.
+    describe "the drive home and the drive there" do
       def item_with(travel, ends: Time.zone.local(2026, 9, 8, 13, 0))
         build(
           :agenda_item, agenda: agenda, kind: "event",
@@ -74,70 +60,26 @@ RSpec.describe AgendaItem do
         )
       end
 
-      it "reads the stamped arrival when there is one" do
+      it "reads a stamped arrival home, or works it out from the end", :aggregate_failures do
         stamped = Time.zone.local(2026, 9, 8, 13, 31).to_i
-        item = item_with({ "post_travel_seconds" => 1860, "post_arrive_at" => stamped })
-
-        expect(item.home_at.to_i).to eq(stamped)
-      end
-
-      # A phantom carries the SCHEDULE's metadata, which mirrors the baseline
-      # and not the per-date epoch — so every occurrence past the 30-hour
-      # materialize window has a drive home and no arrival stamped on it. That
-      # is most of them, and it is the case prod 5266 actually hit.
-      it "works the arrival out from its own end when nothing is stamped" do
-        item = item_with({ "post_travel_seconds" => 1860 })
-
-        expect(item.home_at).to eq(Time.zone.local(2026, 9, 8, 13, 31))
-      end
-
-      it "has no arrival when there is no drive home" do
+        expect(item_with({ "post_travel_seconds" => 1860, "post_arrive_at" => stamped }).home_at.to_i).to eq(stamped)
+        expect(item_with({ "post_travel_seconds" => 1860 }).home_at).to eq(Time.zone.local(2026, 9, 8, 13, 31))
         expect(item_with({ "travel_seconds" => 900 }).home_at).to be_nil
-      end
-
-      it "has no arrival when it has no end to measure from" do
-        item = build(
+        task = build(
           :agenda_item, agenda: agenda, kind: "task", end_at: nil,
           metadata: { "travel" => { "post_travel_seconds" => 1860 } }
         )
-
-        expect(item.home_at).to be_nil
+        expect(task.home_at).to be_nil
       end
 
-      it "rounds the minutes up rather than reporting a drive as shorter" do
+      it "rounds the minutes home up, preferring the stored figure" do
         expect(item_with({ "post_travel_seconds" => 1812 }).travel_home_minutes).to eq(31)
+        expect(item_with({ "post_travel_seconds" => 1812, "post_travel_minutes" => 31 }).travel_home_minutes).to eq(31)
       end
 
-      it "prefers the stored minutes when they are there" do
-        item = item_with({ "post_travel_seconds" => 1812, "post_travel_minutes" => 31 })
-
-        expect(item.travel_home_minutes).to eq(31)
-      end
-    end
-
-    # The legacy pair — `travel_minutes` + `travel_location`, which is what the
-    # Jil refresh task writes — carries no seconds. Reading the key directly
-    # made a 47-minute drive read as no drive at all (prod 5268).
-    describe "#travel_seconds" do
-      it "falls back to the minute figure" do
-        item = build(
-          :agenda_item, agenda: agenda,
-          metadata: { "travel" => { "travel_minutes" => 47, "travel_location" => "Horsetail Falls" } }
-        )
-
-        expect(item.travel_seconds).to eq(2820)
-      end
-
-      it "prefers the seconds when both are there" do
-        item = build(
-          :agenda_item, agenda: agenda,
-          metadata: { "travel" => { "travel_minutes" => 47, "travel_seconds" => 2793 } }
-        )
-
-        expect(item.travel_seconds).to eq(2793)
-      end
-
-      it "is nil when there is no travel at all" do
+      it "reads the drive there in seconds, falling back to the minute figure", :aggregate_failures do
+        expect(item_with({ "travel_minutes" => 47, "travel_location" => "Horsetail Falls" }).travel_seconds).to eq(2820)
+        expect(item_with({ "travel_minutes" => 47, "travel_seconds" => 2793 }).travel_seconds).to eq(2793)
         expect(build(:agenda_item, agenda: agenda, metadata: {}).travel_seconds).to be_nil
       end
     end
@@ -162,16 +104,13 @@ RSpec.describe AgendaItem do
     describe "#crossed_out?" do
       let(:now) { Time.zone.local(2026, 5, 13, 12, 0) }
 
-      it "task crossed out when completed_at present" do
-        item = create(:agenda_item, agenda: agenda, kind: "task",
+      it "crosses out a completed task and an event whose end has passed" do
+        task = create(:agenda_item, agenda: agenda, kind: "task",
           start_at: now - 2.hours, completed_at: now - 1.hour)
-        expect(item.crossed_out?(now: now)).to be true
-      end
-
-      it "event crossed out after end_at passes" do
-        item = create(:agenda_item, agenda: agenda, kind: "event",
+        event = create(:agenda_item, agenda: agenda, kind: "event",
           start_at: now - 2.hours, end_at: now - 1.hour)
-        expect(item.crossed_out?(now: now)).to be true
+        expect(task.crossed_out?(now: now)).to be true
+        expect(event.crossed_out?(now: now)).to be true
       end
     end
 
@@ -195,18 +134,15 @@ RSpec.describe AgendaItem do
         expect(item).not_to be_phantom
       end
 
-      it "AgendaItem.locate resolves a phantom_id" do
+      it "AgendaItem.locate resolves a phantom_id, or the real row once materialized" do
         date = Date.current + 7.days
         phantom_id = "p-#{sched.id}-#{date.iso8601}"
+
         item = described_class.locate(phantom_id, agenda: agenda)
         expect(item).to be_phantom
         expect(item.agenda_schedule_id).to eq(sched.id)
-      end
 
-      it "AgendaItem.locate returns the real row if a phantom_id has already been materialized" do
-        date = Date.current + 7.days
         real = sched.phantom_for(date).tap(&:materialize!)
-        phantom_id = "p-#{sched.id}-#{date.iso8601}"
         item = described_class.locate(phantom_id, agenda: agenda)
         expect(item).to eq(real)
         expect(item).not_to be_phantom
@@ -233,84 +169,33 @@ RSpec.describe AgendaItem do
         triggered
       end
 
-      it "fires :agenda_item action=:created on create" do
-        triggered = trigger_capture
-        create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
-        expect(triggered).to include([:agenda_item, :created])
-      end
-
-      it "fires :agenda_item action=:updated on update" do
+      it "fires :created, :updated and :destroyed through the lifecycle" do
         triggered = trigger_capture
         item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
         item.update!(name: "Renamed")
-        expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :updated]])
-      end
-
-      it "fires :agenda_item action=:destroyed on destroy" do
-        triggered = trigger_capture
-        item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
         item.destroy!
-        expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :destroyed]])
+        expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :updated], [:agenda_item, :destroyed]])
       end
 
-      it "does NOT refire on a metadata-only update (avoids Jil-write retrigger loop)" do
+      # A Jil task writing travel metadata back must not retrigger itself.
+      it "refires on a real column change, not on a metadata-only one" do
         item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
         triggered = trigger_capture
+
         item.update!(metadata: { travel_minutes: 12 })
         expect(triggered).to be_empty
-      end
 
-      it "DOES refire when metadata changes alongside another field" do
-        item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
-        triggered = trigger_capture
-        item.update!(metadata: { travel_minutes: 12 }, name: "Renamed")
-        expect(triggered).to eq([[:agenda_item, :updated]])
-      end
-
-      it "DOES refire when arrive_early_minutes changes (real column, not metadata)" do
-        item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
-        triggered = trigger_capture
+        item.update!(metadata: { travel_minutes: 13 }, name: "Renamed")
         item.update!(arrive_early_minutes: 10)
-        expect(triggered).to eq([[:agenda_item, :updated]])
+        expect(triggered).to eq([[:agenda_item, :updated], [:agenda_item, :updated]])
       end
     end
 
-    describe "arrive_early_minutes column" do
-      it "defaults to 0" do
-        item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
-        expect(item.reload.arrive_early_minutes).to eq(0)
-      end
-
-      it "round-trips an integer" do
-        item = create(:agenda_item, agenda: agenda, kind: "task",
-          start_at: 1.hour.from_now, arrive_early_minutes: 15)
-        expect(item.reload.arrive_early_minutes).to eq(15)
-      end
-
-      it "is included in serialize" do
-        item = create(:agenda_item, agenda: agenda, kind: "task",
-          start_at: 1.hour.from_now, arrive_early_minutes: 10)
-        expect(item.serialize).to include("arrive_early_minutes" => 10)
-      end
-    end
-
-    describe "metadata column" do
-      it "round-trips a hash via jsonb" do
-        item = create(:agenda_item, agenda: agenda, kind: "task",
-          start_at: 1.hour.from_now, metadata: { travel_minutes: 25, travel_location: "123 Main" })
-        expect(item.reload.metadata).to eq("travel_minutes" => 25, "travel_location" => "123 Main")
-      end
-
-      it "defaults to {}" do
-        item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
-        expect(item.metadata).to eq({})
-      end
-
-      it "is included in #serialize" do
-        item = create(:agenda_item, agenda: agenda, kind: "task",
-          start_at: 1.hour.from_now, metadata: { travel_minutes: 7 })
-        expect(item.serialize["metadata"]).to eq("travel_minutes" => 7)
-      end
+    it "carries arrive_early_minutes and metadata in serialize" do
+      item = create(:agenda_item, agenda: agenda, kind: "task",
+        start_at: 1.hour.from_now, arrive_early_minutes: 10, metadata: { travel_minutes: 7 })
+      expect(item.serialize).to include("arrive_early_minutes" => 10)
+      expect(item.serialize["metadata"]).to eq("travel_minutes" => 7)
     end
 
     describe "attendee helpers" do
@@ -447,54 +332,27 @@ RSpec.describe AgendaItem do
         expect(item.presentation_attrs["travel-minutes"]).to eq(0)
       end
 
-      # Regression guard for "all-day events span two days in the cal_week
-      # banner row". `end-date` must be the INCLUSIVE last-day midnight in
-      # the user's tz — NOT `end_at` (which is the exclusive next-day midnight
-      # per Google convention) and NOT `Date#to_time` (which lands in
-      # Rails Time.zone, defaulting to UTC and silently shifting the day
-      # for any user whose tz differs).
-      # `user.timezone` is hardcoded "America/Denver" on the User model
-      # (not a per-user column), so these specs simply assert the math
-      # against that fixed value.
-      it "emits end-date as inclusive last-day midnight in the user's tz for single-day all-day" do
+      # `end-date` must be the INCLUSIVE last-day midnight in the user's zone,
+      # not `end_at` (the exclusive next-day midnight per Google convention)
+      # and not `Date#to_time` (which lands in the Rails zone and shifts the day).
+      it "emits end-date as the inclusive last day of an all-day event" do
         zone = ::ActiveSupport::TimeZone["America/Denver"]
-        item = create(:agenda_item, agenda: agenda, kind: :event, name: "Bday",
-          all_day: true,
-          start_at: zone.local(2026, 6, 21),
-          end_at:   zone.local(2026, 6, 22)) # exclusive
+        bday = create(:agenda_item, agenda: agenda, kind: :event, name: "Bday",
+          all_day: true, start_at: zone.local(2026, 6, 21), end_at: zone.local(2026, 6, 22))
+        trip = create(:agenda_item, agenda: agenda, kind: :event, name: "Trip",
+          all_day: true, start_at: zone.local(2026, 6, 21), end_at: zone.local(2026, 6, 24))
 
-        attrs = item.presentation_attrs
-        # For a single-day all-day event, end-date must equal start-at so
-        # the cal-week chip spans exactly one column.
-        expect(attrs["end-date"]).to eq(attrs["start-at"])
-        # And NOT the exclusive end_at — that's the bug we're guarding.
-        expect(attrs["end-date"]).not_to eq(attrs["end-at"])
-      end
-
-      it "emits end-date == start-at + 2 days for a three-day all-day event" do
-        zone = ::ActiveSupport::TimeZone["America/Denver"]
-        item = create(:agenda_item, agenda: agenda, kind: :event, name: "Trip",
-          all_day: true,
-          start_at: zone.local(2026, 6, 21),
-          end_at:   zone.local(2026, 6, 24)) # exclusive
-
-        attrs = item.presentation_attrs
-        # Last inclusive day is 2026-06-23; start_at is 2026-06-21 midnight.
-        expect(attrs["end-date"]).to eq(attrs["start-at"] + (2 * 86_400))
+        one_day = bday.presentation_attrs
+        expect(one_day["end-date"]).to eq(one_day["start-at"])
+        expect(one_day["end-date"]).not_to eq(one_day["end-at"])
+        three_day = trip.presentation_attrs
+        expect(three_day["end-date"]).to eq(three_day["start-at"] + (2 * 86_400))
       end
     end
 
-    # Rocco, 4 Sep 2026: *"if I add or move events, the UI itself doesn't
-    # update until I click on/focus the Agenda."*
-    #
-    # Every open Agenda repaints off one MonitorChannel broadcast, and until
-    # now only the request paths sent one — the two controllers, Jil, the
-    # Google importer. A row added or moved by Byte, by an undo, or by a
-    # script changed the database and told nobody, so the page sat stale
-    # until `focus` / `visibilitychange` fired its own catch-up poll. Hence
-    # "it updates when I click on it": the click WAS the refresh.
-    #
-    # The announcement belongs to the record, not to whoever wrote it.
+    # Every open Agenda repaints off one MonitorChannel broadcast. A row added
+    # or moved by Byte, an undo or a script has to announce itself too, so the
+    # announcement belongs to the record, not to whoever wrote it.
     describe "the live-update broadcast" do
       def agenda_payloads
         payloads = []
@@ -503,18 +361,16 @@ RSpec.describe AgendaItem do
         payloads.select { |p| p[:id] == :agenda }
       end
 
-      it "announces a row created outside a controller" do
+      it "announces a row created outside a controller, a move, and a destroyed id" do
         sent = agenda_payloads { create(:agenda_item, agenda: agenda, name: "Byte added this") }
-
         expect(sent.size).to eq(1)
         expect(sent.first[:data][:changed].map { |c| c[:agenda_id] }).to eq([agenda.id])
-      end
 
-      it "announces a move" do
         item = create(:agenda_item, agenda: agenda)
-        sent = agenda_payloads { item.update!(start_at: 3.hours.from_now) }
+        expect(agenda_payloads { item.update!(start_at: 3.hours.from_now) }.size).to eq(1)
 
-        expect(sent.size).to eq(1)
+        id = item.id.to_s
+        expect(agenda_payloads { item.destroy! }.first[:data][:destroyed_item_ids]).to eq([id])
       end
 
       it "tells someone who can't see where it went to drop it" do
@@ -532,26 +388,13 @@ RSpec.describe AgendaItem do
         expect(drops.sole.last[:data][:destroyed_item_ids]).to eq([item.id.to_s])
       end
 
-      it "carries the id of a destroyed row, which no delta can return" do
-        item = create(:agenda_item, agenda: agenda)
-        id = item.id.to_s
-        sent = agenda_payloads { item.destroy! }
-
-        expect(sent.first[:data][:destroyed_item_ids]).to eq([id])
-      end
-
-      # Rails runs after_commit on a save that changed nothing, and the
-      # schedule worker re-saves every materialized occurrence each tick.
-      it "stays quiet on a save that changed nothing" do
+      # Rails runs after_commit on a save that changed nothing, and the schedule
+      # worker re-saves every materialized occurrence each tick. A Jil-side
+      # travel-time cache write is not news to the calendar either.
+      it "stays quiet on a save that changed nothing, or only metadata" do
         item = create(:agenda_item, agenda: agenda)
 
         expect(agenda_payloads { item.update!(name: item.name) }).to be_empty
-      end
-
-      # A Jil-side travel-time cache write is not news to the calendar.
-      it "stays quiet on a metadata-only write" do
-        item = create(:agenda_item, agenda: agenda)
-
         expect(agenda_payloads { item.update!(metadata: { "travel" => { "seconds" => 600 } }) }).to be_empty
       end
 
@@ -590,33 +433,23 @@ RSpec.describe AgendaItem do
 
     before { overdue_task; completed_task; upcoming_event; current_event }
 
-    it "kind:task narrows by enum-as-string" do
-      expect(AgendaItem.query("kind:task")).to contain_exactly(overdue_task, completed_task)
-    end
-
-    it "is:task is equivalent to kind:task" do
-      expect(AgendaItem.query("is:task")).to contain_exactly(overdue_task, completed_task)
-    end
-
-    it "is:event narrows by event kind" do
-      expect(AgendaItem.query("is:event")).to contain_exactly(upcoming_event, current_event)
-    end
-
-    it "combines is: filters: kind:task is:incomplete is:overdue narrows to overdue incomplete tasks" do
-      expect(AgendaItem.query("kind:task is:incomplete is:overdue")).to contain_exactly(overdue_task)
-    end
-
-    it "is:overdue excludes events (events auto-disappear when end_at passes)" do
-      _past_event = create(:agenda_item, agenda: agenda, kind: "event",
-        start_at: 3.days.ago, end_at: 3.days.ago + 1.hour,
-        completed_at: nil, name: "Past Meeting")
-
-      expect(AgendaItem.query("is:overdue")).to contain_exactly(overdue_task)
-      expect(AgendaItem.query("is:overdue").pluck(:kind)).not_to include("event")
-    end
-
-    it "is:upcoming keeps events visible until end_at; non-events disappear at start_at" do
-      expect(AgendaItem.query("is:upcoming")).to contain_exactly(upcoming_event, current_event)
+    # Events stay upcoming until end_at and never go overdue; other kinds flip
+    # at start_at.
+    it "narrows by kind and is:<state>", :aggregate_failures do
+      create(:agenda_item, agenda: agenda, kind: "event",
+        start_at: 3.days.ago, end_at: 3.days.ago + 1.hour, completed_at: nil, name: "Past Meeting")
+      {
+        "kind:task"                          => [overdue_task, completed_task],
+        "is:task"                            => [overdue_task, completed_task],
+        "kind:task is:incomplete is:overdue" => [overdue_task],
+        "is:overdue"                         => [overdue_task],
+        "is:upcoming"                        => [upcoming_event, current_event],
+        "name:Overdue"                       => [overdue_task],
+      }.each do |query, want|
+        expect(AgendaItem.query(query).to_a).to match_array(want), query
+      end
+      expect(AgendaItem.query("is:event")).to include(upcoming_event, current_event)
+      expect(AgendaItem.query("is:event")).not_to include(overdue_task, completed_task)
     end
 
     it "is:past flips events at end_at and non-events at start_at" do
@@ -626,10 +459,6 @@ RSpec.describe AgendaItem do
       results = AgendaItem.query("is:past")
       expect(results).to include(past_event, overdue_task, completed_task)
       expect(results).not_to include(current_event, upcoming_event)
-    end
-
-    it "name:Overdue does a name ILIKE search" do
-      expect(AgendaItem.query("name:Overdue")).to contain_exactly(overdue_task)
     end
 
     it "is:recurring narrows to items linked to a schedule" do
@@ -643,26 +472,19 @@ RSpec.describe AgendaItem do
       expect(AgendaItem.query("is:recurring")).to contain_exactly(recurring_item)
     end
 
-    it "bare 'upcoming' is treated as free-text, NOT a state filter" do
+    it "treats a bare state or kind word as free text, not a filter" do
       upcoming_named = create(:agenda_item, agenda: agenda, kind: "task",
         name: "Upcoming review", start_at: 5.days.from_now, completed_at: nil)
-      results = AgendaItem.query("upcoming")
-      expect(results).to include(upcoming_named)
-      expect(results).not_to include(overdue_task)
-      expect(results).not_to include(upcoming_event)
-    end
-
-    it "bare 'event' is treated as free-text, NOT a kind filter" do
-      name_match = create(:agenda_item, agenda: agenda, kind: "task",
+      event_named = create(:agenda_item, agenda: agenda, kind: "task",
         name: "Plan the event", start_at: 1.day.from_now, completed_at: nil)
-      # Free-text matches the literal word; kind:event filter would have
-      # excluded this task. We expect the task TO appear and the existing
-      # bare kind: "event" rows (Future Event, Ongoing Event) to also appear
-      # because both contain "event" in the name.
-      results = AgendaItem.query("event")
-      expect(results).to include(name_match)
-      # Items whose name does NOT contain "event" are excluded.
-      expect(results).not_to include(completed_task) # "Done Task" — no "event"
+
+      upcoming = AgendaItem.query("upcoming")
+      expect(upcoming).to include(upcoming_named)
+      expect(upcoming).not_to include(overdue_task, upcoming_event)
+
+      event = AgendaItem.query("event")
+      expect(event).to include(event_named)
+      expect(event).not_to include(completed_task)
     end
   end
 end

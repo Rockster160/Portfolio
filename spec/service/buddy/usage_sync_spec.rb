@@ -169,22 +169,11 @@ RSpec.describe Buddy::UsageSync do
       expect(described_class.backfill!).to be_empty
     end
 
-    it "leaves out rows that arrived from somewhere else" do
+    # The suite's token counts are invented, and production rows in a restored
+    # backup are already counted there.
+    it "leaves out rows from elsewhere, the suite's own, and a restored backup's", :aggregate_failures do
       usage(origin_uid: "elsewhere:development:1:2026-08-01T00:00:00.000Z")
-
-      expect(described_class.backfill!).to be_empty
-    end
-
-    # The fake client invents its token counts, so they are not money.
-    it "leaves out the suite's own rows" do
       usage(env: :test)
-
-      expect(described_class.backfill!).to be_empty
-    end
-
-    # Development here is a restore of a production backup: those rows were
-    # spent by production and are already counted there.
-    it "leaves out rows a restored backup brought in" do
       usage(env: :production)
 
       expect(described_class.backfill!).to be_empty

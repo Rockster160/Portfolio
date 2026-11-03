@@ -63,17 +63,15 @@ RSpec.describe Jil::Methods::Chore, type: :service do
   describe "#withdraw" do
     before { 5.times { ChoreCompleter.new(vitamins, user).call } }
 
-    it "creates a withdrawal and returns it" do
+    it "creates a withdrawal for a positive amount and nothing otherwise", :aggregate_failures do
+      expect(methods.withdraw(0)).to be_nil
+      expect(methods.withdraw(-1)).to be_nil
+
       record = methods.withdraw(3, "snack")
       expect(record).to be_a(ChoreWithdrawal)
       expect(record.amount_pebbles).to eq(3)
       expect(record.note).to eq("snack")
       expect(user.reload.chore_balance).to eq(2) # 5 earned - 3 withdrawn
-    end
-
-    it "returns nil for non-positive amounts" do
-      expect(methods.withdraw(0)).to be_nil
-      expect(methods.withdraw(-1)).to be_nil
     end
   end
 
@@ -84,27 +82,18 @@ RSpec.describe Jil::Methods::Chore, type: :service do
       20.times { ChoreCompleter.new(vitamins, user).call }
     end
 
-    it "transfers pebbles to a household user resolved by username" do
+    it "transfers to a household user by username or id, and to nobody else", :aggregate_failures do
+      expect(methods.transfer(5, create(:user).username)).to be_nil
+      expect(methods.transfer(5, "nobody-by-that-name")).to be_nil
+
       record = methods.transfer(7, recipient.username, "thx")
       expect(record).to be_a(ChoreTransfer)
       expect(record.to_user_id).to eq(recipient.id)
       expect(record.amount_pebbles).to eq(7)
       expect(user.reload.chore_balance).to eq(13)
       expect(recipient.reload.chore_balance).to eq(7)
-    end
 
-    it "accepts a numeric recipient id" do
-      record = methods.transfer(2, recipient.id)
-      expect(record&.to_user_id).to eq(recipient.id)
-    end
-
-    it "returns nil for a non-household recipient" do
-      stranger = create(:user)
-      expect(methods.transfer(5, stranger.username)).to be_nil
-    end
-
-    it "returns nil for an unknown user" do
-      expect(methods.transfer(5, "nobody-by-that-name")).to be_nil
+      expect(methods.transfer(2, recipient.id)&.to_user_id).to eq(recipient.id)
     end
   end
 
@@ -133,7 +122,7 @@ RSpec.describe Jil::Methods::Chore, type: :service do
 
     it "filters via tokenized query — `amount>N` works across all three feeds" do
       # Earn enough that the withdrawal + transfer validations clear.
-      30.times { ChoreCompleter.new(vitamins, user).call }
+      17.times { ChoreCompleter.new(vitamins, user).call }
       create(:chore_withdrawal, user: user, amount_pebbles: 1, note: "small")
       create(:chore_withdrawal, user: user, amount_pebbles: 9, note: "big")
       big_chore = create(:chore, created_by_user: user, name: "Big", reward_pebbles: 10)
@@ -219,17 +208,6 @@ RSpec.describe Jil::Methods::Chore, type: :service do
   end
 
   describe "#add" do
-    before do
-      allow(jil_stub).to receive(:cast) { |val, type|
-        case type
-        when :Hash    then val.is_a?(Hash) ? val : {}
-        when :Boolean then ::ActiveModel::Type::Boolean.new.cast(val)
-        when :Numeric then val.to_i
-        else val
-        end
-      }
-    end
-
     it "creates a chore from a minimal hash" do
       record = methods.add({ name: "Buy Milk" })
       expect(record).to be_a(Chore)
@@ -273,25 +251,11 @@ RSpec.describe Jil::Methods::Chore, type: :service do
   end
 
   describe "#update" do
-    before do
-      allow(jil_stub).to receive(:cast) { |val, type|
-        case type
-        when :Hash    then val.is_a?(Hash) ? val : {}
-        when :Boolean then ::ActiveModel::Type::Boolean.new.cast(val)
-        when :Numeric then val.to_i
-        else val
-        end
-      }
-    end
-
-    it "updates show_on_today_view from a ChoreData hash" do
+    it "updates show_on_today_view from a ChoreData hash, both ways" do
       record = methods.update("Vitamins", { show_on_today_view: "always" })
       expect(record.id).to eq(vitamins.id)
       expect(record.show_on_today_view).to eq("always")
-    end
 
-    it "round-trips :always → :never" do
-      methods.update("Vitamins", { show_on_today_view: "always" })
       methods.update("Vitamins", { show_on_today_view: "never" })
       expect(vitamins.reload.show_on_today_view).to eq("never")
     end

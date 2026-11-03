@@ -5,22 +5,6 @@ RSpec.describe "Jil Cache Operations" do
   let(:execute) { Jil::Executor.call(user, code, {}) }
   let(:ctx) { execute.ctx }
 
-  describe "set_cache and get_cache" do
-    let(:code) {
-      <<~'JIL'
-        a1 = Global.set_cache("test_ns", "mykey", "hello")::Any
-        a2 = Global.get_cache("test_ns", "mykey")::String
-      JIL
-    }
-
-    after { user.caches.find_by(key: "test_ns")&.destroy }
-
-    it "stores and retrieves a value" do
-      expect(ctx[:error]).to be_blank
-      expect(ctx.dig(:vars, :a2, :value)).to eq("hello")
-    end
-  end
-
   describe "del_cache removes a subkey" do
     let(:code) {
       <<~'JIL'

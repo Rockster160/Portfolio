@@ -18,31 +18,15 @@ RSpec.describe InterviewPrep do
       MD
     }
 
-    it "takes the title off the top so the page has a real heading" do
+    # The title and kind become columns, so they come out of the body and the
+    # rest is kept as written.
+    it "lifts the title and kind off the top and keeps the rest as written", :aggregate_failures do
       prep = described_class.from_report(report, job_application: job)
 
       expect(prep.title).to eq("Technical screen with Bluestaq")
-    end
-
-    it "takes the kind, which is what the heading and the push say it is" do
-      prep = described_class.from_report(report, job_application: job)
-
       expect(prep.kind).to eq("technical")
-      expect(prep.kind_label).to eq("Technical interview")
-    end
-
-    # Both lines became columns. Left in the body they are a heading repeated
-    # under itself and a stray `KIND:` line in the middle of the prose.
-    it "keeps them out of the body" do
-      prep = described_class.from_report(report, job_application: job)
-
       expect(prep.body).to start_with("## The company")
       expect(prep.body).not_to include("KIND:")
-    end
-
-    it "keeps the rest exactly as it was written" do
-      prep = described_class.from_report(report, job_application: job)
-
       expect(prep.body).to include("- Ruby's Enumerable, specifically lazy")
     end
 
@@ -79,32 +63,18 @@ RSpec.describe InterviewPrep do
       prep = described_class.from_report("# A call\nKIND: pairing\n\nbody", job_application: job)
 
       expect(prep.kind).to eq("pairing")
-      expect(prep.kind_label).to eq("Pairing")
     end
   end
 
   describe "when the interview is" do
-    it "is upcoming while it is still ahead" do
-      prep = job.preps.new(body: "x", interview_at: 1.hour.from_now)
+    # Asked for by hand, with nothing counting down to it, is neither.
+    it "is upcoming while ahead, spent once past, and neither with no time", :aggregate_failures do
+      [[1.hour.from_now, true, false], [1.hour.ago, false, true], [nil, false, false]].each do |at, upcoming, spent|
+        prep = job.preps.new(body: "x", interview_at: at)
 
-      expect(prep).to be_upcoming
-      expect(prep).not_to be_spent
-    end
-
-    it "is spent once it has happened" do
-      prep = job.preps.new(body: "x", interview_at: 1.hour.ago)
-
-      expect(prep).to be_spent
-      expect(prep).not_to be_upcoming
-    end
-
-    # Asked for by hand, with nothing counting down to it. Neither state is
-    # true, and the page says the day it was written instead.
-    it "is neither when nobody said" do
-      prep = job.preps.new(body: "x")
-
-      expect(prep).not_to be_spent
-      expect(prep).not_to be_upcoming
+        expect(prep.upcoming?).to eq(upcoming), "upcoming? at #{at.inspect}"
+        expect(prep.spent?).to eq(spent), "spent? at #{at.inspect}"
+      end
     end
   end
 end

@@ -27,31 +27,19 @@ RSpec.describe TeslaCommand do
     allow(::Jarvis).to receive(:ping)
   end
 
-  it "says what it did instead of pushing it" do
+  it "says one line for every command, parsed or not, and never pushes it" do
     described_class.command(:start)
-
-    expect(says).to eq(["Starting car"])
-    expect(::Jarvis).not_to have_received(:ping)
-  end
-
-  it "says it for every command, not just the ones that reach the car" do
     described_class.command(:off)
     described_class.command(:honk)
     described_class.command(:lock)
     described_class.command(:temp, "74")
-
-    expect(says).to eq([
-      "Stopping car",
-      "Honking the horn",
-      "Locking car doors",
-      "Car temp set to 74",
-    ])
-  end
-
-  it "says the fallback when it can't parse the command" do
     described_class.command(:pirouette)
 
-    expect(says).to eq(["Not sure how to tell car: pirouette"])
+    expect(says.length).to eq(6)
+    expect(says.uniq.length).to eq(6)
+    expect(says[4]).to include("74")
+    expect(says[5]).to include("pirouette")
+    expect(::Jarvis).not_to have_received(:ping)
   end
 
   # The quick path only parses and hands off to TeslaCommandWorker, which

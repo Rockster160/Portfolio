@@ -119,6 +119,28 @@ RSpec.describe Jil::Methods::ActionEvent do
     end
   end
 
+  # A missing input casts to a negative-year Date; ActionEventData.timestamp
+  # drops it, so the event lands at the current time rather than the epoch.
+  describe "#create with a timestamp that was never passed in" do
+    let(:code) {
+      <<-JIL
+        input = Global.input_data()::Hash
+        ts = input.get("timestamp")::Date
+        q9693 = ActionEvent.create({
+          jd135 = ActionEventData.name("MoneyJar")::ActionEventData
+          ts1 = ActionEventData.timestamp(ts)::ActionEventData
+        })::ActionEvent
+      JIL
+    }
+
+    it "stamps the event at the current time" do
+      now = Time.zone.local(2026, 5, 6, 10, 0, 0)
+      Timecop.freeze(now) { expect_successful_jil }
+
+      expect(ctx.dig(:vars, :q9693, :value).timestamp).to be_within(1.second).of(now)
+    end
+  end
+
   describe "#bulk_destroy" do
     let!(:inside_old_1) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 8.days.ago) }
     let!(:inside_old_2) { user.action_events.create(name: "Whisper", notes: "Inside", timestamp: 10.days.ago) }
@@ -132,24 +154,16 @@ RSpec.describe Jil::Methods::ActionEvent do
       JIL
     }
 
-    it "deletes matching events and returns the count" do
-      expect_successful_jil
+    it "deletes matching events and returns the count, without per-event broadcasts or triggers" do
+      expect(::Jil).not_to receive(:trigger).with(anything, :event, anything, any_args)
+      expect {
+        expect_successful_jil
+      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
 
       expect(ctx.dig(:vars, :count, :class)).to eq(:Numeric)
       expect(ctx.dig(:vars, :count, :value)).to eq(2)
       expect(::ActionEvent.where(id: [inside_old_1.id, inside_old_2.id])).to be_empty
       expect(::ActionEvent.where(id: [outside_old.id, whisper_recent.id, other_event.id]).count).to eq(3)
-    end
-
-    it "does not enqueue per-event broadcast workers" do
-      expect {
-        expect_successful_jil
-      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
-    end
-
-    it "does not fire Jil event triggers for each deletion" do
-      expect(::Jil).not_to receive(:trigger).with(anything, :event, anything, any_args)
-      expect_successful_jil
     end
 
     context "when limit caps the deletion" do
@@ -180,19 +194,15 @@ RSpec.describe Jil::Methods::ActionEvent do
       JIL
     }
 
-    it "updates matching events and returns the count" do
-      expect_successful_jil
+    it "updates matching events and returns the count, without per-event broadcasts" do
+      expect {
+        expect_successful_jil
+      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
 
       expect(ctx.dig(:vars, :count, :value)).to eq(2)
       expect(e1.reload.notes).to eq("Archived")
       expect(e2.reload.notes).to eq("Archived")
       expect(other.reload.notes).to eq("Inside")
-    end
-
-    it "does not enqueue per-event broadcast workers" do
-      expect {
-        expect_successful_jil
-      }.not_to have_enqueued_job(ActionEventBroadcastWorker)
     end
   end
 

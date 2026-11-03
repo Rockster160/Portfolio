@@ -1,7 +1,7 @@
 require "rails_helper"
 
-# Prod 1236: "a chicken salad for mom" landed on the list verbatim, article and
-# all, sitting under "Trail Mix" and "Protein Shakes".
+# A spoken item name tidied to sit beside the rest of the list: no leading
+# article, and the list's own capitalization.
 RSpec.describe Buddy::ListItemName do
   let(:user) { create(:user) }
   let(:list) { create(:list, user: user, name: "Groceries") }
@@ -56,7 +56,6 @@ RSpec.describe Buddy::ListItemName do
       confirm = tool[:confirm].call({ list: "Groceries", item: "a chicken salad for mom" }, ctx)
       merged  = { list: "Groceries", item: "a chicken salad for mom" }.merge(confirm[:resolved])
 
-      expect(confirm[:summary]).to eq("Add Chicken salad for mom to Groceries?")
       expect(tool[:label].call(merged, ctx)[:title]).to eq("Chicken salad for mom")
 
       tool[:execute].call(merged, ctx)

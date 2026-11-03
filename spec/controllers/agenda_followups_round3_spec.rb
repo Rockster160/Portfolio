@@ -1,23 +1,29 @@
 require "rails_helper"
 
-# Round-3 audit followups:
-#   * Series cross-source refusal returns 422 (no DoubleRenderError) — #1
-#   * Cross-source occurrence move rolls back on Google failure — #2
-#   * Google→local recurring move adds local excluded_date so the source
-#     agenda doesn't render a ghost phantom until next sync — #3
-#   * Kind cannot be flipped to non-event on a Google agenda — #4
-#   * AgendaPreference is pruned when an agenda is destroyed — #7
-#   * `:agenda_sync` trigger is skipped on no-op syncs — #8
-#   * AgendaSchedule#serialize_for_edit carries all_day + the other
-#     fields the edit modal needs to round-trip — #31
+# Moving and editing items across Google and local agendas:
+#   * Series moves: same-account Google moves use events.move; cross-account
+#     and cross-source series moves are refused.
+#   * A cross-source occurrence move rolls back on Google failure, and on
+#     success excludes the date locally so no ghost phantom renders.
+#   * Kind stays :event on a Google agenda (refused, or coerced on a move).
+#   * A lock timeout surfaces as 503.
 RSpec.describe AgendaItemsController, type: :controller do
   let(:user) { create(:user) }
   let(:google_account) {
     GoogleAccount.create!(user: user, email: "r3@example.com", access_token: "t", refresh_token: "r")
   }
+  let(:other_google_account) {
+    GoogleAccount.create!(user: user, email: "other-r3@example.com", access_token: "t2", refresh_token: "r2")
+  }
   let(:gcal_agenda) {
     create(:agenda, user: user, source: :google, external_id: "cal-r3",
            google_account: google_account)
+  }
+  let(:gcal_agenda_b) {
+    create(:agenda, user: user, source: :google, external_id: "cal-r3b", google_account: google_account)
+  }
+  let(:other_gcal_agenda) {
+    create(:agenda, user: user, source: :google, external_id: "cal-other", google_account: other_google_account)
   }
   let(:local_agenda) { create(:agenda, user: user) }
   let(:api) { instance_double(Oauth::GoogleApi) }
@@ -45,7 +51,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       )
     }
 
-    it "returns 422 with the unsupported-move message and does NOT raise DoubleRenderError" do
+    it "returns 422 for a cross-source series move without raising DoubleRenderError" do
       expect {
         patch :update, params: {
           id:          item.id,
@@ -54,7 +60,36 @@ RSpec.describe AgendaItemsController, type: :controller do
         }, format: :json
       }.not_to raise_error
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["errors"].first).to match(/Series moves/i)
+      expect(sched.reload.agenda_id).to eq(gcal_agenda.id)
+    end
+
+    it "calls events.move and re-parents locally for a same-account Google move" do
+      allow(api).to receive(:patch_event).and_return({})
+      expect(api).to receive(:move_event).with(
+        gcal_agenda.external_id, "evt-series-r3", gcal_agenda_b.external_id
+      ).and_return({ etag: %("e-moved"), updated: "2026-05-23T12:00:00Z" })
+
+      patch :update, params: {
+        id:          item.id,
+        scope:       "series",
+        agenda_item: { agenda_id: gcal_agenda_b.id, name: "Weekly Renamed" },
+      }, format: :json
+
+      expect(response.status).to be_in([200, 204])
+      expect(sched.reload.agenda_id).to eq(gcal_agenda_b.id)
+      expect(sched.external_etag).to eq(%("e-moved"))
+    end
+
+    it "refuses cross-account series moves with a 502" do
+      allow(api).to receive(:patch_event).and_return({})
+      patch :update, params: {
+        id:          item.id,
+        scope:       "series",
+        agenda_item: { agenda_id: other_gcal_agenda.id, name: "Weekly" },
+      }, format: :json
+
+      expect(response).to have_http_status(:bad_gateway)
+      expect(sched.reload.agenda_id).to eq(gcal_agenda.id)
     end
   end
 
@@ -124,8 +159,16 @@ RSpec.describe AgendaItemsController, type: :controller do
       }, format: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["errors"].first).to match(/Only events/i)
       expect(item.reload.kind).to eq("event")
+    end
+
+    it "renders 503 when the advisory lock can't be acquired" do
+      allow(Agenda).to receive(:with_advisory_lock_result).and_return(WithAdvisoryLock::Result.new(false))
+
+      patch :update, params: { id: item.id, agenda_item: { name: "Renamed" } }, format: :json
+
+      expect(response).to have_http_status(:service_unavailable)
+      expect(item.reload.name).to eq("Synced")
     end
 
     it "refuses to move a task into a Google agenda" do
@@ -137,12 +180,29 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(response).to have_http_status(:unprocessable_entity)
       expect(task.reload.agenda_id).to eq(local_agenda.id)
     end
+
+    # Without an explicit kind, the source-side kind=task would otherwise
+    # persist into the Google agenda.
+    it "forces a moved task to kind=event on an occurrence move into a Google agenda" do
+      task = local_agenda.agenda_items.create!(kind: :task, name: "Buy milk", start_at: 1.hour.from_now)
+      allow(api).to receive(:insert_event).and_return({ id: "new-uid", etag: %("e1") })
+
+      patch :update, params: {
+        id:          task.id,
+        scope:       "occurrence",
+        agenda_item: { agenda_id: gcal_agenda.id, name: "Buy milk" },
+      }, format: :json
+
+      expect(response).to be_successful
+      expect(task.reload.kind).to eq("event")
+      expect(task.agenda_id).to eq(gcal_agenda.id)
+    end
   end
 end
 
 RSpec.describe Agenda, type: :model do
   describe "after_destroy prunes from AgendaPreference" do
-    it "removes the agenda's id from every user's hidden_agenda_ids" do
+    it "removes the agenda's id from every user's hidden_agenda_ids and broadcasts" do
       owner    = create(:user, phone: 10.times.map { rand(0..9) }.join)
       sharer   = create(:user, phone: 10.times.map { rand(0..9) }.join)
       agenda   = create(:agenda, user: owner)
@@ -151,6 +211,7 @@ RSpec.describe Agenda, type: :model do
       AgendaPreference.create!(user: owner,  hidden_agenda_ids: [agenda.id, keeper.id])
       AgendaPreference.create!(user: sharer, hidden_agenda_ids: [agenda.id])
 
+      expect(MonitorChannel).to receive(:broadcast_to).at_least(:once)
       agenda.destroy
 
       expect(AgendaPreference.find_by(user: owner).hidden_agenda_ids).to eq([keeper.id])
@@ -219,6 +280,31 @@ RSpec.describe GoogleCalendar::Sync, type: :model do
 
     it "doesn't fire :agenda_sync when the page returns zero events" do
       allow(api).to receive(:list_events).and_return({ items: [], nextSyncToken: "n1" })
+      triggered = []
+      allow(::Jil::Executor).to receive(:trigger) { |_u, scope, _d, **_kw| triggered << scope }
+
+      described_class.new(agenda).run!
+      expect(triggered).not_to include(:agenda_sync)
+    end
+
+    it "doesn't fire :agenda_sync when every event in the page is fast-skipped" do
+      AgendaItem.create!(
+        agenda:        agenda,
+        kind:          :event,
+        name:          "Already synced",
+        start_at:      Time.zone.parse("2026-05-23T14:00:00-04:00"),
+        end_at:        Time.zone.parse("2026-05-23T15:00:00-04:00"),
+        external_uid:  "evt-cached",
+        external_etag: %("matching-etag"),
+      )
+      event = {
+        id: "evt-cached", status: "confirmed", summary: "Already synced",
+        start: { dateTime: "2026-05-23T14:00:00-04:00" },
+        end:   { dateTime: "2026-05-23T15:00:00-04:00" },
+        etag:  %("matching-etag"),
+        updated: "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return({ items: [event], nextSyncToken: "n1" })
       triggered = []
       allow(::Jil::Executor).to receive(:trigger) { |_u, scope, _d, **_kw| triggered << scope }
 

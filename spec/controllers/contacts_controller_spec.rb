@@ -17,23 +17,14 @@ RSpec.describe ContactsController, type: :controller do
       expect(body).to eq({ "name" => "Mom", "address" => "123 Main St, Anytown, CA" })
     end
 
-    it "returns an empty object when the contact has no address" do
+    it "returns an empty object when the contact has no address, nobody matches, or the name is blank" do
       user.contacts.create!(name: "Friend")
-      get :lookup, params: { name: "Friend" }
-      expect(response).to be_successful
-      expect(JSON.parse(response.body)).to eq({})
-    end
 
-    it "returns an empty object when no contact matches" do
-      get :lookup, params: { name: "Nobody" }
-      expect(response).to be_successful
-      expect(JSON.parse(response.body)).to eq({})
-    end
-
-    it "returns an empty object for a blank name" do
-      get :lookup, params: { name: "" }
-      expect(response).to be_successful
-      expect(JSON.parse(response.body)).to eq({})
+      ["Friend", "Nobody", ""].each do |name|
+        get :lookup, params: { name: name }
+        expect(response).to be_successful
+        expect(JSON.parse(response.body)).to eq({}), name
+      end
     end
 
     it "does not leak addresses from other users' contacts" do

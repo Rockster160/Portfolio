@@ -77,7 +77,7 @@ RSpec.describe SimpleFin::AmazonNote do
   end
 
   describe ".rename!" do
-    it "renames the row the charge paid for" do
+    it "renames the row the charge paid for, and the delivery trigger carries it onto the charge" do
       stock!([row])
       transaction = charge
 
@@ -85,14 +85,6 @@ RSpec.describe SimpleFin::AmazonNote do
 
       AmazonOrder.clear
       expect(AmazonOrder.find("114-0471911-2289867").name).to eq("Pill Box")
-    end
-
-    it "carries the new name onto the charge, through the delivery trigger" do
-      stock!([row])
-      transaction = charge
-
-      described_class.rename!(transaction, "Pill Box")
-
       expect(transaction.reload.memo).to eq("Pill Box")
     end
 

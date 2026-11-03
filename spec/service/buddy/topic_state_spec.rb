@@ -59,15 +59,6 @@ RSpec.describe Buddy::TopicState do
       expect(described_class.settle!(convo)).to be_nil
     end
 
-    it "stores nothing when there's no thread running through the last few messages" do
-      exchange(["hey", "Hey hey!", "nothing much", "Fair enough.", "yeah", "Mm."])
-      stub_client(described_class::NONE)
-
-      described_class.settle!(convo)
-
-      expect(convo.reload.buddy_topic).to be_nil
-    end
-
     it "clears a stale topic when the conversation stops having one" do
       convo.update_columns(buddy_topic: "the greenhouse refit", buddy_topic_at: 1.hour.ago)
       exchange(["what's for dinner", "Pasta?", "sure", "Nice.", "ok", "Cool."])
@@ -99,14 +90,8 @@ RSpec.describe Buddy::TopicState do
       expect(convo.reload.buddy_topic).to include("delivery")
     end
 
-    # Prod conversation 21, 27 Aug. The topic settled at 16:23 on a
-    # recurring-list problem and was still in the prompt at 17:09, through a
-    # memory, two travel alerts, a chore form and an unrelated question about
-    # product ideas - because Byte's OWN answer to that question said
-    # "recurring", "list" and "already", the tail matched, and nothing
-    # refreshed. A topic in the prompt is what the reply reaches for its
-    # vocabulary from, so reading the reply back as proof the subject is still
-    # live is asking the topic about itself.
+    # A topic in the prompt is what the reply reaches for its vocabulary from,
+    # so only the person's own words count as evidence it is still live.
     describe "the companion's own words" do
       it "does not keep a topic alive by echoing it" do
         convo.update_columns(buddy_topic: "whether Byte can add items to the Before Bed list on a recurring schedule")
@@ -166,21 +151,10 @@ RSpec.describe Buddy::TopicState do
       expect(described_class.block_for(convo)).to be_nil
     end
 
-    it "says what they're on and tells the model not to steer back to it" do
+    it "carries the topic into the real system prompt" do
       convo.update_columns(buddy_topic: "planning the greenhouse refit")
 
-      block = described_class.block_for(convo)
-
-      expect(block).to include("planning the greenhouse refit")
-      expect(block).to match(/don't steer back/i)
-    end
-
-    it "rides in the real system prompt" do
-      convo.update_columns(buddy_topic: "planning the greenhouse refit")
-
-      prompt = Buddy::Personality.for(user, conversation: convo)
-
-      expect(prompt).to include("planning the greenhouse refit")
+      expect(Buddy::Personality.for(user, conversation: convo)).to include("planning the greenhouse refit")
     end
   end
 

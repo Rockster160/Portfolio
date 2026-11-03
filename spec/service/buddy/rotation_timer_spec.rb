@@ -1,12 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Buddy::RotationTimer do
-  # The laundry button used to call `Custom.RemindTimer`, which parked a Schedule
-  # row nobody could see and, 75 minutes later, put "Rotate Laundry" on the TODO
-  # list. Rocco: "clicking the Laundry Button sets a timer that's effectively
-  # invisible and then adds an item in my Todo list."
-  #
-  # What it is now: a countdown on the hero that ends with a question, and a
+  # A countdown on the hero that ends with a question, and a
   # second press of the button that means "I rotated it".
   let(:user) { User.me }
   let!(:convo) {
@@ -51,24 +46,15 @@ RSpec.describe Buddy::RotationTimer do
   end
 
   describe "starting one" do
-    it "is a Buddy timer, so it counts down where they can see it" do
+    it "is a visible Buddy timer carrying its follow-up, with a receipt", :aggregate_failures do
       timer = start!
+      spec = described_class.spec_for(timer)
 
       expect(timer.duration_ms).to eq(4_500_000)
       expect(timer.name).to eq("Rotate Laundry")
       expect(timer).to be_running
       expect(Buddy::Timers.live_for(user)).to include(timer)
-    end
-
-    it "leaves a receipt, because a press on the wall shows up nowhere else" do
-      start!
-
-      expect(said.last.body).to include("started").and include("Rotate Laundry")
-    end
-
-    it "carries the follow-up rather than assuming one" do
-      spec = described_class.spec_for(start!)
-
+      expect(said.last.body).to include("Rotate Laundry")
       expect(spec["key"]).to eq("laundry")
       expect(spec["item"]).to eq("Fold Laundry")
       expect(spec["list"]).to eq("TODO")
@@ -90,16 +76,14 @@ RSpec.describe Buddy::RotationTimer do
       end
     end
 
-    it "counts the round up, so the receipt reads as going round again" do
+    it "counts the round up" do
       start!
       second = start!
 
       expect(described_class.spec_for(second)["round"]).to eq(2)
-      expect(said.last.body).to include("restarted")
     end
 
-    # "Clicking the button again should effectively be the same as clicking the
-    # 'Rotated' button, marking the prompt as completed as well."
+    # A second press is the same as tapping "Rotated".
     it "answers a question already on screen" do
       described_class.on_fired(start!, convo)
       asked = card
@@ -142,33 +126,22 @@ RSpec.describe Buddy::RotationTimer do
   end
 
   describe "the fire" do
-    it "asks instead of announcing, with the three answers on screen" do
+    it "asks with the three answers on screen, naming the follow-up on Done, and pushes", :aggregate_failures do
       described_class.on_fired(start!, convo)
 
       expect(card.buttons.pluck("value")).to eq(%w[again done skip])
       expect(card.buttons.first["label"]).to eq("Rotated")
       expect(card.multi_select).to be(false)
-    end
-
-    it "names the follow-up on the Done button, so it isn't a surprise" do
-      described_class.on_fired(start!, convo)
-
-      expect(card.buttons[1]["description"]).to eq("Puts Fold Laundry on TODO")
+      expect(card.buttons[1]["description"]).to include("Fold Laundry", "TODO")
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(
+        hash_including(title: "Rotate Laundry"),
+      )
     end
 
     it "says nothing about a follow-up when there isn't one" do
       described_class.on_fired(start!(item: nil, list: nil), convo)
 
       expect(card.buttons[1]).not_to have_key("description")
-    end
-
-    # You are in another room when the washer finishes. That is the whole case.
-    it "pushes" do
-      described_class.on_fired(start!, convo)
-
-      expect(WebPushNotifications).to have_received(:send_to_byte).with(
-        hash_including(title: "Rotate Laundry"),
-      )
     end
 
     # The noise is the point: this is a countdown they set, not a wait.
@@ -222,14 +195,10 @@ RSpec.describe Buddy::RotationTimer do
 
     # Answering the question IS the acknowledgement — otherwise the same thing
     # has to be dismissed twice, once on the card and once on the ringing chip.
-    it "clears the ringing chip either way" do
-      tap!(card, described_class::SKIP)
+    it "Skip clears the ringing chip and leaves nothing behind" do
+      expect { tap!(card, described_class::SKIP) }.not_to(change(ListItem, :count))
 
       expect(described_class.live_timer(user, "laundry")).to be_nil
-    end
-
-    it "Skip leaves nothing behind" do
-      expect { tap!(card, described_class::SKIP) }.not_to(change(ListItem, :count))
     end
 
     # The escape hatch: anything else the round should set off stays in Jil,
@@ -244,9 +213,7 @@ RSpec.describe Buddy::RotationTimer do
     end
   end
 
-  # "Can Buddy start one up by command instead of doing it manually in Jil?"
-  # `Buddy.rotate` in a task is one door; this is the other, and it's the one
-  # anybody who isn't writing Jil has.
+  # `Buddy.rotate` in a task is one door; this tool is the other.
   describe "the set_rotation tool" do
     let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
     let(:tool) { Buddy::Tools[:set_rotation] }
@@ -258,10 +225,6 @@ RSpec.describe Buddy::RotationTimer do
       Buddy::Tools.dispatch(tool, payload.merge(resolved), ctx)
     end
 
-    it "runs on a receipt rather than a checkbox, same as set_timer" do
-      expect(tool[:auto]).to be(true)
-    end
-
     it "starts the loop and says what it will leave behind" do
       result = ask(
         label: "Rotate the laundry", minutes: 75,
@@ -271,8 +234,7 @@ RSpec.describe Buddy::RotationTimer do
       expect(result[:ok]).to be(true)
       timer = Timer.find(result[:data][:timer_id])
       expect(timer.duration_ms).to eq(75 * 60 * 1000)
-      expect(described_class.spec_for(timer)["again"]).to eq("Rotated")
-      expect(tool[:receipt].call(result[:data], ctx)).to include("Fold Laundry → TODO")
+      expect(described_class.spec_for(timer)).to include("again" => "Rotated", "item" => "Fold Laundry", "list" => "TODO")
     end
 
     it "works with no follow-up at all" do
@@ -293,27 +255,16 @@ RSpec.describe Buddy::RotationTimer do
       expect { tool[:confirm].call({ label: "Laundry" }, ctx) }.to raise_error(/needs a length/)
     end
 
-    # Said out loud instead of tapped. It has to reach the loop already going
-    # round rather than open a second one beside it, and they won't use the
-    # same words twice.
-    it "restarts the loop already going for that thing" do
+    # Said out loud instead of tapped, in other words: it has to reach the loop
+    # already going round, keeping the follow-up the restart didn't mention.
+    it "restarts the loop already going for that thing, keeping its follow-up", :aggregate_failures do
       start!
 
       result = ask(label: "laundry", minutes: 75)
 
       expect(Buddy::Timers.live_for(user).length).to eq(1)
       expect(result[:data][:round]).to eq(2)
-      expect(tool[:receipt].call(result[:data], ctx)).to include("restarted")
-    end
-
-    # ...and the follow-up it was already carrying comes with it, rather than
-    # being dropped because the restart didn't happen to mention it.
-    it "keeps the follow-up across a spoken restart" do
-      start!
-      ask(label: "laundry", minutes: 75)
-
-      spec = described_class.spec_for(described_class.live_timer(user, "laundry"))
-      expect(spec["item"]).to eq("Fold Laundry")
+      expect(described_class.spec_for(described_class.live_timer(user, "laundry"))["item"]).to eq("Fold Laundry")
     end
   end
 end

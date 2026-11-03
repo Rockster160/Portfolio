@@ -1119,19 +1119,15 @@ RSpec.describe AgendaTravelChain::Service do
         described_class.new(user, Date.new(2026, 6, 18)).run
       end
 
-      it "forgets the address it had for the location before" do
-        expect(evt.reload.metadata["travel"]["location_address"]).to be_nil
-      end
-
-      it "measures the drive against the location as typed instead" do
-        expect(address_book).to have_received(:traveltime_seconds)
-          .with("1060 S 900 W, Salt Lake City", any_args).at_least(:once)
-      end
-
-      # Off, so the next run tries again rather than treating the gap as
-      # settled.
-      it "leaves the fingerprint off" do
-        expect(evt.reload.metadata["travel"]["location_fingerprint"]).to be_nil
+      # The fingerprint stays off, so the next run tries again rather than
+      # treating the gap as settled.
+      it "forgets the old address, measures the typed location, and leaves the fingerprint off", :aggregate_failures do
+        meta = evt.reload.metadata["travel"]
+        expect(meta["location_address"]).to be_nil
+        expect(meta["location_fingerprint"]).to be_nil
+        expect(address_book).to have_received(:traveltime_seconds).with(
+          "1060 S 900 W, Salt Lake City", any_args,
+        ).at_least(:once)
       end
     end
 

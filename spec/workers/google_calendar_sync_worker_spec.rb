@@ -1,11 +1,8 @@
 require "rails_helper"
 
-# Critical surface: when a freshly-connected calendar fails to sync, the
-# user just sees "Never synced" forever. These specs lock in the
-# defensive behaviors that prevent silent failure:
-#   * ensure_timezone! tolerates a missing `timezone` column (pre-migration).
-#   * perform's rescue keeps the failure from disappearing into Sidekiq's
-#     dead queue and tags Slack with an actionable hint.
+# A calendar that fails to sync shows "Never synced" forever, so a sync
+# tolerates a missing `timezone` and a failing get_calendar, and a real failure
+# is re-raised for Sidekiq to retry.
 RSpec.describe GoogleCalendarSyncWorker do
   let(:user) { create(:user) }
   let(:google_account) {
@@ -50,21 +47,14 @@ RSpec.describe GoogleCalendarSyncWorker do
   end
 
   describe "failure surfacing" do
-    it "logs + re-raises so Sidekiq retries — and includes a migration hint when the error looks schema-shaped" do
-      allow(api).to receive(:list_events).and_raise(NoMethodError, "undefined method `timezone' for #<Agenda>")
-      expect(Rails.logger).to receive(:error).with(/missing migration/)
-      expect(Rails.logger).to receive(:error).at_least(:once) # backtrace
-      expect { described_class.new.perform(agenda.id) }.to raise_error(NoMethodError)
-    end
+    it "re-raises a sync failure so Sidekiq retries it, logging it on the way" do
+      [NoMethodError.new("undefined method `timezone' for #<Agenda>"), StandardError.new("unexpected")].each { |error|
+        allow(api).to receive(:list_events).and_raise(error)
+        allow(Rails.logger).to receive(:error)
 
-    it "still logs a non-migration failure, with no migration hint" do
-      allow(api).to receive(:list_events).and_raise(StandardError, "unexpected")
-      expect(Rails.logger).to receive(:error) { |msg|
-        expect(msg).to match(/FAILED StandardError/)
-        expect(msg).not_to match(/missing migration/)
+        expect { described_class.new.perform(agenda.id) }.to raise_error(error.class)
+        expect(Rails.logger).to have_received(:error).at_least(:once)
       }
-      expect(Rails.logger).to receive(:error).at_least(:once)
-      expect { described_class.new.perform(agenda.id) }.to raise_error(StandardError, "unexpected")
     end
   end
 end

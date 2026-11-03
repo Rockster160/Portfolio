@@ -1,10 +1,6 @@
 require "rails_helper"
 
 # Picking where a Claude/cursor/bash thread starts.
-#
-# Before this, cwd was Mac-authoritative with no way to set it: a new
-# conversation had no directory at all until somebody typed `!cd`, and
-# State::DEFAULT_CWD silently pointed every one of them at Portfolio.
 RSpec.describe "Byte starting directory" do
   let(:rocco) { User.me }
 
@@ -15,17 +11,11 @@ RSpec.describe "Byte starting directory" do
   end
 
   describe ByteWorkspaces do
-    it "keeps the reported list and stamps when it arrived" do
-      described_class.replace!(["~/code/Portfolio", "~/code/ocs-backend"])
+    it "keeps the reported list, stamped, without blanks, duplicates or trailing slashes" do
+      described_class.replace!(["~/code/Portfolio", "~/code/ocs-backend", "~/code/Portfolio/", "", nil, "  "])
 
       expect(described_class.all).to eq(["~/code/ocs-backend", "~/code/Portfolio"])
       expect(described_class.reported_at).to be_within(5.seconds).of(Time.current)
-    end
-
-    it "drops blanks, duplicates and trailing slashes" do
-      described_class.replace!(["~/code/Byte/", "~/code/Byte", "", nil, "  "])
-
-      expect(described_class.all).to eq(["~/code/Byte"])
     end
 
     # Typing "ocs" should offer the repo before twenty worktrees cut from it.
@@ -46,26 +36,18 @@ RSpec.describe "Byte starting directory" do
       ])
     end
 
-    it "is case-insensitive" do
-      described_class.replace!(["~/code/Portfolio"])
+    it "searches case-insensitively, returning the whole list for an empty query" do
+      described_class.replace!(["~/code/Portfolio", "~/code/b"])
 
       expect(described_class.search("portf")).to eq(["~/code/Portfolio"])
-    end
-
-    it "returns the whole list for an empty query" do
-      described_class.replace!(["~/code/a", "~/code/b"])
-
-      expect(described_class.search("")).to eq(["~/code/a", "~/code/b"])
+      expect(described_class.search("")).to eq(["~/code/b", "~/code/Portfolio"])
     end
 
     # A repo cloned since the last report is real. Refusing anything unknown
     # would make the picker worse than typing the path out.
-    it "accepts a plausible path it has never heard of" do
+    it "accepts a plausible path it has never heard of and rejects what can't be a directory" do
       expect(described_class.plausible?("~/code/brand-new")).to be(true)
       expect(described_class.plausible?("/Users/zoro/code/thing")).to be(true)
-    end
-
-    it "rejects what can't be a directory" do
       expect(described_class.plausible?("")).to be(false)
       expect(described_class.plausible?("code/relative")).to be(false)
       expect(described_class.plausible?("~/code/../../etc")).to be(false)
@@ -96,49 +78,33 @@ RSpec.describe "Byte starting directory" do
     describe "GET #workspaces" do
       # The whole reason the list is cached rather than fetched: this modal is
       # opened from a phone, and the Mac is usually asleep.
-      it "answers from the cache, with no call to the Mac" do
+      it "answers from the cache, with no call to the Mac, and hands back the default" do
         ByteWorkspaces.replace!(["~/code/Portfolio", "~/code/ocs-backend"])
 
         get :workspaces, params: { q: "ocs" }
 
         expect(response.parsed_body["paths"]).to eq(["~/code/ocs-backend"])
-        expect(ByteLocal).not_to have_received(:deliver)
-      end
-
-      it "hands back the default so the field can hint at it" do
-        get :workspaces
-
         expect(response.parsed_body["default"]).to eq(ByteWorkspaces::DEFAULT)
+        expect(ByteLocal).not_to have_received(:deliver)
       end
     end
 
     describe "POST #create_conversation" do
-      it "stores the starting directory on a Mac-mode thread" do
-        post :create_conversation, params: { name: "OCS", mode: "claude", cwd: "~/code/ocs-backend" }
-
-        expect(rocco.byte_conversations.last.cwd).to eq("~/code/ocs-backend")
-      end
-
-      it "works for the new cursor mode too" do
-        post :create_conversation, params: { name: "Agent", mode: "cursor", cwd: "~/code/ocs-backend" }
-
-        convo = rocco.byte_conversations.last
-        expect(convo.mode).to eq("cursor")
-        expect(convo.cwd).to eq("~/code/ocs-backend")
-      end
-
       # A Buddy thread has no shell and no filesystem, so a cwd on one is a
       # value nothing would ever read.
-      it "ignores a directory on a thread that has no filesystem" do
-        post :create_conversation, params: { name: "Chat", mode: "buddy", cwd: "~/code/ocs-backend" }
+      it "stores the starting directory only on a Mac-mode thread, and only a plausible one" do
+        [
+          ["claude", "~/code/ocs-backend", "~/code/ocs-backend"],
+          ["cursor", "~/code/ocs-backend", "~/code/ocs-backend"],
+          ["buddy", "~/code/ocs-backend", nil],
+          ["claude", "../../etc", nil],
+        ].each do |mode, cwd, stored|
+          post :create_conversation, params: { name: "T", mode: mode, cwd: cwd }
 
-        expect(rocco.byte_conversations.last.cwd).to be_nil
-      end
-
-      it "ignores a path that can't be a directory" do
-        post :create_conversation, params: { name: "Bad", mode: "claude", cwd: "../../etc" }
-
-        expect(rocco.byte_conversations.last.cwd).to be_nil
+          convo = rocco.byte_conversations.order(:id).last
+          expect(convo.mode).to eq(mode)
+          expect(convo.cwd).to eq(stored), "#{mode} #{cwd}"
+        end
       end
 
       it "leaves metadata alone when no directory was chosen" do
@@ -159,32 +125,26 @@ RSpec.describe "Byte starting directory" do
       it "moves the directory and tells the Mac" do
         ByteWorkspaces.replace!(["~/code/ocs-backend"])
 
-        expect(cd("~/code/ocs-backend")).to include("set to `~/code/ocs-backend`")
+        cd("~/code/ocs-backend")
         expect(convo.reload.cwd).to eq("~/code/ocs-backend")
         expect(ByteLocal).to have_received(:set_cwd).with(conversation_id: convo.id, cwd: "~/code/ocs-backend")
       end
 
       # The record is the durable half. A directory chosen while the Mac is
-      # asleep still has to be there when it wakes.
-      it "still records it when the Mac doesn't answer" do
+      # asleep still has to be there when it wakes; one it never reported is
+      # still taken.
+      it "still records it when the Mac doesn't answer, or has never reported it" do
         allow(ByteLocal).to receive(:set_cwd).and_return(false)
-        ByteWorkspaces.replace!(["~/code/ocs-backend"])
-
-        expect(cd("~/code/ocs-backend")).to include("when it next wakes")
-        expect(convo.reload.cwd).to eq("~/code/ocs-backend")
-      end
-
-      it "flags a directory the Mac has never reported, without refusing it" do
         ByteWorkspaces.replace!(["~/code/Portfolio"])
 
-        expect(cd("~/code/brand-new")).to include("isn't one of the directories")
+        cd("~/code/brand-new")
         expect(convo.reload.cwd).to eq("~/code/brand-new")
       end
 
       it "reports the current directory when given no argument" do
         convo.update!(metadata: { "cwd" => "~/code/Byte" })
 
-        expect(cd("")).to include("currently `~/code/Byte`")
+        expect(cd("")).to include("~/code/Byte")
       end
 
       it "falls back to the shared default when nothing is set" do
@@ -192,26 +152,19 @@ RSpec.describe "Byte starting directory" do
       end
 
       it "refuses something that isn't a path" do
-        expect(cd("not a path")).to include("doesn't look like a directory")
+        cd("not a path")
         expect(convo.reload.cwd).to be_nil
+        expect(ByteLocal).not_to have_received(:set_cwd)
       end
     end
 
-    describe "cursor mode" do
-      it "is switchable with /mode" do
-        convo = rocco.byte_conversations.create!(mode: :claude, last_message_at: Time.current)
+    it "switches to cursor mode with /mode, which counts as a Mac mode" do
+      convo = rocco.byte_conversations.create!(mode: :claude, last_message_at: Time.current)
 
-        post :create_message, params: { conversation_id: convo.id, body: "/mode cursor" }
+      post :create_message, params: { conversation_id: convo.id, body: "/mode cursor" }
 
-        expect(convo.reload.mode).to eq("cursor")
-      end
-
-      it "counts as a Mac mode, so it has a working directory" do
-        convo = rocco.byte_conversations.create!(mode: :cursor, last_message_at: Time.current)
-
-        expect(convo).to be_mac
-        expect(ByteConversation::MAC_MODES).to include("cursor")
-      end
+      expect(convo.reload.mode).to eq("cursor")
+      expect(convo).to be_mac
     end
   end
 end

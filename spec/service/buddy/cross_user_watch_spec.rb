@@ -35,35 +35,21 @@ RSpec.describe "Buddy cross-user watches" do
       watch
     end
 
-    it "passes it to the recipient as a message from whoever set it" do
+    it "relays it from whoever set it, with the detail, and leaves the sender a copy", :aggregate_failures do
       watch = fire!
 
       relay = BuddyRelay.last
       expect(relay.from_user).to eq(chelsea)
       expect(relay.to_user).to eq(rocco)
+      expect(relay.body).to include("something landed on the shared agenda", "Vet appt")
       expect(watch.reload.last_fired_at).to be_present
-    end
-
-    it "carries the same wording a self-fired watch would, detail and all" do
-      fire!
-
-      expect(BuddyRelay.last.body).to include("something landed on the shared agenda")
-      expect(BuddyRelay.last.body).to include("Vet appt")
-    end
-
-    it "leaves the sender the copy that says it went" do
-      fire!
 
       copy = chelsea.byte_messages.where("metadata->>'source' = 'relay_copy'").last
-      expect(copy).to be_present
-      expect(copy.body).to include("something landed on the shared agenda")
+      expect(copy&.body).to include("something landed on the shared agenda")
     end
 
-    # ...but only the detail that is actually news. An `event` watch matches on
-    # the event NAME, so the name the payload carries is the one its listener
-    # names on every firing - a constant, and the internal one at that. "I'm on my way
-    # home" reached a partner with the name of the charge that tripped it
-    # stapled to the end.
+    # An `event` watch matches on the event NAME, so the payload's name only
+    # restates the listener and is not news to the recipient.
     it "doesn't staple on a detail that only restates what the watch matched" do
       watch = BuddyWatch.create!(
         user: rocco, notify_user: chelsea, byte_conversation: rocco_convo,

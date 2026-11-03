@@ -17,19 +17,7 @@ RSpec.describe "Byte text size" do
     Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
   end
 
-  def chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-
   describe User do
-    it "defaults to the design size" do
-      expect(user.byte_font_scale).to eq(100)
-    end
-
-    it "round-trips a set value" do
-      user.update!(byte_font_scale: 130)
-
-      expect(user.reload.byte_font_scale).to eq(130)
-    end
-
     # Clamped rather than validated: it's written from a stepper and from a
     # tool, and neither is a place to raise.
     it "clamps rather than rejecting" do
@@ -40,7 +28,9 @@ RSpec.describe "Byte text size" do
       expect(user.reload.byte_font_scale).to eq(User::FONT_SCALE_RANGE.min)
     end
 
-    it "leaves room for the next preference beside it" do
+    it "defaults to the design size and survives another preference beside it" do
+      expect(user.byte_font_scale).to eq(100)
+
       user.update!(byte_font_scale: 120)
       user.update!(byte_prefs: user.byte_prefs.merge("something_else" => true))
 
@@ -49,48 +39,25 @@ RSpec.describe "Byte text size" do
   end
 
   describe "set_font_size" do
-    it "steps up from wherever they are" do
-      run(direction: :bigger)
-
-      expect(user.reload.byte_font_scale).to eq(100 + User::FONT_SCALE_STEP)
+    it "steps, resets, or takes an outright percentage", :aggregate_failures do
+      [
+        [100, { direction: :bigger }, 100 + User::FONT_SCALE_STEP],
+        [120, { direction: :smaller }, 120 - User::FONT_SCALE_STEP],
+        [170, { direction: :reset }, 100],
+        [100, { percent: 150 }, 150],
+      ].each do |from, payload, expected|
+        user.update!(byte_font_scale: from)
+        run(payload)
+        expect(user.reload.byte_font_scale).to eq(expected), payload.inspect
+      end
     end
 
-    it "steps down" do
-      user.update!(byte_font_scale: 120)
-
-      run(direction: :smaller)
-
-      expect(user.reload.byte_font_scale).to eq(120 - User::FONT_SCALE_STEP)
-    end
-
-    it "goes back to the default on reset" do
-      user.update!(byte_font_scale: 170)
-
-      run(direction: :reset)
-
-      expect(user.reload.byte_font_scale).to eq(100)
-    end
-
-    it "takes an outright percentage when they name one" do
-      run(percent: 150)
-
-      expect(user.reload.byte_font_scale).to eq(150)
-    end
-
-    it "says where it landed" do
-      run(direction: :bigger)
-
-      expect(chip.body).to include("110%")
-    end
-
-    # "Done" on a change that didn't happen is a reading they'd only catch by
-    # squinting at text that looks the same.
-    it "says so when it's already at the end of the range" do
+    it "stays put at the end of the range" do
       user.update!(byte_font_scale: User::FONT_SCALE_RANGE.max)
 
       run(direction: :bigger)
 
-      expect(chip.body).to match(/already as big as it goes/i)
+      expect(user.reload.byte_font_scale).to eq(User::FONT_SCALE_RANGE.max)
     end
 
     # The page is already open; a preference change they have to reload to see

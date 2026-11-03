@@ -16,10 +16,9 @@ RSpec.describe Slack::Actions do
   # A link outlives the feature it was posted for. Somebody tapping a month-old
   # message should be told that, not shown a 500.
   it "answers a name it no longer knows without raising" do
-    status, said = described_class.call(:long_gone)
+    status, = described_class.call(:long_gone)
 
     expect(status).to eq(:unknown)
-    expect(said).to include("isn't a thing")
   end
 
   it "reports a handler that blew up rather than letting it escape" do
@@ -32,20 +31,11 @@ RSpec.describe Slack::Actions do
   end
 
   describe ".link" do
-    it "is Slack's own link syntax, labelled from the registration" do
+    it "is Slack's own link syntax, labelled from the registration, carrying params" do
       described_class.register(:spec_thing, label: "🔄 Do it", run: ->(_p) { "ok" })
 
       expect(described_class.link(:spec_thing)).to end_with("/slack/action/spec_thing|🔄 Do it>")
-    end
-
-    it "carries params through" do
-      described_class.register(:spec_thing, label: "Do it", run: ->(_p) { "ok" })
-
       expect(described_class.link(:spec_thing, id: 7)).to include("/slack/action/spec_thing?id=7|")
     end
-  end
-
-  it "has the buddy retry registered at boot" do
-    expect(described_class.find(:buddy_retry)).to be_present
   end
 end

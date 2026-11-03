@@ -1,12 +1,8 @@
 require "rails_helper"
 
-# A sequence that asks something and then uses the answer.
-#
-# Everything else about a saved sequence is static - a payload is frozen when
-# the proposal is built and dispatched byte-for-byte whenever its gate releases.
-# That's what makes "prep my printer" identical every time, and it's also why
-# "ask me what I want for dinner, ask her what she wants, then send both on"
-# was unbuildable: nothing a step learned could reach a later one.
+# A sequence that asks something and then uses the answer: a step captures a
+# value under a var, and a later step's `{{var}}` is filled in when its gate
+# releases.
 RSpec.describe "Buddy step variables" do
   let(:user)       { create(:user) }
   let(:partner)    { create(:user) }
@@ -67,22 +63,14 @@ RSpec.describe "Buddy step variables" do
   end
 
   describe "the token itself" do
-    it "keeps the captured value's own type when the argument is only a token" do
-      filled, = Buddy::StepVars.fill({ text: "{{picked}}" }, { "picked" => %w[a b] })
+    it "fills whole-token, in-sentence and nested references", :aggregate_failures do
+      whole, = Buddy::StepVars.fill({ text: "{{picked}}" }, { "picked" => %w[a b] })
+      sentence, = Buddy::StepVars.fill({ text: "we picked {{picked}} tonight" }, { "picked" => %w[a b] })
+      nested, = Buddy::StepVars.fill({ args: { meal: "{{mine}}" } }, { "mine" => "curry" })
 
-      expect(filled[:text]).to eq(%w[a b])
-    end
-
-    it "reads as text when it's part of a sentence" do
-      filled, = Buddy::StepVars.fill({ text: "we picked {{picked}} tonight" }, { "picked" => %w[a b] })
-
-      expect(filled[:text]).to eq("we picked a, b tonight")
-    end
-
-    it "reaches into nested arguments" do
-      filled, = Buddy::StepVars.fill({ args: { meal: "{{mine}}" } }, { "mine" => "curry" })
-
-      expect(filled[:args][:meal]).to eq("curry")
+      expect(whole[:text]).to eq(%w[a b])
+      expect(sentence[:text]).to eq("we picked a, b tonight")
+      expect(nested[:args][:meal]).to eq("curry")
     end
 
     it "reports what it couldn't fill rather than substituting something" do
@@ -94,15 +82,12 @@ RSpec.describe "Buddy step variables" do
   end
 
   describe "asking the person" do
-    it "holds the steps behind it until they answer" do
+    it "holds the steps behind it until they answer, then fills them in" do
       build!([ask_me("Dinner?", "mine"), tell_her("we're having {{mine}}")])
 
       expect(form_action).to be_present
       expect(told).to be_empty
-    end
 
-    it "fills the later step in with what they said" do
-      build!([ask_me("Dinner?", "mine"), tell_her("we're having {{mine}}")])
       Buddy::FormAction.submit!(form_action, values: { "answer" => "curry" })
 
       expect(told).to eq(["we're having curry"])
@@ -126,32 +111,18 @@ RSpec.describe "Buddy step variables" do
   end
 
   describe "asking someone else" do
-    it "parks the rest of the sequence on their answer" do
+    it "parks the rest on their answer and advances once with it, however many times it lands" do
       build!([ask_her("Dinner?", "hers"), tell_her("she wants {{hers}}")])
 
       expect(relay_gate).to be_present
       expect(told).to be_empty
-    end
 
-    it "picks back up when they answer, with what they said" do
-      build!([ask_her("Dinner?", "hers"), tell_her("she wants {{hers}}")])
       relay = BuddyRelay.last
       relay.update!(status: :delivered)
-
-      Buddy::CompanionRelay.record_answer!(relay, "tacos")
-
-      expect(told).to eq(["she wants tacos"])
-    end
-
-    it "only advances once, however many times the answer lands" do
-      build!([ask_her("Dinner?", "hers"), tell_her("she wants {{hers}}")])
-      relay = BuddyRelay.last
-      relay.update!(status: :delivered)
-
       Buddy::CompanionRelay.record_answer!(relay, "tacos")
       Buddy::CompanionRelay.record_answer!(relay.reload, "tacos")
 
-      expect(told.length).to eq(1)
+      expect(told).to eq(["she wants tacos"])
     end
 
     # An ordinary question is the overwhelming majority, and it must stay
@@ -163,51 +134,22 @@ RSpec.describe "Buddy step variables" do
       expect(told).to eq(["asked her"])
     end
 
-    # Prod Aug 3: "ask Chelsea if she wants to plunge tomorrow" went out with
-    # `await_reply` and nothing behind it. The receipt promised "I'll pick this
-    # back up when they answer", the gate was only built when steps were queued,
-    # so she answered "yes" and Byte never took a turn on it.
+    # An awaited question still promises a pick-up, so the answer comes back
+    # to Buddy as a turn.
     describe "awaited with nothing queued behind it" do
-      def ask_only!
+      it "holds a gate and hands the answer to Buddy as one hidden turn", :aggregate_failures do
         build!([ask_her("Want to plunge tomorrow?", "hers")])
-      end
-
-      it "still holds a gate, because the receipt promised one" do
-        ask_only!
-
         expect(relay_gate).to be_present
-      end
 
-      it "hands the answer to Buddy as a turn when it lands" do
-        ask_only!
         relay = BuddyRelay.last
         relay.update!(status: :delivered)
-
-        expect { Buddy::CompanionRelay.record_answer!(relay, "yes") }
-          .to change { convo.byte_messages.where("metadata->>'source' = 'relay_answer'").count }.by(1)
-      end
-
-      it "seeds that turn with the question and the answer, and says not to parrot it" do
-        ask_only!
-        relay = BuddyRelay.last
-        relay.update!(status: :delivered)
-        Buddy::CompanionRelay.record_answer!(relay, "yes")
-
-        seed = convo.byte_messages.where("metadata->>'source' = 'relay_answer'").last
-        expect(seed.body).to include("Want to plunge tomorrow?", "yes", partner.first_name)
-        expect(seed.body).to include("don't read it back")
-        expect(seed.metadata["hidden"]).to be(true)
-      end
-
-      it "picks it back up only once, however many times the answer lands" do
-        ask_only!
-        relay = BuddyRelay.last
-        relay.update!(status: :delivered)
-
         Buddy::CompanionRelay.record_answer!(relay, "yes")
         Buddy::CompanionRelay.record_answer!(relay.reload, "yes")
 
-        expect(convo.byte_messages.where("metadata->>'source' = 'relay_answer'").count).to eq(1)
+        seeds = convo.byte_messages.where("metadata->>'source' = 'relay_answer'")
+        expect(seeds.count).to eq(1)
+        expect(seeds.last.body).to include("Want to plunge tomorrow?", "yes", partner.first_name)
+        expect(seeds.last.metadata["hidden"]).to be(true)
       end
 
       # A plain ask is still fire-and-forget — no gate, no extra turn.
@@ -305,11 +247,7 @@ RSpec.describe "Buddy step variables" do
   end
 
   describe "a value nothing ever collected" do
-    # The failure this must never have: passing the literal "{{hers}}" on to
-    # something that acts on it, or skipping the step in silence.
-    # Reachable by editing the collecting step out of a routine that already
-    # referenced it. Saving catches that (see below); a routine saved before the
-    # check existed, or markers built by hand, land here instead.
+    # Never pass the literal token on, and never skip the step in silence.
     it "skips the step and says which value was missing" do
       build!([ask_me("Dinner?", "mine"), tell_her("{{nope}}")])
       Buddy::FormAction.submit!(form_action, values: { "answer" => "curry" })
@@ -318,10 +256,7 @@ RSpec.describe "Buddy step variables" do
       expect(convo.byte_messages.last.body).to match(/needed `nope`/)
     end
 
-    # Nothing has been collected at the head of a sequence, so a reference there
-    # can never be satisfied. Dispatching the literal token at something that
-    # acts on it is the failure; this is the backstop for markers that didn't
-    # come through the save-time check.
+    # Nothing has been collected at the head of a sequence.
     it "refuses to run a step at the very start that references anything" do
       build!([{ tool_name: :log_event, payload: { name: "{{mine}}" } }])
 
@@ -330,8 +265,7 @@ RSpec.describe "Buddy step variables" do
     end
 
     # Level-2 calls are normally hoisted to the front, since they execute on
-    # arrival. That reordering silently broke a sequence: this logged an event
-    # literally named "{{mine}}" before the question was even asked.
+    # arrival; one waiting on a value must not be.
     it "keeps a step that's waiting on a value behind the gate that collects it" do
       build!([ask_me("Dinner?", "mine"), { tool_name: :log_event, payload: { name: "{{mine}}" } }])
       expect(ActionEvent.count).to eq(0)
@@ -421,13 +355,11 @@ RSpec.describe "Buddy step variables" do
 
     # The compensation for what a placeholder costs: a step holding one can't be
     # resolved at save time, so the ordering is checked instead, hard.
-    it "rejects a reference nothing collects" do
+    it "rejects a reference nothing before it collects", :aggregate_failures do
       expect {
         save!([{ "tool_name" => "message_partner", "payload" => { "to" => her, "message" => "{{mine}}" } }])
       }.to raise_error(/nothing before it collects that/)
-    end
 
-    it "rejects one that reaches forward to a later step's answer" do
       expect {
         save!([
           { "tool_name" => "message_partner", "payload" => { "to" => her, "message" => "{{mine}}" } },

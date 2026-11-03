@@ -71,7 +71,7 @@ RSpec.describe Emails::InviteSync do
     described_class.call(email)
   end
 
-  it "puts the booking on the calendar" do
+  it "puts the booking on the calendar with its guest list, answerable as him", :aggregate_failures do
     item = deliver
 
     expect(item.agenda).to eq(agenda)
@@ -80,27 +80,18 @@ RSpec.describe Emails::InviteSync do
     expect(item.start_at).to eq(Time.utc(2026, 11, 3, 15, 0))
     expect(item.end_at).to eq(Time.utc(2026, 11, 3, 15, 45))
     expect(item.location).to eq("Google Meet")
-  end
-
-  it "reads a calendar sent as a file with no calendar in its type" do
-    expect(deliver(content_type: "application/octet-stream; name=\"invite.ics\"")).to be_present
-  end
-
-  it "keeps the guest list and marks which one is him" do
-    item = deliver
 
     expect(item.organizer).to include("email" => "erin@acme.test")
     expect(item.attendees.pluck("email")).to eq(["erin@acme.test", "rocco@example.com"])
     expect(item.attendees.find { |a| a["self"] }["email"]).to eq("rocco@example.com")
-    expect(item.self_response).to eq("needsAction")
     expect(item.needs_response?).to be(true)
-  end
-
-  it "is answerable, and says which address answers" do
-    item = deliver
 
     expect(item.mail_invite?).to be(true)
     expect(item.invite_details).to include("uid" => "booking-9f2@calendly.com", "replying_as" => "rocco@example.com")
+  end
+
+  it "reads a calendar sent as a file with no calendar in its type" do
+    expect(deliver(content_type: "application/octet-stream; name=\"invite.ics\"")).to be_present
   end
 
   # Calendly mails the invitee a copy that lists only the organizer.

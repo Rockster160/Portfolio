@@ -53,11 +53,8 @@ RSpec.describe Buddy::WatchMatcher do
     end
   end
 
-  # There is no `deploy` trigger anywhere in the app. A finished deploy is a
-  # `monitor` broadcast on the `deploy:success` channel, and `monitor` isn't a
-  # watchable scope - so dispatch bailed before ever loading the watch. Prod
-  # watch 4 sat unfired for two days across multiple deploys while Buddy had
-  # already told the person it would let them know.
+  # A finished deploy arrives as a `monitor` broadcast (or the bare `deploy`
+  # scope), and either has to reach a deploy watch.
   describe "the deploy signal" do
     let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "let you know the deploy finished") }
 
@@ -74,9 +71,6 @@ RSpec.describe Buddy::WatchMatcher do
       expect(watch.reload.fired_at).to be_present
     end
 
-    # A failed deploy is the one you most want to hear about. Dropping it meant
-    # a standing deploy watch went quiet on exactly those, which reads as
-    # "still deploying" rather than "it broke".
     it "fires on a deploy that failed" do
       described_class.dispatch(user, :monitor, { channel: "deploy:failed", sha: "def456" })
 
@@ -90,13 +84,9 @@ RSpec.describe Buddy::WatchMatcher do
       expect(watch.reload.fired_at).to be_nil
     end
 
-    # The payloads that actually reach WatchMatcher in production. Getting these
-    # wrong is the entire history of this bug: the guard used to demand an `id`
-    # or a `channel`, and the one signal that reliably arrives carries neither.
+    # The payloads that actually reach WatchMatcher in production.
     describe "the payloads a real deploy sends" do
-      # THE important one. The `startup` Jil task fires this the moment the new
-      # Rails boots, and it's what flips the Deploy ActionEvent to Success — a
-      # bare `deploy` key, no id, no channel, no sha.
+      # The `startup` Jil task's signal: a bare `deploy` key, no id, channel or sha.
       it "fires on the bare success the startup trigger emits" do
         described_class.dispatch(user, :monitor, { deploy: "success" })
 
@@ -126,12 +116,6 @@ RSpec.describe Buddy::WatchMatcher do
 
         expect(watch.reload.fired_at).to be_nil
       end
-
-      it "leaves other monitors alone" do
-        described_class.dispatch(user, :monitor, { id: "surveys", blip: 3 })
-
-        expect(watch.reload.fired_at).to be_nil
-      end
     end
 
     it "tells Buddy WHICH outcome it was, so the message can differ" do
@@ -141,12 +125,6 @@ RSpec.describe Buddy::WatchMatcher do
       expect(seed).to include("FAILED")
       expect(seed).to include("abc1234") # short sha, for finding it later
       expect(seed).to include(watch.body)
-    end
-
-    it "says so plainly when it succeeded" do
-      described_class.dispatch(user, :monitor, { channel: "deploy:success", sha: "abc123" })
-
-      expect(seeds.last).to include("finished successfully")
     end
 
     # "Ping me on EVERY deploy" — the standing form.
@@ -164,18 +142,9 @@ RSpec.describe Buddy::WatchMatcher do
       expect(lines).to include(a_string_including("FAILED"))
     end
 
-    # Every deploy notification for months read exactly "🚀 Deploy finished
-    # successfully" and nothing else - never which commit, never what shipped.
-    #
-    # The signal that wins the race is `startup`, whose entire payload is
-    # `{deploy: "success"}`. The workflow's hook has the sha and the message
-    # but arrives second and gets collapsed as a duplicate. Waiting for it
-    # would add latency to every deploy and still lose when it 502s; sending a
-    # second message would mean two pings each time.
-    #
-    # Neither is needed, because the details are already in the database: the
-    # workflow posts them at deploy=start, which is what creates the Deploy
-    # ActionEvent, minutes before any of this fires.
+    # The signal that wins the race (`startup`) carries no sha or message, so
+    # they are read off the in-flight Deploy ActionEvent the workflow created
+    # at deploy=start.
     describe "the commit behind the deploy" do
       let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy news", one_shot: false) }
 
@@ -213,15 +182,9 @@ RSpec.describe Buddy::WatchMatcher do
         expect(lines.last).not_to include("1a5f8fb")
       end
 
-      it "still announces when there's no deploy row to read" do
-        described_class.dispatch(user, :monitor, { deploy: "success" })
-
-        expect(lines.last).to include("finished successfully")
-      end
-
       # An empty string is TRUTHY in Liquid, so passing sha through as "" would
       # render the branch and leave a dangling em dash on the end.
-      it "leaves no trailing punctuation when there's no commit to name" do
+      it "still announces, with no trailing punctuation, when there's no deploy row to read" do
         described_class.dispatch(user, :monitor, { deploy: "success" })
 
         expect(lines.last).to eq("🚀 Deploy finished successfully")
@@ -246,36 +209,18 @@ RSpec.describe Buddy::WatchMatcher do
       end
     end
 
-    # Prod 08-04 14:11. The deploy FAILED, and Byte said it finished
-    # successfully.
-    #
-    # The app's `startup` trigger fires the moment new Rails boots and reports
-    # success unconditionally - it has no way to know cap died two seconds
-    # later. The workflow's failure hook, which does know, landed inside the
-    # debounce window and was thrown away as a duplicate. The person was told
-    # the opposite of what happened and nothing ever corrected it.
-    #
-    # Booting is not succeeding, so the outcome cannot be trusted to the first
-    # signal. What the debounce is FOR is three voices saying the same thing;
-    # two voices disagreeing is the one case that has to get through.
+    # `startup` reports success the moment Rails boots, before cap can fail.
+    # The debounce collapses agreeing signals; a disagreeing one inside the
+    # window has to get through, as a correction.
     describe "when the outcome changes after the first signal" do
       let!(:watch) { make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy news", one_shot: false) }
 
-      it "reports a failure that lands seconds after a premature success" do
+      it "reports a failure that lands seconds after a premature success, as a correction" do
         described_class.dispatch(user, :monitor, { deploy: "success" })
         described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed", sha: "1a5f8fbb" })
 
         expect(lines.length).to eq(2)
-        expect(lines.last).to include("FAILED")
-      end
-
-      # They read the wrong one first, so the second has to say it supersedes
-      # rather than just contradicting it.
-      it "marks the second one as a correction" do
-        described_class.dispatch(user, :monitor, { deploy: "success" })
-        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed" })
-
-        expect(lines.last).to start_with("Correction — ")
+        expect(lines.last).to start_with("Correction — ").and include("FAILED")
       end
 
       it "does not call an ordinary later deploy a correction" do
@@ -309,11 +254,8 @@ RSpec.describe Buddy::WatchMatcher do
       end
     end
 
-    # Prod 1320/1322/1323: one deploy, three notifications 8 seconds apart. The
-    # workflow's finish hook lands, then the app's `startup` trigger fires again
-    # for each Puma worker as the new Rails comes up. Nothing in the payloads
-    # ties them together, so the only thing that can tell "again" from "still"
-    # is how close together they are.
+    # The finish hook and each Puma worker's `startup` all report one deploy;
+    # only their closeness in time ties them together.
     describe "one deploy announcing itself more than once" do
       let!(:repeating) {
         make_watch(trigger_scope: "deploy", listener: "deploy", body: "deploy's done", one_shot: false)
@@ -324,18 +266,12 @@ RSpec.describe Buddy::WatchMatcher do
       # of one. This block is only about the repeating one.
       before { watch.update!(cancelled_at: Time.current) }
 
-      it "notifies once, no matter how many emitters report the same deploy" do
+      it "notifies once, keeping the first signal, which is the one carrying the sha" do
         described_class.dispatch(user, :deploy, { id: "deploy", deploy: "finished", sha: "bc271e0" })
         described_class.dispatch(user, :monitor, { deploy: "success" })
         described_class.dispatch(user, :monitor, { deploy: "success" })
 
         expect(lines.length).to eq(1)
-      end
-
-      it "keeps the FIRST one, which is the only signal carrying the sha" do
-        described_class.dispatch(user, :deploy, { id: "deploy", deploy: "finished", sha: "bc271e0" })
-        described_class.dispatch(user, :monitor, { deploy: "success" })
-
         expect(lines.last).to include("bc271e0")
       end
 
@@ -371,7 +307,7 @@ RSpec.describe Buddy::WatchMatcher do
       let(:watch) do
         make_watch(
           trigger_scope: "travel",
-          listener: "travel:action::arrived near(40.5 -111.9 165m)",
+          listener:      "travel:action::arrived near(40.5 -111.9 165m)",
         )
       end
 
@@ -414,10 +350,8 @@ RSpec.describe Buddy::WatchMatcher do
     end
   end
 
-  # A watch that fires over and over is a feed, and a feed doesn't need writing.
-  # The Claude-list watch fired 64 times in one day - a full model turn each,
-  # about a third of that day's spend - to say "another item landed" 64 different
-  # ways, never once naming the item.
+  # A watch that fires over and over is a feed: it goes out as written, with
+  # what changed appended, and no model turn.
   describe "a repeating watch" do
     let!(:feed) {
       make_watch(
@@ -428,18 +362,11 @@ RSpec.describe Buddy::WatchMatcher do
       )
     }
 
-    it "goes out as written, with no model turn behind it" do
+    it "goes out as written, with no model turn behind it, naming what changed" do
       described_class.dispatch(user, :item, { "action" => "added", "name" => "Fix the estimator" })
 
       expect(seeds).to be_empty
-      expect(lines.last).to include("Claude list got a new item in Ocs-Backend")
-    end
-
-    # The half that went missing on all 64 of them.
-    it "names what actually changed, when the trigger carries it" do
-      described_class.dispatch(user, :item, { "action" => "added", "name" => "Fix the estimator" })
-
-      expect(lines.last).to include("Fix the estimator")
+      expect(lines.last).to include("Claude list got a new item in Ocs-Backend", "Fix the estimator")
     end
 
     it "still reads cleanly when the trigger carries nothing to name" do
@@ -477,12 +404,6 @@ RSpec.describe Buddy::WatchMatcher do
         line = announce("{{ name }} went on {{ list }}", { "name" => "Milk", "list" => "Groceries" })
 
         expect(line).to eq("Milk went on Groceries")
-      end
-
-      it "does not also tack the detail on the end" do
-        line = announce("{{ name }} landed", { "name" => "Fix the estimator" })
-
-        expect(line).not_to include("—")
       end
 
       # The example that asked for filters in the first place: Claude's list

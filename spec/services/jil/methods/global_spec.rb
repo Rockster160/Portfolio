@@ -295,8 +295,8 @@ RSpec.describe Jil::Methods::Global do
         agenda = create(:agenda, user: user)
         allow(::AddressBook).to receive(:non_travelable?).and_return(true)
         agenda.agenda_items.create!(
-          name: "TMS",
-          kind: :event,
+          name:     "TMS",
+          kind:     :event,
           start_at: 2.days.from_now.beginning_of_hour,
           end_at:   2.days.from_now.beginning_of_hour + 1.hour,
           location: "Office",
@@ -405,29 +405,30 @@ RSpec.describe Jil::Methods::Global do
       end
     end
 
+    describe "#looksLike" do
+      it "names the type a value or its string form reads as" do
+        global = described_class.new(::Jil::Executor.new(user, ""))
+        {
+          { a: 1 }      => :Hash,
+          [1]           => :Array,
+          nil           => :None,
+          "true"        => :Boolean,
+          "42"          => :Numeric,
+          "4.2"         => :Numeric,
+          '{"a": 1}'    => :Hash,
+          "2026-08-19"  => :Date,
+          "hello there" => :String,
+        }.each { |value, type| expect(global.looksLike(value)).to eq(type), value.inspect }
+      end
+    end
+
     describe "#ping, #say, #textMe, #remind" do
-      # All four bypass Jarvis.command (and thus the :tell listener bus) and route
-      # directly to the appropriate channel via Jarvis.broadcast.
-      it "ping routes to WebPushNotifications without firing :tell" do
-        expect(::Jarvis).to receive(:broadcast).with(user, "hello there", :ping)
+      it "routes ping, say and textMe to their channel without firing :tell" do
         expect(::Jil).not_to receive(:trigger).with(anything, :tell, anything, anything)
-        ::Jil::Executor.call(user, <<~'JIL')
-          r = Global.ping("hello there")::String
-        JIL
-      end
-
-      it "say routes to JarvisChannel websocket" do
-        expect(::Jarvis).to receive(:broadcast).with(user, "spoken text", :ws)
-        ::Jil::Executor.call(user, <<~'JIL')
-          r = Global.say("spoken text")::String
-        JIL
-      end
-
-      it "textMe routes to SmsWorker" do
-        expect(::Jarvis).to receive(:broadcast).with(user, "sms text", :sms)
-        ::Jil::Executor.call(user, <<~'JIL')
-          r = Global.textMe("sms text")::String
-        JIL
+        { ping: :ping, say: :ws, textMe: :sms }.each { |method, channel|
+          expect(::Jarvis).to receive(:broadcast).with(user, "#{method} text", channel)
+          ::Jil::Executor.call(user, "r = Global.#{method}(\"#{method} text\")::String")
+        }
       end
 
       it "remind pings AND adds to default list" do

@@ -37,24 +37,22 @@ RSpec.describe Emails::InviteReply do
 
     expect(message.to).to eq(["erin@acme.test"])
     expect(message.from).to eq(["rocco@ardesian.com"])
-    expect(message.subject).to eq("Accepted: Interview: Acme")
   end
 
-  # The words are a courtesy. What the organizer's calendar reads is this, and
-  # it only reads it because the part says REPLY.
-  it "carries the event back with the answer on it" do
+  # What the organizer's calendar reads is the REPLY part, quoting the
+  # organizer's own sequence: an older one reads as an answer to a meeting that
+  # has since moved. SENT-BY is left off when the invited address is the sender.
+  it "carries the event back with the answer on it", :aggregate_failures do
     part = calendar_part(reply("declined"))
 
     expect(part.content_type).to include("method=REPLY")
-    expect(part.decoded).to include("METHOD:REPLY")
-    expect(part.decoded).to include("UID:booking-9f2@calendly.com")
-    expect(part.decoded).to include("ATTENDEE;PARTSTAT=DECLINED:mailto:rocco@ardesian.com")
-  end
-
-  # Quoting an older sequence reads as an answer to a meeting that has since
-  # moved, and gets discarded.
-  it "quotes the organizer's own sequence" do
-    expect(calendar_part(reply("tentative")).decoded).to include("SEQUENCE:3")
+    expect(part.decoded).to include(
+      "METHOD:REPLY",
+      "UID:booking-9f2@calendly.com",
+      "SEQUENCE:3",
+      "ATTENDEE;PARTSTAT=DECLINED:mailto:rocco@ardesian.com",
+    )
+    expect(part.decoded).not_to include("SENT-BY")
   end
 
   it "files the copy it sent" do
@@ -82,11 +80,6 @@ RSpec.describe Emails::InviteReply do
         'ATTENDEE;PARTSTAT=ACCEPTED;SENT-BY="mailto:contact@ardesian.com":mailto:rocco11nicholls@gmail.com',
       )
     end
-  end
-
-  # The common case, where saying it would be the same address written twice.
-  it "leaves SENT-BY off when the invited address is the one sending" do
-    expect(calendar_part(reply("accepted")).decoded).not_to include("SENT-BY")
   end
 
   it "says so rather than going quiet when there is nobody to answer" do

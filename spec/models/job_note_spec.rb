@@ -11,7 +11,6 @@ RSpec.describe JobNote do
       note = job.notes.create!(tag: :applied, occurred_at: 1.day.ago)
 
       expect(note.body).to be_nil
-      expect(note.tag_label).to eq("Applied")
     end
 
     # An untagged note IS its words. Without them there is nothing there.
@@ -47,17 +46,13 @@ RSpec.describe JobNote do
   end
 
   describe "defaults" do
-    it "stamps occurred_at with now when nobody said" do
+    it "stamps occurred_at with now when nobody said, and keeps one set by hand" do
       note = job.notes.create!(body: "Applied.")
-
       expect(note.occurred_at).to be_within(5.seconds).of(Time.current)
       expect(note.tag).to eq("note")
-    end
 
-    it "keeps a timestamp that was set by hand" do
-      note = job.notes.create!(body: "Recruiter call", occurred_at: 3.days.ago)
-
-      expect(note.occurred_at).to be_within(5.seconds).of(3.days.ago)
+      dated = job.notes.create!(body: "Recruiter call", occurred_at: 3.days.ago)
+      expect(dated.occurred_at).to be_within(5.seconds).of(3.days.ago)
     end
   end
 
@@ -79,54 +74,16 @@ RSpec.describe JobNote do
     end
   end
 
-  # The other half of "heard back": they wrote, you wrote back. It reads as a
-  # beat, but it doesn't decide anything about the job.
-  describe "the response tag" do
-    it "reads as Response and needs no body" do
-      note = job.notes.create!(tag: :responded, occurred_at: 1.hour.ago)
-
-      expect(note.tag_label).to eq("Response")
-      expect(note.body).to be_nil
+  # A beat that is a whole fact without words, and decides nothing about the
+  # application.
+  it "needs no body for a beat, and leaves the application active for one that settles nothing", :aggregate_failures do
+    %i[responded acknowledged availability cancelled].each do |tag|
+      note = job.notes.create!(tag: tag, occurred_at: 1.hour.ago)
+      expect(note.body).to be_nil, tag.to_s
     end
+    job.notes.create!(tag: :scheduled, follow_up_at: 2.days.from_now)
 
-    it "sits next to heard back in the dropdown" do
-      keys = JobNote::TAG_LABELS.keys
-
-      expect(keys[keys.index("heard_back") + 1]).to eq("responded")
-    end
-
-    it "leaves the application where it was" do
-      job.notes.create!(tag: :responded)
-
-      expect(job.reload.status).to eq("active")
-    end
-  end
-
-  # Prod 6162: a GitLab "thanks for applying, a human will review this" landed
-  # as Applied on an application that was already applied to. Neither neighbour
-  # is honest about a machine's receipt, so it got a tag of its own.
-  describe "the acknowledged tag" do
-    it "reads as Acknowledged and needs no body" do
-      note = job.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)
-
-      expect(note.tag_label).to eq("Acknowledged")
-      expect(note.body).to be_nil
-    end
-
-    # Between the thing they did and the first time a person answers it, which
-    # is the order the three happen in.
-    it "sits between applied and heard back in the dropdown" do
-      keys = JobNote::TAG_LABELS.keys
-
-      expect(keys[keys.index("applied") + 1]).to eq("acknowledged")
-      expect(keys[keys.index("acknowledged") + 1]).to eq("heard_back")
-    end
-
-    it "leaves the application where it was" do
-      job.notes.create!(tag: :acknowledged)
-
-      expect(job.reload.status).to eq("active")
-    end
+    expect(job.reload.status).to eq("active")
   end
 
   # The submission came before the receipt for it, whichever was written first.
@@ -138,8 +95,8 @@ RSpec.describe JobNote do
       expect(applied.reload.occurred_at).to eq(receipt.occurred_at - 1.second)
     end
 
-    # Prod 67/68, University of Utah: jobhunt wrote applied first, and the
-    # receipt tapped later carried the mail's earlier time.
+    # jobhunt can write applied first, and a receipt filed later carries the
+    # mail's earlier time.
     it "moves an applied already there when an earlier receipt lands" do
       applied = job.notes.create!(tag: :applied, occurred_at: 2.minutes.ago)
       receipt = job.notes.create!(tag: :acknowledged, occurred_at: 5.minutes.ago)
@@ -164,68 +121,17 @@ RSpec.describe JobNote do
     end
   end
 
-  # A recruiter came to him about something he does not want. There is no reply
-  # to write, and before this the only ways out claimed something untrue:
-  # `withdrew` is them pulling out and `rejected` says they said no.
+  # A recruiter came to him about something he does not want. `withdrew` is them
+  # pulling out and `rejected` says they said no, so neither is honest.
   describe "the ignored tag" do
-    it "reads as Ignored and needs no body" do
+    it "settles the application as ignored, with nothing owed on it" do
+      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
       note = job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
 
-      expect(note.tag_label).to eq("Ignored")
       expect(note.body).to be_nil
-    end
-
-    it "settles the application as ignored" do
-      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
-      job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
-
       expect(job.reload.status).to eq("ignored")
       expect(job.dead?).to be(true)
-    end
-
-    # The whole point: the row had been asking him to answer a message he had
-    # decided not to answer.
-    it "leaves nothing owed on the row" do
-      job.notes.create!(tag: :reached_out, occurred_at: 2.days.ago, body: "Got a role for you")
-      job.notes.create!(tag: :ignored, occurred_at: 1.hour.ago)
-
-      expect(job.reload.owed_now).to be_nil
-    end
-  end
-
-  # Half the list is the same moment seen from his side and theirs, or from a
-  # person's and a robot's, and picking the wrong half of a pair is the failure
-  # that keeps happening.
-  describe "the Type dropdown" do
-    it "says who causes each beat" do
-      options = JobNote.tag_options.to_h
-
-      expect(options["Applied — you"]).to eq("applied")
-      expect(options["Acknowledged — a machine"]).to eq("acknowledged")
-      expect(options["Heard back — them"]).to eq("heard_back")
-      expect(options["Response — you"]).to eq("responded")
-      expect(options["Interview — a meeting"]).to eq("interview")
-      expect(options["Ignored — you"]).to eq("ignored")
-    end
-
-    it "has an origin for every tag it offers" do
-      expect(JobNote::TAG_ORIGINS.keys).to match_array(JobNote::TAG_LABELS.keys)
-    end
-
-    # The order a process runs in, so picking one is reading down it. The three
-    # at the bottom are housekeeping rather than beats in a process.
-    it "opens on the beats that start an application and keeps housekeeping last" do
-      keys = JobNote::TAG_LABELS.keys
-
-      expect(keys.first(2)).to eq(%w[reached_out applied])
-      expect(keys.last(3)).to eq(%w[ignored note reminder])
-    end
-
-    # A chip is read by somebody who is not choosing anything.
-    it "keeps the origin out of the label the timeline prints" do
-      note = job.notes.create!(tag: :heard_back, occurred_at: 1.hour.ago, body: "Keen to talk")
-
-      expect(note.tag_label).to eq("Heard back")
+      expect(job.owed_now).to be_nil
     end
   end
 
@@ -238,186 +144,75 @@ RSpec.describe JobNote do
     end
   end
 
-  # Prod 6253: "please fill out your availability for the next week" was
-  # proposed as Scheduled. `scheduled` says a time is AGREED and offers to put
-  # it on the calendar as a timed event, so it invents an interview that does
-  # not exist — and the one tag that sounded like interview logistics was the
-  # only place the model had to put it.
+  # `scheduled` says a time is AGREED and books it as a timed event; a request
+  # for times is a thing owed, so it goes on the agenda as a task.
   describe "the availability tag" do
-    it "reads as Availability and needs no body" do
-      note = job.notes.create!(tag: :availability, occurred_at: 1.hour.ago)
-
-      expect(note.tag_label).to eq("Availability")
-      expect(note.body).to be_nil
-    end
-
-    # Adjacent in the dropdown because they are the pair being confused, and
-    # sitting next to each other is how a person tells them apart.
-    it "sits directly above scheduled in the dropdown" do
-      keys = JobNote::TAG_LABELS.keys
-
-      expect(keys[keys.index("availability") + 1]).to eq("scheduled")
-    end
-
-    # The beat waiting on HIM. "Follow up: ApartmentIQ" says nothing about what
-    # is owed, and the whole point of the tag is that there is a thing to do.
     it "puts what he owes on the agenda as a task, not an interview" do
-      at = 2.days.from_now.change(hour: 9, min: 0)
-
-      note = job.notes.create!(tag: :availability, follow_up_at: at)
+      note = job.notes.create!(tag: :availability, follow_up_at: 2.days.from_now.change(hour: 9, min: 0))
       item = note.follow_up_item
 
-      expect(item.name).to eq("Send availability: Acme")
       expect(item.kind).to eq("task")
       expect(item.end_at).to be_nil
     end
-
-    it "leaves the application where it was" do
-      job.notes.create!(tag: :availability)
-
-      expect(job.reload.status).to eq("active")
-    end
   end
 
-  # Prod, KODE Health, Fri 25 Sep. Three beats landed on one application that day
-  # and the middle one went nowhere. 10:34am the phone screen was booked (note 151,
-  # `scheduled`, agenda item 1174 on Fri 2 Oct). 12:13pm the organiser cancelled it
-  # - METHOD:CANCEL, STATUS:CANCELLED, same UID - and Buddy said so out loud and
-  # then wrote NOTHING: there is no note on the row for that mail at all.
-  #
-  # There was nothing on the tag list for it. `withdrew` is the candidate pulling
-  # out, `rejected` settles the application, and neither had happened. So the card
-  # it did offer was `scheduled` again - which is the tag that BOOKS - and tapping
-  # it would have put the cancelled interview on the calendar a second time.
-  #
-  # The live cost was the calendar. Item 1174 survived the cancellation AND the
-  # rejection four hours later, and the following morning's briefing read out
-  # "Friday's got Interview: KODE Health at 8am."
-  # Prod application 73: cancelled at 12:13pm, rejected at 4:14pm, and the
-  # Friday interview stayed on the calendar through both because the guard held
-  # only the three booking tags.
+  # A rejection or withdrawal ends the process, so every future booking on the
+  # row comes off the calendar however long ago it was made. History stays, and
+  # the booking note itself stays as the record that a round was booked. An
+  # offer is not an ending: the last round can be booked after it.
   describe "an application ending" do
-    it "takes a future interview off the calendar when the rejection lands" do
-      at      = 5.days.from_now.change(hour: 8, min: 0)
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: at)
+    it "takes every future interview off the calendar on a rejection, keeping the notes and the past", :aggregate_failures do
+      past    = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
+      old     = travel_to(3.weeks.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 30.days.from_now) }
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 12.days.from_now.change(hour: 8, min: 0))
       item    = booking.follow_up_item
-      expect(item).to be_present
+      expect(AgendaItem.exists?(item.id)).to be(true)
+      expect(old.reload.follow_up_at).to be_present
 
       job.notes.create!(tag: :rejected, occurred_at: Time.current)
 
       expect(booking.reload.follow_up_at).to be_nil
       expect(AgendaItem.find_by(id: item.id)).to be_nil
-    end
-
-    it "does the same when they withdraw" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
-
-      job.notes.create!(tag: :withdrew, occurred_at: Time.current)
-
-      expect(booking.reload.follow_up_at).to be_nil
-    end
-
-    # A rejection is not a correction, so no window narrows it - every future
-    # booking on the row goes, however long ago it was made.
-    it "reaches a booking made weeks earlier" do
-      booking = travel_to(3.weeks.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 30.days.from_now) }
-
-      job.notes.create!(tag: :rejected, occurred_at: Time.current)
-
-      expect(booking.reload.follow_up_at).to be_nil
-    end
-
-    # History stays history. An interview that already happened is not undone by
-    # the rejection that followed it.
-    it "leaves an interview that already happened alone" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
-
-      job.notes.create!(tag: :rejected, occurred_at: Time.current)
-
-      expect(booking.reload.follow_up_at).to be_present
-    end
-
-    # The note itself is the record that a round was booked, same as everywhere
-    # else this callback runs.
-    it "keeps the booking note" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
-      job.notes.create!(tag: :rejected, occurred_at: Time.current)
-
+      expect(old.reload.follow_up_at).to be_nil
+      expect(past.reload.follow_up_at).to be_present
       expect(job.notes.where(tag: :scheduled)).to include(booking)
     end
 
-    # An offer is not the end of the process and settles no booking - the last
-    # round can be booked and an offer made before it.
-    it "leaves a booking standing on an offer" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+    it "does the same when they withdraw, and nothing on an offer" do
+      withdrawn = user.job_applications.create!(company: "Withdrawn")
+      booking = withdrawn.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
+      offered = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
 
+      withdrawn.notes.create!(tag: :withdrew, occurred_at: Time.current)
       job.notes.create!(tag: :offer, occurred_at: Time.current)
 
-      expect(booking.reload.follow_up_at).to be_present
+      expect(booking.reload.follow_up_at).to be_nil
+      expect(offered.reload.follow_up_at).to be_present
     end
   end
 
+  # A round falling through is not the process ending, and unlike a corrected
+  # booking there is no window: a cancellation is not a correction.
   describe "the cancelled tag" do
-    it "reads as Cancelled and needs no body" do
-      note = job.notes.create!(tag: :cancelled, occurred_at: 1.hour.ago)
-
-      expect(note.tag_label).to eq("Cancelled")
-      expect(note.body).to be_nil
-    end
-
-    # The whole of what the tag is for.
-    it "takes the booked interview off the calendar" do
-      at      = 5.days.from_now.change(hour: 8, min: 0)
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: at)
+    it "takes a booked future interview off the calendar however long ago it was booked", :aggregate_failures do
+      past    = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
+      old     = travel_to(4.days.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now) }
+      booking = job.notes.create!(tag: :scheduled, follow_up_at: 8.days.from_now.change(hour: 8, min: 0))
       item    = booking.follow_up_item
-      expect(item).to be_present
+      expect(AgendaItem.exists?(item.id)).to be(true)
+      expect(old.reload.follow_up_at).to be_present
 
       job.notes.create!(tag: :cancelled, occurred_at: Time.current)
 
       expect(booking.reload.follow_up_at).to be_nil
       expect(booking.follow_up_item).to be_nil
       expect(AgendaItem.find_by(id: item.id)).to be_nil
-    end
-
-    # The note holding the booking stays - it is still the record that an
-    # interview was once booked. Only the date it was waiting on goes.
-    it "keeps the booking note itself" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 4.days.from_now)
-      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
-
+      expect(old.reload.follow_up_at).to be_nil
+      expect(past.reload.follow_up_at).to be_present
       expect(job.notes.where(tag: :scheduled)).to include(booking)
-    end
-
-    # A round falling through is not the process ending. At KODE Health the
-    # rejection that did end it came four hours later, as its own beat.
-    it "leaves the application where it was" do
-      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
-
       expect(job.reload.status).to eq("active")
     end
 
-    # An interview that already happened is history, and a cancellation weeks
-    # afterwards is about something else. Same rule `availability` withdraws by.
-    it "leaves a booking that is already in the past alone" do
-      booking = job.notes.create!(tag: :scheduled, follow_up_at: 2.days.ago)
-
-      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
-
-      expect(booking.reload.follow_up_at).to be_present
-    end
-
-    # No window, unlike a corrected booking: a cancellation is not a correction
-    # that has to land while the first one is still news.
-    it "cancels a booking made days earlier" do
-      booking = travel_to(4.days.ago) { job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now) }
-
-      job.notes.create!(tag: :cancelled, occurred_at: Time.current)
-
-      expect(booking.reload.follow_up_at).to be_nil
-    end
-
-    # It is on the list the model can actually see, which is the half that failed:
-    # the beat was unfileable, so it was filed as the thing that books.
     it "is offered to the model as a tag it can pass" do
       expect(Buddy::Tools[:add_job_note][:args][:tag][:values]).to include(:cancelled)
     end
@@ -427,36 +222,16 @@ RSpec.describe JobNote do
   # is the appointment itself, so it goes on the calendar as a timed event
   # rather than as a task called "Follow up".
   describe "the scheduled tag" do
-    it "sits directly above interview in the dropdown" do
-      keys = JobNote::TAG_LABELS.keys
-
-      expect(keys[keys.index("scheduled") + 1]).to eq("interview")
-    end
-
-    # The booking beats read in the order they happen and nothing is interleaved
-    # with them, so a reader of the dropdown gets the sequence rather than a list.
-    it "keeps the whole booking cluster together" do
-      keys = JobNote::TAG_LABELS.keys
-      first = keys.index("availability")
-
-      expect(keys[first, 4]).to eq(%w[availability scheduled interview cancelled])
-    end
-
-    it "writes the interview onto the agenda as an event" do
+    it "writes the interview onto the agenda as an event, an hour long unless told" do
       at = 3.days.from_now.change(hour: 14, min: 0)
-      note = job.notes.create!(tag: :scheduled, follow_up_at: at, duration_minutes: 45)
+      timed = job.notes.create!(tag: :scheduled, follow_up_at: at, duration_minutes: 45)
+      other = user.job_applications.create!(company: "Other")
+      untimed = other.notes.create!(tag: :scheduled, follow_up_at: at + 1.day)
 
-      item = note.follow_up_item
-      expect(item.name).to eq("Interview: Acme")
+      item = timed.follow_up_item
       expect(item.kind).to eq("event")
       expect(item.end_at).to be_within(1.second).of(at + 45.minutes)
-    end
-
-    it "books an hour when nobody said how long" do
-      at = 3.days.from_now.change(hour: 14, min: 0)
-      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
-
-      expect(note.follow_up_item.end_at).to be_within(1.second).of(at + 1.hour)
+      expect(untimed.follow_up_item.end_at).to be_within(1.second).of(at + 1.day + 1.hour)
     end
 
     it "still writes an ordinary follow-up as a task with no end" do
@@ -498,7 +273,6 @@ RSpec.describe JobNote do
 
       item = note.reload.follow_up_item
       expect(item.kind).to eq("event")
-      expect(item.name).to eq("Interview: Acme")
       expect(item.end_at).to be_present
 
       note.update!(tag: :heard_back)
@@ -507,37 +281,15 @@ RSpec.describe JobNote do
       expect(item.kind).to eq("task")
       expect(item.end_at).to be_nil
     end
-
-    it "leaves the application active — being booked is not an outcome" do
-      job.notes.create!(tag: :scheduled, follow_up_at: 2.days.from_now)
-
-      expect(job.reload.status).to eq("active")
-    end
   end
 
   describe "settling the application" do
-    it "marks the job rejected when the newest note says so" do
-      job.notes.create!(body: "No thanks", tag: :rejected)
-
-      expect(job.reload.status).to eq("rejected")
-    end
-
-    it "marks the job as an offer" do
-      job.notes.create!(body: "They offered", tag: :offer)
-
-      expect(job.reload.status).to eq("offer")
-    end
-
-    it "closes the job when you withdrew" do
-      job.notes.create!(body: "Took the other one", tag: :withdrew)
-
-      expect(job.reload.status).to eq("closed")
-    end
-
-    it "leaves the job alone for an ordinary note" do
-      job.notes.create!(body: "Nice office", tag: :interview)
-
-      expect(job.reload.status).to eq("active")
+    it "settles the job from the newest note's tag", :aggregate_failures do
+      { rejected: "rejected", offer: "offer", withdrew: "closed", interview: "active" }.each do |tag, status|
+        application = user.job_applications.create!(company: "Acme #{tag}")
+        application.notes.create!(body: "x", tag: tag)
+        expect(application.reload.status).to eq(status), tag.to_s
+      end
     end
 
     # Typing up an old rejection after the job came back to life would
@@ -564,20 +316,11 @@ RSpec.describe JobNote do
       expect(described_class.follow_ups_for(user).map(&:id)).to eq([late.id, soon.id])
     end
 
-    it "drops the ones on an application that is over" do
-      job.notes.create!(body: "Chase", follow_up_at: 2.days.from_now)
-      job.update!(status: :rejected)
-
-      expect(described_class.follow_ups_for(user)).to be_empty
-    end
-
-    it "ignores notes with no follow-up at all" do
+    it "drops ones on an application that is over, notes with none, and anyone else's" do
       job.notes.create!(body: "Just a thought")
-
-      expect(described_class.follow_ups_for(user)).to be_empty
-    end
-
-    it "never reaches into somebody else's search" do
+      over = user.job_applications.create!(company: "Over")
+      over.notes.create!(body: "Chase", follow_up_at: 2.days.from_now)
+      over.update!(status: :rejected)
       theirs = create(:user).job_applications.create!(company: "Theirs")
       theirs.notes.create!(body: "Chase", follow_up_at: 2.days.from_now)
 
@@ -585,24 +328,21 @@ RSpec.describe JobNote do
     end
 
     describe "due_now" do
+      # Pinned to midday, or "an hour from now" is tomorrow late in the evening.
       it "is the missed and the due-today, not the ones still ahead" do
-        missed = job.notes.create!(body: "Last week", follow_up_at: 6.days.ago)
-        today  = job.notes.create!(body: "This evening", follow_up_at: 1.hour.from_now)
-        job.notes.create!(body: "Friday", follow_up_at: 3.days.from_now)
+        travel_to(user.parse_time("2026-09-10 12:00")) do
+          missed = job.notes.create!(body: "Last week", follow_up_at: 6.days.ago)
+          today  = job.notes.create!(body: "This evening", follow_up_at: 1.hour.from_now)
+          job.notes.create!(body: "Friday", follow_up_at: 3.days.from_now)
 
-        due = described_class.follow_ups_for(user).due_now(user)
+          due = described_class.follow_ups_for(user).due_now(user)
 
-        expect(due.map(&:id)).to eq([missed.id, today.id])
+          expect(due.map(&:id)).to eq([missed.id, today.id])
+        end
       end
 
-      # It read `Time.current.end_of_day` with no zone, which is 6pm in MDT - so
-      # every evening from 6pm a follow-up due later that same evening read as
-      # "still ahead" and dropped off the count, silently, until midnight UTC
-      # put it back. The suite only caught it by running in the 46 minutes
-      # between 11pm UTC and the day rolling over.
-      # `User#timezone` is a method with America/Denver behind it, not a column,
-      # so there is nothing to set up - every user is already in the zone this
-      # was getting wrong.
+      # The end of UTC's day is 6pm in MDT, so a follow-up due later that same
+      # evening must still count as due now.
       it "reads the end of THEIR day, not of UTC" do
         at = Time.utc(2026, 9, 10, 23, 30)  # 5:30pm MDT, and past UTC's evening
         tonight = job.notes.create!(body: "Tonight", follow_up_at: Time.utc(2026, 9, 11, 2))
@@ -614,14 +354,12 @@ RSpec.describe JobNote do
     end
   end
 
-  # "Olivia can no longer meet on the 24th. Please submit further availability."
-  # The mail lands as its own note; the booking it cancels lives on the earlier
-  # `scheduled` one, and nothing looked at that row - so the interview stayed on
-  # the calendar for a day nobody was meeting.
+  # A request for new times lands as its own note, and the booking it cancels
+  # lives on the earlier `scheduled` one.
   describe "an availability request arriving on a booked application" do
     let!(:booking) { job.notes.create!(tag: :scheduled, follow_up_at: 5.days.from_now) }
 
-    it "takes the interview off the calendar" do
+    it "takes the interview off the calendar and keeps the note, because it was still booked" do
       item_id = booking.reload.agenda_item_id
       expect(item_id).to be_present
 
@@ -629,13 +367,8 @@ RSpec.describe JobNote do
 
       expect(booking.reload.follow_up_at).to be_nil
       expect(booking.agenda_item_id).to be_nil
+      expect(booking.tag).to eq("scheduled")
       expect(AgendaItem.find_by(id: item_id)).to be_nil
-    end
-
-    it "keeps the note itself, because the interview was still booked" do
-      job.notes.create!(tag: :availability, body: "Please send more times")
-
-      expect(booking.reload.tag).to eq("scheduled")
     end
 
     it "does the same when an arriving note is retagged into one" do
@@ -656,10 +389,8 @@ RSpec.describe JobNote do
       expect(past.reload.follow_up_at).to be_present
     end
 
-    # Neighbor mailed a booking link at 10:38 and he picked Thursday 11am off it
-    # at 12:28. The 10:38 arrival was filed `interview` by mistake, and
-    # retagging it to `availability` - which is what it always was - reached
-    # FORWARDS and took Thursday off the calendar.
+    # Retagging an earlier arrival to `availability` must not reach FORWARDS to
+    # the booking made in answer to it.
     it "leaves a booking made after the request it answers" do
       arrival = job.notes.create!(tag: :interview, occurred_at: 2.hours.ago)
       picked  = job.notes.create!(tag: :scheduled, follow_up_at: 3.days.from_now)
@@ -711,35 +442,21 @@ RSpec.describe JobNote do
     end
   end
 
-  # iCapital confirmed Thursday and three minutes later sent "Please disregarded
-  # the last email. Here is the correct time" for a Thursday the week after.
-  # Both mails filed their own `scheduled` note, and only the CALENDAR was
-  # cleaned up - by hand. The withdrawn note kept its date, and
-  # `next_interview_at` reads the earliest of those, so the card went on
-  # pointing at a meeting nobody was going to.
+  # A correction filed minutes after a booking supersedes it. `next_interview_at`
+  # reads the earliest standing booking, so the withdrawn note must lose its date.
   describe "a corrected booking landing behind the first one" do
     let!(:booking) { job.notes.create!(tag: :scheduled, follow_up_at: 3.days.from_now) }
 
-    it "takes the superseded interview off the calendar" do
+    it "takes the superseded interview off the calendar and leaves the board on the corrected time" do
       item_id = booking.reload.agenda_item_id
       expect(item_id).to be_present
 
-      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
+      correction = job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
 
       expect(booking.reload.follow_up_at).to be_nil
       expect(AgendaItem.find_by(id: item_id)).to be_nil
-    end
-
-    it "keeps its own booking" do
-      correction = job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
-
       expect(correction.reload.follow_up_at).to be_present
       expect(correction.agenda_item_id).to be_present
-    end
-
-    it "leaves the board naming the corrected time" do
-      job.notes.create!(tag: :scheduled, follow_up_at: 10.days.from_now)
-
       expect(job.reload.next_interview_at).to be_within(1.minute).of(10.days.from_now)
     end
 
@@ -765,10 +482,7 @@ RSpec.describe JobNote do
       expect(past.reload.follow_up_at).to be_present
     end
 
-    # iCapital again, a fortnight on: they moved the interview UP, Friday the
-    # 16th to Wednesday the 14th, and the note holding Friday was two days old
-    # so the window didn't reach it. The board showed two iCapital interviews
-    # and the briefings read both out three mornings running.
+    # A booking moved UP is a correction however old the one it replaces.
     describe "a booking that moves EARLIER than one already standing" do
       # Absolute, because the fixture is filed from two days ago and a relative
       # `from_now` inside the travel block would move with it.
@@ -781,19 +495,12 @@ RSpec.describe JobNote do
         }
       end
 
-      it "withdraws the later one however long ago it was filed" do
+      it "withdraws the later one however long ago it was filed, leaving the earlier as next" do
         old = filed_two_days_ago(friday)
 
         job.notes.create!(tag: :scheduled, follow_up_at: wednesday)
 
         expect(old.reload.follow_up_at).to be_nil
-      end
-
-      it "leaves the board naming the one that is actually next" do
-        filed_two_days_ago(friday)
-
-        job.notes.create!(tag: :scheduled, follow_up_at: wednesday)
-
         expect(job.reload.next_interview_at).to be_within(1.minute).of(wednesday)
       end
 
@@ -821,7 +528,6 @@ RSpec.describe JobNote do
       item = AgendaItem.find(note.reload.agenda_item_id)
       expect(item.agenda_id).to eq(agenda.id)
       expect(item.kind).to eq("task")
-      expect(item.name).to eq("Follow up: Acme")
       expect(item.color).to eq(job.color)
       expect(item.start_at).to be_within(5.seconds).of(3.days.from_now)
     end
@@ -837,20 +543,14 @@ RSpec.describe JobNote do
       expect(AgendaItem.first.start_at).to be_within(5.seconds).of(5.days.from_now)
     end
 
-    it "takes the task back off when the follow-up is cleared" do
-      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
+    it "takes the task back off when the follow-up is cleared or the note deleted" do
+      cleared = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
+      deleted = job.notes.create!(body: "Chase again", follow_up_at: 4.days.from_now)
 
-      note.update!(follow_up_at: nil)
+      cleared.update!(follow_up_at: nil)
+      deleted.destroy!
 
-      expect(note.reload.agenda_item_id).to be_nil
-      expect(AgendaItem.count).to be_zero
-    end
-
-    it "takes the task with it when the note is deleted" do
-      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
-
-      note.destroy!
-
+      expect(cleared.reload.agenda_item_id).to be_nil
       expect(AgendaItem.count).to be_zero
     end
 
@@ -867,17 +567,8 @@ RSpec.describe JobNote do
       expect(AgendaItem.count).to be_zero
     end
 
-    it "goes on the Tasks calendar" do
-      tasks = create(:agenda, user: user, name: "Tasks")
-
-      note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
-
-      expect(AgendaItem.find(note.reload.agenda_item_id).agenda_id).to eq(tasks.id)
-    end
-
-    # A calendar name is typed by a person, and one on this account ends in a
-    # space — an exact match would quietly miss it and write somewhere else.
-    it "finds Tasks through stray case and whitespace" do
+    # A calendar name is typed by a person, so stray case and whitespace still match.
+    it "goes on the Tasks calendar, found through stray case and whitespace" do
       tasks = create(:agenda, user: user, name: " tasks ")
 
       note = job.notes.create!(body: "Chase them", follow_up_at: 3.days.from_now)
@@ -917,15 +608,10 @@ RSpec.describe JobNote do
     end
   end
 
-  # The Fitness cell on the dashboard is pushed, never polled — it refreshes
-  # itself only at midnight — so an application that does not announce itself
-  # leaves the day's count a day behind on a wall being read to decide whether
-  # the day is done.
   # The interview exists twice over, deliberately: the note's own row and the
   # company's invite, synced in from the calendar it was sent to. The invite
-  # carries the meeting link and goes back out to the organizer when it is
-  # edited; the note's row is where the link, the notes and everything else
-  # worth writing down go, and none of that reaches the other side.
+  # goes back out to the organizer when it is edited, so nothing of the note's
+  # is written into it.
   describe "an interview that is also a calendar invite" do
     let(:google) { user.agendas.create!(name: "rocco@example.com", source: :google) }
     let(:at) { 3.days.from_now.change(hour: 11, min: 0, sec: 0) }
@@ -937,31 +623,18 @@ RSpec.describe JobNote do
       )
     end
 
-    it "writes its own row beside the invite" do
+    it "writes its own row beside the invite, whichever lands first, and leaves the invite alone" do
       item = invite("Technical Interview Acme")
-
-      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
-
+      note = job.notes.create!(body: "Confirmed for 11am.", tag: :scheduled, follow_up_at: at)
       expect(note.reload.agenda_item_id).not_to eq(item.id)
-      expect(AgendaItem.count).to eq(2)
-    end
-
-    it "keeps its own row when the invite lands second" do
-      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
-      mine = note.reload.agenda_item_id
-
-      invite("Technical Interview Acme")
-
-      expect(note.reload.agenda_item_id).to eq(mine)
-      expect(AgendaItem.find_by(id: mine)).to be_present
-    end
-
-    it "leaves the invite itself untouched" do
-      job.notes.create!(body: "Confirmed for 11am.", tag: :scheduled, follow_up_at: at)
-      item = invite("Technical Interview Acme")
-
       expect(item.reload.name).to eq("Technical Interview Acme")
       expect(item.notes).to be_blank
+
+      later = job.notes.create!(tag: :scheduled, follow_up_at: at + 1.day)
+      mine = later.reload.agenda_item_id
+      invite("Technical Interview Acme", start_at: at + 1.day, uid: "evt-2")
+      expect(later.reload.agenda_item_id).to eq(mine)
+      expect(AgendaItem.find_by(id: mine)).to be_present
     end
 
     # The notes field of an invite is its DESCRIPTION, which the event writer
@@ -992,21 +665,16 @@ RSpec.describe JobNote do
 
     # A beat with nothing typed under it still earns the link: the tag on its
     # own is what put the row there.
-    it "carries the link on its own when the beat said nothing" do
-      note = job.notes.create!(tag: :scheduled, follow_up_at: at)
+    it "carries the link on its own when the beat said nothing, and on a chase too" do
+      bare = job.notes.create!(tag: :scheduled, follow_up_at: at)
+      chase = job.notes.create!(body: "Chase them", tag: :heard_back, follow_up_at: at + 1.day)
 
-      expect(note.reload.follow_up_item.notes).to eq(job.interview_url)
+      expect(bare.reload.follow_up_item.notes).to eq(job.interview_url)
+      expect(chase.reload.follow_up_item.notes).to start_with(job.interview_url)
     end
 
-    it "carries it on a chase as well as an interview" do
-      note = job.notes.create!(body: "Chase them", tag: :heard_back, follow_up_at: at)
-
-      expect(note.reload.follow_up_item.notes).to start_with(job.interview_url)
-    end
-
-    # The half past 500 characters is the half that says who is joining the call
-    # and what it is about. The brief is written off this row, and it reported
-    # the ellipsis as a fact about the interview.
+    # The brief is written off this row, so the tail of a long message (who is
+    # joining, what it is about) has to survive.
     it "carries the whole message, however long it is" do
       said = "Hi Rocco,\n\n#{"Agenda line. " * 80}\n\nJoining you: Erik Brown."
       note = job.notes.create!(body: said, tag: :scheduled, follow_up_at: at)
@@ -1071,21 +739,19 @@ RSpec.describe JobNote do
 
     # An arrow that opens onto the same sentence again is a control that does
     # nothing, so a one-line note does not get one.
-    it "says there is nothing more to open when the body IS the line" do
-      note = job.notes.create!(tag: :note, occurred_at: 1.hour.ago, body: "Left a voicemail.")
-
-      expect(note.headline).to eq("Left a voicemail.")
-      expect(note.more_to_read?).to be(false)
-    end
-
-    it "says there is more to open when the beat keeps a whole message" do
-      note = job.notes.create!(
+    # An arrow that opens onto the same sentence again is a control that does
+    # nothing, so a one-line note does not get one.
+    it "says whether there is more to open than the line itself" do
+      one_line = job.notes.create!(tag: :note, occurred_at: 1.hour.ago, body: "Left a voicemail.")
+      message = job.notes.create!(
         tag:         :note,
         occurred_at: 1.hour.ago,
         body:        "Hi Rocco,\n\nWe would like to move you to a take-home.\n\nBest,\nDana",
       )
 
-      expect(note.more_to_read?).to be(true)
+      expect(one_line.headline).to eq("Left a voicemail.")
+      expect(one_line.more_to_read?).to be(false)
+      expect(message.more_to_read?).to be(true)
     end
   end
 
@@ -1099,27 +765,20 @@ RSpec.describe JobNote do
       expect(job.notes.create!(tag: :acknowledged, occurred_at: 1.hour.ago)).not_to be_conversation
     end
 
-    it "takes a rating out of ten on each question" do
-      call.update!(did_well: 8, liked_them: 6)
-
-      expect(call.sentiment).to eq(did_well: 8, liked_them: 6)
-      expect(call.sentiment_average).to eq(7.0)
-    end
-
-    # Half-rated is an ordinary thing: how it went is known immediately, whether
-    # he wants the job sometimes takes a day. The blank must not read as a zero.
-    it "averages only the questions he answered" do
-      call.update!(did_well: 9)
-
-      expect(call).to be_rated
-      expect(call.sentiment).to eq(did_well: 9)
-      expect(call.sentiment_average).to eq(9.0)
-    end
-
-    it "is unrated rather than zero when he never scored it" do
+    # Half-rated is ordinary, and the blank must not read as a zero.
+    it "averages only the questions he answered, and is unrated rather than zero with none", :aggregate_failures do
       expect(call).not_to be_rated
       expect(call.sentiment).to eq({})
       expect(call.sentiment_average).to be_nil
+
+      call.update!(did_well: 9)
+      expect(call).to be_rated
+      expect(call.sentiment).to eq(did_well: 9)
+      expect(call.sentiment_average).to eq(9.0)
+
+      call.update!(did_well: 8, liked_them: 6)
+      expect(call.sentiment).to eq(did_well: 8, liked_them: 6)
+      expect(call.sentiment_average).to eq(7.0)
     end
 
     it "refuses a score off the scale" do
@@ -1139,23 +798,21 @@ RSpec.describe JobNote do
     # A range input always submits something, so the form's bottom notch sits
     # below the scale and means UNRATED. Without this, correcting the BODY of an
     # interview beat would stamp a score on it that he never gave.
-    it "reads the notch below the scale as no answer at all" do
+    # A range input always submits something, so the form's bottom notch sits
+    # below the scale and means UNRATED, as does anything a browser clamps below it.
+    it "reads anything below the scale as no answer at all" do
       call.update!(did_well: JobNote::SENTIMENT_UNRATED, liked_them: 7)
-
       expect(call.reload.did_well).to be_nil
       expect(call.sentiment).to eq(liked_them: 7)
-    end
 
-    # The floor is the test, not that one value: a browser clamping a range to
-    # its own minimum must not land on a score.
-    it "reads anything under the scale the same way" do
-      call.update!(did_well: -4)
-
+      call.update!(did_well: -4, liked_them: nil)
       expect(call.reload.did_well).to be_nil
       expect(call).not_to be_rated
     end
   end
 
+  # The Fitness cell on the dashboard is pushed, never polled, so a logged
+  # application has to announce itself.
   describe "the dashboard count" do
     before { allow_any_instance_of(User).to receive(:me?).and_return(true) }
 

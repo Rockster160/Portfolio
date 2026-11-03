@@ -23,27 +23,12 @@ RSpec.describe TerminalWatch do
       )
     end
 
-    it "does not broadcast when the trigger scope differs" do
+    it "does not broadcast for another scope, a payload the filter misses, or another user" do
       described_class.register(user, watch_id, "hass-sensor:location:doorbell")
 
       described_class.dispatch(user, :email, { from: "doorbell" })
-
-      expect(::MonitorChannel).not_to have_received(:broadcast_to)
-    end
-
-    it "does not broadcast when the listener filter does not match the payload" do
-      described_class.register(user, watch_id, "hass-sensor:location:doorbell")
-
       described_class.dispatch(user, :"hass-sensor", { location: "garage" })
-
-      expect(::MonitorChannel).not_to have_received(:broadcast_to)
-    end
-
-    it "does not broadcast to a different user" do
-      other = FactoryBot.create(:user)
-      described_class.register(user, watch_id, "hass-sensor:location:doorbell")
-
-      described_class.dispatch(other, :"hass-sensor", { location: "doorbell" })
+      described_class.dispatch(FactoryBot.create(:user), :"hass-sensor", { location: "doorbell" })
 
       expect(::MonitorChannel).not_to have_received(:broadcast_to)
     end

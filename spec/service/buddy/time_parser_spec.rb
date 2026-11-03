@@ -16,20 +16,10 @@ RSpec.describe Buddy::TimeParser do
       expect(described_class.parse_past("now", user: user)).to be_nil
     end
 
-    it "parses ISO timestamps" do
-      t = described_class.parse_past("2026-07-27T10:00:00-06:00", user: user)
-      expect(t).to eq(Time.zone.parse("2026-07-27T10:00:00-06:00"))
-    end
-
-    it "parses 'an hour ago' as -1 hour" do
+    it "parses ISO timestamps and relative offsets", :aggregate_failures do
+      expect(described_class.parse_past("2026-07-27T10:00:00-06:00", user: user)).to eq(Time.zone.parse("2026-07-27T10:00:00-06:00"))
       expect(described_class.parse_past("an hour ago", user: user)).to eq(Time.current - 1.hour)
-    end
-
-    it "parses '30 minutes ago'" do
       expect(described_class.parse_past("30 minutes ago", user: user)).to eq(Time.current - 30.minutes)
-    end
-
-    it "parses '2 hours ago'" do
       expect(described_class.parse_past("2 hours ago", user: user)).to eq(Time.current - 2.hours)
     end
 
@@ -39,15 +29,10 @@ RSpec.describe Buddy::TimeParser do
       expect(t.to_date).to eq(Time.current.in_time_zone("America/Denver").to_date)
     end
 
-    it "parses '8:15am' as today 8:15" do
+    it "parses a clock time already gone as today", :aggregate_failures do
       t = described_class.parse_past("8:15am", user: user)
-      expect(t.hour).to eq(8)
-      expect(t.min).to eq(15)
-    end
-
-    it "parses '7pm' as today 19:00" do
-      t = described_class.parse_past("7pm", user: user)
-      expect(t.hour).to eq(19)
+      expect([t.hour, t.min]).to eq([8, 15])
+      expect(described_class.parse_past("7pm", user: user).hour).to eq(19)
     end
 
     it "rolls a future clock time back a day" do

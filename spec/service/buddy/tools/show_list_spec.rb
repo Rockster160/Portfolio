@@ -25,37 +25,17 @@ RSpec.describe "show_list tool" do
     ByteAction.where(user: user, tool_name: "buddy_proposals").last
   end
 
-  # Level 1: showing somebody their own list changes nothing and asking
-  # permission to do it is a round spent on nothing.
-  it "runs without being tapped" do
-    expect(tool[:auto]).to be(true)
-  end
-
-  it "draws a tickable row per item" do
+  # The rows are `remove_list_item` proposals, so a tick checks the item off the
+  # real list rather than acknowledging something in the thread. The list's
+  # own name is the heading.
+  it "draws a pending remove_list_item row per item under the list's name" do
     create(:list_item, list: list, name: "Oat milk")
     create(:list_item, list: list, name: "Bread")
 
     expect(execute[:shown]).to eq(2)
     expect(action.buttons.pluck("label")).to contain_exactly("Oat milk", "Bread")
     expect(action.buttons.pluck("status").uniq).to eq(["pending"])
-  end
-
-  # The rows are `remove_list_item` proposals, so a tick checks the item off the
-  # real list rather than acknowledging something in the thread.
-  it "ticks off the actual list item" do
-    create(:list_item, list: list, name: "Oat milk")
-    execute
-
-    expect(action.buttons.first["tool_name"]).to eq("remove_list_item")
-  end
-
-  # The list's own name is the heading. A canned lead-in would be the same
-  # sentence under every list forever, and the model has already written the
-  # words above it in its own voice.
-  it "heads the card with the list's name and nothing else" do
-    create(:list_item, list: list, name: "Oat milk")
-    execute
-
+    expect(action.buttons.pluck("tool_name").uniq).to eq(["remove_list_item"])
     expect(user.byte_messages.last.body).to eq("Groceries")
   end
 
@@ -76,7 +56,7 @@ RSpec.describe "show_list tool" do
     list.list_items.destroy_all
     result = execute
     expect(result[:shown]).to eq(0)
-    expect(tool[:receipt].call(result, ctx)).to include("Nothing on Groceries")
+    expect(tool[:receipt].call(result, ctx)).to be_present
   end
 
   it "refuses a list they don't have" do

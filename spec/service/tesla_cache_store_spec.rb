@@ -317,21 +317,13 @@ RSpec.describe TeslaCacheStore do
     end
 
     describe "drive.shift normalization" do
-      it "accepts Tesla's enum-string form (ShiftStateP)" do
-        described_class.record_telemetry(Gear: "ShiftStateP")
-        expect(car_data.dig(:drive, :shift)).to eq("P")
-        expect(car_data.dig(:drive, :parked)).to be(true)
-      end
+      it "accepts the enum-string, single-letter and integer-as-string forms" do
+        { "ShiftStateP" => ["P", true], "D" => ["D", false], "2" => ["P", true] }.each do |gear, (shift, parked)|
+          described_class.record_telemetry(Gear: gear)
 
-      it "accepts the short single-letter form ('D')" do
-        described_class.record_telemetry(Gear: "D")
-        expect(car_data.dig(:drive, :shift)).to eq("D")
-        expect(car_data.dig(:drive, :parked)).to be(false)
-      end
-
-      it "accepts the integer-as-string form ('2' → P)" do
-        described_class.record_telemetry(Gear: "2")
-        expect(car_data.dig(:drive, :shift)).to eq("P")
+          expect(car_data.dig(:drive, :shift)).to eq(shift), gear
+          expect(car_data.dig(:drive, :parked)).to be(parked), gear
+        end
       end
 
       it "falls through to endpoint drive_state.shift_state when telemetry hasn't sent Gear" do

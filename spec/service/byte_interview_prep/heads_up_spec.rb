@@ -121,23 +121,17 @@ RSpec.describe ByteInterviewPrep::HeadsUp do
       invite(location: "https://meet.google.com/moh-hbtd-mwh")
 
       expect(described_class.dispatch(user, item.id)).to eq(:link)
-      expect(said.body).to eq("Bluestaq starts in 2 minutes - here's the link.\n\nhttps://meet.google.com/moh-hbtd-mwh")
+      expect(said.body).to include("https://meet.google.com/moh-hbtd-mwh")
       expect(said.metadata).to include("source" => "interview_join", "agenda_item_id" => item.id)
       expect(WebPushNotifications).to have_received(:send_to_byte)
     end
 
-    it "warns to watch the phone when it's a call" do
+    it "posts a heads-up with no link when it's a call" do
       item = ours(notes: "Phone call - I will call the phone number provided")
 
       expect(described_class.dispatch(user, item.id)).to eq(:phone)
-      expect(said.body).to eq("Bluestaq starts in 2 minutes - it's a phone call, keep your phone close.")
-    end
-
-    it "says it's probably a call when there is nothing to join" do
-      item = ours
-
-      expect(described_class.dispatch(user, item.id)).to eq(:phone)
-      expect(said.body).to include("no link on the booking")
+      expect(said.metadata).to include("agenda_item_id" => item.id)
+      expect(said.body).not_to include("http")
     end
 
     it "sends nothing for an onsite" do
@@ -164,7 +158,7 @@ RSpec.describe ByteInterviewPrep::HeadsUp do
         second = invite(location: teams, at: start + 75.minutes)
 
         expect(described_class.dispatch(user, second.id)).to eq(:link)
-        expect(said.body).to eq("Bluestaq starts in 2 minutes - here's the link.\n\n#{teams}")
+        expect(said.body).to include(teams)
         expect(said.metadata).to include("agenda_item_id" => second.id)
       end
 

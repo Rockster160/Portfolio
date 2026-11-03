@@ -29,27 +29,10 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
 
     describe "GET #index" do
-      it "lists them alphabetically, with the steps spelled out" do
+      # Disabled ones are included, since turning one back on is the point.
+      it "lists their own alphabetically, disabled included, with the steps spelled out" do
         routine!("Wind Down")
-        routine!("Prep Printer")
-
-        get :index
-        body = response.parsed_body
-
-        expect(response).to be_successful
-        expect(body["routines"].pluck("name")).to eq(["Prep Printer", "Wind Down"])
-        expect(body["routines"].first["summary"]).to be_present
-      end
-
-      it "includes the disabled ones, since turning one back on is the point" do
-        routine!("Off", enabled: false)
-
-        get :index
-
-        expect(response.parsed_body["routines"].pluck("enabled")).to eq([false])
-      end
-
-      it "never shows someone else's" do
+        routine!("Prep Printer", enabled: false)
         BuddyRoutine.create!(
           user:  create(:user),
           name:  "Theirs",
@@ -57,39 +40,29 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
         )
 
         get :index
+        body = response.parsed_body
 
-        expect(response.parsed_body["routines"]).to be_empty
+        expect(response).to be_successful
+        expect(body["routines"].pluck("name")).to eq(["Prep Printer", "Wind Down"])
+        expect(body["routines"].pluck("enabled")).to eq([false, true])
+        expect(body["routines"].first["summary"]).to be_present
       end
     end
 
     describe "PATCH #update" do
-      it "renames one" do
-        routine = routine!("Nightly")
-
-        patch :update, params: { id: routine.id, routine: { name: "Bedtime" } }
-
-        expect(response).to be_successful
-        expect(routine.reload.name).to eq("Bedtime")
-      end
-
-      it "turns one off without losing it" do
-        routine = routine!("Nightly")
-
-        patch :update, params: { id: routine.id, routine: { enabled: false } }
-
-        expect(routine.reload.enabled).to be(false)
-        expect(routine.steps).to be_present
-      end
-
       # Steps come from save_routine, which validates them. Letting the panel post
       # raw steps would be a way around that check.
-      it "ignores steps posted from the panel" do
+      it "renames one and turns it off without losing it, ignoring posted steps" do
         routine = routine!("Nightly")
         before  = routine.steps
 
-        patch :update, params: { id: routine.id, routine: { name: "Bedtime", steps: [] } }
+        patch :update, params: { id: routine.id, routine: { name: "Bedtime", enabled: false, steps: [] } }
 
-        expect(routine.reload.steps).to eq(before)
+        expect(response).to be_successful
+        routine.reload
+        expect(routine.name).to eq("Bedtime")
+        expect(routine.enabled).to be(false)
+        expect(routine.steps).to eq(before)
       end
 
       it "can't reach someone else's" do
@@ -121,33 +94,19 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     # ones, so the whole thing is sent at once: pinning is that list plus one,
     # unpinning is it minus one, and a drag is the new order.
     describe "POST #reorder" do
-      it "pins in the order given" do
+      it "pins in the order given, unpins anything left out, and clears on nothing" do
         a = routine!("Alpha")
         b = routine!("Beta")
 
         post :reorder, params: { ids: [b.id, a.id] }
-
         expect(response).to be_successful
         expect([b.reload.position, a.reload.position]).to eq([0, 1])
-      end
-
-      it "unpins anything left out" do
-        a = routine!("Alpha")
-        b = routine!("Beta")
-        post :reorder, params: { ids: [a.id, b.id] }
 
         post :reorder, params: { ids: [a.id] }
-
         expect(a.reload.position).to eq(0)
         expect(b.reload.position).to be_nil
-      end
-
-      it "clears the whole grid when nothing is sent" do
-        a = routine!("Alpha")
-        post :reorder, params: { ids: [a.id] }
 
         post :reorder, params: { ids: [] }
-
         expect(a.reload.position).to be_nil
       end
 
@@ -192,7 +151,7 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
       # A tapped routine is already decided, so spending a model round trip on
       # having it re-said costs money and reintroduces the one thing a saved
       # sequence removes - a different answer each time.
-      it "runs the steps without a model turn" do
+      it "runs the steps without a model turn, under a line naming the routine" do
         routine = nightly!
 
         expect(BuddyDeliverWorker).not_to receive(:perform_async)
@@ -201,19 +160,7 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
         expect(response).to be_successful
         expect(BuddyRelay.last.body).to eq("night")
         expect(routine.reload.run_count).to eq(1)
-      end
-
-      # The line is the pet's own (Buddy::VoiceLines), so it's asserted as "one of
-      # the things this theme says" rather than pinned to one phrasing — but it
-      # always names the routine, which is the part that has to be there.
-      it "hangs the steps under a line saying what ran" do
-        routine = nightly!
-
-        post :run, params: { id: routine.id, conversation_id: convo.id }
-
-        said = convo.byte_messages.pluck(:body)
-        expect(said).to include(a_string_including("**Nightly**"))
-        expect(said).to include(a_string_matching(one_of(:routine_run, convo.buddy_theme, name: "Nightly")))
+        expect(convo.byte_messages.pluck(:body)).to include(a_string_including("**Nightly**"))
       end
 
       # A bare heading over nothing reads as the routine having worked.
@@ -245,13 +192,9 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
   end
 
-  # Turning a Jil automation into a one-tap button.
-  #
-  # A Jil button IS a routine with one `trigger_jil_task` step - same record, same
-  # runner, same pin/order/mute/delete, and it lands on the Quick grid and the
-  # wall tablet with no separate handling. This is only here because getting one
-  # used to mean asking Buddy to save it, and there's nothing to discuss when the
-  # whole routine is "fire this".
+  # Turning a Jil automation into a one-tap button. A Jil button IS a routine
+  # with one `trigger_jil_task` step - same record, same runner, same
+  # pin/order/mute/delete, and it lands on the Quick grid and the wall tablet.
   describe "jil actions in a step" do
     let(:user) { create(:user, id: 4) } # someone with Byte access
 
@@ -269,56 +212,21 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
 
     describe "GET #jil_actions" do
-      it "offers an automation that fires by name alone" do
-        task!(name: "Fan High")
+      # The client filters on name, description AND scope. A listener with data
+      # filters needs a payload a button can't supply, and a function takes typed
+      # arguments, so neither is offered; nor is one not opted in to Buddy.
+      it "offers only automations that fire by name alone, with their description and scope", :aggregate_failures do
+        task!(name: "Fan High", listener: "fan-high")
+        task!(name: "Categorize", listener: "event:add name::Transaction")
+        task!(name: "HASS Light", listener: 'function("Action" TAB ["on" "off"]("on"))::None')
+        task!(name: "Private", buddy_enabled: false)
 
         get :jil_actions
 
         expect(response).to be_successful
         expect(actions.pluck("name")).to eq(["Fan High"])
         expect(actions.first["description"]).to eq("Puts the fan on high")
-      end
-
-      # The filter that matters. A listener with data filters on it needs a
-      # payload built to fire, and a button has nowhere to say what that payload
-      # is — so offering one would produce a button that looks fine and quietly
-      # never fires, which is the one failure a saved button must not have.
-      it "leaves out one that needs data to fire" do
-        task!(name: "Categorize", listener: "event:add name::Transaction")
-
-        get :jil_actions
-
-        expect(actions).to be_empty
-      end
-
-      # What actually accounts for most of the gap between "automations I have"
-      # and "automations offered here": a function takes typed arguments, so it's
-      # `call_jil_function` with values, not a button. The picker says so in place
-      # now, because 7 offered out of 21 buddy-enabled otherwise reads as a bug.
-      it "leaves out a function, which needs arguments rather than a name" do
-        task!(name: "HASS Light", listener: 'function("Action" TAB ["on" "off"]("on"))::None')
-
-        get :jil_actions
-
-        expect(actions).to be_empty
-      end
-
-      # The client filters on name, description AND scope, because which one you'd
-      # search by depends on the automation.
-      it "sends the scope along so the picker can be searched by it" do
-        task!(name: "Fan High", listener: "fan-high")
-
-        get :jil_actions
-
         expect(actions.first["scope"]).to eq("fan-high")
-      end
-
-      it "leaves out one the owner hasn't opted in to Buddy" do
-        task!(name: "Private", buddy_enabled: false)
-
-        get :jil_actions
-
-        expect(actions).to be_empty
       end
 
       it "stops offering one that already has a button" do
@@ -332,7 +240,9 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
 
     describe "POST #create" do
-      it "saves it as a one-step routine that fires the task" do
+      # Every enabled routine is already on the Quick grid and the kiosk, so
+      # adding one here puts a button on the wall.
+      it "saves it as a one-step routine that fires the task, straight onto the wall pad" do
         t = task!(name: "Fan High")
 
         post :create, params: { task_id: t.id }
@@ -343,6 +253,7 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
         expect(routine.steps.length).to eq(1)
         expect(routine.steps.first["tool_name"]).to eq("trigger_jil_task")
         expect(routine.steps.first.dig("payload", "name")).to eq("Fan High")
+        expect(user.buddy_routines.for_quick.map(&:name)).to include("Fan High")
       end
 
       it "takes a shorter label for the wall when one is given" do
@@ -351,16 +262,6 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
         post :create, params: { task_id: t.id, name: "Preheat" }
 
         expect(user.buddy_routines.last.name).to eq("Preheat")
-      end
-
-      # Every enabled routine is already on the Quick grid and the kiosk, so this
-      # is the whole point: adding one here puts a button on the wall.
-      it "lands on the wall pad straight away" do
-        t = task!(name: "Fan High")
-
-        post :create, params: { task_id: t.id }
-
-        expect(user.buddy_routines.for_quick.map(&:name)).to include("Fan High")
       end
 
       it "refuses a second one under the same name" do
@@ -373,24 +274,16 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
         expect(user.buddy_routines.count).to eq(1)
       end
 
-      it "refuses an automation that needs data" do
-        t = task!(name: "Categorize", listener: "event:add name::Transaction")
-
-        post :create, params: { task_id: t.id }
-
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(user.buddy_routines).to be_empty
-      end
-
-      it "refuses someone else's automation" do
-        other = create(:user)
+      it "refuses an automation that needs data, or someone else's" do
+        needs_data = task!(name: "Categorize", listener: "event:add name::Transaction")
         theirs = Task.create!(
-          user: other, name: "Not Yours", listener: "fan-high", code: "", enabled: true, buddy_enabled: true,
+          user: create(:user), name: "Not Yours", listener: "fan-high", code: "", enabled: true, buddy_enabled: true,
         )
 
-        post :create, params: { task_id: theirs.id }
-
-        expect(response).to have_http_status(:unprocessable_entity)
+        [needs_data, theirs].each do |t|
+          post :create, params: { task_id: t.id }
+          expect(response).to have_http_status(:unprocessable_entity)
+        end
         expect(user.buddy_routines).to be_empty
       end
     end
@@ -424,7 +317,7 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     def routine!
       BuddyRoutine.create!(
         user:  user,
-        name:  "water cup",
+        name:  "water cup #{SecureRandom.hex(3)}",
         steps: [
           BuddyRoutine.step(:complete_chore, { chore: "8oz Water", count: 3 }),
           BuddyRoutine.step(:set_timer, { seconds: 60, then_continue: true }),
@@ -438,65 +331,32 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
 
     describe "PATCH #steps" do
-      it "drops the ones left out" do
+      it "drops the ones left out and reorders into the order sent, payloads untouched" do
         r = routine!
-
         patch :steps, params: { id: r.id, steps: [{ index: 0 }, { index: 2 }] }
-
         expect(response).to be_successful
         expect(tools_of(r)).to eq(%w[complete_chore log_event])
-      end
 
-      it "reorders them into the order sent" do
         r = routine!
-
         patch :steps, params: { id: r.id, steps: [{ index: 2 }, { index: 1 }, { index: 0 }] }
-
         expect(tools_of(r)).to eq(%w[log_event set_timer complete_chore])
+        expect(r.steps.second["payload"]).to eq("seconds" => 60, "then_continue" => true)
       end
 
-      # The value most often wrong, and the one that's purely a number: "cup
-      # water" was saved to cash in three waters and read back as one for days.
-      it "changes how many times a step runs" do
-        r = routine!
+      # A count of one drops the key, a count nobody meant to type is capped, and
+      # a timer has no repeat semantics, so a count on it is ignored.
+      it "changes how many times a countable step runs" do
+        [
+          [[{ index: 0, count: 5 }, { index: 1 }, { index: 2 }], 5],
+          [[{ index: 0, count: 1 }, { index: 1 }, { index: 2 }], nil],
+          [[{ index: 0, count: 900 }], Buddy::RoutinesController::MAX_STEP_COUNT],
+          [[{ index: 1, count: 4 }, { index: 0 }], nil],
+        ].each do |steps, count|
+          r = routine!
+          patch :steps, params: { id: r.id, steps: steps }
 
-        patch :steps, params: { id: r.id, steps: [{ index: 0, count: 5 }, { index: 1 }, { index: 2 }] }
-
-        expect(r.reload.steps.first["payload"]).to include("count" => 5)
-      end
-
-      it "drops the count entirely when it goes back to one" do
-        r = routine!
-
-        patch :steps, params: { id: r.id, steps: [{ index: 0, count: 1 }, { index: 1 }, { index: 2 }] }
-
-        expect(r.reload.steps.first["payload"]).not_to have_key("count")
-      end
-
-      it "caps a count nobody meant to type" do
-        r = routine!
-
-        patch :steps, params: { id: r.id, steps: [{ index: 0, count: 900 }] }
-
-        expect(r.reload.steps.first["payload"]["count"]).to eq(Buddy::RoutinesController::MAX_STEP_COUNT)
-      end
-
-      # A timer has no repeat semantics, so a count on it would be a number that
-      # silently does nothing.
-      it "ignores a count on a step that can't repeat" do
-        r = routine!
-
-        patch :steps, params: { id: r.id, steps: [{ index: 1, count: 4 }, { index: 0 }] }
-
-        expect(r.reload.steps.first["payload"]).not_to have_key("count")
-      end
-
-      it "leaves everything else in the payload exactly as saved" do
-        r = routine!
-
-        patch :steps, params: { id: r.id, steps: [{ index: 1 }, { index: 0 }] }
-
-        expect(r.reload.steps.first["payload"]).to eq("seconds" => 60, "then_continue" => true)
+          expect(r.reload.steps.first["payload"]["count"]).to eq(count), steps.to_s
+        end
       end
 
       it "refuses to empty a routine out" do
@@ -546,23 +406,15 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
     end
 
     describe "what the panel is handed to edit" do
-      it "carries each step's original index, so that's all the client can send" do
+      # The original index is all the client can send back. Countable is read off
+      # the tool, so a step with no repeat semantics gets no stepper.
+      it "carries each step's original index and whether a count applies" do
         r = routine!
 
         get :index
         rows = response.parsed_body["routines"].find { |x| x["id"] == r.id }["step_rows"]
 
         expect(rows.pluck("index")).to eq([0, 1, 2])
-      end
-
-      # Read off the tool rather than guessed, so a step with no repeat semantics
-      # gets no stepper instead of a control that does nothing.
-      it "says which steps a count even applies to" do
-        r = routine!
-
-        get :index
-        rows = response.parsed_body["routines"].find { |x| x["id"] == r.id }["step_rows"]
-
         expect(rows.pluck("countable")).to eq([true, false, true])
         expect(rows.first["count"]).to eq(3)
       end

@@ -79,7 +79,7 @@ RSpec.describe Buddy::TurnDispatcher do
     # runs in Rails with one Sidekiq job per turn, so the dispatcher has to
     # re-establish it — otherwise a follow-up turn seeded by check_weather (or a
     # person double-sending) builds history while the first turn is mid-reply.
-    it "holds a per-conversation advisory lock while the turn runs" do
+    it "holds a per-conversation advisory lock while the turn runs, and releases it after", :aggregate_failures do
       held = nil
       allow(Buddy::GPT::Turn).to receive(:run!) {
         held = ByteConversation.advisory_lock_exists?(described_class.lock_name(convo))
@@ -89,11 +89,6 @@ RSpec.describe Buddy::TurnDispatcher do
       described_class.deliver!(message)
 
       expect(held).to be(true)
-    end
-
-    it "releases the lock afterwards" do
-      described_class.deliver!(message)
-
       expect(ByteConversation.advisory_lock_exists?(described_class.lock_name(convo))).to be(false)
     end
 
@@ -122,13 +117,11 @@ RSpec.describe Buddy::TurnDispatcher do
       expect(message.reload).to be_sent
     end
   end
+
   # Buddy::GPT::Turn#retry_seed! sends a seed round again a minute later when
-  # the turn it ran ended without the call that seed existed to make. The job
-  # mail from a company with two roles on the board stops exactly that way - it
-  # asks which one - and a minute is long enough for the answer. Prod 6718: the
-  # answer filed the note, then the retry landed behind it and filed it again,
-  # putting its own thinner summary over the mail the first had saved and
-  # posting a second bubble saying what the one above it already said.
+  # the turn ended without the call it existed to make - often because it
+  # asked a question. If the person answered in that minute, the retry would
+  # redo the work.
   describe "a retry seed the person got to first" do
     let(:retry_seed) {
       convo.byte_messages.create!(
@@ -140,20 +133,12 @@ RSpec.describe Buddy::TurnDispatcher do
       )
     }
 
-    it "stands down once they have answered" do
+    it "stands down once they have answered, without leaving the seed pending", :aggregate_failures do
       seed = retry_seed
       convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Platform Team")
 
       expect(described_class.deliver!(seed)).to be(false)
       expect(Buddy::GPT::Turn).not_to have_received(:run!)
-    end
-
-    it "stops the seed sitting pending forever" do
-      seed = retry_seed
-      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Platform Team")
-
-      described_class.deliver!(seed)
-
       expect(seed.reload).to be_sent
     end
 

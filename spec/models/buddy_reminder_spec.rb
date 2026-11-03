@@ -35,71 +35,35 @@ RSpec.describe BuddyReminder do
     )
   end
 
-  # A reminder used to carry four frequencies of its own - daily, weekdays,
-  # weekly, monthly - with no interval, no nth-weekday and no end date. The
-  # calendar had all of it. Sharing Recurrence is what closed that gap.
+  # Reminders share the calendar's Recurrence: interval, nth-weekday, end dates
+  # and excluded dates all apply.
   describe "#next_fire_at" do
     def next_after(recurrence, from)
       reminder(recurrence).next_fire_at(from: zone.parse(from))
     end
 
-    it "rolls a daily one forward once its hour has gone by" do
-      at = next_after({ freq: :daily, at: "09:00" }, "2026-03-04 09:01")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-05 09:00")
-    end
-
-    it "keeps today when the hour is still ahead" do
-      at = next_after({ freq: :daily, at: "09:00" }, "2026-03-04 08:59")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-04 09:00")
-    end
-
-    it "skips the weekend on weekdays" do
-      # 2026-03-06 is a Friday, so the next weekday is Monday the 9th.
-      at = next_after({ freq: :weekdays, at: "07:54" }, "2026-03-06 08:00")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-09 07:54")
-    end
-
-    it "handles several named weekdays" do
-      # 2026-03-04 is a Wednesday; next Monday-or-Wednesday after it is the 9th.
-      at = next_after({ freq: :weekly, by_day: %w[mon wed], at: "18:00" }, "2026-03-04 19:00")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-09 18:00")
-    end
-
-    # The request that started this: neither of these was expressible before.
-    it "fires on the second Tuesday of the month" do
-      at = next_after({ freq: :monthly, by_set_pos: 2, by_day: %w[tue], at: "10:00" }, "2026-03-01 00:00")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-10 10:00")
-    end
-
-    it "fires every other Tuesday, counting from where it started" do
-      rule = { freq: :custom, interval: 2, unit: :week, at: "10:00", starts_on: "2026-03-03" }
-      at   = next_after(rule, "2026-03-04 00:00")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-17 10:00")
-    end
-
-    it "fires on the last Friday of the month" do
-      at = next_after({ freq: :monthly, by_set_pos: -1, by_day: %w[fri], at: "17:00" }, "2026-03-01 00:00")
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-27 17:00")
-    end
-
-    it "stops once the end date has passed" do
-      rule = { freq: :daily, at: "09:00", until_on: "2026-03-05" }
-
-      expect(next_after(rule, "2026-03-06 00:00")).to be_nil
-    end
-
-    it "skips a date that was struck out" do
-      rule = { freq: :daily, at: "09:00", excluded_dates: ["2026-03-05"] }
-      at   = next_after(rule, "2026-03-04 10:00")
-
-      expect(at.strftime("%Y-%m-%d")).to eq("2026-03-06")
+    it "finds the next fire across the shared recurrence vocabulary", :aggregate_failures do
+      [
+        # Daily, rolled forward once its hour has gone by, and kept while ahead.
+        [{ freq: :daily, at: "09:00" }, "2026-03-04 09:01", "2026-03-05 09:00"],
+        [{ freq: :daily, at: "09:00" }, "2026-03-04 08:59", "2026-03-04 09:00"],
+        # Friday the 6th skips the weekend.
+        [{ freq: :weekdays, at: "07:54" }, "2026-03-06 08:00", "2026-03-09 07:54"],
+        [{ freq: :weekly, by_day: %w[mon wed], at: "18:00" }, "2026-03-04 19:00", "2026-03-09 18:00"],
+        [{ freq: :monthly, by_set_pos: 2, by_day: %w[tue], at: "10:00" }, "2026-03-01 00:00", "2026-03-10 10:00"],
+        [{ freq: :monthly, by_set_pos: -1, by_day: %w[fri], at: "17:00" }, "2026-03-01 00:00", "2026-03-27 17:00"],
+        # Every other Tuesday, counting from where it started.
+        [
+          { freq: :custom, interval: 2, unit: :week, at: "10:00", starts_on: "2026-03-03" },
+          "2026-03-04 00:00",
+          "2026-03-17 10:00",
+        ],
+        [{ freq: :daily, at: "09:00", excluded_dates: ["2026-03-05"] }, "2026-03-04 10:00", "2026-03-06 09:00"],
+        [{ freq: :daily, at: "09:00", until_on: "2026-03-05" }, "2026-03-06 00:00", nil],
+      ].each do |rule, from, want|
+        got = next_after(rule, from)&.strftime("%Y-%m-%d %H:%M")
+        expect(got).to eq(want), "#{rule.inspect} from #{from}"
+      end
     end
 
     it "is nil for a one-off" do
@@ -111,28 +75,16 @@ RSpec.describe BuddyReminder do
   # deploy, so the old vocabulary is translated on READ rather than only by the
   # migration that cleans it up.
   describe "the shape reminders used to store" do
-    it "reads the old daily" do
-      at = reminder({ kind: "daily", at: "21:30" }).next_fire_at(from: zone.parse("2026-03-04 22:00"))
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-05 21:30")
-    end
-
-    it "reads the old weekdays" do
-      at = reminder({ kind: "weekdays", at: "07:54" }).next_fire_at(from: zone.parse("2026-03-06 08:00"))
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-09 07:54")
-    end
-
-    it "reads the old weekly, whose weekday was spelled out in full" do
-      at = reminder({ kind: "weekly", weekday: "wednesday", at: "20:00" }).next_fire_at(from: zone.parse("2026-03-04 21:00"))
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-03-11 20:00")
-    end
-
-    it "reads the old monthly day-of-month" do
-      at = reminder({ kind: "monthly", day: 15, at: "09:00" }).next_fire_at(from: zone.parse("2026-03-16 00:00"))
-
-      expect(at.strftime("%Y-%m-%d %H:%M")).to eq("2026-04-15 09:00")
+    it "reads every old frequency", :aggregate_failures do
+      [
+        [{ kind: "daily", at: "21:30" }, "2026-03-04 22:00", "2026-03-05 21:30"],
+        [{ kind: "weekdays", at: "07:54" }, "2026-03-06 08:00", "2026-03-09 07:54"],
+        [{ kind: "weekly", weekday: "wednesday", at: "20:00" }, "2026-03-04 21:00", "2026-03-11 20:00"],
+        [{ kind: "monthly", day: 15, at: "09:00" }, "2026-03-16 00:00", "2026-04-15 09:00"],
+      ].each do |rule, from, want|
+        got = reminder(rule).next_fire_at(from: zone.parse(from)).strftime("%Y-%m-%d %H:%M")
+        expect(got).to eq(want), rule.inspect
+      end
     end
 
     it "translates it into the shared vocabulary" do
@@ -178,12 +130,8 @@ RSpec.describe BuddyReminder do
       expect(described_class.clashing(user, "take the trash out", noon + 1.hour)).to be_nil
     end
 
-    # Prod 3448/3449. Reminder 37 was the daily noon plant check; reminder 40
-    # was set for the same noon off "please ping me when it's time to do that",
-    # and both went off. Excluding recurring reminders from the comparison was
-    # the only thing that hid it — the minute window already handles the case
-    # that exclusion was reasoning about, since a daily 9am only lands in the
-    # window on the day it's about to fire.
+    # The minute window is what keeps a recurring one from matching on days it
+    # isn't about to fire, so recurring reminders are compared like any other.
     it "catches a RECURRING one whose next fire is that minute" do
       existing = daily!("Check the bamboo tree and water all the plants.")
 

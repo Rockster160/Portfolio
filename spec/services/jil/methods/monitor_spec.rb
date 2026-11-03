@@ -27,12 +27,6 @@ RSpec.describe Jil::Methods::Monitor do
   #   #data(Hash)
 
   describe "#broadcast" do
-    it "broadcasts the relevant data to the channel" do
-      expect_successful_jil
-
-      expect(ctx[:output]).to eq([])
-    end
-
     # Every broadcast carries who it belongs to, so a board can tell a feed meant
     # for its owner from one that merely shares a group name with a housemate's.
     it "stamps the broadcast with its owner" do

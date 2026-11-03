@@ -15,20 +15,10 @@ RSpec.describe IconPool, ".refs_to_text" do
 
   before { user.update!(chore_household_id: household.id) }
 
-  it "names an icon written by id" do
-    expect(described_class.refs_to_text("feeding [hicon:#{icon.id}] now", user: user))
-      .to eq("feeding Fae now")
-  end
-
-  # Prod: this arrived typed with a space in it.
-  it "names one written with a space after the colon" do
-    expect(described_class.refs_to_text("feeding [hicon: #{icon.id}] now", user: user))
-      .to eq("feeding Fae now")
-  end
-
-  it "keeps a name written as a name" do
-    expect(described_class.refs_to_text("feeding [hicon fae] now", user: user))
-      .to eq("feeding Fae now")
+  it "names an icon written by id, by id with a space, or by name" do
+    ["[hicon:#{icon.id}]", "[hicon: #{icon.id}]", "[hicon fae]"].each do |ref|
+      expect(described_class.refs_to_text("feeding #{ref} now", user: user)).to eq("feeding Fae now")
+    end
   end
 
   it "names a Tabler icon" do

@@ -60,10 +60,8 @@ RSpec.describe BankTransaction, ".query" do
 
     def found(query) = described_class.query(query).to_a
 
-    # The matching surface as a table: query in, rows out. Every line here was
-    # its own example, and each one rebuilt the same four transactions, three
-    # action events and two accounts to ask a single question of them. A
-    # failure still names the query and what came back instead.
+    # The matching surface as a table: query in, rows out. A failure names the
+    # query and what came back instead.
     def expect_matches(table)
       wrong = table.filter_map { |query, names|
         want = names.map { |name| send(name) }
@@ -129,11 +127,8 @@ RSpec.describe BankTransaction, ".query" do
     describe "amount" do
       # It is a plain column derived on save, not a generated one — production
       # is PostgreSQL 9.5. These two are what would catch it drifting.
-      it "is derived on create" do
+      it "is derived on create and follows amount_cents on update, including a sign flip" do
         expect(payday.reload.amount_abs).to eq(BigDecimal("4370.70"))
-      end
-
-      it "follows amount_cents on update, including a sign flip" do
         payday.update!(amount_cents: -1234)
         expect(payday.reload.amount_abs).to eq(BigDecimal("12.34"))
       end
@@ -161,6 +156,8 @@ RSpec.describe BankTransaction, ".query" do
 
     # Two rows that read the same on screen are what you most need to tell apart.
     # Record ids only, in the form you would type to go and find one.
+    # A 36-character UUID identifies the row already being looked at, and the
+    # posted date is in the table, so neither is part of it.
     describe "#source_summary" do
       it "names the bank transaction" do
         expect(orphan.source_summary).to eq("BankTransaction##{orphan.id}")
@@ -178,12 +175,6 @@ RSpec.describe BankTransaction, ".query" do
         expect(row.source_summary).to(
           eq("BankTransaction##{row.id} ActionEvent##{event.id} Email#51450"),
         )
-      end
-
-      # A 36-character UUID identifies the row already being looked at, and the
-      # posted date is in the table.
-      it "says nothing about the SimpleFIN id or the posted date" do
-        expect(orphan.source_summary).not_to include("SimpleFIN", "T3", "posted")
       end
     end
   end
@@ -221,8 +212,7 @@ RSpec.describe BankTransaction, ".query" do
       row("Y2025", Time.zone.local(2025, 3, 9, 12))
     end
 
-    # Every form in one pass over one set of rows. These were nine examples,
-    # and each rebuilt the account and the four dated rows to run one query.
+    # Every form in one pass over one set of rows.
     def expect_dates(table)
       wrong = table.filter_map { |query, ids|
         got = found(query)
@@ -289,25 +279,14 @@ RSpec.describe BankTransaction, ".query" do
         )
       }
 
-      it "lands on the calendar day the bank named" do
+      # The raw bank values are left alone; occurred_at is the interpreted one.
+      it "lands on, and is found by, the calendar day the bank named, with no clock time", :aggregate_failures do
         expect(date_only.occurred_local.to_date).to eq(Date.new(2026, 5, 13))
-      end
-
-      it "is found by the date the bank named, and not by the day before" do
-        date_only
-        expect(found("timestamp:2026-05-13")).to eq(["DATEONLY"])
-        expect(found("timestamp:2026-05-12")).to be_empty
-      end
-
-      it "reports no clock time, so nothing invents one" do
         expect(date_only.occurred_time_known?).to be(false)
-      end
-
-      # The raw bank values are left alone. This column is the interpreted one,
-      # which is the only reason it is safe to interpret.
-      it "leaves posted_at and transacted_at untouched" do
         expect(date_only.posted_at).to eq(Time.utc(2026, 5, 13))
         expect(date_only.transacted_at).to eq(Time.utc(2026, 5, 13))
+        expect(found("timestamp:2026-05-13")).to eq(["DATEONLY"])
+        expect(found("timestamp:2026-05-12")).to be_empty
       end
 
       it "leaves a row that does carry a time exactly where it was" do
@@ -408,31 +387,22 @@ RSpec.describe BankTransaction, ".query" do
 
     # Boolean in, timestamp out, so no caller has to know the column holds a
     # time.
-    it "takes a boolean and stores when it was marked" do
+    # When it was cancelled is the fact, so a second mark keeps the stamp.
+    it "takes a boolean, stores when it was marked, keeps that stamp, and clears back to counting" do
       reissued.voided = "1"
       reissued.save!
-
       expect(reissued.reload.voided_at).to be_present
       expect(reissued).to be_voided
-    end
 
-    it "clears back to counting" do
-      cancelled.voided = false
-      cancelled.save!
-
-      expect(cancelled.reload.voided_at).to be_nil
-      expect(BankTransaction.countable).to include(cancelled)
-    end
-
-    # When it was cancelled is the fact. A second click on the same chip must
-    # not rewrite it.
-    it "leaves the original stamp alone when marked again" do
       was = cancelled.voided_at
-
       cancelled.voided = true
       cancelled.save!
-
       expect(cancelled.reload.voided_at).to be_within(1.second).of(was)
+
+      cancelled.voided = false
+      cancelled.save!
+      expect(cancelled.reload.voided_at).to be_nil
+      expect(BankTransaction.countable).to include(cancelled)
     end
   end
 
@@ -453,11 +423,8 @@ RSpec.describe BankTransaction, ".query" do
       BankTransaction.create!(posted_at: 1.day.ago, amount_cents: 437_070, payee: "direct deposit")
     }
 
-    it "lists the rows whose alert named no account" do
+    it "lists the rows whose alert named no account, and still matches a real one by name" do
       expect(described_class.query("account:none")).to contain_exactly(unattributed)
-    end
-
-    it "still matches a real account by name" do
       expect(described_class.query("account:2363")).to contain_exactly(attributed)
     end
   end

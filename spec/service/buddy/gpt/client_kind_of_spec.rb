@@ -14,42 +14,24 @@ RSpec.describe Buddy::GPT::Client, ".kind_of" do
     described_class.new.send(:kind_of, exception)
   end
 
-  it "sleeps on a rejected key" do
+  # A spent balance is a 429 that carries `insufficient_quota`.
+  it "sleeps on a rejected key, payment required, or a spent balance" do
+    quota = { "error" => { "type" => "insufficient_quota", "message" => "You have no credits remaining." } }
+
     expect(kind(raised(401))).to eq(:outage)
     expect(kind(raised(403))).to eq(:outage)
-  end
-
-  it "sleeps on payment required" do
     expect(kind(raised(402))).to eq(:outage)
+    expect(kind(raised(429, quota))).to eq(:outage)
   end
 
-  # Prod 4185: this exact message went into the thread as Buddy's reply, billing
-  # link and all.
-  it "sleeps on a spent balance" do
-    body = {
-      "error" => {
-        "type"    => "insufficient_quota",
-        "message" => "You have no credits remaining. Add credits to continue.",
-      },
-    }
+  # The account working and being asked too fast, a server error, a bad
+  # request, and a timeout that never reached the provider at all.
+  it "does NOT sleep on a rate limit, a server error, a bad request or a timeout" do
+    limited = { "error" => { "type" => "rate_limit_exceeded", "message" => "Rate limit reached" } }
 
-    expect(kind(raised(429, body))).to eq(:outage)
-  end
-
-  # The account working, and being asked too fast.
-  it "does NOT sleep on a plain rate limit" do
-    body = { "error" => { "type" => "rate_limit_exceeded", "message" => "Rate limit reached" } }
-
-    expect(kind(raised(429, body))).to be_nil
-  end
-
-  it "does NOT sleep on a server error or a bad request" do
+    expect(kind(raised(429, limited))).to be_nil
     expect(kind(raised(500))).to be_nil
     expect(kind(raised(400))).to be_nil
-  end
-
-  # A timeout raises with no response at all.
-  it "does NOT sleep on something that never reached the provider" do
     expect(kind(StandardError.new("execution expired"))).to be_nil
   end
 end

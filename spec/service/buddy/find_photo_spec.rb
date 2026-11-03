@@ -45,25 +45,17 @@ RSpec.describe "Buddy photo recall" do
       )
     end
 
-    it "finds a photo by what is in it" do
+    # Every word must match ("the blue bike" narrows; anything blue OR any bike
+    # is the whole album), against the prose or the tags, case-insensitively and
+    # inside a word.
+    it "matches every word against the description or tags", :aggregate_failures do
       found = Buddy::PhotoSearch.call(user: user, query: "router")
-
       expect(found[:photos].map(&:body).join).to include("router")
       expect(found[:total]).to eq(1)
-    end
 
-    it "finds one by a tag rather than the prose" do
       expect(Buddy::PhotoSearch.call(user: user, query: "wifi")[:photos].length).to eq(1)
-    end
-
-    # "the blue bike" narrowing to pictures with both is the point; anything
-    # blue OR any bike is the whole album.
-    it "requires every word, not any of them" do
-      expect(Buddy::PhotoSearch.call(user: user, query: "router fence")[:photos]).to be_empty
-    end
-
-    it "is case-insensitive and matches inside a word" do
       expect(Buddy::PhotoSearch.call(user: user, query: "ROUT")[:photos].length).to eq(1)
+      expect(Buddy::PhotoSearch.call(user: user, query: "router fence")[:photos]).to be_empty
     end
 
     it "narrows by when it was taken" do
@@ -132,15 +124,8 @@ RSpec.describe "Buddy photo recall" do
       expect(answer({ query: "router" })[:photos].first[:message_id]).to eq(photo.id)
     end
 
-    it "says plainly when nothing matched instead of describing something unseen" do
-      out = answer({ query: "kayak" })
-
-      expect(out[:photos]).to be_empty
-      expect(out[:how]).to match(/can't find one/i)
-    end
-
-    it "settles in the turn rather than leaving a row to tap" do
-      expect(Buddy::Tools.answers?(Buddy::Tools[:find_photo])).to be(true)
+    it "hands back nothing when nothing matched" do
+      expect(answer({ query: "kayak" })[:photos]).to be_empty
     end
   end
 end

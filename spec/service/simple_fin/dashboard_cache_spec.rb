@@ -344,14 +344,17 @@ RSpec.describe SimpleFin::DashboardCache do
   describe "announcing a change" do
     before { allow(Jarvis).to receive(:say) }
 
-    it "says so when the displayed figure moves" do
+    # Spoken aloud, so it gives away neither the amount nor the change.
+    it "speaks once when the displayed figure moves, with no number in it" do
       acct = account(kind: :checking, cents: 203_400)
       described_class.refresh!(user: user)
 
       acct.update!(balance_cents: 199_900)
       described_class.refresh!(user: user)
 
-      expect(Jarvis).to have_received(:say).once.with(/Bank balance changed/)
+      expect(Jarvis).to have_received(:say).once { |message|
+        expect(message).not_to match(/\d/)
+      }
     end
 
     it "stays quiet when the balance moved but the figure did not" do
@@ -364,30 +367,11 @@ RSpec.describe SimpleFin::DashboardCache do
       expect(Jarvis).not_to have_received(:say)
     end
 
-    it "says nothing on the very first write, when there is no previous number" do
-      account(kind: :checking, cents: 203_400)
-
-      described_class.refresh!(user: user)
-
-      expect(Jarvis).not_to have_received(:say)
-    end
-
-    it "stays quiet when nothing changed at all" do
+    it "stays quiet on the very first write and when nothing changed" do
       account(kind: :checking, cents: 203_400)
       2.times { described_class.refresh!(user: user) }
 
       expect(Jarvis).not_to have_received(:say)
-    end
-
-    it "gives away neither the amount nor the change" do
-      acct = account(kind: :checking, cents: 203_400)
-      described_class.refresh!(user: user)
-      acct.update!(balance_cents: 199_900)
-      described_class.refresh!(user: user)
-
-      expect(Jarvis).to have_received(:say) { |message|
-        expect(message).not_to match(/\d/)
-      }
     end
 
     it "does not fail a sync over an unparseable previous value" do

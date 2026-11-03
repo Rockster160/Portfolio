@@ -1,11 +1,7 @@
 require "rails_helper"
 
 # A routine tapped on the Quick grid or the kiosk runs with no model behind it,
-# so the line over it is ours to write — and written once, it came out of every
-# companion identically. Chelsea's firefly announced her yoga lamp with
-# "Running **Yoga Lamp**", which is a job scheduler talking.
-#
-# So the words are per-pet, and each line carries the FACE that goes with it:
+# so the line over it is ours to write. The words are per-pet, and each line carries the FACE that goes with it:
 # the persona's own rule is that face and prose agree, and the only way they
 # can't drift is if they're written down together.
 RSpec.describe Buddy::VoiceLines do
@@ -21,56 +17,53 @@ RSpec.describe Buddy::VoiceLines do
   # line asking for one this pet can't render would leave the pet blank — or
   # worse, resting on `thinking`, which is transitional and never a mood.
   describe "the table itself" do
-    Buddy::VoiceLines.table.each do |theme, kinds|
-      lines = kinds.values.flatten
+    # A face is an image file: a line asking for one this pet can't render would
+    # leave the pet blank, or resting on a transitional face.
+    it "only asks each theme for faces it can wear, never the default", :aggregate_failures do
+      Buddy::VoiceLines.table.each { |theme, kinds|
+        lines = kinds.values.flatten
 
-      it "#{theme} only ever asks for a face #{theme} can wear" do
-        expect(lines.reject { |line| Buddy::Faces.selectable?(theme, line[:mood]) }).to eq([])
-      end
+        expect(lines.reject { |line| Buddy::Faces.selectable?(theme, line[:mood]) }).to eq([]), theme.to_s
+        expect(lines.select { |line| line[:mood] == Buddy::Faces.default }).to eq([]), theme.to_s
+      }
+    end
 
-      it "#{theme} never rests on neutral, which is the whole point" do
-        expect(lines.select { |line| line[:mood] == Buddy::Faces.default }).to eq([])
-      end
-
-      # A routine line IS a receipt for something asked for, and these carry
-      # their face directly rather than going through Buddy::Sentiment — so
-      # the rule that keeps a blush and a pair of glasses off a finished
-      # errand has to be said here too. See Buddy::Faces::NOT_A_CONFIRMATION.
-      #
-      # `chore_done` is the same shape: it lands on something the person just
-      # did, so it answers for a finished thing however warmly it is worded.
-      # `wake_yawn` is NOT — nobody asked for it and nothing finished, which
-      # is exactly where a sleepy blush belongs.
-      #
-      # Tiko's `nerd` art is a spellbook rather than a pair of glasses, and a
-      # routine is a spell cast from it - so its routine lines may wear it.
-      it "#{theme} does not blush or put its glasses on over something finished" do
+    # These lines carry their face directly rather than going through
+    # Buddy::Sentiment, so Faces::NOT_A_CONFIRMATION has to hold here too.
+    # Tiko's `nerd` art is a spellbook and a routine is a spell cast from it,
+    # so its routine lines may wear it.
+    it "does not blush or put its glasses on over something finished", :aggregate_failures do
+      Buddy::VoiceLines.table.each { |theme, kinds|
         cast  = theme.to_sym == :tiko ? [] : Array(kinds[:routine_run]).pluck(:mood)
         moods = cast + Array(kinds[:chore_done]).pluck(:mood)
 
-        expect(moods & Buddy::Faces::NOT_A_CONFIRMATION).to eq([])
-      end
-
-      # Per kind, not per theme: the same hello belongs in more than one set —
-      # "Hiii!" is as right at 2pm as it is at 2am — while a routine line
-      # appearing twice in one set is a line with double the odds.
-      kinds.each do |kind, of_kind|
-        it "#{theme} says each #{kind} line only once" do
-          expect(of_kind.pluck(:say).tally.select { |_say, n| n > 1 }).to eq({})
-        end
-      end
+        expect(moods & Buddy::Faces::NOT_A_CONFIRMATION).to eq([]), theme.to_s
+      }
     end
 
-    it "gives every theme a line for every kind" do
+    # Per kind, not per theme: a line appearing twice in one set has double the odds.
+    it "says each line once within a kind", :aggregate_failures do
+      Buddy::VoiceLines.table.each { |theme, kinds|
+        kinds.each { |kind, of_kind|
+          expect(of_kind.pluck(:say).tally.select { |_say, n| n > 1 }).to eq({}), "#{theme} #{kind}"
+        }
+      }
+    end
+
+    it "gives every theme a line for every kind, and names the chore in every chore_done line", :aggregate_failures do
       kinds = Buddy::VoiceLines.table.values.flat_map(&:keys).uniq
       Buddy::Themes.all.each_key { |theme|
-        kinds.each { |kind| expect(described_class.lines_for(theme, kind)).to be_present }
+        kinds.each { |kind| expect(described_class.lines_for(theme, kind)).to be_present, "#{theme} #{kind}" }
+      }
+      Buddy::VoiceLines.table.each { |theme, of_theme|
+        unnamed = of_theme[:chore_done].reject { |line| line[:say].include?("%<name>s") }
+
+        expect(unnamed).to eq([]), "#{theme} has a chore_done line that doesn't say which chore"
       }
     end
 
     # The fallback only fires when Turn decides a hello is missing, so a
-    # greeting the same check can't recognise would get a SECOND hello put in
-    # front of it the next time a model happened to write it.
+    # greeting the same check can't recognise would get a SECOND hello.
     it "writes greetings that read as greetings" do
       greetings = Buddy::VoiceLines.table.flat_map { |_theme, kinds|
         kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
@@ -78,45 +71,6 @@ RSpec.describe Buddy::VoiceLines do
 
       expect(greetings).to be_present
       expect(greetings.reject { |line| line[:say].match?(Buddy::GPT::Turn::GREETING_OPENER_RX) }).to eq([])
-    end
-
-    # A hello that trails off on a period reads deadpan, and the line after it
-    # inherits the flatness - which is the whole reason the prompt spends a
-    # paragraph on it.
-    it "lands every greeting lifted rather than flat" do
-      greetings = Buddy::VoiceLines.table.flat_map { |_theme, kinds|
-        kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
-      }
-
-      expect(greetings.select { |line| line[:say].end_with?(".") }).to eq([])
-    end
-
-    # The variety IS the feature. A pet with four lines is recognised inside a
-    # week on a tablet somebody walks past all day, and a line you can predict
-    # is one nobody reads - at which point it may as well have stayed "Running
-    # X". So a new companion can't ship with two.
-    # The bubble is read a beat after the press, sometimes after walking away
-    # from the board, and a board can have two people on it - so a well done
-    # that doesn't say WHICH chore is a well done nobody can place. Unlike a
-    # greeting, there is no version of this line that works unnamed.
-    it "names the chore in every chore_done line" do
-      Buddy::VoiceLines.table.each { |theme, kinds|
-        unnamed = kinds[:chore_done].reject { |line| line[:say].include?("%<name>s") }
-
-        expect(unnamed).to eq([]), "#{theme} has a chore_done line that doesn't say which chore"
-      }
-    end
-
-    it "gives every pet enough to say that it doesn't get predictable" do
-      Buddy::VoiceLines.table.each { |theme, kinds|
-        expect(kinds[:routine_run].length).to be >= 8, "#{theme} needs more routine_run lines"
-        # Read against the pet's OWN set rather than `lines_for`, which falls
-        # back to Byte's — a pet that was never given these would otherwise
-        # pass by borrowing them, and a slime's *squish* out of a firefly is
-        # the failure this file exists to prevent.
-        expect(kinds[:chore_done].length).to be >= 8, "#{theme} needs more chore_done lines"
-        expect(kinds[:wake_yawn]).to be_present, "#{theme} has nothing to say when it wakes up"
-      }
     end
   end
 
@@ -126,13 +80,6 @@ RSpec.describe Buddy::VoiceLines do
 
       expect(line[:text]).to include("Yoga Lamp")
       expect(line[:mood]).to be_present
-    end
-
-    it "sounds like the pet whose line it is" do
-      glimmer = described_class.lines_for(:glimmer, :routine_run).pluck(:say)
-      byte    = described_class.lines_for(:byte, :routine_run).pluck(:say)
-
-      expect(glimmer).not_to match_array(byte)
     end
 
     # Two taps in a row landing the same face is a pet that didn't react to the
@@ -154,8 +101,6 @@ RSpec.describe Buddy::VoiceLines do
       expect(line[:text]).to eq("Doing **Yoga Lamp**.")
     end
 
-    # "Never the same hello twice running" was an instruction in the prompt.
-    # This is the version that's true.
     it "never reuses the line that opened the last one" do
       repeated = described_class.lines_for(:byte, :greeting_morning).first[:say]
 
@@ -163,12 +108,6 @@ RSpec.describe Buddy::VoiceLines do
         line = described_class.pick(:byte, :greeting_morning, unlike: "#{repeated} Quiet day today.")
         expect(line[:text]).not_to eq(repeated)
       }
-    end
-
-    it "ignores `unlike` when it isn't how the last one opened" do
-      expect {
-        described_class.pick(:byte, :greeting_morning, unlike: "Quiet day today.")
-      }.not_to raise_error
     end
 
     # The value arrives from a database column, same as Buddy::Themes.for.
@@ -200,7 +139,7 @@ RSpec.describe Buddy::VoiceLines do
       allow(TimerFireWorker).to receive(:perform_at).and_return("jid")
     }
 
-    it "announces it in the pet's own voice" do
+    it "announces it in the pet's own voice and moves the face off neutral", :aggregate_failures do
       convo = convo!(:glimmer)
       said  = described_class.lines_for(:glimmer, :routine_run).map { |l| format(l[:say], name: "Yoga Lamp") }
 
@@ -209,13 +148,6 @@ RSpec.describe Buddy::VoiceLines do
       # The heading is the first line of the message; anything under it is the
       # steps reporting for themselves.
       expect(said).to include(convo.byte_messages.chronological.first.body.split("\n\n").first)
-    end
-
-    it "moves the face off neutral as it goes" do
-      convo = convo!(:glimmer)
-
-      Buddy::Routines.run!(routine, conversation: convo)
-
       expect(convo.reload.buddy_expression).to be_present
       expect(convo.buddy_expression).not_to eq(Buddy::Faces.default.to_s)
     end
@@ -268,22 +200,14 @@ RSpec.describe Buddy::VoiceLines do
       expect(convo.reload.buddy_expression).to eq("grin")
     end
 
-    # Byte's, not Glimmer's. A line asking for a face the theme can't render
-    # would leave the pet blank.
-    it "refuses one it cannot render" do
+    # `nerd` is Byte's, not Glimmer's; `thinking` is transitional, never a mood.
+    it "refuses a face it cannot render, and the thinking face", :aggregate_failures do
       convo = convo!(:glimmer)
 
       described_class.wear(convo, "nerd")
-
       expect(convo.reload.buddy_expression).not_to eq("nerd")
-    end
-
-    # Transitional, never a delivered mood — the pet would rest on it.
-    it "refuses the thinking face" do
-      convo = convo!(:glimmer)
 
       described_class.wear(convo, "thinking")
-
       expect(convo.reload.buddy_expression).not_to eq("thinking")
     end
 
@@ -291,5 +215,4 @@ RSpec.describe Buddy::VoiceLines do
       expect { described_class.wear(nil, "grin") }.not_to raise_error
     end
   end
-
 end

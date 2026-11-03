@@ -54,23 +54,19 @@ RSpec.describe Transcripts::Speakers do
       )
     }
 
-    it "puts every turn on a side and ticks the one that is him" do
+    it "puts every turn on a side, ticks the one that is him, keeps words and timings, and reports progress", :aggregate_failures do
       model_says({ sides: "tmt" }.to_json)
+      seen = []
 
-      expect(described_class.call(transcript).ok).to be(true)
+      expect(described_class.call(transcript) { |done, total| seen << [done, total] }.ok).to be(true)
 
       transcript.reload
       expect(transcript.turns.pluck("speaker")).to eq(%w[Them Me Them])
       expect(transcript.mine?("Me")).to be(true)
       expect(transcript.mine?("Them")).to be(false)
-    end
-
-    it "says how far along it is while it reads" do
-      model_says({ sides: "tmt" }.to_json)
-      seen = []
-
-      described_class.call(transcript) { |done, total| seen << [done, total] }
-
+      expect(transcript.turns.first["text"]).to start_with("Thanks for making the time")
+      expect(transcript.turns.first["at"]).to eq(0.0)
+      expect(transcript.turns.last["to"]).to eq(28.0)
       expect(seen).to eq([[1, 1]])
     end
 
@@ -100,15 +96,6 @@ RSpec.describe Transcripts::Speakers do
 
       expect(result.ok).to be(false)
       expect(transcript.reload.turns.pluck("speaker")).to all(eq(JobTranscript::UNKNOWN))
-    end
-
-    it "keeps the words and the timings exactly as they were" do
-      model_says({ sides: "tmt" }.to_json)
-      described_class.call(transcript)
-
-      expect(transcript.reload.turns.first["text"]).to start_with("Thanks for making the time")
-      expect(transcript.turns.first["at"]).to eq(0.0)
-      expect(transcript.turns.last["to"]).to eq(28.0)
     end
 
     it "leaves a transcript alone once its speakers are settled" do

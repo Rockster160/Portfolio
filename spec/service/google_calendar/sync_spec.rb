@@ -478,69 +478,41 @@ RSpec.describe GoogleCalendar::Sync do
     end
 
     describe "attendees + response state" do
-      it "persists declined invites with self_response in metadata" do
-        declined = {
-          id:        "evt-decline-1",
-          status:    "confirmed",
-          summary:   "Optional meeting",
-          start:     { dateTime: "2026-05-23T14:00:00-04:00" },
-          end:       { dateTime: "2026-05-23T15:00:00-04:00" },
-          attendees: [
-            { email: "me@example.com", self: true, responseStatus: "declined" },
-            { email: "other@example.com", responseStatus: "accepted" },
-          ],
-          etag:      %("e3"),
-          updated:   "2026-05-22T08:00:00Z",
+      it "stores each self response, badging needsAction and keeping tentative as a status", :aggregate_failures do
+        event = ->(id, response, **extra) {
+          {
+            id:        id,
+            status:    "confirmed",
+            summary:   id,
+            start:     { dateTime: "2026-05-23T14:00:00-04:00" },
+            end:       { dateTime: "2026-05-23T15:00:00-04:00" },
+            attendees: [{ email: "me@example.com", self: true, responseStatus: response }],
+            etag:      %("#{id}"),
+            updated:   "2026-05-22T08:00:00Z",
+            **extra,
+          }
         }
-        allow(api).to receive(:list_events).and_return(page([declined]))
+        declined = event.call("evt-decline-1", "declined")
+        declined[:attendees] << { email: "other@example.com", responseStatus: "accepted" }
+        events = [
+          declined,
+          event.call("evt-pending-1", "needsAction", organizer: { email: "boss@example.com", displayName: "Boss" }),
+          event.call("evt-tent-1", "tentative"),
+        ]
+        allow(api).to receive(:list_events).and_return(page(events))
 
-        expect { described_class.new(agenda).run! }.to change(AgendaItem, :count).by(1)
+        expect { described_class.new(agenda).run! }.to change(AgendaItem, :count).by(3)
+
         item = agenda.agenda_items.find_by(external_uid: "evt-decline-1")
         expect(item.self_response).to eq("declined")
         expect(item.declined?).to be true
         expect(item.attendees.size).to eq(2)
         expect(item.status).to eq("confirmed")
-      end
 
-      it "marks needsAction invites with the badge metadata" do
-        pending_event = {
-          id:        "evt-pending-1",
-          status:    "confirmed",
-          summary:   "Pending invite",
-          start:     { dateTime: "2026-05-23T14:00:00-04:00" },
-          end:       { dateTime: "2026-05-23T15:00:00-04:00" },
-          attendees: [
-            { email: "me@example.com", self: true, responseStatus: "needsAction" },
-          ],
-          organizer: { email: "boss@example.com", displayName: "Boss" },
-          etag:      %("e3a"),
-          updated:   "2026-05-22T08:00:00Z",
-        }
-        allow(api).to receive(:list_events).and_return(page([pending_event]))
-
-        described_class.new(agenda).run!
         item = agenda.agenda_items.find_by(external_uid: "evt-pending-1")
         expect(item.needs_response?).to be true
-        expect(item.self_response).to eq("needsAction")
         expect(item.organizer["email"]).to eq("boss@example.com")
-      end
 
-      it "keeps :tentative status for tentative responses" do
-        tentative = {
-          id:        "evt-tent-1",
-          status:    "confirmed",
-          summary:   "Maybe meeting",
-          start:     { dateTime: "2026-05-23T14:00:00-04:00" },
-          end:       { dateTime: "2026-05-23T15:00:00-04:00" },
-          attendees: [
-            { email: "me@example.com", self: true, responseStatus: "tentative" },
-          ],
-          etag:      %("e3b"),
-          updated:   "2026-05-22T08:00:00Z",
-        }
-        allow(api).to receive(:list_events).and_return(page([tentative]))
-
-        described_class.new(agenda).run!
         item = agenda.agenda_items.find_by(external_uid: "evt-tent-1")
         expect(item.status).to eq("tentative")
         expect(item.self_response).to eq("tentative")
@@ -679,38 +651,21 @@ RSpec.describe GoogleCalendar::Sync do
         )
       end
 
-      it "cancels a row already materialized on the newly excluded date" do
+      # The ordinary Google shape for a MOVED occurrence is an EXDATE on the
+      # master plus its own detached event, so the sweep skips detached
+      # overrides: cancelling one would delete the meeting rather than the ghost.
+      it "cancels the row on the newly excluded date, sparing a detached override and other dates", :aggregate_failures do
         sync!(master_event([]))
         schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
         item = materialized_on(excluded_on, schedule)
+        override = materialized_on(excluded_on, schedule, detached: Time.current)
+        kept = materialized_on(excluded_on + 7, schedule)
 
         sync!(master_event([excluded_on], etag: "etag-2"))
 
         expect(schedule.reload.excluded_dates).to include(excluded_on)
         expect(item.reload.status).to eq("cancelled")
-      end
-
-      # The ordinary Google shape for a MOVED occurrence: an EXDATE on the master
-      # plus its own detached event. Cancelling that row would delete the meeting
-      # rather than the ghost — which is why the sweep skips detached overrides,
-      # and why this has to keep skipping them here.
-      it "leaves a detached override on that date alone" do
-        sync!(master_event([]))
-        schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
-        override = materialized_on(excluded_on, schedule, detached: Time.current)
-
-        sync!(master_event([excluded_on], etag: "etag-2"))
-
         expect(override.reload.status).to eq("confirmed")
-      end
-
-      it "leaves rows on dates the series still has" do
-        sync!(master_event([]))
-        schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
-        kept = materialized_on(excluded_on + 7, schedule)
-
-        sync!(master_event([excluded_on], etag: "etag-2"))
-
         expect(kept.reload.status).to eq("confirmed")
       end
 

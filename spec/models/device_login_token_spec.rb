@@ -37,18 +37,14 @@ RSpec.describe DeviceLoginToken do
       expect(token.reload).to be_used
     end
 
-    it "refuses a second use" do
+    it "refuses a second use, and an expired token" do
       token = described_class.issue!(user)
       described_class.claim_token(token.token)
-
       expect(described_class.claim_token(token.token)).to be_nil
-    end
 
-    it "refuses an expired token" do
-      token = described_class.issue!(user)
-      token.update!(expires_at: 1.second.ago)
-
-      expect(described_class.claim_token(token.token)).to be_nil
+      expired = described_class.issue!(create(:user))
+      expired.update!(expires_at: 1.second.ago)
+      expect(described_class.claim_token(expired.token)).to be_nil
     end
 
     it "refuses a blank or unknown token" do
@@ -72,11 +68,15 @@ RSpec.describe DeviceLoginToken do
       expect(described_class.claim_code(user, token.formatted_code)).to eq(user)
     end
 
-    it "refuses a second use" do
+    it "refuses a second use, and an expired code" do
       token = described_class.issue!(user)
       described_class.claim_code(user, token.code)
-
       expect(described_class.claim_code(user, token.code)).to be_nil
+
+      other = create(:user)
+      expired = described_class.issue!(other)
+      expired.update!(expires_at: 1.second.ago)
+      expect(described_class.claim_code(other, expired.code)).to be_nil
     end
 
     it "refuses another user's code" do
@@ -85,13 +85,6 @@ RSpec.describe DeviceLoginToken do
 
       expect(described_class.claim_code(stranger, token.code)).to be_nil
       expect(token.reload).not_to be_used
-    end
-
-    it "refuses an expired code" do
-      token = described_class.issue!(user)
-      token.update!(expires_at: 1.second.ago)
-
-      expect(described_class.claim_code(user, token.code)).to be_nil
     end
 
     it "counts wrong guesses and stops accepting the real code once the budget is spent" do

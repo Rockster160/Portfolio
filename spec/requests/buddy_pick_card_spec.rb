@@ -29,16 +29,11 @@ RSpec.describe "Buddy pick-one card", type: :request do
     post byte_action_respond_path(request_id: action.request_id), params: { value: value }
   end
 
-  it "runs the chore they chose" do
+  it "runs the chore they chose and marks the card decided", :aggregate_failures do
     expect { tap!("Light Load Dishes") }.to change(ChoreCompletion, :count).by(1)
 
     expect(response).to have_http_status(:ok)
     expect(ChoreCompletion.last.chore.name).to eq("Light Load Dishes")
-  end
-
-  it "marks the card decided so it stops asking" do
-    tap!("Light Load Dishes")
-
     expect(action.reload).to be_decided
     expect(action.decision["value"]).to eq("Light Load Dishes")
   end

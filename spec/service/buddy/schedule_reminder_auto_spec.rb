@@ -3,9 +3,9 @@ require "rails_helper"
 # schedule_reminder is now an AUTO tool: no confirmation checkbox, it runs on
 # the spot and drops an activity-receipt chip.
 RSpec.describe "schedule_reminder auto-run" do
-  let(:user)  { create(:user) }
+  let(:user) { create(:user) }
   let!(:convo) { ByteConversation.create!(user: user, mode: :buddy, name: "Buddy") }
-  let(:msg)   { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
+  let(:msg) { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
 
   before { allow(MonitorChannel).to receive(:broadcast_to) }
 
@@ -23,12 +23,9 @@ RSpec.describe "schedule_reminder auto-run" do
 
     chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
     expect(chip).to be_present
-    expect(chip.body).to match(/\A(Byte|Moss) will send you a reminder /)
   end
 
-  # Prod 7693, 7669, 7640 and five more back to 2 Oct: the hover detail read
-  # "Thu 12: 30pm". The detail line was read as `key: value` and split on the
-  # first colon it found, which on a clock time is the one in the middle of it.
+  # The detail line is parsed as `key: value`; a clock time's colon must not split.
   it "leaves the clock time in the chip's detail alone" do
     at = Time.current.in_time_zone(user.timezone).change(hour: 12, min: 30).advance(days: 1)
     markers = [
@@ -42,14 +39,8 @@ RSpec.describe "schedule_reminder auto-run" do
     expect(chip.metadata["detail"]).not_to include("12: 30")
   end
 
-  # Eve asked twice on 17 Aug for the noon plant reminder to be gone, and it was
-  # rebuilt on the 18th. Nothing could see that it had ever been switched off:
-  # `clashing` only looks at pending rows at the same minute.
-  #
-  # Setting it anyway is deliberate. Refusing something they have just asked for
-  # is the worse failure, and people do change their minds — so this SAYS so and
-  # leaves the correction to them, which is what a friend would do with the same
-  # information.
+  # Refusing something they have just asked for is the worse failure, so a
+  # previously cancelled match does not block it.
   describe "one they had switched off before" do
     def set!(text, at:)
       markers = [{ tool_name: :schedule_reminder, payload: { text: text, at: at }, span: [0, 0] }]
@@ -70,25 +61,10 @@ RSpec.describe "schedule_reminder auto-run" do
       expect { set!("Water the plants and check the bamboo", at: at) }
         .to change { BuddyReminder.where(user: user, cancelled_at: nil).count }.by(1)
     end
-
-    # A cancelled row is kept so an undo has something to restore. Raising it
-    # while somebody is asking for something else turns our bookkeeping into a
-    # claim about their memory — and it matched on one shared word across sixty
-    # days, so it was usually about a different reminder entirely (prod 4115).
-    it "says nothing about what they cancelled before" do
-      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
-
-      set!("Water the plants and check the bamboo", at: at)
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).not_to match(/back on|switched this off/)
-    end
   end
 
-  # Prod: "please alert me of both of those items" produced second copies of two
-  # reminders set three hours earlier, and both fired twice - 3:15 and 3:35, a
-  # minute apart each. Buddy had `upcoming_reminders` and never read it, which
-  # is why this can't be prompt guidance alone.
+  # A duplicate at the same minute is refused in code, not left to the model
+  # reading upcoming_reminders.
   describe "one that's already set" do
     let(:at) { 2.hours.from_now.in_time_zone(user.timezone) }
     let(:ctx) { Buddy::ToolContext.new(user, conversation: convo) }
@@ -105,8 +81,6 @@ RSpec.describe "schedule_reminder auto-run" do
         .to raise_error(/already set/i)
     end
 
-    # The two didn't share a single word of phrasing, but they were the same
-    # nudge, and Eve got both of them at 3:35.
     it "catches a reworded copy that still means the same thing" do
       existing!("Get your outfit and accessories sorted before your shower.")
 
@@ -132,12 +106,8 @@ RSpec.describe "schedule_reminder auto-run" do
       expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
     end
 
-    # A daily 9am and a one-off TOMORROW at 9am are different requests - and the
-    # minute window is what says so, since a recurring reminder's `fire_at` is
-    # its next fire. Recurring ones used to be excluded from the comparison
-    # outright on this reasoning, which threw away the one case where it
-    # matters: prod 3448/3449, where the daily noon plant check and a one-off
-    # set for the same noon both went off.
+    # A recurring reminder's `fire_at` is its next fire, so the minute window
+    # alone decides whether it clashes.
     def daily!(body, fire_at)
       BuddyReminder.create!(
         user: user, byte_conversation: convo, body: body,
@@ -159,9 +129,6 @@ RSpec.describe "schedule_reminder auto-run" do
     end
   end
 
-  # Buddy could set a reminder and cancel one, but not MOVE one - so "change the
-  # tomato reminder to 3pm" came out as a second reminder with the original
-  # still sitting there, due to fire at the hour they'd just ruled out.
   describe "move_reminder" do
     let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
     let(:tool) { Buddy::Tools[:move_reminder] }
@@ -180,11 +147,12 @@ RSpec.describe "schedule_reminder auto-run" do
       Buddy::Tools.dispatch(tool, payload.merge(resolved), ctx)
     end
 
-    it "moves the one that's already set instead of adding another" do
+    it "moves the one that's already set, wording intact, instead of adding another" do
       reminder = existing!("Uncover the tomatoes")
 
       expect { move("tomatoes", later) }.not_to(change { BuddyReminder.where(user: user).count })
       expect(reminder.reload.fire_at).to be_within(1.minute).of(later)
+      expect(reminder.body).to eq("Uncover the tomatoes")
     end
 
     it "rewords it when they changed what it should say" do
@@ -193,14 +161,6 @@ RSpec.describe "schedule_reminder auto-run" do
       move("tomatoes", later, text: "Shade the tomatoes")
 
       expect(reminder.reload.body).to eq("Shade the tomatoes")
-    end
-
-    it "leaves the wording alone when they only moved the time" do
-      reminder = existing!("Uncover the tomatoes")
-
-      move("tomatoes", later)
-
-      expect(reminder.reload.body).to eq("Uncover the tomatoes")
     end
 
     # A daily 9am moved to 9:30 is still daily - the shape survives, only the
@@ -239,26 +199,16 @@ RSpec.describe "schedule_reminder auto-run" do
     end
 
     # A one-shot stamps `fired_at` and leaves `pending` the instant it lands,
-    # and that instant is exactly when someone says "send me that again
-    # tomorrow at 6". Prod 2364 answered it with "couldn't find that reminder
-    # to move it" and the whole thing had to be dictated again.
+    # which is exactly when someone says "send me that again tomorrow at 6".
     describe "snoozing one that just fired" do
-      it "re-arms it instead of losing it" do
+      # A new fire_at on a terminal row would just sit there being skipped.
+      it "re-arms it in place, clearing the fired stamp", :aggregate_failures do
         reminder = existing!("Create a gate for the stairs", 10.minutes.ago)
         reminder.update!(fired_at: 10.minutes.ago)
 
         expect { move("gate", later) }.not_to(change { BuddyReminder.where(user: user).count })
         expect(reminder.reload.fire_at).to be_within(1.minute).of(later)
-      end
-
-      # A new fire_at on a terminal row would just sit there being skipped.
-      it "clears the fired stamp so the firer picks it up again" do
-        reminder = existing!("Create a gate for the stairs", 10.minutes.ago)
-        reminder.update!(fired_at: 10.minutes.ago)
-
-        move("gate", later)
-
-        expect(reminder.reload.fired_at).to be_nil
+        expect(reminder.fired_at).to be_nil
         expect(BuddyReminder.pending).to include(reminder)
       end
 
@@ -287,15 +237,8 @@ RSpec.describe "schedule_reminder auto-run" do
       end
     end
 
-    # Daily audit 2026-08-28, §4. Two daily "Do Dishes." rows, 3 PM and 8 PM.
-    # The 3 PM one fired, and twenty seconds later "change that Dishes reminder
-    # to go off at 9am instead" moved the 8 PM one. Byte reported it done, which
-    # was true about the wrong row, so nothing looked wrong until the 8 PM nudge
-    # simply stopped arriving.
-    #
     # A recurring reminder never stamps `fired_at` - it stamps `last_fired_at`
-    # and rolls `fire_at` a day forward - so every candidate looked equally
-    # live and the pick collapsed to whichever `fire_at` sorted first.
+    # and rolls `fire_at` forward - so the one that just rang is the one meant.
     describe "answering the one that just went off" do
       def daily!(text, at, last_fired: nil)
         reminder = BuddyReminder.create!(
@@ -311,20 +254,10 @@ RSpec.describe "schedule_reminder auto-run" do
         other  = daily!("Do Dishes.", 5.hours.from_now)
         target = 30.minutes.from_now.in_time_zone(user.timezone)
 
-        move("Dishes", target)
+        expect { move("Dishes", target) }.not_to(change { other.reload.fire_at })
 
         expect(rang.reload.recurrence["at"]).to eq(target.strftime("%H:%M"))
         expect(other.reload.recurrence["at"]).to eq(5.hours.from_now.strftime("%H:%M"))
-      end
-
-      # The half that hurt: the row nobody touched has to still be running on
-      # its own hour afterwards.
-      it "leaves the other one's schedule exactly where it was" do
-        daily!("Do Dishes.", 23.hours.from_now, last_fired: 20.seconds.ago)
-        other = daily!("Do Dishes.", 5.hours.from_now)
-
-        expect { move("Dishes", 30.minutes.from_now.in_time_zone(user.timezone)) }
-          .not_to(change { other.reload.fire_at })
       end
 
       # Nothing rang, so there is nothing to prefer and the old ordering stands.
@@ -356,17 +289,12 @@ RSpec.describe "schedule_reminder auto-run" do
     let(:ctx) { Buddy::ToolContext.new(user) }
     let(:noon) { Time.current.in_time_zone(user.timezone).change(hour: 18, min: 1) }
 
-    it "gives a bare time for today" do
-      expect(ctx.friendly_future(noon)).to eq("at 6:01pm")
-    end
+    it "phrases today, tomorrow and later days, dropping :00 on the hour", :aggregate_failures do
+      on_hour = Time.current.in_time_zone(user.timezone).change(hour: 18, min: 0)
 
-    it "prefixes tomorrow / weekday for later days" do
+      expect(ctx.friendly_future(noon)).to eq("at 6:01pm")
       expect(ctx.friendly_future(noon + 1.day)).to start_with("tomorrow at ")
       expect(ctx.friendly_future(noon + 3.days)).to match(/\Athis \w+ at /)
-    end
-
-    it "drops :00 on the hour" do
-      on_hour = Time.current.in_time_zone(user.timezone).change(hour: 18, min: 0)
       expect(ctx.friendly_future(on_hour)).to eq("at 6pm")
     end
   end

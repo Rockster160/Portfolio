@@ -49,21 +49,23 @@ RSpec.describe "Playground", type: :request do
   end
 
   describe "the About page" do
-    it "locks Open with the reason for a visitor with no account" do
+    it "locks Open for a visitor with no account" do
       get "/playground/timers", headers: page_headers
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("You must have an account to use this tool", "Sign in")
+      expect(response.body).to include("about-locked")
+      expect(response.body).not_to include("btn is-open")
     end
 
     it "offers Open to someone who can use it" do
       as(FactoryBot.create(:user))
       get "/playground/timers", headers: page_headers
-      expect(response.body).to include("Open Timers")
+      expect(response.body).to include("btn is-open")
+      expect(response.body).not_to include("about-locked")
     end
 
     it "offers no Open at all for a project with no page" do
       get "/playground/jarvis", headers: page_headers
-      expect(response.body).not_to include("Open Jarvis", "🔒")
+      expect(response.body).not_to include("btn is-open", "about-locked")
     end
 
     it "is a 404 for a project that isn't listed" do
@@ -95,7 +97,7 @@ RSpec.describe "Playground", type: :request do
       PlaygroundProject.listed.each do |project|
         expect(response.body).to include("/playground/#{project.slug}")
       end
-      expect(response.body).to include("🔒 Open", 'data-tooltip="You must have an account to use this tool"')
+      expect(response.body).to include("is-locked")
       PlaygroundProject.listed.select(&:api).each do |project|
         expect(response.body).to include(%(data-modal="#code-example-#{project.api}"), %(id="code-example-#{project.api}"))
       end

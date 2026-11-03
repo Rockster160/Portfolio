@@ -30,70 +30,40 @@ RSpec.describe Buddy::RemindersController, type: :controller do
   end
 
   describe "GET #index" do
-    it "lists clock reminders and condition watches together" do
+    # A turned-off one stays listed; one that has fired for good drops out.
+    it "lists clock reminders and condition watches together, their own only", :aggregate_failures do
       reminder!(body: "Vet appt")
-      watch!(body: "Grab prescription", metadata: { "human_when" => "when you get to Costco" })
-
-      get :index
-
-      expect(response).to be_successful
-      expect(rows.pluck("label")).to contain_exactly("Vet appt", "Grab prescription")
-      expect(rows.pluck("type")).to contain_exactly("reminder", "watch")
-      expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to eq("when you get to Costco\ntravel")
-    end
-
-    it "keeps a turned-off one listed, marked off" do
       reminder!(body: "Muted one", cancelled_at: 1.minute.ago)
-
-      get :index
-
-      expect(rows.pluck("label")).to include("Muted one")
-      expect(rows.find { |r| r["label"] == "Muted one" }["enabled"]).to be(false)
-    end
-
-    it "drops one that has already fired for good" do
       reminder!(body: "Long gone", fired_at: 1.hour.ago)
-
-      get :index
-
-      expect(rows).to be_empty
-    end
-
-    it "leaves someone else's reminders out of it" do
+      watch!(body: "Grab prescription", metadata: { "human_when" => "when you get to Costco" })
       other = create(:user)
       other_convo = other.byte_conversations.create!(mode: :buddy)
       BuddyReminder.create!(user: other, byte_conversation: other_convo, body: "Not yours", fire_at: 1.hour.from_now)
 
       get :index
 
-      expect(rows).to be_empty
+      expect(response).to be_successful
+      expect(rows.pluck("label")).to contain_exactly("Vet appt", "Muted one", "Grab prescription")
+      expect(rows.pluck("type")).to contain_exactly("reminder", "reminder", "watch")
+      expect(rows.find { |r| r["label"] == "Muted one" }["enabled"]).to be(false)
+      expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to eq("when you get to Costco\ntravel")
     end
   end
 
   describe "PATCH #update" do
-    it "turns a reminder off without losing it" do
+    it "turns a reminder or a watch off without losing it, and back on" do
       rem = reminder!
+      w = watch!
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { enabled: false } }
-
       expect(response).to be_successful
       expect(rem.reload.cancelled_at).to be_present
       expect(rows.find { |r| r["record_id"] == rem.id }["enabled"]).to be(false)
-    end
-
-    it "turns one back on" do
-      rem = reminder!(cancelled_at: 1.minute.ago)
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { enabled: true } }
-
       expect(rem.reload.cancelled_at).to be_nil
-    end
-
-    it "does the same for a watch" do
-      w = watch!
 
       patch :update, params: { type: :watch, id: w.id, reminder: { enabled: false } }
-
       expect(w.reload.cancelled_at).to be_present
     end
 
@@ -109,18 +79,19 @@ RSpec.describe Buddy::RemindersController, type: :controller do
     end
   end
 
-  # The wording and the hour are the two things that turn out wrong, and until
-  # now the only fix was cancelling and setting the whole thing up again by
-  # talking it through.
+  # The wording and the hour are the two things that turn out wrong.
   describe "PATCH #update, editing it" do
     let(:zone) { ActiveSupport::TimeZone[user.timezone] }
 
-    it "rewrites the words" do
+    it "rewrites the words of a reminder or a watch" do
       rem = reminder!(body: "Vet appt")
+      w = watch!(body: "Grab prescription")
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "Vet appt - bring the carrier" } }
+      patch :update, params: { type: :watch, id: w.id, reminder: { body: "Grab the prescription and the cat food" } }
 
       expect(rem.reload.body).to eq("Vet appt - bring the carrier")
+      expect(w.reload.body).to eq("Grab the prescription and the cat food")
     end
 
     it "moves the time, reading it as their local clock" do
@@ -135,24 +106,17 @@ RSpec.describe Buddy::RemindersController, type: :controller do
 
     # Saving one into the past means it goes off on the next sweep, seconds
     # later, which is never what a mistyped date meant.
-    it "refuses a time that's already gone" do
-      rem = reminder!(fire_at: 2.hours.from_now)
+    it "refuses a time that's already gone, or blank words, leaving it as it was" do
+      rem = reminder!(body: "Vet appt", fire_at: 2.hours.from_now)
       was = rem.fire_at
-
       gone = 2.hours.ago.in_time_zone(zone).strftime("%Y-%m-%dT%H:%M")
-      patch :update, params: { type: :reminder, id: rem.id, reminder: { at: gone } }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      [{ at: gone }, { body: "  " }].each do |edit|
+        patch :update, params: { type: :reminder, id: rem.id, reminder: edit }
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
       expect(rem.reload.fire_at).to be_within(1.second).of(was)
-    end
-
-    it "refuses to blank the words out" do
-      rem = reminder!(body: "Vet appt")
-
-      patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "  " } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(rem.reload.body).to eq("Vet appt")
+      expect(rem.body).to eq("Vet appt")
     end
 
     # A recurring one keeps its shape; only the hour moves, and the next firing
@@ -167,14 +131,6 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(rem.fire_at.in_time_zone(zone).strftime("%H:%M")).to eq("07:30")
     end
 
-    it "lets a watch's words be edited" do
-      w = watch!(body: "Grab prescription")
-
-      patch :update, params: { type: :watch, id: w.id, reminder: { body: "Grab the prescription and the cat food" } }
-
-      expect(w.reload.body).to eq("Grab the prescription and the cat food")
-    end
-
     it "hands the editor the raw values rather than the display ones" do
       rem = reminder!(body: "A" * 120)
 
@@ -187,32 +143,22 @@ RSpec.describe Buddy::RemindersController, type: :controller do
     end
   end
 
-  # The repeat RULE, not just its hour. "Grab my Loops" could be moved from 7:54
-  # to 8:00 but never off weekdays - the rule was set once in conversation and
-  # then frozen, and changing it meant deleting the reminder and describing the
-  # whole thing again.
+  # The repeat RULE, not just its hour.
   describe "PATCH #update, changing how it repeats" do
     let(:zone) { ActiveSupport::TimeZone[user.timezone] }
 
-    it "hands the editor the rule it's on, in parts" do
-      reminder!(recurrence: { "freq" => "weekly", "by_day" => ["tue"], "at" => "07:54" })
-
-      get :index
-      row = rows.first
-
-      expect(row["freq"]).to eq("weekly")
-      expect(row["by_day"]).to eq(["tue"])
-      expect(row["at"]).to eq("07:54")
-    end
-
     # A row written before reminders and the calendar shared a vocabulary edits
     # as though it had always been in the new one.
-    it "hands back the old shape already translated" do
-      reminder!(recurrence: { "kind" => "weekly", "weekday" => "tuesday", "at" => "07:54" })
+    it "hands the editor the rule it's on, in parts, translating the old shape" do
+      current = reminder!(body: "New", recurrence: { "freq" => "weekly", "by_day" => ["tue"], "at" => "07:54" })
+      legacy = reminder!(body: "Old", recurrence: { "kind" => "weekly", "weekday" => "tuesday", "at" => "07:54" })
 
       get :index
 
-      expect(rows.first).to include("freq" => "weekly", "by_day" => ["tue"])
+      [current, legacy].each do |rem|
+        row = rows.find { |r| r["record_id"] == rem.id }
+        expect(row).to include("freq" => "weekly", "by_day" => ["tue"], "at" => "07:54")
+      end
     end
 
     it "switches weekdays to every day" do
@@ -225,20 +171,14 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(rem.recurrence["at"]).to eq("07:54")
     end
 
-    it "takes weekdays when they switch to weekly" do
+    it "takes weekdays, one or several, when they switch to weekly" do
       rem = reminder!(recurrence: { "freq" => "daily", "at" => "09:00" })
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { freq: "weekly", by_day: %w[wed] } }
-
       expect(rem.reload.recurrence["by_day"]).to eq(["wed"])
       expect(rem.fire_at.in_time_zone(zone).strftime("%A").downcase).to eq("wednesday")
-    end
-
-    it "takes several weekdays at once" do
-      rem = reminder!(recurrence: { "freq" => "daily", "at" => "09:00" })
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { freq: "weekly", by_day: %w[mon wed fri] } }
-
       expect(rem.reload.recurrence["by_day"]).to eq(%w[mon wed fri])
     end
 
@@ -325,31 +265,18 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(rem.reload.recurrence).to include("freq" => "weekly", "by_day" => ["fri"], "at" => "18:15")
     end
 
-    it "refuses a repeat it doesn't know" do
+    it "refuses an unknown repeat, a set position that isn't a week of the month, or a past end date" do
       rem = reminder!(recurrence: { "freq" => "daily", "at" => "09:00" })
 
-      patch :update, params: { type: :reminder, id: rem.id, reminder: { freq: "fortnightly" } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(rem.reload.recurrence["freq"]).to eq("daily")
-    end
-
-    it "refuses a set position that isn't a week of the month" do
-      rem = reminder!(recurrence: { "freq" => "daily", "at" => "09:00" })
-
-      patch :update, params: { type: :reminder, id: rem.id, reminder: { freq: "monthly", by_set_pos: 9 } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["errors"].join).to match(/first through fourth/)
-    end
-
-    it "refuses an end date already behind us" do
-      rem = reminder!(recurrence: { "freq" => "daily", "at" => "09:00" })
-
-      patch :update, params: { type: :reminder, id: rem.id, reminder: { until_on: 2.days.ago.to_date.iso8601 } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(rem.reload.recurrence).not_to have_key("until_on")
+      [
+        { freq: "fortnightly" },
+        { freq: "monthly", by_set_pos: 9 },
+        { until_on: 2.days.ago.to_date.iso8601 },
+      ].each do |edit|
+        patch :update, params: { type: :reminder, id: rem.id, reminder: edit }
+        expect(response).to have_http_status(:unprocessable_entity), edit.to_s
+      end
+      expect(rem.reload.recurrence).to eq("freq" => "daily", "at" => "09:00")
     end
 
     it "leaves a one-off alone" do
@@ -364,21 +291,14 @@ RSpec.describe Buddy::RemindersController, type: :controller do
 
     # Recomputing the next firing is what rescheduling MEANS, so it can't ride
     # along on an edit that didn't ask for it.
-    it "does not roll the next firing when only the switch was flipped" do
+    it "does not roll the next firing when only the switch was flipped, or the words changed" do
       rem = reminder!(fire_at: 30.minutes.from_now, recurrence: { "freq" => "daily", "at" => "09:00" })
       was = rem.fire_at
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { enabled: false } }
-
       expect(rem.reload.fire_at).to be_within(1.second).of(was)
-    end
-
-    it "does not roll it for a reword either" do
-      rem = reminder!(fire_at: 30.minutes.from_now, recurrence: { "freq" => "daily", "at" => "09:00" })
-      was = rem.fire_at
 
       patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "Grab the Loops" } }
-
       expect(rem.reload.body).to eq("Grab the Loops")
       expect(rem.fire_at).to be_within(1.second).of(was)
     end
@@ -408,17 +328,12 @@ RSpec.describe Buddy::RemindersController, type: :controller do
     end
 
     describe "POST #preview" do
-      it "says what a template would come out as" do
+      it "says what a template would come out as, with the variables on offer" do
         post :preview, params: { body: "{{ name | remove: '>' }} landed", vars: { name: ">main Done" } }
 
         expect(response).to be_successful
         expect(response.parsed_body["preview"]).to eq("main Done landed")
         expect(response.parsed_body["error"]).to be_nil
-      end
-
-      it "hands back the variables on offer, showing what each one means" do
-        post :preview, params: { body: "hi" }
-
         expect(response.parsed_body["variables"]).to include("weekday", "buddy", "user")
       end
 
@@ -447,46 +362,30 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(row["at"]).to be_nil
     end
 
-    it "narrows a watch to one list" do
+    it "narrows a watch to one list, and follows the listener when its scope changes" do
       w = watch!(scope: "item", listener: "item:action:added")
 
       narrowed = "item:action:added item:list:name:/^Claude$/"
       patch :update, params: { type: :watch, id: w.id, reminder: { listener: narrowed } }
-
       expect(response).to be_successful
       expect(w.reload.listener).to eq(narrowed)
-    end
-
-    it "keeps the old one and says why when the new one would never fire" do
-      w = watch!(scope: "item", listener: "item:action:added")
-
-      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "!!! nonsense" } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["errors"].join).to match(/fire/i)
-      expect(w.reload.listener).to eq("item:action:added")
-    end
-
-    it "follows the listener when its scope changes" do
-      w = watch!(scope: "item", listener: "item:action:added")
 
       patch :update, params: { type: :watch, id: w.id, reminder: { listener: "event:add" } }
-
       expect(response).to be_successful
       expect(w.reload.trigger_scope).to eq("event")
     end
 
-    it "refuses to blank the condition out" do
+    it "keeps the old condition when the new one would never fire, or is blank" do
       w = watch!(scope: "item", listener: "item:action:added")
 
-      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "  " } }
-
-      expect(response).to have_http_status(:unprocessable_entity)
+      ["!!! nonsense", "  "].each do |listener|
+        patch :update, params: { type: :watch, id: w.id, reminder: { listener: listener } }
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
       expect(w.reload.listener).to eq("item:action:added")
     end
 
-    # "Let me know each time the doorbell sees somebody today" had nothing that
-    # would ever retire it - it kept firing until somebody noticed.
+    # A watch for "today" needs something that retires it.
     describe "how long it stays armed" do
       it "sets an expiry to the END of that day, not the moment it starts" do
         w = watch!(scope: "item", listener: "item:action:added")
@@ -500,13 +399,6 @@ RSpec.describe Buddy::RemindersController, type: :controller do
         expect(local.hour).to eq(23)
       end
 
-      it "hands the date back to the editor" do
-        watch!(scope: "item", listener: "item:action:added", expires_at: 3.days.from_now)
-
-        get :index
-
-        expect(rows.find { |r| r["type"] == "watch" }["expires_on"]).to be_present
-      end
 
       # Their end of day, not the server's. Time.zone is UTC app-wide, so a bare
       # end_of_day is already tomorrow on a UTC-6 calendar from 6pm onwards —
@@ -524,8 +416,11 @@ RSpec.describe Buddy::RemindersController, type: :controller do
         expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to include("until tonight")
       end
 
-      it "clears it back to a standing watch" do
+      it "hands the date back to the editor, and clears it back to a standing watch" do
         w = watch!(scope: "item", listener: "item:action:added", expires_at: 3.days.from_now)
+
+        get :index
+        expect(rows.find { |r| r["type"] == "watch" }["expires_on"]).to be_present
 
         patch :update, params: { type: :watch, id: w.id, reminder: { expires_on: "" } }
 
@@ -567,20 +462,15 @@ RSpec.describe Buddy::RemindersController, type: :controller do
   end
 
   describe "DELETE #destroy" do
-    it "deletes a reminder outright" do
+    it "deletes a reminder or a watch outright" do
       rem = reminder!
-
-      delete :destroy, params: { type: :reminder, id: rem.id }
-
-      expect(response).to have_http_status(:no_content)
-      expect(BuddyReminder.exists?(rem.id)).to be(false)
-    end
-
-    it "deletes a watch outright" do
       w = watch!
 
+      delete :destroy, params: { type: :reminder, id: rem.id }
+      expect(response).to have_http_status(:no_content)
       delete :destroy, params: { type: :watch, id: w.id }
 
+      expect(BuddyReminder.exists?(rem.id)).to be(false)
       expect(BuddyWatch.exists?(w.id)).to be(false)
     end
   end

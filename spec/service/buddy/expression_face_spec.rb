@@ -55,7 +55,7 @@ RSpec.describe Buddy::ExpressionState do
     end
   end
 
-  it "waves only when the pet has the gesture art, never painting blank" do
+  it "waves only when the pet has the gesture art, and greets with thinking when it can't" do
     cobalt = buddy_convo(User.me, "cobalt")       # has face_wave.png
     suki   = buddy_convo(create(:user), "suki")   # has none
 
@@ -68,16 +68,11 @@ RSpec.describe Buddy::ExpressionState do
     expect(MonitorChannel).not_to have_received(:broadcast_to).with(
       suki.user, hash_including(data: hash_including(expression: "wave"))
     )
-  end
-
-  it "greets with a wave when it can and falls back to thinking when it can't" do
-    cobalt = buddy_convo(User.me, "cobalt")
-    suki   = buddy_convo(create(:user), "suki")
 
     described_class.greet!(cobalt)
     expect(MonitorChannel).to have_received(:broadcast_to).with(
       cobalt.user, hash_including(data: hash_including(expression: "wave", transient: true))
-    )
+    ).twice
 
     described_class.greet!(suki)
     expect(MonitorChannel).to have_received(:broadcast_to).with(
@@ -107,28 +102,15 @@ RSpec.describe Buddy::ExpressionState do
   # the invariants are about the folder and the sentiment map, not CSS — and
   # they hold for every companion, including one added with no code touched.
   describe "the face art and the sentiment map" do
-    Buddy::Themes.all.each_key do |theme|
-      # The resting default, the first paint, and the resolver's fallback for an
-      # expression a pet has no art for all land on neutral (Buddy::Faces.default
-      # and ByteHelper#buddy_face_url) — so every pet must have it or the hero can
-      # render blank, which is exactly how a theme with no face CSS used to fail.
-      it "#{theme} has a neutral face to rest on and fall back to" do
-        expect(Buddy::Faces.valid?(theme, :neutral)).to be(true)
-      end
-
-      # The prose half of the profile. Each emotion carries its own summary on
-      # the companion, right beside its axes, so a face with numbers and no
-      # sentence can't drift in unnoticed.
-      it "#{theme} describes every face it can wear" do
+    # Every pet needs a neutral face (the resting default and resolver
+    # fallback), a summary for each selectable face, and a thinking pose it has
+    # art for, or the hero paints blank.
+    it "gives every theme a neutral face, a thinking pose, and a summary for each face", :aggregate_failures do
+      Buddy::Themes.all.each_key do |theme|
+        expect(Buddy::Faces.valid?(theme, :neutral)).to be(true), "#{theme} has no neutral"
+        expect(Buddy::Faces.valid?(theme, Buddy::Faces.thinking(theme))).to be(true), "#{theme} can't think"
         missing = Buddy::Faces.selectable(theme).reject { |f| Buddy::Faces.summary(f, theme) }
-        expect(missing).to be_empty
-      end
-
-      # The in-flight "thinking" overlay must resolve to a pose this pet actually
-      # has art for, or the pet repaints blank mid-turn — which is exactly how a
-      # pet with no thinking art used to look like it wasn't reacting at all.
-      it "#{theme} has a thinking pose it can render" do
-        expect(Buddy::Faces.valid?(theme, Buddy::Faces.thinking(theme))).to be(true)
+        expect(missing).to be_empty, "#{theme} has no summary for #{missing}"
       end
     end
 
@@ -152,12 +134,9 @@ RSpec.describe Buddy::ExpressionState do
       end
     end
 
-    it "keeps a pet's own drawing when it has one" do
+    it "keeps a pet's own drawing and lands a missing face on the nearest by mood" do
       expect(Buddy::Faces.resolve(:bloom, :pounce)).to eq(:pounce)
       expect(Buddy::Faces.resolve(:kumoko, :hiding)).to eq(:hiding)
-    end
-
-    it "lands a missing face on the nearest by mood, not neutral" do
       expect(Buddy::Faces.resolve(:moss, :pounce)).not_to eq(:neutral)
       expect(Buddy::Faces.resolve(:bloom, :thinking)).to eq(:focused)
     end
@@ -221,12 +200,6 @@ RSpec.describe Buddy::ExpressionState do
       }
 
       expect(off).to eq([]), "these make the pet hop when the mood changes:\n#{off.join("\n")}"
-    end
-
-    it "keeps the body layer empty for every theme" do
-      scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
-      body = scss.scan(/\.byte-buddy-body\s*\{[^}]*\}/m).join
-      expect(body).not_to include("image-url")
     end
   end
 end

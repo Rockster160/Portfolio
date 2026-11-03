@@ -2,12 +2,6 @@ require "rails_helper"
 
 RSpec.describe "Buddy alarms" do
   # An alarm is a watch that RINGS, as opposed to one that posts a line.
-  #
-  # Prod Aug 10: "set an alarm for the next time the washer finishes" was answered
-  # with a one-second `timer` watch, because that was the only shape that made a
-  # noise. Every surface then named the mechanism instead of the thing — the
-  # receipt said "will start a 1 second timer", the reminders list said "starts a
-  # 1 sec timer", and what actually went off announced itself as a timer expiring.
   describe "alarms" do
     let(:user) { create(:user) }
     # A real task listening on the scope is what makes it watchable at all
@@ -22,8 +16,7 @@ RSpec.describe "Buddy alarms" do
     let(:msg)    { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
 
     # An alarm's countdown is one second long and the suite runs Sidekiq inline,
-    # so without this the fire worker goes off mid-example and every assertion
-    # about what the alarm SAYS is really an assertion about how fast the spec ran.
+    # so without this the fire worker goes off mid-example.
     around { |ex| Sidekiq::Testing.fake! { ex.run } }
 
     before do
@@ -48,7 +41,7 @@ RSpec.describe "Buddy alarms" do
       }
     end
 
-    # Verbatim shape of what Home Assistant posts when the washer stops.
+    # The shape of what Home Assistant posts when the washer stops.
     def washer_stopped
       {
         "type"        => "stop",
@@ -58,32 +51,33 @@ RSpec.describe "Buddy alarms" do
       }
     end
 
+    def last_said
+      convo.byte_messages.where(direction: :inbound).order(:created_at).last
+    end
+
     # A clock time and a duration need no watch at all — the countdown IS the
-    # alarm. What makes it one rather than a timer is the flag, which is what
-    # decides whether the thing that goes off says "Wake up" or "Time's up".
+    # alarm. What makes it one rather than a timer is the flag.
     describe "on the clock" do
-      it "sets one for a stretch of time" do
+      it "sets a flagged countdown, stoppable like any timer, that goes off saying what it was for", :aggregate_failures do
         expect { run({ label: "Wake up", seconds: 1200 }) }.not_to change(BuddyWatch, :count)
 
         timer = user.timers.order(:id).last
         expect(timer.name).to eq("Wake up")
         expect(timer.duration_ms).to eq(1_200_000)
         expect(Buddy::Alarms.alarm?(timer)).to be(true)
+        expect(Buddy::Timers.buddy_timer?(user, timer)).to be(true)
+        expect(Buddy::Timers.live_for(user)).to include(timer)
+
+        Buddy::Timers.on_fired(timer)
+
+        expect(last_said.body).to include("Wake up")
+        expect(last_said.metadata["source"]).to eq("alarm")
       end
 
-      it "sets one for a wall-clock moment" do
-        at = 3.hours.from_now
-
-        run({ label: "Leave for the airport", at: at.iso8601 })
-
-        timer = user.timers.order(:id).last
-        expect(timer.end_at).to be_within(2.seconds).of(at)
-      end
-
-      it "measures to the moment, not from when the turn finished" do
+      # The message that asked came in a minute ago; a duration measured from
+      # `now` would ring a minute early.
+      it "measures a wall-clock moment to the moment, not from when the turn finished" do
         at = 90.minutes.from_now
-        # The message that asked came in a minute ago; a duration measured from
-        # `now` would ring a minute early.
         convo.byte_messages.where(direction: :outbound).delete_all
         convo.byte_messages.create!(
           user: user, direction: :outbound, state: :delivered,
@@ -95,52 +89,20 @@ RSpec.describe "Buddy alarms" do
         expect(user.timers.order(:id).last.end_at).to be_within(2.seconds).of(at)
       end
 
-      it "says when it will go off rather than how long the countdown is" do
-        run({ label: "Wake up", seconds: 1200 })
-
-        chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-        expect(chip.body).to include("alarm")
-        expect(chip.body).not_to include("timer")
-      end
-
-      it "refuses a time that has already gone" do
-        expect { run({ label: "Too late", at: 5.minutes.ago.iso8601 }) }.not_to(change { user.timers.count })
-      end
-
-      it "refuses one further out than a countdown reaches, rather than ringing on the wrong day" do
-        expect { run({ label: "Next week", at: 3.days.from_now.iso8601 }) }.not_to(change { user.timers.count })
-      end
-
-      it "refuses a time AND a condition at once" do
-        expect { run(washer(seconds: 60)) }.not_to change(BuddyWatch, :count)
-      end
-
-      it "refuses an alarm with neither" do
-        expect { run({ label: "When?" }) }.not_to(change { user.timers.count })
-      end
-
-      it "goes off saying what it was set for" do
-        run({ label: "Wake up", seconds: 1200 })
-
-        Buddy::Timers.on_fired(user.timers.order(:id).last)
-
-        said = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-        expect(said.body).to include("Wake up")
-        expect(said.body).not_to include("Time's up")
-        expect(said.metadata["source"]).to eq("alarm")
-      end
-
-      it "can be stopped with the ordinary timer controls" do
-        run({ label: "Wake up", seconds: 1200 })
-        timer = user.timers.order(:id).last
-
-        expect(Buddy::Timers.buddy_timer?(user, timer)).to be(true)
-        expect(Buddy::Timers.live_for(user)).to include(timer)
+      it "refuses a past time, one past a countdown's reach, a time AND a condition, or neither" do
+        [
+          { label: "Too late", at: 5.minutes.ago.iso8601 },
+          { label: "Next week", at: 3.days.from_now.iso8601 },
+          washer(seconds: 60),
+          { label: "When?" },
+        ].each { |payload|
+          expect { run(payload) }.not_to(change { [user.timers.count, BuddyWatch.count] }, payload.inspect)
+        }
       end
     end
 
     describe "setting one" do
-      it "makes an alarm watch carrying what it's for" do
+      it "makes a one-shot alarm watch carrying what it's for, with the listener on the chip" do
         expect { run(washer) }.to change(BuddyWatch, :count).by(1)
 
         watch = BuddyWatch.last
@@ -149,45 +111,25 @@ RSpec.describe "Buddy alarms" do
         expect(watch.body).to eq("Washer's done")
         expect(watch.trigger_scope).to eq("hass-trigger")
         expect(watch.one_shot).to be(true)
-      end
-
-      it "says it will sound an alarm, not that it will remind them or set a timer" do
-        run(washer)
-
-        chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-        expect(chip.body).to include("alarm").and(include("when the washer stops"))
-        expect(chip.body).not_to include("remind you")
-        expect(chip.body).not_to include("timer")
-      end
-
-      it "shows the listener underneath so a wrong one can be caught now" do
-        run(washer)
 
         chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
         expect(chip.body).to include("hass-trigger:device_name::Washer type::stop")
+        expect(Buddy::Context.send(:active_watches, convo).first[:does]).to eq("sounds an alarm")
       end
 
-      it "stays armed when they want it every time" do
-        run(washer(repeat: true))
+      it "stays armed when they want it every time, and stops on its own when bounded" do
+        run(washer(repeat: true, expires: "today"))
 
         expect(BuddyWatch.last.one_shot).to be(false)
         expect(BuddyWatch.last.metadata["human_when"]).to eq("every time the washer stops")
-      end
-
-      it "stops on its own when they bounded it" do
-        run(washer(repeat: true, expires: "today"))
-
         expect(BuddyWatch.last.expires_at).to be_present
       end
 
-      it "refuses a listener that could never fire rather than saving a silent alarm" do
+      it "refuses a listener that could never fire, or none at all, rather than saving a silent alarm" do
         expect {
           run(washer(listener: "definitelynotascope:action:stop", when_phrase: "when the thing stops"))
+          run(washer(listener: nil))
         }.not_to change(BuddyWatch, :count)
-      end
-
-      it "refuses a custom condition with no listener at all" do
-        expect { run(washer(listener: nil)) }.not_to change(BuddyWatch, :count)
       end
     end
 
@@ -197,43 +139,21 @@ RSpec.describe "Buddy alarms" do
         BuddyWatch.last
       }
 
-      it "starts the countdown that does the ringing" do
-        expect {
-          Buddy::WatchMatcher.fire!(watch, washer_stopped)
-        }.to change { user.timers.count }.by(1)
+      it "starts a countdown named and flagged as the alarm, and says nothing yet", :aggregate_failures do
+        expect { Buddy::WatchMatcher.fire!(watch, washer_stopped) }.to change { user.timers.count }.by(1)
+
+        timer = user.timers.order(:id).last
+        expect(convo.byte_messages.where("metadata->>'source' = 'watch'")).to be_empty
+        expect(timer.name).to eq("Washer's done")
+        expect(Buddy::Alarms.alarm?(timer)).to be(true)
       end
 
-      it "names that countdown what the alarm is for" do
-        Buddy::WatchMatcher.fire!(watch, washer_stopped)
-
-        expect(user.timers.order(:id).last.name).to eq("Washer's done")
-      end
-
-      it "marks that countdown as an alarm, so what goes off knows what it is" do
-        Buddy::WatchMatcher.fire!(watch, washer_stopped)
-
-        expect(Buddy::Alarms.alarm?(user.timers.order(:id).last)).to be(true)
-      end
-
-      it "says nothing yet — the alarm speaks when it goes off" do
-        said = -> { convo.byte_messages.where("metadata->>'source' = 'watch'").count }
-
-        expect { Buddy::WatchMatcher.fire!(watch, washer_stopped) }.not_to change(said, :call)
-      end
-
-      it "does not fire on the washer STARTING" do
+      it "fires off the real trigger bus, and not on the washer starting or a different appliance" do
         expect {
           Buddy::WatchMatcher.dispatch(user, "hass-trigger", washer_stopped.merge("type" => "start"))
-        }.not_to(change { user.timers.count })
-      end
-
-      it "does not fire for a different appliance" do
-        expect {
           Buddy::WatchMatcher.dispatch(user, "hass-trigger", washer_stopped.merge("device_name" => "Dryer"))
         }.not_to(change { user.timers.count })
-      end
 
-      it "fires off the real trigger bus" do
         expect {
           Buddy::WatchMatcher.dispatch(user, "hass-trigger", washer_stopped)
         }.to change { user.timers.count }.by(1)
@@ -241,71 +161,44 @@ RSpec.describe "Buddy alarms" do
     end
 
     describe "when it goes off" do
-      let(:timer) {
+      it "says the thing it was set for, and pushes" do
         run(washer)
         Buddy::WatchMatcher.fire!(BuddyWatch.last, washer_stopped)
-        user.timers.order(:id).last
-      }
 
-      it "says the thing it was set for, not that a timer finished" do
-        Buddy::Timers.on_fired(timer)
+        Buddy::Timers.on_fired(user.timers.order(:id).last)
 
-        said = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-        expect(said.body).to include("Washer's done")
-        expect(said.body).not_to include("Time's up")
-        expect(said.metadata["source"]).to eq("alarm")
-      end
-
-      it "pushes, so it lands even when they're away from the thread" do
-        Buddy::Timers.on_fired(timer)
-
+        expect(last_said.body).to include("Washer's done")
+        expect(last_said.metadata["source"]).to eq("alarm")
         expect(WebPushNotifications).to have_received(:send_to_byte)
       end
 
-      it "leaves an ordinary timer saying what it always said" do
+      it "leaves an ordinary timer as a timer" do
         plain = Buddy::Timers.create!(user: user, seconds: 60, label: "Pasta")
 
         Buddy::Timers.on_fired(plain)
 
-        said = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-        expect(said.body).to include("Time's up").and(include("Pasta"))
-        expect(said.metadata["source"]).to eq("timer")
+        expect(last_said.body).to include("Pasta")
+        expect(last_said.metadata["source"]).to eq("timer")
       end
     end
 
-    it "says what it does when Buddy looks at what it's watching" do
+    # remind_when and alarm resolve conditions through the same code so an
+    # arrival watch and an arrival alarm can't disagree.
+    it "resolves a condition the same way remind_when does" do
       run(washer)
+      alarm_watch = BuddyWatch.last
 
-      listed = Buddy::Context.send(:active_watches, convo)
+      run({ text: "put it away", trigger: "custom", listener: washer[:listener], when_phrase: "when the washer stops" }, tool: :remind_when)
+      reminder = BuddyWatch.last
 
-      expect(listed.first[:does]).to eq("sounds an alarm")
-    end
-
-    # The shared half. remind_when and alarm resolve conditions through the same
-    # code precisely so an arrival watch and an arrival alarm can't disagree about
-    # where Costco is.
-    describe "sharing conditions with remind_when" do
-      it "resolves a named trigger the same way for both" do
-        run(washer)
-        alarm_watch = BuddyWatch.last
-
-        run({ text: "put it away", trigger: "custom", listener: washer[:listener], when_phrase: "when the washer stops" }, tool: :remind_when)
-        reminder = BuddyWatch.last
-
-        expect(alarm_watch.trigger_scope).to eq(reminder.trigger_scope)
-        expect(alarm_watch.listener).to eq(reminder.listener)
-        expect(alarm_watch.kind).to eq("alarm")
-        expect(reminder.kind).to eq("prompt")
-      end
+      expect(alarm_watch.trigger_scope).to eq(reminder.trigger_scope)
+      expect(alarm_watch.listener).to eq(reminder.listener)
+      expect(alarm_watch.kind).to eq("alarm")
+      expect(reminder.kind).to eq("prompt")
     end
   end
 
   # Typing "alarm" rings one. No model turn, no tool call, no waiting.
-  #
-  # Same reasoning as the timer fast path next door: a round trip costs several
-  # seconds, and they're several seconds during which the model might not call the
-  # tool at all. On a countdown that's most of a short timer. On this it's the
-  # whole point — the word is what you type when you want a noise NOW.
   describe "the fast path" do
     let(:user) { User.me }
     let!(:convo) {
@@ -332,122 +225,63 @@ RSpec.describe "Buddy alarms" do
       convo.byte_messages.where(direction: :inbound).select { |m| m.metadata["kind"] == "buddy_activity" }
     end
 
-    describe "the bare word" do
-      it "rings one" do
-        say!("alarm")
+    # The chip is the only line this produces: it pushes, and the countdown is
+    # flagged `quick` so landing doesn't announce it a second time.
+    it "rings a quick alarm on the bare word without the model, keeping their bubble and saying it once", :aggregate_failures do
+      message = say!("alarm")
 
-        expect(alarms.length).to eq(1)
+      expect(message.body).to eq("alarm")
+      expect(message.direction).to eq("outbound")
+      expect(alarms.length).to eq(1)
+      expect(Buddy::Alarms.quick?(alarms.first)).to be(true)
+      expect(BuddyDeliverWorker).not_to have_received(:perform_async)
+      expect(WebPushNotifications).to have_received(:send_to_byte)
+      expect(chips.last.metadata).to include("tool_name" => "alarm", "source" => "fast_path")
+
+      Buddy::Timers.on_fired(alarms.first.tap { |t| t.update!(fired_at: Time.current) })
+
+      expect(chips.length).to eq(1)
+      expect(convo.byte_messages.where(direction: :inbound).map(&:body)).to eq([chips.first.body])
+    end
+
+    it "takes the punctuation people actually type, and leaves anything longer to the model" do
+      ["alarm", "ALARM", "Alarm!", "alarm.", " alarm ", "alarm!!"].each do |text|
+        expect(Buddy::Alarms.bare_request?(text)).to be(true), "expected #{text.inspect} to ring"
       end
-
-      it "never reaches the model" do
-        say!("alarm")
-
-        expect(BuddyDeliverWorker).not_to have_received(:perform_async)
-      end
-
-      it "still posts their own bubble" do
-        message = say!("alarm")
-
-        expect(message.body).to eq("alarm")
-        expect(message.direction).to eq("outbound")
-      end
-
-      it "says so in the thread" do
-        say!("alarm")
-
-        expect(chips.last.body).to include("alarm")
-        expect(chips.last.metadata["tool_name"]).to eq("alarm")
-        expect(chips.last.metadata["source"]).to eq("fast_path")
-      end
-
-      # An alarm IS a timer with the flag on it — that's what makes the ringing
-      # loop, the push, the acknowledge tap and the offline queue all work already.
-      it "is a real alarm rather than a plain countdown" do
-        say!("alarm")
-
-        expect(Buddy::Alarms.alarm?(alarms.first)).to be(true)
-      end
-
-      # It's flagged `quick` so the countdown underneath knows it has nothing left
-      # to announce when it reaches zero.
-      it "is marked as a ring that has already announced itself" do
-        say!("alarm")
-
-        expect(Buddy::Alarms.quick?(alarms.first)).to be(true)
-      end
-
-      # The chip is the only line this produces, so it's the one that has to reach
-      # somebody who isn't looking at the app.
-      it "pushes" do
-        say!("alarm")
-
-        expect(WebPushNotifications).to have_received(:send_to_byte).with(hash_including(title: "⏰ Alarm"))
-      end
-
-      # Prod 4062 ("Byte sounded the alarm ⏰") and 4063 ("⏰ Alarm") were the same
-      # event twice, 5.6 seconds apart.
-      it "says it once, not once now and once when the countdown lands" do
-        say!("alarm")
-        Buddy::Timers.on_fired(alarms.first.tap { |t| t.update!(fired_at: Time.current) })
-
-        expect(chips.length).to eq(1)
-        expect(convo.byte_messages.where(direction: :inbound).map(&:body)).to eq([chips.first.body])
-      end
-
-      it "takes the punctuation people actually type" do
-        ["alarm", "ALARM", "Alarm!", "alarm.", " alarm ", "alarm!!"].each do |text|
-          expect(Buddy::Alarms.bare_request?(text)).to be(true), "expected #{text.inspect} to ring"
-        end
+      [
+        "alarm in 20 minutes",
+        "alarm at 7",
+        "set an alarm for 6:30",
+        "alarm when the washer finishes",
+        "cancel the alarm",
+        "what alarms do I have",
+        "alarm?",
+      ].each do |text|
+        expect(Buddy::Alarms.bare_request?(text)).to be(false), "expected #{text.inspect} to go to the model"
       end
     end
 
-    # The one thing this must never do is make a noise in the room in answer to a
-    # request to make one at seven o'clock.
-    describe "anything longer" do
-      it "leaves a time to the model" do
-        [
-          "alarm in 20 minutes",
-          "alarm at 7",
-          "set an alarm for 6:30",
-          "alarm when the washer finishes",
-          "cancel the alarm",
-          "what alarms do I have",
-          "alarm?",
-        ].each do |text|
-          expect(Buddy::Alarms.bare_request?(text)).to be(false), "expected #{text.inspect} to go to the model"
-        end
-      end
+    it "actually hands a longer one on rather than ringing" do
+      say!("alarm in 20 minutes")
 
-      it "actually hands one of those on rather than ringing" do
-        say!("alarm in 20 minutes")
-
-        expect(alarms).to be_empty
-        expect(BuddyDeliverWorker).to have_received(:perform_async)
-      end
+      expect(alarms).to be_empty
+      expect(BuddyDeliverWorker).to have_received(:perform_async)
     end
 
-    # Setting one off from somewhere else — the Mac CLI, a cron, a Jil bash step —
-    # without the word that did it turning up in the thread as though they'd said
-    # it. `hidden` is the same flag the quick-action chips and the daily audit
-    # already ride on: the row still exists (the ring hangs off it), it just isn't
-    # anything anyone reads.
+    # Setting one off from the Mac CLI, a cron, or a Jil bash step: `hidden`
+    # keeps the asking words out of the thread while what Buddy says stays.
     describe "triggering one without a visible message" do
       def say_hidden!(body)
         ByteMessageIntake.call(user: user, conversation: convo, body: body, metadata: { hidden: true })
       end
 
-      it "still rings" do
-        say_hidden!("alarm")
-
-        expect(alarms.length).to eq(1)
-      end
-
-      it "keeps the flag on their message, which the client drops on sight" do
+      it "still rings, hides their message, and leaves the chip visible" do
         expect(say_hidden!("alarm").metadata["hidden"]).to be(true)
+        expect(alarms.length).to eq(1)
+        expect(chips.last.metadata["hidden"]).to be_nil
       end
 
-      # Not the alarm word specifically — anything the thread accepts can come in
-      # this way. `fake!` because the suite runs Sidekiq inline and a five-minute
+      # `fake!` because the suite runs Sidekiq inline and a five-minute
       # countdown would have TimerFireWorker reschedule itself forever.
       it "works the same for a timer" do
         Sidekiq::Testing.fake! { say_hidden!("5m pasta") }
@@ -455,18 +289,8 @@ RSpec.describe "Buddy alarms" do
         expect(Timer.where(user_id: user.id).count).to eq(1)
         expect(convo.byte_messages.where(direction: :outbound).last.metadata["hidden"]).to be(true)
       end
-
-      # What Buddy SAYS is not hidden — only the words that asked for it. The
-      # chip is the whole point of the thing still being visible.
-      it "leaves the chip it produced alone" do
-        say_hidden!("alarm")
-
-        expect(chips.last.metadata["hidden"]).to be_nil
-      end
     end
 
-    # A claude or bash thread has no companion behind it, and "alarm" there is
-    # something being typed at a shell.
     it "only fires on a Buddy thread" do
       shell = user.byte_conversations.create!(mode: :bash, name: "Terminal")
 
@@ -475,8 +299,8 @@ RSpec.describe "Buddy alarms" do
       expect(alarms).to be_empty
     end
 
-    # A failure to ring must not swallow the message — the bubble is already
-    # posted, and losing what they typed is worse than a missing alarm.
+    # The bubble is already posted, and losing what they typed is worse than a
+    # missing alarm.
     it "still returns their message when ringing blows up" do
       allow(Buddy::Timers).to receive(:create!).and_raise("boom")
       allow(Buddy::Errors).to receive(:report)

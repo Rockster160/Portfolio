@@ -1,20 +1,8 @@
 require "rails_helper"
 
-# A sample reply in a persona file gets used.
-#
-# That is the whole point of most of them - `Mooooorning!`, `Ag shame!`,
-# `Thank youuuu!` are there to be borrowed, and borrowing them is how a
-# companion sounds like itself. None of those carry a fact, so a verbatim echo
-# costs nothing.
-#
-# A sample that carries a VALUE is a different object wearing the same clothes.
-# "up in about twenty minutes" and "on your calendar for noon" read as
-# illustrations to whoever wrote them and as sentences to the model, and when
-# one gets borrowed the number comes with it - a claim about the person's day
-# that nothing anywhere checked. Buddy::TodayBriefing::TONE carries the same
-# rule for the briefing seed, and the reason it is written down: two agenda
-# items put in that prompt purely as what-NOT-to-say illustrations were both
-# read out by name on the days they came round.
+# A sample reply in a persona file gets borrowed verbatim. Tone samples carry
+# no fact and cost nothing; a sample carrying a VALUE (a time, a duration, a
+# tally) brings an unchecked claim about the person's day along with it.
 #
 # Scoped to the companion's own files. `tone_profiles/` describes how the PERSON
 # writes, so a time in one of those is a quote of them rather than a reply
@@ -39,26 +27,19 @@ RSpec.describe "persona sample replies" do
     File.read(path).scan(/`([^`\n]{12,})`|"([^"\n]{12,})"/).flatten.compact
   end
 
-  persona_files.each do |path|
-    name = path.dirname.basename.to_s
+  it "hands the model no sample reply carrying a made-up value, in any companion's persona", :aggregate_failures do
+    expect(persona_files.map { |p| p.dirname.basename.to_s }).to match_array(Buddy::Themes.keys.map(&:to_s))
 
-    describe name do
+    persona_files.each do |path|
+      name = path.dirname.basename.to_s
       fabricated.each do |label, pattern|
-        it "hands the model no sample carrying #{label}" do
-          caught = samples_in(path).grep(pattern)
+        caught = samples_in(path).grep(pattern)
 
-          expect(caught).to be_empty,
-            "#{name} offers #{label} inside a sample the model can send verbatim: " \
-            "#{caught.inspect}. Describe the shape instead, and say the figure comes " \
-            "from the record."
-        end
+        expect(caught).to be_empty,
+          "#{name} offers #{label} inside a sample the model can send verbatim: " \
+          "#{caught.inspect}. Describe the shape instead, and say the figure comes " \
+          "from the record."
       end
     end
-  end
-
-  it "covers every companion, so a new one cannot skip the check" do
-    checked = persona_files.map { |p| p.dirname.basename.to_s }
-
-    expect(checked).to match_array(Buddy::Themes.keys.map(&:to_s))
   end
 end

@@ -62,25 +62,15 @@ RSpec.describe BirthdaySync do
   end
 
   describe "Contact after_commit hook" do
-    it "auto-creates the schedule on contact create" do
+    it "creates the schedule with the contact, renames it with them, and removes it with the birthday" do
       contact = user.contacts.create!(name: "Kensei", last_name: "Murton", birth_month: 10, birth_day: 19)
+      scope = birthdays_agenda.agenda_schedules.where("metadata ->> 'birthday_contact_id' = ?", contact.id.to_s)
+      expect(scope.sole.name).to eq("Kensei Murton's Birthday")
 
-      sched = birthdays_agenda.agenda_schedules
-        .where("metadata ->> 'birthday_contact_id' = ?", contact.id.to_s).first
-      expect(sched.name).to eq("Kensei Murton's Birthday")
-    end
-
-    it "renames the event when the contact's name changes" do
-      contact = user.contacts.create!(name: "Kensei", last_name: "Murton", birth_month: 10, birth_day: 19)
       contact.update!(last_name: "Smith")
+      expect(scope.sole.name).to eq("Kensei Smith's Birthday")
 
-      expect(birthdays_agenda.agenda_schedules.first.name).to eq("Kensei Smith's Birthday")
-    end
-
-    it "removes the event when the birthday is cleared" do
-      contact = user.contacts.create!(name: "Kensei", last_name: "Murton", birth_month: 10, birth_day: 19)
       contact.update!(birth_month: nil, birth_day: nil)
-
       expect(birthdays_agenda.agenda_schedules.count).to eq(0)
     end
 

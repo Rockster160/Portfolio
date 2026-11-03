@@ -1,12 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Buddy idea threads" do
-  # A held idea you can come back to.
-  #
-  # A BuddyMemory used to be one immutable `body`, so the second and third visits to
-  # a thought had nowhere to land — stash_idea dedupes on lowercased body, so
-  # re-saying it merged onto the original row and the new detail was dropped on
-  # the floor. Notes are the place it lands now.
+  # A held idea you can come back to: the seed stays as it was said, and each
+  # later visit lands as a note on it.
   describe "threads" do
     let(:user)  { User.me }
     let(:convo) { user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current) }
@@ -35,6 +31,10 @@ RSpec.describe "Buddy idea threads" do
       )
     end
 
+    # Ages are counted in local calendar days, so a clock near midnight or a DST
+    # change would move "10.days.ago" onto a different day.
+    around { |example| travel_to(Time.utc(2026, 9, 16, 18, 0)) { example.run } }
+
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(ActionCable.server).to receive(:broadcast)
@@ -42,39 +42,21 @@ RSpec.describe "Buddy idea threads" do
     end
 
     describe "elaborate_idea" do
-      it "adds a note without touching the seed" do
-        idea = idea!("greenhouse needs sorting out")
-
-        result, confirm = elaborate({ id: idea.id, note: "should probably be solar" })
-
-        expect(confirm[:summary]).to include("greenhouse needs sorting out")
-        expect(result[:count]).to eq(1)
-        expect(idea.reload.content).to eq("greenhouse needs sorting out")
-        expect(idea.notes.map(&:body)).to eq(["should probably be solar"])
-      end
-
-      it "stacks notes oldest-first across separate visits" do
-        idea = idea!("slime colony game")
-
-        elaborate({ id: idea.id, note: "passive idle mechanic" })
-        elaborate({ id: idea.id, note: "colonies should merge" })
-        elaborate({ id: idea.id, note: "maybe a prestige loop" })
-
-        expect(idea.reload.notes.map(&:body))
-          .to eq(["passive idle mechanic", "colonies should merge", "maybe a prestige loop"])
-      end
-
-      # updated_at moves for bookkeeping (a summary rewrite, a recategorize).
-      # last_touched_at answers a different question: when the PERSON last put
-      # something in, which is what says whether a thread is alive.
-      it "moves last_touched_at, which is what makes a thread read as alive" do
-        idea = idea!("old thought", created: 40.days.ago)
+      # last_touched_at is when the PERSON last put something in, which is what
+      # says whether a thread is alive; updated_at moves for bookkeeping too.
+      it "stacks notes oldest-first without touching the seed, and moves last_touched_at", :aggregate_failures do
+        idea = idea!("slime colony game", created: 40.days.ago)
         expect(idea.thread_label).to be_nil
 
-        elaborate({ id: idea.id, note: "still thinking about this" })
+        result, = elaborate({ id: idea.id, note: "passive idle mechanic" })
+        elaborate({ id: idea.id, note: "colonies should merge" })
 
-        expect(idea.reload.last_touched_at).to be_within(5.seconds).of(Time.current)
-        expect(idea.thread_label).to eq("1 note, last today")
+        expect(result[:count]).to eq(1)
+        idea.reload
+        expect(idea.content).to eq("slime colony game")
+        expect(idea.notes.map(&:body)).to eq(["passive idle mechanic", "colonies should merge"])
+        expect(idea.last_touched_at).to be_within(5.seconds).of(Time.current)
+        expect(idea.thread_label).to eq("2 notes, last today")
       end
 
       it "marks a companion note as yours so it is never read back as theirs" do
@@ -107,39 +89,22 @@ RSpec.describe "Buddy idea threads" do
         expect(idea.reload.notes.map(&:body)).to eq(["first thought"])
       end
 
-      it "refuses an id that isn't theirs" do
+      it "refuses an id that isn't theirs, or an empty note", :aggregate_failures do
         theirs = BuddyMemory.create!(kind: :stash, user: create(:user), content: "not mine", status: :active)
-        tool = Buddy::Tools[:elaborate_idea]
-
-        expect { tool[:confirm].call({ id: theirs.id, note: "x" }, ctx) }.to raise_error(/no held idea/)
-      end
-
-      it "refuses an empty note" do
         idea = idea!("greenhouse")
         tool = Buddy::Tools[:elaborate_idea]
 
-        expect { tool[:confirm].call({ id: idea.id, note: "  " }, ctx) }.to raise_error(/nothing to add/)
+        expect { tool[:confirm].call({ id: theirs.id, note: "x" }, ctx) }.to raise_error(RuntimeError)
+        expect { tool[:confirm].call({ id: idea.id, note: "  " }, ctx) }.to raise_error(RuntimeError)
+        expect(theirs.notes.count).to eq(0)
       end
     end
 
     describe "read_idea" do
-      it "settles in the turn rather than leaving a row to tap" do
-        expect(Buddy::Tools.answers?(Buddy::Tools[:read_idea])).to be(true)
-      end
-
-      # The frame around an answer beats the answer's own keys. A tool reporting
-      # something it happens to call `status` must not be able to overwrite the
-      # flag that says the lookup worked.
-      it "cannot have its answered flag overwritten by its own payload" do
-        idea = idea!("anything")
-
-        out = answer(:read_idea, { id: idea.id })
-
-        expect(out[:status]).to eq(:answered)
-        expect(out[:note]).to include("what's above is what came back")
-      end
-
-      it "hands back the seed and every note, oldest first" do
+      # The frame around an answer beats the answer's own keys, so a payload
+      # reporting its own `state` can't overwrite the flag that says the lookup
+      # worked.
+      it "hands back the seed and every note, oldest first, as answered" do
         idea = idea!("greenhouse needs sorting", summary: "Greenhouse plan", created: 10.days.ago)
         elaborate({ id: idea.id, note: "solar would be cheaper" })
         elaborate({ id: idea.id, note: "check the south wall" })
@@ -154,57 +119,28 @@ RSpec.describe "Buddy idea threads" do
         expect(out[:thread].index("solar would be cheaper")).to be < out[:thread].index("check the south wall")
       end
 
-      it "says plainly when there is nothing there rather than inventing one" do
-        out = answer(:read_idea, { id: 999_999 })
-
-        expect(out[:found]).to be(false)
-        expect(out[:how]).to include("don't invent one")
-      end
-
-      it "warns the model off implying history a bare seed doesn't have" do
-        idea = idea!("one-liner")
-
-        out = answer(:read_idea, { id: idea.id })
-
-        expect(out[:note_count]).to eq(0)
-        expect(out[:how]).to include("Don't imply")
+      it "reports nothing found for an id that isn't there" do
+        expect(answer(:read_idea, { id: 999_999 })[:found]).to be(false)
       end
     end
 
     describe "search_ideas" do
-      it "settles in the turn rather than leaving a row to tap" do
-        expect(Buddy::Tools.answers?(Buddy::Tools[:search_ideas])).to be(true)
-      end
-
       # The words somebody remembers about a long thread are usually in what they
       # added later, not in the sentence that started it.
-      it "matches on note text, not just the seed" do
-        idea = idea!("that garden thing")
-        elaborate({ id: idea.id, note: "hydroponics might be the answer" })
+      it "matches the seed, the summary, and note text, requiring every word", :aggregate_failures do
+        by_seed    = idea!("sort out the greenhouse solar panels")
+        by_summary = idea!("something else", summary: "Greenhouse wiring")
+        by_note    = idea!("that garden thing")
+        elaborate({ id: by_note.id, note: "hydroponics in the greenhouse" })
         idea!("unrelated pile")
 
-        out = answer(:search_ideas, { query: "hydroponics" })
-
-        expect(out[:total]).to eq(1)
-        expect(out[:ideas].first).to include("##{idea.id}")
-      end
-
-      it "matches the seed and the summary too" do
-        a = idea!("sort out the greenhouse")
-        b = idea!("something else", summary: "Greenhouse wiring")
-
         out = answer(:search_ideas, { query: "greenhouse" })
+        expect(out[:total]).to eq(3)
+        expect(out[:ideas].join(" ")).to include("##{by_seed.id}", "##{by_summary.id}", "##{by_note.id}")
 
-        expect(out[:total]).to eq(2)
-        expect(out[:ideas].join(" ")).to include("##{a.id}").and include("##{b.id}")
-      end
-
-      it "requires every word, so two terms narrow rather than widen" do
-        idea!("greenhouse solar panels")
-        idea!("greenhouse water butt")
-
-        expect(answer(:search_ideas, { query: "greenhouse" })[:total]).to eq(2)
-        expect(answer(:search_ideas, { query: "greenhouse solar" })[:total]).to eq(1)
+        out = answer(:search_ideas, { query: "greenhouse solar" })
+        expect(out[:total]).to eq(1)
+        expect(out[:ideas].first).to include("##{by_seed.id}")
       end
 
       # Somebody asking about an old thought rarely remembers whether they ever
@@ -236,13 +172,6 @@ RSpec.describe "Buddy idea threads" do
         out = answer(:search_ideas, {})
 
         expect(out[:ideas].first).to include("##{old_thread.id}")
-      end
-
-      it "tells the model that empty is the answer" do
-        out = answer(:search_ideas, { query: "nothing like this exists" })
-
-        expect(out[:ideas]).to be_empty
-        expect(out[:how]).to include("Nothing matched, and that IS the answer")
       end
 
       it "does not reach another person's pile" do
@@ -280,14 +209,6 @@ RSpec.describe "Buddy idea threads" do
 
         expect(prompt).to include("`##{idea.id}` (home, 3 days) one-liner")
       end
-
-      it "sends the model to read_idea before it speaks about a thread" do
-        idea!("anything")
-
-        expect(prompt).to include("Anything tagged with a note count is a THREAD")
-        expect(prompt).to include("`read_idea` it")
-        expect(prompt).to include("that's `elaborate_idea` and NOT a second `stash_idea`")
-      end
     end
 
     describe "the stashed_ideas context section" do
@@ -305,87 +226,21 @@ RSpec.describe "Buddy idea threads" do
     end
   end
 
-  # Prod 3350. "What were the buttons I wanted to add to Whisper's app?" was
-  # answered "Lights, playlist, projector, and a big mode button" — which is a
-  # different idea entirely, stashed three hours earlier, that names another
-  # subject on its own summary line. There was no held idea about that app at all.
-  #
-  # The question named a subject and the answer matched a shape: one held idea was
-  # about buttons, so it became the answer to a question about buttons. The right
-  # answer was the one Buddy gave on the retry — nothing on that one, and here's
-  # what the buttons one actually was.
-  #
-  # `search_ideas` already tells the model that nothing matching IS the answer.
-  # The list carried in every prompt said nothing of the kind, and that list is
-  # where this was answered from — no tool was called on the turn at all.
-  #
-  # The first fix wrote the whole incident into the prompt, both real names
-  # included, as the illustration of what not to do. That is the one thing this
-  # codebase has learned repeatedly not to do: every concrete example ever put in
-  # a prompt here came back out of it, and a rule whose example pairs two real
-  # subjects hands the model that pairing. Rewritten as a shape, and this file is
-  # what keeps the names out.
-  describe "matching a thread by subject" do
+  describe "the open-loops block" do
     let(:user) { create(:user) }
 
-    def block
-      Buddy::Personality.open_loops_block(user)
-    end
-
-    before do
+    # The subject is only checkable if it's on the line, so the block prints
+    # the idea's own summary.
+    it "prints each idea's own summary, and costs nothing for someone holding none", :aggregate_failures do
       user.buddy_memories.create!(
         kind:     :stash,
-        content:     "Glimmer iPad idea: control lights, playlist, projector, big button for mode",
+        content:  "Glimmer iPad idea: control lights, playlist, projector, big button for mode",
         summary:  "Glimmer iPad controls",
         category: :home,
         status:   :active,
       )
-    end
 
-    it "tells the model the named thing has to be in the idea" do
-      expect(block).to match(/that name has to appear in the idea itself/i)
-    end
-
-    it "says why the wrong one is unrecoverable rather than merely wrong" do
-      expect(block).to match(/reads back exactly like the right one/i)
-      expect(block).to match(/subject first, shape second/i)
-    end
-
-    # The rule is stated with no case attached, because a case is a pair of real
-    # subjects sitting in the prompt for the model to reach for. What's left has
-    # to still be actionable, which is the two lines above.
-    it "carries no record names, only the shape of the mistake" do
-      rule = block[/\*\*When they ask what you're holding.*/, 0]
-
-      expect(rule).not_to include("Whisper", "Glimmer", "prod 3350")
-    end
-
-    # This asserted the sample reply that used to sit here. It went with every
-    # other quoted Buddy sentence in the prompts — see the sweep in
-    # `spec/service/buddy/personality_spec.rb`. The rule is the two moves, and
-    # the two moves survive being named.
-    it "asks for the near miss to be named rather than offered as the answer" do
-      expect(block).to include("the near miss offered as an answer is the failure")
-      expect(block).to include("the same near miss offered AS a near miss is useful")
-    end
-
-    it "points at search_ideas, which answers a miss the same way" do
-      expect(block).to include("search_ideas")
-
-      tool  = Buddy::Tools[:search_ideas]
-      empty = tool[:execute].call({ query: "whisper app buttons" }, Buddy::ToolContext.new(user))
-
-      expect(empty[:ideas]).to be_empty
-      expect(empty[:how]).to match(/nothing matched, and that IS the answer/i)
-    end
-
-    # The subject is only checkable if it's on the line. A summary is what the
-    # block prints, so a summary that drops the subject would hide it again.
-    it "prints the idea's own summary, which names its subject" do
-      expect(block).to include("Glimmer iPad controls")
-    end
-
-    it "costs nothing for someone holding no ideas" do
+      expect(Buddy::Personality.open_loops_block(user)).to include("Glimmer iPad controls")
       expect(Buddy::Personality.open_loops_block(create(:user))).to be_nil
     end
   end

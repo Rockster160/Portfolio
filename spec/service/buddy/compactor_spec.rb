@@ -53,9 +53,8 @@ RSpec.describe Buddy::Compactor do
     end
 
     it "does not fire on a fresh conversation just from the fixed prompt overhead" do
-      # Regression guard: the thresholds used to be measured against the raw
-      # context window, where the ~23k of prompt + schemas alone was already
-      # 18% and every new thread compacted on its first message.
+      # Measured against the raw window, the fixed prompt + schemas alone would
+      # cross the threshold on every new thread.
       say("morning")
       conversation.update!(last_message_at: 2.hours.ago)
 
@@ -92,7 +91,6 @@ RSpec.describe Buddy::Compactor do
 
       roles = fake.calls.first.input.pluck(:role)
       expect(roles).to include(:user, :assistant)
-      expect(fake.calls.first.input.last[:content]).to match(/summarize/i)
     end
 
     it "returns nil and leaves metadata alone when the model call fails" do

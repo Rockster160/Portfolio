@@ -119,18 +119,13 @@ RSpec.describe FitnessBroadcast do
       }
     end
 
-    it "turns the whole column gold, header and all" do
+    it "turns the whole column gold, header and all, and not once one row falls short" do
       travel_to(zone.local(2026, 9, 15, 10)) do
         sweep_the_day
 
         expect(column).to all(start_with("#FFD700"))
         expect(column.first).to eq(["#FFD700", "Tue"])
-      end
-    end
 
-    it "leaves the column alone when one row falls short" do
-      travel_to(zone.local(2026, 9, 15, 10)) do
-        sweep_the_day
         user.action_events.find_by(name: "Teeth").destroy!
 
         expect(column.first).to eq("   Tue Mon Sun Sat Fri Thu Wed")

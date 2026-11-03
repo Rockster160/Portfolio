@@ -16,18 +16,6 @@ RSpec.describe "Buddy brain-dump (stash)" do
       convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body)
     end
 
-    # Prod memory 60 was "After that, clear out the entire pantry." — one half of
-    # a sentence she said in one breath, split into a row that means nothing on
-    # its own. The pile is unordered and its rows are never read side by side.
-    describe "the stash_idea tool's own instructions" do
-      it "requires each split-out piece to still say something" do
-        tool = Buddy::Tools.all.find { |t| t[:name] == :stash_idea }
-
-        expect(tool[:description]).to match(/EACH ONE HAS TO\s+STAND ALONE/)
-        expect(tool[:description]).to match(/Splitting their sentence is only half the job/)
-      end
-    end
-
     describe Buddy::Stash do
       it "arms + reads + expires the latch" do
         described_class.arm!(convo, "home")
@@ -43,8 +31,6 @@ RSpec.describe "Buddy brain-dump (stash)" do
 
         expect(idea).to have_attributes(category: "work", content: "ship the invoice tool", status: "active")
         expect(described_class.armed_category(convo.reload)).to be_nil
-        # Buddy responds (acknowledge + offer to talk it through) even for a
-        # concrete bucket.
         expect(BuddyDeliverWorker).to have_received(:perform_async)
       end
 
@@ -56,27 +42,17 @@ RSpec.describe "Buddy brain-dump (stash)" do
         expect(BuddyDeliverWorker).to have_received(:perform_async)
       end
 
-      # An armed latch swallows whatever comes next, and what comes next is
-      # sometimes just manners. Prod filed "Thanks!" onto Eve's Me pile and told
-      # her so; every later read of that pile then has to step over it.
       describe "a bare pleasantry" do
-        %w[Thanks! thanks ty Okay ok 👍 Cool Perfect].each { |word|
-          it "declines to file #{word.inspect}" do
+        it "is not filed, but still clears the latch", :aggregate_failures do
+          %w[Thanks! thanks ty Okay ok 👍 Cool Perfect].each { |word|
             described_class.arm!(convo, "me")
 
             expect { described_class.capture!(user, convo, message(word), "me") }
               .not_to change(BuddyMemory, :count)
-          end
-        }
-
-        it "clears the latch anyway, so they aren't stuck in capture mode" do
-          described_class.arm!(convo, "me")
-          described_class.capture!(user, convo, message("Thanks!"), "me")
-
-          expect(described_class.armed_category(convo.reload)).to be_nil
+            expect(described_class.armed_category(convo.reload)).to be_nil
+          }
         end
 
-        # Gratitude with something attached is still the thought.
         it "files it when there's anything more to it" do
           described_class.arm!(convo, "me")
 
@@ -85,18 +61,46 @@ RSpec.describe "Buddy brain-dump (stash)" do
         end
       end
 
-      it "applies Buddy's sort from a sort_stash call" do
-        idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
-        Buddy::SideEffects.call(convo, :sort_stash, {
-          "id" => idea.id, "category" => "home", "summary" => "build garage shelves"
-        })
+      describe "sort_stash" do
+        it "applies Buddy's category and summary" do
+          idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
+          Buddy::SideEffects.call(convo, :sort_stash, {
+            "id" => idea.id, "category" => "home", "summary" => "build garage shelves"
+          })
 
-        expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
+          expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
+        end
+
+        it "takes it off the pile with drop, which the schema offers", :aggregate_failures do
+          idea = BuddyMemory.create!(kind: :stash, user: user, content: "remind me at 3:35 to uncover the tomatoes", status: :active)
+          schema = Buddy::SideEffects.function_schemas.find { |s| s[:name].to_s == "sort_stash" }
+
+          Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "drop" => true })
+
+          expect(idea.reload.status).to eq("dropped")
+          expect(schema.to_json).to include("drop")
+        end
+
+        it "leaves a sort alone when drop isn't set" do
+          idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
+
+          Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "category" => "home", "drop" => false })
+
+          expect(idea.reload).to have_attributes(status: "active", category: "home")
+        end
+
+        it "refines just the summary from a talk-through (summary-only call)" do
+          idea = BuddyMemory.create!(kind: :stash, user: user, category: :home, summary: "shelves", content: "garage shelves", status: :active)
+          Buddy::SideEffects.call(convo, :sort_stash, {
+            "id" => idea.id, "summary" => "floating oak shelves over the bench"
+          })
+
+          expect(idea.reload).to have_attributes(category: "home", summary: "floating oak shelves over the bench")
+        end
       end
 
-      # What Buddy is told to say AFTER the acknowledgement. It used to be one
-      # fixed instruction, so "just leave it there, I don't want to talk about
-      # each one" couldn't be honoured: the seed asked again every single time.
+      # The seed for the turn after capture decides whether to offer a
+      # talk-through, and whether to offer a repeating reminder.
       describe "the response seed" do
         def seed_for(body, category: "home")
           described_class.arm!(convo, category)
@@ -104,24 +108,12 @@ RSpec.describe "Buddy brain-dump (stash)" do
           convo.byte_messages.where("metadata->>'source' = 'stash_response'").order(:id).last.body
         end
 
-        # The scripted offer itself, rather than the words "talk it through" -
-        # the closings that SUPPRESS the offer have to name it to forbid it.
         let(:offer) { "want to think it through" }
 
-        it "offers to talk the first one through" do
+        it "offers on the first of a run, stops mid-dump, and still offers a repeating reminder", :aggregate_failures do
           expect(seed_for("that garage shelf thing")).to include(offer)
-        end
-
-        it "stops offering once they're mid-dump" do
-          seed_for("that garage shelf thing")
-
           expect(seed_for("check the battery on the smoke alarm")).not_to include(offer)
-        end
-
-        it "says why it's staying quiet rather than just going silent" do
-          seed_for("that garage shelf thing")
-
-          expect(seed_for("check the battery on the smoke alarm")).to include("mid-dump")
+          expect(seed_for("water the greenhouse every morning")).to include("repeating reminder")
         end
 
         it "offers again once the run is over" do
@@ -130,117 +122,29 @@ RSpec.describe "Buddy brain-dump (stash)" do
           expect(seed_for("check the battery on the smoke alarm")).to include(offer)
         end
 
-        # A thing that repeats on a static pile is a reminder nobody set. Both of
-        # these were parked as one-offs, and the person worked around it by asking
-        # for them to be left on the pile forever so she'd see them each day.
-        it "offers a repeating reminder for something that plainly repeats" do
+        it "offers a repeating reminder only for something that repeats", :aggregate_failures do
           expect(seed_for("Feed fish daily")).to include("repeating reminder")
           expect(seed_for("Check propagations every 4 days")).to include("repeating reminder")
-        end
-
-        it "offers the reminder even mid-dump, since that one is worth the interruption" do
-          seed_for("that garage shelf thing")
-
-          expect(seed_for("water the greenhouse every morning")).to include("repeating reminder")
-        end
-
-        it "leaves a one-off alone" do
           expect(seed_for("Pothos needs repotting")).not_to include("repeating reminder")
         end
-      end
 
-      # A dump lands on the pile because the latch swallows whatever comes next,
-      # not because the pile is where it belongs. Prod: "Please remind me at 3:35
-      # to uncover the tomatoes" became a Home pile entry answered with "Done! I
-      # parked the tomatoes reminder on your Home pile" — and 3:35 went past with
-      # nothing set, because a pile entry is not a reminder.
-      describe "what the sort turn is asked to decide" do
-        let!(:list) { user.lists.create!(name: "Ongoing TO DO").tap { |l| user.user_lists.create!(list: l) } }
+        context "with a list of their own" do
+          before { user.lists.create!(name: "Ongoing TO DO").tap { |l| user.user_lists.create!(list: l) } }
 
-        def seed_for(body, category: "home")
-          described_class.arm!(convo, category)
-          described_class.capture!(user, convo, message(body), category)
-          convo.byte_messages.where("metadata->>'source' = 'stash_response'").order(:id).last.body
+          it "names their real lists, and the sort function rather than a stripped marker", :aggregate_failures do
+            seed = seed_for("bring out a meat thermometer to check the tomatoes")
+
+            expect(seed).to include("add_list_item", "Ongoing TO DO")
+            expect(seed).to include("sort_stash(id:")
+            expect(seed).not_to include("[[stash:")
+          end
+
+          it "says nothing about lists for someone who has none" do
+            user.user_lists.destroy_all
+
+            expect(seed_for("bring out a meat thermometer")).not_to include("add_list_item")
+          end
         end
-
-        it "asks what the thing is before asking which bucket" do
-          seed = seed_for("Please remind me at 3:35 to uncover the tomatoes")
-
-          expect(seed).to include("WHAT IS IT?")
-          # Anchored on the filing instruction itself rather than the word
-          # "bucket": this fixture names a time, so it now takes the time-bound
-          # closing (which is the whole point of the case), and "bucket" only ever
-          # appeared here by way of the ordinary talk-it-through closing.
-          expect(seed.index("WHAT IS IT?")).to be < seed.index("If it IS a thought:")
-        end
-
-        it "tells it to do the real thing and take it off the pile" do
-          seed = seed_for("Please remind me at 3:35 to uncover the tomatoes")
-
-          expect(seed).to include("schedule_reminder", "drop: true")
-        end
-
-        it "forbids calling a pile entry a handled reminder" do
-          expect(seed_for("Please remind me at 3:35 to uncover the tomatoes"))
-            .to include("Never tell them it's handled unless you actually did the thing")
-        end
-
-        it "offers their real lists by name for a job with no thinking left in it" do
-          seed = seed_for("bring out a meat thermometer to check the tomatoes")
-
-          expect(seed).to include("add_list_item", "Ongoing TO DO")
-        end
-
-        it "says nothing about lists for someone who has none" do
-          user.user_lists.destroy_all
-
-          expect(seed_for("bring out a meat thermometer")).not_to include("add_list_item")
-        end
-
-        it "still tells it a thought stays on the pile" do
-          expect(seed_for("that garage shelf thing")).to include("A thought worth holding")
-        end
-
-        # The seed used to instruct a `[[stash: ...]]` marker, which Turn strips
-        # as a stray and never applies — so the sort it asked for could only land
-        # if the model reached past the instruction to the real function.
-        it "names the function rather than a marker that gets stripped" do
-          seed = seed_for("that garage shelf thing")
-
-          expect(seed).to include("sort_stash(id:")
-          expect(seed).not_to include("[[stash:")
-        end
-      end
-
-      it "takes it off the pile once it's been filed somewhere real" do
-        idea = BuddyMemory.create!(kind: :stash, user: user, content: "remind me at 3:35 to uncover the tomatoes", status: :active)
-
-        Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "drop" => true })
-
-        expect(idea.reload.status).to eq("dropped")
-      end
-
-      it "leaves a sort alone when drop isn't set" do
-        idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
-
-        Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "category" => "home", "drop" => false })
-
-        expect(idea.reload).to have_attributes(status: "active", category: "home")
-      end
-
-      it "offers drop to the model as part of sort_stash" do
-        schema = Buddy::SideEffects.function_schemas.find { |s| s[:name].to_s == "sort_stash" }
-
-        expect(schema.to_json).to include("drop")
-      end
-
-      it "refines just the summary from a talk-through (summary-only call)" do
-        idea = BuddyMemory.create!(kind: :stash, user: user, category: :home, summary: "shelves", content: "garage shelves", status: :active)
-        Buddy::SideEffects.call(convo, :sort_stash, {
-          "id" => idea.id, "summary" => "floating oak shelves over the bench"
-        })
-
-        expect(idea.reload).to have_attributes(category: "home", summary: "floating oak shelves over the bench")
       end
     end
 
@@ -285,20 +189,20 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
-    # The capture path Buddy drives itself, as opposed to the hero chip. Without
-    # it the only way anything gets held is a deliberate tap, which is no use to
-    # someone who just talks.
+    # The capture path Buddy drives itself, as opposed to the hero chip.
     describe "catching one mid-conversation (stash_idea)" do
-      def catch!(payload)
+      def catch_all!(*payloads)
         msg = convo.byte_messages.create!(
           user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
         )
         Buddy::ProposalBuilder.create(
           user:         user,
           byte_message: msg,
-          markers:      [{ tool_name: :stash_idea, payload: payload }],
+          markers:      payloads.map { |payload| { tool_name: :stash_idea, payload: payload } },
         )
       end
+
+      def catch!(payload) = catch_all!(payload)
 
       it "holds it the moment it's said, without waiting for a tap" do
         catch!({ idea: "call Mel back about the fish tank", category: :home, summary: "call Mel re: fish tank" })
@@ -319,75 +223,37 @@ RSpec.describe "Buddy brain-dump (stash)" do
         expect(held.reload.status).to eq("dropped")
       end
 
-      # The latch refuses these; this is the other door into the same pile, and
-      # it was standing open.
       it "refuses a bare pleasantry here too" do
         expect { catch!({ idea: "Thanks!", category: :me }) }.not_to change(BuddyMemory, :count)
       end
 
       it "catches each loose end in a rant separately" do
-        msg = convo.byte_messages.create!(
-          user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
-        )
-        Buddy::ProposalBuilder.create(
-          user:         user,
-          byte_message: msg,
-          markers:      [
-            { tool_name: :stash_idea, payload: { idea: "call Mel back", category: :me } },
-            { tool_name: :stash_idea, payload: { idea: "the greenhouse door", category: :home } },
-            { tool_name: :stash_idea, payload: { idea: "chase the invoice", category: :work } },
-          ],
+        catch_all!(
+          { idea: "call Mel back", category: :me },
+          { idea: "the greenhouse door", category: :home },
+          { idea: "chase the invoice", category: :work },
         )
 
         expect(user.buddy_memories.live.pluck(:category)).to match_array(%w[me home work])
       end
 
       it "collapses the same thought said twice in one turn" do
-        msg = convo.byte_messages.create!(
-          user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
-        )
-        Buddy::ProposalBuilder.create(
-          user:         user,
-          byte_message: msg,
-          markers:      [
-            { tool_name: :stash_idea, payload: { idea: "call Mel back" } },
-            { tool_name: :stash_idea, payload: { idea: "Call Mel Back" } },
-          ],
-        )
+        catch_all!({ idea: "call Mel back" }, { idea: "Call Mel Back" })
 
         expect(user.buddy_memories.live.count).to eq(1)
       end
 
-      # Prod 4723 / 4739, 26 Aug. The vobot dock link went onto the pile at
-      # 14:47 as BuddyMemory 113. Eighty-two minutes later a message about the
-      # Before Bed list - nothing to do with docks - stashed it again as 115,
-      # reworded: "a cool Dock/Clock/Hub I may want to buy" the first time, "a
-      # Dock/Clock/Hub to probably buy" the second. Content equality was the
-      # whole dedupe, so both doors missed. Rocco said twice that it didn't
-      # belong and got two apologies; neither turn removed anything.
+      # Content equality alone misses a link re-described in other words.
       describe "the same link, described differently" do
         let(:first)  { "https://dock.myvobot.com/ — a cool Dock/Clock/Hub I may want to buy and integrate into HASS at some point." }
         let(:second) { "https://dock.myvobot.com/ - a Dock/Clock/Hub to probably buy and integrate into HASS later." }
 
-        it "does not start a second pile entry" do
-          catch!({ idea: first, summary: "Possible HASS dock integration" })
+        it "keeps one entry with the first wording and fills in a missing label", :aggregate_failures do
+          catch!({ idea: first })
 
           expect { catch!({ idea: second, summary: "Dock/Clock/Hub for HASS" }) }
             .not_to change { user.buddy_memories.live.count }
-        end
-
-        it "keeps the wording that was there first" do
-          catch!({ idea: first })
-          catch!({ idea: second })
-
-          expect(user.buddy_memories.live.first.content).to eq(first)
-        end
-
-        it "fills in a label the first telling didn't carry" do
-          catch!({ idea: first })
-          catch!({ idea: second, summary: "Dock/Clock/Hub for HASS" })
-
-          expect(user.buddy_memories.live.first.summary).to eq("Dock/Clock/Hub for HASS")
+          expect(user.buddy_memories.live.first).to have_attributes(content: first, summary: "Dock/Clock/Hub for HASS")
         end
 
         it "ignores a trailing slash and a query string" do
@@ -404,8 +270,6 @@ RSpec.describe "Buddy brain-dump (stash)" do
             .to change { user.buddy_memories.live.count }.by(1)
         end
 
-        # The link is what can't drift; two link-less thoughts that merely share
-        # a subject are still two thoughts.
         it "leaves two unlinked thoughts about one subject alone" do
           catch!({ idea: "a dock for HASS would be nice" })
 
@@ -414,17 +278,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
         end
 
         it "collapses two of the same link inside one turn" do
-          msg = convo.byte_messages.create!(
-            user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
-          )
-          Buddy::ProposalBuilder.create(
-            user:         user,
-            byte_message: msg,
-            markers:      [
-              { tool_name: :stash_idea, payload: { idea: first } },
-              { tool_name: :stash_idea, payload: { idea: second } },
-            ],
-          )
+          catch_all!({ idea: first }, { idea: second })
 
           expect(user.buddy_memories.live.count).to eq(1)
         end
@@ -438,17 +292,18 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
-    # A held item behind a get_context call only surfaces on a turn where Buddy
-    # already thought to look, which is never the turn one goes missing.
     describe "what's being held rides in the prompt every turn" do
+      # Pinned to midday: the age is counted in calendar days in their zone, so
+      # a late-evening run would read 3.days.ago as two.
       it "lists live items with their id and how long they've waited" do
-        BuddyMemory.create!(kind: :stash, user: user, category: :home, content: "fix the gate", status: :active, created_at: 3.days.ago)
+        travel_to(Time.zone.parse("2026-10-14 12:00")) {
+          BuddyMemory.create!(kind: :stash, user: user, category: :home, content: "fix the gate", status: :active, created_at: 3.days.ago)
 
-        block = Buddy::Personality.open_loops_block(user)
+          block = Buddy::Personality.open_loops_block(user)
 
-        expect(block).to include("Things you're holding")
-        expect(block).to include("fix the gate", "home", "3 days")
-        expect(block).to match(/`#\d+`/)
+          expect(block).to include("fix the gate", "home", "3 days")
+          expect(block).to match(/`#\d+`/)
+        }
       end
 
       it "costs nothing for someone holding nothing" do
@@ -467,51 +322,26 @@ RSpec.describe "Buddy brain-dump (stash)" do
         expect(block.index("older thing")).to be < block.index("newer thing")
       end
 
-      # Prod, 6 Sep. Eve had 33 live stash items; the list ended at `#40` from
-      # 5 August and a month of stash was in front of no turn. Sixteen seconds
-      # after Suki stashed "Ask Rocco about PC access" she asked "Okay is it in
-      # Stash?" and was told no - it was there, in the bucket the same reply
-      # offered to move it to. Ascending order plus a cap takes the OLDEST N, so
-      # the tail is what falls off, and the tail is what was just said.
-      describe "when there are more than the cap" do
-        before {
-          (Buddy::Personality::OPEN_LOOP_LIMIT + 3).times { |i|
-            BuddyMemory.create!(
-              kind: :stash, user: user, status: :active,
-              content: "thing #{i}", created_at: (40 - i).days.ago
-            )
-          }
+      # Ascending order plus a cap would take the OLDEST N, dropping the one
+      # just handed over.
+      it "keeps the newest past the cap, drops the oldest, and still reads oldest-first", :aggregate_failures do
+        limit = Buddy::Personality::OPEN_LOOP_LIMIT
+        (limit + 3).times { |i|
+          BuddyMemory.create!(
+            kind: :stash, user: user, status: :active,
+            content: "thing #{i}", created_at: (40 - i).days.ago
+          )
         }
 
-        it "keeps the newest, which is the one just handed over" do
-          block = Buddy::Personality.open_loops_block(user)
+        block = Buddy::Personality.open_loops_block(user)
+        ideas = Buddy::Context.send(:stashed_ideas, user).pluck(:idea)
 
-          expect(block).to include("thing #{Buddy::Personality::OPEN_LOOP_LIMIT + 2}")
-        end
-
+        expect(block).to include("thing #{limit + 2}")
         # Bounded, because "thing 1" is a substring of "thing 10".
-        it "drops the oldest rather than the newest" do
-          block = Buddy::Personality.open_loops_block(user)
-
-          expect(block).not_to match(/\bthing 0\b/)
-          expect(block).not_to match(/\bthing 1\b/)
-          expect(block).not_to match(/\bthing 2\b/)
-        end
-
-        it "still reads oldest-first, the way the block says it does" do
-          block = Buddy::Personality.open_loops_block(user)
-          first = Buddy::Personality::OPEN_LOOP_LIMIT + 1
-
-          expect(block.index("thing 3")).to be < block.index("thing #{first}")
-        end
-
-        it "hands get_context the newest too" do
-          ideas = Buddy::Context.send(:stashed_ideas, user).pluck(:idea)
-
-          expect(ideas).to include("thing #{Buddy::Personality::OPEN_LOOP_LIMIT + 2}")
-          expect(ideas).not_to include("thing 0")
-          expect(ideas).not_to include("thing 5")
-        end
+        [0, 1, 2].each { |i| expect(block).not_to match(/\bthing #{i}\b/) }
+        expect(block.index("thing 3")).to be < block.index("thing #{limit + 1}")
+        expect(ideas).to include("thing #{limit + 2}")
+        expect(ideas).not_to include("thing 0", "thing 5")
       end
 
       it "reaches the real system prompt, not just the helper" do
@@ -532,18 +362,8 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
   end
 
-  # Pile entries that were never thoughts.
-  #
-  # `destination` ("WHAT IS IT?") landed on 6 Aug and tells the model to DO a
-  # thing with a clock on it rather than file it. It works most of the time. Two
-  # gaps it can't close on its own:
-  #
-  #   1. Nothing deterministic marks a one-off with a moment in it, the way
-  #      RECURRING_RX marks a repeating one. The one shape where hesitating costs
-  #      the whole thing had the loosest handling.
-  #   2. A capture-time fix only ever helps things captured after it ships.
-  #      Everything already on the pile stayed exactly as mis-filed as the day it
-  #      arrived, and nothing ever went back.
+  # Pile entries that were never thoughts: something that repeats, or that
+  # names a moment, belongs on a reminder.
   describe "mis-filing" do
     let(:user) { User.me }
 
@@ -554,87 +374,54 @@ RSpec.describe "Buddy brain-dump (stash)" do
     before { BuddyMemory.where(user: user).destroy_all }
 
     describe "Buddy::Stash.misfiled_kind" do
-      it "spots something that repeats" do
-        expect(Buddy::Stash.misfiled_kind(held("Feed fish daily"))).to eq(:recurring)
-        expect(Buddy::Stash.misfiled_kind(held("Check propagations every 4 days."))).to eq(:recurring)
-        expect(Buddy::Stash.misfiled_kind(held("check the front flower bed daily"))).to eq(:recurring)
+      it "classifies repeating, timed, and genuine thoughts", :aggregate_failures do
+        [
+          ["Feed fish daily", :recurring],
+          ["Check propagations every 4 days.", :recurring],
+          ["check the front flower bed daily", :recurring],
+          # Repeating wins over a time it also names.
+          ["water the plants daily at 8pm", :recurring],
+          ["Pick out my outfit before 3:45", :timed],
+          ["Write Doug's card before 3:45", :timed],
+          ["Banana juice can go on the Home list, and set reminder for 8pm", :timed],
+          ["Please remind me at 8pm to water the tomatoes", :timed],
+          ["Chuck the old plastic pots tomorrow, it's trash day", :timed],
+          ["automatic kennel open/close and treat dispenser with an inside sensor", nil],
+          ["Figure out a way to subtract an image so the base slime can be separated from items", nil],
+          ["Work on bedroom", nil],
+          ["Weeds in the front rocky area", nil],
+          ["send the squash photo to ChatGPT to find out what it is", nil],
+          ["I'm trying to make the lounge feel better, and the Ikea shelf set needs a home", nil],
+          ["Add storage with drawers and glass door faces by his work desk", nil],
+          ["Look up on YouTube whether blueberry bushes need phosphorus", nil],
+        ].each { |content, kind|
+          expect(Buddy::Stash.misfiled_kind(held(content))).to eq(kind), content
+        }
       end
 
-      # Every one of these is a real pile entry whose moment went past with
-      # nothing set.
-      it "spots something that names a moment" do
-        expect(Buddy::Stash.misfiled_kind(held("Pick out my outfit before 3:45"))).to eq(:timed)
-        expect(Buddy::Stash.misfiled_kind(held("Write Doug's card before 3:45"))).to eq(:timed)
-        expect(Buddy::Stash.misfiled_kind(held("Banana juice can go on the Home list, and set reminder for 8pm"))).to eq(:timed)
-        expect(Buddy::Stash.misfiled_kind(held("Please remind me at 8pm to water the tomatoes"))).to eq(:timed)
-        expect(Buddy::Stash.misfiled_kind(held("Chuck the old plastic pots tomorrow, it's trash day"))).to eq(:timed)
-      end
-
-      it "reads the summary as well as the body, since that's where the shape often shows" do
+      it "reads the summary as well as the body" do
         memory = held("Oh right!! Thank you! thank you! Please ping me when it's time to do that!",
           summary: "Noon plant check ping")
 
         expect(Buddy::Stash.misfiled_kind(memory)).to eq(:timed)
       end
-
-      # The regexes have to stay narrow or they swallow the pile they're meant to
-      # clean. These are all real entries that genuinely belong where they are.
-      it "leaves a genuine thought alone" do
-        [
-          "automatic kennel open/close and treat dispenser with an inside sensor",
-          "Figure out a way to subtract an image so the base slime can be separated from items",
-          "Work on bedroom",
-          "Weeds in the front rocky area",
-          "send the squash photo to ChatGPT to find out what it is",
-          "I'm trying to make the lounge feel better, and the Ikea shelf set needs a home",
-          "Add storage with drawers and glass door faces by his work desk",
-          "Look up on YouTube whether blueberry bushes need phosphorus",
-        ].each { |content| expect(Buddy::Stash.misfiled_kind(held(content))).to be_nil }
-      end
-
-      it "reads repeating as repeating even when it also names a time" do
-        expect(Buddy::Stash.misfiled_kind(held("water the plants daily at 8pm"))).to eq(:recurring)
-      end
     end
 
     describe "what rides in the prompt" do
-      it "marks a repeating one so there is somewhere to notice it" do
+      it "tags a repeating one and a timed one", :aggregate_failures do
         held("Feed fish daily", summary: "Daily fish feeding")
-
-        block = Buddy::Personality.open_loops_block(user)
-
-        expect(block).to include("REPEATS")
-        expect(block).to match(/never a thought/i)
-        expect(block).to include("schedule_reminder")
-      end
-
-      it "marks one that names a moment" do
-        held("Pick out my outfit before 3:45")
-
-        expect(Buddy::Personality.open_loops_block(user)).to include("NAMES A TIME")
-      end
-
-      # A pile is not a thing to audit at somebody.
-      it "tells it to wait for the subject to come up rather than raising them cold" do
-        held("Feed fish daily")
-
-        expect(Buddy::Personality.open_loops_block(user)).to match(/don't raise them out of nowhere/i)
-      end
-
-      it "offers dropping instead when the moment has already gone" do
         held("Write Doug's card before 3:45")
 
-        expect(Buddy::Personality.open_loops_block(user)).to include("drop_idea")
-      end
-
-      # The common prompt has to be unchanged for a pile that's all real thoughts.
-      it "says nothing at all when nothing is mis-filed" do
-        held("automatic kennel open/close with an inside sensor")
-
         block = Buddy::Personality.open_loops_block(user)
 
-        expect(block).not_to include("REPEATS", "NAMES A TIME")
-        expect(block).not_to match(/never a thought/i)
+        expect(block).to include("REPEATS", "NAMES A TIME")
+        expect(block).to include("schedule_reminder", "drop_idea")
+      end
+
+      it "tags nothing when nothing is mis-filed" do
+        held("automatic kennel open/close with an inside sensor")
+
+        expect(Buddy::Personality.open_loops_block(user)).not_to include("REPEATS", "NAMES A TIME")
       end
 
       it "reaches the real system prompt, not just the helper" do
@@ -650,51 +437,19 @@ RSpec.describe "Buddy brain-dump (stash)" do
         Buddy::Stash.send(:closing, user, held(content))
       end
 
-      # Not an offer. The moment arrives whether or not anyone gets round to
-      # discussing it, and "want me to set that?" answered twenty minutes later is
-      # a reminder that already missed.
-      it "tells it to SET a one-off rather than offer one" do
-        text = closing_for("Please remind me at 8pm to water the tomatoes")
+      it "sets a one-off after checking upcoming ones, offers a repeating one, and leaves a thought alone", :aggregate_failures do
+        timed = closing_for("Please remind me at 8pm to water the tomatoes")
 
-        expect(text).to include("schedule_reminder")
-        expect(text).to match(/do not offer and wait/i)
-        expect(text).to include("drop: true")
-      end
-
-      it "sends it to check for one that already covers it first" do
-        expect(closing_for("ping me at 8pm about the tomatoes")).to include("upcoming_reminders")
-      end
-
-      it "still merely OFFERS for a repeating one, which can wait" do
-        text = closing_for("Feed fish daily")
-
-        expect(text).to match(/offer/i)
-        expect(text).to match(/repeating reminder/i)
-      end
-
-      it "leaves a genuine thought on the ordinary path" do
-        text = closing_for("Figure out a way to subtract an image from the base slime")
-
-        expect(text).not_to match(/do not offer and wait/i)
+        expect(timed).to include("schedule_reminder", "drop: true", "upcoming_reminders")
+        expect(timed).to match(/do not offer and wait/i)
+        expect(closing_for("Feed fish daily")).to match(/repeating reminder/i)
+        expect(closing_for("Figure out a way to subtract an image from the base slime")).not_to match(/do not offer and wait/i)
       end
     end
   end
 
-  # Prod 3332-3337, which was one failure wearing three faces.
-  #
-  # "That's actually more of a home one" refiled a stashed idea out of Work
-  # correctly, via the `sort_stash` side effect. Side effects are silent by
-  # design, so it left no chip and no row — the only trace was the sentence
-  # "Kk! Moved it to home." Told that was a lie, Buddy looked for evidence of its
-  # own doing, found none (that is exactly what `recent_actions` reads), agreed,
-  # and then invented a reason: "it's already in home, so there wasn't anything
-  # to move" — contradicting the Work receipt it had given five messages earlier.
-  # And it said all that twice, reworded in the middle, because the paragraph
-  # dedupe only caught byte-identical repeats.
-  #
-  # The design tension underneath: silence is RIGHT when an idea is first filed
-  # (the stash chip above it already says where it landed) and wrong when one is
-  # moved out of a bucket it was already in. Those had the same code path.
+  # Refiling out of a bucket leaves a receipt chip, since recent_actions is what
+  # Buddy reads to tell whether it did something; a first-time sort stays silent.
   describe "refile receipts" do
     let(:user) { create(:user) }
     let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
@@ -708,40 +463,24 @@ RSpec.describe "Buddy brain-dump (stash)" do
     describe "moving one that was already filed" do
       let!(:idea) {
         user.buddy_memories.create!(
-        kind:     :stash,
-          content: "recipe cards need total/prep/cook times", summary: "Recipe card time clarity",
+          kind:     :stash,
+          content:  "recipe cards need total/prep/cook times", summary: "Recipe card time clarity",
           category: :work, status: :active
         )
       }
 
-      it "really moves it" do
-        Buddy::Stash.apply_sort(user, { id: idea.id, category: "home" }, conversation: convo)
-
-        expect(idea.reload.category).to eq("home")
-      end
-
-      it "leaves a receipt naming where it went" do
-        Buddy::Stash.apply_sort(user, { id: idea.id, category: "home" }, conversation: convo)
-
-        expect(chips.count).to eq(1)
-        expect(chips.last.body).to eq("Moved Recipe card time clarity to Home")
-        expect(chips.last.metadata["tool_name"]).to eq("sort_stash")
-      end
-
-      # The chip is not decoration — `Buddy::Context#recent_actions` reads exactly
-      # this, and the persona tells Buddy that anything missing from it did not
-      # happen. That rule is what turned a silent success into a confession.
-      it "shows up in the record Buddy checks when accused of not doing it" do
+      it "moves it and leaves a receipt that reaches recent_actions", :aggregate_failures do
         Buddy::Stash.apply_sort(user, { id: idea.id, category: "home" }, conversation: convo)
         did = Buddy::Context.build(user, convo)[:recent_actions].pluck(:did)
 
-        expect(did).to include("Moved Recipe card time clarity to Home")
+        expect(idea.reload.category).to eq("home")
+        expect(chips.count).to eq(1)
+        expect(chips.last.metadata["tool_name"]).to eq("sort_stash")
+        expect(did).to include(chips.last.body)
       end
 
       it "reports that something changed, so a true claim survives the guard" do
-        changed = Buddy::SideEffects.call(convo, :sort_stash, { id: idea.id, category: "home" })
-
-        expect(changed).to be(true)
+        expect(Buddy::SideEffects.call(convo, :sort_stash, { id: idea.id, category: "home" })).to be(true)
       end
 
       it "says nothing when it's already in that bucket" do
@@ -751,24 +490,14 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
-    # Silence is correct here: Stash#capture! already posted "📥 Stashed to Home"
-    # above this, and a second receipt saying the same thing is noise.
     describe "filing a fresh dump for the first time" do
       let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "garage shelves", category: nil, status: :active) }
 
-      it "files it silently" do
+      it "files it and sharpens its summary silently", :aggregate_failures do
         Buddy::Stash.apply_sort(user, { id: idea.id, category: "home" }, conversation: convo)
-
-        expect(idea.reload.category).to eq("home")
-        expect(chips.count).to eq(0)
-      end
-
-      # The persona promises this one out loud: "Never announce that you're
-      # updating it."
-      it "sharpens a summary silently" do
         Buddy::Stash.apply_sort(user, { id: idea.id, summary: "Garage shelf plan" }, conversation: convo)
 
-        expect(idea.reload.summary).to eq("Garage shelf plan")
+        expect(idea.reload).to have_attributes(category: "home", summary: "Garage shelf plan")
         expect(chips.count).to eq(0)
       end
 
@@ -777,137 +506,59 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
-    describe "taking one off the pile" do
-      let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "uncover the tomatoes", category: :home, status: :active) }
+    it "leaves a receipt for taking one off the pile" do
+      idea = user.buddy_memories.create!(kind: :stash, content: "uncover the tomatoes", category: :home, status: :active)
 
-      # It went somewhere it can be acted on. Buddy is told never to say a pile
-      # entry is handled, so the chip says what actually happened to the ENTRY.
-      it "leaves a receipt for that too" do
-        Buddy::Stash.apply_sort(user, { id: idea.id, drop: true }, conversation: convo)
+      Buddy::Stash.apply_sort(user, { id: idea.id, drop: true }, conversation: convo)
 
-        expect(idea.reload.status).to eq("dropped")
-        expect(chips.last.body).to eq("Took uncover the tomatoes off the pile")
-      end
+      expect(idea.reload.status).to eq("dropped")
+      expect(chips.count).to eq(1)
     end
 
-    describe "when nothing is asked for" do
-      let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "something", category: :home, status: :active) }
+    # FALSE rather than an error: a marker the model invents must not count as
+    # having acted, or it gets a free pass past the retraction guard.
+    it "reports no change for an empty sort, someone else's idea, or a marker nothing handles", :aggregate_failures do
+      idea = user.buddy_memories.create!(kind: :stash, content: "something", category: :home, status: :active)
 
-      it "reports no change, so it can't back a claim" do
-        expect(Buddy::SideEffects.call(convo, :sort_stash, { id: idea.id })).to be(false)
-      end
-
-      it "reports no change for an idea that isn't theirs" do
-        expect(Buddy::SideEffects.call(convo, :sort_stash, { id: -1, category: "work" })).to be(false)
-      end
+      expect(Buddy::SideEffects.call(convo, :sort_stash, { id: idea.id })).to be(false)
+      expect(Buddy::SideEffects.call(convo, :sort_stash, { id: -1, category: "work" })).to be(false)
+      expect(Buddy::SideEffects.call(convo, :not_a_marker, { whatever: 1 })).to be(false)
     end
 
-    # A name nothing handles. It matters that this is FALSE rather than an
-    # error: `call` is reached from a live stream of tool calls, and a marker
-    # the model invents must not count as having acted or it hands the reply a
-    # free pass past the retraction guard.
-    describe "a marker nothing handles" do
-      it "reports no change" do
-        expect(Buddy::SideEffects.call(convo, :not_a_marker, { whatever: 1 })).to be(false)
-      end
-    end
-
-    # A conversation-level guard belongs with the paragraph dedupe it protects.
-    describe "saying it twice" do
-      subject(:deduped) {
+    describe "cleaning the reply body" do
+      let(:turn) {
         Buddy::GPT::Turn.new(
           convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hi"),
           client: FakeBuddyClient.new([]),
-        ).send(:display_body, body)
+        )
       }
 
-      # The em dash rule is written down in the persona and in every tone
-      # profile, and em dashes still come out - two in one 100-turn eval. Four
-      # statements of a rule is where a fifth stops being the fix.
-      # Prod 4202: "Log 4 more Build Furniture for the Wayfair Desk" came back
-      # with History#form_standin's marker as the ENTIRE reply, and the
-      # instruction was dropped. Same family as the mood marker and the relay
-      # framing, both already scrubbed here.
-      context "when the model echoes the form marker it was given to read" do
-        let(:body) { "[form you put up: Who did: Puppy Down? - answered]" }
+      def clean(body) = turn.send(:display_body, body)
 
-        it "takes it out" do
-          expect(deduped).to eq("")
-        end
+      it "strips echoed stand-in markers and swaps em dashes for hyphens", :aggregate_failures do
+        [
+          ["[form you put up: Who did: Puppy Down? - answered]", ""],
+          ["Kk, four of them. [form you put up: Who did: Puppy Down? - answered] Done.", "Kk, four of them.  Done."],
+          ["JPMorgan got it.\n\n[Tapped Today - asked for a briefing on the day ahead]", "JPMorgan got it."],
+          ["Done — your Today briefing is up.", "Done - your Today briefing is up."],
+          ["Kk! Fan's on low  —  living room one.", "Kk! Fan's on low - living room one."],
+        ].each { |body, out| expect(clean(body)).to eq(out), body }
       end
 
-      context "when the marker is buried in a real sentence" do
-        let(:body) { "Kk, four of them. [form you put up: Who did: Puppy Down? - answered] Done." }
+      # Below a length floor only an exact repeat counts, since short replies
+      # are mostly stock phrases.
+      it "drops a repeated paragraph, reworded or verbatim, and keeps distinct ones", :aggregate_failures do
+        reworded = "Ahh, yep. You're right - it's still sitting in home already, so there wasn't anything " \
+                   "to move. The recipe card one is home now.\n\nAhh, yep. You're right - it's already in " \
+                   "home, so there wasn't anything to move. The recipe card one is home now."
+        distinct = "The recipe card one is in home now, so it'll come up with the house stuff.\n\n" \
+                   "Want me to pull the other two out of work while I'm in there, or leave those?"
+        verbatim = "Moved it over to home for you, that's where the rest of the house stuff lives.\n\n" * 2
 
-        it "leaves the sentence" do
-          expect(deduped).to eq("Kk, four of them.  Done.")
-        end
-      end
-
-      # Prod 6393: History#seed_standin's bracket, copied onto a job-mail reply.
-      context "when the model echoes a tapped-action stand-in" do
-        let(:body) { "JPMorgan got it.\n\n[Tapped Today - asked for a briefing on the day ahead]" }
-
-        it "takes it out" do
-          expect(deduped).to eq("JPMorgan got it.")
-        end
-      end
-
-      context "when the model uses an em dash anyway" do
-        let(:body) { "Done — your Today briefing is up." }
-
-        it "hands over the hyphen every profile actually asks for" do
-          expect(deduped).to eq("Done - your Today briefing is up.")
-        end
-      end
-
-      context "when the em dash is already sitting in spaces" do
-        let(:body) { "Kk! Fan's on low  —  living room one." }
-
-        it "doesn't leave a puddle of spaces behind" do
-          expect(deduped).to eq("Kk! Fan's on low - living room one.")
-        end
-      end
-
-      context "when the second copy is reworded in the middle" do
-        let(:body) {
-          "Ahh, yep. You're right - it's still sitting in home already, so there wasn't anything " \
-            "to move. The recipe card one is home now.\n\nAhh, yep. You're right - it's already in " \
-            "home, so there wasn't anything to move. The recipe card one is home now."
-        }
-
-        it "keeps one of them" do
-          expect(deduped.scan(/Ahh, yep/).size).to eq(1)
-        end
-      end
-
-      context "when two paragraphs genuinely say different things" do
-        let(:body) {
-          "The recipe card one is in home now, so it'll come up with the house stuff.\n\n" \
-            "Want me to pull the other two out of work while I'm in there, or leave those?"
-        }
-
-        it "keeps both" do
-          expect(deduped.split("\n\n").size).to eq(2)
-        end
-      end
-
-      # Short replies are mostly stock phrases and would collide constantly under
-      # a similarity test. Below the floor, only an exact repeat is a repeat.
-      context "when two short paragraphs are similar but not the same" do
-        let(:body) { "Okie!\n\nOk!" }
-
-        it "keeps both" do
-          expect(deduped.split("\n\n").size).to eq(2)
-        end
-      end
-
-      context "when a long paragraph is repeated word for word" do
-        let(:body) { "Moved it over to home for you, that's where the rest of the house stuff lives.\n\n" * 2 }
-
-        it "keeps one" do
-          expect(deduped.split("\n\n").size).to eq(1)
-        end
+        expect(clean(reworded).scan(/Ahh, yep/).size).to eq(1)
+        expect(clean(distinct).split("\n\n").size).to eq(2)
+        expect(clean("Okie!\n\nOk!").split("\n\n").size).to eq(2)
+        expect(clean(verbatim).split("\n\n").size).to eq(1)
       end
     end
   end

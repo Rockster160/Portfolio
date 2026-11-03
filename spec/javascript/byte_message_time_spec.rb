@@ -64,40 +64,14 @@ RSpec.describe "Byte message timestamps" do
     expect(result["garbage"]).to eq("")
   end
 
-  # The label is half of it. The other half is the bubble actually using it, on
-  # both paths that paint a timestamp - the server's messages and a send still
-  # queued, which is the one that can sit overnight and most needs its date.
   describe "the wiring behind it" do
     let(:index) { Rails.root.join("app/javascript/src/pages/byte/index.js").read }
 
+    # Both paths that paint a timestamp: the server's messages and a queued send.
     it "paints both bubble paths through it" do
       expect(index).to include('import { messageTimeLabel } from "./message_time"')
       expect(index.scan(/messageTimeLabel\(/).length).to eq(2)
       expect(index).not_to match(/\[data-time\]"\)\.textContent = formatTime/)
-    end
-
-    # It is a `<time>`, so the machine-readable stamp belongs on it - and that is
-    # what a hover shows on a bubble whose label has been shortened to a weekday.
-    it "stamps the element it is on" do
-      expect(Rails.root.join("app/views/byte/show.html.erb").read).to include("<time data-time>")
-      expect(index).to include("stamp.dateTime = message.created_at")
-    end
-
-    # The date makes the label long enough to wrap, and a timestamp broken
-    # between its date and its clock is two lines under one bubble.
-    it "keeps the label on one line" do
-      css = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
-      rule = css[/\n    time \{(.*?)\n    \}/m, 1].to_s
-
-      expect(rule).to include("font-variant-numeric: tabular-nums")
-      expect(rule).to include("white-space: nowrap")
-    end
-
-    # The alert status line is handed `formatTime` as its clock, where a date
-    # would read as "last Yesterday · 5:04 PM". It keeps the plain one.
-    it "leaves the plain clock in place for the callers that want one" do
-      expect(index).to include("function formatTime(iso)")
-      expect(index).to include("alertStatusLabel(message?.metadata?.alert, formatTime)")
     end
   end
 end

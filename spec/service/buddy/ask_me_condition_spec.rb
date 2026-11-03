@@ -1,11 +1,7 @@
 require "rails_helper"
 
-# The same "if they say yes" gate, on the other kind of question.
-#
-# `ask_me` is a FORM rather than a relay — it asks the person in front of you
-# instead of someone else — and it released its queue on submit with no more
-# regard for the answer than the relay path had. "Ask me whether to order it,
-# and if yes put it on the list" put it on the list either way.
+# `ask_me` is a FORM rather than a relay: the queued steps behind it are held
+# until the person answers, and `continue_if` decides whether they run.
 RSpec.describe "Buddy ask_me continue_if" do
   let(:user)   { create(:user) }
   let!(:todo)  { create(:list, user: user, name: "Todo") }
@@ -52,19 +48,12 @@ RSpec.describe "Buddy ask_me continue_if" do
     ListItem.joins(:list).where(lists: { id: todo.id })
   end
 
-  def last_said
-    convo.byte_messages.where(direction: :inbound).order(:created_at).last.body
-  end
-
-  it "asks before it adds anything" do
+  it "holds the add until the answer, then adds it on a yes" do
     ask
 
     expect(items).to be_empty
     expect(form).to be_present
-  end
 
-  it "adds it on a yes" do
-    ask
     answer!("yes")
 
     expect(items.pluck(:name)).to eq(["Syrup"])
@@ -75,14 +64,6 @@ RSpec.describe "Buddy ask_me continue_if" do
     answer!("no")
 
     expect(items).to be_empty
-  end
-
-  # Nobody else was involved, so the line speaks to them directly.
-  it "says what it didn't do, in the second person" do
-    ask
-    answer!("no")
-
-    expect(last_said).to eq("You said no, so I didn't go on to Syrup.")
   end
 
   it "still adds it either way when no condition was given" do

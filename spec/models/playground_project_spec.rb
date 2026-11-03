@@ -41,24 +41,18 @@ RSpec.describe PlaygroundProject do
   end
 
   describe ".for_request" do
-    it "maps a sub-page to the project it belongs to" do
-      expect(described_class.for_request(request_for("/chores/links"))&.slug).to eq("chores")
-    end
-
-    it "prefers the longest matching path" do
-      expect(described_class.for_request(request_for("/jil/tasks/1"))&.slug).to eq("jil")
-    end
-
-    it "doesn't match a path that only shares a prefix" do
-      expect(described_class.for_request(request_for("/timersfoo"))).to be_nil
-    end
-
-    it "maps an app on its own subdomain" do
-      expect(described_class.for_request(request_for("/", subdomain: "byte"))&.slug).to eq("byte")
-    end
-
-    it "ignores an unlisted project" do
-      expect(described_class.for_request(request_for("/emails"))).to be_nil
+    # The longest matching path wins, a shared prefix is not a match, and an
+    # unlisted project is never found.
+    it "maps a request to the listed project it belongs to", :aggregate_failures do
+      [
+        ["/chores/links", "", "chores"],
+        ["/jil/tasks/1", "", "jil"],
+        ["/", "byte", "byte"],
+        ["/timersfoo", "", nil],
+        ["/emails", "", nil],
+      ].each do |path, subdomain, slug|
+        expect(described_class.for_request(request_for(path, subdomain: subdomain))&.slug).to eq(slug), path
+      end
     end
   end
 

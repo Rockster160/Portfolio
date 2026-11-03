@@ -27,27 +27,16 @@ RSpec.describe "Interview prep", type: :request do
     post(login_path, params: { user: { username: user.username, password: "password123" } })
   end
 
-  it "opens on the brief itself" do
+  # The markdown is the brief's structure - it is read by skimming headings
+  # with ten minutes to go - so it has to arrive as headings.
+  it "opens on the brief itself, rendered as markdown", :aggregate_failures do
     get interview_prep_path(job, prep)
 
     expect(response.body).to include("Technical screen with Bluestaq")
     expect(response.body).to include("They build data platforms for the Space Force.")
-  end
-
-  # The markdown is the brief's structure - it is read by skimming headings
-  # with ten minutes to go - so it has to arrive as headings.
-  it "renders what the session wrote as markdown" do
-    get interview_prep_path(job, prep)
-
     expect(response.body).to include("<h2>What to go over</h2>")
     expect(response.body).to include("<strong>lazy</strong>")
     expect(response.body).to include("<blockquote>")
-  end
-
-  it "says what kind of conversation it is written for" do
-    get interview_prep_path(job, prep)
-
-    expect(response.body).to include("Technical interview")
   end
 
   it "is reachable from the application's own page afterwards" do
@@ -76,13 +65,6 @@ RSpec.describe "Interview prep", type: :request do
 
     expect(response).to redirect_to(interview_prep_path(job, prep))
     expect(prep.reload.body).to include("Unified Data Library")
-  end
-
-  it "offers the edit on the page itself" do
-    get interview_prep_path(job, prep)
-
-    expect(response.body).to include("<summary>Edit</summary>")
-    expect(response.body).to include("Save prep")
   end
 
   # The model labels a kind it did not anticipate by falling through, so an

@@ -3,11 +3,8 @@ require "rails_helper"
 RSpec.describe ChoreDailyResetWorker do
   let(:user) { create(:user) }
 
-  # A household with enough chores in each reward band to sample from. Only the
-  # two examples about the SHAPE of a day's picks need it, and it used to run in
-  # a `before` for all thirty-one — thirty-one chores built and torn down per
-  # example, with eleven of them opening on `Chore.delete_all` to get the pool
-  # back out of their way.
+  # A household with enough chores in each reward band to sample from; only the
+  # examples about the SHAPE of a day's picks need it.
   def seed_reward_pool
     20.times { |i| create(:chore, created_by_user: user, reward_pebbles: (i % 4) + 1) } # 1..4
     8.times { |i| create(:chore, created_by_user: user, reward_pebbles: 5 + (i % 5)) }  # 5..9
@@ -36,199 +33,95 @@ RSpec.describe ChoreDailyResetWorker do
     expect(ChoreHotPick.where(day_key: ChoreDay.current).count).to be_between(7, 8) # 5 low + 2 med (+ maybe 1 premium)
   end
 
-  it "archives one-offs completed on the previous day" do
+  # A single task carrying a recurrence stays on the list until it's completed
+  # once; completion then finishes it like any one-off.
+  it "archives one-offs (recurring or not) completed on the previous day" do
     today = ChoreDay.current
     oneoff = create(:chore, created_by_user: user, one_off: true, reward_pebbles: 3)
     untouched_oneoff = create(:chore, created_by_user: user, one_off: true, reward_pebbles: 3)
-    create(:chore_completion, user: user, chore: oneoff, day_key: today - 1)
-
-    described_class.new.perform
-
-    expect(oneoff.reload.archived?).to be(true)
-    expect(untouched_oneoff.reload.archived?).to be(false)
-  end
-
-  # A single task carrying a recurrence stays on the list day after day until
-  # it's completed once; completion then finishes it like any one-off, so the
-  # next reset archives it and it stops re-surfacing.
-  it "archives a completed single task that carried a recurrence" do
-    today = ChoreDay.current
     scheduled = create(
       :chore, created_by_user: user, one_off: true, reward_pebbles: 3,
       recurrence: { freq: :daily }
     )
+    create(:chore_completion, user: user, chore: oneoff, day_key: today - 1)
     create(:chore_completion, user: user, chore: scheduled, day_key: today - 1)
 
     described_class.new.perform
 
+    expect(oneoff.reload.archived?).to be(true)
     expect(scheduled.reload.archived?).to be(true)
+    expect(untouched_oneoff.reload.archived?).to be(false)
   end
 
   describe "#clear_completed_marked_due!" do
-    it "clears marked_due_at on chores whose most recent completion postdates the mark" do
-      marked_at = 6.hours.ago
-      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
-      create(:chore_completion, user: user, chore: chore, completed_at: 1.hour.ago)
+    it "clears a mark only when a completion (own or a sub-chore's) postdates it" do
+      cleared = create(:chore, created_by_user: user, marked_due_at: 6.hours.ago)
+      create(:chore_completion, user: user, chore: cleared, completed_at: 1.hour.ago)
 
-      described_class.new.perform
+      stale_mark_at = 1.hour.ago
+      stale = create(:chore, created_by_user: user, marked_due_at: stale_mark_at)
+      create(:chore_completion, user: user, chore: stale, completed_at: 6.hours.ago)
 
-      expect(chore.reload.marked_due_at).to be_nil
-    end
+      untouched_mark_at = 6.hours.ago
+      untouched = create(:chore, created_by_user: user, marked_due_at: untouched_mark_at)
 
-    it "preserves marked_due_at when no completion postdates the mark" do
-      marked_at = 1.hour.ago
-      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
-      create(:chore_completion, user: user, chore: chore, completed_at: 6.hours.ago)
-
-      described_class.new.perform
-
-      expect(chore.reload.marked_due_at).to be_within(1.second).of(marked_at)
-    end
-
-    it "preserves marked_due_at on an un-completed chore" do
-      marked_at = 6.hours.ago
-      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
-
-      described_class.new.perform
-
-      expect(chore.reload.marked_due_at).to be_within(1.second).of(marked_at)
-    end
-
-    it "clears the parent's mark when a sub-chore completion postdates the parent mark" do
       parent = create(:chore, created_by_user: user, marked_due_at: 6.hours.ago, recurrence: { freq: :never })
-      sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true)
-      create(
-        :chore_completion, user: user, chore: sub,
-        completed_at: 1.hour.ago
+      parents_sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true)
+      create(:chore_completion, user: user, chore: parents_sub, completed_at: 1.hour.ago)
+
+      other_parent = create(:chore, created_by_user: user, recurrence: { freq: :never })
+      marked_sub = create(
+        :chore, created_by_user: user, parent_chore: other_parent, one_off: true,
+        marked_due_at: 6.hours.ago
       )
+      create(:chore_completion, user: user, chore: marked_sub, completed_at: 1.hour.ago)
 
       described_class.new.perform
 
+      expect(cleared.reload.marked_due_at).to be_nil
+      expect(stale.reload.marked_due_at).to be_within(1.second).of(stale_mark_at)
+      expect(untouched.reload.marked_due_at).to be_within(1.second).of(untouched_mark_at)
       expect(parent.reload.marked_due_at).to be_nil
-    end
-
-    it "clears the sub-chore's mark when its own completion postdates the sub mark" do
-      parent = create(:chore, created_by_user: user, recurrence: { freq: :never })
-      sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true,
-        marked_due_at: 6.hours.ago)
-      create(
-        :chore_completion, user: user, chore: sub,
-        completed_at: 1.hour.ago
-      )
-
-      described_class.new.perform
-
-      expect(sub.reload.marked_due_at).to be_nil
+      expect(marked_sub.reload.marked_due_at).to be_nil
     end
   end
 
-  describe "hot eligibility — (overdue OR unscheduled) AND not on cooldown" do
-    it "excludes a scheduled chore that is not yet due (future-only)" do
-      today = ChoreDay.current
-      # Scheduled to recur on a single far-future weekday only.
-      far_future_wday = ((today + 5).wday)
-      weekday_keys = %i[sun mon tue wed thu fri sat]
-      future_only = create(
-        :chore, created_by_user: user, reward_pebbles: 2,
-        recurrence: { freq: :weekly, by_day: [weekday_keys[far_future_wday]] },
-        starts_on: today + 5
-      )
+  # Hot eligibility is (overdue OR unscheduled) AND not on cooldown. Every
+  # candidate here is in the low band, and there are fewer eligible ones than
+  # the band takes, so each eligible chore is picked.
+  it "picks only chores that are overdue or unscheduled, and off cooldown" do
+    today = ChoreDay.current
+    weekday_keys = %i[sun mon tue wed thu fri sat]
+    weekly_yesterday = { freq: :weekly, by_day: [weekday_keys[(today - 1).wday]] }
+    low = { created_by_user: user, reward_pebbles: 2 }
 
-      described_class.new.perform
+    future_only = create(
+      :chore, **low,
+      recurrence: { freq: :weekly, by_day: [weekday_keys[(today + 5).wday]] }, starts_on: today + 5
+    )
+    overdue = create(:chore, **low, recurrence: weekly_yesterday, starts_on: today - 30)
+    satisfied = create(:chore, **low, recurrence: weekly_yesterday, starts_on: today - 30)
+    create(:chore_completion, user: user, chore: satisfied, day_key: today - 1)
+    unscheduled = create(:chore, **low)
 
-      picked_ids = ChoreHotPick.where(day_key: today).pluck(:chore_id)
-      expect(picked_ids).not_to include(future_only.id)
-    end
+    cooling = create(:chore, **low, threshold_seconds: 4.hours)
+    create(:chore_completion, user: user, chore: cooling, completed_at: 30.minutes.ago, payout_skipped: false)
+    day_reset = create(:chore, **low, threshold_seconds: Chore::THRESHOLD_DAY_RESET)
+    create(
+      :chore_completion, user: user, chore: day_reset,
+      day_key: today, completed_at: 1.hour.ago, payout_skipped: false
+    )
+    ready = create(:chore, **low, threshold_seconds: 1.hour)
+    create(:chore_completion, user: user, chore: ready, completed_at: 2.hours.ago, payout_skipped: false)
+    # A skipped-payout completion doesn't start a cooldown.
+    skipped_payout = create(:chore, **low, threshold_seconds: 4.hours)
+    create(:chore_completion, user: user, chore: skipped_payout, completed_at: 30.minutes.ago, payout_skipped: true)
 
-    it "includes a scheduled chore that is overdue (last scheduled day passed, no completion since)" do
-      today = ChoreDay.current
-      weekday_keys = %i[sun mon tue wed thu fri sat]
-      # Weekly on yesterday's weekday → last scheduled day was yesterday,
-      # no completion since → overdue.
-      overdue = create(
-        :chore, created_by_user: user, reward_pebbles: 2,
-        recurrence: { freq: :weekly, by_day: [weekday_keys[(today - 1).wday]] },
-        starts_on: today - 30
-      )
+    described_class.new.perform
 
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: today).pluck(:chore_id)
-      expect(picked_ids).to include(overdue.id)
-    end
-
-    it "excludes a scheduled chore whose last scheduled day was already completed" do
-      today = ChoreDay.current
-      weekday_keys = %i[sun mon tue wed thu fri sat]
-      satisfied = create(
-        :chore, created_by_user: user, reward_pebbles: 2,
-        recurrence: { freq: :weekly, by_day: [weekday_keys[(today - 1).wday]] },
-        starts_on: today - 30
-      )
-      create(:chore_completion, user: user, chore: satisfied, day_key: today - 1)
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: today).pluck(:chore_id)
-      expect(picked_ids).not_to include(satisfied.id)
-    end
-
-    it "includes an unscheduled chore" do
-      unscheduled = create(:chore, created_by_user: user, reward_pebbles: 2)
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: ChoreDay.current).pluck(:chore_id)
-      expect(picked_ids).to include(unscheduled.id)
-    end
-  end
-
-  describe "cooldown filtering" do
-    it "excludes a fixed-cooldown chore whose threshold hasn't elapsed" do
-      cooling = create(:chore, created_by_user: user, reward_pebbles: 2, threshold_seconds: 4.hours)
-      create(:chore_completion, user: user, chore: cooling, completed_at: 30.minutes.ago, payout_skipped: false)
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: ChoreDay.current).pluck(:chore_id)
-      expect(picked_ids).not_to include(cooling.id)
-    end
-
-    it "includes a fixed-cooldown chore whose threshold has elapsed" do
-      ready = create(:chore, created_by_user: user, reward_pebbles: 2, threshold_seconds: 1.hour)
-      create(:chore_completion, user: user, chore: ready, completed_at: 2.hours.ago, payout_skipped: false)
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: ChoreDay.current).pluck(:chore_id)
-      expect(picked_ids).to include(ready.id)
-    end
-
-    it "excludes a day-reset cooldown chore already completed today" do
-      day_reset = create(
-        :chore, created_by_user: user, reward_pebbles: 2,
-        threshold_seconds: Chore::THRESHOLD_DAY_RESET
-      )
-      create(
-        :chore_completion, user: user, chore: day_reset,
-        day_key: ChoreDay.current, completed_at: 1.hour.ago, payout_skipped: false
-      )
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: ChoreDay.current).pluck(:chore_id)
-      expect(picked_ids).not_to include(day_reset.id)
-    end
-
-    it "ignores skipped-payout completions when checking cooldown" do
-      ready = create(:chore, created_by_user: user, reward_pebbles: 2, threshold_seconds: 4.hours)
-      create(:chore_completion, user: user, chore: ready, completed_at: 30.minutes.ago, payout_skipped: true)
-
-      described_class.new.perform
-
-      picked_ids = ChoreHotPick.where(day_key: ChoreDay.current).pluck(:chore_id)
-      expect(picked_ids).to include(ready.id)
-    end
+    picked_ids = ChoreHotPick.where(day_key: today).pluck(:chore_id)
+    expect(picked_ids).to include(overdue.id, unscheduled.id, ready.id, skipped_payout.id)
+    expect(picked_ids).not_to include(future_only.id, satisfied.id, cooling.id, day_reset.id)
   end
 
   it "zeros stale streaks (last_completed_day older than yesterday)" do
@@ -315,13 +208,6 @@ RSpec.describe ChoreDailyResetWorker do
       _, overdue_ids = worker.send(:schedule_weight_sets, [weekly_sun], day)
       expect(overdue_ids).not_to include(weekly_sun.id)
     end
-
-    it "recurring-daily chores are excluded from overdue regardless of completion gaps" do
-      daily = make(recurrence: { freq: "daily" }, starts_on: day - 30)
-      today_ids, overdue_ids = worker.send(:schedule_weight_sets, [daily], day)
-      expect(today_ids).not_to include(daily.id)
-      expect(overdue_ids).not_to include(daily.id)
-    end
   end
 
   describe "hot_eligibility" do
@@ -361,6 +247,7 @@ RSpec.describe ChoreDailyResetWorker do
       expect(worker.send(:weight_for, baseline, empty, empty)).to eq(1.0)
       expect(worker.send(:weight_for, critical, empty, empty)).to eq(2.0)
       expect(worker.send(:weight_for, low, empty, empty)).to eq(0.5)
+      expect(worker.send(:weight_for, create(:chore, created_by_user: user, priority: :none), empty, empty)).to eq(0.0)
     end
 
     it "compounds with the due-today schedule weight rather than replacing it" do
@@ -368,11 +255,6 @@ RSpec.describe ChoreDailyResetWorker do
 
       expect(worker.send(:weight_for, chore, Set.new([chore.id]), Set.new)).to eq(3.0)   # 2.0 today × 1.5
       expect(worker.send(:weight_for, chore, Set.new, Set.new([chore.id]))).to eq(2.25)  # 1.5 overdue × 1.5
-    end
-
-    it "zeroes out :none so it never enters the pool" do
-      chore = create(:chore, created_by_user: user, priority: :none)
-      expect(worker.send(:weight_for, chore, Set.new, Set.new)).to eq(0.0)
     end
 
     it "never picks a :none chore even when it's the only candidate in its band" do

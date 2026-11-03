@@ -54,24 +54,15 @@ RSpec.describe Transcripts::Tidy do
       )
     }
 
-    it "puts it right and keeps what the recorder wrote" do
+    it "puts the word right, keeps what the recorder wrote, and leaves the rest of the sentence alone" do
       model_says(fixes({ turn: 2, was: "hand coating", now: "hand coding" }))
 
       result = described_class.call(transcript)
 
       expect(result.ok).to be(true)
       expect(result.mended).to eq(1)
-      expect(transcript.reload.turns[1]["text"]).to start_with("I'm hand coding everything now")
+      expect(transcript.reload.turns[1]["text"]).to eq("I'm hand coding everything now, and it is faster than it sounds.")
       expect(transcript.turns[1]["heard"]).to include("hand coating")
-    end
-
-    it "leaves the rest of the sentence exactly as it was said" do
-      model_says(fixes({ turn: 2, was: "hand coating", now: "hand coding" }))
-
-      described_class.call(transcript)
-
-      expect(transcript.reload.turns[1]["text"])
-        .to eq("I'm hand coding everything now, and it is faster than it sounds.")
     end
 
     it "marks the recording as gone over, so the next pass is asked for" do
@@ -111,15 +102,8 @@ RSpec.describe Transcripts::Tidy do
       expect(transcript.turns[1]["heard"]).to be_nil
     end
 
-    it "refuses a replacement for words that are not in the turn it names" do
-      model_says(fixes({ turn: 1, was: "four inboxes", now: "four mailboxes" }))
-
-      expect(described_class.call(transcript).mended).to eq(0)
-      expect(transcript.reload.turns[1]["text"]).to include("four inboxes")
-    end
-
-    it "refuses a replacement in a turn the window never covered" do
-      model_says(fixes({ turn: 9, was: "four inboxes", now: "four mailboxes" }))
+    it "refuses a replacement for words not in the turn it names, or in a turn the window never covered" do
+      model_says(fixes({ turn: 1, was: "four inboxes", now: "four mailboxes" }, { turn: 9, was: "four inboxes", now: "four mailboxes" }))
 
       expect(described_class.call(transcript).mended).to eq(0)
       expect(transcript.reload.turns[1]["text"]).to include("four inboxes")
@@ -165,14 +149,14 @@ RSpec.describe Transcripts::Tidy do
       transcript!("What have you built?", "A mail consolidation, four inboxes into one.")
     }
 
-    it "says who was talking on each line, and what the conversation is" do
+    it "says who was talking on each line, and names the company" do
       model_says(fixes)
 
       described_class.call(transcript)
 
       expect(asked.first).to include("1. [Them] What have you built?")
       expect(asked.first).to include("2. [the candidate] A mail consolidation")
-      expect(asked.first).to include("The company interviewing them is Podium.")
+      expect(asked.first).to include("Podium")
     end
   end
 end

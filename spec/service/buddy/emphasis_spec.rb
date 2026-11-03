@@ -55,20 +55,12 @@ RSpec.describe Buddy::Emphasis do
       ])
     }
 
-    it "takes the emphasis off the numbers" do
+    it "takes the bold off the figures, leaves it on the name, and keeps every word", :aggregate_failures do
       out = described_class.thin(body)
 
-      expect(out).to include("is at 2:10 PM")
-      expect(out).to include("High of 61°F")
-      expect(out).to include("are 40% this morning")
-    end
-
-    it "leaves the name carrying it, which is what a glance is looking for" do
-      expect(described_class.thin(body)).to include("**Dentist**")
-    end
-
-    it "keeps every word it had" do
-      expect(described_class.thin(body).delete("*")).to eq(body.delete("*"))
+      expect(out).to include("is at 2:10 PM", "High of 61°F", "are 40% this morning")
+      expect(out).to include("**Dentist**")
+      expect(out.delete("*")).to eq(body.delete("*"))
     end
   end
 
@@ -85,11 +77,7 @@ RSpec.describe Buddy::Emphasis do
       )
     }
 
-    it "takes all of it off" do
-      expect(described_class.thin(body)).not_to include("**")
-    end
-
-    it "still keeps every word" do
+    it "takes all of it off and keeps every word" do
       expect(described_class.thin(body)).to eq(body.delete("*"))
     end
   end
@@ -126,12 +114,11 @@ RSpec.describe Buddy::Emphasis do
         "**PC income tasks** have waited **6 weeks**."
     }
 
-    it "takes the bold off the figures" do
-      expect(described_class.thin(body)).to include("High of 55°F, low 39°F.")
-    end
+    it "takes the bold off the figures and leaves the names theirs", :aggregate_failures do
+      out = described_class.thin(body)
 
-    it "leaves the names their bold" do
-      expect(described_class.thin(body)).to include("**PC income tasks**", "**Sunday, Monday and Friday**")
+      expect(out).to include("High of 55°F, low 39°F.")
+      expect(out).to include("**PC income tasks**", "**Sunday, Monday and Friday**")
     end
   end
 

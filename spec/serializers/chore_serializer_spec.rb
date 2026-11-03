@@ -57,13 +57,16 @@ RSpec.describe ChoreSerializer, type: :serializer do
     )
   end
 
-  it "icon_kind detects image / svg / empty" do
-    image = create(:chore, created_by_user: user, icon: "data:image/png;base64,iVBOR")
-    svg   = create(:chore, created_by_user: user, icon: "<svg></svg>")
-    blank = create(:chore, created_by_user: user, icon: nil)
-    expect(described_class.new(image, viewer: user).as_json[:icon_kind]).to eq(:image)
-    expect(described_class.new(svg,   viewer: user).as_json[:icon_kind]).to eq(:svg)
-    expect(described_class.new(blank, viewer: user).as_json[:icon_kind]).to eq(:empty)
+  it "icon_kind detects image / svg / tabler / empty" do
+    {
+      "data:image/png;base64,iVBOR" => :image,
+      "<svg></svg>"                 => :svg,
+      "ti-fa-wrench"                => :ti_icon,
+      nil                           => :empty,
+    }.each { |icon, kind|
+      ch = create(:chore, created_by_user: user, icon: icon)
+      expect(described_class.new(ch, viewer: user).as_json[:icon_kind]).to eq(kind), icon.inspect
+    }
   end
 
   describe "hicon:<id> references" do
@@ -134,22 +137,13 @@ RSpec.describe ChoreSerializer, type: :serializer do
     expect(via_ctx[:last_completed_at]).to eq(via_lone[:last_completed_at])
   end
 
-  describe "on_dailies" do
-    it "is false when the viewer has not pinned the chore" do
-      json = described_class.new(chore, viewer: user).as_json
-      expect(json[:on_dailies]).to be(false)
-    end
+  it "on_dailies follows the viewer's pin on both the bulk and lone paths", :aggregate_failures do
+    expect(described_class.new(chore, viewer: user).as_json[:on_dailies]).to be(false)
 
-    it "is true when the viewer has pinned the chore — bulk path" do
-      ChoreDaily.create!(user: user, chore: chore, sort_order: 0)
-      ctx = ChoreSerializerContext.for_user(user)
-      expect(described_class.new(chore, viewer: user, ctx: ctx).as_json[:on_dailies]).to be(true)
-    end
-
-    it "is true when the viewer has pinned the chore — lone path" do
-      ChoreDaily.create!(user: user, chore: chore, sort_order: 0)
-      expect(described_class.new(chore, viewer: user).as_json[:on_dailies]).to be(true)
-    end
+    ChoreDaily.create!(user: user, chore: chore, sort_order: 0)
+    ctx = ChoreSerializerContext.for_user(user)
+    expect(described_class.new(chore, viewer: user, ctx: ctx).as_json[:on_dailies]).to be(true)
+    expect(described_class.new(chore, viewer: user).as_json[:on_dailies]).to be(true)
   end
 
   # ----------------------------------------------------------------
@@ -223,32 +217,31 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
     it "payment status doesn't affect visibility — a skipped completion " \
        "before today behaves the same as a paid one" do
-         # Two identical chores, one with a PAID completion yesterday,
-         # one with a SKIPPED completion yesterday. today_visible? must
-         # agree — payment is a payout concern, not a visibility one.
-         paid_ch = create(
-           :chore, created_by_user: user, show_on_today_view: :when_scheduled,
-           recurrence: { freq: :daily }
-         )
-         skipped_ch = create(
-           :chore, created_by_user: user, show_on_today_view: :when_scheduled,
-           recurrence: { freq: :daily }
-         )
-         create(
-           :chore_completion, chore: paid_ch, user: user, paid_pebbles: 1,
-           completed_at: 6.hours.ago, day_key: today - 1, payout_skipped: false
-         )
-         create(
-           :chore_completion, chore: skipped_ch, user: user, paid_pebbles: 0,
-           completed_at: 6.hours.ago, day_key: today - 1, payout_skipped: true
-         )
-         expect(render(paid_ch)[:today_visible]).to eq(render(skipped_ch)[:today_visible])
+      # Two identical chores, one with a PAID completion yesterday,
+      # one with a SKIPPED completion yesterday. today_visible? must
+      # agree — payment is a payout concern, not a visibility one.
+      paid_ch = create(
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
+        recurrence: { freq: :daily }
+      )
+      skipped_ch = create(
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
+        recurrence: { freq: :daily }
+      )
+      create(
+        :chore_completion, chore: paid_ch, user: user, paid_pebbles: 1,
+        completed_at: 6.hours.ago, day_key: today - 1, payout_skipped: false
+      )
+      create(
+        :chore_completion, chore: skipped_ch, user: user, paid_pebbles: 0,
+        completed_at: 6.hours.ago, day_key: today - 1, payout_skipped: true
+      )
+      expect(render(paid_ch)[:today_visible]).to eq(render(skipped_ch)[:today_visible])
        end
 
     it "household carryover uses HOUSEHOLD-wide completion days, not just viewer's" do
-      # Chelsea bug: "Get the Mail" is a weekly household chore due
-      # Tuesday. Rocco completes it Tuesday. On Wednesday morning,
-      # Chelsea's Today must NOT show it as a carryover overdue.
+      # A weekly household chore done Tuesday by the other member is not
+      # carried over onto the viewer's Wednesday.
       other = create(:user)
       share_chore_household!(user, other)
       tue = Date.new(2026, 6, 2) # arbitrary Tuesday
@@ -258,13 +251,11 @@ RSpec.describe ChoreSerializer, type: :serializer do
         show_on_today_view: :when_scheduled,
         recurrence: { freq: :weekly, by_day: [:tue] }, starts_on: tue - 7
       )
-      # Rocco completed it on Tuesday
       create(
         :chore_completion, chore: ch, user: other, paid_pebbles: 1,
         completed_at: tue.to_time + 12.hours, day_key: tue, payout_skipped: false
       )
 
-      # Chelsea looks at Today on Wednesday.
       ctx = ChoreSerializerContext.for_user(user, day: wed)
       json = described_class.new(ch, viewer: user, ctx: ctx, day: wed).as_json
       expect(json[:today_visible]).to be(false)
@@ -353,34 +344,17 @@ RSpec.describe ChoreSerializer, type: :serializer do
       expect(render(ch)[:due_today]).to be(false)
     end
 
-    it "due_today: one-off with starts_on == today is due today" do
-      ch = create(
-        :chore, created_by_user: user, one_off: true,
-        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
-        starts_on: today
-      )
-      expect(render(ch)[:today_visible]).to be(true)
-      expect(render(ch)[:due_today]).to be(true)
-    end
-
-    it "due_today: one-off with starts_on in the past is overdue, not due today" do
-      ch = create(
-        :chore, created_by_user: user, one_off: true,
-        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
-        starts_on: today - 5
-      )
-      expect(render(ch)[:today_visible]).to be(true)
-      expect(render(ch)[:due_today]).to be(false)
-    end
-
-    it "due_today: one-off without starts_on is not flagged due today" do
-      ch = create(
-        :chore, created_by_user: user, one_off: true,
-        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
-        starts_on: nil
-      )
-      expect(render(ch)[:today_visible]).to be(true)
-      expect(render(ch)[:due_today]).to be(false)
+    it "due_today: a one-off is due only on its starts_on, and visible either way" do
+      [[today, true], [today - 5, false], [nil, false]].each { |starts_on, due|
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          show_on_today_view: :when_scheduled, recurrence: { freq: :never },
+          starts_on: starts_on
+        )
+        json = render(ch)
+        expect(json[:today_visible]).to be(true), starts_on.inspect
+        expect(json[:due_today]).to be(due), starts_on.inspect
+      }
     end
 
     # A single task carrying a recurrence rides the schedule (re-surfaces on
@@ -512,7 +486,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       # Anonymous means the work happened, just uncredited — laundry
       # marked done by someone outside the household still has to be
       # folded. Anonymous already counts for cooldown and for household
-      # carryover; the anchor path used to be the one place it didn't.
+      # carryover, and for the anchor path too.
       it "anonymous anchor completion DOES surface the follower" do
         f = follower
         create(
@@ -535,7 +509,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
         )
         # Holds the anchor's own cooldown...
         expect(anchor.reload.cooldown_elapsed?(user)).to be(false)
-        # ...and now also surfaces the follower. Previously only the first.
+        # ...and surfaces the follower.
         expect(render(f)[:today_visible]).to be(true)
       end
 
@@ -580,8 +554,6 @@ RSpec.describe ChoreSerializer, type: :serializer do
           )
         end
 
-        # Only the housemate ever fetches the mail — mirrors prod, where
-        # one person does it 12/0.
         def housemate_fetches_mail!
           create(
             :chore_completion, chore: mail_run, user: housemate, paid_pebbles: 1,
@@ -625,29 +597,24 @@ RSpec.describe ChoreSerializer, type: :serializer do
         end
       end
 
-      it "save with self-anchor is rejected" do
-        # Build a chore and try to point its anchor at itself.
+      it "rejects an anchor that is itself, in another household, or forms a cycle", :aggregate_failures do
         c = create(:chore, created_by_user: user, name: "X",
           recurrence: { freq: :never })
         c.recurrence = { freq: :after_chore, anchor_chore_id: c.id, interval: 0, unit: :day }
         expect(c).not_to be_valid
         expect(c.errors[:recurrence].join).to include("itself")
-      end
 
-      it "save with cross-household anchor is rejected" do
         other_user = create(:user)
         other_household = create(:chore_household)
         ChoreHouseholdMembership.create!(user: other_user, chore_household: other_household)
         other_user.update_columns(chore_household_id: other_household.id)
         external = create(:chore, created_by_user: other_user,
           chore_household: other_household, recurrence: { freq: :never })
-        c = build(:chore, created_by_user: user, name: "Cross",
+        cross = build(:chore, created_by_user: user, name: "Cross",
           recurrence: { freq: :after_chore, anchor_chore_id: external.id, interval: 0, unit: :day })
-        expect(c).not_to be_valid
-        expect(c.errors[:recurrence].join).to include("household")
-      end
+        expect(cross).not_to be_valid
+        expect(cross.errors[:recurrence].join).to include("household")
 
-      it "save creating a cycle (A→B→A) is rejected" do
         a = create(:chore, created_by_user: user, name: "A", recurrence: { freq: :never })
         b = create(:chore, created_by_user: user, name: "B",
           recurrence: { freq: :after_chore, anchor_chore_id: a.id, interval: 0, unit: :day })
@@ -810,38 +777,21 @@ RSpec.describe ChoreSerializer, type: :serializer do
       end
     end
 
-    describe "JSON payload" do
-      it "emits marked_due_on as the viewer's chore-day date (YYYY-MM-DD)" do
-        chore.update!(marked_due_at: ChoreDay.starts_at(day, user) + 6.hours)
-        expect(serialize(chore)[:marked_due_on]).to eq(day.iso8601)
-      end
+    it "emits marked_due_at as ISO-8601 and marked_due_on as the viewer's chore-day", :aggregate_failures do
+      expect(serialize(chore)[:marked_due_at]).to be_nil
 
-      it "emits marked_due_on for prior chore-day stamps too" do
-        chore.update!(marked_due_at: ChoreDay.starts_at(day - 3, user) + 5.hours)
-        expect(serialize(chore)[:marked_due_on]).to eq((day - 3).iso8601)
-      end
+      t = ChoreDay.starts_at(day, user) + 6.hours
+      chore.update!(marked_due_at: t)
+      expect(Time.iso8601(serialize(chore)[:marked_due_at])).to eq(t)
+      expect(serialize(chore)[:marked_due_on]).to eq(day.iso8601)
 
-      it "emits marked_due_at as ISO-8601 (ms) when set" do
-        t = Time.current
-        chore.update!(marked_due_at: t)
-        expect(serialize(chore)[:marked_due_at]).to eq(t.iso8601(3))
-      end
-
-      it "emits nil when unset" do
-        expect(serialize(chore)[:marked_due_at]).to be_nil
-      end
+      chore.update!(marked_due_at: ChoreDay.starts_at(day - 3, user) + 5.hours)
+      expect(serialize(chore)[:marked_due_on]).to eq((day - 3).iso8601)
     end
   end
 
   describe "target_count + progress_count" do
     let(:user) { create(:user) }
-
-    it "emits target_count and progress_count" do
-      chore = create(:chore, created_by_user: user, target_count: 5)
-      json = described_class.new(chore, viewer: user).as_json
-      expect(json[:target_count]).to eq(5)
-      expect(json[:progress_count]).to eq(0)
-    end
 
     it "progress_count counts taps in the current chore-day" do
       chore = create(:chore, created_by_user: user, target_count: 3)
@@ -850,12 +800,6 @@ RSpec.describe ChoreSerializer, type: :serializer do
       json = described_class.new(chore, viewer: user).as_json
       expect(json[:progress_count]).to eq(2)
       expect(json[:done_count_today]).to eq(2)
-    end
-
-    it "defaults to 1 when not set" do
-      chore = create(:chore, created_by_user: user)
-      json = described_class.new(chore, viewer: user).as_json
-      expect(json[:target_count]).to eq(1)
     end
 
     it "yields the same value via bulk context as via lone serializer" do

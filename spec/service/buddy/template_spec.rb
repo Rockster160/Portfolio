@@ -72,15 +72,9 @@ RSpec.describe Buddy::Template do
   # stop a notification going out - the person is waiting on a doorbell or a
   # deploy, and silence is the one outcome that can't happen.
   describe "when the template is broken" do
-    it "falls back to the raw body rather than raising" do
+    it "falls back to the raw body rather than raising or rendering empty, and can't reach a Ruby object", :aggregate_failures do
       expect(render("{% nonsense %}the doorbell went")).to include("the doorbell went")
-    end
-
-    it "falls back rather than returning an empty line" do
       expect(render("{{ missing }}")).to eq("{{ missing }}")
-    end
-
-    it "cannot reach a Ruby object it was handed" do
       expect(render("{{ user.password_digest }}", "user" => user)).to eq("{{ user.password_digest }}")
     end
   end

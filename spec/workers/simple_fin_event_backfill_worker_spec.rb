@@ -20,18 +20,12 @@ RSpec.describe SimpleFinEventBackfillWorker do
     )
   end
 
-  it "projects a batch when it runs" do
-    alert(24.99)
-
-    expect { described_class.new.perform }.to(change(BankTransaction, :count).by(1))
-  end
-
-  it "queues the next batch while there is more to do" do
+  it "projects a batch when it runs, and queues the next while there is more to do" do
     alert(24.99)
 
     expect(described_class).to receive(:perform_in).with(described_class::NEXT_IN)
 
-    described_class.new.perform
+    expect { described_class.new.perform }.to(change(BankTransaction, :count).by(1))
   end
 
   it "stops the chain once the walk is through" do

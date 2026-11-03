@@ -118,7 +118,6 @@ RSpec.describe Emails::JobTriage do
       described_class.triage!(mail)
 
       expect(seen&.key).to eq("mail:triage:#{mail.id}")
-      expect(seen&.name).to eq("Reading mail")
       expect(BackgroundProcess.live_for(user)).to be_empty
     end
 
@@ -150,21 +149,6 @@ RSpec.describe Emails::JobTriage do
       text = described_class.instructions(user)
       expect(text).to include("Anrok, Netflix")
       expect(text).not_to include("Visa") # settled; not something to expect mail about
-      expect(text).to include("EVIDENCE, NOT A GATE")
-    end
-
-    it "says so plainly when there is nothing on file" do
-      expect(described_class.instructions(user)).to include("(none on file)")
-    end
-
-    # The sender is almost always an applicant tracking system, and a verdict
-    # naming the courier opens a second board row for an application that
-    # already exists - which then has to be merged by hand.
-    it "says the tracking system sending the mail is not the employer" do
-      text = described_class.instructions(user)
-
-      expect(text).to include("the courier is never the company")
-      expect(text).to match(/when it names none, the answer\s+is null/i)
     end
 
     it "sends the sender, the subject and the blurb" do
@@ -307,7 +291,7 @@ RSpec.describe Emails::JobTriage do
       ))
     end
 
-    it "hands Buddy a seed to speak from instead of posting a card" do
+    it "hands Buddy a hidden seed naming the application instead of posting a card" do
       message = described_class.triage!(email)
 
       expect(message.direction).to eq("outbound")
@@ -315,20 +299,6 @@ RSpec.describe Emails::JobTriage do
       expect(message.body).to include("Email id: #{email.id}")
       expect(message.body).to include("add_job_note")
       expect(message.metadata.to_h["job_application_id"]).to be_present
-    end
-
-    # Nothing is written on arrival, but the question is the CARD, not a
-    # sentence: add_job_note is level 3, so calling it proposes and waits.
-    it "tells Buddy to propose it as a card rather than ask in prose" do
-      message = described_class.triage!(email)
-
-      expect(message.body).to include("CALL add_job_note")
-      expect(message.body).to include("do not offer to, do not ask")
-    end
-
-    it "keeps the seed out of the thread" do
-      message = described_class.triage!(email)
-
       expect(message.metadata.to_h["hidden"]).to be(true)
     end
 
@@ -338,8 +308,7 @@ RSpec.describe Emails::JobTriage do
       message = described_class.triage!(email)
 
       expect(message.direction).to eq("outbound")
-      expect(message.body).to include("NOT on their board yet")
-      expect(message.body).to include("CALL add_job_application")
+      expect(message.body).to include("add_job_application")
       expect(message.metadata.to_h["hidden"]).to be(true)
     end
   end

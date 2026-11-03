@@ -30,12 +30,11 @@ RSpec.describe "Job transcript tidy", type: :request do
     allow(TranscriptTidyWorker).to receive(:perform_async)
   end
 
-  it "starts another pass and says so" do
+  it "starts another pass" do
     post(tidy_interview_transcript_path(job, transcript))
 
     expect(TranscriptTidyWorker).to have_received(:perform_async).with(transcript.id, true)
     expect(response).to redirect_to(interview_transcript_path(job, transcript))
-    expect(flash[:notice]).to include("Going back over the words")
   end
 
   # The lookup goes through the current user's applications, so an id from
@@ -50,33 +49,12 @@ RSpec.describe "Job transcript tidy", type: :request do
     expect(response).to have_http_status(:redirect)
   end
 
-  describe "the page afterwards" do
-    it "keeps what the recorder wrote on a turn whose words were put right" do
-      transcript.update!(tidied_at: Time.current)
+  it "shows the corrected words with what the recorder wrote kept beside them" do
+    transcript.update!(tidied_at: Time.current)
 
-      get(interview_transcript_path(job, transcript))
+    get(interview_transcript_path(job, transcript))
 
-      expect(response.body).to include("I&#39;m hand coding everything now.")
-      expect(response.body).to include("As the recorder heard it: I&#39;m hand coating")
-      expect(response.body).to include("1 turn put right")
-    end
-
-    it "says the words were checked when the pass found nothing to do" do
-      transcript.update!(tidied_at: Time.current, turns: [
-        { "raw" => "Unknown", "speaker" => "Me", "text" => "It is faster than it sounds." },
-      ])
-
-      get(interview_transcript_path(job, transcript))
-
-      expect(response.body).to include("words checked")
-      expect(response.body).not_to include("As the recorder heard it")
-    end
-
-    it "says nothing about it on a recording nobody has been over" do
-      get(interview_transcript_path(job, transcript))
-
-      expect(response.body).not_to include("words checked")
-      expect(response.body).not_to include("put right")
-    end
+    expect(response.body).to include("I&#39;m hand coding everything now.")
+    expect(response.body).to include("I&#39;m hand coating")
   end
 end

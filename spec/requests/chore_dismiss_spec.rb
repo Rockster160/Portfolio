@@ -26,24 +26,15 @@ RSpec.describe "Chore dismiss", type: :request do
       expect(json.dig("chore", "dismissed_until")).to eq(ChoreDay.current(user).iso8601)
     end
 
-    it "defaults to the day when no span is given" do
-      post "/chores/items/#{chore.id}/dismiss"
+    # Calendar arithmetic for a month, not 30 days: "not this month" said on
+    # the 31st should not quietly become five weeks.
+    it "defaults to the day, and reaches a week or a calendar month out" do
+      today = ChoreDay.current(user)
+      [[{}, today], [{ span: "week" }, today + 7], [{ span: "month" }, today + 1.month]].each do |params, until_day|
+        post "/chores/items/#{chore.id}/dismiss", params: params
 
-      expect(chore.reload.dismissed_until).to eq(ChoreDay.current(user))
-    end
-
-    it "reaches a week out" do
-      post "/chores/items/#{chore.id}/dismiss", params: { span: "week" }
-
-      expect(chore.reload.dismissed_until).to eq(ChoreDay.current(user) + 7)
-    end
-
-    # Calendar arithmetic, not 30 days: "not this month" said on the 31st
-    # should not quietly become five weeks.
-    it "reaches a calendar month out" do
-      post "/chores/items/#{chore.id}/dismiss", params: { span: "month" }
-
-      expect(chore.reload.dismissed_until).to eq(ChoreDay.current(user) + 1.month)
+        expect(chore.reload.dismissed_until).to eq(until_day), params.to_s
+      end
     end
 
     # The whole point of the gesture. A dismissal that cost a payout or broke a
@@ -89,7 +80,7 @@ RSpec.describe "Chore dismiss", type: :request do
   end
 
   describe "DELETE /chores/items/:chore_id/dismiss" do
-    it "brings it back now instead of when the wave-off runs out" do
+    it "brings it back now instead of when the wave-off runs out, and is fine repeated" do
       chore.update!(dismissed_until: ChoreDay.current(user) + 7)
 
       delete "/chores/items/#{chore.id}/dismiss"
@@ -97,13 +88,9 @@ RSpec.describe "Chore dismiss", type: :request do
       expect(response).to have_http_status(:ok)
       expect(chore.reload.dismissed_until).to be_nil
       expect(json.dig("chore", "dismissed")).to be(false)
-    end
 
-    it "is fine on a chore that was never waved off" do
       delete "/chores/items/#{chore.id}/dismiss"
-
       expect(response).to have_http_status(:ok)
-      expect(chore.reload.dismissed_until).to be_nil
     end
   end
 

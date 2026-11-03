@@ -17,6 +17,9 @@ RSpec.describe ChoreBroadcaster do
       _, payload = broadcasts.first
       expect(payload[:data][:chore_id]).to eq(chore.id)
       expect(payload[:data][:chore_ids]).to eq([chore.id])
+
+      described_class.broadcast_changes!(user, chore, related: chore)
+      expect(broadcasts.last[1][:data][:chore_ids]).to eq([chore.id])
     end
 
     it "waits for the open transaction to commit, and says nothing on a rollback" do
@@ -47,27 +50,12 @@ RSpec.describe ChoreBroadcaster do
 
       described_class.broadcast_changes!(user, parent, related: sub)
 
-      # Regression guard: prior behavior was TWO broadcasts (one per chore),
-      # which multiplied client-side request fan-out (state fetch + shell
-      # refresh) per recipient tab. Coalescing must stay ONE broadcast.
+      # One broadcast, not one per chore: each one fans out a state fetch and
+      # a shell refresh in every recipient tab.
       expect(broadcasts.size).to eq(1)
       _, payload = broadcasts.first
       expect(payload[:data][:chore_id]).to eq(parent.id)
       expect(payload[:data][:chore_ids]).to match_array([parent.id, sub.id])
-    end
-
-    it "does not duplicate the id when related equals chore" do
-      chore = create(:chore, created_by_user: user)
-      broadcasts = []
-      allow(MonitorChannel).to receive(:broadcast_to) { |recipient, payload|
-        broadcasts << [recipient, payload]
-      }
-
-      described_class.broadcast_changes!(user, chore, related: chore)
-
-      expect(broadcasts.size).to eq(1)
-      _, payload = broadcasts.first
-      expect(payload[:data][:chore_ids]).to eq([chore.id])
     end
   end
 end

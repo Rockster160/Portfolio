@@ -1,14 +1,7 @@
 require "rails_helper"
 
-# Rocco, 2026-10-01: "Affirmation should just be a Quick Action that can be
-# removed if the user so chooses."
-#
-# Everything else in that list is either a row with its own options or one of
-# their own saved routines, which they can delete. Affirmation was neither: a
-# hard-coded button, and the only one that cannot BE a routine - a routine runs
-# deterministically with no model call (Buddy::Routines.run!) and an
-# affirmation is a model turn by definition. So it is a preference, and turning
-# it off is what deleting a routine would be for one of these.
+# Affirmation is a model turn, so it can't be a routine; turning it off is a
+# preference stored in byte_prefs.
 RSpec.describe "Byte affirmation setting", type: :request do
   let(:user) { User.me }
 
@@ -21,56 +14,34 @@ RSpec.describe "Byte affirmation setting", type: :request do
 
   before { sign_in }
 
-  describe User do
-    # Absent means on, which is what it was for everybody before the switch
-    # existed - nobody is deciding about this by being asked.
-    it "is on for somebody who has never touched it" do
-      user.update!(byte_prefs: {})
+  # Absent means on, which is what it was for everybody before the switch existed.
+  it "is on by default and round-trips without touching other preferences", :aggregate_failures do
+    user.update!(byte_prefs: { "font_scale" => 130 })
+    expect(user.byte_affirmation?).to be(true)
 
-      expect(user.byte_affirmation?).to be(true)
-    end
+    user.byte_affirmation = false
+    user.save!
+    expect(user.reload.byte_affirmation?).to be(false)
+    expect(user.byte_font_scale).to eq(130)
 
-    it "round-trips off and back on" do
-      user.byte_affirmation = false
-      user.save!
-      expect(user.reload.byte_affirmation?).to be(false)
-
-      user.byte_affirmation = true
-      user.save!
-      expect(user.reload.byte_affirmation?).to be(true)
-    end
-
-    # The row is what the setting is about, so nothing else in byte_prefs can
-    # be disturbed by it.
-    it "leaves the rest of the preferences alone" do
-      user.update!(byte_prefs: { "font_scale" => 130 })
-      user.byte_affirmation = false
-      user.save!
-
-      expect(user.reload.byte_font_scale).to eq(130)
-    end
+    user.byte_affirmation = true
+    user.save!
+    expect(user.reload.byte_affirmation?).to be(true)
   end
 
-  describe "the endpoint" do
-    it "stores off and says so" do
-      post byte_affirmation_action_path, params: { on: false }, as: :json
+  # The toggle paints from what comes back rather than from what was tapped,
+  # so the answer has to be the stored value and not the request.
+  it "stores off and on from the endpoint and answers with the stored value", :aggregate_failures do
+    post byte_affirmation_action_path, params: { on: false }, as: :json
 
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["on"]).to be(false)
-      expect(user.reload.byte_affirmation?).to be(false)
-    end
+    expect(response).to have_http_status(:ok)
+    expect(response.parsed_body["on"]).to be(false)
+    expect(user.reload.byte_affirmation?).to be(false)
 
-    # The toggle paints from what comes back rather than from what was tapped,
-    # so the answer has to be the stored value and not the request.
-    it "stores on and says so" do
-      user.byte_affirmation = false
-      user.save!
+    post byte_affirmation_action_path, params: { on: true }, as: :json
 
-      post byte_affirmation_action_path, params: { on: true }, as: :json
-
-      expect(response.parsed_body["on"]).to be(true)
-      expect(user.reload.byte_affirmation?).to be(true)
-    end
+    expect(response.parsed_body["on"]).to be(true)
+    expect(user.reload.byte_affirmation?).to be(true)
   end
 
   # The page itself lives on the byte subdomain, and the constraint only reads

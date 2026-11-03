@@ -19,30 +19,17 @@ RSpec.describe "Byte conversation read", type: :request do
     captured
   end
 
-  it "tells every other device the thread has been read" do
+  # The record didn't change, so the conversation wire object stays out: a
+  # device LOOKING at this thread must not redraw its header because another
+  # one tapped into it.
+  it "moves the read marker and tells every other device, with the new total", :aggregate_failures do
     payload = broadcasts.find { |p| p.dig(:data, :kind) == :conversation_read }
 
+    expect(conversation.reload.last_read_at).to be_present
     expect(payload).to be_present
     expect(payload.dig(:data, :conversation_id)).to eq(conversation.id)
-  end
-
-  it "carries the new total so a listening device can restamp the icon" do
-    payload = broadcasts.find { |p| p.dig(:data, :kind) == :conversation_read }
-
     expect(payload.dig(:data, :unread_total)).to eq(ByteConversation.unread_total_for(user))
-  end
-
-  # The record didn't change, and a device that is LOOKING at this thread must
-  # not redraw its header because another one tapped into it.
-  it "does not send the conversation wire object" do
-    payload = broadcasts.find { |p| p.dig(:data, :kind) == :conversation_read }
-
     expect(payload[:data]).not_to have_key(:conversation)
-  end
-
-  it "still moves the read marker" do
-    expect { post byte_read_conversation_path(id: conversation.id) }
-      .to change { conversation.reload.last_read_at }.from(nil)
   end
 
   it "says nothing about a conversation that isn't theirs" do
@@ -77,15 +64,12 @@ RSpec.describe "Byte conversation read", type: :request do
     # revoked by WebKit, which is what was quietly killing them.
     before { WebPushNotifications.record_badge(user, 1, channel: :byte) }
 
-    it "pushes the new count so the badge can clear" do
-      expect(pushed.first&.dig("data", "count")).to eq(0)
-    end
-
     # A banner every time another device is opened would be worse than the
-    # stale badge.
-    it "says nothing out loud" do
+    # stale badge, so the push is silent.
+    it "pushes the new count, silently, so the badge can clear", :aggregate_failures do
       sent = pushed.first
 
+      expect(sent&.dig("data", "count")).to eq(0)
       expect(sent["title"]).to be_blank
       expect(sent["body"]).to be_blank
     end

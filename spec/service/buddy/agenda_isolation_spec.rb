@@ -40,7 +40,7 @@ RSpec.describe "Buddy agenda isolation between unshared households" do
     end
 
     # `strict:` on the resolve. A name nobody has is a question, not a silent
-    # landing on whatever calendar happened to be first (prod 4463).
+    # landing on whatever calendar happened to be first.
     it "refuses a calendar she cannot write to rather than falling back" do
       expect {
         run(:add_agenda_item, { title: "Fish food", at: at.iso8601, calendar: "Rocco Work" }, as: eve)
@@ -56,33 +56,13 @@ RSpec.describe "Buddy agenda isolation between unshared households" do
     end
   end
 
-  # She holds the `agenda` feature, so the page is hers to be sent to - the
-  # link is how "where do I change that" gets a real answer instead of
-  # directions to a screen the companion cannot see.
-  describe "the link to it" do
-    it "offers her the agenda page" do
-      names = Buddy::AppPages.for_user(eve).pluck(:name)
+  it "links only the app pages behind features she holds" do
+    eve.update!(buddy_features: %w[agenda lists])
+    pages = Buddy::AppPages.for_user(eve)
 
-      expect(names).to include(:agenda)
-      expect(Buddy::AppPages.for_user(eve).find { |p| p[:name] == :agenda }[:url]).to end_with("/agenda")
-    end
-
-    # The reject has been in `for_user` from the start and only `interviews`
-    # ever used it, so somebody without `chores` was handed the chore grid, the
-    # pebble balance and the completion history - three links to pages that can
-    # only be empty for them.
-    it "keeps back the pages behind a feature she does not hold" do
-      eve.update!(buddy_features: %w[agenda lists])
-      names = Buddy::AppPages.for_user(eve).pluck(:name)
-
-      expect(names).to include(:agenda, :lists)
-      expect(names).not_to include(:chores, :chores_balance, :chores_history, :jil_tasks, :prompts)
-    end
-
-    it "still keeps the owner's own page to the owner" do
-      expect(Buddy::AppPages.for_user(rocco).pluck(:name)).not_to include(:system)
-      expect(Buddy::AppPages.for_user(User.me).pluck(:name)).to include(:system)
-    end
+    expect(pages.find { |p| p[:name] == :agenda }[:url]).to end_with("/agenda")
+    expect(pages.pluck(:name)).to include(:agenda, :lists)
+    expect(pages.pluck(:name)).not_to include(:chores, :chores_balance, :chores_history, :jil_tasks, :prompts)
   end
 
   describe "reading and editing" do

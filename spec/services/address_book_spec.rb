@@ -2,42 +2,33 @@ require "rails_helper"
 
 RSpec.describe AddressBook do
   describe ".non_travelable?" do
-    it "rejects http(s) and www URLs" do
-      expect(described_class.non_travelable?("https://example.com")).to be true
-      expect(described_class.non_travelable?("http://example.com/x")).to be true
-      expect(described_class.non_travelable?("www.example.com")).to be true
-    end
-
-    it "rejects common video-conf hosts even without scheme" do
-      expect(described_class.non_travelable?("meet.google.com/abc-defg-hij")).to be true
-      expect(described_class.non_travelable?("zoom.us/j/123")).to be true
-      expect(described_class.non_travelable?("companyname.zoom.us/j/123")).to be true
-      expect(described_class.non_travelable?("teams.microsoft.com/l/meetup-join/...")).to be true
-    end
-
-    it "rejects placeholder text" do
-      expect(described_class.non_travelable?("tbd")).to be true
-      expect(described_class.non_travelable?("Online")).to be true
-      expect(described_class.non_travelable?("virtual")).to be true
-      expect(described_class.non_travelable?("N/A")).to be true
-    end
-
-    it "rejects phone-like digit strings" do
-      expect(described_class.non_travelable?("+1 555-123-4567")).to be true
-      expect(described_class.non_travelable?("(555) 123-4567")).to be true
+    it "rejects URLs, video-conf hosts, placeholders, phone numbers and blanks" do
+      [
+        "https://example.com",
+        "http://example.com/x",
+        "www.example.com",
+        "meet.google.com/abc-defg-hij",
+        "zoom.us/j/123",
+        "companyname.zoom.us/j/123",
+        "teams.microsoft.com/l/meetup-join/...",
+        "tbd",
+        "Online",
+        "virtual",
+        "N/A",
+        "+1 555-123-4567",
+        "(555) 123-4567",
+        "",
+        "   ",
+        nil,
+      ].each { |location|
+        expect(described_class.non_travelable?(location)).to be(true), location.inspect
+      }
     end
 
     it "accepts real addresses + contact-name-like strings" do
-      expect(described_class.non_travelable?("123 Main St")).to be false
-      expect(described_class.non_travelable?("Home")).to be false
-      expect(described_class.non_travelable?("Sarah's house")).to be false
-      expect(described_class.non_travelable?("Cherry Creek Mall, Denver CO")).to be false
-    end
-
-    it "treats blank as non-travelable" do
-      expect(described_class.non_travelable?("")).to be true
-      expect(described_class.non_travelable?("   ")).to be true
-      expect(described_class.non_travelable?(nil)).to be true
+      ["123 Main St", "Home", "Sarah's house", "Cherry Creek Mall, Denver CO"].each { |location|
+        expect(described_class.non_travelable?(location)).to be(false), location
+      }
     end
   end
 

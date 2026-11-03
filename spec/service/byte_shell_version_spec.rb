@@ -15,16 +15,12 @@ RSpec.describe ByteShellVersion do
     expect(described_class.current).not_to eq(COMMIT_SHA[0, 12])
   end
 
-  it "is stable across calls" do
-    first = described_class.compute
-
-    expect(described_class.compute).to eq(first)
-  end
-
-  it "is memoized, since nothing short of a deploy changes an input" do
+  # Nothing short of a deploy changes an input.
+  it "is stable across calls, and memoized" do
     first = described_class.current
-    allow(described_class).to receive(:compute).and_return("something-else")
+    expect(described_class.compute).to eq(first)
 
+    allow(described_class).to receive(:compute).and_return("something-else")
     expect(described_class.current).to eq(first)
   end
 
@@ -32,26 +28,13 @@ RSpec.describe ByteShellVersion do
     # The three things that decide what the browser has in memory. Asserted on
     # `parts` rather than on the hash, so a passing test means the input is
     # really in there and not that some unrelated string moved.
-    it "includes the fingerprinted bundles the page fetches" do
-      expect(described_class.parts).to include(a_string_matching(%r{application.*\.js}))
-    end
-
-    it "includes the shell markup itself" do
-      shell = Rails.root.join("app/views/byte/show.html.erb").read
-
-      expect(described_class.parts).to include(shell)
-    end
-
-    it "includes the layout wrapped around it" do
-      layout = Rails.root.join("app/views/layouts/application.html.erb").read
-
-      expect(described_class.parts).to include(layout)
-    end
-
-    it "includes the service worker, which decides what gets served" do
-      worker = Rails.public_path.join("byte_worker.js").read
-
-      expect(described_class.parts).to include(worker)
+    it "includes the bundles, the shell markup, its layout and the service worker" do
+      expect(described_class.parts).to include(
+        a_string_matching(%r{application.*\.js}),
+        Rails.root.join("app/views/byte/show.html.erb").read,
+        Rails.root.join("app/views/layouts/application.html.erb").read,
+        Rails.public_path.join("byte_worker.js").read,
+      )
     end
   end
 

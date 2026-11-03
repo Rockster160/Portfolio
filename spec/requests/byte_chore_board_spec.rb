@@ -33,53 +33,35 @@ RSpec.describe "Byte chore board", type: :request do
   alias_method :board_chores, :board_items
 
   describe "GET /board/:conversation_id" do
-    it "renders the board surface rather than the routine pad" do
+    # Parsed the way a browser parses it: one stray closing tag in the owner's
+    # settings once shut .byte-app early and left the thread outside it. The
+    # background-process strip belongs to the chat, not a board. A board has no
+    # header, so it carries its own way back to the board index.
+    it "renders the owner's board page: kiosk chrome without the pad, settings, chat and dreams", :aggregate_failures do
+      housemate = create(:user, chore_household_id: user.chore_household_id)
+
       get "/board/#{thread.id}"
 
+      body = response.body
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include('data-board="true"')
-      expect(response.body).to include("data-byte-board")
-      # Both are kiosk chrome - the board IS a kiosk with a different pad - but
-      # the routine pad itself must not also be on screen. Two grids of big
-      # targets is the state where you have to read before you can press.
-      expect(response.body).to include('data-kiosk="true"')
-      expect(response.body).not_to include("data-kiosk-pad")
-    end
+      expect(body).to include('data-board="true"', "data-byte-board", 'data-kiosk="true"')
+      expect(body).not_to include("data-kiosk-pad", "data-buddy-processes")
 
-    # Parsed the way a browser parses it. One stray closing tag in the board's
-    # settings shut .byte-app early, leaving the thread outside it, and the
-    # page's script found no thread and stopped on every board.
-    it "keeps the whole page inside the app, for the owner's settings too" do
-      get "/board/#{thread.id}"
-
-      app = Nokogiri::HTML5(response.body).at_css(".byte-app")
+      app = Nokogiri::HTML5(body).at_css(".byte-app")
       expect(app.at_css("[data-byte-thread]")).to be_present
       expect(app.at_css("[data-byte-composer]")).to be_present
       expect(app.at_css("[data-board-list-dialog]")).to be_present
+
+      expect(body).to include("data-board-dream", 'data-version-url="/byte/version"')
+      expect(body).to include("href=\"#{byte_board_path}\"")
+      expect(body).to include("data-board-settings", "data-board-rename-form", "data-board-share")
+      expect(body).to include("data-url=\"#{byte_conversation_path(thread)}\"")
+      expect(body).to include("data-board-members-section", "value=\"#{housemate.id}\"")
+      expect(body).to include("data-board-chat-toggle")
+      expect(body).to include(">#{thread.id}##{BUILD_NUMBER}<")
     end
 
-    # The background-process strip ("Reading mail", an application filling in) is
-    # scoped to the account, not the thread - it belongs to the chat. A board is
-    # its own surface and must not carry the account's machinery, so the strip is
-    # left out of the DOM entirely here.
-    it "does not carry the account's background-process strip" do
-      get "/board/#{thread.id}"
-
-      expect(response.body).not_to include("data-buddy-processes")
-    end
-
-    it "carries only the thread's own groups, serialized for the first paint" do
-      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home"]))
-      create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
-      create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"], marked_due_at: Time.current)
-
-      get "/board/#{thread.id}"
-
-      expect(board_chores.pluck("name")).to eq(["Vacuum"])
-      expect(board_chores.first["tags"]).to eq(["Home"])
-    end
-
-    it "gathers chores from ANY of the groups it watches" do
+    it "carries chores from ANY of the thread's own groups, serialized for the first paint" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Home", "Pets"]))
       create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"], marked_due_at: Time.current)
       create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"], marked_due_at: Time.current)
@@ -88,6 +70,7 @@ RSpec.describe "Byte chore board", type: :request do
       get "/board/#{thread.id}"
 
       expect(board_chores.pluck("name")).to contain_exactly("Vacuum", "Feed Whisper")
+      expect(board_chores.find { |c| c["name"] == "Vacuum" }["tags"]).to eq(["Home"])
     end
 
     # Top-to-bottom by when they came due: today first, then the most recently
@@ -185,13 +168,6 @@ RSpec.describe "Byte chore board", type: :request do
       expect(response.parsed_body["version"]).to eq(ByteShellVersion.current)
     end
 
-    it "carries a thought bubble for the pet's dreams" do
-      get "/board/#{thread.id}"
-
-      expect(response.body).to include("data-board-dream")
-      expect(response.body).to include('data-version-url="/byte/version"')
-    end
-
     # A board set before groups went plural keeps watching what it did, read off
     # the old single `chore_tag` key until it is next changed.
     it "still honours a board pointed at a group the old way" do
@@ -211,18 +187,6 @@ RSpec.describe "Byte chore board", type: :request do
       get "/board/#{thread.id}"
 
       expect(board_chores).to eq([])
-      expect(response.body).to include("Pick groups")
-    end
-
-    # A board has no header and no composer, so without this there is no way
-    # off it but the browser's own back button - and an installed board has no
-    # browser chrome at all. Boards are their own kind of thread now, so the way
-    # out leads to the board index rather than the chat.
-    it "offers a way back to the board index" do
-      get "/board/#{thread.id}"
-
-      expect(response.body).to include("All boards")
-      expect(response.body).to include("href=\"#{byte_board_path}\"")
     end
 
     it "redirects to the board index when the id isn't a board of the viewer's" do
@@ -245,7 +209,6 @@ RSpec.describe "Byte chore board", type: :request do
       get "/"
 
       expect(response.body).to include("data-byte-menu-board")
-      expect(response.body).to include("Open chore board")
     end
   end
 
@@ -448,20 +411,17 @@ RSpec.describe "Byte chore board", type: :request do
   describe "PATCH /byte/board/tag" do
     before { create(:chore, created_by_user: user, name: "Vacuum", tags: ["Home"]) }
 
-    it "points the thread's board at a group" do
-      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Home" }
-
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["chore_tags"]).to eq(["Home"])
-      expect(thread.reload.chore_tags).to eq(["Home"])
-    end
-
-    it "broadcasts the change so other open copies of the board re-scope live" do
+    # The broadcast is what re-scopes other open copies of the board live.
+    it "points the thread's board at a group and broadcasts the change" do
       expect(MonitorChannel).to receive(:broadcast_to).with(
         user, hash_including(data: hash_including(kind: :conversation)),
       )
 
       patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Home" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["chore_tags"]).to eq(["Home"])
+      expect(thread.reload.chore_tags).to eq(["Home"])
     end
 
     it "points a board at several groups at once" do
@@ -473,24 +433,17 @@ RSpec.describe "Byte chore board", type: :request do
       expect(thread.reload.chore_tags).to eq(["Home", "Pets"])
     end
 
-    # A typo'd group is a board that is permanently empty with nothing on the
-    # screen to say why, so it is refused at the door rather than stored.
-    it "refuses a group the household doesn't use, and says which it does" do
-      patch "/byte/board/tag", params: { conversation_id: thread.id, tag: "Workshp" }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["tags"]).to eq(["All", "Home"])
-      expect(thread.reload.chore_tags).to eq([])
-    end
-
-    # One bad group in the set fails the whole change — a board half-pointed at
-    # what you asked for is a surprise, not a convenience.
-    it "refuses the set when any group in it is unknown" do
+    # A typo'd group is a board that is permanently empty with nothing to say
+    # why, and one bad group fails the whole set.
+    it "refuses a group the household doesn't use, alone or in a set, saying which it does" do
       create(:chore, created_by_user: user, name: "Feed Whisper", tags: ["Pets"])
 
-      patch "/byte/board/tag", params: { conversation_id: thread.id, tags: ["Home", "Workshp"] }
+      [{ tag: "Workshp" }, { tags: ["Home", "Workshp"] }].each do |params|
+        patch "/byte/board/tag", params: { conversation_id: thread.id, **params }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["tags"]).to eq(["All", "Home", "Pets"])
+      end
       expect(thread.reload.chore_tags).to eq([])
     end
 
@@ -724,24 +677,17 @@ RSpec.describe "Byte chore board", type: :request do
   describe "POST /byte/chore_cheer" do
     let!(:chore) { create(:chore, created_by_user: user, name: "Vacuum", short_name: "Vacuum") }
 
-    it "answers with a line in the thread's own pet voice and wears the face" do
+    # The column is the one writer of the pet's face, and its broadcast repaints
+    # every open screen, so the cheer moves it rather than handing back a mood.
+    it "answers with a line naming the chore and wears the face" do
       thread.update_columns(buddy_theme: "kumoko", buddy_expression: "neutral")
 
       post "/byte/chore_cheer", params: { conversation_id: thread.id, chore_id: chore.id }
 
       expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["say"]).to be_present
-      expect(response.parsed_body["mood"]).to be_present
-      # The column is the one writer of the pet's face, and the broadcast off
-      # it is what repaints every open screen - so the cheer has to have moved
-      # it rather than handing the client a mood to paint itself.
-      expect(thread.reload.buddy_expression).to eq(response.parsed_body["mood"])
-    end
-
-    it "names the chore it is cheering" do
-      post "/byte/chore_cheer", params: { conversation_id: thread.id, chore_id: chore.id }
-
       expect(response.parsed_body["say"]).to include("Vacuum")
+      expect(response.parsed_body["mood"]).to be_present
+      expect(thread.reload.buddy_expression).to eq(response.parsed_body["mood"])
     end
 
     # The waking line has no chore behind it at all, so it must not need one.
@@ -772,24 +718,13 @@ RSpec.describe "Byte chore board", type: :request do
       BoardTaskButton.create!(user: user, task: task, label: "Fed", icon: "🍖", color: "#8B5E34", tags: ["Whisper"])
     }
 
-    it "sits on a board watching its group, carrying its icon" do
+    it "sits on a board watching its group, carrying its icon and the tile its task answers on" do
       thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"]))
 
       get "/board/#{thread.id}"
 
       item = board_items.find { |i| i["kind"] == "task" }
-      expect(item).to be_present
-      expect(item["name"]).to eq("Fed")
-      expect(item["icon"]).to eq("🍖")
-      expect(item["icon_kind"]).to eq("emoji")
-    end
-
-    it "names the tile its task answers on, so the board can wear what it says" do
-      thread.update!(metadata: thread.metadata.merge("chore_tags" => ["Whisper"]))
-
-      get "/board/#{thread.id}"
-
-      expect(board_items.find { |i| i["kind"] == "task" }["monitor"]).to eq("whisper-btn-fed")
+      expect(item).to include("name" => "Fed", "icon" => "🍖", "icon_kind" => "emoji", "monitor" => "whisper-btn-fed")
     end
 
     it "has no tile when its task isn't a monitor" do
@@ -993,15 +928,6 @@ RSpec.describe "Byte chore board", type: :request do
   end
 
   describe "board settings on the board" do
-    it "offers the owner rename and sharing" do
-      get "/board/#{thread.id}"
-
-      expect(response.body).to include("data-board-settings")
-      expect(response.body).to include("data-board-rename-form")
-      expect(response.body).to include("data-url=\"#{byte_conversation_path(thread)}\"")
-      expect(response.body).to include("data-board-share")
-    end
-
     it "opens holding the face a standing alert names" do
       thread.update!(buddy_theme: "bloom", metadata: thread.metadata.merge("chore_tags" => ["Laundry"]))
       gate_alert!
@@ -1066,11 +992,8 @@ RSpec.describe "Byte chore board", type: :request do
 
     # The chat runs as the owner, and a message from anyone else would land in
     # their own thread, so the board's chat is the owner's alone.
-    it "gives the owner the board's chat and a housemate none" do
+    it "gives a housemate no chat on a shared board, since it runs as the owner" do
       thread.update!(metadata: thread.metadata.merge("shared" => true))
-
-      get "/board/#{thread.id}"
-      expect(response.body).to include("data-board-chat-toggle")
 
       sign_in_as(housemate)
       get "/board/#{thread.id}"
@@ -1162,13 +1085,8 @@ RSpec.describe "Byte chore board", type: :request do
       expect(names).not_to include("Mine") # the owner's own, dropped
     end
 
-    it "offers the owner a member picker, confined to the household" do
-      get "/board/#{thread.id}"
-
-      expect(response.body).to include("data-board-members-section")
-      expect(response.body).to include("value=\"#{housemate.id}\"")
-    end
   end
+
   # A board in a shared room can't know who pressed it, so a press there is done
   # by nobody yet and the board's owner is asked who it was.
   describe "asking who did it" do

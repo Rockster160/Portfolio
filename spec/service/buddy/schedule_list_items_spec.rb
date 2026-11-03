@@ -1,21 +1,7 @@
 require "rails_helper"
 
-# Prod 4744-4750, 26 Aug. "Every night at 9pm, can you add these items to that
-# list: ..." → a claim that never ran, and then, asked again, "I can't make list
-# items recur on a schedule, so I've put that request on the list instead."
-#
-# Adding a list item is something Buddy does. Putting a thing on the clock is
-# something Buddy does. `BuddyReminder#action` has stored `{tool:, payload:}`
-# and fired it with no model turn behind it since `schedule_function` was
-# built — and `add_list_item`'s own IMMEDIATE_NOTE already tells the model to
-# reach for "a schedule_* tool when they named a clock time". Every piece was
-# there and nothing joined them, so the answer to a recurring list add was a
-# feature request.
-#
-# The first attempt at this built a per-user Jil function and scheduled that,
-# which is the wrong shape twice: it makes a plain capability into a custom
-# automation each person has to have, and it routes a list write out through the
-# automation engine to reach a tool sitting right there. He said so.
+# "Every night at 9pm, add these items to that list": one reminder whose
+# `action` is one add_list_item call per item, fired with no model turn.
 RSpec.describe "schedule_list_items" do
   let(:user) { create(:user) }
   let!(:convo) {
@@ -38,8 +24,11 @@ RSpec.describe "schedule_list_items" do
   end
 
   describe "putting them on the clock" do
-    it "stores one call per item rather than adding anything now" do
-      reminder = schedule!
+    # Raw arguments, not ids: a list rebuilt or renamed under a months-long
+    # nightly row must fail loudly rather than write into a dead id.
+    it "stores one call per item on ONE recurring row, adding nothing now", :aggregate_failures do
+      reminder = nil
+      expect { reminder = schedule! }.to change(BuddyReminder, :count).by(1)
 
       expect(list.reload.list_items).to be_empty
       expect(reminder.action.length).to eq(3)
@@ -47,25 +36,10 @@ RSpec.describe "schedule_list_items" do
       expect(reminder.action.pluck("payload").pluck("item")).to eq(
         ["Pickup Whisper Dinner", "Kitchen & Living 90% Reset", "Dish washer running/delay"],
       )
-    end
-
-    # The same reason `schedule_function` stores a function NAME rather than an
-    # id: this row repeats nightly for months, and a list that gets rebuilt or
-    # renamed under it must fail loudly at 9pm rather than write into a dead id.
-    it "stores the raw arguments, so everything re-resolves when it fires" do
-      stored = schedule!.action.first["payload"]
-
-      expect(stored).to include("list" => "Before Bed", "item" => "Pickup Whisper Dinner")
-      expect(stored).not_to have_key("list_id")
-    end
-
-    it "is ONE row, so one sentence is one thing to see and one thing to cancel" do
-      expect { schedule! }.to change(BuddyReminder, :count).by(1)
-    end
-
-    it "keeps the recurrence" do
-      expect(schedule!.recurrence).to include("freq" => "daily", "at" => "21:00")
-      expect(schedule!.fire_at.in_time_zone(user.timezone).strftime("%H:%M")).to eq("21:00")
+      expect(reminder.action.first["payload"]).to include("list" => "Before Bed")
+      expect(reminder.action.first["payload"]).not_to have_key("list_id")
+      expect(reminder.recurrence).to include("freq" => "daily", "at" => "21:00")
+      expect(reminder.fire_at.in_time_zone(user.timezone).strftime("%H:%M")).to eq("21:00")
     end
 
     it "takes a one-off time instead" do
@@ -88,26 +62,17 @@ RSpec.describe "schedule_list_items" do
   # matches nothing fails while they are still in the conversation rather than
   # silently at 9pm tomorrow.
   describe "what it refuses up front" do
-    it "raises on a list that doesn't exist" do
+    it "raises on an unknown list, nothing to add, an unreadable repeat, or a past time", :aggregate_failures do
       expect { schedule!(list: "Nonexistent") }.to raise_error(/no list matching/i)
-    end
-
-    it "raises on nothing to add" do
       expect { schedule!(items: "  \n \n") }.to raise_error(/nothing to add/i)
-    end
-
-    it "raises on a repeat spec it can't read" do
       expect { schedule!(repeat: "every so often") }.to raise_error(/unknown repeat spec/i)
-    end
-
-    it "raises rather than scheduling something into the past" do
       expect { schedule!(repeat: nil, at: 2.hours.ago.iso8601) }.to raise_error(/already passed/i)
     end
   end
 
   # The whole point: what happens at 9pm, with no model turn anywhere in it.
   describe "when it fires" do
-    it "adds every item to the list" do
+    it "adds every item to the list and rolls forward to the next night", :aggregate_failures do
       reminder = schedule!
       reminder.update!(fire_at: 1.minute.ago)
 
@@ -116,14 +81,6 @@ RSpec.describe "schedule_list_items" do
       expect(list.reload.list_items.pluck(:name)).to contain_exactly(
         "Pickup Whisper Dinner", "Kitchen & Living 90% Reset", "Dish washer running/delay"
       )
-    end
-
-    it "rolls forward to the next night rather than firing once" do
-      reminder = schedule!
-      reminder.update!(fire_at: 1.minute.ago)
-
-      expect { Buddy::ReminderFirer.fire!(reminder.reload) }
-        .to(change { reminder.reload.fire_at })
       expect(reminder.reload.fire_at).to be > Time.current
     end
   end

@@ -27,7 +27,7 @@ RSpec.describe "Agenda 'Notify others' opt-in" do
           start_at:      Time.current.to_i,
           end_at:        (1.hour.from_now).to_i,
           notify_others: notify,
-        },
+        }.compact,
       }, format: :json
     end
 
@@ -39,26 +39,10 @@ RSpec.describe "Agenda 'Notify others' opt-in" do
       expect(response).to have_http_status(:ok)
     end
 
-    it "does not enqueue when unchecked" do
+    it "does not enqueue when unchecked, absent, or on a solo agenda" do
       expect(AgendaNotifyOthersWorker).not_to receive(:perform_in)
       create_item(shared, notify: false)
-    end
-
-    it "does not enqueue when the flag is absent" do
-      expect(AgendaNotifyOthersWorker).not_to receive(:perform_in)
-      post :create, params: {
-        agenda_item: {
-          agenda_id: shared.id,
-          name:      "Coffee",
-          kind:      "event",
-          start_at:  Time.current.to_i,
-          end_at:    (1.hour.from_now).to_i,
-        },
-      }, format: :json
-    end
-
-    it "does not enqueue on a solo (unshared) agenda even when checked" do
-      expect(AgendaNotifyOthersWorker).not_to receive(:perform_in)
+      create_item(shared, notify: nil)
       create_item(solo, notify: true)
     end
 

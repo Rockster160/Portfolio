@@ -47,20 +47,11 @@ RSpec.describe "Retrying a message that didn't go through", type: :request do
     expect(msg.state).to eq("failed")
   end
 
-  it "refuses a message that didn't fail" do
-    msg = message(state: :delivered)
+  it "refuses a message that didn't fail, and one of Buddy's own" do
+    [message(state: :delivered), message(state: :failed, direction: :inbound)].each do |msg|
+      post byte_message_retry_path(msg)
 
-    post byte_message_retry_path(msg)
-
-    expect(response).to have_http_status(:unprocessable_entity)
-  end
-
-  # Buddy's own reply is not yours to re-send.
-  it "refuses one of Buddy's" do
-    msg = message(state: :failed, direction: :inbound)
-
-    post byte_message_retry_path(msg)
-
-    expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
   end
 end

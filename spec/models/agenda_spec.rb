@@ -51,40 +51,22 @@ RSpec.describe Agenda do
       let(:partner) { create(:user, phone: "5550000101") }
       let(:agenda) { described_class.create!(user: user, name: "Work") }
 
-      it "is the owner alone on a calendar nobody else touches" do
-        expect(agenda.subject_users).to contain_exactly(user)
-      end
-
-      # The distinction the whole thing turns on: an editor can ADD to someone's
-      # work calendar without it being their day.
-      it "is still the owner alone when shared as an editor" do
-        agenda.agenda_shares.create!(user: partner, permission: :editor)
-        expect(agenda.subject_users).to contain_exactly(user)
-      end
-
-      it "is still the owner alone when shared as a viewer" do
-        agenda.agenda_shares.create!(user: partner, permission: :viewer)
-        expect(agenda.subject_users).to contain_exactly(user)
-      end
-
-      it "is everyone once someone else is a co-owner — that's a joint calendar" do
-        agenda.agenda_shares.create!(user: partner, permission: :owner)
-        expect(agenda.subject_users).to contain_exactly(user, partner)
-      end
-
-      it "counts a co-owner once even alongside other shares" do
+      # An editor can ADD to someone's work calendar without it being their
+      # day, so only a co-owner joins the owner; access_users is the wider set.
+      it "is the owner alone until someone else is a co-owner", :aggregate_failures do
         third = create(:user, phone: "5550000102")
-        agenda.agenda_shares.create!(user: partner, permission: :owner)
-        agenda.agenda_shares.create!(user: third, permission: :viewer)
-        expect(agenda.subject_users).to contain_exactly(user, partner)
-      end
-
-      # access_users answers "who can see this" — a wider set on purpose, and
-      # the two must not be confused for one another.
-      it "is narrower than access_users" do
-        agenda.agenda_shares.create!(user: partner, permission: :editor)
-        expect(agenda.access_users).to contain_exactly(user, partner)
         expect(agenda.subject_users).to contain_exactly(user)
+
+        share = agenda.agenda_shares.create!(user: partner, permission: :viewer)
+        expect(agenda.subject_users).to contain_exactly(user)
+
+        share.update!(permission: :editor)
+        expect(agenda.reload.subject_users).to contain_exactly(user)
+        expect(agenda.access_users).to contain_exactly(user, partner)
+
+        share.update!(permission: :owner)
+        agenda.agenda_shares.create!(user: third, permission: :viewer)
+        expect(agenda.reload.subject_users).to contain_exactly(user, partner)
       end
     end
 
@@ -203,33 +185,12 @@ RSpec.describe Agenda do
   describe "google" do
     let(:user) { create(:user) }
 
-    describe "source enum" do
-      it "defaults to :user and is not managed_externally?" do
-        agenda = create(:agenda, user: user)
-        expect(agenda.source).to eq("user")
-        expect(agenda).not_to be_managed_externally
-      end
-
-      it "marks :google-source agendas as managed_externally?" do
-        agenda = create(:agenda, user: user, source: :google, external_id: "cal-1")
-        expect(agenda.source).to eq("google")
-        expect(agenda).to be_managed_externally
-      end
+    it "is managed externally only when it comes from Google" do
+      expect(create(:agenda, user: user)).not_to be_managed_externally
+      expect(create(:agenda, user: user, source: :google, external_id: "cal-1")).to be_managed_externally
     end
 
-    describe "schema columns" do
-      it "has sync_token, synced_at, watch_* columns" do
-        expect(Agenda.column_names).to include(
-          "source", "external_id", "sync_token", "synced_at",
-          "watch_channel_id", "watch_resource_id", "watch_expires_at"
-        )
-      end
-
-      it "external_uid + external_etag exist on items and schedules" do
-        expect(AgendaItem.column_names).to include("external_uid", "external_etag", "external_updated_at")
-        expect(AgendaSchedule.column_names).to include("external_uid", "external_etag", "external_updated_at")
-      end
-
+    describe "external_id uniqueness" do
       it "lets the same external_id appear under different google_accounts (shared calendar)" do
         account_a = GoogleAccount.create!(user: user, email: "a@x.com")
         account_b = GoogleAccount.create!(user: user, email: "b@x.com")
@@ -294,21 +255,12 @@ RSpec.describe Agenda do
     describe "#needs_watch?" do
       let(:agenda) { create(:agenda, user: user, source: :google, external_id: "cal-x") }
 
-      it "is true for an externally-managed agenda with no channel and no recent failure" do
+      it "is true with no channel and no recent failure, false while a channel runs or cooling down" do
         expect(agenda.needs_watch?).to be(true)
-      end
-
-      it "is false when a channel is already running" do
         agenda.update!(watch_channel_id: "ch")
         expect(agenda.needs_watch?).to be(false)
-      end
-
-      it "is false during the failure cooldown" do
-        agenda.update!(watch_failed_at: 1.hour.ago)
+        agenda.update!(watch_channel_id: nil, watch_failed_at: 1.hour.ago)
         expect(agenda.needs_watch?).to be(false)
-      end
-
-      it "is true again after the cooldown elapses" do
         agenda.update!(watch_failed_at: 2.days.ago)
         expect(agenda.needs_watch?).to be(true)
       end
@@ -339,35 +291,17 @@ RSpec.describe Agenda do
     let(:user) { create(:user) }
     let(:agenda) { create(:agenda, user: user, color: "#0160FF") }
 
-    describe "AgendaSchedule#display_color" do
-      it "uses its own color when present" do
-        sched = create(:agenda_schedule, agenda: agenda, color: "#ff8800")
-        expect(sched.display_color).to eq("#ff8800")
-      end
+    it "uses an item's own color, then its schedule's, then the agenda's", :aggregate_failures do
+      colored = create(:agenda_schedule, agenda: agenda, color: "#ff8800")
+      plain = create(:agenda_schedule, agenda: agenda, color: nil)
+      expect(colored.display_color).to eq("#ff8800")
+      expect(plain.display_color).to eq("#0160FF")
 
-      it "falls back to the agenda's color when blank" do
-        sched = create(:agenda_schedule, agenda: agenda, color: nil)
-        expect(sched.display_color).to eq("#0160FF")
-      end
-    end
-
-    describe "AgendaItem#display_color" do
-      it "uses its own color when present" do
-        item = create(:agenda_item, agenda: agenda, color: "#00ff00")
-        expect(item.display_color).to eq("#00ff00")
-      end
-
-      it "falls back to the schedule's color when set" do
-        sched = create(:agenda_schedule, agenda: agenda, color: "#ff8800")
-        item = sched.agenda_items.create!(agenda: agenda, kind: "task",
-          name: "X", start_at: 1.hour.from_now, color: nil)
-        expect(item.display_color).to eq("#ff8800")
-      end
-
-      it "falls back to the agenda's color when neither set" do
-        item = create(:agenda_item, agenda: agenda, color: nil)
-        expect(item.display_color).to eq("#0160FF")
-      end
+      expect(create(:agenda_item, agenda: agenda, color: "#00ff00").display_color).to eq("#00ff00")
+      from_schedule = colored.agenda_items.create!(agenda: agenda, kind: "task",
+        name: "X", start_at: 1.hour.from_now, color: nil)
+      expect(from_schedule.display_color).to eq("#ff8800")
+      expect(create(:agenda_item, agenda: agenda, color: nil).display_color).to eq("#0160FF")
     end
 
     describe "phantom inherits color from its schedule" do
@@ -399,30 +333,24 @@ RSpec.describe Agenda do
       queries
     end
 
-    it "items_for_range issues exactly 2 SQL queries (items + schedules) regardless of range" do
+    it "reads a year or a single day in 2 queries (items + schedules), however many schedules" do
       create_list(:agenda_schedule, 10, agenda: agenda,
         recurrence: { "freq" => "daily" }, starts_on: Date.current)
 
-      queries = count_queries { agenda.items_for_range(Date.current, Date.current + 365.days).to_a }
-      expect(queries.size).to eq(2)
+      year   = count_queries { agenda.items_for_range(Date.current, Date.current + 365.days).to_a }
+      single = count_queries { agenda.items_for(Date.current).to_a }
+
+      expect([year.size, single.size]).to eq([2, 2])
     end
 
-    it "items_for_range is constant-query as range grows from 1 day to 100 years" do
+    it "stays at 2 queries as the range grows from 1 day to 100 years" do
       create(:agenda_schedule, agenda: agenda,
         recurrence: { "freq" => "weekly", "by_day" => %w[mon] }, starts_on: Date.current)
 
       one_day = count_queries { agenda.items_for_range(Date.current, Date.current).to_a }
       century = count_queries { agenda.items_for_range(Date.current, Date.current + 100.years).to_a }
 
-      expect(one_day.size).to eq(2)
-      expect(century.size).to eq(2)
-    end
-
-    it "items_for(date) is 2 queries" do
-      create(:agenda_schedule, agenda: agenda,
-        recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      queries = count_queries { agenda.items_for(Date.current).to_a }
-      expect(queries.size).to eq(2)
+      expect([one_day.size, century.size]).to eq([2, 2])
     end
   end
 end

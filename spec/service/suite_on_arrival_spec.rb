@@ -44,18 +44,18 @@ RSpec.describe SuiteOnArrival do
       )
     end
 
-    it "reads a # number too" do
-      appointment(location: "100 E Center St #1300, Provo UT")
+    it "reads a # number and the other words for one" do
       allow_any_instance_of(AddressBook).to receive(:coords_for_location).and_return(clinic)
 
-      expect(arrive["suite"]).to eq("#1300")
-    end
+      {
+        "100 E Center St #1300, Provo UT" => "#1300",
+        "1 Health Way Unit B, Draper UT"  => "Unit B",
+      }.each do |location, suite|
+        item = appointment(location: location)
 
-    it "reads the other words for one" do
-      appointment(location: "1 Health Way Unit B, Draper UT")
-      allow_any_instance_of(AddressBook).to receive(:coords_for_location).and_return(clinic)
-
-      expect(arrive["suite"]).to eq("Unit B")
+        expect(arrive["suite"]).to eq(suite)
+        item.destroy!
+      end
     end
 
     # The request in one sentence: early is the case this exists for.

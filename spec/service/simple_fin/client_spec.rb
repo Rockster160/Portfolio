@@ -46,26 +46,15 @@ RSpec.describe SimpleFin::Client do
   end
 
   describe ".accounts" do
-    it "authenticates with the credentials embedded in the access URL" do
-      request = stub_accounts.with(basic_auth: ["user1", "pass1"])
-
-      described_class.accounts
-      expect(request).to have_been_requested
-    end
-
-    it "returns the parsed account set" do
-      stub_accounts
+    # v2, so per-institution failures come back as errlist.
+    it "asks for v2 with the credentials embedded in the access URL, and returns the parsed set" do
+      request = stub_accounts(query: hash_including("version" => "2")).with(basic_auth: ["user1", "pass1"])
 
       result = described_class.accounts
+
+      expect(request).to have_been_requested
       expect(result["accounts"].first["balance"]).to eq("1234.56")
       expect(result["accounts"].first["name"]).to eq("PREMIER PLUS CKG (2363)")
-    end
-
-    it "asks for v2 so errors come back as errlist" do
-      request = stub_accounts(query: hash_including("version" => "2"))
-
-      described_class.accounts
-      expect(request).to have_been_requested
     end
 
     it "surfaces errlist rather than swallowing a partial refresh" do

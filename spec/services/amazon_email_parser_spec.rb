@@ -63,31 +63,15 @@ RSpec.describe AmazonEmailParser do
     context "email #{c[:id]} (#{c[:subject][0..40]})" do
       before { parse(c[:id], c[:subject]) }
 
-      it "creates one AmazonOrder per ASIN with correct order_id" do
+      it "creates one AmazonOrder per ASIN with its order, delivery state, date and time range", :aggregate_failures do
         orders = AmazonOrder.by_order(c[:order])
         expect(orders.map(&:item_id)).to match_array(c[:asins])
         orders.each do |item|
           expect(item.order_id).to eq(c[:order])
           expect(item.email_ids).to include(c[:id])
           expect(item.errors).to be_none
-        end
-      end
-
-      it "sets delivered=#{c[:delivered]} based on email status" do
-        AmazonOrder.by_order(c[:order]).each do |item|
           expect(!!item.delivered).to eq(c[:delivered])
-        end
-      end
-
-      it "sets delivery_date to #{c[:date_offset]} day(s) from now" do
-        expected = (Date.current + c[:date_offset]).iso8601
-        AmazonOrder.by_order(c[:order]).each do |item|
-          expect(item.delivery_date).to eq(expected)
-        end
-      end
-
-      it "sets time_range=#{c[:time_range].inspect}" do
-        AmazonOrder.by_order(c[:order]).each do |item|
+          expect(item.delivery_date).to eq((Date.current + c[:date_offset]).iso8601)
           expect(item.time_range).to eq(c[:time_range])
         end
       end
@@ -103,6 +87,7 @@ RSpec.describe AmazonEmailParser do
       orders = AmazonOrder.by_order(c[:order])
       expect(orders.map(&:item_id)).to match_array(c[:asins])
       expect(orders.first.delivery_date).to be_present
+      expect(orders.first.listed_name).to be_present
     end
 
     it "skips the ChatGPT call entirely when skip_ai_naming: true" do
@@ -111,15 +96,6 @@ RSpec.describe AmazonEmailParser do
       AmazonEmailParser.parse(email, skip_ai_naming: true)
       orders = AmazonOrder.by_order(c[:order])
       expect(orders.map(&:item_id)).to match_array(c[:asins])
-    end
-
-    it "asks ChatGPT for ALL items in one batched call (not one per ASIN)" do
-      skip "GPT call is currently disabled inside prefetch_names! (Disabling GPT for now - need to update API Tokens)"
-      c = CASES.find { |row| row[:id] == 50_684 } # 2 ASINs in one email
-      expect(ChatGPT).to receive(:short_names_from_orders).once.with(
-        an_instance_of(Array).and(satisfy { |titles| titles.size == 2 }),
-      ).and_return(["Raspberries", "Blackberries"])
-      parse(c[:id], c[:subject])
     end
   end
 
@@ -133,14 +109,6 @@ RSpec.describe AmazonEmailParser do
       expect(orders["B000P6G12U"].listed_name).to match(/Red Raspberries/i)
       expect(orders["B000P717MI"].listed_name).to match(/Blackberries/i)
       expect(orders["B000P6G12U"].listed_name).not_to eq(orders["B000P717MI"].listed_name)
-    end
-
-    it "falls back to the subject-quoted name when ChatGPT raises and only one ASIN ships" do
-      allow(ChatGPT).to receive(:short_names_from_orders).and_raise(StandardError, "insufficient_quota")
-      c = CASES.find { |row| row[:id] == 50_695 }
-      parse(c[:id], c[:subject])
-      item = AmazonOrder.by_order(c[:order]).first
-      expect(item.listed_name).to be_present
     end
   end
 
@@ -160,10 +128,11 @@ RSpec.describe AmazonEmailParser do
       double("Email", id: email_id, to_html: html, subject: %(Delivered: "#{link_texts.first}"))
     end
 
-    it "marks only the items present in the delivery email, not the whole order" do
+    it "marks and re-dates only the items present in the delivery email, not the whole order" do
       shipped = CASES.find { |row| row[:id] == 50_684 }
       parse(shipped[:id], shipped[:subject])
       expect(AmazonOrder.by_order(shipped[:order]).map(&:delivered)).to all(be_falsey)
+      original_dates = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id).transform_values(&:delivery_date)
 
       partial = synthetic_delivery_email(99_001, shipped[:order], [shipped[:asins].first], ["Red Raspberries, 6 oz"])
       AmazonEmailParser.parse(partial)
@@ -172,17 +141,6 @@ RSpec.describe AmazonEmailParser do
       expect(orders[shipped[:asins].first].delivered).to eq(true)
       expect(orders[shipped[:asins].last].delivered).to be_falsey
       expect(orders[shipped[:asins].last].email_ids).not_to include(99_001)
-    end
-
-    it "does not update delivery_date for items absent from the email" do
-      shipped = CASES.find { |row| row[:id] == 50_684 }
-      parse(shipped[:id], shipped[:subject])
-      original_dates = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id).transform_values(&:delivery_date)
-
-      partial = synthetic_delivery_email(99_002, shipped[:order], [shipped[:asins].first], ["Red Raspberries, 6 oz"])
-      AmazonEmailParser.parse(partial)
-
-      orders = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id)
       expect(orders[shipped[:asins].last].delivery_date).to eq(original_dates[shipped[:asins].last])
     end
   end
@@ -248,17 +206,6 @@ RSpec.describe AmazonEmailParser do
     before do
       allow(AmazonItemCatalog).to receive(:all).and_return({})
       allow(AmazonItemCatalog).to receive(:set).and_return(nil)
-    end
-
-    it "writes the GPT-cleaned name into the catalog when an ASIN is parsed for the first time" do
-      skip "GPT call is currently disabled inside prefetch_names! (Disabling GPT for now - need to update API Tokens)"
-      allow(ChatGPT).to receive(:short_names_from_orders).and_return(["Strawberries"])
-      c = CASES.find { |row| row[:id] == 50_714 }
-      expect(AmazonItemCatalog).to receive(:set).with(
-        "B000P6J0SM",
-        hash_including(name: "Strawberries"),
-      )
-      parse(c[:id], c[:subject])
     end
 
     it "reuses a previously-cached name (e.g. a manual rename) instead of the card text" do
@@ -339,7 +286,7 @@ RSpec.describe AmazonEmailParser do
     #   Order 111-4536894-1373807 -> Pet Botanics (B0144BMLFM) + Ceramic Bowls (B0GFLZQHVM)  arriving today 5-10 PM
     #   Order 111-0441897-6436244 -> Litter Genie  (B0FDLFSZ1S)                              arriving Tuesday
     # The card is what Amazon emails as "Litter Genie + 2 more items" - subject is misleading.
-    it "attributes each ASIN to the order_id printed in its own sub-block" do
+    it "attributes each ASIN to the order_id and schedule printed in its own sub-block", :aggregate_failures do
       email = double(
         "Email",
         id:      50_734,
@@ -356,27 +303,13 @@ RSpec.describe AmazonEmailParser do
       expect(bowls).to        be_present, "Ceramic Bowls should land under the same order as Pet Botanics"
       expect(litter_genie).to be_present, "Litter Genie should land under its OWN distinct order id, not the Pet Botanics one"
 
-      # The bug we just fixed: the litter genie used to be stamped with 111-4536894 and then
-      # the openAmz link opened the wrong order in the dashboard.
       expect(AmazonOrder.find("111-4536894-1373807", "B0FDLFSZ1S")).to be_nil
-    end
 
-    it "uses each sub-block's own date/time so siblings on different schedules aren't confused" do
-      email = double(
-        "Email",
-        id:      50_734,
-        to_html: html_fixture("email_body_50734", raw: true),
-        subject: 'Ordered: "Litter Genie Easy Roll..." and 2 more items',
-      )
-      AmazonEmailParser.parse(email)
-
-      pet_botanics = AmazonOrder.find("111-4536894-1373807", "B0144BMLFM")
-      litter_genie = AmazonOrder.find("111-0441897-6436244", "B0FDLFSZ1S")
-
-      expect(pet_botanics.delivery_date).to eq(Date.current.iso8601)        # "Arriving today"
+      # Each sub-block carries its own schedule.
+      expect(pet_botanics.delivery_date).to eq(Date.current.iso8601)
       expect(pet_botanics.time_range).to eq("5-10PM")
       expect(litter_genie.delivery_date).not_to eq(pet_botanics.delivery_date)
-      expect(litter_genie.time_range).to be_nil # "Arriving Tuesday" - no time range
+      expect(litter_genie.time_range).to be_nil
     end
   end
 
@@ -455,7 +388,9 @@ RSpec.describe AmazonEmailParser do
     # sent no product link at all. Order # 114-0583723-4455423, "Arriving Monday".
     let(:subject_51048) { "Ordered: ⁦1⁩ Pet item" }
 
-    it "creates a placeholder keyed by order_id when the Ordered email has no product card" do
+    it "creates a placeholder keyed by order_id when the Ordered email has no product card, without flagging it" do
+      calls = []
+      allow(Jarvis).to receive(:cmd) { |m| calls << m }
       parse(51_048, subject_51048)
 
       placeholder = AmazonOrder.find("114-0583723-4455423", "114-0583723-4455423")
@@ -466,12 +401,6 @@ RSpec.describe AmazonEmailParser do
       expect(placeholder.delivery_date).to be_present
       expect(placeholder.delivered).to be_falsey
       expect(placeholder.email_ids).to include(51_048)
-    end
-
-    it "does not fire the Jarvis 'no order card' fallback for redacted Ordered emails" do
-      calls = []
-      allow(Jarvis).to receive(:cmd) { |m| calls << m }
-      parse(51_048, subject_51048)
       expect(calls).to be_empty
     end
 
@@ -494,9 +423,8 @@ RSpec.describe AmazonEmailParser do
       expect(AmazonOrder.find("114-3295736-0173045", "114-3295736-0173045")).to be_nil
     end
 
-    # Email 51382: "Out for delivery: ⁦1⁩ Lighting & Fans item" - same redacted
-    # shape as the Ordered/Shipped/Delivered ones, but the subject prefix was
-    # missing from the lifecycle list so it fell through to the Jarvis flag.
+    # Email 51382: "Out for delivery: ⁦1⁩ Lighting & Fans item" - the same
+    # redacted shape as the Ordered/Shipped/Delivered ones.
     let(:subject_51382) { "Out for delivery: ⁦1⁩ Lighting & Fans item" }
 
     it "updates the existing item on the order when a redacted 'Out for delivery' email arrives" do
@@ -509,19 +437,15 @@ RSpec.describe AmazonEmailParser do
       expect(lamp.email_ids).to include(51_382)
     end
 
-    it "creates a placeholder named from the subject when no items are known for the order" do
+    it "creates a placeholder named from the subject when no items are known for the order, without flagging it" do
+      calls = []
+      allow(Jarvis).to receive(:cmd) { |m| calls << m }
       parse(51_382, subject_51382)
 
       placeholder = AmazonOrder.find("114-7377615-7161007", "114-7377615-7161007")
       expect(placeholder).to be_present
       expect(placeholder.listed_name).to eq("Lighting & Fans item")
       expect(placeholder.delivered).to be_falsey
-    end
-
-    it "does not fire the Jarvis 'no order card' fallback for redacted Out for delivery emails" do
-      calls = []
-      allow(Jarvis).to receive(:cmd) { |m| calls << m }
-      parse(51_382, subject_51382)
       expect(calls).to be_empty
     end
 
@@ -595,12 +519,6 @@ RSpec.describe AmazonEmailParser do
   end
 
   describe "order total (amount)" do
-    it "extracts the order total from the email and stamps it on each item" do
-      parse(50_685, 'Ordered: "Amazon Basics Multipurpose..."')
-      item = AmazonOrder.by_order("111-0453665-0021069").first
-      expect(item.amount).to eq(17.53)
-    end
-
     it "stamps the same total on every sibling item in a multi-item order" do
       parse(50_734, 'Ordered: "Litter Genie Easy Roll..." and 2 more items')
       pet_botanics = AmazonOrder.find("111-4536894-1373807", "B0144BMLFM")
@@ -609,9 +527,11 @@ RSpec.describe AmazonEmailParser do
       expect(bowls.amount).to eq(34.04)
     end
 
-    it "keeps the first-seen amount when a later email lacks a Total line" do
+    it "stamps the order total, and keeps it when a later email lacks a Total line" do
       parse(50_685, 'Ordered: "Amazon Basics Multipurpose..."')
       item = AmazonOrder.by_order("111-0453665-0021069").first
+      expect(item.amount).to eq(17.53)
+
       AmazonEmailParser.parse(double(
         "Email",
         id:      99_700,

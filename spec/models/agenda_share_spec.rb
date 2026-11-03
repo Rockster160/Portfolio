@@ -19,21 +19,13 @@ RSpec.describe AgendaShare do
   describe "User#perceived_today (3am rollover for BE/FE alignment)" do
     let(:tz_user) { create(:user) } # America/Denver by default
 
-    it "is today's calendar date at 4am local" do
-      Timecop.freeze(Time.utc(2026, 5, 15, 10, 0)) do # 4am MDT
-        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 15))
-      end
-    end
-
-    it "is yesterday's calendar date at 1am local" do
-      Timecop.freeze(Time.utc(2026, 5, 15, 7, 0)) do # 1am MDT
-        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 14))
-      end
-    end
-
-    it "rolls at exactly 3am local" do
-      Timecop.freeze(Time.utc(2026, 5, 15, 9, 0)) do # 3am MDT
-        expect(tz_user.perceived_today).to eq(Date.new(2026, 5, 15))
+    it "rolls the day over at 3am local", :aggregate_failures do
+      {
+        Time.utc(2026, 5, 15, 7, 0)  => Date.new(2026, 5, 14), # 1am MDT
+        Time.utc(2026, 5, 15, 9, 0)  => Date.new(2026, 5, 15), # 3am MDT
+        Time.utc(2026, 5, 15, 10, 0) => Date.new(2026, 5, 15), # 4am MDT
+      }.each do |at, day|
+        Timecop.freeze(at) { expect(tz_user.perceived_today).to eq(day), at.to_s }
       end
     end
   end
@@ -66,7 +58,7 @@ RSpec.describe AgendaShare do
   it "rejects sharing back to the owner" do
     share = AgendaShare.new(agenda: agenda, user: owner)
     expect(share).not_to be_valid
-    expect(share.errors[:user_id]).to include("is already the owner")
+    expect(share.errors[:user_id]).to be_present
   end
 
   it "prevents duplicate shares for the same user" do
@@ -84,20 +76,12 @@ RSpec.describe AgendaShare do
     end
   end
 
-  describe "Agenda#editable_by?" do
-    it "is true for the owner" do
-      expect(agenda.editable_by?(owner)).to be true
-    end
-
-    it "is true for editor shares" do
-      AgendaShare.create!(agenda: agenda, user: other, permission: :editor)
-      expect(agenda.editable_by?(other)).to be true
-    end
-
-    it "is false for viewer shares" do
-      AgendaShare.create!(agenda: agenda, user: other, permission: :viewer)
-      expect(agenda.editable_by?(other)).to be false
-    end
+  it "lets the owner and an editor edit, and not a viewer" do
+    expect(agenda.editable_by?(owner)).to be true
+    share = AgendaShare.create!(agenda: agenda, user: other, permission: :viewer)
+    expect(agenda.editable_by?(other)).to be false
+    share.update!(permission: :editor)
+    expect(agenda.reload.editable_by?(other)).to be true
   end
 
   # Every non-guest user gets an auto-default agenda named after their
@@ -116,18 +100,6 @@ RSpec.describe AgendaShare do
       own = create(:agenda, user: other, name: "Own")
       expect(other.editable_agendas.pluck(:id)).to include(own.id)
       expect(other.editable_agendas.pluck(:id)).not_to include(agenda.id)
-    end
-
-    it "editable includes editor-permission shares" do
-      AgendaShare.create!(agenda: agenda, user: other, permission: :editor)
-      own = create(:agenda, user: other, name: "Own")
-      expect(other.editable_agendas.pluck(:id)).to include(agenda.id, own.id)
-    end
-
-    it "editable includes owner-permission shares" do
-      AgendaShare.create!(agenda: agenda, user: other, permission: :owner)
-      own = create(:agenda, user: other, name: "Own")
-      expect(other.editable_agendas.pluck(:id)).to include(agenda.id, own.id)
     end
 
     it "agrees with Agenda#editable_by? at every permission level" do

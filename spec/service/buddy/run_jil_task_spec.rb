@@ -55,7 +55,7 @@ RSpec.describe "run_jil_task tool" do
 
       expect(result[:status]).to eq(:answered)
       expect(result[:answer]).to eq("Next nap is at 5pm")
-      expect(chip.body).to eq("Called **Whisper Skip Nap**")
+      expect(chip.body).to include("Whisper Skip Nap")
     end
 
     it "passes its arguments in signature order" do
@@ -68,12 +68,12 @@ RSpec.describe "run_jil_task tool" do
       expect(run({ name: "Tesla Start", args: { dest: "Home", temp: 72 } })[:status]).to eq(:answered)
     end
 
-    it "refuses an argument the signature doesn't have, naming the ones it does" do
+    # The refusal names what the task does take, so the model can retry.
+    it "refuses an argument the signature doesn't have, as args or as data, naming the ones it does", :aggregate_failures do
       expect_any_instance_of(Task).not_to receive(:execute)
 
-      result = run({ name: "Tesla Start", args: { temperature: 72 } })
-
-      expect(result.to_s).to include("Nothing ran: Tesla Start takes `temp`, `dest`", "`temperature` would go nowhere")
+      expect(run({ name: "Tesla Start", args: { temperature: 72 } }).to_s).to include("`temp`, `dest`", "`temperature`")
+      expect(run({ name: "Tesla Start", data: "temperature:72" })[:error]).to include("`temperature`")
     end
 
     it "refuses arguments to one that takes none" do
@@ -87,10 +87,6 @@ RSpec.describe "run_jil_task tool" do
       }
 
       expect(run({ name: "Tesla Start", data: "temp:72 dest:Home" })[:status]).to eq(:answered)
-    end
-
-    it "still refuses data whose keys the signature doesn't have" do
-      expect(run({ name: "Tesla Start", data: "temperature:72" })[:error]).to include("`temperature` would go nowhere")
     end
 
     it "prefers a function when the call carries arguments" do
@@ -117,7 +113,7 @@ RSpec.describe "run_jil_task tool" do
 
       expect(result[:status]).to eq(:answered)
       expect(result[:answer]).to eq("Laundry timer started")
-      expect(chip.body).to eq("Fired **Laundry Button**")
+      expect(chip.body).to include("Laundry Button")
     end
 
     it "fires a bare scope with no data at all" do

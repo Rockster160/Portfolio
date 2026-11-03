@@ -4,18 +4,11 @@ RSpec.describe Oauth::Base do
   describe ".from_jwt" do
     let(:user) { create(:user, phone: "5550000099") }
 
-    it "returns nil for a nil token (callsites use `&.code =`)" do
-      expect(Oauth::GoogleApi.from_jwt(nil)).to be_nil
-    end
-
-    it "returns nil for a blank token" do
-      expect(Oauth::GoogleApi.from_jwt("")).to be_nil
-      expect(Oauth::GoogleApi.from_jwt("   ")).to be_nil
-    end
-
-    it "returns nil for a malformed token instead of raising JWT::DecodeError" do
-      expect(Oauth::GoogleApi.from_jwt("not.a.jwt")).to be_nil
-      expect(Oauth::GoogleApi.from_jwt("garbage")).to be_nil
+    # Callsites use `&.code =`, so a bad token is nil rather than a DecodeError.
+    it "returns nil for a nil, blank or malformed token" do
+      [nil, "", "   ", "not.a.jwt", "garbage"].each do |token|
+        expect(Oauth::GoogleApi.from_jwt(token)).to be_nil, token.inspect
+      end
     end
 
     it "returns nil for a JWT signed with a different secret" do

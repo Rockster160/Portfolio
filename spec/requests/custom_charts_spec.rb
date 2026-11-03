@@ -94,15 +94,17 @@ RSpec.describe "CustomCharts", type: :request do
       expect(response).to redirect_to(custom_chart_path(created))
     end
 
-    it "round-trips the invert_sign checkbox" do
-      post custom_charts_path, params: {
-        custom_chart: {
-          name:   "Transactions",
-          query:  "name::Transaction",
-          config: { series_by: "sign", metric: "sum", invert_sign: "1" },
-        },
-      }
-      expect(user.custom_charts.last.invert_sign).to be(true)
+    it "round-trips the invert_sign checkbox, checked and unchecked" do
+      [["1", true], ["0", false]].each do |box, expected|
+        post custom_charts_path, params: {
+          custom_chart: {
+            name:   "Transactions #{box}",
+            query:  "name::Transaction",
+            config: { series_by: "sign", metric: "sum", invert_sign: box },
+          },
+        }
+        expect(user.custom_charts.last.invert_sign).to be(expected)
+      end
     end
 
     it "round-trips the series_key field" do
@@ -116,17 +118,6 @@ RSpec.describe "CustomCharts", type: :request do
       created = user.custom_charts.last
       expect(created.series_by).to eq(:data_value)
       expect(created.series_key).to eq("category")
-    end
-
-    it "reads an unchecked invert_sign as false" do
-      post custom_charts_path, params: {
-        custom_chart: {
-          name:   "Transactions",
-          query:  "name::Transaction",
-          config: { series_by: "sign", metric: "sum", invert_sign: "0" },
-        },
-      }
-      expect(user.custom_charts.last.invert_sign).to be(false)
     end
   end
 

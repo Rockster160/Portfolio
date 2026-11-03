@@ -10,18 +10,13 @@ RSpec.describe TrackerLogger do
 
   before { allow(Rails.env).to receive(:production?).and_return(true) }
 
-  it "stamps the visit count as it stood before this request" do
+  it "stamps the visit count as it stood before this request, counted against the IP" do
     described_class.log_request(request)
     expect(LogTracker.last.ip_count).to eq(0)
+    expect(IpVisit.find_by(ip_address: "203.0.113.30").visit_count).to eq(1)
 
     described_class.log_request(request)
     expect(LogTracker.last.ip_count).to eq(1)
-  end
-
-  it "records the visit against the requesting IP" do
-    described_class.log_request(request)
-
-    expect(IpVisit.find_by(ip_address: "203.0.113.30").visit_count).to eq(1)
   end
 
   # The regression this whole change exists to prevent: deriving ip_count by

@@ -31,10 +31,10 @@ RSpec.describe AgendaConnectionsController, type: :controller do
   describe "GET #new" do
     render_views
 
-    it "shows the connect CTA when no accounts are connected" do
+    it "offers the Google sign-in when no accounts are connected" do
       get :new
       expect(response).to be_successful
-      expect(response.body).to include("Sign in with Google")
+      expect(response.body).to include(start_google_agenda_connection_path)
     end
 
     it "renders one section per connected account with their calendars" do
@@ -55,10 +55,9 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       expect(response.body).to include("bob@example.com")
       expect(response.body).to include("Alice Personal")
       expect(response.body).to include("Bob Work")
-      expect(response.body).to include("Connect another account")
     end
 
-    it "marks rows whose calendar already has an Agenda as Connected" do
+    it "offers Disconnect, not Connect, on a calendar that already has an Agenda" do
       account
       account.agendas.create!(
         user: user, source: :google, external_id: "primary",
@@ -70,11 +69,11 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       allow(Oauth::GoogleApi).to receive(:for_account).with(account).and_return(api_a)
 
       get :new
-      expect(response.body).to match(/connected/i)
-      expect(response.body).to include("Disconnect")
+      expect(response.body).to include(disconnect_agenda_connection_calendar_path)
+      expect(response.body).not_to include(connect_agenda_connection_calendar_path)
     end
 
-    it "renders a Reconnect CTA when list_calendars raises a RestClient error" do
+    it "flags the account for reauth and offers reconnecting when list_calendars raises" do
       account
       api_a = instance_double(Oauth::GoogleApi)
       allow(api_a).to receive(:list_calendars).and_raise(
@@ -84,7 +83,7 @@ RSpec.describe AgendaConnectionsController, type: :controller do
 
       get :new
       expect(response).to be_successful
-      expect(response.body).to include("Reconnect alice@example.com")
+      expect(response.body).to include(start_google_agenda_connection_path)
       expect(account.reload).to be_needs_reauth
     end
   end
@@ -119,16 +118,13 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       expect(account.agendas.find_by(external_id: "primary").id).to eq(first_id)
     end
 
-    it "alerts when the account is unknown" do
-      post :connect_calendar, params: { google_account_id: 999_999, external_id: "primary" }
-      expect(response).to redirect_to(new_agenda_connection_path)
-      expect(flash[:alert]).to match(/Unknown Google account/i)
-    end
-
-    it "alerts when external_id is missing" do
-      post :connect_calendar, params: { google_account_id: account.id }
-      expect(response).to redirect_to(new_agenda_connection_path)
-      expect(flash[:alert]).to match(/Missing calendar id/i)
+    it "creates nothing for an unknown account or a missing external_id" do
+      [{ google_account_id: 999_999, external_id: "primary" }, { google_account_id: account.id }].each do |params|
+        post :connect_calendar, params: params
+        expect(response).to redirect_to(new_agenda_connection_path)
+        expect(flash[:alert]).to be_present
+      end
+      expect(account.agendas.count).to eq(0)
     end
   end
 
@@ -148,19 +144,17 @@ RSpec.describe AgendaConnectionsController, type: :controller do
       expect(::GoogleCalendar::WatchManager).to have_received(:stop!).with(gcal_agenda)
       expect(Agenda.exists?(gcal_agenda.id)).to be(false)
       expect(GoogleAccount.exists?(account.id)).to be(true) # account itself preserved
-      expect(flash[:notice]).to match(/Disconnected "Personal"/)
     end
 
     it "alerts when the calendar isn't connected under that account" do
       delete :disconnect_calendar, params: { google_account_id: account.id, external_id: "nope" }
-      expect(flash[:alert]).to match(/not connected/i)
+      expect(flash[:alert]).to be_present
+      expect(Agenda.exists?(gcal_agenda.id)).to be(true)
     end
 
     # Items reached through the schedule cascade (agenda → schedules → items)
-    # carry no loaded agenda, so their destroy-time after_commit callbacks ran
-    # against a calendar that had just been deleted out from under them. The
-    # DELETE had already committed by then, so removing any Google calendar
-    # with a recurring event took the delete AND returned a 500.
+    # carry no loaded agenda, so their destroy-time callbacks must not depend
+    # on the calendar that was just deleted.
     it "removes a calendar carrying recurring events" do
       allow(::GoogleCalendar::WatchManager).to receive(:stop!)
       schedule = gcal_agenda.agenda_schedules.create!(

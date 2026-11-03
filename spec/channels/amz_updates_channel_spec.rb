@@ -66,11 +66,7 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
       expect(created.carrier).to eq(:manual)
     end
 
-    # Pinned to a date before Aug 7 so the parse is deterministic. Unpinned,
-    # this passed until Aug 7 and then failed every day after — a bare
-    # "Month day" that has already passed does NOT roll to next year, it walks
-    # forward in 12-hour steps to today (Jarvis::Times.safe_date_parse). That
-    # is a real defect in the parser, but it is not what this example is for.
+    # Pinned so "Aug 7" is still ahead of the clock.
     it "parses an inline metadata block: name, date, and custom url" do
       travel_to(Time.zone.local(2026, 8, 1, 12, 0)) do
         url = "https://www.wayfair.com/session/secure/account/order_search.php?csnid=978882AB&_emr=fac652f5&wfcs=cs7"

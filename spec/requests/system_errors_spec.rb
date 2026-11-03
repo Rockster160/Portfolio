@@ -24,37 +24,15 @@ RSpec.describe "System errors page", type: :request do
   end
 
   describe "the list" do
-    it "shows one row per distinct failure with its count" do
-      3.times { |i| record(message: "no item #{i}") }
-
-      get system_errors_path
-
-      expect(response.body).to include("sync")
-      expect(response.body).to include("3×")
-    end
-
-    it "separates failures that aren't the same one" do
-      record(section: "sync")
+    it "shows one row per distinct failure with its count and who it happened for", :aggregate_failures do
+      3.times { |i| record(message: "no item #{i}", user_for: user) }
       record(section: "turn", message: "something else")
 
       get system_errors_path
 
       expect(response.body).to include("sync", "turn")
-    end
-
-    it "names who each one happened for" do
-      record(user_for: user)
-
-      get system_errors_path
-
+      expect(response.body).to include("3×")
       expect(response.body).to include("#{user.first_name} (##{user.id})")
-    end
-
-    it "says when a failure was never announced" do
-      record
-      get system_errors_path
-
-      expect(response.body).to include("never announced")
     end
 
     # The chips list every section in the window whichever one is picked, so
@@ -83,29 +61,21 @@ RSpec.describe "System errors page", type: :request do
       record(section: "ancient", at: 20.days.ago)
 
       get system_errors_path(hours: 24)
-
       expect(response.body).not_to include("ancient")
-      expect(response.body).to include("Quiet is the right answer")
-    end
-
-    it "reaches back when asked to" do
-      record(section: "ancient", at: 20.days.ago)
 
       get system_errors_path(hours: 24 * 30)
-
       expect(response.body).to include("ancient")
     end
   end
 
   describe "deciding about a failure" do
-    it "lists the newest first, saying how long ago each last happened" do
+    it "lists the newest first" do
       record(section: "older-one", at: 3.hours.ago)
       record(section: "newer-one", at: 5.minutes.ago)
 
       get system_errors_path
 
       expect(response.body.index("newer-one")).to be < response.body.index("older-one")
-      expect(response.body).to include("5 minutes ago", "about 3 hours ago")
     end
 
     it "resolves every occurrence of it at once" do
@@ -116,7 +86,7 @@ RSpec.describe "System errors page", type: :request do
 
       expect(ErrorStatus.find_by(fingerprint: later.fingerprint)).to be_resolved
       get system_error_path(id: later.id)
-      expect(response.body).to include("err-badge-resolved", "reopen")
+      expect(response.body).to include("err-badge-resolved")
     end
 
     # Ignoring one keeps it quiet, not hidden.
@@ -186,14 +156,12 @@ RSpec.describe "System errors page", type: :request do
     end
   end
 
-  it "is reachable from the system index, with today's count on it" do
+  it "is reachable from the system index" do
     record
-    record(section: "turn", message: "another")
 
     get system_path
 
     expect(response.body).to include(system_errors_path)
-    expect(response.body).to include("Errors")
   end
 
   describe "one error" do

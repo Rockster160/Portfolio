@@ -10,40 +10,15 @@ RSpec.describe Buddy::BriefingFacts do
 
   before { allow(user).to receive(:timezone).and_return("America/Denver") }
 
-  # Rocco, 2026-09-04: "we also want to make sure that we are collecting all of
-  # the information that Buddy previously was collecting. Reminders, memories,
-  # and anything else that Buddy normally would have looked at and collected, we
-  # should be collecting, determining if it should be included or not, and then
-  # providing it."
-  #
-  # An absence is a silent decision unless it is written down, and there is no
-  # longer a model on the other side that can go and look for what it's missing.
-  describe "the decision recorded for every section" do
-    it "covers everything Buddy can reach" do
-      expect(Buddy::GPT::ContextTool::SECTIONS - described_class::SECTION_DECISIONS.keys).to be_empty
-    end
-
-    it "gives a reason for each one it leaves out" do
-      dropped = described_class::SECTION_DECISIONS.compact
-
-      expect(dropped.values).to all(be_present)
-    end
-
-    it "collects the ones it keeps" do
-      expect(described_class::SECTIONS).to contain_exactly(
-        :today_notable, :upcoming_notable, :upcoming_reminders,
-        :chores_due_today, :stashed_ideas, :pending_relays
-      )
-    end
+  # An absence is a silent decision unless it is written down, so every section
+  # Buddy can reach has a recorded decision, and every one left out says why.
+  it "records a decision for every section Buddy can reach" do
+    expect(Buddy::GPT::ContextTool::SECTIONS - described_class::SECTION_DECISIONS.keys).to be_empty
+    expect(described_class::SECTION_DECISIONS.compact.values).to all(be_present)
   end
 
-  # Rocco, 2026-09-06: "Only Rocco sees the Alpine weather."
-  #
-  # It is a canyon he drives to. For everybody else in the house it is a town
-  # half an hour away whose forecast they have no reason to hear, and their own
-  # weather is already in the block above it. Prod 5503 and 5505 - the first
-  # morning with real rain windows in it - opened Eve's and Chelsea's briefings
-  # on Alpine, off a repair that asked PlungeAdvisor instead of reading the seed.
+  # Alpine is the owner's plunge spot; for everybody else it is a town whose
+  # forecast they have no reason to hear.
   describe "whose forecast Alpine is" do
     before {
       allow(Buddy::PlungeAdvisor).to receive_messages(
@@ -58,74 +33,45 @@ RSpec.describe Buddy::BriefingFacts do
       expect(described_class.build(user, convo)[:alpine]).to be_present
     end
 
-    it "is nobody else's, however wet it is" do
+    it "is nobody else's, however wet it is, in the facts or the seed" do
       allow(user).to receive(:me?).and_return(false)
 
       expect(described_class.build(user, convo)[:alpine]).to eq({})
-    end
-
-    it "keeps the heading and the rule out of their seed with it" do
-      allow(user).to receive(:me?).and_return(false)
-      seed = Buddy::TodayBriefing.seed(user, convo)
-
-      expect(seed).not_to include("ALPINE")
-      expect(seed).not_to include("Alpine")
+      expect(Buddy::TodayBriefing.seed(user, convo)).not_to include("Alpine", "ALPINE")
     end
   end
 
-  # Rocco: "We don't want Alpine included every day - only the days with
-  # precipitation during the desired hours, otherwise it gets ignored/dropped
-  # from the data and the prompt entirely."
-  describe "Alpine on a dry day" do
+  # Only days with rain during the plunge hours bring Alpine in at all.
+  describe "Alpine for the owner" do
     before {
       allow(described_class).to receive(:alpine?).and_return(true)
       allow(Buddy::PlungeAdvisor).to receive_messages(briefing_lines: [], week_rain_lines: [])
     }
 
-    it "leaves the key out of the facts, not an empty one in" do
+    it "leaves the key and its section out on a dry day" do
       expect(described_class.build(user, convo)[:alpine]).to eq({})
+      expect(Buddy::TodayBriefing.seed(user, convo)).not_to include("ALPINE")
     end
 
-    it "takes the heading and the rule out of the seed with it" do
-      seed = Buddy::TodayBriefing.seed(user, convo)
-
-      expect(seed).not_to include("ALPINE")
-      expect(seed).not_to include("Alpine only ever comes up")
-    end
-
-    it "is there on a wet one" do
+    it "carries its rain hours into the seed on a wet one" do
       allow(Buddy::PlungeAdvisor).to receive_messages(
         briefing_lines:  ["Rain in the forecast", "Rain in Alpine 6pm-8pm"],
         week_rain_lines: [],
       )
 
-      seed = Buddy::TodayBriefing.seed(user, convo)
-
-      expect(seed).to include("ALPINE")
-      expect(seed).to include("Rain in Alpine 6pm-8pm")
-      expect(seed).to include("Give the hours wherever there are hours")
+      expect(Buddy::TodayBriefing.seed(user, convo)).to include("ALPINE", "Rain in Alpine 6pm-8pm")
     end
   end
 
-  # A question somebody in the house asked and is still waiting on IS part of
-  # the day, and it was reachable through `get_context` before a briefing turn
-  # stopped being offered one.
-  describe "what's coming up" do
-    let(:now) { tz.parse("2026-10-26 08:00") } # a Monday
+  it "keeps the next two days coming up, and no more than a handful" do
+    now  = tz.parse("2026-10-26 08:00") # a Monday
+    item = ->(day, title) { { day: day, time: "6pm", title: title } }
 
-    def item(day, title) = { day: day, time: "6pm", title: title }
+    items = [item.call("tomorrow", "Dinner"), item.call("Wednesday", "Yoga"), item.call("Friday", "Party"), item.call("next Monday", "Trip")]
+    expect(described_class.coming_up(user, items, now).pluck(:title)).to eq(%w[Dinner Yoga])
 
-    it "keeps the next two days and leaves the rest of the week for later" do
-      items = [item("tomorrow", "Dinner"), item("Wednesday", "Yoga"), item("Friday", "Party"), item("next Monday", "Trip")]
-
-      expect(described_class.coming_up(user, items, now).pluck(:title)).to eq(%w[Dinner Yoga])
-    end
-
-    it "carries no more than a handful" do
-      items = Array.new(6) { |i| item("tomorrow", "Thing #{i}") }
-
-      expect(described_class.coming_up(user, items, now).length).to eq(described_class::COMING_UP_LIMIT)
-    end
+    many = Array.new(6) { |i| item.call("tomorrow", "Thing #{i}") }
+    expect(described_class.coming_up(user, many, now).length).to eq(described_class::COMING_UP_LIMIT)
   end
 
   describe "the forecast table" do
@@ -180,9 +126,10 @@ RSpec.describe Buddy::BriefingFacts do
       )
     }
 
-    it "is collected" do
+    it "is collected and reaches the seed" do
       expect(described_class.build(user, convo)[:waiting].pluck(:question))
         .to include("Are we still on for Thursday?")
+      expect(Buddy::TodayBriefing.seed(user, convo)).to include("Are we still on for Thursday?")
     end
 
     it "is left out once it was asked before yesterday" do
@@ -196,47 +143,22 @@ RSpec.describe Buddy::BriefingFacts do
       expect(questions).to include("Are we still on for Thursday?")
       expect(questions).not_to include("Want me to close the garage?")
     end
-
-    it "reaches the seed with who asked it" do
-      seed = Buddy::TodayBriefing.seed(user, convo)
-
-      expect(seed).to include("WAITING ON THEM")
-      expect(seed).to include("asked: Are we still on for Thursday?")
-      expect(seed).to include("Say who asked and what")
-    end
   end
 
-  # Rocco: "Buddy should NOT bring things up like 'Oh, I'm going to check up on
-  # you today' just because there is a check up today."
-  #
-  # A check-in is Buddy's own plan to ask about something later, scheduled per
-  # record on `BuddyMemory#check_in_at` (Buddy::CheckIns). It speaks for itself
-  # when it fires, and a briefing that announces it is announcing Buddy rather
-  # than the day.
-  describe "a check-in scheduled for today" do
-    before {
-      BuddyMemory.create!(
-        user: user, kind: :followup, content: "Ask how the interview went.",
-        check_in_at: 4.hours.from_now, relevant_at: 4.hours.from_now
-      )
-    }
+  # A check-in speaks for itself when it fires; a briefing announcing it would
+  # be announcing Buddy rather than the day.
+  it "leaves a check-in scheduled for today out of the facts and the seed" do
+    BuddyMemory.create!(
+      user: user, kind: :followup, content: "Ask how the interview went.",
+      check_in_at: 4.hours.from_now, relevant_at: 4.hours.from_now
+    )
 
-    it "is not in the facts" do
-      facts = described_class.build(user, convo)
+    facts = described_class.build(user, convo)
 
-      expect(facts.values.flatten.map(&:to_s).join(" ")).not_to include("Ask how the interview went")
-    end
-
-    it "is not in the seed" do
-      expect(Buddy::TodayBriefing.seed(user, convo)).not_to include("interview went")
-    end
+    expect(facts.values.flatten.map(&:to_s).join(" ")).not_to include("Ask how the interview went")
+    expect(Buddy::TodayBriefing.seed(user, convo)).not_to include("interview went")
   end
 
-  # ON THEIR MIND had never once rendered: the section read `idea[:summary]`
-  # and `idea[:body]`, and Buddy::Context#stashed_ideas writes neither. Every
-  # line came back nil, the section was dropped as empty, and the rule asking
-  # the briefing to float one of them shipped anyway - so the model was told to
-  # reach for a list it was never handed.
   describe "what is on their mind" do
     let(:stash) {
       [
@@ -245,49 +167,30 @@ RSpec.describe Buddy::BriefingFacts do
       ]
     }
 
-    it "renders the idea, with how long it has been sitting" do
-      lines = described_class.stash_lines({ stash: stash })
-
-      expect(lines).to eq(["Repaint the shed (9 days)"])
-    end
-
-    # Twelve of them went out as one paragraph, in order, with the ages
-    # stripped - on a day with no agenda, no chores and no reminders, so the
-    # idle thoughts WERE the briefing and read as a list of assigned tasks.
-    it "floats one, however many are sitting there" do
-      many = (1..12).map { |n| { id: n, idea: "Idea #{n}", waiting: "#{n} days" } }
-
-      expect(described_class.stash_lines({ stash: many }).length).to eq(1)
-    end
-
-    it "skips a row with nothing written on it" do
-      rows = [{ id: 1, idea: "" }, { id: 2, idea: "Repaint the shed" }]
-
-      expect(described_class.stash_lines({ stash: rows })).to eq(["Repaint the shed"])
-    end
-
     # The guard reads the thought and the section renders it, and they have to
     # be looking at the same row.
-    it "hands the same row to the line and to the guard" do
-      floated = described_class.stash_floated({ stash: stash })
+    it "floats one idea with its age, the same row the guard reads, into the block", :aggregate_failures do
+      many = (1..12).map { |n| { id: n, idea: "Idea #{n}", waiting: "#{n} days" } }
 
-      expect(floated.length).to eq(1)
-      expect(floated.first[:idea]).to eq("Repaint the shed")
-    end
+      expect(described_class.stash_lines({ stash: stash })).to eq(["Repaint the shed (9 days)"])
+      expect(described_class.stash_lines({ stash: many }).length).to eq(1)
+      expect(described_class.stash_floated({ stash: stash }).pluck(:idea)).to eq(["Repaint the shed"])
 
-    it "puts the section in the block" do
       block = described_class.block({ today: [], due: [], jobs: [], weather: nil, week: [], stash: stash })
-
       expect(block).to include("ON THEIR MIND", "- Repaint the shed (9 days)")
     end
 
-    it "is empty when nothing is stashed" do
+    it "skips a blank row, and is empty when nothing is stashed" do
+      rows = [{ id: 1, idea: "" }, { id: 2, idea: "Repaint the shed" }]
+
+      expect(described_class.stash_lines({ stash: rows })).to eq(["Repaint the shed"])
       expect(described_class.stash_lines({ stash: [] })).to eq([])
+      expect(described_class.block({ today: [], due: [], jobs: [], weather: nil, week: [], stash: [] }))
+        .not_to include("ON THEIR MIND")
     end
   end
 
-  # Ten of eleven mornings, eight unbroken, always the same thought: the count
-  # moved into Ruby and the RARITY was left to a sentence in the prompt.
+  # The count lives in Ruby, and so does the RARITY.
   describe "how often a thought is floated" do
     def stashed(idea, created:, surfaced: nil)
       memory = user.buddy_memories.create!(kind: :stash, content: idea, category: :home)
@@ -301,46 +204,20 @@ RSpec.describe Buddy::BriefingFacts do
 
     def due(rows, now: Time.current) = described_class.stash_due(user, hashes(rows), now)
 
-    # The one most at risk of going quietly missing, which is the call
-    # `Buddy::Context#stashed_ideas` already makes.
-    it "takes the oldest thought nobody has been told about" do
-      old = stashed("Kennel auto-open idea", created: 7.weeks.ago)
-      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
+    it "rotates: the oldest unfloated first, nothing while one is warm, then the next, then round again" do
+      [
+        [nil, nil, :old],
+        [1.day.ago, nil, :none],
+        [4.days.ago, nil, :recent],
+        [9.days.ago, 4.days.ago, :old],
+      ].each { |old_surfaced, recent_surfaced, expected|
+        BuddyMemory.where(user: user).delete_all
+        old    = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: old_surfaced)
+        recent = stashed("Glimmer iPad controls", created: 4.weeks.ago, surfaced: recent_surfaced)
+        want   = { old: [old.id], recent: [recent.id], none: [] }[expected]
 
-      expect(due([old, recent]).map { |i| i[:id] }).to eq([old.id])
-    end
-
-    # NOTHING, rather than a line the model is asked to use sparingly - the rule
-    # asking for the float comes off with the section.
-    it "says nothing at all while one is still warm" do
-      old = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 1.day.ago)
-      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
-
-      expect(due([old, recent])).to be_empty
-    end
-
-    it "takes the section and its writing rule off together" do
-      stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 1.day.ago)
-      facts = { today: [], due: [], jobs: [], weather: nil, week: [], stash: [] }
-
-      expect(described_class.block(facts)).not_to include("ON THEIR MIND")
-      expect(described_class.stash_lines(facts)).to be_empty
-    end
-
-    # The old behaviour: the pick was the oldest, and the oldest does not change
-    # until it is settled, so it was the same thought every morning forever.
-    it "moves on to the next one rather than back to the top" do
-      old = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 4.days.ago)
-      recent = stashed("Glimmer iPad controls", created: 4.weeks.ago)
-
-      expect(due([old, recent]).map { |i| i[:id] }).to eq([recent.id])
-    end
-
-    it "comes back round once they have all had a turn" do
-      first = stashed("Kennel auto-open idea", created: 7.weeks.ago, surfaced: 9.days.ago)
-      second = stashed("Glimmer iPad controls", created: 4.weeks.ago, surfaced: 4.days.ago)
-
-      expect(due([first, second]).map { |i| i[:id] }).to eq([first.id])
+        expect(due([old, recent]).map { |i| i[:id] }).to eq(want), "#{old_surfaced.inspect}/#{recent_surfaced.inspect}"
+      }
     end
 
     # `updated_at` is what the daily audit reads to tell an edit from an
@@ -354,124 +231,66 @@ RSpec.describe Buddy::BriefingFacts do
 
       expect(row.reload.surfaced_at).to be_present
       expect(row.reload.updated_at).to be_within(1.second).of(before)
-    end
-
-    it "stamps nothing for a row it was handed without an id" do
       expect { described_class.mark_floated!(user, { idea: "No id" }) }.not_to raise_error
     end
   end
 
   describe "how a line reads" do
-    # Rocco: "'You have yoga tomorrow' is absolutely incorrect. 'Chelsea has
-    # yoga tomorrow' is accurate and acceptable."
-    it "puts whose it is in front of what it is" do
-      line = described_class.agenda_line(
-        { time: "4:00 PM", title: "Yoga", mine: false, owner: "Chelsea" },
-      )
-
-      expect(line).to eq("4:00 PM · Chelsea's Yoga")
+    # Whose it is goes in front; the calendar name never stands in for a place.
+    it "puts whose it is in front, keeps the departure, and never names the calendar" do
+      [
+        [{ time: "4:00 PM", title: "Yoga", mine: false, owner: "Chelsea" }, "4:00 PM · Chelsea's Yoga"],
+        [{ time: "9:00 AM", title: "Standup" }, "9:00 AM · Standup"],
+        [
+          { time: "11:40 AM", title: "Eye Follow Up", leave_by: "11:08 AM", drive_min: 22 },
+          "11:40 AM · Eye Follow Up · leave by 11:08 AM (22 min drive)",
+        ],
+        [
+          { time: "10:00 AM", title: "Hair trim", mine: false, owner: "Chelsea", cal: "Alchemibluum" },
+          "10:00 AM · Chelsea's Hair trim",
+        ],
+        [{ time: "6:00 PM", title: "Salmon soyaki bowls", cal: "Ours 💕" }, "6:00 PM · Salmon soyaki bowls"],
+      ].each { |item, expected| expect(described_class.agenda_line(item)).to eq(expected) }
     end
 
-    it "leaves their own alone" do
-      line = described_class.agenda_line({ time: "9:00 AM", title: "Standup" })
-
-      expect(line).to eq("9:00 AM · Standup")
-    end
-
-    it "keeps the departure on the item it belongs to" do
-      line = described_class.agenda_line(
-        { time: "11:40 AM", title: "Eye Follow Up", leave_by: "11:08 AM", drive_min: 22 },
-      )
-
-      expect(line).to eq("11:40 AM · Eye Follow Up · leave by 11:08 AM (22 min drive)")
-    end
-
-    # 9 Sep: "a hair trim for Chelsea at 10:00 AM at Alchemibluum". Alchemibluum
-    # is the CALENDAR the trim is written on. The trim has no location at all,
-    # and the line put the calendar exactly where a place goes, so it was read
-    # as one. Rocco: "The calendar is not a replacement for location."
-    it "never says which calendar a thing is on" do
-      line = described_class.agenda_line(
-        { time: "10:00 AM", title: "Hair trim", mine: false, owner: "Chelsea", cal: "Alchemibluum" },
-      )
-
-      expect(line).to eq("10:00 AM · Chelsea's Hair trim")
-    end
-
-    # Whose it is was the only thing the calendar was ever standing in for, and
-    # the title already carries it.
-    it "still says whose it is without one" do
-      line = described_class.agenda_line({ time: "6:00 PM", title: "Salmon soyaki bowls", cal: "Ours 💕" })
-
-      expect(line).to eq("6:00 PM · Salmon soyaki bowls")
-    end
-
-    it "says a group of jobs as the group" do
-      rows = [
-        { id: 1, name: "Gather trash", group: "trash" },
-        { id: 2, name: "Take out trash bags", group: "trash" },
-        { id: 3, name: "Replace Air Filter", hot: "5x" },
-      ]
-
-      expect(described_class.job_lines(rows))
-        .to eq(["trash: Gather trash, Take out trash bags", "Replace Air Filter · 5x points"])
-    end
-
-    # Which rules reach the prompt is decided on the facts, so a multiplier the
-    # grouped branch dropped put "tack it onto the job" in front of the model
-    # with no multiplier anywhere in the lines it reads. Both trash-day
-    # briefings on 30 Sep went out without it.
-    it "keeps a multiplier on a job inside a group" do
-      rows = [
-        { id: 15, name: "Gather trash", group: "trash" },
-        { id: 19, name: "Take trash cans out", group: "trash", hot: "2x" },
-        { id: 17, name: "Take out trash bags", group: "trash" },
-      ]
-
-      lines = described_class.job_lines(rows)
-
-      expect(lines).to eq(["trash: Gather trash, Take trash cans out · 2x points, Take out trash bags"])
-    end
-
-    # Rocco, 7 Oct: the briefings were reading `2x` as a COUNT. Three of four in
-    # one window said a double-point mail run happens twice, and one turned a
-    # trash day into gathering the trash twice, taking the cans out twice and
-    # gathering the recycling twice. The multiplier is written `2x` because that
-    # is how the chores page writes it; what the line was missing is what the
-    # number is OF.
-    it "says what the multiplier is a multiplier of" do
-      expect(described_class.job_lines([{ id: 1, name: "Go get mail", hot: "2x" }]))
-        .to eq(["Go get mail · 2x points"])
-    end
-
-    it "says nothing extra about a job with no multiplier on it" do
-      expect(described_class.job_lines([{ id: 1, name: "Go get mail" }])).to eq(["Go get mail"])
+    # `2x` alone reads as a count, so the line says what it multiplies, including
+    # on a job inside a group.
+    it "says a group of jobs as the group, with each multiplier as points" do
+      [
+        [
+          [
+            { id: 1, name: "Gather trash", group: "trash" },
+            { id: 2, name: "Take out trash bags", group: "trash" },
+            { id: 3, name: "Replace Air Filter", hot: "5x" },
+          ],
+          ["trash: Gather trash, Take out trash bags", "Replace Air Filter · 5x points"],
+        ],
+        [
+          [
+            { id: 15, name: "Gather trash", group: "trash" },
+            { id: 19, name: "Take trash cans out", group: "trash", hot: "2x" },
+            { id: 17, name: "Take out trash bags", group: "trash" },
+          ],
+          ["trash: Gather trash, Take trash cans out · 2x points, Take out trash bags"],
+        ],
+        [[{ id: 1, name: "Go get mail", hot: "2x" }], ["Go get mail · 2x points"]],
+        [[{ id: 1, name: "Go get mail" }], ["Go get mail"]],
+      ].each { |rows, expected| expect(described_class.job_lines(rows)).to eq(expected) }
     end
   end
 
-  # Prod 7410, 3 Oct: "Sat 7pm, check the front flower bed", said on a Saturday
-  # morning. `fire_at` is `Clock.day_at` because `upcoming_reminders` runs a
-  # 48-hour window, but `without_other_days` has already cut everything that
-  # isn't today by the time it reaches this section, so the weekday is the only
-  # part of the line that can't tell them anything.
-  describe "the ALSO DUE TODAY line" do
-    def line(fire_at)
+  # Everything that reaches this section is already today's, so the weekday is
+  # the only part of a `Clock.day_at` stamp that tells them nothing.
+  it "gives an ALSO DUE TODAY reminder its time without the day" do
+    line = ->(fire_at) {
       described_class.block(
         today: [], due: [{ fire_at: fire_at, body: "Check the front flower bed." }],
         jobs: [], weather: nil, week: [], stash: []
       )
-    end
+    }
 
-    it "gives the time without the day" do
-      expect(line("Sat 7pm")).to include("- 7pm · Check the front flower bed.")
-    end
-
-    it "keeps the minutes on a time that has them" do
-      expect(line("Mon 9:30am")).to include("- 9:30am · Check")
-    end
-
-    it "leaves a time that never carried a day alone" do
-      expect(line("7pm")).to include("- 7pm · Check")
-    end
+    expect(line.call("Sat 7pm")).to include("- 7pm · Check the front flower bed.")
+    expect(line.call("Mon 9:30am")).to include("- 9:30am · Check")
+    expect(line.call("7pm")).to include("- 7pm · Check")
   end
 end

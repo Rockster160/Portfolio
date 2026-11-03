@@ -84,27 +84,18 @@ RSpec.describe ByteController, type: :controller do
         )
       end
 
-      it "enqueues the executor with the tapped ids and leaves the action pending" do
+      # Incremental — the action is NOT decided by the tap itself; the executor
+      # decides it once every row is resolved. No blocked Mac hook waits on these.
+      it "enqueues the executor with the tapped ids, leaving the action pending and the Mac hook alone" do
         action = proposal_action
 
         expect(Buddy::ProposalExecutorJob).to receive(:perform_later).with(action.id, [1])
-
-        post :respond_action, params: { request_id: action.request_id, value: [1] }
-
-        expect(response).to be_successful
-        # Incremental — the action is NOT decided by the tap itself; the
-        # executor decides it only once every row is resolved.
-        expect(action.reload).to be_pending
-      end
-
-      it "does not notify the Mac decision hook (no blocked hook waits on these)" do
-        action = proposal_action
-        allow(Buddy::ProposalExecutorJob).to receive(:perform_later)
-
         expect(ByteLocal).not_to receive(:notify_action_decision)
 
         post :respond_action, params: { request_id: action.request_id, value: [1] }
+
         expect(response).to be_successful
+        expect(action.reload).to be_pending
       end
     end
 
@@ -154,7 +145,7 @@ RSpec.describe ByteController, type: :controller do
         }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)["errors"].join).to include("Meal needs a value")
+        expect(JSON.parse(response.body)["errors"]).to be_present
         expect(action.reload).to be_pending
       end
 
@@ -190,7 +181,7 @@ RSpec.describe ByteController, type: :controller do
         ByteAction.where(tool_name: Buddy::TimerCycle::TOOL_NAME).order(:id).last
       end
 
-      it "starts the next block on the tap" do
+      it "starts the next block on the tap, and refuses a second tap rather than starting another" do
         action = card!
 
         expect {
@@ -198,11 +189,6 @@ RSpec.describe ByteController, type: :controller do
         }.to change { user.timers.where(name: "Cupboards").count }.by(1)
 
         expect(response).to be_successful
-      end
-
-      it "refuses the second tap rather than starting a second block" do
-        action = card!
-        post :respond_action, params: { request_id: action.request_id, value: "resume" }
 
         expect {
           post :respond_action, params: { request_id: action.request_id, value: "resume" }

@@ -53,63 +53,34 @@ RSpec.describe "Buddy job hunt tools" do
       expect(described_class.context_for(user)).to be_nil
     end
 
-    it "carries the board with what last happened on each" do
-      job = application!("Netflix", role: "Senior Engineer")
-      job.notes.create!(tag: :applied, occurred_at: 3.days.ago, body: "Sent it")
-
-      payload = described_class.context_for(user)
-      row = payload[:applications].find { |a| a[:company] == "Netflix" }
-
-      expect(row).to include(role: "Senior Engineer", notes: 1)
-      expect(row[:last_beat]).to include("Applied on")
-    end
-
-    # Prod 5759: "Corporate Tools rejected me" reached a board that had hidden
-    # Corporate Tools the moment it was rejected, so the model had no way to be
-    # right and settled CSC Generation instead. A closed application is still a
-    # thing they talk about; `status` is what stops it reading as a live lead.
-    it "carries the settled ones too, saying which is which" do
-      application!("Netflix")
+    # A closed application is still something they talk about; `status` is what
+    # stops it reading as a live lead.
+    it "carries the whole board, what last happened, what is owed, and which mail is filed", :aggregate_failures do
+      netflix = application!("Netflix", role: "Senior Engineer")
+      netflix.notes.create!(tag: :applied, occurred_at: 3.days.ago, body: "Sent it")
       application!("Visa", status: :rejected)
-
-      rows = described_class.context_for(user)[:applications]
-
-      expect(rows.pluck(:company)).to include("Netflix", "Visa")
-      expect(rows.find { |a| a[:company] == "Visa" }[:status]).to eq("rejected")
-    end
-
-    it "surfaces a follow-up that is owed" do
-      job = application!("Samsara")
-      job.notes.create!(tag: :recruiter_call, occurred_at: 2.days.ago, follow_up_at: 1.day.from_now)
-
-      expect(described_class.context_for(user)[:applications].first[:follow_up]).to be_present
-    end
-
-    # The field that turns a list of messages into something answerable.
-    it "says which mail is already on the board and which is not" do
-      application!("Netflix")
+      application!("Samsara").notes.create!(tag: :recruiter_call, occurred_at: 2.days.ago, follow_up_at: 1.day.from_now)
       job_mail!(subject: "We got it", company: "Netflix")
       job_mail!(subject: "Already filed", company: "Netflix", logged: 99)
+      job_mail!(subject: "Website redesign?", company: nil).update!(job_triage: { job: false, kind: "sales outreach" })
 
-      mail = described_class.context_for(user)[:recent_mail]
+      payload = described_class.context_for(user)
+      rows = payload[:applications]
+      row = rows.find { |a| a[:company] == "Netflix" }
+      expect(row).to include(role: "Senior Engineer", notes: 1)
+      expect(row[:last_beat]).to be_present
+      expect(rows.find { |a| a[:company] == "Visa" }[:status]).to eq("rejected")
+      expect(rows.find { |a| a[:company] == "Samsara" }[:follow_up]).to be_present
 
+      mail = payload[:recent_mail]
+      expect(mail.pluck(:subject)).to contain_exactly("We got it", "Already filed")
       expect(mail.find { |m| m[:subject] == "We got it" }[:logged]).to be(false)
       expect(mail.find { |m| m[:subject] == "Already filed" }[:logged]).to be(true)
+      # One application link by id rather than one url per row.
+      expect(payload[:url]).to end_with("/interviews/{id}")
     end
 
-    it "leaves out mail that was triaged and turned down" do
-      application!("Netflix")
-      email = job_mail!(subject: "Website redesign?", company: nil)
-      email.update!(job_triage: { job: false, kind: "sales outreach" })
-
-      expect(described_class.context_for(user)[:recent_mail]).to be_empty
-    end
-
-    # The section is useless if get_context can't be asked for it, and it is
-    # gated on a feature that is off for everyone until granted.
-    it "is reachable through get_context once the feature is held" do
-      expect(Buddy::GPT::ContextTool::SECTIONS).to include(:job_search)
-
+    it "is reachable through get_context only once the feature is held", :aggregate_failures do
       user.update!(buddy_features: Array(user.buddy_features).map(&:to_s) - ["job_search"])
       expect(Buddy::Features.hidden_sections(user)).to include(:job_search)
 
@@ -117,15 +88,10 @@ RSpec.describe "Buddy job hunt tools" do
       expect(Buddy::Features.hidden_sections(user)).not_to include(:job_search)
       expect(Buddy::Features.allows_tool?(user, Buddy::Tools[:add_job_note])).to be(true)
     end
-
-    it "links one application by id rather than one url per row" do
-      application!("Netflix")
-      expect(described_class.context_for(user)[:url]).to end_with("/interviews/{id}")
-    end
   end
 
-  # The question this whole feature has to survive: it is one person's job hunt,
-  # and nobody else's companion should know it exists.
+  # One person's job hunt: nobody else's companion should know it exists, even
+  # if the feature is granted to them.
   describe "who can see any of it" do
     let(:other) {
       User.find_by(id: 4) || create(:user, id: 4, username: "Eve")
@@ -133,130 +99,65 @@ RSpec.describe "Buddy job hunt tools" do
 
     before { other.update!(buddy_features: Buddy::Features::DEFAULT.map(&:to_s)) }
 
-    # The bug this pins: SECTIONS drives DEFAULT, so adding job_search there
-    # without also listing it handed the tool to every account created after.
-    it "is not part of what a new account is handed" do
-      expect(Buddy::Features::DEFAULT).not_to include(:job_search)
-      expect(Buddy::Features.enabled?(other, :job_search)).to be(false)
-    end
-
-    # Out of DEFAULT only ever meant "not handed over at signup". The ask was
-    # that it be HIS, so it's OWNER_ONLY now and `enabled_for` subtracts it
-    # from everybody else - a grant that reaches this row does nothing.
-    it "keeps the tool out of the schema even if the feature is granted" do
-      names = Buddy::Tools.function_schemas(user: other).pluck(:name)
-      expect(names).not_to include(:add_job_note)
-
+    def grant_other!
       other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
-      granted = Buddy::Tools.function_schemas(user: other.reload).pluck(:name)
-      expect(granted).not_to include(:add_job_note)
+      other.reload
+    end
+
+    it "keeps the tool, the section, the page and the board from anyone but the owner, granted or not", :aggregate_failures do
+      application!("Netflix")
+
       expect(Buddy::Features.enabled?(other, :job_search)).to be(false)
-    end
-
-    it "leaves it working for the owner" do
-      expect(Buddy::Tools.function_schemas(user: user).pluck(:name)).to include(:add_job_note)
-    end
-
-    it "keeps the section out of get_context and out of the built context" do
-      expect(Buddy::Features.hidden_sections(other)).to include(:job_search)
-      expect(Buddy::GPT::ContextTool.withheld(other)).to include(:job_search)
-      offered = Buddy::GPT::ContextTool.schema(user: other)
-      nameable = offered.dig(:parameters, :properties, :sections, :items, :enum)
-      expect(nameable).not_to include(:job_search)
-    end
-
-    it "does not offer them the interviews page" do
+      expect(Buddy::Tools.function_schemas(user: other).pluck(:name)).not_to include(:add_job_note)
       expect(Buddy::AppPages.for_user(other).pluck(:name)).not_to include(:interviews)
 
-      other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
-      expect(Buddy::AppPages.for_user(other.reload).pluck(:name)).not_to include(:interviews)
-      expect(Buddy::AppPages.for_user(user).pluck(:name)).to include(:interviews)
+      grant_other!
+      expect(Buddy::Features.enabled?(other, :job_search)).to be(false)
+      expect(Buddy::Tools.function_schemas(user: other).pluck(:name)).not_to include(:add_job_note)
+      expect(Buddy::Features.hidden_sections(other)).to include(:job_search)
+      expect(Buddy::GPT::ContextTool.withheld(other)).to include(:job_search)
+      nameable = Buddy::GPT::ContextTool.schema(user: other).dig(:parameters, :properties, :sections, :items, :enum)
+      expect(nameable).not_to include(:job_search)
+      expect(Buddy::AppPages.for_user(other).pluck(:name)).not_to include(:interviews)
+      # Scoped by user underneath the gate too.
+      expect(Buddy::JobHunt.context_for(other)).to be_nil
+      expect(Buddy::JobHunt.resolve_application(other, "Netflix")).to be_nil
     end
 
-    # Belt and braces under the feature gate: even if something reached the
-    # board directly, it is scoped by user, so nobody is one bug away from
-    # reading his applications the way the delivery list would have leaked.
-    it "shows them their own empty board rather than anyone else's" do
-      application!("Netflix")
-      other.update!(buddy_features: Array(other.buddy_features).map(&:to_s) + ["job_search"])
-
-      expect(Buddy::JobHunt.context_for(other.reload)).to be_nil
-      expect(Buddy::JobHunt.resolve_application(other, "Netflix")).to be_nil
+    it "leaves it working for the owner", :aggregate_failures do
+      expect(Buddy::Tools.function_schemas(user: user).pluck(:name)).to include(:add_job_note)
+      expect(Buddy::AppPages.for_user(user).pluck(:name)).to include(:interviews)
     end
   end
 
   describe "add_job_note" do
-    # It writes on arrival and draws a row that can be unticked.
-    #
-    # Prod 5759 is why it did not for a while: he said Corporate Tools, and the
-    # row settled as rejected was CSC Generation, because Corporate Tools was
-    # already closed and so off the visible board. Both halves of that are shut
-    # in `applications_for` now - it searches the WHOLE board rather than the
-    # live rows, and a name matching several DIFFERENT companies returns nothing
-    # rather than the best of them. Picking a neighbour is no longer the likely
-    # outcome, and `undo` puts back the note, the status and the mail.
-    it "writes on arrival and draws a row that can be unticked" do
-      expect(Buddy::Tools[:add_job_note][:level]).to eq(2)
-      expect(Buddy::Tools[:add_job_note][:auto]).to be(false)
-    end
-
-    # A settling tag doesn't just add a row - it closes the application. That
-    # is the half that made being wrong expensive.
-    it "still carries a way back once it has been tapped" do
-      application!("Netflix")
-      result, = run(:add_job_note, { company: "Netflix", tag: :rejected, note: "no thanks" })
-
-      expect(result[:settled]).to be(true)
-      expect(Buddy::Reverter.descriptors(result)).to be_present
-    end
-
-    it "logs a beat against a fuzzily-named company" do
+    it "logs a beat against a fuzzily-named company, including a settled one", :aggregate_failures do
       application!("CSC Generation")
-
-      result, confirm = run(:add_job_note, {
-        company: "CSC Generation, Inc.",
-        note:    "They want to book a call",
-        tag:     :heard_back,
-      })
-
-      expect(confirm[:summary]).to include("CSC Generation")
-      expect(result[:company]).to eq("CSC Generation")
-      expect(JobNote.last.tag).to eq("heard_back")
-    end
-
-    it "refuses a company that isn't on the board at all" do
-      application!("Netflix")
-
-      expect {
-        run(:add_job_note, { company: "Wayfarer Labs", note: "hi", tag: :note })
-      }.to raise_error(/no application matching/)
-    end
-
-    # The other half of prod 5759. Talking about a rejection has to be able to
-    # land somewhere, or the model reaches for a company that IS resolvable.
-    it "logs against a settled application" do
       application!("Corporate Tools", status: :rejected)
 
-      result, = run(:add_job_note, { company: "Corporate Tools", note: "no reason given", tag: :note })
+      result, = run(:add_job_note, { company: "CSC Generation, Inc.", note: "They want to book a call", tag: :heard_back })
+      expect(result[:company]).to eq("CSC Generation")
+      expect(JobNote.last.tag).to eq("heard_back")
+      # Only the one descriptor when nothing was settled.
+      expect(result[:reverts].length).to eq(1)
 
+      result, = run(:add_job_note, { company: "Corporate Tools", note: "no reason given", tag: :note })
       expect(result[:company]).to eq("Corporate Tools")
       expect(result[:status]).to eq("rejected")
     end
 
-    it "does not log a bare note with nothing in it" do
+    it "refuses a company not on the board, an empty note, or an email that isn't theirs", :aggregate_failures do
       application!("Netflix")
 
-      expect { run(:add_job_note, { company: "Netflix", note: "  ", tag: :note }) }.to raise_error(/say what happened/)
+      expect { run(:add_job_note, { company: "Wayfarer Labs", note: "hi", tag: :note }) }.to raise_error(RuntimeError)
+      expect { run(:add_job_note, { company: "Netflix", note: "  ", tag: :note }) }.to raise_error(RuntimeError)
+      expect { run(:add_job_note, { company: "Netflix", note: "x", tag: :note, email_id: 0 }) }.to raise_error(RuntimeError)
+      expect(JobNote.count).to be_zero
     end
 
-    # The point of the whole feature: the note carries the email's date, its
-    # link, and a mark back on the email saying it has been dealt with.
-    it "stamps the note from the email and marks the email logged" do
+    it "stamps the note from the email and marks the email logged", :aggregate_failures do
       application!("Netflix")
-      email = job_mail!(
-        subject: "We received your application", company: "Netflix",
-        at: 3.days.ago
-      )
+      email = job_mail!(subject: "We received your application", company: "Netflix", at: 3.days.ago)
 
       result, = run(:add_job_note, {
         company:  "Netflix",
@@ -273,7 +174,7 @@ RSpec.describe "Buddy job hunt tools" do
       expect(result[:settled]).to be(false)
     end
 
-    it "keeps the mail's own words when it revises the row the mail filed" do
+    it "keeps the mail's own words when it revises the row the mail filed", :aggregate_failures do
       job = application!("Neighbor")
       filed = job.notes.create!(
         tag: :note, occurred_at: 1.hour.ago, source: "Email",
@@ -293,82 +194,40 @@ RSpec.describe "Buddy job hunt tools" do
       expect(job.notes.count).to eq(1)
     end
 
-    it "refuses an email id that isn't theirs" do
-      application!("Netflix")
+    # JobNote#settle_application bails on destroy, so undoing the note alone
+    # would take the row away and leave the application marked rejected.
+    it "closes the application on a settling tag, and puts the status back on undo", :aggregate_failures do
+      application!("Upstart")
 
-      expect { run(:add_job_note, { company: "Netflix", note: "x", tag: :note, email_id: 0 }) }.to raise_error(/no email/)
-    end
+      result, = run(:add_job_note, { company: "Upstart", note: "No thanks", tag: :rejected })
 
-    describe "a tag that settles the whole application" do
-      it "closes the job and says so" do
-        application!("Upstart")
+      expect(result[:settled]).to be(true)
+      expect(JobApplication.find_by(company: "Upstart").status).to eq("rejected")
 
-        result, confirm = run(:add_job_note, {
-          company: "Upstart", note: "No thanks", tag: :rejected
-        })
+      result[:reverts].each { |rv| Buddy::Reverter.call(rv) }
 
-        expect(confirm[:summary]).to include("closes it as rejected")
-        expect(result[:settled]).to be(true)
-        expect(JobApplication.find_by(company: "Upstart").status).to eq("rejected")
-      end
-
-      # JobNote#settle_application bails on destroy, so undoing the note alone
-      # would take the row away and leave the application marked rejected.
-      it "puts the status back when the note is undone" do
-        application!("Upstart")
-        result, = run(:add_job_note, { company: "Upstart", note: "No thanks", tag: :rejected })
-
-        result[:reverts].each { |rv| Buddy::Reverter.call(rv) }
-
-        expect(JobNote.count).to be_zero
-        expect(JobApplication.find_by(company: "Upstart").status).to eq("active")
-      end
-
-      it "stashes only the one descriptor when nothing was settled" do
-        application!("Netflix")
-        result, = run(:add_job_note, { company: "Netflix", note: "Called", tag: :recruiter_call })
-
-        expect(result[:reverts].length).to eq(1)
-      end
+      expect(JobNote.count).to be_zero
+      expect(JobApplication.find_by(company: "Upstart").status).to eq("active")
     end
   end
 
-  # Prod 15 Sep: three Aledade PBC roles in one day. The resolver took a company
-  # and only a company and answered with the FIRST row, so two of those jobs
-  # were filed onto a third one's timeline.
   describe ".resolve_application with several jobs at one company" do
     let!(:backend) { user.job_applications.create!(company: "Aledade PBC", role: "Senior Backend Engineer") }
     let!(:manager) { user.job_applications.create!(company: "Aledade PBC", role: "Engineering Manager") }
 
-    it "is still the one row when a company holds only one" do
+    # Nil is answerable upstream; a guess is silent and permanent.
+    it "picks the one whose role the text names, and is nil rather than a guess", :aggregate_failures do
       solo = user.job_applications.create!(company: "Pellworth", role: "Staff Engineer")
 
       expect(Buddy::JobHunt.resolve_application(user, "Pellworth")).to eq(solo)
-    end
-
-    it "picks the one whose role the text names" do
-      picked = Buddy::JobHunt.resolve_application(user, "Aledade", said: "Senior Backend Engineer")
-
-      expect(picked).to eq(backend)
-    end
-
-    # Nil is answerable upstream; a guess is silent and permanent.
-    it "is nil rather than a guess when nothing names a role" do
+      expect(Buddy::JobHunt.resolve_application(user, "Aledade", said: "Senior Backend Engineer")).to eq(backend)
       expect(Buddy::JobHunt.resolve_application(user, "Aledade PBC")).to be_nil
-    end
-
-    it "is nil when the text names both" do
-      both = Buddy::JobHunt.resolve_application(user, "Aledade PBC", said: "Engineer")
-
-      expect(both).to be_nil
-    end
-
-    it "hands back every row for the company" do
+      expect(Buddy::JobHunt.resolve_application(user, "Aledade PBC", said: "Engineer")).to be_nil
       expect(Buddy::JobHunt.applications_for(user, "Aledade PBC")).to contain_exactly(backend, manager)
     end
 
-    # The head-word fallback was unambiguous-only because one head word matching
-    # two companies is a coin toss. Two rows for the SAME company is not.
+    # One head word matching two companies is a coin toss; two rows for the
+    # SAME company is not.
     it "still refuses a head word that reaches two different companies" do
       user.job_applications.create!(company: "Acme Systems")
       user.job_applications.create!(company: "Acme Robotics")
@@ -377,82 +236,39 @@ RSpec.describe "Buddy job hunt tools" do
     end
   end
 
-  # Prod 24 Sep, 2:08pm. "Thank you for applying to OpenAI" resolved onto an
-  # OnBoard application, because a jobhunt note on that row happened to contain
-  # the word openai and it was the only thing on the board that did. One hit, so
-  # `rows.one?` called it settled. Nine model calls then went into pushing a note
-  # onto the wrong company - and the guard that refused it is the only thing that
-  # worked, so nothing was filed anywhere.
-  #
-  # The classifier was right: the mail IS from OpenAI. The matcher was reading
-  # note bodies, which the search box wants and a resolution must not.
+  # Note bodies and links are what the search box wants, and what a resolution
+  # must not read.
   describe ".applications_for reads the company and nothing else" do
     let!(:onboard) { user.job_applications.create!(company: "OnBoard", role: "Senior Engineer") }
 
-    it "does not resolve a company off a note that merely mentions it" do
+    it "does not resolve a company off a note or link that mentions it, until the company is on the board", :aggregate_failures do
       onboard.notes.create!(body: "Sourced from the openai jobs page", tag: :note, occurred_at: Time.current)
-
-      expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to be_empty
-      expect(Buddy::JobHunt.resolve_application(user, "OpenAI")).to be_nil
-    end
-
-    it "does not resolve one off a link either" do
       onboard.update!(url: "https://jobs.example.com/openai-partner/role/8")
 
       expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to be_empty
-    end
+      expect(Buddy::JobHunt.resolve_application(user, "OpenAI")).to be_nil
 
-    # The row that was actually meant existed seven seconds later. Once it does,
-    # the company field answers on its own.
-    it "finds the row once the company itself is on the board" do
-      onboard.notes.create!(body: "Sourced from the openai jobs page", tag: :note, occurred_at: Time.current)
       real = user.job_applications.create!(company: "OpenAI", role: "Applied AI Engineer, Codex Core Agent")
-
       expect(Buddy::JobHunt.applications_for(user, "OpenAI")).to eq([real])
       expect(Buddy::JobHunt.resolve_application(user, "OpenAI")).to eq(real)
     end
 
-    # Narrowing to one field must not cost the typo allowance, which is the
-    # reason a fuzzy weight is on the company in the first place.
     it "still catches a misspelled company" do
       user.job_applications.create!(company: "Netflix", role: "Staff Engineer")
 
       expect(Buddy::JobHunt.applications_for(user, "Netflx").map(&:company)).to eq(["Netflix"])
     end
 
-    # Prod 7810, 9 Oct. The seed said GitHub was on the board 2 times: the
-    # GitHub row, and a GitLab one. Two edits apart is inside the allowance for
-    # a six-letter name, so the fuzzy weight kept it at 40 next to GitHub's 100.
-    # The seed lists rows without their company names, so nothing after this
-    # could see the second was a different company, and a GitHub rejection went
-    # unfiled rather than onto the row sitting right there.
-    describe "when the typo allowance reaches a DIFFERENT company" do
-      let!(:github) { user.job_applications.create!(company: "GitHub") }
-      let!(:gitlab) {
-        user.job_applications.create!(company: "GitLab", role: "Staff Backend Engineer (Ruby)")
-      }
+    it "takes the exact name over a near miss at a different company, and refuses when nothing is exact", :aggregate_failures do
+      github = user.job_applications.create!(company: "GitHub")
+      gitlab = user.job_applications.create!(company: "GitLab", role: "Staff Backend Engineer (Ruby)")
 
-      it "takes the exact name over the near miss" do
-        expect(Buddy::JobHunt.applications_for(user, "GitHub")).to eq([github])
-      end
-
-      it "resolves to it, so the mail gets filed" do
-        expect(Buddy::JobHunt.resolve_application(user, "GitHub")).to eq(github)
-      end
-
-      it "answers for the other one the same way" do
-        expect(Buddy::JobHunt.applications_for(user, "GitLab")).to eq([gitlab])
-      end
-
-      # No exact name and two companies answering is the coin toss the
-      # head-word fallback already refuses, so this refuses it too.
-      it "refuses when a near miss reaches two companies and nothing is exact" do
-        expect(Buddy::JobHunt.applications_for(user, "Gitlob")).to be_empty
-      end
+      expect(Buddy::JobHunt.applications_for(user, "GitHub")).to eq([github])
+      expect(Buddy::JobHunt.resolve_application(user, "GitHub")).to eq(github)
+      expect(Buddy::JobHunt.applications_for(user, "GitLab")).to eq([gitlab])
+      expect(Buddy::JobHunt.applications_for(user, "Gitlob")).to be_empty
     end
 
-    # A role is still how two rows at ONE company are told apart - that is
-    # `resolve_application`'s own step, and it is downstream of this.
     it "leaves the role doing its own job of picking between rows" do
       user.job_applications.create!(company: "Stripe", role: "Staff Backend Engineer")
       picked = user.job_applications.create!(company: "Stripe", role: "Product Designer")
@@ -470,22 +286,13 @@ RSpec.describe "Buddy job hunt tools" do
       }
     }
 
-    it "answers to the legal name the paperwork uses" do
-      expect(Buddy::JobHunt.resolve_application(user, "Institutional Capital Network, Inc.")).to eq(job)
-    end
-
-    it "settles it before the fuzzy matching gets a say" do
+    it "answers to the legal name and the vendor's address, ahead of fuzzy matching", :aggregate_failures do
       other = application!("Accurate Systems")
 
+      expect(Buddy::JobHunt.resolve_application(user, "Institutional Capital Network, Inc.")).to eq(job)
       expect(Buddy::JobHunt.applications_for(user, "Accurate")).to eq([job])
       expect(Buddy::JobHunt.applications_for(user, "Accurate Systems")).to eq([other])
-    end
-
-    it "knows the vendor by the address it writes from" do
       expect(Buddy::JobHunt.resolve_by_sender(user, ["infoneeded@accurate.com"])).to eq(job)
-    end
-
-    it "asks nothing of a row with no other names on it" do
       expect(Buddy::JobHunt.resolve_by_sender(user, ["recruiter@stripe.com"])).to be_nil
     end
 

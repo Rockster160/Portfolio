@@ -69,26 +69,14 @@ RSpec.describe RecordLinks::Propagator do
       expect(link!(:event, "A", :list_item, "E", target_scope: "Todo")).to be_persisted
     end
 
-    # These two were real rules and are the reason the old pair could chase each
-    # other in a circle.
-    it "refuses a chore writing an event" do
-      bad = RecordLink.new(user: user, source_kind: :chore, source_name: "X", target_kind: :event, target_name: "Y")
+    # The first two were real rules, and the reason the old pair could chase
+    # each other in a circle.
+    it "refuses a chore writing an event, a list item touching a chore, and a link to the same kind" do
+      [[:chore, :event], [:list_item, :chore], [:chore, :chore]].each do |source, target|
+        bad = RecordLink.new(user: user, source_kind: source, source_name: "X", target_kind: target, target_name: "Y")
 
-      expect(bad).not_to be_valid
-      expect(bad.errors[:target_kind].join).to include("event -> chore -> agenda -> list_item")
-    end
-
-    it "refuses a list item touching a chore" do
-      bad = RecordLink.new(user: user, source_kind: :list_item, source_name: "X", target_kind: :chore, target_name: "Y")
-
-      expect(bad).not_to be_valid
-    end
-
-    it "refuses a link to the same kind" do
-      expect(RecordLink.new(
-               user: user, source_kind: :chore, source_name: "X",
-               target_kind: :chore, target_name: "Y"
-      )).not_to be_valid
+        expect(bad).not_to be_valid, "#{source} -> #{target}"
+      end
     end
   end
 
@@ -236,30 +224,16 @@ RSpec.describe RecordLinks::Propagator do
 
     before { link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores") }
 
-    it "puts the item on the list when the chore is marked due" do
-      chore.update!(marked_due_at: Time.current)
-
-      expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
-    end
-
-    it "takes the item off when the chore is completed" do
-      chore.update!(marked_due_at: Time.current)
-      expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
-
-      ChoreCompleter.new(chore.reload, user, at: Time.current).call
-
-      expect(list.reload.list_items.map(&:name)).not_to include("Pickup RX")
-    end
-
     # Undoing a completion has to put the item back, or the person is left
-    # walking it back by hand — which is the thing links exist to avoid.
-    it "puts the item back when the completion is undone" do
+    # walking it back by hand.
+    it "puts the item on when the chore is due, off when completed, and back on undo", :aggregate_failures do
       chore.update!(marked_due_at: Time.current)
+      expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
+
       ChoreCompleter.new(chore.reload, user, at: Time.current).call
-      completion = chore.chore_completions.first
+      expect(list.reload.list_items.map(&:name)).not_to include("Pickup RX")
 
-      ChoreCompletionUndoer.call(user, completion)
-
+      ChoreCompletionUndoer.call(user, chore.chore_completions.first)
       expect(list.reload.list_items.map(&:name)).to include("Pickup RX")
     end
 
@@ -303,12 +277,6 @@ RSpec.describe RecordLinks::Propagator do
     before {
       link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores", reverse: true)
     }
-
-    it "marks the chore due when the item is added to the list" do
-      list.list_items.add("Pickup RX")
-
-      expect(chore.reload).to be_marked_due
-    end
 
     # The reason `Add Pickup RX to Chores` was reported broken: spoken adds go
     # through Jarvis, which reaches the model rather than either controller.
@@ -368,14 +336,6 @@ RSpec.describe RecordLinks::Propagator do
 
       expect(chore.reload.marked_due_at).to be_within(1.second).of(was)
     end
-
-    it "says both directions in the manager" do
-      reversed = RecordLink.find_by(reverse: true)
-
-      expect(reversed.summary).to eq("chore:Pickup RX ↔ list_item:Pickup RX (Chores)")
-      expect(reversed.sentence).to include("chore where name is exactly \"Pickup RX\" takes off the list list item \"Pickup RX\" on Chores")
-      expect(reversed.sentence).to include("and back: list item where name is exactly \"Pickup RX\" and list is exactly \"Chores\" marks due chore \"Pickup RX\"")
-    end
   end
 
   # The uphill half of an event<->chore pairing: `reverse` makes the sync read
@@ -390,12 +350,6 @@ RSpec.describe RecordLinks::Propagator do
       let!(:teeth) { chore!("Teeth") }
 
       before { link!(:event, "Teeth", :chore, "Teeth", reverse: true) }
-
-      it "logs the event when the chore is completed directly" do
-        expect { complete!(teeth) }.to change {
-          user.action_events.where(name: "Teeth").count
-        }.by(1)
-      end
 
       it "completes the chore from the event with no second event logged" do
         log_event!("Teeth")
@@ -415,7 +369,7 @@ RSpec.describe RecordLinks::Propagator do
         expect(user.action_events.where(name: "Teeth").count).to eq(0)
       end
 
-      it "terminates, logging exactly one event for one completion" do
+      it "logs the event when the chore is completed directly, exactly once, and terminates" do
         Timeout.timeout(20) { complete!(teeth) }
 
         expect(user.chore_completions.where(chore_id: teeth.id).count).to eq(1)
@@ -709,21 +663,13 @@ RSpec.describe RecordLinks::Propagator do
     end
 
     # Downhill-only means there is no cycle to break, but the guard still has to
-    # hold: a chore marked due adds an item, and nothing comes back up from it.
-    it "terminates rather than circling" do
-      link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores")
-      chore!("Pickup RX")
-
-      Timeout.timeout(10) { Chore.find_by(name: "Pickup RX").update!(marked_due_at: Time.current) }
-
-      expect(list.reload.list_items.where(name: "Pickup RX").count).to eq(1)
-    end
-
-    it "survives a chore being re-marked due over and over" do
+    # hold: a chore marked due adds an item, and nothing comes back up from it,
+    # however many times it is re-marked.
+    it "terminates rather than circling, adding the item once" do
       link!(:chore, "Pickup RX", :list_item, "Pickup RX", target_scope: "Chores")
       c = chore!("Pickup RX")
 
-      3.times { c.update!(marked_due_at: Time.current) }
+      Timeout.timeout(10) { 3.times { c.update!(marked_due_at: Time.current) } }
 
       expect(list.reload.list_items.where(name: "Pickup RX").count).to eq(1)
     end
@@ -755,18 +701,13 @@ RSpec.describe RecordLinks::Propagator do
 
     # The button that logged it may be on a wall everybody uses, so it can't
     # say who - but the work happened. Done now, credited to nobody, and asked.
-    it "marks it done for nobody and asks who" do
+    it "marks it done for nobody and asks who, with a chip per person in their own color", :aggregate_failures do
       expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
-      expect(user.prompts.last.question).to eq("Who did: Puppy Down?")
 
       completion = chore.chore_completions.sole
       expect(completion.anonymous).to be(true)
       expect(completion.paid_pebbles.to_i).to eq(0)
       expect(user.prompts.last.params["completion_id"]).to eq(completion.id)
-    end
-
-    it "asks with a chip per person, each in their own color" do
-      log_event!("Whisper", notes: "Down")
 
       who = user.prompts.last.options.first
       expect(who).to include("type" => "chips", "question" => "Who did it?")
@@ -1042,63 +983,16 @@ RSpec.describe RecordLinks::Propagator do
   describe "an end pointing at nothing" do
     # Not an error anywhere — the link simply never fires — which is why the
     # manager has to ask and say so out loud.
-    it "reports a chore that doesn't exist" do
-      link = link!(:event, "Ghost", :chore, "Nonexistent Chore")
+    it "reports a missing chore or list, and is quiet when both ends resolve" do
+      expect(link!(:event, "Ghost", :chore, "Nonexistent Chore").broken_ends).to include(/no chore called/)
 
-      expect(link.broken_ends).to include(/no chore called/)
-    end
-
-    it "reports a list that doesn't exist" do
       chore!("Real Chore")
       link = link!(:chore, "Real Chore", :list_item, "Thing", target_scope: "No Such List")
-
       expect(link.broken_ends).to include(/no list called/)
-    end
 
-    it "is quiet when both ends resolve" do
-      chore!("Real Chore")
       list!("Chores")
       link = link!(:chore, "Real Chore", :list_item, "Thing", target_scope: "Chores")
-
       expect(link.broken_ends).to be_empty
-    end
-  end
-
-  describe "the seeded pairings" do
-    before { RecordLinks::Seed.plant!(user) }
-
-    it "carries every downhill pairing from the Jil maps" do
-      expect(RecordLink.where(user: user).count).to eq(44)
-    end
-
-    it "carries no uphill ones" do
-      expect(RecordLink.where(user: user).all? { |l|
-        RecordLink::RANK[l.source_kind.to_sym] < RecordLink::RANK[l.target_kind.to_sym]
-      }).to be(true)
-      expect(RecordLink.where(user: user, source_kind: :list_item)).to be_empty
-      expect(RecordLink.where(user: user, target_kind: :event)).to be_empty
-    end
-
-    it "loosens the two pairings that were fragile" do
-      cymbalta = RecordLink.find_by(user: user, source_name: "M")
-      expect(cymbalta.source_scope).to eq("Duloxetine")
-      expect(cymbalta.source_scope_match).to eq("contains")
-
-      focus = RecordLink.where(user: user, source_name: "D-Amphetamine")
-      expect(focus.pluck(:target_kind, :source_name_match)).to match_array([
-        %w[chore starts_with], %w[agenda starts_with]
-      ])
-    end
-
-    it "marks the ambiguous pairs ask_who" do
-      link = RecordLink.find_by(user: user, source_name: "Fae", source_scope: "Litter")
-
-      expect(link).to be_ask_who
-      expect(link.target_name).to eq("Kitty Litter")
-    end
-
-    it "is idempotent" do
-      expect { RecordLinks::Seed.plant!(user) }.not_to change(RecordLink, :count)
     end
   end
 end

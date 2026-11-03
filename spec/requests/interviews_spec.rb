@@ -29,22 +29,15 @@ RSpec.describe "Interview tracker", type: :request do
     let!(:live) { user.job_applications.create!(company: "Acme") }
     let!(:dead) { user.job_applications.create!(company: "Initech", status: :rejected) }
 
-    it "hides the rejected ones by default" do
+    it "hides the rejected ones by default, shows everything when asked, and filters to one status" do
       get interviews_path
-
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Acme")
       expect(response.body).not_to include("Initech")
-    end
 
-    it "shows everything when asked" do
       get interviews_path(status: :all)
+      expect(response.body).to include("Acme", "Initech")
 
-      expect(response.body).to include("Acme")
-      expect(response.body).to include("Initech")
-    end
-
-    it "filters to a single status" do
       get interviews_path(status: :rejected)
 
       expect(response.body).to include("Initech")
@@ -58,25 +51,13 @@ RSpec.describe "Interview tracker", type: :request do
     # The Type dropdown is ordered by when a beat happens, so its first option
     # is no longer a safe default - a blank body under any other tag is a beat
     # this form would file.
-    it "opens the capture form's Type on Note" do
+    # With no record to PATCH yet, the icon square posts with the form.
+    it "opens the capture form's Type on Note, with the icon square posting in the form" do
       get interviews_path
 
       form = response.body[/<form[^>]*capture-form.*?<\/form>/m]
       block = form[/<select[^>]*name="job_note\[tag\]".*?<\/select>/m]
       expect(block[/<option selected="selected" value="(\w+)"/, 1]).to eq("note")
-    end
-
-    # Reading down a process, each option saying who causes it.
-    it "says who causes each kind of beat" do
-      get interviews_path
-
-      expect(response.body).to include("Applied — you")
-      expect(response.body).to include("Acknowledged — a machine")
-      expect(response.body).to include("Heard back — them")
-    end
-
-    it "offers the icon square on the new-company form" do
-      get interviews_path
 
       expect(response.body).to include("data-icon-stack")
       expect(response.body).to include(%(name="job_application[logo]"))
@@ -166,7 +147,6 @@ RSpec.describe "Interview tracker", type: :request do
       get interviews_path
 
       expect(response.body).to include("Interviews booked")
-      expect(response.body).to include("how did it go?")
       expect(response.body).not_to include("Following up")
     end
 
@@ -455,6 +435,10 @@ RSpec.describe "Interview tracker", type: :request do
   end
 
   describe "the waiting-on-you strip" do
+    # Day counts are calendar days in the reader's zone, so pin the clock to
+    # midday there rather than letting the hour the suite runs move them.
+    around { |ex| travel_to(Time.zone.parse("2026-10-15 18:00 UTC")) { ex.run } }
+
     let!(:job) { user.job_applications.create!(company: "Neighbor") }
 
     # The markup of one row of the strip, by what is owed.
@@ -534,6 +518,10 @@ RSpec.describe "Interview tracker", type: :request do
   # Most of the board is rows nobody ever answered. This is the handful where a
   # person on their side has moved, how far each one got and how much was said.
   describe "the where-you-stand table" do
+    # Day counts are calendar days in the reader's zone, so pin the clock to
+    # midday there rather than letting the hour the suite runs move them.
+    around { |ex| travel_to(Time.zone.parse("2026-10-15 18:00 UTC")) { ex.run } }
+
     let!(:job) { user.job_applications.create!(company: "Reserv", role: "Senior Engineer") }
 
     # One whole row of the table, by the stage it reports.

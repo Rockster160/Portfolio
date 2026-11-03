@@ -77,18 +77,13 @@ RSpec.describe "Buddy sleeping through a GPT outage" do
   end
 
   describe "the retry on a failed bubble" do
-    it "goes straight back to failed while the provider is still down" do
+    it "goes back to failed while the provider is down, and through once the house is awake", :aggregate_failures do
       Buddy::Outage.down!(detail: "no credits")
       message = send!("are you there?")
 
       ByteMessageIntake.redispatch!(message.tap { |m| m.update!(state: :pending) })
-
       expect(message.reload.state).to eq("failed")
-    end
 
-    it "goes through once the house is awake again" do
-      Buddy::Outage.down!(detail: "no credits")
-      message = send!("are you there?")
       allow_any_instance_of(Buddy::GPT::Client).to receive(:ping).and_return({ ok: true, error: nil })
       Buddy::Outage.retry!
 

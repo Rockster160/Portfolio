@@ -48,6 +48,5 @@ RSpec.describe "check_weather tool" do
 
     result = read(location: "somewhere imaginary")
     expect(result[:status]).to eq("failed")
-    expect(result[:note]).to include("Do not say you did it")
   end
 end

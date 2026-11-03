@@ -64,26 +64,16 @@ RSpec.describe "Logging an event for a chore that's been split per person" do
     ChoreCompletion.where(chore_id: chore.id)
   end
 
-  it "ticks off the sub-chore that belongs to whoever logged it" do
+  # The parent's card would otherwise read as done off its own row while the
+  # leaf on Today read as not done.
+  it "ticks off the logger's own sub-chore, where its card finds it, and nothing else", :aggregate_failures do
     log_teeth!
 
     expect(completions_on(mine).count).to eq(1)
     expect(completions_on(mine).first.user_id).to eq(user.id)
-  end
-
-  it "leaves the container alone, and the other person's" do
-    log_teeth!
-
+    expect(ChoreCompletion.where("chore_id = :id OR parent_chore_id = :id", id: mine.id)).to be_present
     expect(completions_on(parent)).to be_empty
     expect(completions_on(theirs)).to be_empty
-  end
-
-  # The whole point: the parent's card would have read as done off its own row
-  # while the leaf on Today read as not done.
-  it "puts the row where the card that's on screen will find it" do
-    log_teeth!
-
-    expect(ChoreCompletion.where("chore_id = :id OR parent_chore_id = :id", id: mine.id)).to be_present
   end
 
   # Deleting the event has to find the row it made, which is no longer on the

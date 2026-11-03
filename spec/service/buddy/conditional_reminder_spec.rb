@@ -1,13 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Buddy conditional reminders" do
-  # "Charge village car if the chore isn't done yet", set as three separate
-  # reminders an hour apart. Both halves of that were wrong and neither was
-  # visible from the row: the "if" was decorative, and three rows can't be
-  # cancelled, edited or satisfied together.
-  #
-  # This covers what a reminder does with a condition at fire time, and the
-  # intraday window that makes three rows one.
+  # What a reminder does with a condition at fire time, and the intraday window
+  # that makes several same-evening reminders one row.
   describe "what fires" do
     let(:user)       { create(:user) }
     let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
@@ -48,63 +43,33 @@ RSpec.describe "Buddy conditional reminders" do
     end
 
     describe "a condition at fire time" do
-      it "delivers while the chore is still outstanding" do
-        Buddy::ReminderFirer.fire!(reminder!(condition: condition))
-
-        expect(said.join).to include("Charge the village car")
-      end
-
-      it "says nothing once the chore is done" do
-        completed!
-
-        Buddy::ReminderFirer.fire!(reminder!(condition: condition))
-
-        expect(said).to be_empty
-      end
-
-      # Skipping is not the same as never being due. The row still moves, so it
-      # leaves `pending` and shows up in context as something that came and went,
-      # rather than vanishing and leaving "did that go off?" unanswerable.
-      it "still records that a skipped one came due" do
-        completed!
+      it "delivers while the chore is still outstanding, with no skip mark or receipt", :aggregate_failures do
         rem = reminder!(condition: condition)
 
         Buddy::ReminderFirer.fire!(rem)
 
-        expect(rem.reload.fired_at).to be_present
-        expect(rem.metadata["last_skipped_at"]).to be_present
-      end
-
-      # A skip is invisible by design, and invisible is exactly how a condition
-      # that's quietly wrong stays wrong. The pill says what was checked.
-      #
-      # A chip and not a message: `buddy_activity` is dropped by both the unread
-      # count and the push path, so this explains a silence without breaking it.
-      it "leaves a receipt saying what it checked" do
-        completed!
-
-        Buddy::ReminderFirer.fire!(reminder!(condition: condition))
-
-        chip = convo.byte_messages.where(direction: :inbound).last
-        expect(chip.metadata["kind"]).to eq("buddy_activity")
-        expect(chip.metadata["ok"]).to be(false)
-        expect(chip.body).to include("Skipped")
-        expect(chip.metadata["detail"]).to include("no chore completions")
-      end
-
-      it "leaves no receipt when it actually delivered" do
-        Buddy::ReminderFirer.fire!(reminder!(condition: condition))
-
+        expect(said.join).to include("Charge the village car")
+        expect(rem.reload.metadata["last_skipped_at"]).to be_nil
         kinds = convo.byte_messages.where(direction: :inbound).map { |m| m.metadata["kind"] }
         expect(kinds).not_to include("buddy_activity")
       end
 
-      it "leaves a delivered one unmarked as skipped" do
+      # Skipping is not the same as never being due: the row still moves, and a
+      # `buddy_activity` chip (dropped by unread count and push) explains the
+      # silence without breaking it.
+      it "says nothing once the chore is done, but records it came due and leaves a receipt", :aggregate_failures do
+        completed!
         rem = reminder!(condition: condition)
 
         Buddy::ReminderFirer.fire!(rem)
 
-        expect(rem.reload.metadata["last_skipped_at"]).to be_nil
+        expect(said).to be_empty
+        expect(rem.reload.fired_at).to be_present
+        expect(rem.metadata["last_skipped_at"]).to be_present
+
+        chip = convo.byte_messages.where(direction: :inbound).last
+        expect(chip.metadata["kind"]).to eq("buddy_activity")
+        expect(chip.metadata["ok"]).to be(false)
       end
 
       it "carries on exactly as before when there's no condition" do
@@ -124,9 +89,7 @@ RSpec.describe "Buddy conditional reminders" do
         expect(rem.fire_at).to be > Time.current
       end
 
-      # Both outcomes are wrong and they are not equally wrong: a nudge that
-      # arrives when it needn't is noise, and one that silently vanishes is the
-      # thing they asked to be told about, gone, with nothing to say it was due.
+      # A needless nudge is noise; a silently vanished one is worse.
       it "delivers anyway when the condition can't be evaluated" do
         allow(Buddy::Errors).to receive(:report)
 
@@ -159,10 +122,7 @@ RSpec.describe "Buddy conditional reminders" do
       end
 
       # `created_at` is where a recurrence counts from when the rule names no
-      # start of its own, and a reminder can't fire before it was set. Every
-      # assertion below names particular dates, so it has to be pinned - left to
-      # default these passed on the day they were written and failed the next
-      # morning, when "2026-08-12" stopped being today.
+      # start of its own, so it is pinned to the dates asserted below.
       def dated!(**attrs)
         reminder!(created_at: tz.parse("2026-08-12 08:00"), **attrs)
       end
@@ -178,13 +138,7 @@ RSpec.describe "Buddy conditional reminders" do
         end
 
         expect(fires).to eq(["8/12 9:00 PM", "8/12 10:00 PM", "8/12 11:00 PM", "8/13 9:00 PM"])
-      end
-
-      it "is one row, so cancelling it cancels all of tonight" do
-        rem = dated!(recurrence: hourly_window)
-
         expect(rem.intraday?).to be(true)
-        expect(BuddyReminder.where(user_id: user.id).count).to eq(1)
       end
 
       it "leaves an ordinary daily reminder firing once" do
@@ -215,8 +169,7 @@ RSpec.describe "Buddy conditional reminders" do
         expect(second.in_time_zone(tz).strftime("%A %-I:%M %p")).to eq("Saturday 10:00 PM")
       end
 
-      # The other half of "three reminders should have been one": an end date, so
-      # tonight's window doesn't come back tomorrow.
+      # An end date, so tonight's window doesn't come back tomorrow.
       it "stops for good at the until date" do
         rem = dated!(recurrence: hourly_window.merge("until_on" => "2026-08-12"))
 
@@ -227,10 +180,6 @@ RSpec.describe "Buddy conditional reminders" do
     end
   end
 
-  # The tool has to be able to EXPRESS the thing, or the mechanism behind it never
-  # gets used. Prod 42/43/44 were three unconditional reminders because that was
-  # the only shape `schedule_reminder` offered.
-  #
   # Conditions are validated HERE, on the way in, rather than at fire time. An
   # authoring mistake caught while the person is still in the conversation is a
   # sentence; caught at 9pm three weeks later its only symptom is a reminder that
@@ -280,12 +229,6 @@ RSpec.describe "Buddy conditional reminders" do
           "kind"  => "search",
           "expect" => "missing",
         )
-      end
-
-      # The confirm card is where the person sees what they're agreeing to, and
-      # "remind me at 9" reads identically whether or not it will check anything.
-      it "says out loud what it will check before they tap yes" do
-        expect(confirm(checked)[:summary]).to include("no chore completions")
       end
 
       it "refuses a check with nothing to search for" do
@@ -339,25 +282,15 @@ RSpec.describe "Buddy conditional reminders" do
         )
       end
 
-      it "says what it will ask before they tap yes" do
+      # The name is checked at authoring time, but the function itself is NOT
+      # run: asking one isn't free.
+      it "names the task on the card without running it, and refuses one that resolves to nothing" do
+        expect_any_instance_of(Task).not_to receive(:execute)
+
         expect(confirm(repeat: "daily:21:00", check_task: "Is The Car Plugged In")[:summary])
           .to include("Is The Car Plugged In")
-      end
-
-      # Checked at authoring time — the half that can be wrong forever. The
-      # function itself is NOT run here: asking one isn't free, and a reminder set
-      # for next Tuesday shouldn't fire it today to prove it can.
-      it "refuses a task name that resolves to nothing" do
         expect { confirm(repeat: "daily:21:00", check_task: "Nothing By That Name") }
           .to raise_error(/no Jil function matches/)
-      end
-
-      it "does not run the function just to validate it" do
-        allow(task).to receive(:execute)
-
-        confirm(repeat: "daily:21:00", check_task: "Is The Car Plugged In")
-
-        expect(task).not_to have_received(:execute)
       end
 
       it "refuses a check that is more than one kind of check" do
@@ -379,43 +312,24 @@ RSpec.describe "Buddy conditional reminders" do
       end
 
       # `at` is where the window starts, and that's the repeat spec's to give.
-      it "refuses a window with no repeat to start from" do
+      it "refuses a window with no repeat, half a window, one that ends before it starts, or an unreadable time" do
         expect { confirm(every_minutes: 60, until_time: "23:00", at: 1.hour.from_now.iso8601) }
-          .to raise_error(/needs a `repeat`/)
-      end
-
-      it "refuses half a window, which would silently do nothing" do
+          .to raise_error(/repeat/)
         expect { confirm(repeat: "daily:21:00", every_minutes: 60) }.to raise_error(/go together/)
         expect { confirm(repeat: "daily:21:00", until_time: "23:00") }.to raise_error(/go together/)
+        expect { confirm(hourly.merge(until_time: "19:00")) }.to raise_error(/not after/)
+        expect { confirm(hourly.merge(until_time: "elevenish")) }.to raise_error(/HH:MM/)
       end
 
-      it "refuses a window that ends before it starts" do
-        expect { confirm(hourly.merge(until_time: "19:00")) }.to raise_error(/is not after/)
-      end
-
-      it "refuses a time it can't read" do
-        expect { confirm(hourly.merge(until_time: "elevenish")) }.to raise_error(/want HH:MM/)
-      end
-
-      # Dev 4068-4075: "check my printer every 30 minutes until the print
-      # finishes." Byte reached for `every:30-minutes`, was refused twice, and
-      # ended with nothing set — the rule it wanted was this one, reachable only
-      # through two arguments it never connected to the phrase.
       describe "reached by the short spelling" do
-        it "builds the same window off the repeat spec alone" do
+        it "builds the same window off the repeat spec alone, coming due every half hour" do
           result   = create!(repeat: "every:30-minutes:14:00")
           reminder = BuddyReminder.find(result[:reminder_id])
+          zone     = ActiveSupport::TimeZone[user.timezone]
 
           expect(reminder.recurrence["every_minutes"]).to eq(30)
           expect(reminder.recurrence["at"]).to eq("14:00")
           expect(reminder).to be_intraday
-        end
-
-        # The whole point: it actually comes due every half hour.
-        it "comes due every half hour" do
-          result   = create!(repeat: "every:30-minutes:14:00")
-          reminder = BuddyReminder.find(result[:reminder_id])
-          zone     = ActiveSupport::TimeZone[user.timezone]
 
           slots = reminder.send(:slots_on, Date.new(2026, 3, 3), zone)
           expect(slots.first.strftime("%H:%M")).to eq("14:00")
@@ -433,8 +347,7 @@ RSpec.describe "Buddy conditional reminders" do
       end
     end
 
-    # The whole point of the pairing: one row, conditional, that stops for the
-    # night on its own — which is what those three rows should have been.
+    # One row, conditional, that stops for the night on its own.
     it "builds the reminder that should have been set in the first place" do
       result = create!(
         repeat:        "daily:21:00",

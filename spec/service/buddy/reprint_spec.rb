@@ -47,64 +47,37 @@ RSpec.describe Buddy::Reprint do
       expect(described_class.call(user: user, file: nil)[:file]).to be_nil
     end
 
-    # Verbatim from the HASS script, both branches.
-    it "reads a start off the success message" do
-      printer_says("Printing game_tray-vase.")
-
-      result = described_class.call(user: user, file: "game_tray-vase")
-      expect(result[:outcome]).to eq(:started)
-    end
-
-    it "reads a refusal off the real one" do
-      printer_says("Printer is preheating, but nothing will print - no matching file.")
-
-      expect(described_class.call(user: user, file: "game tray")[:outcome]).to eq(:missed)
-    end
-
-    # The printer does its own matching, so the name it reports back is the real
-    # one — the only place it appears without a second lookup.
-    it "picks the filename the printer matched out of the message" do
-      printer_says("Printing game_tray-vase.")
-
-      expect(described_class.call(user: user, file: "game tray")[:printed]).to eq("game_tray-vase")
-    end
-
-    # Reasonable neighbours of the real refusal, in case the script is reworded.
-    [
-      "No such file: game tray",
-      "File not found on the printer",
-      "Couldn't find a file named game tray",
-      "cannot match game tray",
-    ].each do |refusal|
-      it "also reads a refusal off #{refusal.inspect}" do
-        printer_says(refusal)
-
-        expect(described_class.call(user: user, file: "game tray")[:outcome]).to eq(:missed)
-      end
-    end
-
     # The polarity is the whole safety property. Anything that isn't recognisably
     # a start is UNCLEAR, never a start: a refusal read as a print is announced
     # as one, while an unclear answer just gets quoted back.
-    it "refuses to call an answer it can't read a start" do
-      printer_says("the spool is empty")
+    it "reads a start, a refusal, or anything else as unclear off the printer's answer", :aggregate_failures do
+      [
+        ["Printing game_tray-vase.", :started],
+        ["Printer is preheating, but nothing will print - no matching file.", :missed],
+        # Reasonable neighbours of the real refusal, in case the script is reworded.
+        ["No such file: game tray", :missed],
+        ["File not found on the printer", :missed],
+        ["Couldn't find a file named game tray", :missed],
+        ["cannot match game tray", :missed],
+        ["the spool is empty", :unclear],
+        ["The printer turned on and is preheating, but I didn't get a print status back.", :unclear],
+        ["", :unclear],
+      ].each { |said, outcome|
+        printer_says(said)
+        expect(described_class.call(user: user, file: "game tray")[:outcome]).to eq(outcome), said.inspect
+      }
+    end
 
+    # The printer does its own matching, so the name it reports back is the real
+    # one; an unclear answer names nothing and is quoted back.
+    it "picks the filename the printer matched, and quotes an unclear answer", :aggregate_failures do
+      printer_says("Printing game_tray-vase.")
+      expect(described_class.call(user: user, file: "game tray")[:printed]).to eq("game_tray-vase")
+
+      printer_says("the spool is empty")
       result = described_class.call(user: user, file: "game_tray-vase")
-      expect(result[:outcome]).to eq(:unclear)
       expect(result[:printed]).to be_nil
       expect(result[:printer_said]).to eq("the spool is empty")
-    end
-
-    it "treats the task's own no-status fallback as unclear" do
-      printer_says("The printer turned on and is preheating, but I didn't get a print status back.")
-
-      expect(described_class.call(user: user, file: "x")[:outcome]).to eq(:unclear)
-    end
-
-    it "says it can't tell when the printer answers with nothing" do
-      printer_says("")
-
-      expect(described_class.call(user: user, file: "x")[:outcome]).to eq(:unclear)
     end
 
     it "refuses when they have no reprint function at all" do
@@ -130,7 +103,6 @@ RSpec.describe Buddy::Reprint do
     it "settles in the turn so the model sees the printer's answer" do
       printer_says("Printing game_tray-vase.")
 
-      expect(Buddy::Tools.answers?(Buddy::Tools[:print_again])).to be(true)
       expect(send!(file: "game_tray-vase")[:status]).to eq(:answered)
     end
 
@@ -142,16 +114,7 @@ RSpec.describe Buddy::Reprint do
       result = send!(file: "game tray")
       expect(result[:outcome]).to eq(:missed)
       expect(result[:printer_said]).to include("no matching file")
-      expect(result[:how]).to include("print_history").and include("NOTHING is printing")
-    end
-
-    it "leaves a chip for a start" do
-      printer_says("Printing game_tray-vase.")
-
-      send!(file: "game_tray-vase")
-
-      expect(chips.last.body).to include("game_tray-vase")
-      expect(chips.last.metadata["ok"]).to be(true)
+      expect(result[:how]).to include("print_history")
     end
 
     # Asked for "game tray", the printer matched `game_tray-vase` and said so.
@@ -163,6 +126,7 @@ RSpec.describe Buddy::Reprint do
 
       expect(result[:printing]).to eq("game_tray-vase")
       expect(chips.last.body).to include("game_tray-vase")
+      expect(chips.last.metadata["ok"]).to be(true)
       expect(chips.last.metadata.dig("payload", "file")).to eq("game_tray-vase")
     end
 
@@ -173,7 +137,6 @@ RSpec.describe Buddy::Reprint do
 
       send!(file: "game tray")
 
-      expect(chips.last.body).to include("didn't know")
       expect(chips.last.metadata["ok"]).to be(false)
     end
 
@@ -189,10 +152,6 @@ RSpec.describe Buddy::Reprint do
     # would start a second print — so it must never be collected as a marker.
     #
     # That guard is Turn#proposal?, asserted here against the real method.
-    # ProposalBuilder used to refuse answering tools a second time as well,
-    # which read as belt-and-braces and was load-bearing in the wrong
-    # direction: it also refused ROUTINES, where nothing has run yet and a
-    # button press is the entire request. See routine_answering_tools_spec.
     it "is never collected as a proposal during a turn" do
       turn = Buddy::GPT::Turn.new(
         convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "print it again"),

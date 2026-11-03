@@ -1,8 +1,7 @@
 require "rails_helper"
 
-# Prod 6243, 15 Sep: a morning briefing that closed by announcing it was
-# holding one of the heavy things the person is carrying, against a bolded
-# instruction not to, on a turn where the seed had said nothing about it.
+# A briefing must not SAY a carried memory the seed never raised; being shaped
+# by it is fine.
 RSpec.describe Buddy::UnpromptedMemory do
   # A carried memory is only ever read for its `content` here, so the spec does
   # not need a record - and must not leak a constant to get one.
@@ -15,57 +14,33 @@ RSpec.describe Buddy::UnpromptedMemory do
 
   def trim(body) = described_class.trim(body, carried, facts)
 
-  it "drops the sentence that names it" do
-    body = "Morning! And I'm holding that audit note for you too, so you don't have to keep it in your head."
-
-    expect(trim(body)).to eq("Morning!")
+  it "drops the sentence that names it, and one pointing back at it", :aggregate_failures do
+    [
+      ["Morning! And I'm holding that audit note for you too, so you don't have to keep it in your head.", "Morning!"],
+      ["High of 74 today.\n\nDentist at 9.\n\nI know the audit is on your mind.", "High of 74 today.\n\nDentist at 9."],
+      ["Dentist at 9. I'm holding that audit note for you. That one's been sitting a while. High of 74.", "Dentist at 9. High of 74."],
+    ].each { |body, out| expect(trim(body)).to eq(out), body }
   end
 
-  it "leaves the rest of the briefing exactly as written" do
-    body = "High of 74 today.\n\nDentist at 9.\n\nI know the audit is on your mind."
+  # A gentler tone names nothing; a "that" opener only goes along with a cut;
+  # and a body that was nothing else is kept whole.
+  it "leaves everything else exactly as written", :aggregate_failures do
+    [
+      "Morning - take it easy today if you can, and leave yourself some room.",
+      "Dentist at 9. That one's been on the calendar a while.",
+      "I'm still holding that audit note for you.",
+    ].each { |body| expect(trim(body)).to eq(body), body }
 
-    expect(trim(body)).to eq("High of 74 today.\n\nDentist at 9.")
+    expect(described_class.trim("Morning! High of 74 and a clear afternoon.", [], facts))
+      .to eq("Morning! High of 74 and a clear afternoon.")
   end
 
-  # The half that must not be lost. Being SHAPED by it is the whole point of
-  # carrying it; only SAYING it is off limits.
-  it "says nothing about a gentler tone that names nothing" do
-    body = "Morning - take it easy today if you can, and leave yourself some room."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  # If the seed carried it, the seed decided it was today's subject, and the
-  # briefing is allowed to say it.
+  # If the seed carried it, the seed decided it was today's subject.
   it "allows a word the facts themselves carried" do
     body = "The audit is at 9:00am, so the morning is spoken for."
     facts_with = facts.merge(today: ["9:00am · Audit at work"])
 
     expect(described_class.trim(body, carried, facts_with)).to eq(body)
-  end
-
-  it "takes the sentence pointing back at it along with it" do
-    body = "Dentist at 9. I'm holding that audit note for you. That one's been sitting a while. High of 74."
-
-    expect(trim(body)).to eq("Dentist at 9. High of 74.")
-  end
-
-  it "leaves a sentence opening with \"that\" when nothing before it was cut" do
-    body = "Dentist at 9. That one's been on the calendar a while."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  it "keeps a body that was nothing else" do
-    body = "I'm still holding that audit note for you."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  it "does nothing when they are carrying nothing" do
-    body = "Morning! High of 74 and a clear afternoon."
-
-    expect(described_class.trim(body, [], facts)).to eq(body)
   end
 
   # The always-loaded block ships on a briefing where `situation_block` does
@@ -79,49 +54,24 @@ RSpec.describe Buddy::UnpromptedMemory do
       described_class.trim(body, [preference.new(content)], facts)
     end
 
-    it "drops a sentence that names several of its words" do
-      body = "Morning! Keeping in mind your period is about 6 days away, so a softer touch this week."
-      note = "Be mindful about how hormones might affect me over the next little while, with my period about 6 days away."
+    it "drops a sentence naming several of its words, not one sharing a single ordinary word", :aggregate_failures do
+      expect(trim_pref(
+        "Morning! Keeping in mind your period is about 6 days away, so a softer touch this week.",
+        "Be mindful about how hormones might affect me over the next little while, with my period about 6 days away.",
+      )).to eq("Morning!")
 
-      expect(trim_pref(body, note)).to eq("Morning!")
-    end
-
-    it "leaves a sentence that shares one ordinary word with it" do
       body = "Your shopping list has four things on it."
-      note = "My list means the Ongoing TO DO list, not the old empty duplicate."
-
-      expect(trim_pref(body, note)).to eq(body)
+      expect(trim_pref(body, "My list means the Ongoing TO DO list, not the old empty duplicate.")).to eq(body)
     end
 
-    # Prod 24 Sep, 8:30am. A briefing of three lines lost the third, which was
-    # the only one carrying anything: a two-week-old thought floated out of ON
-    # THEIR MIND. `repairs` recorded `unprompted_memory` and nothing else.
-    #
-    # The bar was two words and the pool was all twenty-odd preferences at once,
-    # so the two words came out of two unrelated notes - one about a pile of
-    # thoughts, one about being distracted. Nothing about either of them was said
-    # back; the sentence just used ordinary words that happened to appear in
-    # them, which a big enough pool makes almost unavoidable.
+    # The two-word bar is per note, so a big pool of preferences can't
+    # assemble a conviction from one ordinary word in each of two notes.
     describe "several preferences at once" do
       def trim_all(body, *notes)
         described_class.trim(body, notes.map { |n| preference.new(n) }, facts)
       end
 
-      it "does not convict on one word each from two different notes" do
-        body = "Morning! That fridge-leftovers thought is still sitting there if you want to get back to it."
-
-        kept = trim_all(
-          body,
-          "When something is sitting in the pile, hold it in your head for a moment before you drop it.",
-          "When I get distracted, nudge me back to the task I was doing.",
-        )
-
-        expect(kept).to eq(body)
-      end
-
-      # The bar is per note, so a pool of twenty cannot quietly lower it. Every
-      # extra note used to make every sentence easier to convict.
-      it "does not get easier to convict as the pool grows" do
+      it "does not convict on one word each from different notes, however many there are" do
         body = "Morning! That fridge-leftovers thought is still sitting there if you want to get back to it."
         notes = [
           "When something is sitting in the pile, hold it in your head for a moment.",
@@ -174,13 +124,8 @@ RSpec.describe Buddy::UnpromptedMemory do
     expect(Rails.logger).to have_received(:info) { |line| expect(line).not_to include("audit") }
   end
 
-  # Prod 7410, 3 Oct. `STASH_SPACING` had held Eve's fridge thought back for the
-  # third morning running - seed 7408 carried `stash: []` and no ON THEIR MIND
-  # section at all - and the briefing opened "Hope the fridge mission is feeling
-  # a bit more tamed now :)", which is 7329's line from the day before with the
-  # adjectives moved. It came off the previous briefing in the scrollback, so
-  # the spacing had nothing left to do; the words are the only place to catch
-  # it. Four consecutive mornings: 7168, 7245/7329, 7410.
+  # A stash thought held back by STASH_SPACING can still come off yesterday's
+  # briefing in the scrollback; the words are the only place to catch it.
   describe "a stash thought the spacing withheld" do
     let(:fridge) {
       Struct.new(:content, :kind_preference?).new(
@@ -199,19 +144,13 @@ RSpec.describe Buddy::UnpromptedMemory do
       expect(withheld(body)).to eq("Mooooorning!")
     end
 
-    # GRAMMAR. The note says "...fridge THAT needs to be eaten", and `that` is
-    # four letters, so without the stoplist it vetoes both of these - measured
-    # against Eve's last 20 briefings, where they are the only two false cuts.
-    it "is not a veto on every sentence containing the word that" do
-      body = "Mooooorning! Check the front flower bed at 7pm today, that one's on deck."
-
-      expect(withheld(body)).to eq(body)
-    end
-
-    it "leaves a sentence whose only crime is grammar" do
-      body = "Hi! Rain is due on Tuesday, so that's the bit worth keeping one eye on!"
-
-      expect(withheld(body)).to eq(body)
+    # The note says "...fridge THAT needs to be eaten"; the stoplist keeps
+    # grammar words from convicting.
+    it "is not a veto on every sentence containing the word that", :aggregate_failures do
+      [
+        "Mooooorning! Check the front flower bed at 7pm today, that one's on deck.",
+        "Hi! Rain is due on Tuesday, so that's the bit worth keeping one eye on!",
+      ].each { |body| expect(withheld(body)).to eq(body) }
     end
 
     # The morning it IS floated, the seed decided it was the subject.

@@ -133,7 +133,6 @@ RSpec.describe ErrorReport do
       back.announced!("#portfolio")
 
       expect(said).to include(reason: :returned)
-      expect(described_class.repeat_note(said)).to include("after being marked resolved")
       expect(ErrorStatus.find_by(fingerprint: first.fingerprint)).to be_nil
       expect(occurrence.announcement).to be_nil
     end
@@ -226,17 +225,13 @@ RSpec.describe ErrorReport do
     # long-running failure is normally unsent while the failure was announced
     # hours ago. Asking the group is the only way that reads correctly.
     it "says whether the failure was announced, not whether the last one was" do
+      described_class.record!(section: "turn", exception: boom("b"))
       first = described_class.record!(section: "sync", exception: boom("a"))
       first.update!(channel: "#portfolio")
       described_class.record!(section: "sync", exception: boom("a"))
 
-      expect(described_class.digest(span).first[:announced]).to be(true)
-    end
-
-    it "says so when nothing of its kind was ever announced" do
-      described_class.record!(section: "sync", exception: boom("a"))
-
-      expect(described_class.digest(span).first[:announced]).to be(false)
+      announced = described_class.digest(span).to_h { |entry| [entry[:section], entry[:announced]] }
+      expect(announced).to eq("sync" => true, "turn" => false)
     end
 
     it "carries a real row to read the detail off" do

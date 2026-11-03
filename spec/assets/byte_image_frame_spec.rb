@@ -1,14 +1,8 @@
 require "rails_helper"
 
-# A picture in the thread was invisible for as long as the network took, and
-# then arrived all at once and shoved everything above it — mid-read, mid-scroll
-# — because an <img> with no dimensions of its own is 0px tall until its bytes
-# land.
-#
-# The fix is a frame reserved before the picture exists, and the whole thing
-# rests on ONE property: the frame's height is the same empty as it is full.
-# That's a fact about the compiled cascade rather than about any single
-# declaration, which is why it's asserted here and not in a diff.
+# An <img> with no dimensions is 0px tall until its bytes land, so a picture in
+# the thread gets a frame reserved up front, and the frame is the same height
+# empty as full.
 RSpec.describe "Byte thread image frame" do
   let(:rules) { CompiledCss.rules.select { |r| r["selector"].include?(".byte-attachment-image") } }
 

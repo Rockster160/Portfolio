@@ -14,15 +14,9 @@ RSpec.describe Buddy::GPT::ContextTool do
   # sat in jil_functions the whole time. Which of the two indexes a capability
   # lands in is our filing system, not something the request reveals.
   describe "the two Jil indexes" do
-    it "returns both when only the trigger index was asked for" do
+    it "returns both whichever was asked for, and drags neither into an unrelated request" do
       expect(sections_returned(["jil_triggers"])).to include("jil_triggers", "jil_functions")
-    end
-
-    it "returns both when only the function index was asked for" do
       expect(sections_returned(["jil_functions"])).to include("jil_triggers", "jil_functions")
-    end
-
-    it "does not drag them into an unrelated request" do
       expect(sections_returned(["chores_all"])).to eq(["chores_all"])
     end
   end
@@ -122,30 +116,15 @@ RSpec.describe Buddy::GPT::ContextTool do
         )
       }
 
-      it "is not in front of the briefing that it started" do
-        expect(reminder_bodies(briefing)).not_to include(Buddy::TodaySchedule::BODY)
-      end
-
       # Half of somebody's day can live in reminders, so this takes one row
-      # rather than the section.
-      it "leaves every other reminder where it is" do
+      # rather than the section. "When's my next briefing?" is a real question,
+      # so an ordinary turn keeps it, labelled so it doesn't read as their job.
+      it "is withheld from the briefing it started, and labelled on an ordinary turn" do
+        expect(reminder_bodies(briefing)).not_to include(Buddy::TodaySchedule::BODY)
         expect(reminder_bodies(briefing)).to include("Cover the tomatoes.")
-      end
 
-      # "When's my next briefing?" is a real question, and an ordinary turn is
-      # where it gets asked.
-      it "is still there on an ordinary turn" do
-        expect(reminder_bodies(tool)).to include(Buddy::TodaySchedule::BODY)
-      end
-
-      # Prod 4020, hours after the briefing-turn guard shipped: "what's
-      # happening tomorrow?" came back "that Today briefing reminder is still
-      # sitting there from this morning." Present is right; unlabelled is not.
-      it "is labelled on an ordinary turn, so it doesn't read as a job of theirs" do
         rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
-        mine = rows.find { |r| r["body"] == Buddy::TodaySchedule::BODY }
-
-        expect(mine["own_briefing"]).to be(true)
+        expect(rows.find { |r| r["body"] == Buddy::TodaySchedule::BODY }["own_briefing"]).to be(true)
         expect(rows.find { |r| r["body"] == "Cover the tomatoes." }).not_to have_key("own_briefing")
       end
     end
@@ -181,17 +160,11 @@ RSpec.describe Buddy::GPT::ContextTool do
         )
       }
 
-      it "is not in front of a briefing about today" do
-        expect(reminder_bodies(briefing)).not_to include("Check the propagations.")
-      end
-
-      it "leaves today's alone" do
-        expect(reminder_bodies(briefing)).to include("Feed the fish.")
-      end
-
       # "What have I got coming up" is a question about the window, and every
       # turn that isn't a briefing keeps all 48 hours of it.
-      it "is still there on an ordinary turn" do
+      it "is withheld from a briefing about today, and kept on an ordinary turn" do
+        expect(reminder_bodies(briefing)).not_to include("Check the propagations.")
+        expect(reminder_bodies(briefing)).to include("Feed the fish.")
         expect(reminder_bodies(tool)).to include("Check the propagations.")
       end
     end
@@ -237,45 +210,29 @@ RSpec.describe Buddy::GPT::ContextTool do
       # prod 4482 now is the shape of the line rather than its absence:
       # Buddy::BriefingFacts puts the owner in front of the title, so the row
       # reads as hers before the model has written a word.
-      it "keeps today's, whether or not it touches their own day" do
-        expect(titles(briefing)).to include("Her Yoga", "Her IT Call")
-      end
-
-      # "(Although it should only be bringing up today's except for
-      # specifically noticeable events)" — the week is their own.
-      it "keeps a partner out of the week" do
+      # A partner's item is visible but never treated as their own: the owner
+      # goes in front of the title in Buddy::BriefingFacts, the week is their
+      # own, and two people doing two things at one hour is not a clash.
+      it "keeps today's for a briefing, but not the week, and names no collision" do
         AgendaItem.create!(agenda: hers, name: "Her Thursday", kind: :event,
                            start_at: 3.days.from_now, end_at: 3.days.from_now + 1.hour, status: :confirmed)
 
+        expect(titles(briefing)).to include("Her Yoga", "Her IT Call", "Serenity")
         expect(titles(briefing, "upcoming_notable")).not_to include("Her Thursday")
-      end
-
-      it "never drops one of their own" do
-        expect(titles(briefing)).to include("Serenity")
-      end
-
-      # "What has Chelsea got on today" is a real question, and it gets asked on
-      # an ordinary turn.
-      it "hands over the whole lot on an ordinary turn" do
-        expect(titles(tool)).to include("Her Yoga", "Her IT Call", "Serenity")
-      end
-
-      def row(tool, title)
-        JSON.parse(tool.call({ "sections" => ["today_notable"] }))["today_notable"]
-          .to_a.find { |i| i["title"] == title }
-      end
-
-      # Prod 4524 opened Byte's briefing with Chelsea's yoga as Rocco's own. Two
-      # people doing two different things at the same hour is not a clash, and
-      # a tag naming what it runs into is an invitation to write one.
-      it "does not tell a briefing what a partner's item runs into" do
         expect(row(briefing, "Her IT Call")).not_to have_key("collides_with")
       end
 
       # "Does her thing run into my Serenity?" is a real question, and an
       # ordinary turn is where it gets asked.
-      it "names it on an ordinary turn, where the comparison is the question" do
+      it "hands over the whole lot on an ordinary turn, collisions named" do
+        expect(titles(tool)).to include("Her Yoga", "Her IT Call", "Serenity")
         expect(row(tool, "Her IT Call")["collides_with"]).to eq("Serenity")
+      end
+
+      def row(tool, title)
+        JSON.parse(tool.call({ "sections" => ["today_notable"] }))["today_notable"].to_a.find { |i|
+          i["title"] == title
+        }
       end
     end
 
@@ -311,31 +268,18 @@ RSpec.describe Buddy::GPT::ContextTool do
                               cancelled_at: 6.days.ago)
       end
 
-      it "leaves the one that already went out of the briefing" do
-        expect(titles(briefing)).not_to include("Morning Yoga")
-      end
-
-      it "keeps the rest of the day" do
-        expect(titles(briefing)).to include("Tech Retro")
-      end
-
-      it "leaves a switched-off reminder out of the briefing" do
-        expect(reminder_bodies(briefing)).not_to include("Check the plants.")
-      end
-
       # "Did my yoga already happen?" and "is the plant check still on?" are
       # real questions, and an ordinary turn is where they get asked.
-      it "hands both over on an ordinary turn" do
+      it "leaves what already went, and switched-off reminders, out of the briefing only" do
+        expect(titles(briefing)).not_to include("Morning Yoga")
+        expect(titles(briefing)).to include("Tech Retro")
+        expect(reminder_bodies(briefing)).not_to include("Check the plants.")
         expect(titles(tool)).to include("Morning Yoga")
         expect(reminder_bodies(tool)).to include("Check the plants.")
       end
 
-      # Prod 4980 opened on "Whisper nap sound just went off" — reminder 69, a
-      # one-off that had rung twenty hours earlier — and then named nothing
-      # still ahead. A rung one-off is the only row in `upcoming_reminders`
-      # shaped like an event, and on a quiet morning that is what gets reached
-      # for. It stays everywhere else: prod 3255 is a briefing re-dating one
-      # forward off the thread with nothing in context to argue.
+      # A rung one-off is the only row in `upcoming_reminders` shaped like an
+      # event, so it is kept but marked everywhere except a briefing.
       describe "a one-off that already rang" do
         let!(:rang) {
           BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
@@ -343,25 +287,13 @@ RSpec.describe Buddy::GPT::ContextTool do
                                 fired_at: 20.hours.ago)
         }
 
-        it "is marked as history rather than dropped from the context" do
-          rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
-          mine = rows.to_a.find { |r| r["body"] == "Whisper nap sound." }
-
-          expect(mine["status"]).to eq("already_rang")
-        end
-
-        it "is not in front of a briefing" do
-          expect(reminder_bodies(briefing)).not_to include("Whisper nap sound.")
-        end
-
-        it "is still there on an ordinary turn, where the question gets asked" do
-          expect(reminder_bodies(tool)).to include("Whisper nap sound.")
-        end
-
-        it "does not take the still-due ones with it" do
+        it "is marked as history on an ordinary turn, and kept out of a briefing" do
           BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
                                 body: "Collect the parcel.", fire_at: 2.hours.from_now)
+          rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
 
+          expect(rows.to_a.find { |r| r["body"] == "Whisper nap sound." }["status"]).to eq("already_rang")
+          expect(reminder_bodies(briefing)).not_to include("Whisper nap sound.")
           expect(reminder_bodies(briefing)).to include("Collect the parcel.")
         end
       end
@@ -378,11 +310,8 @@ RSpec.describe Buddy::GPT::ContextTool do
         JSON.parse(tool.call({ "sections" => ["chores_due_today"] }))
       end
 
-      it "is not handed to a briefing at all" do
+      it "is not handed to a briefing at all, but still arrives on an ordinary turn" do
         expect(chore_rows(briefing)).not_to have_key("chores_due_today")
-      end
-
-      it "still arrives on an ordinary turn" do
         expect(chore_rows(tool)).to have_key("chores_due_today")
       end
 
@@ -423,27 +352,12 @@ RSpec.describe Buddy::GPT::ContextTool do
                               body: "Call the vet back.", fire_at: 7.hours.from_now)
       end
 
-      it "leaves a daily one out of the briefing" do
-        expect(reminder_bodies(briefing)).not_to include("Do Dishes.")
-      end
-
-      it "leaves an every-weekday one out too" do
-        expect(reminder_bodies(briefing)).not_to include("Stand up and stretch.")
-      end
-
-      # The whole point of the cut. A weekly or monthly nudge is exactly the
-      # thing somebody doesn't have top of mind, which is what makes it news.
-      it "keeps a weekly one, which is not something anybody knows cold" do
-        expect(reminder_bodies(briefing)).to include("Water the ferns.")
-      end
-
-      it "keeps a one-off" do
-        expect(reminder_bodies(briefing)).to include("Call the vet back.")
-      end
-
-      # "What reminders do I have?" and "move the dishes one to 9" both need
-      # the row. The narrowing is the briefing's, not the person's.
-      it "hands every one of them over on an ordinary turn" do
+      # A weekly or monthly nudge is exactly the thing somebody doesn't have top
+      # of mind, which is what makes it news. The narrowing is the briefing's,
+      # not the person's.
+      it "leaves daily and weekday nudges out of the briefing only" do
+        expect(reminder_bodies(briefing)).not_to include("Do Dishes.", "Stand up and stretch.")
+        expect(reminder_bodies(briefing)).to include("Water the ferns.", "Call the vet back.")
         expect(reminder_bodies(tool)).to include(
           "Do Dishes.", "Stand up and stretch.", "Water the ferns.", "Call the vet back."
         )
@@ -455,11 +369,8 @@ RSpec.describe Buddy::GPT::ContextTool do
     # to leave OUT and never said to go and get them, so a briefing that didn't
     # think to ask wrote the day without them.
     describe "reminders" do
-      it "arrive whether or not the briefing thought to ask" do
+      it "arrive on a briefing whether or not it asked, and are not forced on an ordinary turn" do
         expect(briefing_sections(["today_notable"])).to include("upcoming_reminders")
-      end
-
-      it "are not forced into an ordinary turn that asked for something else" do
         expect(sections_returned(["today_notable"])).to eq(["today_notable"])
       end
     end

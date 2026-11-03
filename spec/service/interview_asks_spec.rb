@@ -36,40 +36,20 @@ RSpec.describe InterviewAsks do
   }
 
   describe ".passages" do
-    it "takes the instruction and the list under it, which is the whole ask" do
+    # The bullets ARE the ask, and something to read before the call is an ask
+    # of its own. The pleasantries, the scheduling link and the sign-off sit
+    # next to both and ask for nothing.
+    it "takes the instruction with its list, and the recommended reading, and nothing around them" do
       found = described_class.passages(availability)
-
-      expect(found.first).to include("come ready to walk through")
-      expect(found.first).to include("An AI system you've built or shipped")
-      expect(found.first).to include("A time you disagreed with a teammate")
-    end
-
-    # The bullets ARE the ask. A cue carried without them says somebody asked
-    # for something and not what.
-    it "leaves the pleasantries behind it out" do
-      found = described_class.passages(availability).first
-
-      expect(found).not_to include("Thanks for your interest")
-      expect(found).not_to include("This role is onsite")
-      expect(found).not_to include("Tyler Mills")
-    end
-
-    # Something to go and read before the call is an ask as much as a story to
-    # have ready, and it is the half that needs the most notice.
-    it "takes the reading they recommended as an ask of its own" do
-      found = described_class.passages(availability)
+      joined = found.join("\n")
 
       expect(found.size).to eq(2)
+      expect(found.first).to include(
+        "come ready to walk through", "An AI system you've built or shipped", "A time you disagreed with a teammate"
+      )
       expect(found.last).to include("reviewing our Operating Principles")
-    end
-
-    # The link line and the sign-off. Neither asks for anything, and both sit
-    # next to something that does.
-    it "takes neither the scheduling link nor the sign-off" do
-      found = described_class.passages(availability).join("\n")
-
-      expect(found).not_to include("Enter your availability now")
-      expect(found).not_to include("Looking forward to the next steps")
+      expect(joined).not_to include("Thanks for your interest", "This role is onsite", "Tyler Mills")
+      expect(joined).not_to include("Enter your availability now", "Looking forward to the next steps")
     end
 
     it "finds nothing in a mail that asks for nothing" do

@@ -1,17 +1,8 @@
 require "rails_helper"
 
-# Prod 3509: "Also, the script was supposed to be darkness, NOT total darkness".
-# Reply 3510: "Kk! I fixed the script wording to darkness." buddy_routines 4
-# still read `scene: "total_darkness"` on step 2, with an updated_at identical
-# to its created_at — nothing had written to the row since it was made. Both
-# are real HASS scenes, so running lockdown ran the wrong one.
-#
-# save_routine's description already said, in those words, that saving over a
-# name is how a routine gets fixed. The reason that wasn't enough is that it
-# couldn't be followed: `routines` shows each step as a phrase ("call jil
-# function: HASS Scene"), never its arguments, so re-saving the sequence from
-# what the model can see silently drops every argument the phrase omits — here,
-# the position the blinds close to. There was no way to change one value.
+# `routines` shows each step as a phrase, never its arguments, so re-saving a
+# sequence from what the model can see drops every argument the phrase omits.
+# edit_routine changes one value on one step and leaves the rest.
 RSpec.describe "edit_routine" do
   let(:user)  { create(:user) }
   let!(:list) { List.create!(name: "Groceries").tap { |l| UserList.create!(user: user, list: l) } }
@@ -41,21 +32,15 @@ RSpec.describe "edit_routine" do
   def steps = routine.reload.steps
 
   describe "changing one value" do
-    it "writes the new value onto the step they named" do
+    it "writes the new value onto the step they named and leaves every other step as it was" do
       edit!(name: "shopping run", step: 2, set: '{"item":"sourdough"}')
 
       expect(steps[1]["payload"]["item"]).to eq("sourdough")
-    end
-
-    it "leaves every other step exactly as it was" do
-      edit!(name: "shopping run", step: 2, set: '{"item":"sourdough"}')
-
       expect(steps[0]["payload"]).to eq("list" => "Groceries", "item" => "milk", "category" => "weekly")
     end
 
-    # The argument nobody mentioned is also the one that can't be read back off
-    # the summary phrase, so replacing the payload wholesale is exactly how a
-    # correction quietly drops it.
+    # Replacing the payload wholesale is how a correction quietly drops the
+    # argument nobody mentioned.
     it "keeps the arguments of that step that weren't named" do
       edit!(name: "shopping run", step: 1, set: '{"item":"oat milk"}')
 
@@ -72,87 +57,6 @@ RSpec.describe "edit_routine" do
       expect { edit!(name: "shopping", step: 1, set: '{"item":"oat milk"}') }
         .to change { steps[0]["payload"]["item"] }.to("oat milk")
     end
-  end
-
-  describe "what it refuses" do
-    def confirm(payload) = tool[:confirm].call(payload, ctx)
-
-    it "refuses a routine that isn't theirs to edit" do
-      expect { confirm(name: "wind down", step: 1, set: '{"item":"x"}') }
-        .to raise_error(/no routine called/)
-    end
-
-    it "refuses a step number the routine doesn't have" do
-      expect { confirm(name: "shopping run", step: 5, set: '{"item":"x"}') }
-        .to raise_error(/has 2 steps, so there's no step 5/)
-    end
-
-    it "refuses step 0, since the model counts from 1" do
-      expect { confirm(name: "shopping run", step: 0, set: '{"item":"x"}') }
-        .to raise_error(/no step 0/)
-    end
-
-    it "refuses something that isn't a JSON object" do
-      expect { confirm(name: "shopping run", step: 1, set: "item = milk") }
-        .to raise_error(/JSON object/)
-      expect { confirm(name: "shopping run", step: 1, set: "{}") }
-        .to raise_error(/name at least one argument/)
-    end
-
-    # The same gate a fresh save goes through. A routine is the one thing where
-    # a step that resolves to nothing is unaffordable, because nobody re-reads a
-    # saved sequence — it fails the same way every time and looks like it ran.
-    it "refuses a value that matches nothing of theirs, and writes nothing" do
-      expect { edit!(name: "shopping run", step: 1, set: '{"list":"Kayaks"}') }
-        .to raise_error(/no list matching/)
-      expect(steps[0]["payload"]["list"]).to eq("Groceries")
-    end
-
-    # Prod 1 Sep, Puppy Window mode. The routine was right from the moment it
-    # was made — the blind moved wrongly because task 429 inverted the
-    # percentage downstream — and three turns rewrote it to the identical
-    # payload and called it fixed (5128, 5136, 5142).
-    describe "an edit that would change nothing" do
-      it "refuses rather than writing the same values again" do
-        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }
-          .to raise_error(/already set that way/)
-      end
-
-      it "tells the model to stop rather than retry, and to look elsewhere" do
-        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }
-          .to raise_error(/nothing to change.*somewhere other than this routine/m)
-      end
-
-      it "leaves the row untouched, updated_at included" do
-        was = routine.updated_at
-
-        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }.to raise_error(/already set/)
-        expect(routine.reload.updated_at).to eq(was)
-      end
-
-      # Restating one argument while genuinely changing another is a normal
-      # correction and has to go through.
-      it "still allows an edit that repeats one value and changes another" do
-        edit!(name: "shopping run", step: 1, set: '{"list":"Groceries","item":"oat milk"}')
-
-        expect(steps[0]["payload"]).to eq("list" => "Groceries", "item" => "oat milk", "category" => "weekly")
-      end
-
-      # The same values on a DIFFERENT step are a real change.
-      it "still allows setting a step to what a different step says" do
-        edit!(name: "shopping run", step: 2, set: '{"item":"milk"}')
-
-        expect(steps[1]["payload"]["item"]).to eq("milk")
-      end
-    end
-  end
-
-  describe "what it tells them" do
-    it "names the step and what it became" do
-      result = edit!(name: "shopping run", step: 2, set: '{"item":"sourdough"}')
-
-      expect(tool[:receipt].call(result.symbolize_keys, ctx)).to include("shopping run", "step 2", "sourdough")
-    end
 
     it "shows the before and after on the chip" do
       resolved = tool[:confirm].call({ name: "shopping run", step: 2, set: '{"item":"sourdough"}' }, ctx)[:resolved]
@@ -161,9 +65,43 @@ RSpec.describe "edit_routine" do
     end
   end
 
-  # Editing a routine from inside a routine is a knot with no use case behind
-  # it, and the same reason save_routine and forget_routine are excluded.
-  it "can't be saved as a step of a routine" do
-    expect(Buddy::Tools.routinable?(tool)).to be(false)
+  describe "what it refuses" do
+    def confirm(payload) = tool[:confirm].call(payload, ctx)
+
+    it "refuses a routine that isn't theirs, a step it doesn't have, and a set that isn't a JSON object" do
+      expect { confirm(name: "wind down", step: 1, set: '{"item":"x"}') }.to raise_error(/no routine called/)
+      expect { confirm(name: "shopping run", step: 5, set: '{"item":"x"}') }.to raise_error(/no step 5/)
+      # The model counts from 1.
+      expect { confirm(name: "shopping run", step: 0, set: '{"item":"x"}') }.to raise_error(/no step 0/)
+      expect { confirm(name: "shopping run", step: 1, set: "item = milk") }.to raise_error(/JSON object/)
+      expect { confirm(name: "shopping run", step: 1, set: "{}") }.to raise_error(/at least one argument/)
+    end
+
+    # The same gate a fresh save goes through: nobody re-reads a saved
+    # sequence, so a step that resolves to nothing fails silently every time.
+    it "refuses a value that matches nothing of theirs, and writes nothing" do
+      expect { edit!(name: "shopping run", step: 1, set: '{"list":"Kayaks"}') }
+        .to raise_error(/no list matching/)
+      expect(steps[0]["payload"]["list"]).to eq("Groceries")
+    end
+
+    # Rewriting the identical payload and calling it fixed hides that the fault
+    # is somewhere else.
+    describe "an edit that would change nothing" do
+      it "refuses rather than writing the same values again, leaving updated_at alone" do
+        was = routine.updated_at
+
+        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }.to raise_error(/already set/)
+        expect(routine.reload.updated_at).to eq(was)
+      end
+
+      it "still allows repeating one value while changing another, or copying a different step" do
+        edit!(name: "shopping run", step: 1, set: '{"list":"Groceries","item":"oat milk"}')
+        expect(steps[0]["payload"]).to eq("list" => "Groceries", "item" => "oat milk", "category" => "weekly")
+
+        edit!(name: "shopping run", step: 2, set: '{"item":"oat milk"}')
+        expect(steps[1]["payload"]["item"]).to eq("oat milk")
+      end
+    end
   end
 end

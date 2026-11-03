@@ -268,25 +268,15 @@ RSpec.describe Jil::Executor do
     }
 
     describe "auth_type / auth_type_id / trigger_scope" do
-      it "stores auth and trigger_scope passed to .call" do
+      it "stores auth and trigger_scope passed to .call, blank when not provided" do
+        described_class.call(user, code, {})
+        expect(Execution.last).to have_attributes(auth_type: nil, auth_type_id: nil, trigger_scope: nil)
+
         described_class.call(
           user, code, {},
           auth: :run, auth_id: user.id, trigger_scope: :ui_run
         )
-
-        execution = Execution.last
-        expect(execution.auth_type).to eq("run")
-        expect(execution.auth_type_id).to eq(user.id)
-        expect(execution.trigger_scope).to eq("ui_run")
-      end
-
-      it "leaves columns blank when not provided" do
-        described_class.call(user, code, {})
-
-        execution = Execution.last
-        expect(execution.auth_type).to be_nil
-        expect(execution.auth_type_id).to be_nil
-        expect(execution.trigger_scope).to be_nil
+        expect(Execution.last).to have_attributes(auth_type: "run", auth_type_id: user.id, trigger_scope: "ui_run")
       end
 
       it "auto-derives trigger_scope from the listener trigger" do
@@ -324,45 +314,20 @@ RSpec.describe Jil::Executor do
     end
 
     describe "auth_record / auth_label" do
-      it "resolves a Task source for :trigger" do
+      it "resolves the source record where there is a class for it, and labels every shape" do
         source_task = user.tasks.create!(name: "src", listener: "src_lis", code: code, enabled: true)
-        execution = Execution.create!(user: user, auth_type: :trigger, auth_type_id: source_task.id)
-
-        expect(execution.auth_record).to eq(source_task)
-        expect(execution.auth_label).to eq("Task##{source_task.id}")
-      end
-
-      it "resolves a User source for :userpass" do
-        execution = Execution.create!(user: user, auth_type: :userpass, auth_type_id: user.id)
-
-        expect(execution.auth_record).to eq(user)
-        expect(execution.auth_label).to eq("User##{user.id}")
-      end
-
-      it "returns nil record and labels by enum for :cron" do
-        execution = Execution.create!(user: user, auth_type: :cron)
-
-        expect(execution.auth_record).to be_nil
-        expect(execution.auth_label).to eq("cron")
-      end
-
-      it "labels with auth_type when no class mapping but id present" do
-        execution = Execution.create!(user: user, auth_type: :cron, auth_type_id: 5)
-
-        expect(execution.auth_label).to eq("cron#5")
-      end
-
-      it "labels as 'unknown' when auth_type and auth_type_id are both blank" do
-        execution = Execution.create!(user: user)
-
-        expect(execution.auth_label).to eq("unknown")
-      end
-
-      it "labels :words as plain auth_type with no id" do
-        execution = Execution.create!(user: user, auth_type: :words)
-
-        expect(execution.auth_record).to be_nil
-        expect(execution.auth_label).to eq("words")
+        [
+          [{ auth_type: :trigger, auth_type_id: source_task.id }, source_task, "Task##{source_task.id}"],
+          [{ auth_type: :userpass, auth_type_id: user.id }, user, "User##{user.id}"],
+          [{ auth_type: :cron }, nil, "cron"],
+          [{ auth_type: :cron, auth_type_id: 5 }, nil, "cron#5"],
+          [{ auth_type: :words }, nil, "words"],
+          [{}, nil, "unknown"],
+        ].each { |attrs, record, label|
+          execution = Execution.create!(user: user, **attrs)
+          expect(execution.auth_record).to eq(record), attrs.inspect
+          expect(execution.auth_label).to eq(label), attrs.inspect
+        }
       end
     end
   end
@@ -383,6 +348,8 @@ RSpec.describe Jil::Executor do
       expect(execution.code).to eq(code)
       expect(execution.input_data).to include("foo" => "bar")
       expect(execution.ctx).to include("output" => ["hello"])
+      expect(execution.output).to eq(["hello"])
+      expect(execution.error).to be_nil
     end
 
     it "does not run inline compaction on initialize" do
@@ -392,12 +359,9 @@ RSpec.describe Jil::Executor do
       expect(Execution.where.not(payload_id: nil).count).to eq(11)
     end
 
-    # A camera frame reaches Jil as ~500KB of base64 sitting in a var, so what
-    # gets done with vars stopped being free. `store_progress` writes
-    # `ctx.except(:vars)` and `broadcast!` sends five named keys — neither carries
-    # a value. Including vars in either would write half a megabyte into
-    # execution_payloads and push it down the socket on EVERY snapshot request,
-    # 32 times over, since execute_line broadcasts per line.
+    # A var can hold a large blob (a camera frame as base64). `store_progress`
+    # writes `ctx.except(:vars)` and `broadcast!` sends named keys only, so
+    # neither the payload nor the per-line broadcast carries a var's value.
     it "keeps var values out of the stored payload and off the socket" do
       big = "x" * 200_000
       allow_any_instance_of(Jil::Methods::Global).to receive(:request).and_return(
@@ -417,18 +381,10 @@ RSpec.describe Jil::Executor do
       expect(payload.ctx.to_json).not_to include(big)
       expect(broadcasts.map(&:to_json).join).not_to include(big)
     end
-
-    it "exposes ctx-derived helpers through the payload" do
-      described_class.call(user, code, {})
-      execution = Execution.last
-      expect(execution.output).to eq(["hello"])
-      expect(execution.error).to be_nil
-    end
   end
 
-  # Reproduces the bug where external Run-button POSTs (which arrive as string-keyed
-  # hashes after Sidekiq's JSON roundtrip) silently delivered nil to
-  # Global.functionParams positional binders that look up dig(:params).
+  # External Run-button POSTs arrive as string-keyed hashes after Sidekiq's JSON
+  # roundtrip; Global.functionParams binders look up dig(:params).
   describe "external run input data" do
     let(:user) { User.me }
 
@@ -441,16 +397,9 @@ RSpec.describe Jil::Executor do
       JIL
     }
 
-    it "binds positional args from a string-keyed input_data hash" do
-      string_keyed = { "params" => ["White"], "Color" => "White" }
-      exe = described_class.call(user, code, string_keyed)
-      expect(exe.result).to eq("White")
-    end
-
-    it "binds positional args from a symbol-keyed input_data hash" do
-      symbol_keyed = { params: ["Blue"] }
-      exe = described_class.call(user, code, symbol_keyed)
-      expect(exe.result).to eq("Blue")
+    it "binds positional args from a string- or symbol-keyed input_data hash" do
+      expect(described_class.call(user, code, { "params" => ["White"], "Color" => "White" }).result).to eq("White")
+      expect(described_class.call(user, code, { params: ["Blue"] }).result).to eq("Blue")
     end
 
     it "binds NamedArg lookups from a string-keyed input_data hash" do
@@ -464,9 +413,8 @@ RSpec.describe Jil::Executor do
       expect(exe.result).to eq("Alice")
     end
 
-    # Regression: 0e6b39fd wrapped input_data in .with_indifferent_access
-    # unconditionally, which exploded on AR records and silently dropped every
-    # event:add / agenda_item / chore_completion listener trigger.
+    # Record triggers (event:add, agenda_item, chore_completion) hand the
+    # executor an AR record, which has no `with_indifferent_access`.
     it "accepts an ApplicationRecord as input_data (Jilable trigger path)" do
       event = ActionEvent.create!(user: user, name: "Whisper", notes: "Nap")
       record_code = <<~'JIL'

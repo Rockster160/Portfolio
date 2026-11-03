@@ -44,12 +44,10 @@ RSpec.describe AgendaNotificationSetting do
   describe "#notify_for?" do
     let(:setting) { described_class.for(owner, agenda) }
 
-    it "matches kind × recurrence" do
+    it "matches kind × recurrence against the user's settings" do
       oneoff_task = build(:agenda_item, agenda: agenda, kind: :task, agenda_schedule: nil)
       expect(setting.notify_for?(oneoff_task)).to be true
-    end
 
-    it "respects user-customized state" do
       setting.notify_event_recurring = false
       setting.save!
       sched = create(:agenda_schedule, agenda: agenda, kind: :event,

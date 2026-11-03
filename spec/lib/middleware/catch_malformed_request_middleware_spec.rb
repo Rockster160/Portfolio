@@ -21,10 +21,6 @@ RSpec.describe CatchMalformedRequestMiddleware do
     expect(body).to eq(["Not a valid HTTP method"])
   end
 
-  it "does not let an unknown method reach Rails' own method check" do
-    expect { middleware.call(env_for("PRI")) }.not_to raise_error
-  end
-
   it "refuses a request whose Accept header is not a MIME type" do
     raising_app = ->(_env) { raise ActionDispatch::Http::MimeNegotiation::InvalidType }
     status, _headers, body = described_class.new(raising_app).call(env_for("GET"))

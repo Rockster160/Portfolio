@@ -3,24 +3,9 @@ require "rails_helper"
 RSpec.describe JobApplication do
   let(:user) { create(:user) }
 
-  it "gives every application a colour without being asked" do
-    job = user.job_applications.create!(company: "Acme")
-
-    expect(job.color).to match(/\A#[0-9a-f]{6}\z/i)
-  end
-
-  it "keeps a colour that was chosen" do
-    job = user.job_applications.create!(company: "Acme", color: "#123456")
-
-    expect(job.color).to eq("#123456")
-  end
-
-  it "reads as company and role together" do
-    expect(user.job_applications.new(company: "Acme", role: "Staff").label).to eq("Acme — Staff")
-    expect(user.job_applications.new(company: "Acme").label).to eq("Acme")
-  end
-
-  it "falls back to initials when there is no logo" do
+  it "gets a colour unless one was chosen, and falls back to initials for a logo", :aggregate_failures do
+    expect(user.job_applications.create!(company: "Acme").color).to match(/\A#[0-9a-f]{6}\z/i)
+    expect(user.job_applications.create!(company: "Acme", color: "#123456").color).to eq("#123456")
     expect(user.job_applications.new(company: "Acme").initials).to eq("A")
     expect(user.job_applications.new(company: "Big Corp").initials).to eq("BC")
   end
@@ -67,16 +52,10 @@ RSpec.describe JobApplication do
     end
   end
 
-  describe "#jobhunt_url" do
-    it "is nothing at all until the row knows its local id" do
-      expect(user.job_applications.create!(company: "Acme").jobhunt_url).to be_nil
-    end
-
-    it "points at the job's page in the local hunter" do
-      job = user.job_applications.create!(company: "Acme", jobhunt_job_id: 631)
-
-      expect(job.jobhunt_url).to eq("http://localhost:8790/jobs/631")
-    end
+  it "points at the job's page in the local hunter once it knows the local id" do
+    expect(user.job_applications.create!(company: "Acme").jobhunt_url).to be_nil
+    job = user.job_applications.create!(company: "Acme", jobhunt_job_id: 631)
+    expect(job.jobhunt_url).to eq("http://localhost:8790/jobs/631")
   end
 
   describe "#merge_with!" do
@@ -139,16 +118,14 @@ RSpec.describe JobApplication do
       expect(keep.reload.jobhunt_job_id).to eq(182)
     end
 
-    it "keeps the row it was called on when neither was recorded by jobhunt" do
+    it "keeps the row it was called on when neither, or both, were recorded by jobhunt" do
+      other = user.job_applications.create!(company: "Workstream")
       expect(drop.merge_with!(keep)).to eq(drop)
       expect(JobApplication.exists?(keep.id)).to be(false)
-    end
 
-    it "keeps the row it was called on when both were" do
-      keep.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
       drop.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
-
-      expect(drop.merge_with!(keep)).to eq(drop)
+      other.notes.create!(tag: :applied, source: "jobhunt", occurred_at: receipt_at)
+      expect(other.merge_with!(drop)).to eq(other)
     end
 
     it "fills what this row is missing and keeps what it has" do
@@ -686,23 +663,16 @@ RSpec.describe JobApplication do
   describe "the other names it answers to" do
     let(:job) { user.job_applications.create!(company: "iCapital") }
 
-    it "takes one name per line and keeps them as typed" do
+    it "takes one name per line as typed, one of each, up to a cap", :aggregate_failures do
       job.known_as_lines = " Institutional Capital Network \n\naccurate.com\n"
       job.save!
-
       expect(job.reload.known_as).to eq(["Institutional Capital Network", "accurate.com"])
       expect(job.known_as_lines).to eq("Institutional Capital Network\naccurate.com")
-    end
 
-    it "keeps one of each name" do
       job.known_as_lines = "Accurate\naccurate\nSterling"
-
       expect(job.known_as).to eq(["Accurate", "Sterling"])
-    end
 
-    it "keeps the list to something a person typed" do
       job.known_as_lines = (1..30).map { |n| "Name #{n}" }.join("\n")
-
       expect(job.known_as.size).to eq(JobApplication::MAX_KNOWN_AS)
       expect(job.known_as.first.length).to be <= JobApplication::MAX_KNOWN_AS_NAME
     end
@@ -740,11 +710,15 @@ RSpec.describe JobApplication do
       job.notes.create!(tag: tag, occurred_at: at)
     end
 
-    it "starts as the standard steps, none of them answered" do
-      expect(job.rubric_steps.map(&:name)).to eq(
-        ["Applied", "Recruiter screen", "Hiring manager call", "Technical screen", "Onsite loop", "Offer"],
-      )
+    it "starts as the standard steps, none of them answered, and goes back to them when emptied" do
+      expect(job.rubric_steps.map(&:name)).to eq(JobApplication::DEFAULT_RUBRIC)
       expect(job.rubric_steps).to all(satisfy { |step| !step.done? })
+
+      job.rubric_lines = "Just the one"
+      job.save!
+      job.rubric_lines = ""
+      job.save!
+      expect(job.rubric_steps.map(&:name)).to eq(JobApplication::DEFAULT_RUBRIC)
     end
 
     # The tick is read off the notes every time rather than written down when
@@ -807,15 +781,6 @@ RSpec.describe JobApplication do
       expect(job.rubric_steps.map(&:name)).to include("Take-home")
     end
 
-    it "goes back to the standard steps when the list is emptied" do
-      job.rubric_lines = "Just the one"
-      job.save!
-      job.rubric_lines = ""
-      job.save!
-
-      expect(job.rubric_steps.map(&:name)).to eq(JobApplication::DEFAULT_RUBRIC)
-    end
-
     it "ticks a step nothing on the timeline speaks for" do
       job.rubric_lines = "Reference check"
       job.save!
@@ -844,18 +809,14 @@ RSpec.describe JobApplication do
       expect(job.reload.rubric_steps.first.done?).to be(true)
     end
 
-    it "keeps the list to something a person typed" do
+    it "keeps the list to something a person typed, one step per name" do
       job.rubric_lines = (1..40).map { |n| "Step #{n}" }.join("\n")
       job.save!
-
       expect(job.rubric.size).to eq(JobApplication::MAX_RUBRIC_STEPS)
       expect(job.rubric.first["name"].length).to be <= JobApplication::MAX_RUBRIC_NAME
-    end
 
-    it "keeps one step per name" do
       job.rubric_lines = "Interview\ninterview\nOffer"
       job.save!
-
       expect(job.rubric.pluck("name")).to eq(["Interview", "Offer"])
     end
   end

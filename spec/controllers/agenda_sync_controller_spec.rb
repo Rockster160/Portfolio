@@ -7,7 +7,7 @@ RSpec.describe AgendaSyncController, type: :controller do
   before { sign_in user }
 
   describe "GET #bootstrap" do
-    it "returns the full snapshot shape" do
+    it "returns the full snapshot shape, with accessible agendas flagged editable", :aggregate_failures do
       get :bootstrap
       expect(response).to be_successful
 
@@ -21,13 +21,10 @@ RSpec.describe AgendaSyncController, type: :controller do
       expect(body["window"]).to include("from", "to")
       expect(body["window"]["to"]).to be_nil # open-ended forward
       expect(body["timezone"]).to eq(user.timezone)
-    end
 
-    it "includes accessible agendas with editable flag" do
-      get :bootstrap
-      ids = JSON.parse(response.body)["agendas"].map { |a| a["id"] }
+      ids = body["agendas"].map { |a| a["id"] }
       expect(ids).to include(agenda.id)
-      a = JSON.parse(response.body)["agendas"].find { |x| x["id"] == agenda.id }
+      a = body["agendas"].find { |x| x["id"] == agenda.id }
       expect(a["editable"]).to eq(true)
       expect(a).to include("name", "color", "slug", "source", "sort_order", "managed_externally")
     end
@@ -106,8 +103,11 @@ RSpec.describe AgendaSyncController, type: :controller do
   end
 
   describe "GET #page" do
-    it "400s with missing/invalid range" do
+    it "400s with a missing range, or one past the day cap" do
       get :page
+      expect(response).to have_http_status(:bad_request)
+
+      get :page, params: { from: "2026-01-01", to: "2030-01-01" }
       expect(response).to have_http_status(:bad_request)
     end
 
@@ -121,11 +121,6 @@ RSpec.describe AgendaSyncController, type: :controller do
       ids = JSON.parse(response.body)["items"].map { |i| i["id"] }
       expect(ids).to include(inside.id.to_s)
       expect(ids).not_to include(outside.id.to_s)
-    end
-
-    it "400s when range exceeds the day cap" do
-      get :page, params: { from: "2026-01-01", to: "2030-01-01" }
-      expect(response).to have_http_status(:bad_request)
     end
   end
 end

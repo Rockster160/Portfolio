@@ -25,7 +25,7 @@ RSpec.describe "POST /api/v1/buddy_usages", type: :request do
     post "/api/v1/buddy_usages", params: { usages: rows }, headers: as_headers, as: :json
   end
 
-  it "records spend that happened somewhere else" do
+  it "records spend that happened somewhere else, at the moment it was spent", :aggregate_failures do
     expect { post_rows([row]) }.to change(BuddyUsage, :count).by(1)
 
     expect(response).to have_http_status(:ok)
@@ -38,12 +38,7 @@ RSpec.describe "POST /api/v1/buddy_usages", type: :request do
       cost_micros: 1_234,
       origin_uid:  "laptop:development:41:2026-08-20T18:04:00.000Z",
     )
-  end
-
-  # A month of evals arriving at once must not land on today.
-  it "keeps the moment the money was spent" do
-    post_rows([row])
-
+    # A month of evals arriving at once must not land on today.
     expect(BuddyUsage.last.created_at).to eq(Time.zone.parse("2026-08-20T18:04:00.000Z"))
   end
 

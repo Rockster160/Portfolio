@@ -1,14 +1,9 @@
 require "rails_helper"
 
-# The briefing saying something its seed never carried.
-#
-# Prod 6137, 15 Sep: a weather-only seed, and a briefing that moved Eve's pantry
-# day to Tuesday by reading her own sentence from the night before forward
-# unchanged. See Buddy::DayClaim.
+# Trims a briefing's claims about days its seed never carried.
 RSpec.describe Buddy::DayClaim do
-  # What Suki actually had, in the shape the seed actually carries it - seed
-  # 6135's `weather` is a hash with a `week` outlook in it, and the day check
-  # reads that field rather than the facts' text.
+  # The seed's `weather` is a hash with a `week` outlook in it, and the day
+  # check reads that field rather than the facts' text.
   let(:facts) {
     { weather: { low: 53, high: 74, week: "rain Wed, Thu & Fri" } }
   }
@@ -82,13 +77,7 @@ RSpec.describe Buddy::DayClaim do
     expect(described_class.trim("Morning!", {})).to eq("Morning!")
   end
 
-  # Prod 7239/7240, 1 Oct. Byte opened Thursday's briefing "Busy one tomorrow,
-  # but a good one" over a day holding a 10am iCapital interview. Read on a lock
-  # screen that moves the interview to Friday.
-  #
-  # The word was in the facts - as the title of an 8pm chore, "Set alarm for
-  # tomorrow!" - so the overlap test had its evidence handed to it by the one
-  # thing on the day that was not about tomorrow at all.
+  # A day word inside an item's title is not evidence that the day is covered.
   describe "a day word that is part of a NAME" do
     let(:facts) {
       {
@@ -126,12 +115,8 @@ RSpec.describe Buddy::DayClaim do
     end
   end
 
-  # Prod 6381, 16 Sep. The seed's outlook read "rain Thu, Fri & Sat" and the
-  # briefing wrote the days out in full, which is what it is asked to do - so
-  # the sentence shares no WORD with the facts ("rainy" is not "rain",
-  # "Thursday" is not "Thu") and anything comparing word sets cuts a correct
-  # forecast. The days are read off the outlook, abbreviations expanded, for
-  # exactly this.
+  # The days are read off the outlook with abbreviations expanded, so a
+  # spelled-out forecast sharing no WORD with the facts still survives.
   it "keeps the week's own rain, spelled out" do
     facts[:weather][:week] = "rain Thu, Fri & Sat"
     body = "Morning! This week looks rainy on Thursday, Friday, and Saturday too!"

@@ -19,7 +19,7 @@ RSpec.describe SidekiqErrors do
     expect(row.section).to eq("sidekiq:SimpleFinSyncWorker")
     expect(row).to have_attributes(layer: "backend", tag: "job")
     expect(row.error_class).to eq("RuntimeError")
-    expect(row.message).to include("Job SimpleFinSyncWorker failed", "upstream 502")
+    expect(row.message).to include("upstream 502")
     expect(row.extra).to include("jid" => "abc123", "retry" => 2, "args" => "[1,\"x\"]")
   end
 

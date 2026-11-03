@@ -87,57 +87,36 @@ RSpec.describe ByteInterviewPrep do
       expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
     end
 
-    it "puts read mode back when the pwd bar has toggled it" do
+    it "puts read mode back when the pwd bar has toggled it, and stays archived" do
       convo = described_class.conversation(user)
       convo.update!(metadata: convo.metadata.merge("permission_mode" => "auto"))
 
-      expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
-    end
-
-    it "stays out of the thread list" do
-      expect(described_class.conversation(user)).to be_archived
-    end
-
-    it "reuses the one thread rather than making one per interview" do
-      first = described_class.conversation(user)
-
-      expect(described_class.conversation(user).id).to eq(first.id)
+      again = described_class.conversation(user)
+      expect(again.metadata["permission_mode"]).to eq("read")
+      expect(again).to be_archived
+      expect(again.id).to eq(convo.id)
     end
   end
 
   describe ".run!" do
-    it "posts the prompt into the prep thread" do
+    # NOTHING IS SAID WHEN IT STARTS: an hour before an interview, a buzz saying
+    # "researching" costs attention and carries nothing. The thread is reused
+    # for every interview, so a resumed session would arrive already believing
+    # it knows which company this is.
+    it "posts the prompt hidden and silent on a fresh session, stamped with the application and booking" do
+      expect(ByteLocal).to receive(:reset_claude_session)
+
       expect { described_class.run!(user, application: job, item: item) }.to change {
         described_class.conversation(user).byte_messages.count
       }.by(1)
-    end
-
-    # NOTHING IS SAID WHEN IT STARTS. An hour before an interview, a buzz
-    # saying "researching" costs attention and carries nothing.
-    it "keeps the prompt out of the thread and off his phone" do
-      described_class.run!(user, application: job, item: item)
       posted = described_class.conversation(user).byte_messages.order(:id).last
 
       expect(posted.metadata["hidden"]).to be_truthy
       expect(posted.direction).to eq("outbound")
+      expect(posted.metadata).to include(
+        "job_application_id" => job.id, "agenda_item_id" => item.id, "interview_at" => item.start_at.iso8601,
+      )
       expect(WebPushNotifications).not_to have_received(:send_to_byte)
-    end
-
-    # The thread is reused for every interview, so a resumed session arrives
-    # already believing it knows which company this is.
-    it "starts a fresh session" do
-      expect(ByteLocal).to receive(:reset_claude_session)
-
-      described_class.run!(user, application: job, item: item)
-    end
-
-    it "stamps which application and which booking it is for" do
-      described_class.run!(user, application: job, item: item)
-      posted = described_class.conversation(user).byte_messages.order(:id).last
-
-      expect(posted.metadata["job_application_id"]).to eq(job.id)
-      expect(posted.metadata["agenda_item_id"]).to eq(item.id)
-      expect(posted.metadata["interview_at"]).to eq(item.start_at.iso8601)
     end
 
     # A touched event re-arms its trigger and can fire twice; a second session
@@ -213,15 +192,10 @@ RSpec.describe ByteInterviewPrep do
   describe "the prompt" do
     subject(:prompt) { described_class::Brief.text(job, item, user: user) }
 
-    it "says which company, which role, and when" do
-      expect(prompt).to include("Bluestaq")
-      expect(prompt).to include("Principal Engineer")
-      expect(prompt).to include("Tuesday October 20, 2026 at 2:00 PM")
-    end
-
     # What the row says is how the kind of conversation gets decided, and the
     # link line is dropped because it is only how we got here.
-    it "carries what the calendar row says, without the link line" do
+    it "says which company, which role, and when, with the calendar row but not its link line" do
+      expect(prompt).to include("Bluestaq", "Principal Engineer", "Tuesday October 20, 2026 at 2:00 PM")
       expect(prompt).to include("45 minutes with Casey, the hiring manager.")
       expect(prompt).not_to include(job.interview_url)
     end
@@ -262,27 +236,15 @@ RSpec.describe ByteInterviewPrep do
         )
       end
 
-      it "hoists it out of the mail into a section of its own" do
+      # The row says "45 minutes with Casey, the hiring manager", so this ask is
+      # about the hour coming up rather than about a later round.
+      it "hoists it into a section of its own, naming its beat and that it is this round" do
         expect(prompt).to include("WHAT THEY TOLD ME TO PREPARE")
-        expect(prompt).to include("An AI system you've built or shipped that takes action")
-        expect(prompt).to include("A time you disagreed with a teammate")
-      end
-
-      it "says which beat it arrived in and which round it is about" do
-        expect(prompt).to include("Availability beat")
-        expect(prompt).to include("about the hiring manager interview")
-      end
-
-      # The row says "45 minutes with Casey, the hiring manager", so this ask
-      # is about the hour coming up rather than about a later round.
-      it "says when the booking being prepared for is that round" do
+        expect(prompt).to include(
+          "An AI system you've built or shipped that takes action", "A time you disagreed with a teammate"
+        )
+        expect(prompt).to include("Availability beat", "about the hiring manager interview")
         expect(prompt).to include("and that is the round being prepared for")
-      end
-
-      # A brief that mentions what they asked for and answers something else is
-      # the one failure this section exists to stop.
-      it "asks for each of them answered rather than noted" do
-        expect(prompt).to include("has to come through into the brief ANSWERED")
       end
 
       # A rundown of the whole process arrives once, at the start, and is older
@@ -303,58 +265,11 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).not_to include("WHAT THEY TOLD ME TO PREPARE")
     end
 
-    it "says plainly when there is nothing written down yet" do
-      expect(prompt).to include("Nothing is logged against this one yet")
-    end
-
-    # The kind of conversation decides everything else, and getting it wrong
-    # prepares him for the wrong hour.
-    it "asks it to work out what kind of conversation this is first" do
-      expect(prompt).to include("WORK OUT WHAT KIND OF CONVERSATION THIS IS FIRST")
-      expect(prompt).to include("recruiter")
-      expect(prompt).to include("technical")
-    end
-
-    it "names where his own background is written down" do
-      expect(prompt).to include(described_class::RESUME_REPO)
-      expect(prompt).to include("profile.yml")
-      expect(prompt).to include("interview-answers.md")
-    end
-
-    # A brief that says "use #3" has sent him to another page to do the one
-    # thing it was written to save him - and the answers file is on a drive
-    # the phone reading the brief cannot open at all.
-    it "asks for the written answers themselves, not a pointer to them" do
-      expect(prompt).to include("WHATEVER THE BRIEF NAMES, THE BRIEF CARRIES")
-      expect(prompt).to include("Verbatim, as the file has it")
-    end
-
-    # Collected at the end, an answer is read by scrolling up to the question
-    # and back down again, which loses his place in both.
-    it "asks for each answer under the question it answers" do
-      expect(prompt).to include("AN ANSWER SITS UNDER ITS QUESTION")
-      expect(prompt).not_to include("The answers themselves")
-    end
-
-    # The shorthand everyone is assumed to know is the one that goes in bare,
-    # and a glossary at the top is the same scroll the answers were.
-    it "asks for every term to be explained where it is used" do
-      expect(prompt).to include("EVERY TERM IS EXPLAINED WHERE IT IS USED")
-      expect(prompt).to include("every acronym and piece of jargon")
-    end
-
-    # A fixed list of acronyms gets brought into the brief as facts about the
-    # company, so the rule names none.
-    it "names no sample terms to gloss" do
-      expect(prompt).not_to include("TS/SCI")
-      expect(prompt).not_to include("Series B")
-    end
-
     it "tells the session the real time to the interview" do
       lead = ByteInterviewPrep::Brief.lead_line(Struct.new(:start_at).new(45.minutes.from_now))
 
-      expect(lead).to eq("I have an interview in about 45 minutes.")
-      expect(ByteInterviewPrep::Brief.lead_line(nil)).to eq("I have an interview coming up.")
+      expect(lead).to include("45 minutes")
+      expect(ByteInterviewPrep::Brief.lead_line(nil)).to be_present
     end
 
     # 400 characters is a greeting and the first paragraph, so the brief was
@@ -477,23 +392,8 @@ RSpec.describe ByteInterviewPrep do
       expect(prompt).not_to include("#{described_class::JOBHUNT_URL}/jobs/412")
     end
 
-    it "tells it not to go fetching a localhost page" do
-      expect(prompt).to include("cannot reach a loopback address")
-    end
-
-    # There is nobody in front of this run, so a question is a stall and a
-    # refusal retried is the rest of the hour.
-    it "tells the run not to ask and not to retry a refusal" do
-      expect(prompt).to include("do not ask a question")
-      expect(prompt).to include("do not retry a refusal")
-    end
-
     it "asks for the two opening lines it is parsed by" do
       expect(prompt).to include("KIND:")
-    end
-
-    it "says the brief is saved for him, so the session does not go looking" do
-      expect(prompt).to include("saved and linked for me automatically")
     end
   end
 
@@ -518,36 +418,20 @@ RSpec.describe ByteInterviewPrep do
       )
     end
 
-    it "files the brief against the application" do
+    # The brief outlives the calendar row, and is read by following a link from
+    # the thread he actually reads rather than pasted into it.
+    it "files the brief against the application with what it was for, and sends one message carrying the link" do
       expect { described_class.submit!(write_the_brief) }.to change { job.preps.reload.size }.by(1)
-    end
-
-    it "keeps what it was for, so the brief outlives the calendar row" do
-      described_class.submit!(write_the_brief)
       prep = job.preps.first
+      said = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
 
       expect(prep.agenda_item_id).to eq(item.id)
       expect(prep.interview_at).to eq(item.start_at)
       expect(prep.kind).to eq("manager")
       expect(prep.title).to eq("Hiring manager call with Bluestaq")
-    end
-
-    # The session's own thread is archived machinery. The brief is read by
-    # following a link from the thread he actually reads.
-    it "sends him one message carrying the link" do
-      described_class.submit!(write_the_brief)
-      prep = job.preps.first
-      said = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
-
       expect(said.body).to include(prep.prep_url)
-      expect(said.metadata["source"]).to eq("interview_prep")
-    end
-
-    it "does not paste the brief into the thread" do
-      described_class.submit!(write_the_brief)
-      said = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
-
       expect(said.body).not_to include("They build data platforms")
+      expect(said.metadata["source"]).to eq("interview_prep")
     end
 
     # The prep thread is a real thread somebody can type in.

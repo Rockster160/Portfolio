@@ -1,13 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Buddy Today briefing" do
-  # A briefing that announces itself instead of being itself.
-  #
-  # "Hiii! Your Today is ready ✨" is not a briefing, it's a receipt for one that
-  # was never written — and nothing else is coming. Two routes in: the
-  # `today_briefing` tool used to be callable from the briefing turn, and once one
-  # reply lands like this it sits in history teaching every briefing after it.
-  # Dev, 19 Aug: 28 of them in a row, then the next hand-run copied the shape.
+  # A briefing that announces itself ("Your Today is ready ✨") instead of
+  # being itself has the claim cut, keeping whatever real briefing followed.
   describe "announcing itself" do
     let(:user)   { create(:user) }
     let!(:convo) {
@@ -41,92 +36,51 @@ RSpec.describe "Buddy Today briefing" do
       convo.byte_messages.where(direction: :inbound).order(:id).last.body
     end
 
-    describe "the claim is cut and the real briefing kept" do
-      it "drops a leading announcement and leaves what followed" do
-        body = briefing_reply("Your Today briefing is ready! Dentist at 2, and the bins go out tonight.")
+    it "cuts a leading announcement and keeps what followed", :aggregate_failures do
+      [
+        "Your Today briefing is ready! Dentist at 2, and the bins go out tonight.",
+        "Hiii! Your Today is ready ✨ Dentist at 2, bins tonight.",
+        "Heyyy! Done! Your Today briefing went out 💛 Dentist at 2, bins tonight.",
+        "Hi hi! All set! Your Today briefing is up ✨ Dentist at 2, bins tonight.",
+        "Okay! Your Today briefing just popped in ✨ Dentist at 2, bins tonight.",
+        "Heyyy! Your Today's out now, nice and tidy ✨ Dentist at 2, bins tonight.",
+        "Your rundown is on its way! Dentist at 2, bins tonight.",
+      ].each do |text|
+        body = briefing_reply(text)
 
-        expect(body).to include("Dentist at 2")
-        expect(body).not_to match(/briefing is ready/i)
-      end
-
-      # Verbatim shapes from the 28 that went out in dev, with a real briefing
-      # behind them.
-      it "catches the shapes it actually came out as" do
-        [
-          "Hiii! Your Today is ready ✨ Dentist at 2, bins tonight.",
-          "Heyyy! Done! Your Today briefing went out 💛 Dentist at 2, bins tonight.",
-          "Hi hi! All set! Your Today briefing is up ✨ Dentist at 2, bins tonight.",
-          "Okay! Your Today briefing just popped in ✨ Dentist at 2, bins tonight.",
-          "Heyyy! Your Today's out now, nice and tidy ✨ Dentist at 2, bins tonight.",
-          "Your rundown is on its way! Dentist at 2, bins tonight.",
-        ].each do |text|
-          body = briefing_reply(text)
-
-          expect(body).to include("Dentist at 2"), "lost the briefing in: #{text}"
-          expect(body).not_to match(/(?:today|briefing|rundown)\s*(?:is|just)?\s*(?:ready|up|out|on its way|went out|popped in)/i),
-            "left the claim in: #{body}"
-        end
+        expect(body).to include("Dentist at 2"), "lost the briefing in: #{text}"
+        expect(body).not_to match(/(?:today|briefing|rundown)\s*(?:is|just)?\s*(?:ready|up|out|on its way|went out|popped in)/i),
+          "left the claim in: #{body}"
       end
     end
 
-    describe "what it must not touch" do
-      # The whole point is that a real briefing survives intact.
-      it "leaves an ordinary briefing completely alone" do
-        text = "Morning! Dentist at 2, and the bins go out tonight. Quiet otherwise."
+    it "leaves a real briefing, even one mentioning today, completely alone", :aggregate_failures do
+      [
+        "Morning! Dentist at 2, and the bins go out tonight. Quiet otherwise.",
+        "Morning! Today's mostly clear. Dentist at 2 is the only thing on.",
+      ].each { |text| expect(briefing_reply(text)).to eq(text) }
+    end
 
-        expect(briefing_reply(text)).to eq(text)
-      end
+    # Outside a briefing this sentence is honest — the tool really did post one.
+    it "leaves the same sentence alone on an ordinary turn" do
+      text = "Your Today briefing is on its way!"
 
-      it "leaves a briefing that merely mentions today alone" do
-        text = "Morning! Today's mostly clear. Dentist at 2 is the only thing on."
-
-        expect(briefing_reply(text)).to eq(text)
-      end
-
-      # Outside a briefing this sentence is perfectly honest — the tool really did
-      # just post one.
-      it "leaves the same sentence alone on an ordinary turn" do
-        text = "Your Today briefing is on its way!"
-
-        expect(ordinary_reply(text)).to eq(text)
-      end
+      expect(ordinary_reply(text)).to eq(text)
     end
 
     describe "when there is nothing left" do
-      # A briefing that was ONLY a claim never got written. Reporting it makes a
-      # silent failure loud rather than shipping an empty message.
-      it "reports rather than posting an empty briefing" do
-        briefing_reply("Hiii! Your Today is ready ✨")
-
+      # A briefing that was ONLY a claim never got written.
+      it "reports it, and still posts something rather than nothing", :aggregate_failures do
+        expect(briefing_reply("Hiii! Your Today is ready ✨")).to be_present
         expect(Buddy::Errors).to have_received(:report).with(
           hash_including(section: "turn.briefing_claim"),
         )
       end
-
-      it "still posts something rather than nothing at all" do
-        expect(briefing_reply("Hiii! Your Today is ready ✨")).to be_present
-      end
     end
   end
 
-  # A Today briefing cannot send a Today briefing.
-  #
-  # Dev, 19 Aug: 28 briefings in under two minutes, one every four seconds, each
-  # reply announcing that the briefing had gone out rather than being it — "Done!
-  # Your Today briefing is up ✨". The seed arrives, the turn answering it is
-  # offered `today_briefing`, calling that posts another seed, and that seed's
-  # turn is offered the same tool.
-  #
-  # Two prose guards were already in place and both lost: the tool's own
-  # description says "almost nothing said to you is a reason to call this", and
-  # the seed could hardly be more explicit about wanting the briefing itself. A
-  # turn that IS the briefing can never have a reason to send one, so it stops
-  # being reachable rather than being advised against.
-  # 5 Sep: the week staple fired on all three morning briefings and on two of
-  # them landed directly under a sentence saying the opposite, so each one said
-  # two contradicting things about the same week.
-  # The bracket on the stash line, which the prompt lost six times across two
-  # windows before this moved into Ruby.
+  # With a forecast table in the facts, the seed points at the table and drops
+  # the weather order the repair keys off.
   describe "a seed whose forecast goes on as a table" do
     let(:facts) {
       {
@@ -155,80 +109,53 @@ RSpec.describe "Buddy Today briefing" do
       Buddy::TodayBriefing.stash_age_said?(body, { idea: "Kennel auto-open idea", waiting: waiting })
     end
 
-    it "takes the figure as written" do
-      expect(said?("that kennel auto-open idea, sitting there from 7 weeks ago")).to be(true)
-      expect(said?("it has been sitting there for 7 weeks now")).to be(true)
+    it "takes the age as written, spelled out, or as a wordy label", :aggregate_failures do
+      [
+        ["that kennel auto-open idea, sitting there from 7 weeks ago", "7 weeks"],
+        ["it has been sitting there for 7 weeks now", "7 weeks"],
+        ["seven weeks is a long time to carry that one!", "7 weeks"],
+        ["three weeks on and it is still there", "3 weeks"],
+        ["you stashed that today", "today"],
+        ["that one has been there since yesterday", "since yesterday"],
+        ["anything at all", nil],
+      ].each { |body, waiting| expect(said?(body, waiting: waiting)).to be(true), body }
     end
 
-    # Moss wrote "seven weeks is a long time to carry that one!" and got it
-    # right. A digit-only test would have nudged a correct briefing.
-    it "takes the figure spelled out" do
-      expect(said?("seven weeks is a long time to carry that one!")).to be(true)
-      expect(said?("three weeks on and it is still there", waiting: "3 weeks")).to be(true)
-    end
-
-    # The two real misses, verbatim.
-    it "catches the paraphrases that dropped it" do
-      expect(said?("still sitting there from a while back")).to be(false)
-      expect(said?("Fridge leftovers are still on your mind", waiting: "3 weeks")).to be(false)
-    end
-
-    it "does not take a different figure as the age" do
-      expect(said?("that idea from 2 weeks ago")).to be(false)
-      expect(said?("7 days of that", waiting: "7 weeks")).to be(false)
-    end
-
-    # "today" and "since yesterday" carry no figure, so the words are the age.
-    it "reads the wordy labels as themselves" do
-      expect(said?("you stashed that today", waiting: "today")).to be(true)
-      expect(said?("that one has been there since yesterday", waiting: "since yesterday")).to be(true)
-      expect(said?("that one is still hanging around", waiting: "since yesterday")).to be(false)
-    end
-
-    it "asks nothing of a row with no age on it" do
-      expect(said?("anything at all", waiting: nil)).to be(true)
+    it "does not take a paraphrase or a different figure as the age", :aggregate_failures do
+      [
+        ["still sitting there from a while back", "7 weeks"],
+        ["Fridge leftovers are still on your mind", "3 weeks"],
+        ["that idea from 2 weeks ago", "7 weeks"],
+        ["7 days of that", "7 weeks"],
+        ["that one is still hanging around", "since yesterday"],
+      ].each { |body, waiting| expect(said?(body, waiting: waiting)).to be(false), body }
     end
   end
 
   describe ".without_calm_week" do
     let(:days) { %w[Sun Mon] }
 
-    it "cuts the clause and keeps the figures beside it (prod 5456)" do
-      body = "It's 67 right now, with a high of 87 and a low of 66 today, and the week looks pretty clear overall, so nothing spicy lurking out there. If you want, I can help pick the next thing."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days))
-        .to eq("It's 67 right now, with a high of 87 and a low of 66 today. If you want, I can help pick the next thing.")
-    end
-
-    it "cuts the whole sentence when the week is what it opens on (prod 5459)" do
-      body = "Good morning!!\n\nThe week ahead looks mostly steady from here, so nothing is shouting for attention just yet! Have a good one."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq("Good morning!!\n\nHave a good one.")
+    it "cuts a calm-week clause or sentence and keeps everything else", :aggregate_failures do
+      [
+        [
+          "It's 67 right now, with a high of 87 and a low of 66 today, and the week looks pretty clear overall, so nothing spicy lurking out there. If you want, I can help pick the next thing.",
+          "It's 67 right now, with a high of 87 and a low of 66 today. If you want, I can help pick the next thing.",
+        ],
+        [
+          "Good morning!!\n\nThe week ahead looks mostly steady from here, so nothing is shouting for attention just yet! Have a good one.",
+          "Good morning!!\n\nHave a good one.",
+        ],
+      ].each { |body, out| expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(out) }
     end
 
     # A flagged day by name is the model doing the job, however flatly it reads.
-    it "leaves a week sentence that names a flagged day" do
-      body = "Rain Sunday and Monday, so the week is not exactly clear."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(body)
-    end
-
-    it "leaves a calm claim that isn't about the week" do
-      body = "Your morning looks clear, with nothing before 11."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(body)
-    end
-
-    it "leaves a week claim that isn't calm" do
-      body = "The week ahead is packed, and I love that for you."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(body)
-    end
-
-    it "keeps the original when cutting would leave nothing" do
-      body = "The week looks clear."
-
-      expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(body)
+    it "leaves a flagged day, a calm claim not about the week, a busy week, and a cut that leaves nothing", :aggregate_failures do
+      [
+        "Rain Sunday and Monday, so the week is not exactly clear.",
+        "Your morning looks clear, with nothing before 11.",
+        "The week ahead is packed, and I love that for you.",
+        "The week looks clear.",
+      ].each { |body| expect(Buddy::TodayBriefing.without_calm_week(body, days)).to eq(body) }
     end
   end
 
@@ -259,8 +186,10 @@ RSpec.describe "Buddy Today briefing" do
         state:     :sent,
         body:      Buddy::TodayBriefing.seed(user),
         metadata:  {
-          "kind" => "buddy_trigger", "hidden" => true,
-          "source" => "today_scheduled", "buddy_action" => "today",
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "source"       => "today_scheduled",
+          "buddy_action" => "today",
         },
       )
     end
@@ -271,45 +200,23 @@ RSpec.describe "Buddy Today briefing" do
       client
     end
 
-    it "is not offered the tool that would send another one" do
-      expect(names_in(run_briefing!)).not_to include(:today_briefing)
-    end
-
-    # 5 Sep: 5456, 5459 and 5461 spent four, five and five calls on a turn with
-    # nothing to look up, and Moss spent one of Chelsea's filing a feature
-    # request for the week's weather - which was line 23 of its own seed.
-    it "is offered nothing at all to call" do
-      expect(names_in(run_briefing!)).to be_empty
-    end
-
-    it "leaves an ordinary turn its whole registry" do
-      inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hi")
-      client  = FakeBuddyClient.new([{ text: "Hey!" }])
-      Buddy::GPT::Turn.run!(inbound, client: client)
-
-      expect(names_in(client)).to include(:complete_chore, :log_event, :get_context)
-    end
-
-    # The whole day arrives in the seed (Buddy::BriefingFacts), so there is
-    # nothing left to fetch — and a model that CAN fetch twenty sections reads
-    # some of them out whatever the prose above them says.
-    it "is offered no lookup, because it has nothing to look up" do
-      expect(names_in(run_briefing!)).not_to include(:get_context)
-    end
-
-    # The whole failure was a SECOND seed appearing behind the first.
-    it "produces no further briefing seed of its own" do
+    # The whole day arrives in the seed, so the briefing turn has nothing to
+    # look up, and offering today_briefing let it post another seed.
+    it "offers the briefing turn no tools and produces no further seed", :aggregate_failures do
       seed = seed!
+      client = nil
 
-      expect { run_briefing!(seed) }
+      expect { client = run_briefing!(seed) }
         .not_to change { convo.byte_messages.where("metadata->>'buddy_action' = 'today'").count }
+      expect(names_in(client)).to be_empty
     end
 
-    it "leaves the tool available on an ordinary turn, so it can still be asked for" do
+    it "leaves an ordinary turn its whole registry, today_briefing included" do
       inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "send me my Today")
       client  = FakeBuddyClient.new([{ text: "Sure." }])
       Buddy::GPT::Turn.run!(inbound, client: client)
 
+      expect(names_in(client)).to include(:complete_chore, :log_event, :get_context)
       # Reachable is enough: listed by name, to be opened (see Buddy::ToolIndex).
       expect(client.calls.first.tools.pluck(:name).map(&:to_s)).to include("today_briefing")
     end

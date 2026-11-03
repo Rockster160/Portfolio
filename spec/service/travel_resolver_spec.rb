@@ -48,21 +48,12 @@ RSpec.describe TravelResolver do
   end
 
   describe "the coordinate" do
-    it "takes separate lat and lng keys" do
+    # The string is what `Tokenizing.parse` pulls out of `location:"40.48,-111.99"`.
+    it "takes separate keys, a pair, or the offline queue's string, and none from a place name" do
       expect(described_class.coord_from(lat: 40.1, lng: -111.9)).to eq([40.1, -111.9])
-    end
-
-    it "takes a pair" do
       expect(described_class.coord_from(coord: [40.1, -111.9])).to eq([40.1, -111.9])
-    end
-
-    # What `Tokenizing.parse` pulls out of `location:"40.48,-111.99"`.
-    it "takes the offline queue's string" do
       expect(described_class.coord_from(location: "40.48045593063188,-111.9983115258447"))
         .to eq([40.48045593063188, -111.9983115258447])
-    end
-
-    it "has none when the location is a place name" do
       expect(described_class.coord_from(location: "Home")).to be_nil
     end
   end
@@ -260,12 +251,10 @@ RSpec.describe TravelResolver do
       )
     end
 
-    it "records nothing at all" do
-      expect { pairing }.not_to change(ActionEvent, :count)
-    end
-
-    it "reports having recorded nothing" do
-      expect(pairing).to be_nil
+    it "records nothing at all, and says so" do
+      result = :unset
+      expect { result = pairing }.not_to change(ActionEvent, :count)
+      expect(result).to be_nil
     end
 
     it "stays quiet through the whole storm" do
@@ -279,20 +268,13 @@ RSpec.describe TravelResolver do
     # own vocabulary is the only marker it has: 80 of 81 `depart` lines and 74
     # of 75 `arrive` lines in the log window arrived alongside a Bluetooth
     # post, against 10 of 59 `arrived` lines.
-    it "knows the queued copy by the word the automation uses" do
+    # The half-word separates the two automations, and an explicit label beats
+    # the word.
+    it "knows the queued copy by its word, believes the geofence's, and takes a label over either" do
       expect(described_class.normalize_via(action: "depart")).to eq(:bluetooth)
       expect(described_class.normalize_via(action: "arrive")).to eq(:bluetooth)
-    end
-
-    # The half-word that separates the two automations. A geofence departure
-    # has never arrived in five weeks; this is what will honour the first one
-    # that does, with nothing added to the Shortcut.
-    it "believes the geofence's own vocabulary" do
       expect(described_class.normalize_via(action: "arrived")).to eq(:geofence)
       expect(described_class.normalize_via(action: "departed")).to eq(:geofence)
-    end
-
-    it "takes an explicit label over the word" do
       expect(described_class.normalize_via(action: "depart", via: "geofence")).to eq(:geofence)
       expect(described_class.normalize_via(action: "departed", via: "bluetooth")).to eq(:bluetooth)
     end

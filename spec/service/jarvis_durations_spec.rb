@@ -37,11 +37,11 @@ RSpec.describe Jarvis::Durations do
       "Sam's birthday Friday"     => 0,
       "Birmingham"                => 0,
       "Standup at 10am for 30 m"  => 30,
-    }.each do |input, expected|
-      it "extracts #{expected} minutes from #{input.inspect}" do
-        expect(described_class.extract(input)).to eq(expected)
+    }.then { |table|
+      it "extracts the minutes, or zero, from each phrasing" do
+        table.each { |input, expected| expect(described_class.extract(input)).to eq(expected), input.inspect }
       end
-    end
+    }
 
     it "ignores duration-like substrings inside words" do
       expect(described_class.extract("Costcomeeting agent7minutes")).to eq(0)
@@ -61,10 +61,10 @@ RSpec.describe Jarvis::Durations do
       "Coffee tomorrow at 9am"          => "Coffee tomorrow at 9am",
       "Eat ham at 5pm"                  => "Eat ham at 5pm",
       "Sam's birthday Friday"           => "Sam's birthday Friday",
-    }.each do |input, expected|
-      it "strips to #{expected.inspect} from #{input.inspect}" do
-        expect(described_class.strip(input)).to eq(expected)
+    }.then { |table|
+      it "strips the duration and leaves look-alikes intact" do
+        table.each { |input, expected| expect(described_class.strip(input)).to eq(expected), input.inspect }
       end
-    end
+    }
   end
 end

@@ -19,11 +19,8 @@ require "rails_helper"
 RSpec.describe ByteMessage, type: :model do
   let(:user) { User.me }
 
-  # A usage row is what a turn COST. Deleting the message it was earned on used
-  # to raise a foreign key violation - it stopped a backfill halfway through the
-  # twelve looping briefings of 21 Aug - and deleting the spend with it would
-  # have been worse: the money is a true fact about the day either way, and
-  # `buddy:cost` still has to add it up.
+  # A usage row is what a turn COST, and the money is a true fact about the day
+  # whether or not the message it was earned on survives.
   describe "deleting a message that cost something" do
     let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Byte", buddy_theme: "byte") }
 
@@ -42,50 +39,37 @@ RSpec.describe ByteMessage, type: :model do
     end
   end
 
-  it "creates with default direction and state" do
-    msg = user.byte_messages.create!(body: "hi")
-    expect(msg.direction).to eq("outbound")
-    expect(msg.state).to eq("pending")
+  describe "#as_wire" do
+    it "serializes the message with an empty attachments array by default" do
+      msg = user.byte_messages.create!(body: "hey", metadata: { source: "test" })
+      wire = msg.as_wire
+      expect(wire).to include(id: msg.id, body: "hey", direction: "outbound", state: "pending")
+      expect(wire[:metadata]).to eq("source" => "test")
+      expect(wire[:attachments]).to eq([])
+    end
+
+    it "includes attachments" do
+      msg = user.byte_messages.create!(body: "with file")
+      msg.files.attach(
+        io:           StringIO.new("hello"),
+        filename:     "greeting.txt",
+        content_type: "text/plain",
+      )
+      wire = msg.as_wire
+      expect(wire[:attachments].size).to eq(1)
+      expect(wire[:attachments].first).to include(
+        filename:     "greeting.txt",
+        content_type: "text/plain",
+        byte_size:    5,
+      )
+      expect(wire[:attachments].first[:url]).to match(%r{^/rails/active_storage/})
+    end
   end
 
-  it "supports the direction and state enums including :streaming" do
-    streaming = user.byte_messages.create!(direction: :inbound, state: :streaming, body: "…")
-    expect(streaming).to be_inbound
-    expect(streaming).to be_streaming
-
-    delivered = user.byte_messages.create!(direction: :inbound, state: :delivered, body: "yo")
-    expect(delivered).to be_delivered
-  end
-
-  it "serializes to wire format with an empty attachments array by default" do
-    msg = user.byte_messages.create!(body: "hey", metadata: { source: "test" })
-    wire = msg.as_wire
-    expect(wire).to include(id: msg.id, body: "hey", direction: "outbound", state: "pending")
-    expect(wire[:metadata]).to eq("source" => "test")
-    expect(wire[:attachments]).to eq([])
-  end
-
-  it "includes attachments in wire format" do
-    msg = user.byte_messages.create!(body: "with file")
-    msg.files.attach(
-      io:           StringIO.new("hello"),
-      filename:     "greeting.txt",
-      content_type: "text/plain",
-    )
-    wire = msg.as_wire
-    expect(wire[:attachments].size).to eq(1)
-    expect(wire[:attachments].first).to include(
-      filename:     "greeting.txt",
-      content_type: "text/plain",
-      byte_size:    5,
-    )
-    expect(wire[:attachments].first[:url]).to match(%r{^/rails/active_storage/})
-  end
   # The person's own side of the thread carries hidden trigger seeds, receipt
-  # chips and tapped action pills alongside what they typed, and a caller asking
-  # "have they said anything" wants none of those. Buddy::TurnDispatcher stands
-  # a retry seed down on the strength of this, so a seed counting as speech
-  # would have every retry answering itself.
+  # chips and tapped action pills alongside what they typed. Buddy::TurnDispatcher
+  # stands a retry seed down on the strength of `spoken`, so a seed counting as
+  # speech would have every retry answering itself.
   describe "what the person actually said" do
     let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Byte", buddy_theme: "byte") }
 
@@ -95,28 +79,13 @@ RSpec.describe ByteMessage, type: :model do
       )
     end
 
-    it "keeps what they typed" do
+    it "keeps only what they typed" do
       typed = add("Platform Team")
-
-      expect(convo.byte_messages.spoken).to eq([typed])
-    end
-
-    it "leaves out a hidden seed standing in for them" do
       add("mail arrived", metadata: { "hidden" => true, "kind" => "buddy_trigger" })
-
-      expect(convo.byte_messages.spoken).to be_empty
-    end
-
-    it "leaves out a receipt chip and a tapped pill" do
       ByteMessage::SILENT_KINDS.each { |kind| add(kind, metadata: { "kind" => kind }) }
-
-      expect(convo.byte_messages.spoken).to be_empty
-    end
-
-    it "leaves out the companion's own replies" do
       add("which role was that?", direction: :inbound)
 
-      expect(convo.byte_messages.spoken).to be_empty
+      expect(convo.byte_messages.spoken).to eq([typed])
     end
   end
 end

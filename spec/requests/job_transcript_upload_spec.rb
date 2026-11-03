@@ -31,60 +31,42 @@ RSpec.describe "Job transcript upload", type: :request do
     Rack::Test::UploadedFile.new(file.path, "text/plain", original_filename: name)
   end
 
-  it "reads the file into turns and lands on the conversation" do
+  # `ingest!` reads the tempfile to the end before the attach, and an IO at EOF
+  # attaches as an empty file - the upload would be on the page, nameable and
+  # readable, with nothing behind the download link. Labelled or not, the file
+  # never said which speaker is him, so the speakers pass always starts.
+  it "reads the file into turns, keeps it as dropped, starts the speakers pass and lands on it", :aggregate_failures do
     post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
     transcript = job.transcripts.first
     expect(transcript.turns.length).to eq(2)
+    expect(transcript.file).to be_attached
+    expect(transcript.file.download).to eq(body)
+    expect(TranscriptSpeakersWorker).to have_received(:perform_async).with(transcript.id)
     expect(response).to redirect_to(interview_transcript_path(job, transcript))
 
     follow_redirect!
     expect(response.body).to include("How do you handle disagreeing with a teammate?")
   end
 
-  # `ingest!` reads the tempfile to the end before the attach, and an IO at EOF
-  # attaches as an empty file - the upload would be on the page, nameable and
-  # readable, with nothing behind the download link.
-  it "keeps the file as it was dropped in" do
-    post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
-
-    transcript = job.transcripts.first
-    expect(transcript.file).to be_attached
-    expect(transcript.file.download).to eq(body)
-  end
-
-  # "I'd like to be able to just paste in the text, since it usually comes from
-  # Voice Memos which gives the entire text as a single line."
   describe "pasting the words instead of a file" do
     let(:spoken) {
       "Thanks for making the time today. Happy to be here, I was looking forward to it."
     }
 
-    it "reads a paste into a conversation and lands on it" do
+    # The paste is written as the text file it would have been, so there is one
+    # thing to reread when the parse got the conversation wrong.
+    it "reads a paste into a conversation kept as a .txt file, like any upload", :aggregate_failures do
       post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
 
       transcript = job.transcripts.first
       expect(transcript.turns.length).to eq(1)
       expect(transcript.turns.first["text"]).to include("looking forward to it")
       expect(response).to redirect_to(interview_transcript_path(job, transcript))
-    end
-
-    # The paste is written as the text file it would have been, so there is one
-    # thing to reread when the parse got the conversation wrong.
-    it "keeps the paste as a file, like any other upload" do
-      post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
-
-      transcript = job.transcripts.first
       expect(transcript.file).to be_attached
       expect(transcript.file.download).to eq(spoken)
       expect(transcript.file.filename.to_s).to end_with(".txt")
-    end
-
-    it "starts the pass on who was talking, the same as a file does" do
-      post(interview_transcripts_path(job), params: { job_transcript: { text: spoken } })
-
-      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
-        .with(job.transcripts.first.id)
+      expect(TranscriptSpeakersWorker).to have_received(:perform_async).with(transcript.id)
     end
 
     it "takes the title and the beat typed beside it" do
@@ -101,24 +83,9 @@ RSpec.describe "Job transcript upload", type: :request do
       expect(transcript.job_note_id).to eq(note.id)
     end
 
-    it "says so rather than erroring when the box holds nothing but spaces" do
-      post(interview_transcripts_path(job), params: { job_transcript: { text: "   \n  " } })
-
-      expect(response).to redirect_to(interview_path(job))
-      expect(flash[:alert]).to include("Pick a transcript file")
-      expect(job.transcripts).to be_empty
-    end
-
-    it "offers the box on the page, beside the one for a file" do
-      get(interview_path(job))
-
-      expect(response.body).to include("or paste the words")
-    end
   end
 
-  # "Can we add the ability to attach/upload the transcripts directly when
-  # submitting an Interview? Right now it's 2 separate pieces." A conversation
-  # and the beat saying it happened are one thing that happened.
+  # A conversation and the beat saying it happened are one thing that happened.
   describe "logging the conversation with the beat" do
     let(:note_params) {
       {
@@ -148,7 +115,6 @@ RSpec.describe "Job transcript upload", type: :request do
       ))
 
       expect(job.transcripts.first.job_note_id).to eq(job.notes.last.id)
-      expect(flash[:notice]).to include("Working out who was talking")
     end
 
     it "logs the beat on its own when no recording came with it" do
@@ -170,27 +136,24 @@ RSpec.describe "Job transcript upload", type: :request do
       ))
 
       expect(job.notes.size).to eq(1)
-      expect(flash[:alert]).to include("note is saved")
+      expect(flash[:alert]).to be_present
     end
 
     it "offers the recording on the beat form rather than only in the panel" do
       get(interview_path(job))
 
-      expect(response.body).to include("With a recording")
       expect(response.body).to include("multipart/form-data")
     end
   end
 
-  # "Both openable as a full, dedicated page, but also able to open as a
-  # scrollable view. Both views should also have a search." Half an hour of
-  # talking is 120 turns, and what is asked of it afterwards is a lookup.
+  # Half an hour of talking is 120 turns, and what is asked of it afterwards is
+  # a lookup, on its own page and under the beat in the timeline.
   describe "finding a line in it" do
     it "offers the box on the transcript's own page" do
       post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
 
       get(interview_transcript_path(job, job.transcripts.first))
 
-      expect(response.body).to include("Find a line")
       expect(response.body).to include("data-transcript-query")
       expect(response.body).to include("data-turn-text")
     end
@@ -207,13 +170,11 @@ RSpec.describe "Job transcript upload", type: :request do
 
       expect(response.body).to include("I would rather have the argument early.")
       expect(response.body).to include("data-transcript-search")
-      expect(response.body).to include("Find a line")
     end
   end
 
-  # DROPPING IT IN IS THE WHOLE INSTRUCTION. Whether the file needs splitting
-  # into sides or just needs telling which of its labels is him is something it
-  # can be read off, so there is nothing to press afterwards.
+  # Dropping it in is the whole instruction: who was talking is read off the
+  # file, so there is nothing to press afterwards.
   describe "working out who was talking" do
     let(:unlabelled) {
       <<~VTT
@@ -225,18 +186,10 @@ RSpec.describe "Job transcript upload", type: :request do
       VTT
     }
 
-    it "starts the pass off the upload, with nothing to press" do
+    it "starts the pass off an unlabelled upload too" do
       post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
 
-      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
-        .with(job.transcripts.first.id)
-    end
-
-    it "starts it for a file that named people too, which still never said which is him" do
-      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
-
-      expect(TranscriptSpeakersWorker).to have_received(:perform_async)
-        .with(job.transcripts.first.id)
+      expect(TranscriptSpeakersWorker).to have_received(:perform_async).with(job.transcripts.first.id)
     end
 
     # Dropping a file in and landing on a page that looks exactly like a failed
@@ -255,7 +208,6 @@ RSpec.describe "Job transcript upload", type: :request do
       get(interview_transcript_path(job, transcript))
 
       expect(response.body).to include("Reading the recording")
-      expect(response.body).to include("pass 2 of 5")
       expect(response.body).to include("http-equiv=\"refresh\"")
     end
 
@@ -267,20 +219,10 @@ RSpec.describe "Job transcript upload", type: :request do
       expect(response.body).not_to include("Reading the recording")
       expect(response.body).not_to include("http-equiv=\"refresh\"")
     end
-
-    it "asks nothing on the page about who was talking" do
-      post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(unlabelled) } })
-      get(interview_transcript_path(job, job.transcripts.first))
-
-      expect(response.body).not_to include("Work out which of these are me")
-      expect(response.body).to include("read off the recording when it lands")
-    end
   end
 
-  # The local job hunter pulls questions out of a recording and rebuilds his
-  # spoken answers from them, and the one thing it needs is which turns are
-  # his. That is settled here now, on the board, rather than by a second pass
-  # over its own copy of the same file.
+  # The local job hunter rebuilds his spoken answers from a recording, and the
+  # one thing it needs is which turns are his.
   describe "the conversation as data" do
     it "says which side each turn is on, and what to call them" do
       post(interview_transcripts_path(job), params: { job_transcript: { file: transcript_file(body) } })
@@ -317,11 +259,13 @@ RSpec.describe "Job transcript upload", type: :request do
     end
   end
 
-  it "says so rather than erroring when no file was picked" do
-    post(interview_transcripts_path(job))
+  it "redirects back rather than erroring when no file was picked, or only spaces were pasted" do
+    [{}, { job_transcript: { text: "   \n  " } }].each do |params|
+      post(interview_transcripts_path(job), params: params)
 
-    expect(response).to redirect_to(interview_path(job))
-    expect(flash[:alert]).to include("Pick a transcript file")
+      expect(response).to redirect_to(interview_path(job))
+      expect(flash[:alert]).to be_present
+    end
     expect(job.transcripts).to be_empty
   end
 
@@ -342,16 +286,14 @@ RSpec.describe "Job transcript upload", type: :request do
     transcript.reload
     expect(transcript.name_for("Speaker 2")).to eq("Rocco")
     expect(transcript).to be_mine("Speaker 2")
-    expect(flash[:notice]).to eq("Saved.")
+    expect(transcript.turns.pluck("speaker")).to eq(["Speaker 1", "Speaker 2"])
   end
 
-  # "If I can, it's not clear that I can or where I should drop it." The zone is
-  # the instruction, and it has to be in the markup for the script to find it.
+  # The drop zone has to be in the markup for the script to find it.
   it "offers somewhere to drop a file" do
     get(interview_path(job))
 
     expect(response.body).to include("data-drop")
-    expect(response.body).to include("Drop a transcript here")
   end
 
   it "shows the transcript on the interview page once it is there" do

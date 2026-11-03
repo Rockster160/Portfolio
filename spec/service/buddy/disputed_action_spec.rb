@@ -1,25 +1,7 @@
 require "rails_helper"
 
-# Four times over two days, someone told Buddy it hadn't done the thing it said
-# it did, and four times Buddy answered without looking:
-#
-#   3129 "Oh you didn't do anything"                  -> "Ahh, nope, I did."   (wrong)
-#   3208 "That's not correct. That's the laundry
-#         button being pressed."                      -> "I've got a watch on
-#                                                        the dryer stop call
-#                                                        already"              (wrong)
-#   3237 "You just copied what you said before
-#         without actually running the task."         -> conceded              (right)
-#   3336 "I don't think you actually moved it to
-#         home. I think that's a lie."                -> conceded, and invented
-#                                                        a reason              (wrong)
-#
-# Two arguments and two capitulations, so the error isn't a leaning in either
-# direction. It's answering the question at all without `recent_actions`, which
-# is the only thing in the system that can settle it. Both personality.rb and
-# the get_context description already say to read it the moment this happens,
-# in those words; 3336 landed a day after that instruction shipped. So the
-# check stops being the model's to elect.
+# When someone disputes that an action happened, only `recent_actions` can
+# settle it, so a reply written without reading it gets one corrective round.
 RSpec.describe "Buddy disputed-action turns" do
   let(:user) { User.me }
   let!(:convo) {
@@ -55,40 +37,32 @@ RSpec.describe "Buddy disputed-action turns" do
       Buddy::GPT::Turn::DISPUTED_ACTION_RX.match?(text)
     end
 
-    # Every one of these is a real inbound message from prod.
-    it "catches the four that got past it" do
-      expect(disputes?("Oh you didn’t do anything")).to be(true)
-      expect(disputes?("That's not correct. That's the laundry button being pressed.")).to be(true)
-      expect(disputes?("You just copied what you said before without actually running the task.")).to be(true)
-      expect(disputes?("I don't think you actually moved it to home. I think that's a lie.")).to be(true)
-    end
-
-    # Prod 5760, and it is one word. "That's not correct" matched; "That's not
-    # THE correct company" did not, so no nudge went out, the model answered
-    # from memory, and `retract_false_claim!` told him nothing had run while
-    # the job note it had just written sat in the database. Four turns, a wrong
-    # company left settled, and "now I'm frustrated".
-    it "catches a correction with a determiner in the middle of it" do
-      expect(disputes?("That's not the correct company.")).to be(true)
-      expect(disputes?("that's not the right one")).to be(true)
-      expect(disputes?("That's not a correct reading of it")).to be(true)
-      expect(disputes?("that's not my right address")).to be(true)
-    end
-
-    it "catches the plainer phrasings of the same complaint" do
-      expect(disputes?("you never sent it")).to be(true)
-      expect(disputes?("did you actually do that?")).to be(true)
-      expect(disputes?("nothing happened")).to be(true)
-      expect(disputes?("you're lying")).to be(true)
+    it "catches denials, corrections (determiner or not) and accusations" do
+      [
+        "Oh you didn’t do anything",
+        "That's not correct. That's the laundry button being pressed.",
+        "You just copied what you said before without actually running the task.",
+        "I don't think you actually moved it to home. I think that's a lie.",
+        "That's not the correct company.",
+        "that's not the right one",
+        "That's not a correct reading of it",
+        "that's not my right address",
+        "you never sent it",
+        "did you actually do that?",
+        "nothing happened",
+        "you're lying",
+      ].each { |text| expect(disputes?(text)).to be(true), text }
     end
 
     # A false fire costs one corrective round, so this list is about staying out
     # of the way of ordinary conversation rather than about precision.
     it "leaves alone messages that dispute nothing" do
-      expect(disputes?("that's not the one I meant, I wanted the other list")).to be(false)
-      expect(disputes?("I didn't do the dishes yet")).to be(false)
-      expect(disputes?("thanks, that's right")).to be(false)
-      expect(disputes?("can you tell me what happened?")).to be(false)
+      [
+        "that's not the one I meant, I wanted the other list",
+        "I didn't do the dishes yet",
+        "thanks, that's right",
+        "can you tell me what happened?",
+      ].each { |text| expect(disputes?(text)).to be(false), text }
     end
   end
 

@@ -2,83 +2,35 @@ require "rails_helper"
 
 RSpec.describe Jarvis::Times do
   describe ".extract_time" do
-    describe "hyphen boundaries" do
-      it "does not match a day word embedded in a hyphenated identifier" do
-        pre_text, parsed = described_class.extract_time("set evening-mode")
-        expect(pre_text).to be_nil
-        expect(parsed).to be_nil
-      end
-
-      it "does not match a month word embedded in a hyphenated identifier" do
-        pre_text, parsed = described_class.extract_time("trigger march-update")
-        expect(pre_text).to be_nil
-        expect(parsed).to be_nil
-      end
-    end
-
-    describe "weak day words require a qualifier" do
-      it "does not match bare 'evening'" do
-        pre_text, parsed = described_class.extract_time("remind me evening")
-        expect(pre_text).to be_nil
-        expect(parsed).to be_nil
-      end
-
-      it "does not match 'evening' surrounded by non-time words" do
-        pre_text, parsed = described_class.extract_time("trigger evening mode")
-        expect(pre_text).to be_nil
-        expect(parsed).to be_nil
-      end
-
-      it "does not match bare 'morning' / 'afternoon' / 'night'" do
-        %w[morning afternoon night].each do |w|
-          pre_text, parsed = described_class.extract_time("ping me #{w}")
-          expect(pre_text).to be_nil, "expected '#{w}' alone to not match, got #{pre_text.inspect}"
-          expect(parsed).to be_nil
-        end
-      end
-
-      it "matches 'this evening'" do
-        pre_text, parsed = described_class.extract_time("remind me this evening to bake sweets")
-        expect(pre_text).to eq("this evening")
-        expect(parsed).to be_present
-      end
-
-      it "matches 'in the evening'" do
-        pre_text, parsed = described_class.extract_time("remind me in the evening to bake sweets")
-        expect(pre_text).to eq("in the evening")
-        expect(parsed).to be_present
-      end
-
-      it "matches 'tomorrow morning' (strong + weak)" do
-        pre_text, parsed = described_class.extract_time("remind me tomorrow morning")
-        expect(pre_text).to eq("tomorrow morning")
-        expect(parsed).to be_present
+    # A day or month word inside a hyphenated identifier is not a time, and a
+    # weak day word ("evening") needs a qualifier to be one.
+    it "leaves a hyphenated identifier or a bare weak day word alone" do
+      [
+        "set evening-mode",
+        "trigger march-update",
+        "remind me evening",
+        "trigger evening mode",
+        "ping me morning",
+        "ping me afternoon",
+        "ping me night",
+      ].each do |text|
+        expect(described_class.extract_time(text)).to eq([nil, nil]), text
       end
     end
 
-    describe "strong day words stand alone" do
-      it "matches bare 'tomorrow'" do
-        pre_text, parsed = described_class.extract_time("remind me tomorrow")
-        expect(pre_text).to eq("tomorrow")
-        expect(parsed).to be_present
-      end
-
-      it "matches bare 'tonight'" do
-        pre_text, parsed = described_class.extract_time("ping me tonight")
-        expect(pre_text).to eq("tonight")
-        expect(parsed).to be_present
-      end
-
-      it "matches a day name" do
-        pre_text, parsed = described_class.extract_time("remind me monday to call mom")
-        expect(pre_text).to eq("monday")
-        expect(parsed).to be_present
-      end
-
-      it "matches 'next monday'" do
-        pre_text, parsed = described_class.extract_time("schedule meeting next monday")
-        expect(pre_text).to include("next monday")
-        expect(parsed).to be_present
+    it "matches a qualified weak day word, and a strong one standing alone" do
+      [
+        ["remind me this evening to bake sweets",   "this evening"],
+        ["remind me in the evening to bake sweets", "in the evening"],
+        ["remind me tomorrow morning",              "tomorrow morning"],
+        ["remind me tomorrow",                      "tomorrow"],
+        ["ping me tonight",                         "tonight"],
+        ["remind me monday to call mom",            "monday"],
+        ["schedule meeting next monday",            "next monday"],
+      ].each do |text, matched|
+        pre_text, parsed = described_class.extract_time(text)
+        expect(pre_text).to include(matched), text
+        expect(parsed).to be_present, text
       end
     end
 
@@ -98,17 +50,11 @@ RSpec.describe Jarvis::Times do
       end
     end
 
-    describe "explicit clock times still work" do
-      it "matches 'at 3pm'" do
-        pre_text, parsed = described_class.extract_time("remind me at 3pm")
-        expect(pre_text).to include("at 3pm")
-        expect(parsed).to be_present
-      end
-
-      it "matches 'tomorrow at 3pm'" do
-        pre_text, parsed = described_class.extract_time("meeting tomorrow at 3pm")
-        expect(pre_text).to include("at 3pm")
-        expect(parsed).to be_present
+    it "matches an explicit clock time, with or without a day" do
+      ["remind me at 3pm", "meeting tomorrow at 3pm"].each do |text|
+        pre_text, parsed = described_class.extract_time(text)
+        expect(pre_text).to include("at 3pm"), text
+        expect(parsed).to be_present, text
       end
     end
 

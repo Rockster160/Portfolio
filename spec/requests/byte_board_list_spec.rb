@@ -42,13 +42,16 @@ RSpec.describe "Byte board list", type: :request do
   end
 
   describe "connecting a list" do
-    it "shows its items as circles, very high first, then high, then the rest" do
+    it "shows its items as circles, very high first, a leading emoji as the picture", :aggregate_failures do
       connect
       expect(response).to have_http_status(:ok)
 
-      expect(items.map { |item| [item["name"], item["priority"]] }).to eq(
+      listed = items
+      expect(listed.map { |item| [item["name"], item["priority"]] }).to eq(
         [["🔑 Keys", "very_high"], ["Cards", "high"], ["Chairs", "normal"]],
       )
+      expect(listed.first).to include("icon" => "🔑", "short_name" => "Keys", "icon_kind" => "emoji")
+      expect(listed.last).to include("icon" => nil, "short_name" => "Chairs")
     end
 
     it "sits after the pinned chores and ahead of the rest" do
@@ -60,14 +63,6 @@ RSpec.describe "Byte board list", type: :request do
       get "/byte/board/items", params: { conversation_id: board.id }
 
       expect(response.parsed_body["items"].pluck("name")).to eq(["Litter", "🔑 Keys", "Cards", "Chairs", "Sweep"])
-    end
-
-    it "takes a leading emoji as the picture" do
-      connect
-
-      keys_item = items.first
-      expect(keys_item).to include("icon" => "🔑", "short_name" => "Keys", "icon_kind" => "emoji")
-      expect(items.last).to include("icon" => nil, "short_name" => "Chairs")
     end
 
     it "matches a /pattern/ on the item's name" do

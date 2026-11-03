@@ -16,9 +16,7 @@ RSpec.describe Buddy::TodaySchedule do
     allow(BuddyDeliverWorker).to receive(:perform_async)
   end
 
-  # `at` is the LATEST it may land, not a fixed hour. Moving the schedule onto a
-  # reminder took it literally, and on 19 Aug all three briefings went out at
-  # 08:30:40 — Rocco's landing in the same SECOND as an 08:30:00 Focus block.
+  # `at` is the LATEST it may land, not a fixed hour.
   describe "an early start pulling the time forward" do
     def early_item(start_at, travel: nil)
       agenda = create(:agenda, user: user)
@@ -48,23 +46,21 @@ RSpec.describe Buddy::TodaySchedule do
 
     # It only ever pulls FORWARD. A 9:30 start would compute to 9:00, which is
     # later than the hour they picked, and their hour wins.
-    it "never pushes the briefing later than the hour they chose" do
-      early_item(tomorrow_at.change(hour: 9, min: 30))
-      at = tomorrow_at.change(hour: 8, min: 30)
-
-      expect(described_class.fire_time(user, at)).to eq(at)
-    end
-
     it "leaves a day with nothing early exactly where it was" do
       at = tomorrow_at.change(hour: 8, min: 30)
 
       expect(described_class.fire_time(user, at)).to eq(at)
     end
 
-    it "ignores an event past the cutoff, however big the drive" do
-      early_item(tomorrow_at.change(hour: 11, min: 0), travel: 90)
+    # It only ever pulls FORWARD: a 9:30 start would compute later than the hour
+    # they picked, and an event past the cutoff never counts.
+    it "never pushes later than the hour they chose, nor reaches past the cutoff", :aggregate_failures do
       at = tomorrow_at.change(hour: 8, min: 30)
 
+      early_item(tomorrow_at.change(hour: 9, min: 30))
+      expect(described_class.fire_time(user, at)).to eq(at)
+
+      early_item(tomorrow_at.change(hour: 11, min: 0), travel: 90)
       expect(described_class.fire_time(user, at)).to eq(at)
     end
 
@@ -76,15 +72,12 @@ RSpec.describe Buddy::TodaySchedule do
   end
 
   describe ".ensure!" do
-    it "makes a daily reminder that fires the briefing" do
+    it "makes a daily reminder that fires the briefing, first due in the future", :aggregate_failures do
       reminder = described_class.ensure!(user)
 
       expect(reminder.recurrence).to include("freq" => "daily", "at" => "08:30")
       expect(reminder.action_call).to eq(tool_name: :today_briefing, payload: {})
-    end
-
-    it "puts the first fire in the future" do
-      expect(described_class.ensure!(user).fire_at).to be > Time.current
+      expect(reminder.fire_at).to be > Time.current
     end
 
     it "takes an hour when given one" do
@@ -123,31 +116,16 @@ RSpec.describe Buddy::TodaySchedule do
   # Above a briefing that opens with its own greeting, that lands on the line
   # the briefing's prompt works hardest to get right.
   describe "firing it" do
-    it "posts no heading above the briefing" do
-      allow(Buddy::TodayBriefing).to receive(:deliver!).and_return(nil)
-      reminder = described_class.ensure!(user)
-
-      Buddy::ReminderFirer.fire!(reminder)
-
-      expect(convo.byte_messages.where("body LIKE '%Today briefing%'")).to be_empty
-    end
-
-    it "delivers the briefing into their own thread" do
-      allow(Buddy::TodayBriefing).to receive(:deliver!).and_return(nil)
-
-      Buddy::ReminderFirer.fire!(described_class.ensure!(user))
-
-      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, convo, scheduled: true)
-    end
-
     # A daily reminder never goes terminal: it stamps last_fired_at, rolls
     # fire_at to the next occurrence, and stays pending forever.
-    it "stays pending with tomorrow's slot on it" do
+    it "delivers into their own thread with no heading, and stays pending on tomorrow's slot", :aggregate_failures do
       allow(Buddy::TodayBriefing).to receive(:deliver!).and_return(nil)
       reminder = described_class.ensure!(user)
 
       Buddy::ReminderFirer.fire!(reminder)
 
+      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, convo, scheduled: true)
+      expect(convo.byte_messages.where("body LIKE '%Today briefing%'")).to be_empty
       expect(reminder.reload.fired_at).to be_nil
       expect(reminder.last_fired_at).to be_present
       expect(reminder.fire_at).to be > Time.current
@@ -185,10 +163,7 @@ RSpec.describe Buddy::TodaySchedule do
     end
   end
 
-  # The guard used to sit in Buddy::TodayScheduler. Buddy::ReminderFirer has
-  # never checked it, so moving the schedule onto a reminder would have dropped
-  # it silently — a briefing arriving at 3am because nothing on the new path
-  # knew to ask.
+  # Buddy::ReminderFirer doesn't check sleep, so deliver! has to.
   describe "while Buddy is asleep" do
     before { allow(Buddy::SleepGuard).to receive(:sleeping?).with(user).and_return(true) }
 

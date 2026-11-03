@@ -24,69 +24,41 @@ RSpec.describe "Buddy recall" do
   before { BuddyMemory.where(user: [user, other]).destroy_all }
 
   describe "search_memories" do
-    it "settles inside the turn rather than leaving a row to tap" do
-      expect(Buddy::Tools.answers?(Buddy::Tools[:search_memories])).to be(true)
-    end
-
-    it "finds by tag, which is how a subject in the conversation reaches a memory" do
+    it "finds by tag, stash category or note text, narrows by severity, and only in their own pile", :aggregate_failures do
       packed = user.buddy_memories.create!(
         kind: :concept, content: "Forgot the sleeping bags on the last camping trip.",
         tags: %w[camping gear], severity: 20,
       )
       user.buddy_memories.create!(kind: :concept, content: "The boiler needs bleeding.", tags: %w[house])
+      other.buddy_memories.create!(kind: :concept, content: "their private camping thought", tags: %w[camping])
+      held = user.buddy_memories.create!(kind: :stash, content: "chase the invoice", category: :work)
+      thread = user.buddy_memories.create!(kind: :stash, content: "that garden thing")
+      thread.notes.create!(body: "hydroponics might be the answer")
+      heavy = user.buddy_memories.create!(kind: :followup, content: "mum's surgery next week", severity: 80, tags: %w[family])
+      user.buddy_memories.create!(kind: :concept, content: "family likes board games", severity: 5, tags: %w[family])
 
       out = answer(:search_memories, { tags: "camping" })
-
       expect(out[:total]).to eq(1)
       expect(out[:memories].join(" ")).to include("##{packed.id}", "sleeping bags")
+
+      # A category matches the same term, so the caller needn't know which field holds it.
+      expect(answer(:search_memories, { tags: "work" })[:memories].join(" ")).to include("##{held.id}")
+      expect(answer(:search_memories, { query: "hydroponics" })[:memories].join(" ")).to include("##{thread.id}")
+
+      out = answer(:search_memories, { tags: "family", min_severity: 50 })
+      expect(out[:showing]).to eq(1)
+      expect(out[:memories].join(" ")).to include("##{heavy.id}")
     end
 
-    # The whole reason the cap had to go: a fact mentioned once and never
-    # repeated sorted LAST under the old priority ordering, so it was first over
-    # the side — and that is exactly the shape of the memories worth keeping.
-    it "reaches a never-reinforced memory that the old 30-row cap would have dropped" do
+    # A fact mentioned once and never repeated sorts last by priority, and is
+    # exactly the shape of memory worth keeping, so no row cap may drop it.
+    it "reaches a never-reinforced memory beneath many reinforced ones" do
       35.times { |i| user.buddy_memories.create!(kind: :preference, content: "filler preference #{i}", priority: 50) }
       once = user.buddy_memories.create!(kind: :concept, content: "Pharmacy shuts early on Sundays.", priority: 0)
 
       out = answer(:search_memories, { query: "pharmacy" })
 
       expect(out[:memories].join(" ")).to include("##{once.id}")
-    end
-
-    it "matches a stash category by the same term, so the caller needn't know which field holds it" do
-      held = user.buddy_memories.create!(kind: :stash, content: "chase the invoice", category: :work)
-
-      out = answer(:search_memories, { tags: "work" })
-
-      expect(out[:memories].join(" ")).to include("##{held.id}")
-    end
-
-    it "narrows to what actually matters with min_severity" do
-      heavy = user.buddy_memories.create!(kind: :followup, content: "mum's surgery next week", severity: 80, tags: %w[family])
-      user.buddy_memories.create!(kind: :concept, content: "family likes board games", severity: 5, tags: %w[family])
-
-      out = answer(:search_memories, { tags: "family", min_severity: 50 })
-
-      expect(out[:showing]).to eq(1)
-      expect(out[:memories].join(" ")).to include("##{heavy.id}")
-    end
-
-    it "never reaches another person's memories" do
-      other.buddy_memories.create!(kind: :concept, content: "their private camping thought", tags: %w[camping])
-
-      out = answer(:search_memories, { tags: "camping" })
-
-      expect(out[:total]).to eq(0)
-      expect(out[:how]).to include("Nothing matched")
-    end
-
-    it "searches the notes on a thread, not just the seed" do
-      held = user.buddy_memories.create!(kind: :stash, content: "that garden thing")
-      held.notes.create!(body: "hydroponics might be the answer")
-
-      out = answer(:search_memories, { query: "hydroponics" })
-
-      expect(out[:memories].join(" ")).to include("##{held.id}")
     end
   end
 
@@ -96,10 +68,6 @@ RSpec.describe "Buddy recall" do
         user: user, direction: direction, state: :delivered,
         body: body, metadata: meta, created_at: at,
       )
-    end
-
-    it "settles inside the turn rather than leaving a row to tap" do
-      expect(Buddy::Tools.answers?(Buddy::Tools[:search_conversations])).to be(true)
     end
 
     it "finds what they said and hands back enough to answer from" do
@@ -149,25 +117,14 @@ RSpec.describe "Buddy recall" do
       expect(out[:total]).to eq(0)
     end
 
-    it "narrows by days when they've said 'earlier today'" do
+    it "requires every word and narrows by days", :aggregate_failures do
       say("airport run", at: 40.days.ago)
-
-      expect(answer(:search_conversations, { query: "airport" })[:total]).to eq(1)
-      expect(answer(:search_conversations, { query: "airport", days: 7 })[:total]).to eq(0)
-    end
-
-    it "requires every word, so two terms narrow rather than widen" do
       say("the airport on Tuesday")
       say("the airport on Friday")
 
+      expect(answer(:search_conversations, { query: "airport" })[:total]).to eq(3)
+      expect(answer(:search_conversations, { query: "airport", days: 7 })[:total]).to eq(2)
       expect(answer(:search_conversations, { query: "airport Tuesday" })[:total]).to eq(1)
-    end
-
-    it "says plainly when nothing matched rather than reconstructing" do
-      out = answer(:search_conversations, { query: "submarine" })
-
-      expect(out[:total]).to eq(0)
-      expect(out[:how]).to include("you don't know it")
     end
   end
 end

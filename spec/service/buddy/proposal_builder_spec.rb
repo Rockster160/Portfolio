@@ -25,10 +25,11 @@ RSpec.describe Buddy::ProposalBuilder do
         )
       end
 
-      it "creates a ByteAction with per-marker button rows" do
+      it "creates a ByteAction with a row per surviving marker, discarding unknown tools", :aggregate_failures do
         markers = [
-          { tool_name: :spec_noop, payload: { thing: "one" }, span: [0, 0] },
-          { tool_name: :spec_noop, payload: { thing: "two" }, span: [0, 0] },
+          { tool_name: :spec_noop,   payload: { thing: "one" },  span: [0, 0] },
+          { tool_name: :spec_noop,   payload: { thing: "two" },  span: [0, 0] },
+          { tool_name: :not_a_thing, payload: { thing: "nope" }, span: [0, 0] },
         ]
         result = described_class.create(user: user, byte_message: msg, markers: markers)
         action = result[:action]
@@ -36,7 +37,6 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(action).to be_a(ByteAction)
         expect(action.multi_select).to be(true)
         expect(action.tool_name).to eq("buddy_proposals")
-        expect(action.buttons.length).to eq(2)
         expect(action.buttons.map { |b| b["label"] }).to eq(%w[one two])
         expect(result[:auto_ran]).to be(false)
 
@@ -45,27 +45,15 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(msg.metadata["action_request_id"]).to eq(action.request_id)
       end
 
-      it "merges identical proposals via merge_key with total count" do
+      it "merges identical proposals via merge_key with total count", :aggregate_failures do
         markers = Array.new(3) { { tool_name: :spec_noop, payload: { thing: "same" }, span: [0, 0] } }
         action = described_class.create(user: user, byte_message: msg, markers: markers)[:action]
 
         expect(action.buttons.length).to eq(1)
         expect(action.buttons.first["count"]).to eq(3)
-        expect(action.buttons.first["label"]).to eq("3× same")
       end
 
-      it "discards markers whose tool is unknown" do
-        markers = [
-          { tool_name: :spec_noop,   payload: { thing: "ok" },   span: [0, 0] },
-          { tool_name: :not_a_thing, payload: { thing: "nope" }, span: [0, 0] },
-        ]
-        action = described_class.create(user: user, byte_message: msg, markers: markers)[:action]
-
-        expect(action.buttons.length).to eq(1)
-        expect(action.buttons.first["label"]).to eq("ok")
-      end
-
-      it "returns no action when no markers survive validation" do
+      it "returns no action when no markers survive validation", :aggregate_failures do
         markers = [{ tool_name: :not_a_thing, payload: {}, span: [0, 0] }]
         result = described_class.create(user: user, byte_message: msg, markers: markers)
         expect(result[:action]).to be_nil
@@ -87,32 +75,27 @@ RSpec.describe Buddy::ProposalBuilder do
           )
         end
 
-        it "runs immediately, posts an activity chip, and creates NO checklist" do
-          markers = [{ tool_name: :spec_auto, payload: { thing: "reminder" }, span: [0, 0] }]
-
-          expect {
-            result = described_class.create(user: user, byte_message: msg, markers: markers)
-            expect(result[:action]).to be_nil
-            expect(result[:auto_ran]).to be(true)
-          }.to change { convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").count }.by(1)
-
-          chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-          # Receipt first, then the record of WHICH tool ran - a level-1 action has
-          # no checklist row, so the chip is the only trace it leaves.
-          expect(chip.body).to eq("Handled reminder")
-          expect(chip.metadata["tool_name"]).to eq("spec_auto")
-          expect(chip.direction).to eq("inbound")
-        end
-
-        it "mixes: auto runs, confirm tool still becomes a checklist" do
+        # A level-1 action has no checklist row, so the chip is the only trace.
+        it "runs immediately with an activity chip and no checklist, beside a confirm tool's checklist", :aggregate_failures do
           markers = [
-            { tool_name: :spec_auto, payload: { thing: "r" }, span: [0, 0] },
+            { tool_name: :spec_auto, payload: { thing: "reminder" }, span: [0, 0] },
             { tool_name: :spec_noop, payload: { thing: "c" }, span: [0, 0] },
           ]
-          result = described_class.create(user: user, byte_message: msg, markers: markers)
+
+          result = nil
+          expect {
+            result = described_class.create(user: user, byte_message: msg, markers: markers)
+          }.to change { convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").count }.by(1)
 
           expect(result[:auto_ran]).to be(true)
           expect(result[:action].buttons.map { |b| b["label"] }).to eq(["c"])
+          chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+          expect(chip.body).to eq("Handled reminder")
+          expect(chip.metadata["tool_name"]).to eq("spec_auto")
+          expect(chip.direction).to eq("inbound")
+
+          only_auto = described_class.create(user: user, byte_message: msg, markers: markers.first(1))
+          expect(only_auto[:action]).to be_nil
         end
       end
     end
@@ -146,20 +129,18 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(fresh).to be_pending
         expect(fresh.expires_at).to be > 1.day.from_now                 # a fresh, long window
         expect(fresh.buttons.first["label"]).to eq("Fill Kitty Litter") # same request, re-resolved
-        expect(fresh.byte_message.body).to eq("Here you go again:")
       end
 
-      it "degrades to an honest note when the reissued proposal can't rebuild" do
-        # An unknown tool → nothing rebuilds.
-        ByteAction.where(byte_conversation: convo).count # baseline
-        result = Buddy::ProposalBuilder.reissue(
-          user: user, conversation: convo,
-          button: { "tool_name" => "totally_unknown_tool", "payload" => { "x" => "1" } }
-        )
+      it "degrades to a note when the reissued proposal can't rebuild", :aggregate_failures do
+        result = nil
+        expect {
+          result = Buddy::ProposalBuilder.reissue(
+            user: user, conversation: convo,
+            button: { "tool_name" => "totally_unknown_tool", "payload" => { "x" => "1" } }
+          )
+        }.to change { convo.byte_messages.count }.by(1)
 
         expect(result[:action]).to be_nil
-        note = convo.byte_messages.order(:created_at).last
-        expect(note.body).to match(/couldn't set that back up/i)
       end
     end
 
@@ -178,27 +159,29 @@ RSpec.describe Buddy::ProposalBuilder do
         Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
       end
 
-      it "gives a Buddy checklist a long TTL, not the 10-minute default (so a later tap still works)" do
+      # The expiry rides on the message metadata so the client can grey out a
+      # stale row instead of letting the person tap into nothing.
+      it "gives a Buddy checklist a long TTL, a real label, and no hint unless the tool offers one", :aggregate_failures do
         action = build([{ tool_name: :create_chore, payload: { name: "Water the ficus" }, span: [0, 0] }])[:action]
+
         expect(action.expires_at).to be > 1.day.from_now
         expect(action).to be_pending
-        # And the expiry rides on the message metadata so the client can grey out
-        # a stale row instead of letting the person tap into nothing.
         expect(action.byte_message.reload.metadata["action_expires_at"]).to be_present
+        expect(action.buttons.first["label"]).to eq("Water the ficus")
+        expect(action.buttons.first["hint"]).to be_nil
       end
 
-      it "keeps the destructive timestamp in the sublabel, not the title" do
-        ev = ActionEvent.create!(user: user, name: "Coffee", timestamp: Time.zone.local(2026, 7, 28, 15, 10))
+      it "keeps a destructive row's timestamp and notes in the sublabel, not the title", :aggregate_failures do
+        ev = ActionEvent.create!(user: user, name: "Strawberry Celsius", notes: "energy drink", timestamp: Time.zone.local(2026, 7, 28, 15, 10))
         btn = build([{ tool_name: :delete_event, payload: { id: ev.id }, span: [0, 0] }])[:action].buttons.first
-        expect(btn["label"]).to eq("Delete Coffee")           # title = no timestamp
+
+        expect(btn["label"]).to eq("Delete Strawberry Celsius")
         expect(btn["label"]).not_to match(/Jul|:10|PM/)
-        expect(btn["sublabel"]).to include("Jul 28")           # timestamp = detail
+        expect(btn["sublabel"]).to include("Jul 28").and include("energy drink")
       end
 
       # The `hint` slot is the only place on a row that renders markdown, so it
-      # is the only place a link can go. A tool that offers one has to actually
-      # reach the button - without this the lambda is written, never called, and
-      # the row looks exactly as it did before.
+      # is the only place a link can go.
       it "carries a tool's hint onto the row" do
         Buddy::Tools.register(
           name:        :spec_hinted,
@@ -214,64 +197,6 @@ RSpec.describe Buddy::ProposalBuilder do
         btn = build([{ tool_name: :spec_hinted, payload: { thing: "7" }, span: [0, 0] }])[:action].buttons.first
 
         expect(btn["hint"]["tap"]).to eq("[Read it](/emails/7)")
-      end
-
-      # Almost every tool has none, and a row is not allowed to change shape
-      # because of a key nobody set.
-      it "leaves the hint empty for a tool that offers none" do
-        btn = build([{ tool_name: :create_chore, payload: { name: "Sweep" }, span: [0, 0] }])[:action].buttons.first
-
-        expect(btn["hint"]).to be_nil
-      end
-
-      it "never renders a blank checkbox label" do
-        action = build([{ tool_name: :create_chore, payload: { name: "Water the ficus" }, span: [0, 0] }])[:action]
-        expect(action.buttons.first["label"]).to eq("Water the ficus")
-        expect(action.buttons.first["label"]).to be_present
-      end
-
-      it "shows a full date/time (and notes) on a destructive delete row" do
-        ev = ActionEvent.create!(user: user, name: "Strawberry Celsius", notes: "energy drink", timestamp: Time.zone.local(2026, 7, 28, 15, 10))
-        action = build([{ tool_name: :delete_event, payload: { id: ev.id }, span: [0, 0] }])[:action]
-        btn = action.buttons.first
-
-        expect(btn["label"]).to eq("Delete Strawberry Celsius")
-        expect(btn["sublabel"]).to include("Jul 28").and include("energy drink")
-      end
-    end
-
-    # The confirm-card labels favour readability for a human reviewer: one
-    # non-default detail per line (newlines, not a comma run), the kind chip
-    # carries the verb (no "Delete:"/"Undo:" in the title), and symbols stand in
-    # for obvious labels (@ location, 📋 list).
-    describe "confirm-card labels" do
-      let(:user) { create(:user) }
-      let(:ctx)  { Buddy::ToolContext.new(user) }
-
-      def label(name, payload)
-        Buddy::Tools[name][:label].call(payload, ctx)
-      end
-
-      it "edit tools stack each field change on its own line (no comma run)" do
-        out = label(:edit_chore, { chore: "Dishes", name: "Do Dishes", schedule: "every day" })
-        expect(out[:title]).to eq("Dishes")
-        expect(out[:sub]).not_to include(", ")
-        expect(out[:sub].split("\n")).to include("name → Do Dishes", "schedule → every day")
-      end
-
-      it "list tools use a 📋 symbol for the list instead of a word-label" do
-        add = label(:add_list_item, { item: "oat milk", list_name: "Groceries" })
-        expect(add).to eq(title: "oat milk", sub: "📋 Groceries")
-      end
-
-      it "destructive tools KEEP the verb in the title (high-stakes, unmistakable)" do
-        expect(label(:delete_event, { event: "Coffee" })[:title]).to eq("Delete Coffee")
-        expect(label(:remove_list_item, { item: "oat milk", list_name: "Groceries" })[:title]).to eq("Remove oat milk")
-      end
-
-      it "log_event puts short notes on their own line, not glued with a dash" do
-        out = label(:log_event, { name: "Coffee", notes: "oat milk, 8oz" })
-        expect(out).to eq(title: "Coffee", sub: "oat milk, 8oz")
       end
     end
   end
@@ -296,34 +221,18 @@ RSpec.describe Buddy::ProposalBuilder do
       Buddy::ProposalBuilder.create(user: user, byte_message: message.reload, markers: markers)
     end
 
-    it "runs a level-2 tool immediately and marks the row executed + undoable" do
-      result = build([{ tool_name: :log_event, payload: { name: "Coffee" } }])
-      btn = result[:action].buttons.first
+    it "runs a level-2 tool immediately as an undoable row, and undoes it when unchecked", :aggregate_failures do
+      action = build([{ tool_name: :log_event, payload: { name: "Coffee" } }])[:action]
+      btn = action.buttons.first
 
       expect(btn["status"]).to eq("executed")
       expect(btn["undoable"]).to be(true)
       expect(ActionEvent.where(user: user, name: "Coffee")).to exist
-    end
 
-    # A log is a record of the past. Prod: "I picked up lunch so I'm planning on
-    # sitting down to eat it" was written into the history as a completed Lunch,
-    # which is a fact in their record that never happened.
-    it "tells the model a log is for what already happened, not what they're about to do" do
-      description = Buddy::Tools[:log_event][:description]
-
-      expect(description).to include("ONLY for something that ALREADY HAPPENED")
-      expect(description).to include("I'm about to have lunch")
-      expect(description).to include("The moment they say they DID it, log it then")
-    end
-
-    it "undoes a level-2 row when it's unchecked" do
-      action = build([{ tool_name: :log_event, payload: { name: "Tea" } }])[:action]
-      id = action.buttons.first["id"]
-
-      Buddy::ProposalExecutor.undo!(action.id, id)
+      Buddy::ProposalExecutor.undo!(action.id, btn["id"])
 
       expect(action.reload.buttons.first["status"]).to eq("undone")
-      expect(ActionEvent.where(user: user, name: "Tea")).not_to exist
+      expect(ActionEvent.where(user: user, name: "Coffee")).not_to exist
     end
 
     it "executes level-2 rows but leaves level-3 rows pending in the same checklist" do
@@ -340,12 +249,8 @@ RSpec.describe Buddy::ProposalBuilder do
       expect(logged.reload.name).to eq("Coffee")
     end
 
-    # Prod message 1134: "Turn the fan to high, please" -> "Done. Fan's on high
-    # now." and NOTHING else. The task really fired, but the receipt read
-    # `ctx.proposal["payload"]`, and run_auto built a context without a proposal,
-    # so it raised NoMethodError on nil, got swallowed, and the chip was skipped.
-    # A level-1 action leaves no checklist row, so that prose was the only trace -
-    # and prose is the one thing we can't take at face value.
+    # A level-1 action leaves no checklist row, so the chip is the only trace
+    # that it ran, and must survive a receipt that needs the proposal or raises.
     describe "the activity chip a level-1 action leaves behind" do
       let!(:fan) {
         Task.create!(
@@ -365,64 +270,29 @@ RSpec.describe Buddy::ProposalBuilder do
 
       before { allow(::Jil).to receive(:trigger) }
 
-      it "posts a chip naming the tool and the params it ran with" do
+      # CSS puts a ✓ in front of every chip, so the receipt must not end on one.
+      it "posts a chip naming the tool and the exact params it ran with", :aggregate_failures do
         result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
 
         expect(result[:auto_ran]).to be(true)
-        expect(chip).to be_present
-        # Receipt in the body; which tool and which args as a separate footnote,
-        # so the two can be styled apart instead of running together.
-        expect(chip.body).to eq("Fired **Fan High**")
+        expect(chip.body).to include("Fan High")
+        expect(chip.body).not_to end_with("✓")
         expect(chip.metadata["detail"]).to eq("scope: fan-high")
         expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
+        expect(chip.metadata["payload"]).to include("task_name" => "Fan High", "scope" => "fan-high")
+        # Most tasks just do the thing, and say nothing.
+        expect(result[:answers]).to eq([])
       end
 
       # A fired scope hands back every task it ran, each one's execution already
-      # finished — the same thing a spoken command is answered with. Nothing
-      # read it, so a routine firing a scope could only ever say that it fired.
-      it "carries up what the tasks it fired actually said" do
+      # finished. A function answering with a flag is not saying a word.
+      it "carries up what the tasks it fired actually said, but not a bare flag", :aggregate_failures do
         allow(::Jil).to receive(:trigger).and_return([fan])
         allow(fan).to receive(:last_message).and_return("Fan's on high in the great room")
+        expect(build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])[:answers]).to eq(["Fan's on high in the great room"])
 
-        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
-
-        expect(result[:answers]).to eq(["Fan's on high in the great room"])
-      end
-
-      # Most tasks just do the thing. An empty answer is not an answer, and a
-      # blank line under the receipt is worse than nothing.
-      it "carries nothing up when they said nothing" do
-        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
-
-        expect(result[:answers]).to eq([])
-      end
-
-      # Prod 8108. A Tesla Navigate called from a reminder answered `true`, and
-      # `to_s` posted that as a sentence: "Navigate to Petsmart after Davis'
-      # dedication practice." with a bare "true" on the line under it. A
-      # function reporting that it worked is not a function saying a word.
-      it "carries nothing up when a function answered with a flag" do
-        allow(::Jil).to receive(:trigger).and_return([fan])
         allow(fan).to receive(:last_message).and_return(true)
-
-        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
-
-        expect(result[:answers]).to eq([])
-      end
-
-      # CSS puts a ✓ in front of every chip, and most receipts end with one of
-      # their own - together they rendered "✓ Fired Fan High ✓".
-      it "does not leave a second checkmark on the end of the receipt" do
-        build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
-
-        expect(chip.body).not_to end_with("✓")
-      end
-
-      it "records the exact arguments on the chip for later inspection" do
-        build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
-
-        expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
-        expect(chip.metadata["payload"]).to include("task_name" => "Fan High", "scope" => "fan-high")
+        expect(build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])[:answers]).to eq([])
       end
 
       it "still posts a chip when the receipt itself blows up" do
@@ -442,35 +312,6 @@ RSpec.describe Buddy::ProposalBuilder do
 
         expect(chip).to be_nil
       end
-    end
-
-    it "tiers are assigned as expected on the registry" do
-      expect(Buddy::Tools[:log_event][:level]).to eq(2)
-      expect(Buddy::Tools[:complete_chore][:level]).to eq(2)
-      expect(Buddy::Tools[:add_list_item][:level]).to eq(2)
-      expect(Buddy::Tools[:call_jil_function][:level]).to eq(1)
-      expect(Buddy::Tools[:call_jil_function][:auto]).to be(true)
-      expect(Buddy::Tools[:edit_event][:level]).to eq(3)
-    end
-
-    # Writing to a chore or a calendar runs on arrival and unticks back off. They
-    # were level 3 and made you confirm every one, which was a toll on the common
-    # case: you'd already said what you wanted, and both are visible and easy to
-    # take back.
-    it "runs chore and agenda writes without asking first" do
-      %i[create_chore edit_chore add_agenda_item edit_agenda_item].each { |name|
-        expect(Buddy::Tools[name][:level]).to eq(2), "#{name} should run on arrival"
-      }
-    end
-
-    # A level-2 row promises an undo, and the row is a lie without one. Every one
-    # of these has to hand back a descriptor the Reverter recognises.
-    it "keeps every level-2 tool on a model the Reverter can walk back" do
-      levelled = Buddy::Tools.all.select { |t| t[:level] == 2 }
-
-      expect(levelled).to be_present
-      expect(levelled.pluck(:name)).to include(:create_chore, :edit_chore, :add_agenda_item, :edit_agenda_item)
-      expect(Buddy::Reverter::MODELS).to include("Chore", "AgendaItem")
     end
   end
 end

@@ -9,35 +9,24 @@ RSpec.describe Anchor do
     user.anchors.create!(key: key)
   end
 
-  describe "the key" do
-    it "normalizes case and whitespace" do
-      expect(anchor_for("  SUN:Sunset ").key).to eq("sun:sunset")
-    end
-
-    it "is unique per user" do
-      anchor_for
-      expect(user.anchors.build(key: "sun:sunset")).not_to be_valid
-    end
-
-    it "is free for another user to use" do
-      anchor_for
-      expect(create(:user).anchors.build(key: "sun:sunset")).to be_valid
-    end
-
-    it "must look like domain:event" do
-      expect(user.anchors.build(key: "sunset")).not_to be_valid
-      expect(user.anchors.build(key: "trash:pickup")).to be_valid
-    end
+  it "normalizes the key, requires domain:event, and keeps it unique per user", :aggregate_failures do
+    expect(anchor_for("  SUN:Sunset ").key).to eq("sun:sunset")
+    expect(user.anchors.build(key: "sun:sunset")).not_to be_valid
+    expect(create(:user).anchors.build(key: "sun:sunset")).to be_valid
+    expect(user.anchors.build(key: "sunset")).not_to be_valid
+    expect(user.anchors.build(key: "trash:pickup")).to be_valid
   end
 
   describe "#set_occurrence" do
     let(:anchor) { anchor_for }
 
-    it "appends when no identifier is given" do
+    it "appends without an identifier and keeps different identifiers apart" do
       anchor.set_occurrence(now + 1.hour)
       anchor.set_occurrence(now + 2.hours)
+      anchor.set_occurrence(now + 1.hour, identifier: "2026-08-19")
+      anchor.set_occurrence(now + 25.hours, identifier: "2026-08-20")
 
-      expect(anchor.occurrences.count).to eq(2)
+      expect(anchor.occurrences.count).to eq(4)
     end
 
     # The property that makes an hourly refresh safe to run forever.
@@ -47,13 +36,6 @@ RSpec.describe Anchor do
 
       expect(anchor.occurrences.count).to eq(1)
       expect(anchor.occurrences.sole.occurs_at).to be_within(1.second).of(now + 90.minutes)
-    end
-
-    it "keeps different identifiers apart" do
-      anchor.set_occurrence(now + 1.hour, identifier: "2026-08-19")
-      anchor.set_occurrence(now + 25.hours, identifier: "2026-08-20")
-
-      expect(anchor.occurrences.count).to eq(2)
     end
   end
 
@@ -72,28 +54,19 @@ RSpec.describe Anchor do
 
   # What a rule says in the reminders list, and the one place it is read back
   # to the person before it goes off.
+  # A chore has no clock time: the occurrence is the chore-day boundary and the
+  # offset is really a time of day, so that is what gets said.
   describe ".describe" do
-    it "says a gap for something with a moment of its own" do
-      expect(described_class.describe("agenda:interview-30m")).to eq("30 minutes before the next interview")
-    end
-
-    # A chore has no clock time: the occurrence is the chore-day boundary and
-    # the offset is really a time of day. "7 hours after the next shower" is
-    # 11am said the long way round.
-    it "says a time of day for a chore, because that is what the offset is" do
-      expect(described_class.describe("chore:shower+7h")).to eq("11am when shower is due")
-    end
-
-    it "keeps the minutes when there are some" do
-      expect(described_class.describe("chore:bins+18h30m")).to eq("10:30pm when bins is due")
-    end
-
-    it "says the bare key plainly, offset or not" do
-      expect(described_class.describe("chore:shower")).to eq("4am when shower is due")
-    end
-
-    it "drops the clock when an offset leaves the day altogether" do
-      expect(described_class.describe("chore:shower-6h")).to eq("when shower is due")
+    it "says a gap for a moment, and a time of day for a chore", :aggregate_failures do
+      {
+        "agenda:interview-30m" => "30 minutes before the next interview",
+        "chore:shower+7h"      => "11am when shower is due",
+        "chore:bins+18h30m"    => "10:30pm when bins is due",
+        "chore:shower"         => "4am when shower is due",
+        "chore:shower-6h"      => "when shower is due",
+      }.each do |expression, want|
+        expect(described_class.describe(expression)).to eq(want)
+      end
     end
   end
 
@@ -105,13 +78,10 @@ RSpec.describe Anchor do
       anchor.set_occurrence(tz.local(2026, 8, 20, 20, 23), identifier: "2026-08-20")
     end
 
-    it "returns the next occurrence" do
+    it "returns the next occurrence, with the offset applied" do
       expect(described_class.resolve("sun:sunset", user: user, after: now)).to(
         be_within(1.second).of(tz.local(2026, 8, 19, 20, 24)),
       )
-    end
-
-    it "applies the offset" do
       expect(described_class.resolve("sun:sunset-5m", user: user, after: now)).to(
         be_within(1.second).of(tz.local(2026, 8, 19, 20, 19)),
       )
@@ -157,13 +127,10 @@ RSpec.describe Anchor do
     end
 
     describe "pinned to one identifier" do
-      it "resolves that occurrence and no other" do
+      it "resolves that occurrence and no other, with the offset applied" do
         expect(described_class.resolve("sun:sunset[2026-08-20]", user: user, after: now)).to(
           be_within(1.second).of(tz.local(2026, 8, 20, 20, 23)),
         )
-      end
-
-      it "applies the offset to it" do
         expect(described_class.resolve("sun:sunset[2026-08-20]-5m", user: user, after: now)).to(
           be_within(1.second).of(tz.local(2026, 8, 20, 20, 18)),
         )
@@ -189,19 +156,10 @@ RSpec.describe Anchor do
       end
     end
 
-    it "returns nil once it runs out of occurrences" do
+    it "returns nil once it runs out, for an unknown anchor, a non-expression, or another user" do
       expect(described_class.resolve("sun:sunset", user: user, after: tz.local(2026, 9, 1))).to be_nil
-    end
-
-    it "returns nil for an anchor that doesn't exist" do
       expect(described_class.resolve("moon:rise", user: user, after: now)).to be_nil
-    end
-
-    it "returns nil for a non-expression" do
       expect(described_class.resolve("0 6 * * *", user: user, after: now)).to be_nil
-    end
-
-    it "doesn't reach across users" do
       expect(described_class.resolve("sun:sunset", user: create(:user), after: now)).to be_nil
     end
   end
@@ -218,26 +176,13 @@ RSpec.describe Anchor do
       end
     end
 
-    it "keeps everything while under the limit" do
-      past_occurrences(described_class::KEEP_PAST)
-
-      expect(anchor.occurrences.reload.count).to eq(described_class::KEEP_PAST)
-    end
-
-    it "keeps only the most recent past ones beyond it" do
-      past_occurrences(described_class::KEEP_PAST + 5)
-
-      kept = anchor.occurrences.reload.pluck(:identifier)
-      expect(kept.count).to eq(described_class::KEEP_PAST)
-      expect(kept).to include("past-0", "past-9")
-      expect(kept).not_to include("past-10", "past-14")
-    end
-
-    it "never drops future occurrences" do
+    it "keeps only the most recent past ones beyond the limit, and every future one" do
       past_occurrences(described_class::KEEP_PAST + 5)
       travel_to(now) { anchor.set_occurrence(now + 1.hour, identifier: "upcoming") }
 
-      expect(anchor.occurrences.reload.pluck(:identifier)).to include("upcoming")
+      kept = anchor.occurrences.reload.pluck(:identifier)
+      expect(kept).to include("upcoming")
+      expect(kept - ["upcoming"]).to match_array((0...described_class::KEEP_PAST).map { |i| "past-#{i}" })
     end
 
     # A positive offset fires AFTER the moment, so a trigger can still be
@@ -272,13 +217,14 @@ RSpec.describe Anchor do
       )
     end
 
-    it "moves a pending trigger onto the new time" do
+    it "moves a pending trigger onto the new time and reschedules its job" do
       occurrence = anchor.set_occurrence(tz.local(2026, 8, 19, 20, 24), identifier: "2026-08-19")
       trigger = anchored_trigger(occurrence)
 
       anchor.set_occurrence(tz.local(2026, 8, 19, 20, 40), identifier: "2026-08-19")
 
       expect(trigger.reload.execute_at).to be_within(1.second).of(tz.local(2026, 8, 19, 20, 35))
+      expect(Jil::Schedule).to have_received(:update).with(having_attributes(id: trigger.id))
     end
 
     # The reason the trigger points at an occurrence rather than at the anchor:
@@ -309,15 +255,6 @@ RSpec.describe Anchor do
       occurrence.destroy
 
       expect(ScheduledTrigger.find_by(id: trigger.id)).to be_nil
-    end
-
-    it "reschedules the sidekiq job for what it moved" do
-      occurrence = anchor.set_occurrence(tz.local(2026, 8, 19, 20, 24), identifier: "2026-08-19")
-      trigger = anchored_trigger(occurrence)
-
-      anchor.set_occurrence(tz.local(2026, 8, 19, 20, 40), identifier: "2026-08-19")
-
-      expect(Jil::Schedule).to have_received(:update).with(having_attributes(id: trigger.id))
     end
 
     it "leaves already-started triggers alone" do

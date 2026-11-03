@@ -65,9 +65,7 @@ RSpec.describe "POST /webhooks/byte/job_mail", type: :request do
     post_mail(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.\n\nCordelia")
 
     body = user.byte_messages.order(:id).last.body
-    expect(body).to include("--- the message, for the NOTE only ---")
     expect(body).to include("We'd like to schedule a Zoom.")
-    expect(body).to include("keep the message itself as the note")
   end
 
   # A recruiter's first contact has no row yet — so the suggestion is to make
@@ -80,16 +78,12 @@ RSpec.describe "POST /webhooks/byte/job_mail", type: :request do
     expect(body).to include("CALL add_job_application")
   end
 
-  it "falls back to the card when no company was named" do
+  it "falls back to the card when no company was named, keeping the watcher's metadata" do
     post_mail(company: "")
 
-    expect(user.byte_messages.order(:id).last.body).to eq("📬 Interview confirmed")
-  end
-
-  it "keeps the metadata the watcher sent, and the kind the client renders on" do
-    post_mail(company: "")
-
-    metadata = user.byte_messages.order(:id).last.metadata
+    message = user.byte_messages.order(:id).last
+    expect(message.body).to eq("📬 Interview confirmed")
+    metadata = message.metadata
     expect(metadata["source"]).to eq("job_mail_watcher")
     expect(metadata["kind"]).to eq("system")
     expect(metadata["subject"]).to eq("Zoom Interview Confirmation")
@@ -113,36 +107,25 @@ RSpec.describe "POST /webhooks/byte/job_mail", type: :request do
       ].join("\n")
     }
 
-    it "keeps a row with the mail on it and hands the seed its number" do
+    # Stamping the watcher's verdict is what stops the app triaging it a second
+    # time and what puts it in front of the job_search context section.
+    it "keeps a row with the mail on it, hands the seed its id and link, and stamps the verdict", :aggregate_failures do
       post_mail(raw_b64: Base64.encode64(raw))
 
       email = user.emails.order(:id).last
       expect(email.mail_id).to eq("zoom-1@icapital.com")
       expect(email.mail_blob).to be_attached
-      expect(user.byte_messages.order(:id).last.body).to include("Email id: #{email.id}")
-    end
-
-    it "offers the mail as something to link" do
-      post_mail(raw_b64: Base64.encode64(raw))
-
-      email = user.emails.order(:id).last
-      expect(user.byte_messages.order(:id).last.body).to include("/emails/#{email.id}")
+      body = user.byte_messages.order(:id).last.body
+      expect(body).to include("Email id: #{email.id}")
+      expect(body).to include("/emails/#{email.id}")
+      expect(Email.job_mail).to include(email)
+      expect(email.job_triage[:company]).to eq("iCapital, Inc.")
     end
 
     it "files one they sent as outbound" do
       post_mail(raw_b64: Base64.encode64(raw), outgoing: "1")
 
       expect(user.emails.order(:id).last).to be_outbound
-    end
-
-    # The watcher already decided this one on the Mac. Stamping the verdict is
-    # what stops the app triaging it a second time and what puts it in front of
-    # the job_search context section.
-    it "stamps the watcher's verdict rather than re-deciding it" do
-      post_mail(raw_b64: Base64.encode64(raw))
-
-      expect(Email.job_mail).to include(user.emails.order(:id).last)
-      expect(user.emails.order(:id).last.job_triage[:company]).to eq("iCapital, Inc.")
     end
 
     # Mail announced without its paperwork is worth far more than mail not

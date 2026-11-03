@@ -22,13 +22,18 @@ RSpec.describe Transcripts::Arriving do
   end
 
   describe "the conversation it builds" do
-    it "marks his side as his and theirs as theirs" do
+    # Where it came from is kept for naming it and for refusing the source.
+    it "marks his side and theirs, keeps its source, and reads the start in his own zone", :aggregate_failures do
       transcript = described_class.call(user, payload)
 
       expect(transcript.turns.map { |turn| turn["speaker"] }).to eq(["Them", "Me"])
       expect(transcript.mine?("Me")).to be(true)
       expect(transcript.mine?("Them")).to be(false)
       expect(transcript.owner).to eq(user)
+      expect(transcript.source["host"]).to eq("meet.google.com")
+      expect(transcript.source_key).to eq("meet.google.com")
+      expect(transcript.title).to eq("Chrome")
+      expect(transcript.occurred_at).to eq(Time.zone.parse("2026-10-29T14:02:00-06:00"))
     end
 
     # The whole reason the two streams share one clock: the conversation IS the
@@ -61,20 +66,6 @@ RSpec.describe Transcripts::Arriving do
       expect(transcript.turns.first["text"]).to eq("The last big one was a mail consolidation.")
       expect(transcript.turns.first["to"]).to eq(4.0)
       expect(transcript.turns.last["at"]).to eq(30.0)
-    end
-
-    it "keeps where it came from, for naming it and for refusing the source" do
-      transcript = described_class.call(user, payload)
-
-      expect(transcript.source["host"]).to eq("meet.google.com")
-      expect(transcript.source_key).to eq("meet.google.com")
-      expect(transcript.title).to eq("Chrome")
-    end
-
-    it "reads the start in his own zone" do
-      transcript = described_class.call(user, payload)
-
-      expect(transcript.occurred_at).to eq(Time.zone.parse("2026-10-29T14:02:00-06:00"))
     end
 
     # His microphone hot with nothing coming back is usually dictation or a

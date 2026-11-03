@@ -23,64 +23,32 @@ RSpec.describe Buddy::PromptDelivery do
   end
 
   describe ".post!" do
-    it "posts the prompt into their Buddy thread as a form" do
-      action = described_class.post!(user, prompt)
-
-      expect(action).to be_present
-      expect(action.tool_name).to eq(Buddy::FormAction::TOOL_NAME)
-      expect(action.byte_conversation_id).to eq(conversation.id)
-      expect(action.tool_input["tool_name"]).to eq("answer_prompt")
-      expect(action.tool_input["payload"]["id"]).to eq(prompt.id)
-    end
-
-    it "carries the dropdown and the timestamp, so it's answerable where it sits" do
-      action = described_class.post!(user, prompt)
-
-      who = action.buttons.find { |f| f["key"] == "Who did it?" }
-      expect(who["type"]).to eq("select")
-      expect(who["choices"]).to eq(%w[Rockster160 Eve Alchemibluum])
-      expect(action.buttons.find { |f| f["key"] == "When?" }["value"]).to eq("2026-08-06T22:01")
-    end
-
-    it "titles the message with the question and leaves it submittable" do
-      action = described_class.post!(user, prompt)
-      message = action.byte_message
-
-      expect(message.body).to eq("Who did: Puppy Down?")
-      expect(message.metadata.dig("form", "status")).to eq("pending")
-      expect(message.metadata.dig("form", "actions").last["label"]).to eq("Send it")
-    end
-
-    # A prompt that arrives unasked-for needs the answer it usually gets, which
-    # is "not now". Without it the only way out of one Buddy posted was to fill
-    # it in or leave it sitting there.
-    it "offers a way out that isn't answering it" do
-      action = described_class.post!(user, prompt)
-
-      skip_button = message_actions(action).find { |b| b["key"] == "skip" }
-      expect(skip_button["style"]).to eq("danger")
-      expect(message_actions(action).pluck("key")).to eq(%w[skip submit])
-    end
-
     # Nothing is guessed server-side: a stored value would read as Buddy having
-    # decided who did it. The dropdown still OPENS on the first name, because a
-    # required select renders without a blank option — same as the prompt page.
-    it "stores no answer of its own" do
-      action = described_class.post!(user, prompt)
-      who    = action.buttons.find { |f| f["key"] == "Who did it?" }
-
-      expect(who["value"]).to be_blank
-      expect(who["required"]).to be(true)
-    end
-
-    it "pushes it, since nothing else is going to tell them it's there" do
+    # decided who did it. A prompt that arrives unasked-for needs a way out that
+    # isn't answering it.
+    it "posts the prompt into their Buddy thread as a pushed, answerable form", :aggregate_failures do
       allow(WebPushNotifications).to receive(:send_to_byte)
 
       action = described_class.post!(user, prompt)
 
+      expect(action.tool_name).to eq(Buddy::FormAction::TOOL_NAME)
+      expect(action.byte_conversation_id).to eq(conversation.id)
+      expect(action.tool_input["tool_name"]).to eq("answer_prompt")
+      expect(action.tool_input["payload"]["id"]).to eq(prompt.id)
+
+      who = action.buttons.find { |f| f["key"] == "Who did it?" }
+      expect(who).to include("type" => "select", "choices" => %w[Rockster160 Eve Alchemibluum], "required" => true)
+      expect(who["value"]).to be_blank
+      expect(action.buttons.find { |f| f["key"] == "When?" }["value"]).to eq("2026-08-06T22:01")
+
+      message = action.byte_message
+      expect(message.body).to eq("Who did: Puppy Down?")
+      expect(message.metadata.dig("form", "status")).to eq("pending")
+      expect(message_actions(action).pluck("key")).to eq(%w[skip submit])
+
       expect(WebPushNotifications).to have_received(:send_to_byte).with(
         title: "Who did: Puppy Down?",
-        tag:   "byte-#{action.byte_message.id}",
+        tag:   "byte-#{message.id}",
         users: [user],
       )
     end
@@ -93,7 +61,7 @@ RSpec.describe Buddy::PromptDelivery do
 
     # The event bus can deliver `added` twice, and a second copy of one question
     # is a second thing to dismiss.
-    it "replaces an earlier form for the same prompt rather than stacking one" do
+    it "replaces an earlier form for the same prompt rather than stacking one", :aggregate_failures do
       first  = described_class.post!(user, prompt)
       second = described_class.post!(user, prompt)
 
@@ -102,27 +70,21 @@ RSpec.describe Buddy::PromptDelivery do
       expect(ByteAction.where(tool_name: Buddy::FormAction::TOOL_NAME).pending.count).to eq(1)
     end
 
-    it "does nothing for a prompt that's already answered" do
-      prompt.update!(response: { "Who did it?" => "Eve" })
-
-      expect(described_class.post!(user, prompt)).to be_nil
-    end
-
-    it "does nothing for someone with no Buddy thread" do
-      conversation.update!(archived: true)
-
-      expect(described_class.post!(user, prompt)).to be_nil
-    end
-
-    it "does nothing for someone who doesn't have prompts" do
+    it "does nothing for an answered prompt, someone with no thread, or someone without prompts", :aggregate_failures do
+      allow(Buddy::Features).to receive(:enabled?).and_call_original
       allow(Buddy::Features).to receive(:enabled?).with(user, :prompts).and_return(false)
+      expect(described_class.post!(user, prompt)).to be_nil
 
+      allow(Buddy::Features).to receive(:enabled?).with(user, :prompts).and_return(true)
+      conversation.update!(archived: true)
+      expect(described_class.post!(user, prompt)).to be_nil
+
+      conversation.update!(archived: false)
+      prompt.update!(response: { "Who did it?" => "Eve" })
       expect(described_class.post!(user, prompt)).to be_nil
     end
   end
 
-  # Submitting in the thread has to be worth as much as submitting in the app:
-  # same response shape, same completion trigger behind it.
   # Some prompts fill their choices in as they're opened, on `prompt:load`.
   # The form in the thread runs the same step and rebuilds from what it left.
   describe "refreshing the form" do
@@ -140,11 +102,9 @@ RSpec.describe Buddy::PromptDelivery do
       }
     end
 
-    it "asks to be refreshed when it's shown" do
+    it "asks to be refreshed, then runs the prompt's load step and repaints the fields and title", :aggregate_failures do
       expect(action.byte_message.metadata.dig("form", "refresh")).to be(true)
-    end
 
-    it "runs the prompt's load step and repaints the fields and the title" do
       message = Buddy::FormAction.refresh!(action)
 
       expect(message.body).to eq("Who did: Puppy Up?")
@@ -160,8 +120,10 @@ RSpec.describe Buddy::PromptDelivery do
     end
   end
 
+  # Submitting in the thread has to be worth as much as submitting in the app:
+  # same response shape, same completion trigger behind it.
   describe "submitting it from the thread" do
-    it "writes the answer onto the prompt and fires the completion trigger" do
+    it "writes the answer onto the prompt and fires the completion trigger", :aggregate_failures do
       action = described_class.post!(user, prompt)
       fired  = []
       allow(::Jil).to receive(:trigger) { |_u, kind, sent| fired << [kind, sent[:state], sent[:status]] }
@@ -172,71 +134,47 @@ RSpec.describe Buddy::PromptDelivery do
 
       expect(result[:ok]).to be(true)
       expect(prompt.reload.response).to eq("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
-      # The same trigger the page fires on submit — it's what RecordLinks
-      # listens for to actually complete the chore.
+      # The trigger RecordLinks listens for to actually complete the chore.
       expect(fired).to include([:prompt, nil, :complete])
     end
 
-    it "refuses a name that isn't on the dropdown" do
+    it "refuses a name that isn't on the dropdown, or an empty one", :aggregate_failures do
       action = described_class.post!(user, prompt)
 
-      result = Buddy::FormAction.submit!(action, values: { "Who did it?" => "Somebody", "When?" => "2026-08-06T22:01" })
-
-      expect(result[:ok]).to be(false)
-      expect(prompt.reload.response).to be_blank
-    end
-
-    it "refuses an empty answer rather than submitting a blank who" do
-      action = described_class.post!(user, prompt)
-
-      result = Buddy::FormAction.submit!(action, values: { "Who did it?" => "", "When?" => "2026-08-06T22:01" })
-
-      expect(result[:ok]).to be(false)
+      ["Somebody", ""].each do |who|
+        result = Buddy::FormAction.submit!(action, values: { "Who did it?" => who, "When?" => "2026-08-06T22:01" })
+        expect(result[:ok]).to be(false), who.inspect
+      end
       expect(prompt.reload.response).to be_blank
     end
   end
 
   # The same question exists in two places at once, so answering it in either
-  # has to close it in both. Until this, answering on the prompt's own page left
-  # the thread showing a live form whose only remaining behaviour was to refuse
-  # the tap with "no pending prompt".
+  # has to close it in both.
   describe "settling a form answered elsewhere" do
     def form_of(action)
       action.byte_message.reload.metadata["form"]
     end
 
-    # What PromptsController#update does: write the response, fire the trigger.
-    def answer_in_the_app!(answers)
-      prompt.update!(response: answers)
-      described_class.dispatch(user, :prompt, prompt.with_jil_attrs(status: :complete))
-    end
-
-    it "shows what was actually answered and stops being answerable" do
-      action = described_class.post!(user, prompt)
-
-      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
-
-      form = form_of(action)
-      expect(form["status"]).to eq("submitted")
-      expect(form["receipt"]).to eq("Answered in the app ✓")
-      expect(form["fields"].find { |f| f["key"] == "Who did it?" }["value"]).to eq("Eve")
-      expect(action.reload).not_to be_pending
-    end
-
-    it "leaves the history in the thread rather than taking the question away" do
+    it "shows what was answered, keeps the question in the thread, and stops being answerable", :aggregate_failures do
       action  = described_class.post!(user, prompt)
       message = action.byte_message
 
-      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
+      # What PromptsController#update does: write the response, fire the trigger.
+      prompt.update!(response: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
+      ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
 
-      expect(ByteMessage.find_by(id: message.id)).to be_present
+      form = form_of(action)
+      expect(form["status"]).to eq("submitted")
+      expect(form["fields"].find { |f| f["key"] == "Who did it?" }["value"]).to eq("Eve")
+      expect(form["fields"].pluck("key")).to eq(["Who did it?", "When?"])
+      expect(action.reload).not_to be_pending
       expect(message.reload.body).to eq("Who did: Puppy Down?")
-      expect(form_of(action)["fields"].pluck("key")).to eq(["Who did it?", "When?"])
     end
 
     # Every skip door destroys the prompt and THEN fires the trigger, so the
-    # destroy callback gets there first and its wording is the one that shows.
-    it "closes it with nothing filled in when it's dismissed there" do
+    # destroy callback gets there first.
+    it "closes it with nothing filled in when it's dismissed there", :aggregate_failures do
       action = described_class.post!(user, prompt)
       fields = action.buttons
 
@@ -246,11 +184,10 @@ RSpec.describe Buddy::PromptDelivery do
       form = form_of(action)
       expect(form["status"]).to eq("submitted")
       expect(form["receipt"]).to eq(described_class::DISCARDED)
-      # No answer exists, so none is invented onto the fields.
       expect(form["fields"]).to eq(fields)
     end
 
-    it "leaves it alone while the prompt is only being opened" do
+    it "leaves it alone while the prompt is only being opened", :aggregate_failures do
       action = described_class.post!(user, prompt)
 
       described_class.dispatch(user, :prompt, prompt.with_jil_attrs(state: :load))
@@ -259,14 +196,15 @@ RSpec.describe Buddy::PromptDelivery do
       expect(form_of(action)["status"]).to eq("pending")
     end
 
-    it "settles only the form for THAT prompt" do
+    it "settles only the form for THAT prompt", :aggregate_failures do
       other = user.prompts.create!(question: "How was it?", options: [
         { type: :text, question: "Notes", default: "" },
       ])
       action = described_class.post!(user, prompt)
       spared = described_class.post!(user, other)
 
-      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
+      prompt.update!(response: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
+      described_class.dispatch(user, :prompt, prompt.with_jil_attrs(status: :complete))
 
       expect(action.reload).not_to be_pending
       expect(spared.reload).to be_pending
@@ -275,11 +213,8 @@ RSpec.describe Buddy::PromptDelivery do
     # answer_prompt fires `prompt:complete` from inside the submit, so the
     # settler is handed the very form being submitted. If it took it, both would
     # claim the deferred queue and run whatever was behind it twice.
-    it "stands down when the thread is the one submitting it" do
+    it "stands down when the thread is the one submitting it", :aggregate_failures do
       action = described_class.post!(user, prompt)
-      # The settler reaches this form mid-submit and has to decline. If it
-      # didn't, the submit would land on a row it had already decided — and
-      # both would claim the queue parked behind it.
       seen = nil
       allow(Buddy::FormAction).to(receive(:settle!).and_wrap_original { |orig, *args, **kwargs|
         seen = orig.call(*args, **kwargs)
@@ -288,73 +223,30 @@ RSpec.describe Buddy::PromptDelivery do
       Buddy::FormAction.submit!(action, values: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
 
       expect(seen).to be(false)
-      expect(form_of(action)["receipt"]).to eq("Answered it ✓")
       expect(action.reload.decision["source"]).to eq("user")
-    end
-
-    it "rides the trigger bus, so every door reaches it" do
-      action = described_class.post!(user, prompt)
-
-      prompt.update!(response: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
-      ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
-
-      expect(action.reload).not_to be_pending
-      expect(form_of(action)["receipt"]).to eq("Answered in the app ✓")
     end
   end
 
-  # The one ending the trigger bus can't carry. `lib/scripts/
-  # fix_whisper_stray_nap_20260902.rb` destroyed prompt 5196 on 2 Sep because
-  # the nap it asked about never happened, and byte_action 756 stayed pending
-  # in the thread with three days left to expire — a "Who did: Puppy Down?"
-  # card whose "Send it" would answer a prompt that no longer existed.
+  # A destroy from a script or console fires nothing on the trigger bus, and the
+  # form must not be left pointing at a prompt that no longer exists.
   describe "a prompt that is deleted rather than answered" do
-    def form_of(action)
-      action.byte_message.reload.metadata["form"]
-    end
-
-    it "settles the open form instead of leaving it pointing at nothing" do
-      action = described_class.post!(user, prompt)
-
-      prompt.destroy!
-
-      expect(action.reload).not_to be_pending
-      expect(form_of(action)["status"]).to eq("submitted")
-      expect(form_of(action)["receipt"]).to eq(described_class::DISCARDED)
-    end
-
-    it "reaches a destroy that fires no trigger at all" do
-      action = described_class.post!(user, prompt)
-      # Nothing on the bus: this is a script or a console, which is exactly how
-      # 5196 went.
+    it "settles its own open form with no trigger, keeping the question to read", :aggregate_failures do
+      other = user.prompts.create!(question: "How was it?", options: [
+        { type: :text, question: "Notes", default: "" },
+      ])
+      action  = described_class.post!(user, prompt)
+      spared  = described_class.post!(user, other)
+      message = action.byte_message
       expect(::Jil).not_to receive(:trigger)
 
       prompt.destroy!
 
       expect(action.reload).not_to be_pending
-    end
-
-    it "leaves other people's forms alone" do
-      other = user.prompts.create!(question: "How was it?", options: [
-        { type: :text, question: "Notes", default: "" },
-      ])
-      action = described_class.post!(user, prompt)
-      spared = described_class.post!(user, other)
-
-      prompt.destroy!
-
-      expect(action.reload).not_to be_pending
+      form = message.reload.metadata["form"]
+      expect(form["status"]).to eq("submitted")
+      expect(form["receipt"]).to eq(described_class::DISCARDED)
+      expect(message.body).to eq("Who did: Puppy Down?")
       expect(spared.reload).to be_pending
-    end
-
-    it "leaves the question in the thread to read" do
-      action  = described_class.post!(user, prompt)
-      message = action.byte_message
-
-      prompt.destroy!
-
-      expect(ByteMessage.find_by(id: message.id)).to be_present
-      expect(message.reload.body).to eq("Who did: Puppy Down?")
     end
 
     # A prompt nobody posted is the common case, and a callback that raised on

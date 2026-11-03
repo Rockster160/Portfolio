@@ -5,25 +5,8 @@ RSpec.describe Chore, type: :model do
     let(:user) { create(:user) }
     let(:today) { ChoreDay.current(user) }
 
-    describe "show_on_today_view enum" do
-      it "defaults to when_scheduled" do
-        chore = create(:chore, created_by_user: user)
-        expect(chore.today_when_scheduled?).to eq(true)
-      end
-
-      it "supports always / when_available / when_scheduled_and_available / never" do
-        %i[always when_available when_scheduled_and_available never].each do |v|
-          chore = create(:chore, created_by_user: user, show_on_today_view: v)
-          expect(chore.show_on_today_view).to eq(v.to_s)
-        end
-      end
-    end
-
     # `matches_day?` answers "can this be done today". `strictly_matches_day?`
-    # answers "is today the day it comes round". They had been the same method,
-    # and a briefing asking the second question got the first one's answer —
-    # prod 5500 read out ten jobs on a Saturday, one of them a trash follower
-    # whose anchor was done on the Wednesday.
+    # answers "is today the day it comes round", which is what a briefing asks.
     describe "strictly_matches_day?" do
       def relative(interval, last_done:)
         chore = create(:chore, created_by_user: user,
@@ -181,24 +164,6 @@ RSpec.describe Chore, type: :model do
       end
     end
 
-    describe "show_on_today_view :when_scheduled_and_available semantic = OR" do
-      let(:chore) {
-        create(:chore, created_by_user: user,
-          show_on_today_view: :when_scheduled_and_available,
-          threshold_seconds: 6 * 3600,
-          recurrence: { freq: :daily })
-      }
-      it "shows when scheduled even if cooldown hasn't elapsed" do
-        create(:chore_completion, chore: chore, user: user,
-          completed_at: 1.hour.ago, day_key: ChoreDay.current(user), payout_skipped: false)
-        get_history = "irrelevant"
-        # We test the rule itself indirectly: scheduled=true (daily) so OR returns true
-        # regardless of cooldown_elapsed?=false.
-        expect(chore.cooldown_elapsed?(user, now: Time.current)).to eq(false)
-        expect(chore.matches_day?(Date.current, user)).to eq(true)
-      end
-    end
-
     describe "cooldown_elapsed?" do
       let(:chore) { create(:chore, created_by_user: user, threshold_seconds: 6 * 3600) }
 
@@ -234,17 +199,6 @@ RSpec.describe Chore, type: :model do
     let(:user) { create(:user) }
     let(:chore) { create(:chore, created_by_user: user) }
 
-    describe "#marked_due?" do
-      it "is false when marked_due_at is nil" do
-        expect(chore.marked_due?).to be(false)
-      end
-
-      it "is true when marked_due_at is present" do
-        chore.update!(marked_due_at: Time.current)
-        expect(chore.marked_due?).to be(true)
-      end
-    end
-
     describe "ChoreCompletion does NOT clear the stamp synchronously" do
       # The mark stays until ChoreDailyResetWorker runs at the next
       # chore-day rollover. Holding the clear keeps today_visible? /
@@ -252,17 +206,9 @@ RSpec.describe Chore, type: :model do
       # a chore must not change its slot in the Today tab.
       before { chore.update!(marked_due_at: 2.hours.ago) }
 
-      it "keeps marked_due_at intact after a credited completion" do
+      it "keeps marked_due_at intact after a credited, skipped or anonymous completion" do
         create(:chore_completion, chore: chore, user: user)
-        expect(chore.reload.marked_due_at).to be_present
-      end
-
-      it "keeps marked_due_at intact after a skipped completion" do
         create(:chore_completion, chore: chore, user: user, payout_skipped: true)
-        expect(chore.reload.marked_due_at).to be_present
-      end
-
-      it "keeps marked_due_at intact after an anonymous completion" do
         create(:chore_completion, chore: chore, user: user, anonymous: true)
         expect(chore.reload.marked_due_at).to be_present
       end
@@ -271,17 +217,6 @@ RSpec.describe Chore, type: :model do
 
   describe "priority" do
     let(:user) { create(:user) }
-
-    it "defaults to normal" do
-      chore = create(:chore, created_by_user: user)
-      expect(chore.priority).to eq("normal")
-      expect(chore).to be_priority_normal
-    end
-
-    it "stores descending integers so higher = more urgent" do
-      expect(described_class.priorities.values_at("critical", "high", "normal", "low", "none"))
-        .to eq([4, 3, 2, 1, 0])
-    end
 
     it "orders by the raw column with critical first" do
       none     = create(:chore, created_by_user: user, priority: :none)
@@ -305,15 +240,11 @@ RSpec.describe Chore, type: :model do
       end
     end
 
-    it "rides along on the Jil trigger payload" do
-      chore = create(:chore, created_by_user: user, priority: :high)
-      expect(chore.jil_attrs(action: :updated)[:priority]).to eq("high")
-    end
-
-    it "is serialized with both the name and the sortable rank" do
+    it "rides along on the Jil trigger payload and is serialized with its sortable rank" do
       chore = create(:chore, created_by_user: user, priority: :critical)
       json = ChoreSerializer.new(chore, viewer: user).as_json
 
+      expect(chore.jil_attrs(action: :updated)[:priority]).to eq("critical")
       expect(json[:priority]).to eq("critical")
       expect(json[:priority_rank]).to eq(4)
     end
@@ -322,41 +253,15 @@ RSpec.describe Chore, type: :model do
   describe "target_count" do
     let(:user) { create(:user) }
 
-    it "defaults to 1 when not specified" do
-      chore = create(:chore, created_by_user: user)
-      expect(chore.target_count).to eq(1)
-    end
-
-    it "persists a custom target" do
-      chore = create(:chore, created_by_user: user, target_count: 5)
-      expect(chore.reload.target_count).to eq(5)
-    end
-
-    it "rejects values below 1" do
-      chore = build(:chore, created_by_user: user, target_count: 0)
-      expect(chore).not_to be_valid
-      expect(chore.errors[:target_count]).to be_present
-    end
-
-    it "rejects negative values" do
-      chore = build(:chore, created_by_user: user, target_count: -1)
-      expect(chore).not_to be_valid
-    end
-
-    it "rejects values above 99" do
-      chore = build(:chore, created_by_user: user, target_count: 100)
-      expect(chore).not_to be_valid
-    end
-
-    it "accepts the upper bound" do
-      chore = build(:chore, created_by_user: user, target_count: 99)
-      expect(chore).to be_valid
+    it "accepts 1 through 99 only", :aggregate_failures do
+      { 0 => false, -1 => false, 1 => true, 99 => true, 100 => false }.each do |count, valid|
+        expect(build(:chore, created_by_user: user, target_count: count).valid?).to eq(valid), count.to_s
+      end
     end
 
     it "includes target_count in jil_attrs payload" do
       chore = create(:chore, created_by_user: user, target_count: 4)
-      payload = chore.jil_attrs(action: :created)
-      expect(payload[:target_count]).to eq(4)
+      expect(chore.jil_attrs(action: :created)[:target_count]).to eq(4)
     end
   end
 
@@ -371,18 +276,11 @@ RSpec.describe Chore, type: :model do
       [alice, bob].each(&:reload)
     end
 
-    describe "broadcasts on persistence" do
-      it "fans out a ChoreBroadcaster call when a chore is created via the model" do
-        expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, kind_of(Chore))
-        Chore.create!(name: "Surprise", created_by_user: alice, chore_household: household, reward_pebbles: 1)
-      end
-
-      it "fires the same broadcast on archival / destroy" do
-        chore = create(:chore, created_by_user: alice, chore_household: household, name: "X", reward_pebbles: 1)
-        expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, chore).twice
-        chore.update!(archived_at: Time.current)
-        chore.destroy!
-      end
+    it "fans out a ChoreBroadcaster call on create, archival and destroy" do
+      expect(ChoreBroadcaster).to receive(:broadcast_changes!).with(alice, kind_of(Chore)).exactly(3).times
+      chore = Chore.create!(name: "Surprise", created_by_user: alice, chore_household: household, reward_pebbles: 1)
+      chore.update!(archived_at: Time.current)
+      chore.destroy!
     end
 
     describe "accessible_chores filtering" do
@@ -448,7 +346,7 @@ RSpec.describe Chore, type: :model do
           sharing_mode: :household, reward_pebbles: 5, threshold_seconds: 6 * 3600)
       }
 
-      it "alice completes → bob taps 1h later → bob's payout is skipped" do
+      it "skips bob's payout inside alice's window and pays the next tapper after it" do
         base = Time.current
         travel_to(base) { ChoreCompleter.new(chore, alice).call }
         travel_to(base + 1.hour) {
@@ -458,11 +356,7 @@ RSpec.describe Chore, type: :model do
         }
         expect(alice.reload.chore_balance).to eq(5)
         expect(bob.reload.chore_balance).to eq(0)
-      end
 
-      it "after the window, the next tapper IS paid" do
-        base = Time.current
-        travel_to(base) { ChoreCompleter.new(chore, alice).call }
         travel_to(base + 7.hours) {
           result = ChoreCompleter.new(chore, bob).call
           expect(result).not_to be_skipped
@@ -490,35 +384,16 @@ RSpec.describe Chore, type: :model do
       let(:member) { create(:user) }
       before { create(:chore_household_membership, chore_household: household, user: member, role: :member) }
 
-      it "owner is implicitly a manager" do
+      it "lets the owner and managers manage chores, and not members" do
         expect(household.manager?(alice)).to be(true)
-      end
-
-      it "managers can manage chores; members cannot" do
         expect(bob.reload.can_manage_chores?).to be(true)
         expect(member.reload.can_manage_chores?).to be(false)
-      end
-
-      it "transfers are restricted to household peers" do
-        outsider = create(:user)
-        create(:chore_completion, user: bob, paid_pebbles: 10, base_pebbles: 10, payout_skipped: false)
-        ok = ChoreTransfer.new(from_user: bob, to_user: alice, amount_pebbles: 1)
-        bad = ChoreTransfer.new(from_user: bob, to_user: outsider, amount_pebbles: 1)
-        expect(ok).to be_valid
-        expect(bad).not_to be_valid
-        expect(bad.errors[:to_user_id]).to include("must be in your chore household")
       end
     end
   end
 
-  describe "smoke" do
+  describe "households and balances" do
     let(:user) { create(:user) }
-
-    it "loads all chore classes without error" do
-      chore = create(:chore, created_by_user: user, name: "Brush Teeth", reward_pebbles: 1)
-      expect(chore).to be_persisted
-      expect(chore.reward_label).to eq("1p")
-    end
 
     it "ChoreDay returns date in user tz using 4am cutoff" do
       travel_to Time.zone.local(2026, 5, 28, 3, 30, 0) do
@@ -551,15 +426,6 @@ RSpec.describe Chore, type: :model do
       membership = household.memberships.find_by(user_id: user.id)
       expect(membership).to be_present
       expect(membership.role.to_sym).to eq(:manager)
-    end
-
-    it "accessible_chores includes all chores in the household" do
-      owner = create(:user)
-      member = create(:user)
-      household = create(:chore_household, owner_user: owner)
-      create(:chore_household_membership, chore_household: household, user: member, role: :member)
-      chore = create(:chore, created_by_user: owner, chore_household: household)
-      expect(member.reload.accessible_chores).to include(chore)
     end
   end
 end

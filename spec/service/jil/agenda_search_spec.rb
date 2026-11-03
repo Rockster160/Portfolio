@@ -159,39 +159,18 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
       )
     end
 
-    it "by default returns everything regardless of hide prefs" do
-      results = methods.search("kind:task is:incomplete", 50, "ASC")
-      names = results.map { |h| h[:name] }
-      expect(names).to include("Visible", "ByPattern")
-    end
+    it "reads is:visible / is:not-hidden / is:hidden against the prefs, and nothing by default", :aggregate_failures do
+      names = ->(query, limit = 50) { methods.search(query, limit, "ASC").map { |h| h[:name] } }
 
-    it "is:visible drops items the user has hidden" do
-      results = methods.search("kind:task is:incomplete is:visible", 50, "ASC")
-      names = results.map { |h| h[:name] }
-      expect(names).to include("Visible")
-      expect(names).not_to include("ByPattern")
-    end
-
-    it "is:not-hidden is an alias for is:visible" do
-      results = methods.search("kind:task is:incomplete is:not-hidden", 50, "ASC")
-      names = results.map { |h| h[:name] }
-      expect(names).to include("Visible")
-      expect(names).not_to include("ByPattern")
-    end
-
-    it "is:hidden returns ONLY items the user has hidden" do
-      results = methods.search("kind:task is:incomplete is:hidden", 50, "ASC")
-      names = results.map { |h| h[:name] }
-      expect(names).not_to include("Visible")
-      expect(names).to include("ByPattern")
-    end
-
-    it "filtering happens in SQL so LIMIT stays accurate" do
-      # 1 limit, 1 hidden row in front — pure Ruby post-filter would
-      # return zero. SQL pre-filter returns the next visible row.
-      results = methods.search("kind:task is:incomplete is:visible", 1, "ASC")
-      expect(results.size).to eq(1)
-      expect(results.first[:name]).to eq("Visible")
+      expect(names.call("kind:task is:incomplete")).to include("Visible", "ByPattern")
+      %w[is:visible is:not-hidden].each do |token|
+        expect(names.call("kind:task is:incomplete #{token}")).to include("Visible")
+        expect(names.call("kind:task is:incomplete #{token}")).not_to include("ByPattern")
+      end
+      expect(names.call("kind:task is:incomplete is:hidden")).to include("ByPattern")
+      expect(names.call("kind:task is:incomplete is:hidden")).not_to include("Visible")
+      # In SQL, so a hidden row ahead of the LIMIT doesn't eat it.
+      expect(names.call("kind:task is:incomplete is:visible", 1)).to eq(["Visible"])
     end
 
     it "is:visible is a no-op when the user has no hide prefs at all" do

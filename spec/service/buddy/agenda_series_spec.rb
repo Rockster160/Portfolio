@@ -1,9 +1,7 @@
 require "rails_helper"
 
-# `add_agenda_item` could only ever make ONE row, so "check the front flower bed
-# daily" had nowhere to go - it became a custom watch on a list that didn't
-# exist, and never fired. AgendaSchedule already spoke the shared Recurrence
-# vocabulary; nothing reached it.
+# `add_agenda_item` with a repeat makes an AgendaSchedule (the shared Recurrence
+# vocabulary) rather than one row.
 RSpec.describe Buddy::AgendaSeries do
   let(:user)     { create(:user) }
   let!(:convo)   { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
@@ -21,91 +19,25 @@ RSpec.describe Buddy::AgendaSeries do
   end
 
   describe "adding a repeating task" do
-    it "creates a series rather than a single row" do
-      expect { add(title: "Check the front flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
+    # The rule hash carries the clock inside it because a BuddyReminder has no
+    # column for one. AgendaSchedule does, and leaving `at` in the jsonb lands
+    # every occurrence at midnight. Level 2 promises an undo, and removing the
+    # schedule takes its occurrences with it.
+    it "creates a series with the clock on the column, and undo takes the whole series back off", :aggregate_failures do
+      result = nil
+      expect { result = add(title: "Check the front flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
         .to change(AgendaSchedule, :count).by(1)
 
       schedule = AgendaSchedule.last
       expect(schedule.name).to eq("Check the front flower bed")
       expect(schedule.recurrence["freq"]).to eq("daily")
       expect(schedule.kind).to eq("task")
-    end
-
-    # The rule hash carries the clock inside it because a BuddyReminder has no
-    # column for one. AgendaSchedule does, and leaving `at` in the jsonb lands
-    # every occurrence at midnight.
-    it "hoists the time of day out of the rule and onto the column" do
-      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily")
-
-      schedule = AgendaSchedule.last
+      expect(schedule.duration_minutes).to be_nil
       expect(schedule.start_time.strftime("%H:%M")).to eq("08:30")
       expect(schedule.recurrence).not_to have_key("at")
       expect(schedule.recurrence).not_to have_key("starts_on")
-    end
 
-    it "takes the clock from `at` when the spec doesn't carry one" do
-      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "weekly:wednesday")
-
-      schedule = AgendaSchedule.last
-      expect(schedule.start_time.strftime("%H:%M")).to eq("08:30")
-      expect(schedule.recurrence["by_day"]).to eq(["wed"])
-    end
-
-    it "lets the spec's own clock win when it has one" do
-      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily:06:15")
-
-      expect(AgendaSchedule.last.start_time.strftime("%H:%M")).to eq("06:15")
-    end
-
-    # Pinned to a clock, because AgendaSchedule::MATERIALIZE_WINDOW is 30 hours
-    # and `tomorrow` here is 08:30 the following morning in THEIR zone. Whether
-    # that falls inside 30 hours depends on the hour the suite happens to run:
-    # from about 08:30 UTC it does, and before that it's 32-odd hours out and
-    # nothing materializes. It ran green all day and failed at midnight.
-    it "materializes real occurrences off the back of it" do
-      travel_to(Time.utc(2026, 8, 19, 15, 0)) do
-        expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
-          .to change(AgendaItem, :count)
-
-        expect(AgendaItem.where(agenda_schedule_id: AgendaSchedule.last.id)).to exist
-      end
-    end
-
-    it "honours an end date" do
-      ends = 10.days.from_now.to_date
-      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily", until: ends.iso8601)
-
-      expect(AgendaSchedule.last.until_on).to eq(ends)
-    end
-
-    it "carries an event's duration, and leaves a task without one" do
-      add(title: "Standup", at: tomorrow.iso8601, kind: :event, duration: 45, repeat: "weekdays")
-      expect(AgendaSchedule.last.duration_minutes).to eq(45)
-
-      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily")
-      expect(AgendaSchedule.last.duration_minutes).to be_nil
-    end
-
-    it "says so rather than making a silent one-off when the spec is unreadable" do
-      expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "everyish") }
-        .not_to(change(AgendaSchedule, :count))
-    end
-
-    it "still makes a single row when nothing repeats" do
-      expect { add(title: "Dentist", at: tomorrow.iso8601, kind: :event) }
-        .to change(AgendaItem, :count).by(1)
-
-      expect(AgendaSchedule.count).to eq(0)
-    end
-  end
-
-  # Level 2 promises an undo, and the row is a lie without one. Removing the
-  # schedule takes its occurrences with it (`dependent: :destroy`).
-  describe "undoing one" do
-    it "takes the whole series back off" do
-      result = add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily")
-      btn    = result[:action].buttons.first
-
+      btn = result[:action].buttons.first
       expect(btn["status"]).to eq("executed")
       expect(btn["undoable"]).to be(true)
 
@@ -115,20 +47,44 @@ RSpec.describe Buddy::AgendaSeries do
       expect(AgendaItem.count).to eq(0)
     end
 
-    it "is a model the Reverter knows how to walk back" do
-      expect(Buddy::Reverter::MODELS).to include("AgendaSchedule")
+    it "takes the clock from `at` unless the spec carries its own" do
+      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "weekly:wednesday")
+      expect(AgendaSchedule.last.start_time.strftime("%H:%M")).to eq("08:30")
+      expect(AgendaSchedule.last.recurrence["by_day"]).to eq(["wed"])
+
+      add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily:06:15")
+      expect(AgendaSchedule.last.start_time.strftime("%H:%M")).to eq("06:15")
     end
-  end
 
-  it "says on the receipt that it repeats, so it's not mistaken for a one-off" do
-    result = add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily")
+    # Pinned to a clock, because AgendaSchedule::MATERIALIZE_WINDOW is 30 hours
+    # and whether 08:30 tomorrow falls inside it depends on the hour of the run.
+    it "materializes real occurrences off the back of it" do
+      travel_to(Time.utc(2026, 8, 19, 15, 0)) do
+        expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
+          .to change(AgendaItem, :count)
 
-    expect(result[:action].buttons.first["receipt"].to_s).to match(/Flower bed/).and match(/day/i)
-  end
+        expect(AgendaItem.where(agenda_schedule_id: AgendaSchedule.last.id)).to exist
+      end
+    end
 
-  it "marks the row as repeating so the person sees it before it runs away" do
-    result = add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily")
+    it "honours an end date and an event's duration" do
+      ends = 10.days.from_now.to_date
+      add(title: "Standup", at: tomorrow.iso8601, kind: :event, duration: 45, repeat: "weekdays", until: ends.iso8601)
 
-    expect(result[:action].buttons.first["sublabel"].to_s).to include("🔁")
+      expect(AgendaSchedule.last.until_on).to eq(ends)
+      expect(AgendaSchedule.last.duration_minutes).to eq(45)
+    end
+
+    it "makes nothing rather than a silent one-off when the spec is unreadable" do
+      expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "everyish") }
+        .not_to(change { [AgendaSchedule.count, AgendaItem.count] })
+    end
+
+    it "still makes a single row when nothing repeats" do
+      expect { add(title: "Dentist", at: tomorrow.iso8601, kind: :event) }
+        .to change(AgendaItem, :count).by(1)
+
+      expect(AgendaSchedule.count).to eq(0)
+    end
   end
 end

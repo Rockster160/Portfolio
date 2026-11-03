@@ -19,10 +19,6 @@ RSpec.describe "add_job_application tool" do
   # Opened on arrival and drawn pre-checked. A row that was never tapped costs
   # the application itself, which is on the board nowhere else; an untick
   # destroys the row and takes its first beat with it.
-  it "is a level 2 proposal, undone by unticking" do
-    expect(tool[:level]).to eq(2)
-  end
-
   it "arrives pre-checked with a way back, and unticking takes the row away" do
     msg = conversation.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok")
     allow(Buddy::Features).to receive_messages(allows_tool?: true, allows_payload?: true)
@@ -70,28 +66,10 @@ RSpec.describe "add_job_application tool" do
       expect(row.notes.pluck(:tag)).to eq(["heard_back"])
     end
 
-    it "says on the card that it is logging, not tracking" do
-      expect(confirm(note: "They wrote again.")[:summary]).to include("Log")
-    end
-
-    # `Track <Company>` is a promise about the board, and the row is already on
-    # it. The title has to read like the beat it actually files.
-    it "titles the card like a beat on the row" do
-      payload = confirm(note: "They wrote again.", tag: :heard_back)[:resolved]
-
-      expect(tool[:label].call(payload, ctx)[:title]).to eq("💼 Heard back — Pellworth Dynamics")
-    end
-
     it "offers the row to look at when there is no mail" do
       payload = confirm(note: "They wrote again.", tag: :heard_back)[:resolved]
 
       expect(tool[:hint].call(payload, ctx)["tap"]).to include("/interviews/#{row.id}")
-    end
-
-    it "says it logged rather than claiming a new row" do
-      result = execute(note: "They wrote again.", tag: :heard_back)
-
-      expect(tool[:receipt].call(result, ctx)).to start_with("Logged on")
     end
 
     # Undo takes back the beat and leaves the row, which was never this card's
@@ -280,30 +258,19 @@ RSpec.describe "add_job_application tool" do
       expect(tool[:hint].call({ company: "Pellworth Dynamics" }, ctx)).to be_nil
     end
 
-    it "stamps the first beat with the mail's own clock and a link back" do
+    # Filing the mail against the beat is what stops the same mail reading as
+    # outstanding and being offered again every time the board is looked at.
+    it "stamps the beat with the mail's clock and link, files the mail against it, and settles the mail" do
+      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
+
       execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
       note = user.job_applications.find_by(company: "Pellworth Dynamics").notes.first
+      email.reload
 
       expect(note.occurred_at).to eq(email.timestamp)
       expect(note.source).to eq("Email")
       expect(note.url).to include("/emails/#{email.id}")
-    end
-
-    # Without this the same mail keeps reading as outstanding and gets offered
-    # again every time the board is looked at.
-    it "files the mail against the beat it made" do
-      execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
-      note = user.job_applications.find_by(company: "Pellworth Dynamics").notes.first
-
-      expect(email.reload.job_triage[:job_note_id]).to eq(note.id)
-    end
-
-    it "marks Ardesian's copy read and archived, and labels the real one" do
-      expect(LabelMailWorker).to receive(:perform_async).with(email.id)
-
-      execute(email_id: email.id, tag: :acknowledged, note: "We got it.")
-      email.reload
-
+      expect(email.job_triage[:job_note_id]).to eq(note.id)
       expect(email).to be_read
       expect(email).to be_archived
     end

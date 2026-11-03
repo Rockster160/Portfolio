@@ -124,33 +124,16 @@ RSpec.describe Contact, type: :model do
   describe ".name_find with comma-separated nicknames" do
     let!(:contact) { user.contacts.create!(name: "Alexander", nickname: "Alex, Al, Xander") }
 
-    it "matches the first nickname" do
-      expect(user.contacts.name_find("Alex")).to eq(contact)
-    end
-
-    it "matches a middle nickname" do
-      expect(user.contacts.name_find("Al")).to eq(contact)
-    end
-
-    it "matches a trailing nickname" do
-      expect(user.contacts.name_find("Xander")).to eq(contact)
-    end
-
-    it "is case-insensitive" do
-      expect(user.contacts.name_find("xander")).to eq(contact)
-    end
-
-    it "does not match a substring of a nickname" do
+    it "matches any whole nickname in the list, ignoring case and possessives", :aggregate_failures do
+      ["Alex", "Al", "Xander", "xander", "Xander's house"].each do |name|
+        expect(user.contacts.name_find(name)).to eq(contact), name
+      end
       expect(user.contacts.name_find("Xan")).to be_nil
     end
 
     it "tolerates missing whitespace around commas" do
       contact.update!(nickname: "Alex,Al,Xander")
       expect(user.contacts.name_find("Al")).to eq(contact)
-    end
-
-    it "matches after 's/house/place stripping" do
-      expect(user.contacts.name_find("Xander's house")).to eq(contact)
     end
 
     it "matches with special-char stripping across tokens" do

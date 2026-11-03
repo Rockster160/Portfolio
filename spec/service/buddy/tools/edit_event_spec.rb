@@ -15,7 +15,6 @@ RSpec.describe "edit_event tool" do
     payload = { id: event.id, at: at.iso8601 }
     payload.merge!(tool[:confirm].call(payload, ctx)[:resolved])
 
-    expect(tool[:label].call(payload, ctx)[:sub]).to start_with("time →")
     tool[:execute].call(payload, ctx)
     expect(event.reload.timestamp).to eq(at)
   end

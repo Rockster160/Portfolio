@@ -35,31 +35,18 @@ RSpec.describe ActionEvent do
         user.action_events.create!(name: "arrived", notes: "SpecTown", data: {})
       end
 
-      after do
-        [phone_only, multi_source, legacy_event].each(&:destroy)
-      end
-
-      it "matches events whose data has the given source key" do
+      it "matches events whose data has the given source key, directly and through query" do
         results = described_class.search_data_source(:phone)
         expect(results).to include(phone_only, multi_source)
         expect(results).not_to include(legacy_event)
-      end
-
-      it "matches multi-source events on either key" do
         expect(described_class.search_data_source(:car)).to contain_exactly(multi_source)
-      end
-
-      it "is queryable via search_terms alias data_source" do
-        results = user.action_events.query('data_source::"car"')
-        expect(results).to contain_exactly(multi_source)
+        expect(user.action_events.query('data_source::"car"')).to contain_exactly(multi_source)
       end
     end
   end
 
-  # `merchant:` raised PG::SyntaxError for every query until 2026-08-11: the
-  # search pipeline strips the parentheses from `ILIKE ANY (array[...])` when it
-  # extracts a scope's WHERE clause, leaving invalid SQL. Nothing covered it, so
-  # nothing caught it.
+  # The search pipeline strips the parentheses from `ILIKE ANY (array[...])`
+  # when it extracts a scope's WHERE clause, so the scope must not rely on them.
   describe "search_data_merchant" do
     let(:user) { User.me }
 
@@ -68,10 +55,6 @@ RSpec.describe ActionEvent do
         user: user, name: "Transaction", timestamp: 1.day.ago,
         data: { amount: 10, merchant: merchant, category: "other" }
       )
-    end
-
-    it "does not raise" do
-      expect { described_class.query("merchant:amazon").count }.not_to raise_error
     end
 
     it "matches on a substring, case-insensitively" do

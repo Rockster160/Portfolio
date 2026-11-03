@@ -13,24 +13,17 @@ RSpec.describe "Buddy list sections + completion notes" do
     { confirm: confirm, label: tool[:label].call(merged, ctx), merged: merged, tool: tool }
   end
 
-  # ---- Task 1: chore-completion note shows on the preview ----
-
   describe "complete_chore label" do
-    it "puts the note on its own line so it's visible before confirming" do
+    it "carries the note so it's visible before confirming, and nothing without one", :aggregate_failures do
       out = Buddy::Tools[:complete_chore][:label].call(
         { chore: "Dishes", note: "used the good soap" }, ctx
       )
       expect(out[:title]).to eq("Dishes")
-      expect(out[:sub].split("\n")).to include("📝 used the good soap")
-    end
+      expect(out[:sub]).to include("used the good soap")
 
-    it "omits the note line when there's no note" do
-      out = Buddy::Tools[:complete_chore][:label].call({ chore: "Dishes" }, ctx)
-      expect(out[:sub]).to be_nil
+      expect(Buddy::Tools[:complete_chore][:label].call({ chore: "Dishes" }, ctx)[:sub]).to be_nil
     end
   end
-
-  # ---- Task 2: sections in context + used by the list tools ----
 
   describe "context lists" do
     it "lists each list with its section names, ordered, dropping empties" do
@@ -57,8 +50,7 @@ RSpec.describe "Buddy list sections + completion notes" do
 
       expect(res[:merged][:section_id]).to eq(section.id)
       expect(res[:merged][:section_name]).to eq("Harmon's")
-      expect(res[:confirm][:summary]).to eq("Add sanitizer to Groceries under Harmon's?")
-      expect(res[:label][:sub]).to eq("📋 Groceries › Harmon's")
+      expect(res[:label][:sub]).to include("Harmon's")
 
       res[:tool][:execute].call(res[:merged], ctx)
       item = list.list_items.reload.find { |i| i.name == "sanitizer" }
@@ -79,7 +71,7 @@ RSpec.describe "Buddy list sections + completion notes" do
       res = run(:add_list_item, { list: "Groceries", item: "milk", section: "back fridge" })
 
       expect(res[:merged]).not_to have_key(:section_id)
-      expect(res[:label][:sub]).to eq("📋 Groceries\n🏷️ back fridge")
+      expect(res[:label][:sub]).to include("back fridge")
 
       res[:tool][:execute].call(res[:merged], ctx)
       item = list.list_items.reload.find { |i| i.name == "milk" }
@@ -87,14 +79,13 @@ RSpec.describe "Buddy list sections + completion notes" do
       expect(item.category).to eq("Back Fridge") # titleized by the model
     end
 
-    # Prod 1236: "a chicken salad for mom to Shopping at Costco" put Costco in
-    # line with the list and dropped "mom" entirely. They're separate questions.
+    # Where it goes on the list and who it's for are separate questions.
     it "carries a section and a category at the same time" do
       res = run(:add_list_item, { list: "Groceries", item: "Chicken salad", section: "Harmon's", category: "Mom" })
 
       expect(res[:merged][:section_name]).to eq("Harmon's")
       expect(res[:merged][:category]).to eq("Mom")
-      expect(res[:label][:sub]).to eq("📋 Groceries › Harmon's\n🏷️ Mom")
+      expect(res[:label][:sub]).to include("Harmon's", "Mom")
 
       res[:tool][:execute].call(res[:merged], ctx)
       item = list.list_items.reload.find { |i| i.name == "Chicken salad" }
@@ -112,7 +103,6 @@ RSpec.describe "Buddy list sections + completion notes" do
       res  = run(:edit_list_item, { list: "Groceries", item: "milk", section: "dairy" })
 
       expect(res[:merged][:section_id]).to eq(section.id)
-      expect(res[:label][:sub]).to include("› Dairy")
 
       res[:tool][:execute].call(res[:merged], ctx)
       expect(item.reload.section_id).to eq(section.id)

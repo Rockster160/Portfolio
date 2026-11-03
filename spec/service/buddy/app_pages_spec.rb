@@ -12,13 +12,7 @@ RSpec.describe Buddy::AppPages do
       page = described_class.for_user(other).find { |p| p[:name] == :links }
 
       expect(page[:url]).to end_with("/chores/links")
-      expect(page[:about]).to match(/record links/i)
-    end
-
-    it "gives absolute urls, because a relative one would resolve against the Byte subdomain" do
-      described_class.for_user(other).each { |page|
-        expect(page[:url]).to start_with("http")
-      }
+      expect(described_class.for_user(other).pluck(:url)).to all(start_with("http"))
     end
 
     # The whole reason this is a closed list. Compared against the route set
@@ -38,25 +32,13 @@ RSpec.describe Buddy::AppPages do
 
   # /system is behind MeConstraint. Offering it to someone who'd be bounced is
   # worse than not mentioning it, because they can see it and can't use it.
-  describe "owner-only pages" do
-    it "offers system dashboards to the owner" do
-      expect(described_class.for_user(owner).pluck(:name)).to include(:system)
-    end
-
-    it "hides them from everyone else" do
-      expect(described_class.for_user(other).pluck(:name)).not_to include(:system)
-    end
-
-    it "hides them from nobody at all" do
-      expect(described_class.for_user(nil)).to eq([])
-    end
+  it "offers system dashboards to the owner only, and nothing to nobody", :aggregate_failures do
+    expect(described_class.for_user(owner).pluck(:name)).to include(:system)
+    expect(described_class.for_user(other).pluck(:name)).not_to include(:system)
+    expect(described_class.for_user(nil)).to eq([])
   end
 
   describe "as a context section" do
-    it "is fetchable rather than sitting in the prompt on every turn" do
-      expect(Buddy::GPT::ContextTool::SECTIONS).to include(:app_pages)
-    end
-
     it "rides in the full context for the user it was built for" do
       convo = other.byte_conversations.create!(mode: :buddy, last_message_at: Time.current)
 

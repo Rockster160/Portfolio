@@ -32,13 +32,19 @@ RSpec.describe SimpleFin::EventTransaction do
   end
 
   describe ".sync" do
-    it "lands a transaction the moment the alert arrives" do
+    # An alert fires when the purchase is made and says nothing about when it
+    # will clear, which can be four days later.
+    it "lands an unconfirmed transaction the moment the alert arrives", :aggregate_failures do
       row = described_class.sync(alert)
 
       expect(row.payee).to eq("AMAZON MKTPLACE PMTS")
       expect(row.category).to eq("shopping")
       expect(row.bank_account).to eq(card)
       expect(row.transacted_at).to eq(Time.utc(2026, 8, 10, 21, 15))
+      expect(row.occurred_at).to eq(Time.utc(2026, 8, 10, 21, 15))
+      expect(row.posted_at).to be_nil
+      expect(row.simplefin_id).to be_nil
+      expect(BankTransaction.bank_confirmed).to be_empty
     end
 
     # The alert says "you spent 24.99"; the card it left records -24.99.
@@ -50,34 +56,13 @@ RSpec.describe SimpleFin::EventTransaction do
       expect(described_class.sync(alert(amount: -4370.70)).amount_cents).to eq(437_070)
     end
 
-    # An alert fires when the purchase is made and says nothing about when it
-    # will clear — which can be four days later.
-    it "claims no posted date and no SimpleFIN id" do
-      row = described_class.sync(alert)
-
-      expect(row.posted_at).to be_nil
-      expect(row.simplefin_id).to be_nil
-      expect(BankTransaction.bank_confirmed).to be_empty
-    end
-
-    it "takes its timestamp from the alert" do
-      row = described_class.sync(alert(at: Time.utc(2026, 8, 10, 21, 15)))
-
-      expect(row.occurred_at).to eq(Time.utc(2026, 8, 10, 21, 15))
-    end
-
-    # 433 of 2,563 events come from an alert format that names no account.
-    # Blank is the answer; the likeliest account is not.
-    it "leaves the account blank when the alert names none" do
+    # Many alerts name no account. Blank is the answer; the likeliest account is not.
+    it "leaves the account blank when the alert names none, or one we do not hold" do
       row = described_class.sync(alert(account: ""))
-
       expect(row.bank_account).to be_nil
       expect(row.category).to eq("shopping")
-    end
 
-    it "leaves the account blank when the alert names one we do not hold" do
-      row = described_class.sync(alert(account: "Chase Sapphire Preferred (...4842)"))
-
+      row = described_class.sync(alert(account: "Chase Sapphire Preferred (...4842)", amount: 1.00))
       expect(row.bank_account).to be_nil
     end
 

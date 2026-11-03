@@ -66,28 +66,17 @@ RSpec.describe "agenda_items/_data_attrs" do
     end
   end
 
-  it "emits `data-readonly` (no value) when editable is false" do
-    rendered = render(partial: "agenda_items/data_attrs", locals: { item: item, editable: false })
-    expect(rendered).to match(/\bdata-readonly\b/)
-  end
+  it "marks readonly only when not editable, and lets all_day_value override the item", :aggregate_failures do
+    readonly = render(partial: "agenda_items/data_attrs", locals: { item: item, editable: false })
+    expect(readonly).to match(/\bdata-readonly\b/)
 
-  it "omits `data-readonly` when editable is true" do
-    rendered = render(partial: "agenda_items/data_attrs", locals: { item: item, editable: true })
-    expect(rendered).not_to match(/\bdata-readonly\b/)
-  end
-
-  it "lets all_day_value override the item's all_day? (cal_month hardcoded loops)" do
-    rendered = render(partial: "agenda_items/data_attrs",
-      locals: { item: item, editable: true, all_day_value: true })
-    expect(fragment(rendered)["data-all-day"]).to eq("true")
-  end
-
-  it "renders the agenda-item-data marker for JS hooks across all four views" do
-    # The marker class is on the wrapper element in calendar/cal_month and
-    # on .agenda-item in _item — verify the partial doesn't accidentally
-    # introduce its own element that would shadow those hooks.
-    rendered = render(partial: "agenda_items/data_attrs", locals: { item: item, editable: true })
-    # Should be a string of attributes only — no element tags.
-    expect(rendered).not_to match(/<[a-z]/i)
+    overridden = render(
+      partial: "agenda_items/data_attrs",
+      locals:  { item: item, editable: true, all_day_value: true },
+    )
+    expect(overridden).not_to match(/\bdata-readonly\b/)
+    expect(fragment(overridden)["data-all-day"]).to eq("true")
+    # Attributes only: the wrapper element belongs to each calling view.
+    expect(overridden).not_to match(/<[a-z]/i)
   end
 end

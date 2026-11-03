@@ -20,19 +20,13 @@ RSpec.describe "log_event tool" do
   end
 
   # "I got sick yesterday morning": whatever listens for the event reads its
-  # time as when it happened.
-  it "logs it when it happened, given an earlier time" do
+  # time as when it happened. The proposal is stored as JSON and run from
+  # there, so in practice the time is a string by the time it executes.
+  it "logs it when it happened, given an earlier time or the time as stored text" do
     at = 1.day.ago.change(hour: 8, min: 0, sec: 0)
 
     expect(log(name: "Sick", at: at).timestamp).to eq(at)
-  end
-
-  # How it arrives in practice: the proposal is stored as JSON and run from
-  # there, so the time is a string by the time it executes.
-  it "logs it when it happened, given the time as stored text" do
-    at = 2.days.ago.change(hour: 8, min: 0, sec: 0)
-
-    expect(log(name: "Sick", at: at.iso8601).timestamp).to eq(at)
+    expect(log(name: "Sick", at: (at - 1.day).iso8601).timestamp).to eq(at - 1.day)
   end
 
   it "refuses a time that hasn't come yet" do

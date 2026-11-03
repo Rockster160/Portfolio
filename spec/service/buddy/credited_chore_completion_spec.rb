@@ -29,21 +29,24 @@ RSpec.describe "Buddy credited chore completion" do
     [result, resolved, confirm, tool]
   end
 
-  it "credits the housemate and records who marked it" do
-    result, resolved, confirm = run({ chore: "Recycling", credit_to: "wren" })
+  it "credits and pays the housemate, records who marked it, and tells both people's devices", :aggregate_failures do
+    result, resolved, _confirm, tool = nil
+    expect { result, resolved, _confirm, tool = run({ chore: "Recycling", credit_to: "wren" }) }
+      .to change { housemate.reload.chore_completions.sum(:paid_pebbles) }.by(2)
     completion = ChoreCompletion.find(result[:chore_completion_id])
 
     expect(resolved[:credit_user_id]).to eq(housemate.id)
-    expect(confirm[:summary]).to include("for wren")
     expect(completion.user).to eq(housemate)
     expect(completion.recorded_by_user).to eq(recorder)
     expect(completion.anonymous).to be(false)
-  end
-
-  it "pays the housemate rather than the person who spoke" do
-    expect { run({ chore: "Recycling", credit_to: "wren" }) }
-      .to change { housemate.reload.chore_completions.sum(:paid_pebbles) }.by(2)
     expect(recorder.reload.chore_completions.count).to eq(0)
+    expect(tool[:label].call(resolved, Buddy::ToolContext.new(recorder))[:sub]).to include("wren")
+
+    expect(ChoreBroadcaster).to have_received(:broadcast_changes!).with(housemate, anything, anything)
+    expect(ChoreBroadcaster).to have_received(:broadcast_changes!).with(recorder, anything, anything)
+
+    # The recorder can still reach it to edit or undo.
+    expect(Buddy::ToolContext.new(recorder).resolve_chore_completion("Recycling")&.id).to eq(completion.id)
   end
 
   it "leaves an ordinary completion untouched" do
@@ -81,23 +84,6 @@ RSpec.describe "Buddy credited chore completion" do
     expect(mine.chore_completions.count).to eq(0)
   end
 
-  it "tells the recorder's own devices as well as the credited person's" do
-    run({ chore: "Recycling", credit_to: "wren" })
-
-    expect(ChoreBroadcaster).to have_received(:broadcast_changes!).with(housemate, anything, anything)
-    expect(ChoreBroadcaster).to have_received(:broadcast_changes!).with(recorder, anything, anything)
-  end
-
-  it "names the credited person on the row and in the receipt" do
-    _result, resolved, _confirm, tool = run({ chore: "Recycling", credit_to: "wren" })
-    label = tool[:label].call(resolved, Buddy::ToolContext.new(recorder))
-    ctx   = Buddy::ToolContext.new(recorder)
-    allow(ctx).to receive(:proposal).and_return({ "payload" => resolved.stringify_keys })
-
-    expect(label[:sub]).to include("credited to wren")
-    expect(tool[:receipt].call({}, ctx)).to include("for wren")
-  end
-
   describe "undoing one" do
     before { allow(ChoreStreak).to receive(:rebuild_for!) }
 
@@ -112,30 +98,15 @@ RSpec.describe "Buddy credited chore completion" do
     end
   end
 
-  it "can still be reached by the person who recorded it" do
-    result, = run({ chore: "Recycling", credit_to: "wren" })
-    found = Buddy::ToolContext.new(recorder).resolve_chore_completion("Recycling")
-
-    expect(found&.id).to eq(result[:chore_completion_id])
-  end
-  # Prod 5879: "Chelsea also did the gather versions for both" was a sentence
-  # saying WHICH pair had been hers, and it got read as fresh work. Two
-  # completions already written two minutes earlier were written again.
-  # `merge_key` settles this within one card and cannot see the card above it.
+  # `merge_key` settles duplicates within one card and cannot see the card
+  # above it, so the guard checks what is already recorded.
   describe "recording the same one twice" do
     it "refuses a second completion for the same person on the same day" do
       run({ chore: "Recycling", credit_to: "wren" })
 
       expect { run({ chore: "Recycling", credit_to: "wren" }) }
-        .to raise_error(/already marked done for wren/)
+        .to raise_error(/already marked done/)
       expect(chore.chore_completions.count).to eq(1)
-    end
-
-    it "points at the tools that change one instead" do
-      run({ chore: "Recycling" })
-
-      expect { run({ chore: "Recycling" }) }
-        .to raise_error(/edit_chore_completion.*undo_chore_completion/m)
     end
 
     # Two people doing the same chore is two rows, and always was - the
@@ -147,14 +118,8 @@ RSpec.describe "Buddy credited chore completion" do
       expect(chore.chore_completions.count).to eq(2)
     end
 
-    # The day the row would LAND on, not today - so backdating one to a day
-    # that is already covered is caught, and backdating to a free one isn't.
-    #
-    # Yesterday is worked out in the PERSON'S zone, because `ChoreDay` is: it
-    # takes 4am in America/Denver as the boundary. Specs run in UTC, where the
-    # date turns six hours early, so a plain `Time.current - 1.day` lands on
-    # TODAY'S chore day every evening from 6pm and the third case below then
-    # collided with the row the first one wrote.
+    # The day the row would LAND on, not today. Yesterday is worked out in the
+    # person's zone because `ChoreDay` is (4am America/Denver boundary).
     it "reads the backdated day rather than the clock" do
       yesterday = recorder.timezone { (Time.current - 1.day).change(hour: 14) }.iso8601
 

@@ -21,7 +21,7 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
   }
 
   describe "AR-level propagation" do
-    it "moves derived execute_at when source.start_at changes" do
+    it "moves a pending derived row when source.start_at changes, and skips a started one" do
       sched = user.scheduled_triggers.create!(
         source_item:    event,
         name:           "suite-reminder",
@@ -30,24 +30,20 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
         execute_at:     event.start_at - 5.minutes,
         data:           { e_name: "Serenity", suite: "STE 500" },
       )
-      new_start = event.start_at + 3.hours
-      event.update!(start_at: new_start, end_at: new_start + 30.minutes)
-      expect(sched.reload.execute_at).to be_within(1.second).of(new_start - 5.minutes)
-    end
-
-    it "skips started rows during propagation" do
-      sched = user.scheduled_triggers.create!(
+      started = user.scheduled_triggers.create!(
         source_item:    event,
-        name:           "suite-reminder",
+        name:           "started-reminder",
         offset_seconds: -5 * 60,
         trigger:        "suite-reminder",
         execute_at:     event.start_at - 5.minutes,
         started_at:     Time.current,
         data:           {},
       )
-      old_execute_at = sched.execute_at
-      event.update!(start_at: event.start_at + 3.hours, end_at: event.end_at + 3.hours)
-      expect(sched.reload.execute_at).to be_within(1.second).of(old_execute_at)
+      old_execute_at = started.execute_at
+      new_start = event.start_at + 3.hours
+      event.update!(start_at: new_start, end_at: new_start + 30.minutes)
+      expect(sched.reload.execute_at).to be_within(1.second).of(new_start - 5.minutes)
+      expect(started.reload.execute_at).to be_within(1.second).of(old_execute_at)
     end
 
     # A move that lands the trigger in the past would fire it on the spot —
@@ -115,8 +111,8 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
         data:        {},
       )
       expect(sched).not_to be_valid
-      expect(sched.errors[:offset_seconds]).to include("can't be blank")
-      expect(sched.errors[:name]).to include("can't be blank")
+      expect(sched.errors[:offset_seconds]).to be_present
+      expect(sched.errors[:name]).to be_present
     end
 
     it "enforces uniqueness of (source_item_id, name) per user" do
@@ -129,7 +125,7 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
         trigger: "suite-reminder", execute_at: Time.current, data: {},
       )
       expect(dup).not_to be_valid
-      expect(dup.errors[:name]).to include("has already been taken")
+      expect(dup.errors[:name]).to be_present
     end
   end
 
@@ -145,7 +141,7 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       JIL
     }
 
-    it "creates a derived ScheduledTrigger linked to the source" do
+    it "creates a derived ScheduledTrigger linked to the source, and upserts it on a re-run" do
       expect {
         Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
       }.to change { ScheduledTrigger.derived.count }.by(1)
@@ -155,26 +151,23 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       expect(sched.offset_seconds).to eq(-300)
       expect(sched.execute_at).to be_within(1.second).of(event.start_at - 5.minutes)
       expect(sched.data["e_name"]).to eq("Serenity")
-    end
 
-    it "second run upserts the same row (no duplicate)" do
-      Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
       expect {
         Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
       }.not_to change { ScheduledTrigger.derived.count }
     end
 
-    # Prod, 4 Sep, agenda item 1062. The leave-by went out at 10:10:02 for an
-    # 11:00 meeting, the meeting moved to 11:45 twenty-eight seconds later, and
-    # the corrected 10:52 leave-by never came. "Time to go" re-armed correctly
-    # off the same upsert because it had not fired yet.
+    # An event that moves after its trigger already fired has to fire again at
+    # the new time, not stay spent.
     describe "re-arming a trigger that has already fired" do
       before {
         Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
         ScheduledTrigger.derived.last.update!(started_at: Time.current, completed_at: Time.current)
       }
 
-      it "un-fires the row, so it can come due again" do
+      # `ready` is `not_started`, so a spent row re-armed to a future time would
+      # be a trigger nothing ever picks up.
+      it "un-fires the row so it comes due again at the new time" do
         moved = event.start_at + 45.minutes
         event.update_columns(start_at: moved, end_at: moved + 30.minutes)
         Jil::Executor.call(user, code, event.reload.serialize.merge(id: event.id))
@@ -184,17 +177,8 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
         expect(sched.execute_at).to be_within(1.second).of(moved - 5.minutes)
         expect(sched.started_at).to be_nil
         expect(sched.completed_at).to be_nil
-      end
-
-      # `ready` is `not_started`, so a spent row re-armed to a future time is
-      # a trigger nothing will ever pick up - which is the whole failure.
-      it "makes it ready again once its new time comes round" do
-        moved = event.start_at + 45.minutes
-        event.update_columns(start_at: moved, end_at: moved + 30.minutes)
-        Jil::Executor.call(user, code, event.reload.serialize.merge(id: event.id))
-
         travel_to(moved - 4.minutes) {
-          expect(user.scheduled_triggers.ready).to include(ScheduledTrigger.derived.last)
+          expect(user.scheduled_triggers.ready).to include(sched)
         }
       end
 

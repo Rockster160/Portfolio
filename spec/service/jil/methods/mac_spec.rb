@@ -93,64 +93,25 @@ RSpec.describe Jil::Methods::Mac do
 
     before { allow(ByteLocal).to receive(:run_command).and_return({ ok: true }) }
 
-    it "refuses another person pressing Run on a shared task" do
-      expect(ByteLocal).not_to receive(:run_command)
-
-      ctx = run(owner, code, auth: :run, auth_id: other.id)
-      expect(value(ctx, :ok)).to be(false)
-    end
-
-    it "refuses another person's companion firing a shared task" do
-      expect(ByteLocal).not_to receive(:run_command)
-
-      ctx = run(owner, code, auth: :buddy, auth_id: other.id)
-      expect(value(ctx, :ok)).to be(false)
-    end
-
     # FireDueAgendaTriggersWorker fires as `item.user`, so an item on HER
     # calendar can match a task of mine that's shared with her.
-    it "refuses another person's agenda item firing a shared task" do
-      expect(ByteLocal).not_to receive(:run_command)
+    it "refuses another person's Run, companion, or agenda item, and an unnamed actor" do
       item = FactoryBot.create(:agenda_item, agenda: FactoryBot.create(:agenda, user: other))
-
-      ctx = run(owner, code, auth: :agenda, auth_id: item.id)
-      expect(value(ctx, :ok)).to be(false)
+      [[:run, other.id], [:buddy, other.id], [:agenda, item.id], [:run, nil]].each do |auth, auth_id|
+        ctx = run(owner, code, auth: auth, auth_id: auth_id)
+        expect(value(ctx, :ok)).to be(false), "#{auth}/#{auth_id.inspect}"
+      end
+      expect(ByteLocal).not_to have_received(:run_command)
     end
 
-    it "still allows my own agenda item" do
+    # `cron` and `words` carry no acting person, so the owner check is the
+    # whole answer for them.
+    it "still allows my own agenda item, Run, companion, cron and voice command" do
       item = FactoryBot.create(:agenda_item, agenda: FactoryBot.create(:agenda, user: owner))
-
-      ctx = run(owner, code, auth: :agenda, auth_id: item.id)
-      expect(value(ctx, :ok)).to be(true)
-    end
-
-    it "refuses an actor-bearing execution that can't name its actor" do
-      expect(ByteLocal).not_to receive(:run_command)
-
-      ctx = run(owner, code, auth: :run, auth_id: nil)
-      expect(value(ctx, :ok)).to be(false)
-    end
-
-    it "still allows me pressing Run on my own task" do
-      ctx = run(owner, code, auth: :run, auth_id: owner.id)
-      expect(value(ctx, :ok)).to be(true)
-    end
-
-    it "still allows my own companion" do
-      ctx = run(owner, code, auth: :buddy, auth_id: owner.id)
-      expect(value(ctx, :ok)).to be(true)
-    end
-
-    # `cron`, `words` and `trigger` carry no acting person — nobody but the
-    # owner is involved — so the owner check is the whole answer for them.
-    it "still allows a cron-fired task of mine" do
-      ctx = run(owner, code, auth: :cron, auth_id: nil)
-      expect(value(ctx, :ok)).to be(true)
-    end
-
-    it "still allows a voice command of mine" do
-      ctx = run(owner, code, auth: :words, auth_id: nil)
-      expect(value(ctx, :ok)).to be(true)
+      [[:agenda, item.id], [:run, owner.id], [:buddy, owner.id], [:cron, nil], [:words, nil]].each do |auth, auth_id|
+        ctx = run(owner, code, auth: auth, auth_id: auth_id)
+        expect(value(ctx, :ok)).to be(true), "#{auth}/#{auth_id.inspect}"
+      end
     end
   end
 end

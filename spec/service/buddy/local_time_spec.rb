@@ -25,78 +25,24 @@ RSpec.describe "Buddy and local time" do
       }
     end
 
-    # The band is derived from the clock (a 9am briefing kept opening "Good
-    # afternoon"), so it's handed over rather than worked out. But the band is
-    # CONTEXT - the exact greeting words are the model's, varied per reply, not
-    # a prescribed string, and the line does not ask for a greeting at all.
-    # Said as "CONTEXT for your opener" it read as one: whether a message opens
-    # with a hello is settled under Greetings, and only two kinds of turn do.
-    it "says morning while UTC would read afternoon, and hands the band as context not a script" do
+    # The band is derived from the clock and handed over as context. Morning
+    # starts exactly when the perceived day rolls over, so neither can drift
+    # from the other by picking its own boundary.
+    it "hands the local part of day and hour, never UTC's, for every hour of the clock", :aggregate_failures do
       text = preamble_at(9)
-
       expect(text).to include("**Part of day:** morning")
       expect(text).to include("9am MDT")
-      expect(text).to include("CONTEXT, never an instruction to greet")
-      expect(text).not_to include("Good morning")
-    end
+      expect(text).not_to include("3:00 PM")
 
-    it "carries the local hour, not the UTC one" do
-      expect(preamble_at(9)).not_to include("3:00 PM")
-    end
-
-    it "turns over at noon and again in the evening" do
       expect(preamble_at(13)).to include("**Part of day:** afternoon")
       expect(preamble_at(18)).to include("**Part of day:** evening")
-    end
-
-    # "Good morning" at 2am is wrong and "Good evening" is wronger, and no fixed
-    # greeting fits - so late night gets none, and the preamble tells the model
-    # to skip time-of-day framing rather than force one.
-    it "marks the small hours as late night and tells it to skip time-of-day framing" do
-      text = preamble_at(2)
-
-      expect(text).to include("**Part of day:** late night")
-      expect(text).to include("skip the time-of-day framing")
-    end
-
-    # The part of day and the perceived day turn over together: the moment
-    # yesterday ends is the moment morning starts, so neither can drift from
-    # the other by picking its own boundary.
-    it "starts morning exactly when the day rolls over" do
+      expect(preamble_at(2)).to include("**Part of day:** late night")
       expect(preamble_at(Buddy::Day::ROLLOVER_HOUR - 1)).to include("late night")
       expect(preamble_at(Buddy::Day::ROLLOVER_HOUR)).to include("**Part of day:** morning")
-    end
 
-    it "covers every hour of the clock" do
       parts = (0..23).map { |h| preamble_at(h)[/\*\*Part of day:\*\* ([a-z ]+)\./, 1] }
-
       expect(parts).to all(be_present)
       expect(parts.uniq).to contain_exactly("morning", "afternoon", "evening", "late night")
-    end
-  end
-
-  # The SCHEDULE is a morning thing; the briefing isn't. The chip sits in the
-  # hero all day, so the seed can't assume which part of the day it's read in.
-  describe "the Today briefing at any hour" do
-    def seed_at(hour)
-      Timecop.freeze(zone.local(2026, 8, 2, hour, 0)) { Buddy::TodayBriefing.seed(user) }
-    end
-
-    it "never tells it which part of the day it is" do
-      [8, 14, 20].each { |hour|
-        expect(seed_at(hour)).not_to match(/\b(good morning|this morning|fits the morning)\b/i)
-      }
-    end
-
-    it "sends it to the part of day worked out from the clock instead" do
-      expect(seed_at(20)).to include("Part of day")
-    end
-
-    # A Today gets asked for at all hours, so the greeting is told to read the
-    # clock rather than the shape of the request.
-    it "sends it to the clock rather than to the shape of the ask" do
-      expect(seed_at(8)).to include("rather than from the shape of this request")
-      expect(seed_at(8)).to include("asked for at all hours")
     end
   end
 
@@ -143,15 +89,8 @@ RSpec.describe "Buddy and local time" do
       create(:chore_completion, chore: chore, user: user, completed_at: at, day_key: at.to_date)
     end
 
-    it "doesn't reach back into last night" do
+    it "finds this morning's and doesn't reach back into last night" do
       completed!(zone.local(2026, 8, 1, 20, 0))
-
-      found = Timecop.freeze(morning) { ctx.resolve_chore_completions(chore, hint: :today) }
-
-      expect(found).to be_empty
-    end
-
-    it "still finds one from this morning" do
       done = completed!(zone.local(2026, 8, 2, 7, 30))
 
       found = Timecop.freeze(morning) { ctx.resolve_chore_completions(chore, hint: :today) }
@@ -179,11 +118,8 @@ RSpec.describe "Buddy and local time" do
     # Time.current.end_of_day is 23:59 UTC, which is 5:59pm locally — so a fact
     # meant to last the evening expired before the evening did. The day ends
     # when Buddy says it does (3am), not when the calendar does.
-    it "lasts to the end of their day, not to the end of UTC's" do
+    it "lasts to the end of their day, not to the end of UTC's, and a day further for tomorrow", :aggregate_failures do
       expect(remember!(morning, "today")).to eq(zone.local(2026, 8, 3, 3, 0))
-    end
-
-    it "carries a day further for tomorrow" do
       expect(remember!(morning, "tomorrow")).to eq(zone.local(2026, 8, 4, 3, 0))
     end
 

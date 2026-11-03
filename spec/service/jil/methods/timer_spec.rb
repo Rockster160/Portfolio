@@ -31,11 +31,8 @@ RSpec.describe Jil::Methods::Timer, type: :service do
     let!(:swarm) { create(:timer, user: user, name: "Swarm",  kind: :dial,
                                  duration_ms: nil, dial_config: { sections: [{ name: "A" }] }) }
 
-    it "matches by case-insensitive name fragment" do
+    it "matches by case-insensitive name fragment or numeric id" do
       expect(methods.find("phas")).to eq(phase)
-    end
-
-    it "matches by numeric id" do
       expect(methods.find(swarm.id)).to eq(swarm)
     end
   end
@@ -45,15 +42,9 @@ RSpec.describe Jil::Methods::Timer, type: :service do
     let!(:home_t)  { create(:timer, user: user, name: "Home", duration_ms: 60_000) }
     let!(:page_t)  { create(:timer, user: user, name: "On Page", duration_ms: 60_000, timer_page: page) }
 
-    it "list returns all of the user's live timers" do
+    it "lists every live timer, or those on a page by slug, Home for nil" do
       expect(methods.list).to match_array([home_t, page_t])
-    end
-
-    it "on_page filters by page slug" do
       expect(methods.on_page("slime-colony")).to eq([page_t])
-    end
-
-    it "on_page(nil) returns Home page timers" do
       expect(methods.on_page(nil)).to eq([home_t])
     end
   end
@@ -106,18 +97,11 @@ RSpec.describe Jil::Methods::Timer, type: :service do
     let!(:dial) { create(:timer, user: user, name: "Phase", kind: :dial, duration_ms: nil,
                                  dial_config: { sections: [{ name: "Prep" }, { name: "Swarm" }, { name: "Settle" }] }) }
 
-    it "advance bumps dial_step_index" do
+    it "advances, jumps to a named section, and resets to step 0" do
       methods.advance("phase", 1)
       expect(dial.reload.dial_step_index).to eq(1)
-    end
-
-    it "goto jumps to the named section" do
       methods.goto("phase", "Settle")
       expect(dial.reload.dial_step_index).to eq(2)
-    end
-
-    it "reset returns the dial to step 0" do
-      dial.update!(dial_step_index: 2)
       methods.reset("phase")
       expect(dial.reload.dial_step_index).to eq(0)
     end

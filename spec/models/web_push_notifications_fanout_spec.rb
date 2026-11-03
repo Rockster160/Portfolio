@@ -72,45 +72,28 @@ RSpec.describe WebPushNotifications do
   # One dead endpoint used to be the whole notification. It has to cost only
   # itself.
   describe "when one device is gone" do
-    before do
-      allow(SlackNotifier).to receive(:notify)
-      gone = instance_double(Net::HTTPGone, body: "gone", code: "410", message: "Gone")
+    let(:gone) { instance_double(Net::HTTPGone, body: "gone", code: "410", message: "Gone") }
+
+    before { allow(SlackNotifier).to receive(:notify) }
+
+    it "still delivers to the others, retires only the dead one, and reports success" do
+      sent = []
       allow(WebPush).to receive(:payload_send) { |args|
         raise WebPush::ExpiredSubscription.new(gone, "push") if args[:endpoint] == "https://push/phone"
+
+        sent << args[:endpoint]
       }
-    end
 
-    it "still delivers to the others" do
-      expect(WebPush).to receive(:payload_send).with(hash_including(endpoint: "https://push/desk"))
+      expect(described_class.send_to(user, { title: "hi" }, channel: :byte)).to eq("Push success")
 
-      described_class.send_to(user, { title: "hi" }, channel: :byte)
-    end
-
-    it "retires only the dead one" do
-      described_class.send_to(user, { title: "hi" }, channel: :byte)
-
+      expect(sent).to eq(["https://push/desk"])
       expect(phone.reload.registered_at).to be_nil
       expect(desk.reload.registered_at).to be_present
     end
-
-    it "still reports success, because somebody got it" do
-      expect(described_class.send_to(user, { title: "hi" }, channel: :byte)).to eq("Push success")
-    end
-  end
-
-  it "says so when there is nowhere to send" do
-    phone.update!(registered_at: nil)
-    desk.update!(registered_at: nil)
-
-    expect(Rails.logger).to receive(:warn).with(/no registered subscription/)
-    described_class.send_to(user, { title: "hi" }, channel: :byte)
   end
 
   # Every endpoint here is web.push.apple.com, where a normal-urgency push is
-  # one Apple may hold until the phone next wakes on its own. The gem defaults
-  # to normal and nothing overrode it, so a message could sit delivered in the
-  # thread for minutes before the buzz — and from this end the send looked
-  # instant and successful, because it was.
+  # one Apple may hold until the phone next wakes on its own.
   describe "urgency" do
     def sent_with
       captured = []
@@ -119,10 +102,13 @@ RSpec.describe WebPushNotifications do
       captured
     end
 
-    it "marks a message as high, because somebody is waiting on it" do
+    # These sends are serial, so each one also needs a finite deadline or one
+    # push service that never answers holds every device behind it.
+    it "marks a message as high, with a finite deadline on every send" do
       sent = sent_with { described_class.send_to(user, { title: "hi" }, channel: :byte) }
 
       expect(sent.pluck(:urgency)).to all(eq("high"))
+      expect(sent).to all(include(open_timeout: be_positive, read_timeout: be_positive))
     end
 
     # Nobody waits on a notification being taken away.
@@ -130,14 +116,6 @@ RSpec.describe WebPushNotifications do
       sent = sent_with { described_class.dismiss(user, "byte-1", channel: :byte) }
 
       expect(sent.pluck(:urgency)).to all(eq("low"))
-    end
-
-    # These sends are serial: one push service that accepts the connection and
-    # never answers used to hold every device behind it, indefinitely.
-    it "gives every send a finite deadline" do
-      sent = sent_with { described_class.send_to(user, { title: "hi" }, channel: :byte) }
-
-      expect(sent).to all(include(open_timeout: be_positive, read_timeout: be_positive))
     end
 
     it "keeps a timed-out device registered, since a timeout proves nothing" do
@@ -163,22 +141,10 @@ RSpec.describe WebPushNotifications do
       sent
     end
 
-    it "goes out at all" do
-      sent = payload_sent { described_class.send_to(user, { data: { count: 0 } }, channel: :byte) }
-
-      expect(sent).to be_present
-    end
-
-    it "carries the count the worker reads" do
+    it "goes out carrying the count the worker reads and nothing to draw a banner with" do
       sent = payload_sent { described_class.send_to(user, { data: { count: 3 } }, channel: :byte) }
 
       expect(sent.dig("data", "count")).to eq(3)
-    end
-
-    # Or the phone shows a banner every time another device is opened.
-    it "carries nothing to draw a notification with" do
-      sent = payload_sent { described_class.send_to(user, { data: { count: 0 } }, channel: :byte) }
-
       expect(sent["title"]).to be_blank
       expect(sent["body"]).to be_blank
     end

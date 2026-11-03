@@ -32,12 +32,16 @@ RSpec.describe "Recorded calls", type: :request do
   end
 
   describe "a call arriving off the laptop" do
-    it "keeps the words and says what it did with them" do
-      expect { post(transcripts_path, params: recording, headers: headers) }
-        .to change(JobTranscript, :count).by(1)
+    # The recorder has no settings of its own, so the one moment it is
+    # certainly talking to the board is when it finds out what not to record.
+    it "keeps the words and hands back the sources it is not to record from", :aggregate_failures do
+      user.recording_skips.create!(key: "discord.com", label: "discord.com")
+
+      expect { post(transcripts_path, params: recording, headers: headers) }.to change(JobTranscript, :count).by(1)
 
       expect(response).to have_http_status(:ok)
       expect(said["filed"]).to be_nil
+      expect(said["skip"]).to eq(["discord.com"])
       expect(JobTranscript.last.turns.length).to eq(2)
     end
 
@@ -47,17 +51,6 @@ RSpec.describe "Recorded calls", type: :request do
       post(transcripts_path, params: recording, headers: headers)
 
       expect(said.dig("filed", "company")).to eq("Podium")
-    end
-
-    # The recorder has no settings of its own and nothing on the laptop to
-    # edit, so the one moment it is certainly talking to the board is the
-    # moment it finds out what it must not record any more.
-    it "hands back the sources it is not to record from" do
-      user.recording_skips.create!(key: "discord.com", label: "discord.com")
-
-      post(transcripts_path, params: recording, headers: headers)
-
-      expect(said["skip"]).to eq(["discord.com"])
     end
 
     it "says so rather than saving nothing when there were no words in it" do
@@ -100,7 +93,6 @@ RSpec.describe "Recorded calls", type: :request do
     it "waits on the interview index, with the start of it to go on" do
       get(interviews_path)
 
-      expect(response.body).to include("Recordings to file")
       expect(response.body).to include("Thanks for having me.")
       expect(response.body).to include("meet.google.com")
     end
@@ -120,20 +112,15 @@ RSpec.describe "Recorded calls", type: :request do
 
     # Filing it is what starts the read of how it went: that pass has no
     # company, role or timeline to read the conversation against until now.
-    it "is filed by hand, and read back once it is" do
-      post(attach_transcript_path(transcript), params: { interview_id: job.id })
-
-      expect(transcript.reload.job_application).to eq(job)
-      expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id)
-      expect(response).to redirect_to(interview_transcript_path(job, transcript))
-    end
-
-    it "picks up the booking the clock suggested as it files it" do
+    it "is filed by hand onto the suggested booking, and read back once it is", :aggregate_failures do
       note = job.notes.create!(tag: :interview, occurred_at: user.parse_time("2026-10-29 14:00"))
 
       post(attach_transcript_path(transcript), params: { interview_id: job.id })
 
-      expect(transcript.reload.job_note).to eq(note)
+      expect(transcript.reload.job_application).to eq(job)
+      expect(transcript.job_note).to eq(note)
+      expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id)
+      expect(response).to redirect_to(interview_transcript_path(job, transcript))
     end
 
     it "is thrown away on its own" do
@@ -148,7 +135,6 @@ RSpec.describe "Recorded calls", type: :request do
 
       expect(JobTranscript.count).to eq(0)
       expect(user.recording_skips.last.key).to eq("meet.google.com")
-      expect(flash[:notice]).to include("Not recording from meet.google.com")
     end
 
     # A denial nobody can undo is how an interview silently stops being

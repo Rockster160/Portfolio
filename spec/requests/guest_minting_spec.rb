@@ -5,11 +5,14 @@ require "rails_helper"
 # of its own - see AuthHelper#authorize_user_or_guest for the day's counts.
 RSpec.describe "Guest account minting", type: :request do
   describe "a page somebody is looking at" do
-    it "mints a guest for a page navigation" do
-      expect { get chores_path, headers: { "Sec-Fetch-Dest" => "document" } }
-        .to change(User.guest, :count).by(1)
-
-      expect(response).to have_http_status(:ok)
+    # Non-browser clients send no Sec-Fetch-Dest at all, and absence cannot
+    # disqualify them - the Accept format is what carries those.
+    it "mints a guest for a page navigation, with or without Sec-Fetch-Dest" do
+      [{ "Sec-Fetch-Dest" => "document" }, {}].each do |headers|
+        reset!
+        expect { get chores_path, headers: headers }.to change(User.guest, :count).by(1)
+        expect(response).to have_http_status(:ok)
+      end
     end
 
     # The links this filter exists for. A recipe someone was sent has no account
@@ -22,56 +25,20 @@ RSpec.describe "Guest account minting", type: :request do
 
       expect(response).to have_http_status(:ok)
     end
-
-    # Non-browser clients send no Sec-Fetch-Dest at all, and absence cannot
-    # disqualify them - the Accept format is what carries those.
-    it "mints a guest for a page navigation that sends no Sec-Fetch-Dest" do
-      expect { get chores_path }.to change(User.guest, :count).by(1)
-      expect(response).to have_http_status(:ok)
-    end
   end
 
   describe "a data endpoint reached with no session" do
-    it "mints nothing for a JSON fetch" do
-      expect {
-        get "/chores/icons.json", headers: {
-          "Accept"         => "application/json",
-          "Sec-Fetch-Dest" => "empty",
-        }
-      }.not_to change(User.guest, :count)
-
-      expect(response).to have_http_status(:unauthorized)
-    end
-
-    # The format check, not Sec-Fetch-Dest, is what turns this one away.
-    it "mints nothing for a JSON fetch that sends no Sec-Fetch-Dest" do
-      expect {
-        get "/chores/icons.json", headers: { "Accept" => "application/json" }
-      }.not_to change(User.guest, :count)
-
-      expect(response).to have_http_status(:unauthorized)
-    end
-
-    it "mints nothing for an XHR" do
-      expect {
-        get "/agenda_preference", headers: {
-          "Accept"           => "application/json",
-          "X-Requested-With" => "XMLHttpRequest",
-        }
-      }.not_to change(User.guest, :count)
-
-      expect(response).to have_http_status(:unauthorized)
-    end
-
-    it "mints nothing for a service worker fetch" do
-      expect {
-        get "/agenda/sync/bootstrap", headers: {
-          "Accept"         => "application/json",
-          "Sec-Fetch-Dest" => "serviceworker",
-        }
-      }.not_to change(User.guest, :count)
-
-      expect(response).to have_http_status(:unauthorized)
+    # A JSON fetch with no Sec-Fetch-Dest is turned away by the format check.
+    it "mints nothing for a JSON fetch, an XHR, or a service worker fetch" do
+      [
+        ["/chores/icons.json", { "Accept" => "application/json", "Sec-Fetch-Dest" => "empty" }],
+        ["/chores/icons.json", { "Accept" => "application/json" }],
+        ["/agenda_preference", { "Accept" => "application/json", "X-Requested-With" => "XMLHttpRequest" }],
+        ["/agenda/sync/bootstrap", { "Accept" => "application/json", "Sec-Fetch-Dest" => "serviceworker" }],
+      ].each do |path, headers|
+        expect { get path, headers: headers }.not_to change(User.guest, :count)
+        expect(response).to have_http_status(:unauthorized), "#{path} #{headers}"
+      end
     end
 
     it "mints nothing for a write" do

@@ -24,14 +24,17 @@ RSpec.describe "Games::Sync" do
     end
   end
 
-  describe "switching dice mode mid-game" do
-    it "saves the new mode on a play that already exists" do
+  describe "changing a play mid-game" do
+    it "saves dice mode and turn changes on a play that already exists" do
       uuid = SecureRandom.uuid
-      sync!(uuid, play: { name: "Catan", settings: { dice: "2d6" }, players: [{ name: "Rocco" }] })
+      sync!(uuid, play: { name: "Catan", settings: { dice: "2d6" }, players: [{ name: "Rocco" }, { name: "Chelsea" }] })
 
       sync!(uuid, play: { dice_mode: "virtual" })
+      sync!(uuid, play: { current_player_index: 1 })
 
-      expect(user.game_plays.find_by!(client_uuid: uuid).dice_mode).to eq("virtual")
+      play = user.game_plays.find_by!(client_uuid: uuid)
+      expect(play.dice_mode).to eq("virtual")
+      expect(play.current_player_index).to eq(1)
     end
   end
 
@@ -59,17 +62,6 @@ RSpec.describe "Games::Sync" do
       roll = GameRoll.find_by!(client_uuid: roll_uuid)
       expect(roll.voided_at).to be_present
       expect(GameRoll.live.count).to eq(0)
-    end
-  end
-
-  describe "advancing the turn" do
-    it "updates current_player_index on the existing play" do
-      play_uuid = SecureRandom.uuid
-      sync!(play_uuid, play: { name: "Catan", players: [{ name: "Rocco" }, { name: "Chelsea" }] })
-
-      sync!(play_uuid, play: { current_player_index: 1 })
-
-      expect(user.game_plays.find_by!(client_uuid: play_uuid).current_player_index).to eq(1)
     end
   end
 end

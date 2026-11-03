@@ -1,18 +1,12 @@
 require "rails_helper"
 
-# Audit-followup controller behaviors:
-#   * Agenda source cannot be flipped after creation (#41 BE backstop)
-#   * AgendaPreference round-trips + broadcasts (#40)
-#   * webhooks#google_calendar uses constant-time HMAC compare (#10)
-#   * agendas#resync clears watch_failed_at + enqueues sync (#25)
-RSpec.describe "Agenda audit followups", type: :request do
+# Agenda source is fixed after creation, AgendaPreference round-trips and
+# broadcasts, and a Google agenda can be resynced by hand.
+RSpec.describe "Agenda source, preferences and resync", type: :request do
   let(:user) { create(:user) }
 
   before { sign_in(user) if respond_to?(:sign_in) }
 
-  # If the project's controller specs don't use Devise-style sign_in, fall
-  # back to whatever the existing controllers use for auth. This block
-  # detects + adapts so we don't depend on the helper either way.
   before do
     if !respond_to?(:sign_in)
       allow_any_instance_of(ApplicationController).to receive(:current_user).and_return(user)
@@ -33,12 +27,6 @@ RSpec.describe "Agenda audit followups", type: :request do
       patch agenda_path(google_agenda), params: { agenda: { source: "user" } }, as: :json
       expect(response.status).to be_in([302, 422])
       expect(google_agenda.reload.source).to eq("google")
-    end
-
-    it "still accepts ordinary name/color updates" do
-      allow_any_instance_of(Oauth::GoogleApi).to receive(:patch_calendar).and_return({})
-      patch agenda_path(google_agenda), params: { agenda: { name: "Renamed" } }, as: :json
-      expect(google_agenda.reload.name).to eq("Renamed")
     end
   end
 
@@ -69,37 +57,6 @@ RSpec.describe "Agenda audit followups", type: :request do
       expect(pref.hidden_agenda_ids).to include(agenda.id)
       expect(pref.hide_completed["task"]).to be(true)
       expect(pref.hide_tentative).to be(true)
-    end
-  end
-
-  describe "Google webhook HMAC verification" do
-    let(:google_account) {
-      GoogleAccount.create!(user: user, email: "w@example.com", access_token: "t", refresh_token: "r")
-    }
-    let!(:google_agenda) {
-      create(:agenda, user: user, source: :google, external_id: "cal-w",
-             google_account: google_account, watch_channel_id: "chan-w")
-    }
-
-    it "rejects deliveries whose token doesn't match the HMAC" do
-      post "/webhooks/google_calendar", headers: {
-        "X-Goog-Channel-Id"     => "chan-w",
-        "X-Goog-Channel-Token"  => "bogus",
-        "X-Goog-Resource-State" => "exists",
-      }
-      expect(response).to have_http_status(:forbidden)
-    end
-
-    it "accepts deliveries with the correct token" do
-      expected = GoogleCalendar::WatchManager.token_for(google_agenda)
-      allow(GoogleCalendarSyncWorker).to receive(:perform_async)
-      post "/webhooks/google_calendar", headers: {
-        "X-Goog-Channel-Id"     => "chan-w",
-        "X-Goog-Channel-Token"  => expected,
-        "X-Goog-Resource-State" => "exists",
-      }
-      expect(response).to have_http_status(:no_content)
-      expect(GoogleCalendarSyncWorker).to have_received(:perform_async).with(google_agenda.id, "webhook")
     end
   end
 

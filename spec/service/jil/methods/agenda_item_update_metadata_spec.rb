@@ -79,35 +79,4 @@ RSpec.describe Jil::Methods::AgendaItem, "#update! metadata merge" do
     expect(item.metadata.dig("travel", "chain_predecessor_id")).to eq(42)
     expect(item.metadata.dig("other_writer", "flag")).to be true
   end
-
-  it "handles items whose metadata starts empty" do
-    empty_item = create(:agenda_item,
-      agenda: agenda,
-      kind: :event,
-      start_at: Time.zone.local(2026, 7, 3, 16, 0),
-      end_at:   Time.zone.local(2026, 7, 3, 17, 0),
-      location: "Elsewhere",
-      metadata: {})
-    code = <<~'JIL'
-      *input = Global.input_data()::Hash
-      itemId = input.get("id")::Numeric
-      idHash = Hash.new({
-        i1 = Keyval.new("id", itemId)::Keyval
-      })::Hash
-      evt = Global.ref(idHash)::AgendaItem
-      travelKeys = Hash.new({
-        tk1 = Keyval.new("travel_minutes", 12)::Keyval
-      })::Hash
-      travelEntry = Hash.new({
-        te1 = Keyval.new("travel", travelKeys)::Keyval
-      })::Hash
-      updated = evt.update!({
-        mu = AgendaItemData.metadata(travelEntry)::Hash
-      })::AgendaItem
-    JIL
-    run_jil(code, item_id: empty_item.id)
-    empty_item.reload
-
-    expect(empty_item.metadata.dig("travel", "travel_minutes")).to eq(12)
-  end
 end

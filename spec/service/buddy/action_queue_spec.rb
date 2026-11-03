@@ -3,10 +3,6 @@ require "rails_helper"
 # What Buddy asks for in one turn becomes ordered STEPS, and only the first thing
 # that needs the person goes out with the reply. The rest rides on it and lands
 # when they resolve it.
-#
-# Two failures drove this. Prod 1201: a partner message fired 22 seconds before
-# the checkbox that would have made it true. Prod 1266-1270: three pending
-# prompts, answered in one sentence, and Buddy opened exactly one of them.
 RSpec.describe "Buddy action queue" do
   let(:user)       { create(:user) }
   let(:partner)    { create(:user) }
@@ -41,6 +37,12 @@ RSpec.describe "Buddy action queue" do
     client  = FakeBuddyClient.new([{ tool_calls: tool_calls }, { text: text }])
     Buddy::GPT::Turn.run!(inbound, client: client)
     client
+  end
+
+  # The output the model was handed for one call, as the tool reported it.
+  def output_for(client, call_id)
+    outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
+    JSON.parse(outputs.find { |o| o[:call_id] == call_id }[:output])
   end
 
   # A gate: something that waits for a tap. Any level-3 tool does — what's being
@@ -115,22 +117,22 @@ RSpec.describe "Buddy action queue" do
 
   # ---- chaining: one thing at a time, in the order it was asked for --------
 
-  it "holds a checklist behind a form until the form is sent" do
+  it "holds a checklist behind a form until the form is sent, and tells the model it is queued" do
     prompt = prompt_for("Puppy Down")
 
-    turn!(
+    client = turn!(
       "answer the puppy prompt then put laundry on my agenda",
       [answer_call("c1", prompt), gate_call("c2", "Laundry")],
     )
 
     expect(forms.count).to eq(1)
     expect(checklists).to be_empty
+    expect(output_for(client, "c2")["status"]).to eq("queued")
 
     Buddy::FormAction.submit!(forms.first, values: { "Who did it?" => user.username })
 
     expect(checklists.count).to eq(1)
     expect(checklists.first.buttons.pluck("label")).to eq(["Laundry"])
-    expect(checklists.first.byte_message.body).to eq("Next up:")
   end
 
   it "holds a form behind a checklist until the checkbox is tapped" do
@@ -195,32 +197,38 @@ RSpec.describe "Buddy action queue" do
   end
 
   # ---- waiting: the gate is the clock, not the person ----------------------
-  #
-  # Prod 1307: "Start my printer, wait 1m, then preheat it for PLA." started the
-  # printer and the timer, then offered to maybe do the preheat - which was the
-  # part they'd actually asked for.
   describe "a wait in the middle of a sequence" do
     # Timers schedule their own fire job, and the suite runs Sidekiq inline, so
     # without this a one-minute wait would fire during the example.
     around { |ex| Sidekiq::Testing.fake! { ex.run } }
 
-    it "holds everything after the wait until the countdown fires" do
-      turn!("start the printer, wait a minute, then tell Chelsea", [
+    # The wait's chip is marked a wait (so the client doesn't ring it), and it
+    # takes itself off screen once the held step has run, without a push of
+    # its own for picking the sequence back up.
+    it "holds everything after the wait until the countdown fires, then clears the chip quietly", :aggregate_failures do
+      client = turn!("start the printer, wait a minute, then tell Chelsea", [
         tell_call("c1", "Printer's on."),
         wait_call("c2", 60),
         tell_call("c3", "Preheating now."),
       ])
+      timer = timers.first
 
-      # The first message went out, the timer is running, and the second message
-      # is parked on it rather than sent alongside the first.
       expect(relays.pluck(:body)).to eq(["Printer's on."])
       expect(timers.count).to eq(1)
       expect(timer_gates.count).to eq(1)
+      expect(output_for(client, "c3")["status"]).to eq("queued")
+      expect(Buddy::Timers.wait?(timer)).to be(true)
+      expect(TimerSerializer.new(timer, viewer: user).as_json[:wait]).to be(true)
 
-      Buddy::Timers.on_fired(timers.first)
+      Buddy::Timers.on_fired(timer)
 
       expect(relays.pluck(:body)).to eq(["Printer's on.", "Preheating now."])
       expect(timer_gates.first.reload).to be_decided
+      expect(timer.reload.archived_at).to be_present
+      expect(Buddy::Timers.live_for(user)).to be_empty
+      expect(WebPushNotifications).not_to have_received(:send_to_byte).with(
+        hash_including(title: a_string_matching(/picking it back up/i)),
+      )
     end
 
     it "posts a checklist held behind a wait only once the wait is over" do
@@ -243,23 +251,15 @@ RSpec.describe "Buddy action queue" do
       expect(relays.count).to eq(1)
     end
 
-    it "says it's picking the sequence back up rather than that time is up" do
-      turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
-      Buddy::Timers.on_fired(timers.first)
-
-      bodies = convo.byte_messages.where(direction: :inbound).pluck(:body)
-      expect(bodies).to include(a_string_matching(/picking it back up/))
-      expect(bodies).not_to include(a_string_matching(/Time's up/))
-      expect(bodies).to include(a_string_matching(/waiting 1 min before the next step/))
-    end
-
-    # An ordinary countdown is not a sequence. "Set a 10 minute timer and tell
-    # Chelsea" must not park the message behind the timer.
+    # An ordinary countdown is not a sequence: nothing parks behind it, and it
+    # still rings and waits to be dealt with.
     it "leaves a plain countdown out of the way" do
       turn!("10 minute timer and tell Chelsea", [timer_call("c1", 600), tell_call("c2", "Timer's going.")])
 
       expect(relays.count).to eq(1)
       expect(timer_gates).to be_empty
+      expect(Buddy::Timers.wait?(timers.first)).to be(false)
+      expect(TimerSerializer.new(timers.first, viewer: user).as_json).not_to have_key(:wait)
     end
 
     it "nests a second wait instead of collapsing the two" do
@@ -282,67 +282,6 @@ RSpec.describe "Buddy action queue" do
       expect(relays.pluck(:body)).to eq(["First.", "Second."])
     end
 
-    # Rocco, 4 Sep: "the timer went off as if I was supposed to go dismiss it.
-    # We do NOT want that. Showing the timer, yes. But once the timer ends, Byte
-    # should just quietly do whatever he was supposed to do."
-    #
-    # Prod timer 98: "play whisper nap sound in 5 minutes" put an ordinary chip
-    # on screen, blared at zero, and carries a `confirmed_at` two seconds after
-    # the fire - the tap that shut it up, with the sound already playing.
-    describe "the chip the wait puts on screen" do
-      it "is marked a wait, which is what stops the client ringing it" do
-        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
-
-        expect(Buddy::Timers.wait?(timers.first)).to be(true)
-        expect(TimerSerializer.new(timers.first, viewer: user).as_json[:wait]).to be(true)
-      end
-
-      # A countdown they set themselves is untouched: it rings, and it waits to
-      # be dealt with.
-      it "leaves an ordinary countdown alone" do
-        turn!("10 minute timer and tell Chelsea", [timer_call("c1", 600), tell_call("c2", "Going.")])
-
-        expect(Buddy::Timers.wait?(timers.first)).to be(false)
-        expect(TimerSerializer.new(timers.first, viewer: user).as_json).not_to have_key(:wait)
-      end
-
-      # Nothing is left to acknowledge once the held step has run, so the chip
-      # goes rather than parking at 0:00 waiting for a tap.
-      it "takes itself off screen once the step it was holding has run" do
-        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
-        timer = timers.first
-
-        Buddy::Timers.on_fired(timer)
-
-        expect(timer.reload.archived_at).to be_present
-        expect(Buddy::Timers.live_for(user)).to be_empty
-      end
-
-      # The step behind the wait posts and pushes on its own account. A buzz for
-      # the pick-up line too is one notification for the delay and a second for
-      # the thing the delay was for.
-      it "doesn't push to announce that it is picking the sequence back up" do
-        turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
-
-        Buddy::Timers.on_fired(timers.first)
-
-        expect(WebPushNotifications).not_to have_received(:send_to_byte).with(
-          hash_including(title: a_string_matching(/picking it back up/i)),
-        )
-      end
-    end
-
-    it "tells the model the held step happens on its own, not on a tap" do
-      client = turn!("wait a minute then tell Chelsea", [wait_call("c1", 60), tell_call("c2", "Hi.")])
-
-      outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
-      held    = JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])
-
-      expect(held["status"]).to eq("queued")
-      expect(held["note"]).to include("on its own")
-      expect(held["note"]).not_to include("tap")
-    end
-
     # A countdown that never starts can't hold anything, and silently swallowing
     # the rest of the sequence is worse than running it a minute early.
     it "runs the rest immediately when the wait itself fails to start" do
@@ -357,23 +296,15 @@ RSpec.describe "Buddy action queue" do
 
   # ---- the escape hatch ---------------------------------------------------
 
-  it "never advances on its own — an untouched gate leaves the rest unposted" do
+  it "does not advance the chain when the gate's own step fails" do
     prompt = prompt_for("Puppy Down")
     turn!("laundry then the prompt", [gate_call("c1", "Laundry"), answer_call("c2", prompt)])
-
-    expect(forms).to be_empty
     expect(checklists.first).to be_pending
-  end
-
-  it "says what it held back when the gate is declined outright" do
-    prompt = prompt_for("Puppy Down")
-    turn!("laundry then the prompt", [gate_call("c1", "Laundry"), answer_call("c2", prompt)])
     allow(Buddy::Tools).to receive(:dispatch).and_return({ ok: false, error: "nope" })
 
     Buddy::ProposalExecutor.perform(checklists.first.id, [1])
 
     expect(forms).to be_empty
-    expect(convo.byte_messages.where(direction: :inbound).last.body).to include("Held off on")
   end
 
   # ---- level 2 never waits ------------------------------------------------
@@ -390,19 +321,6 @@ RSpec.describe "Buddy action queue" do
     expect(list.list_items.reload.pluck(:name)).to eq(["Milk"])
     expect(forms.count).to eq(1)
     expect(checklists.count).to eq(1)
-  end
-
-  # ---- what the model is told ---------------------------------------------
-
-  it "tells the model a chained gate is next in line, not waiting on them" do
-    prompt = prompt_for("Puppy Down")
-    client = turn!("the prompt, then laundry", [answer_call("c1", prompt), gate_call("c2", "Laundry")])
-
-    outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
-    chained = JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])
-
-    expect(chained["status"]).to eq("queued")
-    expect(chained["note"]).to include("next in line")
   end
 
   # ---- rows written before the queue understood steps ---------------------

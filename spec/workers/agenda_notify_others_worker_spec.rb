@@ -25,23 +25,8 @@ RSpec.describe AgendaNotifyOthersWorker do
 
     expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).with(hash_including(user: partner)).once
     expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).with(hash_including(user: viewer)).once
-  end
-
-  it "never briefs the actor" do
-    described_class.new.perform("AgendaItem", item.id, actor.id, "created")
     expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt).with(hash_including(user: actor))
-  end
-
-  it "skips agenda members who don't use Buddy" do
-    described_class.new.perform("AgendaItem", item.id, actor.id, "created")
     expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt).with(hash_including(user: no_buddy))
-  end
-
-  it "passes the created/updated action through to the seed" do
-    described_class.new.perform("AgendaItem", item.id, actor.id, "updated")
-    expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).with(
-      hash_including(seed: a_string_including("just changed")),
-    ).at_least(:once)
   end
 
   it "no-ops when the source no longer exists" do

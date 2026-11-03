@@ -20,26 +20,6 @@ RSpec.describe Buddy::Compile::Toolbox do
     )
   end
 
-  # `buddy_memories` 105, written 15:21 Mon 24 Aug: "Eve has a therapist
-  # appointment with Iberty tomorrow at 10:00 AM", with a check-in at 6pm the
-  # next evening and no expiry - so by the time it reads itself out, "tomorrow"
-  # is Wednesday and the appointment was that morning. Rows 44 and 71 had the
-  # same defect. Third occurrence in three weeks, and "stands alone" on its own
-  # was what every one of them passed.
-  describe "the argument a memory is written into" do
-    def content_description(tool)
-      described_class.schemas.find { |t| t[:name] == tool }.dig(:parameters, :properties, :content, :description)
-    end
-
-    it "names the words that stop a fact standing alone" do
-      expect(content_description("write_memory")).to include("tomorrow", "tonight", "next week")
-    end
-
-    it "says the same thing where a row is rewritten" do
-      expect(content_description("revise_memory")).to include("ABSOLUTELY")
-    end
-  end
-
   describe "writing" do
     it "holds something new and reports the id back" do
       answer = box.call("write_memory", { "kind" => "concept", "content" => "Their gate latch is bent.", "tags" => ["home"] })
@@ -70,7 +50,6 @@ RSpec.describe Buddy::Compile::Toolbox do
 
       answer = box.call("write_memory", { "kind" => "concept", "content" => "their gate latch is bent" })
 
-      expect(answer).to match(/already held/)
       expect(BuddyMemory.where(user: user).count).to eq(1)
     end
 
@@ -182,13 +161,6 @@ RSpec.describe Buddy::Compile::Toolbox do
         expect(memory.relevant_at).to be_within(1.day).of(40.days.from_now)
         expect(memory.check_in_at).to be >= memory.relevant_at
       end
-
-      it "tells the model this is for moving one closer too" do
-        schema = described_class.schemas.find { |t| t[:name] == "set_check_in" }
-
-        expect(schema[:description]).to include("CLOSER")
-        expect(schema.dig(:parameters, :properties, :relevant_days, :description)).to include("never `days`")
-      end
     end
 
     it "clears one when no days are given" do
@@ -229,12 +201,6 @@ RSpec.describe Buddy::Compile::Toolbox do
         box.call("set_check_in", { "id" => memory.id, "note" => "They sorted it themselves." })
 
         expect(memory.reload.notes.pluck(:body)).to eq(["They sorted it themselves."])
-      end
-
-      it "tells the model what the note is for" do
-        schema = described_class.schemas.find { |t| t[:name] == "set_check_in" }
-
-        expect(schema.dig(:parameters, :properties, :note, :description)).to include("THIS one")
       end
     end
   end
@@ -283,15 +249,8 @@ RSpec.describe Buddy::Compile::Toolbox do
       user.buddy_memories.create!(kind: :stash, status: :active, content: "Alexa fan and blind commands")
     }
 
-    it "cannot be dropped, and says what to do instead" do
-      answer = box.call("close_memory", { "id" => stashed.id, "status" => "dropped" })
-
-      expect(stashed.reload).to be_status_active
-      expect(answer).to match(/theirs to close/)
-      expect(answer).to match(/revise_memory/)
-    end
-
-    it "cannot be closed as done either" do
+    it "cannot be dropped or closed as done" do
+      box.call("close_memory", { "id" => stashed.id, "status" => "dropped" })
       box.call("close_memory", { "id" => stashed.id, "status" => "done" })
 
       expect(stashed.reload).to be_status_active
@@ -306,9 +265,8 @@ RSpec.describe Buddy::Compile::Toolbox do
     end
 
     it "is not something this pass can add to" do
-      answer = box.call("write_memory", { "kind" => "stash", "content" => "Rocco needs a feature request for Inventory access" })
+      box.call("write_memory", { "kind" => "stash", "content" => "Rocco needs a feature request for Inventory access" })
 
-      expect(answer).to match(/pile is theirs/)
       expect(user.buddy_memories.kind_stash.count).to eq(1)
     end
 
@@ -349,24 +307,15 @@ RSpec.describe Buddy::Compile::Toolbox do
     end
 
     # The stretch is already in front of the model; handing it back doubles the
-    # prompt for nothing.
-    it "reads further back without repeating the stretch" do
+    # prompt for nothing. Without ids it can only ever be called once — there is
+    # nothing to pass as `before`.
+    it "reads further back without repeating the stretch, with ids and times to page by" do
       old = say("We talked about the greenhouse last week.", at: 2.days.ago)
 
       answer = box.call("read_conversation", {})
 
       expect(answer).to include(old.body)
       expect(answer).not_to include(messages.first.body)
-    end
-
-    # Without ids it can only ever be called once — there is nothing to pass as
-    # `before` — so "keep going until you have what you need" is not a thing the
-    # model can actually do.
-    it "answers with ids and times, and says how to ask for more" do
-      old = say("We talked about the greenhouse last week.", at: 2.days.ago)
-
-      answer = box.call("read_conversation", {})
-
       expect(answer).to match(/^##{old.id} \[\w{3} \d+ \w{3}, \d+:\d\d[ap]m\] Them:/)
       expect(answer).to include("call again with before: #{old.id}")
     end

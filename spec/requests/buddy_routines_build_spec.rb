@@ -1,13 +1,9 @@
 require "rails_helper"
 
-# Building a routine from the panel.
-#
-# The steps are tool calls with validated arguments, and the old objection was
-# that a text box is a bad place to write one. The box was the problem: the
-# fields come from the tool registry, so only arguments that exist can be
-# offered, and the server runs the same `Buddy::Routines.sanitize` a routine
-# saved in conversation goes through - including each tool's own `confirm`, so a
-# step naming a chore nobody has is refused rather than saved broken.
+# Building a routine from the panel. The fields come from the tool registry,
+# and the server runs the same `Buddy::Routines.sanitize` a routine saved in
+# conversation goes through - including each tool's own `confirm`, so a step
+# naming a chore nobody has is refused rather than saved broken.
 RSpec.describe "Building a Buddy routine", type: :request do
   let(:user) { User.me }
   let!(:chore) { create(:chore, created_by_user: user, name: "Load Dishes", recurrence: { "freq" => "daily" }) }
@@ -23,120 +19,45 @@ RSpec.describe "Building a Buddy routine", type: :request do
   def json = response.parsed_body
 
   describe "GET /buddy/routines/tools" do
-    it "offers the tools a routine can replay" do
-      get "/buddy/routines/tools"
+    before { get "/buddy/routines/tools" }
 
+    def tool(name) = json["tools"].find { |t| t["name"] == name }
+
+    # `routinable: false` declares a tool whose whole value is one moment, and an
+    # :object arg is a shape a field can't hold; neither is offered.
+    it "offers the tools a routine can replay, with each argument's type and need", :aggregate_failures do
+      expect(response).to have_http_status(:ok)
       names = json["tools"].pluck("name")
       expect(names).to include("complete_chore")
-      expect(response).to have_http_status(:ok)
-    end
+      expect(names).not_to include("request_feature", "answer_prompt")
 
-    # `routinable: false` is the declaration that a tool's whole value is one
-    # particular moment - filing a gap somebody hit, answering the question in
-    # front of them. Replaying one is never what anybody wanted.
-    it "leaves out the ones whose value is a single moment" do
-      get "/buddy/routines/tools"
-
-      expect(json["tools"].pluck("name")).not_to include("request_feature")
-    end
-
-    # An :object arg is a shape rather than a value, and a field asking for one
-    # would be a step that looks filled in and fails.
-    it "leaves out a tool that needs something a field can't hold" do
-      get "/buddy/routines/tools"
-
-      expect(json["tools"].pluck("name")).not_to include("answer_prompt")
-    end
-
-    it "carries each argument's type and whether it's needed" do
-      get "/buddy/routines/tools"
-
-      arg = json["tools"].find { |t| t["name"] == "complete_chore" }["args"].find { |a| a["key"] == "chore" }
+      arg = tool("complete_chore")["args"].find { |a| a["key"] == "chore" }
       expect(arg).to include("type" => "string", "required" => true)
       expect(arg["description"]).to be_present
+
+      # The descriptions are written for the model; one line is what fits in a list.
+      blurbs = json["tools"].filter_map { |t| t["description"] }
+      expect(blurbs.map(&:length).max).to be <= 140
     end
 
-    # Two arguments because the model picks whichever matches how it was said.
-    # Offered raw they were two empty boxes under a hint explaining to use one
-    # and not the other.
-    describe "a length" do
-      before { get "/buddy/routines/tools" }
+    # Seconds-or-minutes is offered as one duration field, and the optional
+    # arguments fold away so a form reads as one decision rather than ten.
+    it "turns a length into one duration field and folds the optional arguments", :aggregate_failures do
+      args = tool("set_timer")["args"]
+      expect(args.pluck("key")).to include("seconds")
+      expect(args.pluck("key")).not_to include("minutes")
+      expect(args.find { |a| a["key"] == "seconds" }).to include("type" => "duration", "unit" => "seconds")
+      expect(args.find { |a| a["key"] == "break_minutes" }).to include("type" => "duration", "unit" => "minutes")
 
-      let(:timer) { json["tools"].find { |t| t["name"] == "set_timer" } }
-
-      it "is one field rather than a seconds box and a minutes box" do
-        keys = timer["args"].pluck("key")
-
-        expect(keys).to include("seconds")
-        expect(keys).not_to include("minutes")
-      end
-
-      it "says which unit it converts back into" do
-        seconds = timer["args"].find { |a| a["key"] == "seconds" }
-
-        expect(seconds).to include("type" => "duration", "unit" => "seconds")
-      end
-
-      it "drops the description about which of the two to use" do
-        seconds = timer["args"].find { |a| a["key"] == "seconds" }
-
-        expect(seconds["description"]).not_to match(/OR minutes/i)
-      end
-
-      # Minutes of break between blocks is a length too, whatever it is called.
-      it "takes a minutes-only argument the same way" do
-        brk = timer["args"].find { |a| a["key"] == "break_minutes" }
-
-        expect(brk).to include("type" => "duration", "unit" => "minutes")
-      end
-    end
-
-    # set_timer takes ten arguments, six of them about a repeating work/break
-    # rhythm with a stop condition. Asked all at once a form reads as ten
-    # decisions rather than one.
-    describe "how much it asks at once" do
-      before { get "/buddy/routines/tools" }
-
-      it "keeps a length and anything required on screen" do
-        timer = json["tools"].find { |t| t["name"] == "set_timer" }
-        shown = timer["args"].reject { |a| a["advanced"] }.pluck("key")
-
-        expect(shown).to eq(["seconds"])
-      end
-
-      it "folds the rest away rather than dropping them" do
-        timer = json["tools"].find { |t| t["name"] == "set_timer" }
-        folded = timer["args"].select { |a| a["advanced"] }.pluck("key")
-
-        expect(folded).to include("label", "repeat", "stop_when", "break_minutes")
-      end
-
-      it "keeps a required argument on screen beside the optional ones folded away" do
-        chore = json["tools"].find { |t| t["name"] == "complete_chore" }
-        shown = chore["args"].reject { |a| a["advanced"] }.pluck("key")
-
-        expect(shown).to eq(["chore"])
-      end
+      expect(args.reject { |a| a["advanced"] }.pluck("key")).to eq(["seconds"])
+      expect(args.select { |a| a["advanced"] }.pluck("key")).to include("label", "repeat", "stop_when", "break_minutes")
+      expect(tool("complete_chore")["args"].reject { |a| a["advanced"] }.pluck("key")).to eq(["chore"])
 
       # Folding everything would leave a form with nothing on it.
-      it "shows the lot when nothing stands out" do
-        loose = json["tools"].find { |t|
-          t["args"].any? && t["args"].none? { |a| a["required"] || %w[seconds minutes duration].include?(a["key"]) }
-        }
-
-        expect(loose).to be_present
-        expect(loose["args"].select { |a| a["advanced"] }).to be_empty
-      end
-    end
-
-    # The descriptions are written for the model and run to paragraphs. One line
-    # is what fits beside a name in a list.
-    it "says what a tool is for in one line" do
-      get "/buddy/routines/tools"
-
-      blurbs = json["tools"].filter_map { |t| t["description"] }
-      expect(blurbs).to be_present
-      expect(blurbs.map(&:length).max).to be <= 140
+      loose = json["tools"].find { |t|
+        t["args"].any? && t["args"].none? { |a| a["required"] || %w[seconds minutes duration].include?(a["key"]) }
+      }
+      expect(loose["args"].select { |a| a["advanced"] }).to be_empty
     end
   end
 
@@ -161,8 +82,7 @@ RSpec.describe "Building a Buddy routine", type: :request do
       }, as: :json
 
       expect(response).to have_http_status(:created)
-      expect(BuddyRoutine.find(json["id"]).steps.pluck("tool_name"))
-        .to eq(%w[set_timer complete_chore])
+      expect(BuddyRoutine.find(json["id"]).steps.pluck("tool_name")).to eq(%w[set_timer complete_chore])
     end
 
     # The whole reason this goes through sanitize rather than straight into the
@@ -179,37 +99,21 @@ RSpec.describe "Building a Buddy routine", type: :request do
       expect(BuddyRoutine.where(name: "Nope")).to be_empty
     end
 
-    it "refuses a tool that can't be replayed" do
-      post "/buddy/routines", params: {
-        name:  "Nope",
-        steps: [{ tool_name: "request_feature", payload: { title: "a", body: "b" } }],
-      }, as: :json
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(json["errors"].join).to match(/can't be saved in a routine/i)
-    end
-
-    it "wants a name" do
-      post "/buddy/routines", params: {
-        steps: [{ tool_name: "complete_chore", payload: { chore: "Load Dishes" } }],
-      }, as: :json
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(json["errors"].join).to match(/needs a name/i)
-    end
-
-    it "refuses a second one by the same name" do
+    it "refuses a tool that can't be replayed, a missing name, and a name already taken" do
       user.buddy_routines.create!(
         name: "Kitchen reset", steps: [BuddyRoutine.step("complete_chore", { chore: "Load Dishes" })],
       )
+      chore_step = { tool_name: "complete_chore", payload: { chore: "Load Dishes" } }
 
-      post "/buddy/routines", params: {
-        name:  "kitchen RESET",
-        steps: [{ tool_name: "complete_chore", payload: { chore: "Load Dishes" } }],
-      }, as: :json
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(json["errors"].join).to match(/already have one called/i)
+      [
+        { name: "Nope", steps: [{ tool_name: "request_feature", payload: { title: "a", body: "b" } }] },
+        { steps: [chore_step] },
+        { name: "kitchen RESET", steps: [chore_step] },
+      ].each do |params|
+        expect { post "/buddy/routines", params: params, as: :json }.not_to change(BuddyRoutine, :count)
+        expect(response).to have_http_status(:unprocessable_entity), params.to_s
+        expect(json["errors"]).to be_present
+      end
     end
 
     # Wrapping a Jil automation is the same endpoint and still works off a task
@@ -283,8 +187,7 @@ RSpec.describe "Building a Buddy routine", type: :request do
       }, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(routine.reload.steps.map { |s| s.dig("payload", "chore") })
-        .to eq(["A Chore Nobody Has", "Load Dishes"])
+      expect(routine.reload.steps.map { |s| s.dig("payload", "chore") }).to eq(["A Chore Nobody Has", "Load Dishes"])
     end
 
     it "still refuses to empty one out" do

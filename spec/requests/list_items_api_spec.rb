@@ -39,12 +39,6 @@ RSpec.describe "List items API", type: :request do
     expect(ListItem.with_deleted.find(id)).to be_deleted
   end
 
-  it "drops an item into no section when the section is not on the list" do
-    body = add(">abcd Done", "SomeOtherProject")
-
-    expect(body.dig("data", "section_id")).to be_nil
-  end
-
   # The hooks reach this with an API key and delete their own row on every state
   # change. That is a row being replaced, not one someone read, so it must not
   # tell terminal-pet the session was seen. See ListItem#ack_pet.

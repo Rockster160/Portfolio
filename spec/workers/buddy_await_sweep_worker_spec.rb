@@ -1,10 +1,7 @@
 require "rails_helper"
 
-# Every other gate resolves on its own — a countdown finishes, a checklist and a
-# form sit in the thread where the person can see them. A relay gate is
-# invisible and depends on someone ELSE choosing to reply, so left alone it
-# either fires days late or never, and both read as the sequence having quietly
-# finished.
+# A relay gate waits on someone ELSE replying, so unlike a countdown or a form
+# it never resolves on its own; this sweep expires it.
 RSpec.describe BuddyAwaitSweepWorker do
   let(:user)    { create(:user) }
   let(:partner) { create(:user) }
@@ -33,31 +30,16 @@ RSpec.describe BuddyAwaitSweepWorker do
     )
   end
 
-  it "closes out a question that was never answered" do
+  # Everything behind the question was about the answer, so none of it runs;
+  # the person is told who didn't answer.
+  it "closes out a question that was never answered, dropping its queue" do
     action = gate!(expires_at: 1.minute.ago)
 
     described_class.new.perform
 
     expect(action.reload).to be_expired
-  end
-
-  # Naming the person, because "nobody answered" is unhelpfully vague in a
-  # household of several.
-  it "says who didn't answer and what it therefore skipped" do
-    gate!(expires_at: 1.minute.ago)
-
-    described_class.new.perform
-
-    expect(convo.byte_messages.last.body).to include("#{partner.first_name} never answered")
-  end
-
-  # Everything behind the question was about the answer, so none of it runs.
-  it "drops the queue rather than running it late" do
-    gate!(expires_at: 1.minute.ago)
-
-    described_class.new.perform
-
     expect(BuddyRelay.notify.count).to eq(0)
+    expect(convo.byte_messages.last.body).to include(partner.first_name)
   end
 
   it "leaves one that's still within its window alone" do

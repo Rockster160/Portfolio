@@ -1,8 +1,7 @@
 require "rails_helper"
 
-# The fixture is the real thing this exists because of: a 22-minute stretch in
-# prod where a stashed kennel idea got weighed, narrowed, and corrected, and
-# ended byte-for-byte as it was seeded.
+# Once a conversation about a stashed idea moves on, the companion writes one
+# note on the idea saying what the stretch added.
 RSpec.describe Buddy::IdeaDwell do
   let(:user) { User.me }
   let(:conversation) {
@@ -67,10 +66,8 @@ RSpec.describe Buddy::IdeaDwell do
     )
   end
 
-  # Laid down in order, oldest first. The gaps are deliberately absurd —
-  # roughly an hour between messages — because nothing here is allowed to care.
-  # A person thinking something through between other things is the case that
-  # broke the first cut of this.
+  # Laid down in order, oldest first, about an hour apart: the gap between
+  # messages must never be what decides a stretch is over.
   def lay_down(lines)
     base = (lines.size + 1).hours.ago
     lines.each_with_index { |(who, body), i| say(who, body, at: base + (i + 1).hours) }
@@ -84,15 +81,28 @@ RSpec.describe Buddy::IdeaDwell do
   end
 
   describe ".settle!" do
-    it "writes one companion note once they've moved on to something else" do
+    it "writes one companion note once they've moved on, from the idea and the conversation, once", :aggregate_failures do
       lay_down(kennel + elsewhere)
-      stub_client([{ text: "Landed on an mmWave presence sensor inside." }])
+      fake = stub_client([{ text: "Landed on an mmWave presence sensor inside." }])
 
       notes = described_class.settle!(conversation)
 
       expect(notes.size).to eq(1)
       expect(notes.first).to be_from_companion
       expect(notes.first.body).to eq("Landed on an mmWave presence sensor inside.")
+
+      sent = fake.calls.first.input.first[:content]
+      expect(sent).to include(idea.content)
+      expect(sent).to include("the door is NOT done yet")
+
+      # Its own cost, separate from turns and compactions.
+      row = BuddyUsage.last
+      expect(row).to be_idea_note
+      expect(row.byte_conversation_id).to eq(conversation.id)
+      expect(row.cost_micros).to be > 0
+
+      # A stretch it has already settled gets no second note.
+      described_class.settle!(conversation)
       expect(idea.reload.notes.count).to eq(1)
     end
 
@@ -118,9 +128,6 @@ RSpec.describe Buddy::IdeaDwell do
       expect(described_class.settle!(conversation)).to be_empty
     end
 
-    # The case that killed the first cut of this, which called a stretch over
-    # after six quiet minutes: somebody picking a thought back up between other
-    # things all day would have had every message look like the end of it.
     it "doesn't care how long they take between messages" do
       base = 3.days.ago
       kennel.each_with_index { |(who, body), i| say(who, body, at: base + (i * 5).hours) }
@@ -131,66 +138,19 @@ RSpec.describe Buddy::IdeaDwell do
       expect(idea.reload.notes).to be_empty
     end
 
-    it "hands the model the idea as it stands and the conversation" do
-      lay_down(kennel + elsewhere)
-      fake = stub_client([{ text: "note" }])
-
-      described_class.settle!(conversation)
-
-      sent = fake.calls.first.input.first[:content]
-      expect(sent).to include(idea.content)
-      expect(sent).to include("the door is NOT done yet")
-      expect(sent).to include("Them:", "Byte:")
-    end
-
-    it "writes nothing when the stretch added nothing worth keeping" do
-      lay_down(kennel + elsewhere)
-      stub_client([{ text: described_class::NOTHING }])
-
-      expect(described_class.settle!(conversation)).to be_empty
-      expect(idea.reload.notes).to be_empty
-    end
-
-    # Prod, 26 Aug 02:41. A conversation about filing photos into inventory -
-    # what's in my boxes, here's a picture of the garage freezer, add it as a
-    # box, file the items - was written up as a note on the kennel idea. Four
-    # words carried it: `tell`, `open`, `close` and `inside`, five of the seven
-    # matching messages being somebody saying "tell me" and two of the words
-    # donated by an unrelated camera refusal of Buddy's.
-    #
-    # The score can't be tightened out of this: the notes it gets RIGHT look the
-    # same by term overlap, so anything that rejects the kennel case rejects
-    # those too. The question belongs to the model, which is holding both the
-    # idea and the transcript - and it was only ever asked whether there was
-    # anything NEW in the stretch, which has an obliging answer when the stretch
-    # is about something else entirely.
-    describe "a stretch that only shares words with the idea" do
-      it "asks whether it was the subject before asking what is new" do
-        instructions = described_class::INSTRUCTIONS
-
-        expect(instructions).to match(/was this stretch ABOUT your idea/i)
-        expect(instructions.index(/ABOUT your idea/i)).to be < instructions.index(/Only what is NEW/)
-      end
-
-      it "says a wrong thread is worse than no note at all" do
-        expect(described_class::INSTRUCTIONS).to match(/worse than no note at all/i)
-      end
-
-      it "writes nothing when the model says it wasn't the subject" do
+    # NOTHING is also the answer when the stretch only shared words with the
+    # idea and was never about it.
+    [
+      ["says nothing was added", { text: Buddy::IdeaDwell::NOTHING }],
+      ["call fails", { error: "rate limited" }],
+    ].each do |label, round|
+      it "writes nothing when the model #{label}" do
         lay_down(kennel + elsewhere)
-        stub_client([{ text: described_class::NOTHING }])
+        stub_client([round])
 
         expect(described_class.settle!(conversation)).to be_empty
         expect(idea.reload.notes).to be_empty
       end
-    end
-
-    it "writes nothing when the model call fails" do
-      lay_down(kennel + elsewhere)
-      stub_client([{ error: "rate limited" }])
-
-      expect(described_class.settle!(conversation)).to be_empty
-      expect(idea.reload.notes).to be_empty
     end
 
     it "stays out of the way when the turn already wrote the note itself" do
@@ -199,16 +159,6 @@ RSpec.describe Buddy::IdeaDwell do
       expect(Buddy::GPT::Client).not_to receive(:new)
 
       expect(described_class.settle!(conversation)).to be_empty
-      expect(idea.reload.notes.count).to eq(1)
-    end
-
-    it "does not write a second note for a stretch it has already settled" do
-      lay_down(kennel + elsewhere)
-      stub_client([{ text: "Landed on presence." }])
-
-      described_class.settle!(conversation)
-      described_class.settle!(conversation)
-
       expect(idea.reload.notes.count).to eq(1)
     end
 
@@ -228,18 +178,6 @@ RSpec.describe Buddy::IdeaDwell do
       expect(Buddy::GPT::Client).not_to receive(:new)
 
       expect(described_class.settle!(conversation)).to be_empty
-    end
-
-    it "records its own cost separately from turns and compactions" do
-      lay_down(kennel + elsewhere)
-      stub_client([{ text: "note" }])
-
-      described_class.settle!(conversation)
-
-      row = BuddyUsage.last
-      expect(row).to be_idea_note
-      expect(row.byte_conversation_id).to eq(conversation.id)
-      expect(row.cost_micros).to be > 0
     end
 
     # Counted, a run of these partway through would shove most of the exchange
@@ -322,8 +260,8 @@ RSpec.describe Buddy::IdeaDwell do
       described_class.settle!(conversation)
 
       briefs = fake.calls.map { |call| call.input.first[:content] }
-      expect(briefs.first).to include(idea.content).and include("NOT YOURS", greenhouse.summary)
-      expect(briefs.last).to include(greenhouse.content).and include("NOT YOURS", idea.summary)
+      expect(briefs.first).to include(idea.content, greenhouse.summary)
+      expect(briefs.last).to include(greenhouse.content, idea.summary)
     end
 
     it "still writes the other one when a note fails to come back for the first" do

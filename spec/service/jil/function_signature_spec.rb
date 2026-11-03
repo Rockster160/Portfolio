@@ -90,38 +90,27 @@ RSpec.describe Jil::FunctionSignature do
   end
 
   describe ".params" do
-    # Prod byte_message 3845. `lockdown` is BuddyRoutine 4; its step payload
-    # lives in jsonb, and Postgres sorts object keys by length then bytes, so
-    # {action, which, position} came back {which, action, position}. The blinds
-    # were sent action="all" which="close", matched no case in HASS Blinds, and
-    # nothing moved — over a reply that said the house was locked down.
+    # A step payload stored in jsonb comes back with its keys sorted by length
+    # then bytes, so the caller's order is never the signature's.
     describe "when the caller's keys arrive in the wrong order" do
       let(:blinds) {
         '"Action" TAB ["open" "close" "stop" "position"]("open") BR ' \
           '"Which" TAB ["all" "great_room" "stairs"]("great_room") BR "Position" TAB Numeric'
       }
 
-      it "puts them back in signature order" do
-        scrambled = { "which" => "all", "action" => "close", "position" => 0 }
-
-        expect(described_class.params(blinds, scrambled)).to eq(["close", "all", 0])
-      end
-
-      it "gets the same answer whichever order they came in" do
-        ordered = { "action" => "close", "which" => "all", "position" => 0 }
-
-        expect(described_class.params(blinds, ordered)).to eq(["close", "all", 0])
-      end
-
-      it "reads symbol keys too" do
-        expect(described_class.params(blinds, { which: "all", action: "close", position: 0 }))
-          .to eq(["close", "all", 0])
+      it "puts them back in signature order, string or symbol keys alike" do
+        [
+          { "which" => "all", "action" => "close", "position" => 0 },
+          { "action" => "close", "which" => "all", "position" => 0 },
+          { which: "all", action: "close", position: 0 },
+        ].each do |given|
+          expect(described_class.params(blinds, given)).to eq(["close", "all", 0]), given.inspect
+        end
       end
     end
 
-    # The other half of the same bug: `params` used to be built from the keys
-    # the caller actually SENT, so one arg left out slid every later arg onto
-    # the wrong slot.
+    # Built from the signature, not from the keys the caller sent, so one arg
+    # left out doesn't slide every later arg onto the wrong slot.
     describe "when the caller leaves an arg out" do
       let(:thermostat) {
         '"Zone" TAB ["main" "upstairs"]("main") BR ' \
@@ -229,10 +218,13 @@ RSpec.describe Jil::FunctionSignature do
       "Yoga Lights"       => ['"Execute" TAB Boolean', %w[execute]],
     }
 
-    live.each do |name, (signature, expected)|
-      it "reads #{name} as #{expected.join(", ")}" do
-        expect(keys(signature)).to eq(expected)
-      end
+    it "reads every one of them" do
+      wrong = live.filter_map { |name, (signature, expected)|
+        got = keys(signature)
+        "#{name}: #{got.inspect}, expected #{expected.inspect}" unless got == expected
+      }
+
+      expect(wrong).to eq([])
     end
   end
 end

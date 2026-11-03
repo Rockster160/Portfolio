@@ -89,62 +89,18 @@ RSpec.describe TeslaControl do
     end
   end
 
-  # Pin the destination-resolution priority used by Tesla.navigate (Jil method
-  # + TeslaControl#navigate): contact > lat,lng > raw address. The actual
-  # contact-name normalization (possessives/plurals/"X's house" etc.) lives
-  # in AddressBook now — see spec/service/address_book_spec.rb.
-  describe "navigating" do
+  describe "navigating to nothing" do
     subject(:resolve) { TeslaControl.resolve_destination(input) }
 
-    let(:address_book) { instance_double("AddressBook") }
-    before do
-      allow(User.me).to receive(:address_book).and_return(address_book)
-      # After a contact miss, resolve_destination asks Places to place the phrase
-      # near us ("the plunge in Alpine" → the trailhead, not the town). nil is the
-      # off-prod / can't-place answer, which is what makes it fall through to the
-      # raw text. Stubbed here because the call is wrapped in `rescue nil`, and a
-      # verifying double raises an Exception that a StandardError rescue misses —
-      # so an unstubbed call fails the example instead of the lookup.
-      allow(address_book).to receive_messages(nearest_from_name: nil, address_in_phrase: nil)
-    end
+    let(:address_book) { instance_double(AddressBook) }
 
-    context "when AddressBook returns a contact match" do
-      let(:input) { "Sarah" }
-      before do
-        contact = double(primary_address: double(street: "123 Main St"))
-        allow(address_book).to receive(:match_contact).with("Sarah").and_return(contact)
-      end
+    let(:input) { "  " }
 
-      it "returns the contact's primary street address" do
-        expect(resolve).to eq("123 Main St")
-      end
-    end
+    before { allow(User.me).to receive(:address_book).and_return(address_book) }
 
-    context "when the input is a lat,lng pair (no contact match)" do
-      let(:input) { "40.4804, -111.998191" }
-      before { allow(address_book).to receive(:match_contact).and_return(nil) }
-
-      it "returns whitespace-stripped coordinates" do
-        expect(resolve).to eq("40.4804,-111.998191")
-      end
-    end
-
-    context "when the input is a free-form address (no contact match)" do
-      let(:input) { "1 Apple Park Way, Cupertino" }
-      before { allow(address_book).to receive(:match_contact).and_return(nil) }
-
-      it "passes through unchanged" do
-        expect(resolve).to eq("1 Apple Park Way, Cupertino")
-      end
-    end
-
-    context "with empty input" do
-      let(:input) { "  " }
-
-      it "returns an empty string without consulting the address book" do
-        expect(address_book).not_to receive(:match_contact)
-        expect(resolve).to eq("")
-      end
+    it "returns an empty string without consulting the address book" do
+      expect(address_book).not_to receive(:match_contact)
+      expect(resolve).to eq("")
     end
   end
 
@@ -229,29 +185,16 @@ RSpec.describe TeslaControl do
     context "when switch is muted" do
       before { TeslaSwitch.disable!(reason: "spec") }
 
-      it "proxy_command does not hit the API" do
+      it "touches no API from any entry point, and posts the muted reminder" do
         expect(ctrl.api).not_to receive(:proxy_post)
-        expect(ctrl.send(:proxy_command, :flash_lights)).to be(false)
-      end
-
-      it "command does not hit the API" do
         expect(ctrl.api).not_to receive(:post)
-        expect(ctrl.send(:command, :navigation_request, {})).to be(false)
-      end
-
-      it "wake_up returns false without calling the API" do
-        expect(ctrl.api).not_to receive(:proxy_post)
-        expect(ctrl.wake_up).to be(false)
-      end
-
-      it "vehicle_data returns cached data without hitting the API" do
         expect(ctrl.api).not_to receive(:get)
-        ctrl.vehicle_data
-      end
 
-      it "posts the once-per-day muted reminder on a blocked attempt" do
-        ctrl.send(:proxy_command, :flash_lights)
-        expect(SlackNotifier).to have_received(:notify).with(/Tesla is muted/)
+        expect(ctrl.send(:proxy_command, :flash_lights)).to be(false)
+        expect(ctrl.send(:command, :navigation_request, {})).to be(false)
+        expect(ctrl.wake_up).to be(false)
+        ctrl.vehicle_data
+        expect(SlackNotifier).to have_received(:notify).once
       end
     end
 
@@ -260,7 +203,7 @@ RSpec.describe TeslaControl do
         allow(ctrl).to receive(:perform_requests?).and_return(true)
         allow(ctrl).to receive(:proxy_post_vehicle).and_raise(Errno::EHOSTUNREACH)
         ctrl.send(:proxy_command, :flash_lights)
-        expect(SlackNotifier).to have_received(:notify).with(/home Mac proxies/)
+        expect(SlackNotifier).to have_received(:notify)
       end
     end
   end

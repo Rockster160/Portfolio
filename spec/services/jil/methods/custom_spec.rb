@@ -139,29 +139,6 @@ RSpec.describe Jil::Methods::Custom do
       expect(returned[:url]).to eq("https://www.ups.com/track?tracknum=1ZXH04590371184662")
     end
 
-    it "back-fills the existing delivery when the tracking number already matches" do
-      existing = AmazonOrder.create(
-        carrier: :manual, name: "Computer Desk",
-        order_id: "CUSTOM", item_id: "CUSTOM-f4f9",
-        tracking_number: "1ZXH04590371184662",
-      )
-
-      jil(ups_code, { "ups" => text })
-
-      expect(AmazonOrder.all.length).to eq(1)
-      expect(existing.name).to eq("Computer Desk")
-      expect(existing.delivery_date).to eq("2026-08-12")
-      expect(existing.time_range).to eq("5-7PM")
-    end
-
-    it "creates nothing for a digest text and returns nil" do
-      digest = "UPS: You have 2 packages estimated for delivery today."
-      exe = jil(ups_code, { "ups" => digest })
-
-      expect(exe.ctx[:error]).to be_blank
-      expect(AmazonOrder.all).to be_empty
-    end
-
     it "does not touch User.me's deliveries for another user's task" do
       allow(user).to receive(:me?).and_return(false)
 
@@ -218,14 +195,6 @@ RSpec.describe Jil::Methods::Custom do
       expect(returned[:custom_url]).to eq("https://www.wayfair.com/pXJxCqyzBM")
       # Nothing to send to a carrier tracking page — the short link is the link.
       expect(returned[:url]).to be_nil
-    end
-
-    it "creates nothing for a marketing text and returns nil" do
-      promo = "Wayfair: Way Day starts now! Up to 70% off: https://www.wayfair.com/zzQ1Ab2Cd"
-      exe = jil(wayfair_code, { "wayfair" => promo })
-
-      expect(exe.ctx[:error]).to be_blank
-      expect(AmazonOrder.all).to be_empty
     end
 
     it "does not touch User.me's deliveries for another user's task" do

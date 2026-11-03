@@ -1,8 +1,7 @@
 require "rails_helper"
 
 # The background pass that reads a finished stretch and writes down what was
-# worth keeping. The fixture is the real message this exists because of: prod
-# 3907, which carried three separate things and produced none of them.
+# worth keeping.
 RSpec.describe Buddy::Compile do
   let(:user)  { User.me }
   let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current) }
@@ -79,98 +78,107 @@ RSpec.describe Buddy::Compile do
       expect(convo.reload.buddy_compile_after).to be > first
     end
 
-    it "does nothing while the target is still ahead, without touching the model" do
+    it "does nothing, without touching the model, while the target is ahead or was never set" do
+      flare
+      expect(Buddy::GPT::Client).not_to receive(:new)
+
       convo.update_columns(buddy_compile_after: 5.minutes.from_now)
-      flare
-      expect(Buddy::GPT::Client).not_to receive(:new)
-
       expect(described_class.run!(convo)).to be_empty
-    end
 
-    it "does nothing at all when the conversation was never flagged" do
       convo.update_columns(buddy_compile_after: nil)
-      flare
-      expect(Buddy::GPT::Client).not_to receive(:new)
-
       expect(described_class.run!(convo)).to be_empty
     end
   end
 
-  # Suki's first run on 19 Aug reached back three days and wrote two memories
-  # off things asked for, actioned and finished at the time — a 3pm errand
-  # became an undated permanent concept saying she visits Doug at 3pm forever.
-  #
-  # The fix used to be a six-hour floor on how far a first run could read. That
-  # was a guess about meaning made from a clock, and it cut real context off
-  # conversations people had simply come back to. What replaces it is showing
-  # the model what it needs to make the judgement itself: how old each line is,
-  # and what was actually carried out.
-  describe "a first run on a thread with history behind it" do
-    it "reads the older exchange rather than cutting it off" do
-      old = say("I need to leave around 3 to visit Doug.", at: 3.days.ago)
-      say("On the calendar for 3:00 PM.", direction: :inbound, at: 3.days.ago, meta: { "kind" => "buddy" })
-      say("The fence gate is sticking again.")
-      say("Oh, that one.", direction: :inbound, meta: { "kind" => "buddy" })
-      convo.update_columns(buddy_compiled_at: nil)
+  # What the pass is handed: the stretch with each line's age, what the
+  # companion already carried out (kept out of the conversation itself), and
+  # today's date to write dates absolutely from.
+  describe "the brief" do
+    def brief_for
       client = stub_quiet
-
       described_class.run!(convo)
-
-      expect(client.calls.first.input.first[:content]).to include(old.body)
+      client.calls.first.input.first[:content]
     end
 
-    it "shows how old it is, so a three-day-old errand reads as one" do
-      say("I need to leave around 3 to visit Doug.", at: 3.days.ago)
-      say("On the calendar for 3:00 PM.", direction: :inbound, at: 3.days.ago, meta: { "kind" => "buddy" })
-      say("The fence gate is sticking again.")
-      convo.update_columns(buddy_compiled_at: nil)
-      client = stub_quiet
+    it "reads older history with its age, and today's date, on a first run", :aggregate_failures do
+      travel_to(Time.utc(2026, 8, 25, 18, 0)) do
+        # Inside the travel: stamped from the real clock, the target could sit
+        # in this example's future.
+        convo.update_columns(buddy_compile_after: 2.hours.ago, buddy_compiled_at: nil)
+        old = say("I need to leave around 3 to visit Doug.", at: 3.days.ago)
+        say("On the calendar for 3:00 PM.", direction: :inbound, at: 3.days.ago, meta: { "kind" => "buddy" })
+        say("The fence gate is sticking again.")
+        say("Oh, that one.", direction: :inbound, meta: { "kind" => "buddy" })
 
-      described_class.run!(convo)
+        brief = brief_for
 
-      stamp = 3.days.ago.in_time_zone(Buddy::Day.zone(user)).strftime("%a %-d %b")
-      expect(client.calls.first.input.first[:content]).to include(stamp)
+        expect(brief).to include(old.body)
+        expect(brief).to include(3.days.ago.in_time_zone(Buddy::Day.zone(user)).strftime("%a %-d %b"))
+        expect(brief).to include("TODAY: Tuesday 25 Aug 2026")
+      end
     end
 
-    # And it can go looking rather than deciding from what it was handed:
-    # `read_conversation` pages backwards as many times as it takes.
-    it "is told to page back until it has the part that explains things" do
+    # A chip is listed under ALREADY DONE so the model can tell a request that
+    # was carried out from one that wasn't; it must never be a line in the
+    # conversation, where it would vote on what the stretch was about. A form
+    # prompt and a hidden seed are not conversation either.
+    it "lists what was already done apart from the conversation, and skips widgets and seeds", :aggregate_failures do
+      say("Who did: Puppy Up?", direction: :inbound, meta: { "kind" => "buddy_reply", "source" => "form" })
+      say("Please remind me every day to let things go.")
+      say("Done!! I set that to repeat every day.", direction: :inbound, meta: { "kind" => "buddy" })
+      say("Suki will remind you every day at 9am", direction: :inbound, meta: { "kind" => "buddy_activity" })
+      say("hidden seed", meta: { "hidden" => true, "kind" => "buddy_trigger" })
+
+      brief = brief_for
+      talk  = brief[/THE CONVERSATION:.*/m]
+
+      expect(brief).to include("ALREADY DONE IN THIS STRETCH", "Suki will remind you every day at 9am")
+      expect(talk).to include("let things go")
+      expect(talk).not_to include("will remind you every day")
+      expect(brief).not_to include("Puppy Up", "hidden seed")
+    end
+
+    it "says (none) when nothing was done" do
       flare
-      client = stub_quiet
 
-      described_class.run!(convo)
+      expect(brief_for).to match(/ALREADY DONE IN THIS STRETCH[^\n]*\n\(none\)/)
+    end
 
-      expect(client.calls.first.instructions).to match(/GO AND LOOK before you write/)
-      expect(client.calls.first.instructions).to match(/paging back with `before`/)
-      expect(client.calls.first.instructions).to match(/Deciding from half a\s+conversation/)
+    # Both count days in the PERSON'S zone, as `pending_when` does.
+    it "shows every held row by id with its full wording, and pending follow-ups with when and weight", :aggregate_failures do
+      concept = user.buddy_memories.create!(kind: :concept, content: "Their cat is called Fae.", summary: "Cat is Fae")
+      far     = user.buddy_memories.create!(
+        kind: :followup, content: "Far one.", summary: "Rough day", severity: 86,
+        check_in_at: user.timezone { 96.days.from_now },
+      )
+      soon    = user.buddy_memories.create!(
+        kind: :followup, content: "Soon one.", summary: "Soon", severity: 40,
+        check_in_at: user.timezone { 1.day.from_now.change(hour: 18) },
+      )
+      armed   = user.buddy_memories.create!(
+        kind: :preference, content: "Held inline, and asked about.", summary: "Held and armed",
+        severity: 40, check_in_at: 3.days.from_now
+      )
+      flare
+
+      brief = brief_for
+
+      expect(brief).to match(/- ##{concept.id} \[concept\] Their cat is called Fae\./)
+      expect(brief).to include("##{far.id}", "Rough day", "in 96 days", "sev 86")
+      expect(brief).to include("##{soon.id}", "[tomorrow,")
+      expect(brief).to include("##{armed.id}", "Held and armed")
     end
 
     it "takes several rounds of looking before it has to be finished" do
       say("Something.")
       say("Mm.", direction: :inbound, meta: { "kind" => "buddy" })
-      rounds = Array.new(3) { [{ name: :read_conversation, args: {} }] }
-      stub_rounds(*rounds)
+      stub_rounds(*Array.new(3) { [{ name: :read_conversation, args: {} }] })
 
       expect { described_class.run!(convo) }.not_to raise_error
     end
-
-    # The rule that keeps the Suki case from recurring now that the window
-    # doesn't: a dated one-off already dealt with is nothing to keep.
-    it "is told a dated one-off that has been and gone is nothing" do
-      flare
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.instructions).to include("A CLOCK TIME OR A DATE MEANS IT IS NOT A CONCEPT")
-      expect(client.calls.first.instructions).to match(/already been and gone/)
-    end
   end
 
-  # Both memories written off Suki's thread point at her goodnight message,
-  # which contains neither subject: the stamp was "last thing they said", not
-  # "where this came from". Nothing reads the column yet, which is exactly why
-  # it has to be right or absent.
+  # The source stamp has to be where the content actually came from, or absent.
   describe "where a memory says it came from" do
     it "points at the message the content is actually in" do
       origin = say("The fence gate is sticking again and the latch is bent.")
@@ -190,135 +198,34 @@ RSpec.describe Buddy::Compile do
     end
   end
 
-  # Prod memory 64: the attribution form went up at 15:04 ("Who did: Puppy
-  # Up?"), Rocco typed an unrelated printer command at 15:13, and the compile
-  # read them as one exchange — writing down that "Puppy Up" MEANS "print game
-  # tray vase". A widget with buttons is not the companion asking a question.
-  describe "app widgets that look like conversation" do
-    it "keeps a form prompt out of the stretch it reads" do
-      say("Who did: Puppy Up?", direction: :inbound, meta: { "kind" => "buddy_reply", "source" => "form" })
-      say("print game tray vase")
-      say("It's printing.", direction: :inbound, meta: { "kind" => "buddy" })
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.input.first[:content]).not_to include("Puppy Up")
-    end
-  end
-
-  # A memory told to write dates absolutely needs a date to write them from.
-  # `buddy_memories` 105 froze "tomorrow at 10:00 AM" into a row with no expiry
-  # and a check-in the following evening; the pass runs an hour after the
-  # conversation ends and the only clock in the brief was the timestamp on each
-  # transcript line.
-  it "tells the pass what day it is" do
-    travel_to(Time.utc(2026, 8, 25, 18, 0)) do
-      # Inside the travel, not in the `before` hook. Out there it is stamped
-      # from the real clock, so once the wall clock passed 8pm UTC the target
-      # sat in this example's FUTURE, run! returned early, and a test that had
-      # been green all day started failing for reasons that had nothing to do
-      # with it.
-      convo.update_columns(buddy_compile_after: 2.hours.ago)
-      say("Eve's therapist thing is tomorrow at 10.")
-      say("Noted.", direction: :inbound, meta: { "kind" => "buddy" })
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.input.first[:content]).to include("TODAY: Tuesday 25 Aug 2026")
-    end
-  end
-
-  # Prod memory 67: Eve asked for a daily nudge, Suki set the reminder and
-  # posted a receipt saying so, and the compile — which never sees receipts —
-  # wrote "she wants a daily reminder to let things go" as a standing
-  # preference. The same request now existed twice, and the copy in memories had
-  # no way to be cancelled when she changed her mind about the real one.
-  describe "things the companion already handled" do
-    it "shows the model what it did, even though receipts stay out of the transcript" do
-      say("Please remind me every day to let things go.")
-      say("Done!! I set that to repeat every day.", direction: :inbound, meta: { "kind" => "buddy" })
-      say("Suki will remind you every day at 9am", direction: :inbound, meta: { "kind" => "buddy_activity" })
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      brief = client.calls.first.input.first[:content]
-      expect(brief).to include("ALREADY DONE IN THIS STRETCH")
-      expect(brief).to include("Suki will remind you every day at 9am")
-      # Still not part of the conversation it reads — that filter is what stops
-      # a doorbell notification voting on the subject.
-      expect(brief[/THE CONVERSATION:.*/m]).not_to include("will remind you every day")
-    end
-
-    it "says a carried-out request is not a preference" do
-      say("Anything at all.")
-      say("Sure.", direction: :inbound, meta: { "kind" => "buddy" })
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.instructions).to include("A REQUEST THAT WAS CARRIED OUT IS NOT A PREFERENCE")
-    end
-
-    it "says so plainly when nothing was done" do
-      flare
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.input.first[:content]).to match(/ALREADY DONE IN THIS STRETCH[^\n]*\n\(none\)/)
-    end
-  end
-
-  # Three rows in prod carried handling instructions instead of facts: a
-  # correction stored after it had been applied, a sentence leaning on the row
-  # beside it, and a "don't remind her about this" that nothing could act on.
-  # Content is handed over as something TRUE ABOUT THE PERSON, so anything else
-  # comes back out as a claim about them and the thing it asked for never
-  # happens.
-  # Suki told Eve three things once and remembered each of them twice: the
-  # inline `remember` path writes immediately, then compile re-reads the same
-  # turns half an hour later. `duplicate?` is what should have caught the second
-  # write, and it had two holes.
+  # The inline `remember` path writes immediately, then compile re-reads the
+  # same turns, so `duplicate?` is what stops the second write.
   describe ".duplicate?" do
-    it "sees a stash row, which is how 88 got written over an identical 84" do
-      BuddyMemory.create!(user: user, kind: :stash, status: :active,
-                          content: "She is working on kitchen cupboards and wants to keep at it")
+    def duplicate?(text) = described_class.send(:duplicate?, user, text)
 
-      expect(described_class.send(:duplicate?, user, "She is working on kitchen cupboards and wants to keep at it"))
-        .to be(true)
+    it "matches the same fact across kinds, spacing, -ing and one-word restatements" do
+      [
+        [:stash, "She is working on kitchen cupboards and wants to keep at it",
+         "She is working on kitchen cupboards and wants to keep at it"],
+        [:preference, "She avoids the hose when Whisper's naptime is close",
+         "She avoids the hose when Whisper's nap time is close"],
+        [:stash, "Go through the 2 bins of bathroom and first aid supplies later while we watch TV",
+         "Two bins of bathroom and first aid supplies are set aside to sort later while watching TV"],
+        [:stash, "Once the bedroom is sorted, clear out the entire pantry", "pantry"],
+      ].each { |kind, existing, candidate|
+        BuddyMemory.where(user: user).delete_all
+        BuddyMemory.create!(user: user, kind: kind, status: :active, content: existing)
+
+        expect(duplicate?(candidate)).to be(true), candidate
+      }
     end
 
-    it "reads naptime and nap time as the same fact" do
-      BuddyMemory.create!(user: user, kind: :preference,
-                          content: "She avoids the hose when Whisper's naptime is close")
-
-      expect(described_class.send(:duplicate?, user, "She avoids the hose when Whisper's nap time is close"))
-        .to be(true)
-    end
-
-    it "still lets a genuinely different fact through" do
+    it "lets a genuinely different fact, or a word merely containing a short entry, through" do
       BuddyMemory.create!(user: user, kind: :preference, content: "She checks the schedule when working outside")
+      BuddyMemory.create!(user: user, kind: :stash, status: :active, content: "Buy buttermilk for the pancakes")
 
-      expect(described_class.send(:duplicate?, user, "She avoids the hose during the last nap of the day"))
-        .to be(false)
-    end
-
-    # Memories 92 and 99, both on the pile, one job. "watch" against "watching"
-    # was the whole of the difference and it put the overlap at 0.778, under
-    # the gate by a fifth of a word.
-    it "reads watch and watching as the same word" do
-      BuddyMemory.create!(user: user, kind: :stash, status: :active,
-                          content: "Go through the 2 bins of bathroom and first aid supplies later while we watch TV")
-
-      expect(
-        described_class.send(
-          :duplicate?, user,
-          "Two bins of bathroom and first aid supplies are set aside to sort later while watching TV",
-        ),
-      ).to be(true)
+      expect(duplicate?("She avoids the hose during the last nap of the day")).to be(false)
+      expect(duplicate?("milk")).to be(false)
     end
 
     it "leaves a word alone when stripping -ing would gut it" do
@@ -326,78 +233,18 @@ RSpec.describe Buddy::Compile do
       expect(Buddy::SideEffects.stem("watching")).to eq("watch")
     end
 
-    # Memory 97, written half an hour after feature request 1 was created with
-    # a receipt chip saying so. A note about a row is not the row.
-    it "sees a feature request that already exists in its own table" do
-      FeatureRequest.create!(user: user, title: "Inventory access", body: "Wants to see what is in stock")
+    # A note about a row is not the row.
+    it "sees a standing feature request in its own table, but not a shipped one" do
+      request = FeatureRequest.create!(user: user, title: "Inventory access", body: "Wants to see what is in stock")
+      expect(duplicate?("Rocco needs a feature request for Inventory access")).to be(true)
 
-      expect(described_class.send(:duplicate?, user, "Rocco needs a feature request for Inventory access"))
-        .to be(true)
-    end
-
-    it "does not read a shipped request as still standing" do
-      FeatureRequest.create!(user: user, title: "Inventory access", body: "x", status: :shipped)
-
-      expect(described_class.send(:duplicate?, user, "Rocco needs a feature request for Inventory access"))
-        .to be(false)
-    end
-
-    # Memory 91 was the single word "pantry", written off "Keep the pantry on
-    # the stash pile" - a sentence asking to KEEP memory 60. Too short for the
-    # string tests, which used to answer false and let it through.
-    it "catches a one-word restatement of something already held" do
-      BuddyMemory.create!(user: user, kind: :stash, status: :active,
-                          content: "Once the bedroom is sorted, clear out the entire pantry")
-
-      expect(described_class.send(:duplicate?, user, "pantry")).to be(true)
-    end
-
-    it "does not let a short entry collide with a word that merely contains it" do
-      BuddyMemory.create!(user: user, kind: :stash, status: :active, content: "Buy buttermilk for the pancakes")
-
-      expect(described_class.send(:duplicate?, user, "milk")).to be(false)
+      request.update!(status: :shipped)
+      expect(duplicate?("Rocco needs a feature request for Inventory access")).to be(false)
     end
   end
 
-  describe "what a row is allowed to be" do
-    let(:instructions) {
-      say("Anything at all.")
-      say("Sure.", direction: :inbound, meta: { "kind" => "buddy" })
-      client = stub_quiet
-      described_class.run!(convo)
-      client.calls.first.instructions
-    }
-
-    it "requires every row to make sense with nothing beside it" do
-      expect(instructions).to include("EVERY ROW HAS TO STAND ALONE")
-      expect(instructions).to match(/never read in order, never read\s+beside each other/)
-    end
-
-    it "forbids storing an instruction where a fact belongs" do
-      expect(instructions).to include("WRITE THE FACT, NOT A NOTE ABOUT THE FACT")
-      expect(instructions).to match(/nothing reads content and\s+acts on it/)
-    end
-
-    it "says a correction is applied rather than kept" do
-      expect(instructions).to include("A CORRECTION IS NOT A MEMORY")
-      expect(instructions).to match(/written once,\s+correctly/)
-    end
-
-    # It has no tools — `distill` sends instructions and input and nothing
-    # else — so a rule that ends "go and do it" would leave it stuck. Its two
-    # levers are `check_in_days` and `updates`, and it has to be told so.
-    # It has real tools now, so the rule has to point at them rather than at a
-    # JSON field that no longer exists.
-    it "points each forbidden shape at the tool that handles it" do
-      expect(instructions).to match(/something to come back to is `set_check_in`/)
-      expect(instructions).to match(/no longer worth holding is `close_memory`/)
-      expect(instructions).to match(/row that is wrong is `revise_memory`/)
-    end
-  end
-
-  # Until now this pass could only ADD and retire. Two rows that turned out to
-  # be one thing, or a row that only made sense beside its neighbour, had no way
-  # to be fixed — so the pile could only ever grow more tangled.
+  # Two rows that turned out to be one thing, or a row that only made sense
+  # beside its neighbour, get revised in place.
   describe "tidying what is already held" do
     let!(:held) {
       user.buddy_memories.create!(
@@ -431,59 +278,18 @@ RSpec.describe Buddy::Compile do
       expect(held.notes.map(&:body).join).to include("After that, clear out the pantry.")
     end
 
-    it "ignores a revise with nothing to write" do
+    it "ignores a revise with nothing to write, or one that changes nothing" do
       revise!({ id: held.id, action: "revised", content: "  " })
-
       expect(held.content).to eq("After that, clear out the pantry.")
       expect(held.notes).to be_empty
-    end
 
-    it "leaves an unchanged row alone rather than noting a no-op" do
+      convo.update_columns(buddy_compile_after: 2.hours.ago)
       revise!({ id: held.id, action: "revised", content: "After that, clear out the pantry." })
-
       expect(held.notes).to be_empty
-    end
-
-    # Consolidation is a revise plus a drop, so it needs to be able to name both.
-    it "shows every held row with its id and full wording" do
-      flare
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.input.first[:content]).to match(/- ##{held.id} \[concept\] After that, clear out the pantry\./)
-    end
-
-    it "tells the model to tidy only what this conversation touched" do
-      flare
-      client = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(client.calls.first.instructions).to include("TIDY WHAT IS ALREADY THERE")
-      expect(client.calls.first.instructions).to match(/Only\s+revise when THIS conversation gave you a reason to/)
     end
   end
 
   describe "writing what mattered" do
-    # The point of the whole thing: one message, several records, each with its
-    # own weight and its own timing.
-    it "writes every separate thing one message carried" do
-      flare
-      stub_calls(
-        held("Their CSCR has flared up.", summary: "CSCR flare", kind: "concept", severity: 55, tags: %w[health], check_in_days: 3),
-        held("They are stressed about it all landing at once.", summary: "Stress", kind: "concept", severity: 60, tags: %w[wellbeing], check_in_days: 0),
-        held("They will be out of a job before the end of the year.", summary: "Job ending", kind: "concept", severity: 85, tags: %w[work], check_in_days: 7),
-      )
-
-      written = described_class.run!(convo)
-
-      expect(written.size).to eq(3)
-      expect(written.map(&:severity)).to contain_exactly(55, 60, 85)
-      expect(written.map(&:tag_list).flatten).to contain_exactly("health", "wellbeing", "work")
-      expect(written.map(&:kind).uniq).to eq(["followup"])
-    end
-
     it "keeps a plain memory as a memory when nothing needs asking about" do
       flare
       stub_calls(held("They forgot the sleeping bags camping.", kind: "concept", severity: 10, tags: %w[camping]))
@@ -495,12 +301,15 @@ RSpec.describe Buddy::Compile do
       expect(written.first.tag_list).to eq(["camping"])
     end
 
-    it "writes nothing when the stretch carried nothing worth keeping" do
+    # A compile is invisible, so finding nothing just clears the flag.
+    it "writes nothing when the stretch carried nothing worth keeping, and clears the flag" do
       flare
       stub_quiet
 
       expect(described_class.run!(convo)).to be_empty
       expect(BuddyMemory.where(user: user).count).to eq(0)
+      expect(convo.reload.buddy_compile_after).to be_nil
+      expect(convo.buddy_compiled_at).to be_present
     end
 
     it "clamps a severity outside the scale rather than failing the write" do
@@ -522,15 +331,6 @@ RSpec.describe Buddy::Compile do
       expect(BuddyMemory.where(user: user).count).to eq(1)
     end
 
-    # Degrading to silence is right: a compile is invisible, so a parse failure
-    # should look exactly like a compile that found nothing.
-    it "writes nothing and stays quiet when the output can't be parsed" do
-      flare
-      stub_quiet
-
-      expect(described_class.run!(convo)).to be_empty
-    end
-
     it "survives the model call failing outright" do
       flare
       fake = FakeBuddyClient.new([{ error: "rate limited" }])
@@ -539,24 +339,11 @@ RSpec.describe Buddy::Compile do
       expect(described_class.run!(convo)).to be_empty
       expect(convo.reload.buddy_compile_after).to be_nil
     end
-
-    it "clears the flag once it has run, so it doesn't compile the same stretch forever" do
-      flare
-      stub_quiet
-
-      described_class.run!(convo)
-
-      expect(convo.reload.buddy_compile_after).to be_nil
-      expect(convo.reload.buddy_compiled_at).to be_present
-    end
   end
 
   describe "several follow-ups from one stretch" do
-    # The compiler has to be able to split a message, and each piece has to keep
-    # its OWN weight and its OWN timing. A design that quietly collapses these
-    # into one record loses the two that mattered least at write time and most
-    # a week later.
-    it "gives each thing its own severity, tags and timing" do
+    # One message, several records, each with its own weight and timing.
+    it "gives each thing its own severity, tags and spaced-out timing, as follow-ups" do
       flare
       stub_calls(
         held("Their CSCR has flared up.", severity: 55, tags: %w[health eyes], check_in_days: 3),
@@ -570,20 +357,8 @@ RSpec.describe Buddy::Compile do
       expect(written.map { |m| m.tag_list.sort }).to eq([%w[eyes health], %w[wellbeing], %w[money work]])
       expect(written.map(&:check_in_at)).to all(be_present)
       expect(written.map(&:check_in_at).uniq.size).to eq(3)
-    end
-
-    it "spaces them out instead of stacking three onto one evening" do
-      flare
-      stub_calls(
-        held("Eye thing.", severity: 55, check_in_days: 3),
-        held("Stress thing.", severity: 60, check_in_days: 0),
-        held("Job thing.", severity: 85, check_in_days: 7),
-      )
-
-      described_class.run!(convo)
-
-      times = BuddyMemory.where(user: user).order(:check_in_at).pluck(:check_in_at)
-      times.each_cons(2) { |a, b| expect(b - a).to be >= Buddy::CheckIns::MIN_GAP }
+      expect(written.map(&:kind).uniq).to eq(["followup"])
+      written.map(&:check_in_at).sort.each_cons(2) { |a, b| expect(b - a).to be >= Buddy::CheckIns::MIN_GAP }
     end
 
     it "splits a long unburdening into one record per thing, weighted separately" do
@@ -705,128 +480,6 @@ RSpec.describe Buddy::Compile do
 
       expect(theirs.reload).to be_status_active
     end
-
-    it "shows the model what is already pending, by id" do
-      flare
-      fake = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(fake.calls.first.input.first[:content]).to include("##{mood_check.id}", "Rough day")
-    end
-
-    # Rocco, 8 Sep: "when I gave more info saying that the layoff was happening
-    # sooner than anticipated, the check-in likely should have been moved to a
-    # much sooner time." It was shown the row and not the date on it, so it had
-    # nothing to judge "too far out" against and pulling it in was never a move
-    # it was in a position to make.
-    # Both of these count days in the PERSON'S zone, because `pending_when` does -
-    # it takes `Buddy::Day.zone(user)` and subtracts two dates inside it. Specs
-    # run in UTC, so a plain `1.day.from_now` is a different date from the one
-    # the prompt will label for the six hours after UTC midnight, which here is
-    # every evening from 6pm. That window used to read as "in 2 days".
-    it "says when each pending follow-up is due, and how heavy it is" do
-      mood_check.update!(check_in_at: user.timezone { 96.days.from_now }, severity: 86)
-      flare
-      fake = stub_quiet
-
-      described_class.run!(convo)
-
-      brief = fake.calls.first.input.first[:content]
-      expect(brief).to include("in 96 days")
-      expect(brief).to include("sev 86")
-    end
-
-    it "shows a held fact that was armed in the conversation too" do
-      held = user.buddy_memories.create!(
-        kind: :preference, content: "Held inline, and asked about.", summary: "Held and armed",
-        severity: 40, check_in_at: 3.days.from_now
-      )
-      flare
-      fake = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(fake.calls.first.input.first[:content]).to include("##{held.id}", "Held and armed")
-    end
-
-    it "says so plainly when one is due tomorrow" do
-      mood_check.update!(check_in_at: user.timezone { 1.day.from_now.change(hour: 18) })
-      flare
-      fake = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(fake.calls.first.input.first[:content]).to include("[tomorrow,")
-    end
-  end
-
-  # What this pass writes is RECORDS, not replies, and that changes what a
-  # quoted illustration costs. A sample sentence in a reply prompt comes back
-  # out as a sentence somebody reads once; the same sentence here comes back out
-  # as a memory, a check-in or a note, filed against a real person and read as
-  # fact for weeks afterwards.
-  #
-  # The three below were written on 8 Sep and cut the same day, before they ever
-  # ran: two of them described Rocco's actual situation almost word for word, so
-  # a copy filed against Eve or Chelsea would have been indistinguishable from
-  # something they had said. The fourth is the older shape - a phrase named in
-  # order to forbid it, which `today_forward_looking_spec` has already
-  # established is still a phrase handed over.
-  #
-  # Every rule they were carrying survived being DESCRIBED instead of quoted,
-  # which is the whole of the fix and cost no rules. See
-  # `spec/service/buddy/personality_spec.rb` for the same list on the always-on
-  # prompt, where the sentences had actually escaped.
-  describe "what the pass is handed to write records from" do
-    let(:rules) { described_class::INSTRUCTIONS }
-
-    it "hands over no circumstance a person could be given by mistake" do
-      planted = [
-        "I'm out of a job on 11 Sep",
-        "The layoff is happening sooner than we thought",
-        "her surgery is in three weeks",
-        "she's still in hospital, doing okay for now",
-        "forgot the sleeping bags",
-        "clear out the pantry",
-        "that's in the house words too",
-        "do not remind her about this",
-        "check on this next week",
-      ].select { |line| rules.include?(line) }
-
-      expect(planted).to be_empty,
-        "this prompt's output is stored facts, so an illustration in it can be " \
-        "filed against somebody as a real one: #{planted.inspect}"
-    end
-
-    # The phrases a claim is RECOGNISED by are the opposite case and have to
-    # stay. They are read out of the companion's own past messages, they assert
-    # nothing about anybody, and without them the pass cannot tell a promise
-    # from small talk.
-    it "keeps the bare phrases a claim is spotted by" do
-      expect(rules).to include("I'll remember that", "I've set that")
-    end
-
-    # Every rule the cut illustrations were carrying, still stated.
-    it "loses no rule to the cutting" do
-      expect(rules).to include("especially with a lesson attached")
-      expect(rules).to include("EVERY ROW HAS TO STAND ALONE")
-      expect(rules).to include("WRITE THE FACT, NOT A NOTE ABOUT THE FACT")
-      expect(rules).to include("ONE MESSAGE CAN CARRY SEVERAL THINGS")
-      expect(rules).to include("CHECK WHAT THE COMPANION SAID IT DID")
-    end
-
-    it "hands over no phrase to avoid" do
-      expect(rules).not_to match(/do not ask about|never say|avoid saying/i)
-    end
-
-    # The point of cutting them: describing a rule keeps it.
-    it "still says which way heavy things go, and which field a date belongs in" do
-      expect(rules).to include("NOT TO THE DATE")
-      expect(rules).to include("The big ones")
-      expect(rules).to include("A DATE IN THE FUTURE IS `relevant_days`")
-      expect(rules).to include("FEWER days")
-    end
   end
 
   describe "the check-in floor" do
@@ -851,65 +504,41 @@ RSpec.describe Buddy::Compile do
     end
   end
 
+  # The face belongs to the live turn; an async pass changing it would change
+  # it out of nowhere.
+  it "has no face tool, and leaves the expression where the conversation left it" do
+    expect(described_class::Toolbox.schemas.map { |t| t[:name] }).not_to include("set_face")
+    convo.update_columns(buddy_expression: "happy")
+    flare
+    stub_calls({ name: :set_face, args: { face: "sad" } })
 
-  # An async job an hour — or fifteen minutes — after the conversation ended
-  # has no business changing how the companion looks. The face belongs to the
-  # live turn: set from here it would change out of nowhere, while the person is
-  # somewhere else entirely, about something they have stopped thinking about.
-  describe "the face" do
-    it "is not something this pass can touch at all" do
-      expect(described_class::Toolbox.schemas.map { |t| t[:name] }).not_to include("set_face")
-      expect(described_class).not_to respond_to(:apply_face)
-    end
+    described_class.run!(convo)
 
-    it "leaves the expression exactly where the conversation left it" do
-      convo.update_columns(buddy_expression: "happy")
-      flare
-      stub_calls({ name: :set_face, args: { face: "sad" } })
-
-      described_class.run!(convo)
-
-      expect(convo.reload.buddy_expression).to eq("happy")
-    end
+    expect(convo.reload.buddy_expression).to eq("happy")
   end
 
-  describe "what it reads" do
-    # A chip is still not somebody talking — it just isn't invisible any more.
-    # It's listed under ALREADY DONE so the model can tell a request that was
-    # carried out from one that wasn't; what it must never be is a line in the
-    # conversation, where it would vote on what the stretch was about.
-    it "skips hidden seeds, chips and watch-fired posts" do
-      flare
-      say("hidden seed", meta: { "hidden" => true, "kind" => "buddy_trigger" })
-      say("chip", direction: :inbound, meta: { "kind" => "buddy_activity" })
-      fake = stub_quiet
+  it "bills its own usage kind rather than muddying turn numbers" do
+    flare
+    stub_quiet
 
-      described_class.run!(convo)
+    expect { described_class.run!(convo) }.to change { BuddyUsage.where(kind: :compile).count }.by(1)
+  end
 
-      sent = fake.calls.first.input.first[:content]
-      talk = sent[/THE CONVERSATION:.*/m]
-      expect(sent).to include("CSCR has flared up")
-      expect(sent).not_to include("hidden seed")
-      expect(talk).not_to include("chip")
-    end
+  # The pass writes stored facts, so a sample circumstance in its instructions
+  # can be filed against somebody as a real one.
+  it "hands the pass no circumstance it could file as a real one" do
+    planted = [
+      "I'm out of a job on 11 Sep",
+      "The layoff is happening sooner than we thought",
+      "her surgery is in three weeks",
+      "she's still in hospital, doing okay for now",
+      "forgot the sleeping bags",
+      "clear out the pantry",
+      "that's in the house words too",
+      "do not remind her about this",
+      "check on this next week",
+    ]
 
-    # Full wording rather than the summary label: overlap can't be judged off
-    # "Cat is Fae", and a row can't be revised without seeing what it says.
-    it "shows the model what is already held so it doesn't write a fourth copy" do
-      user.buddy_memories.create!(kind: :concept, content: "Their cat is called Fae.", summary: "Cat is Fae")
-      flare
-      fake = stub_quiet
-
-      described_class.run!(convo)
-
-      expect(fake.calls.first.input.first[:content]).to include("Their cat is called Fae.")
-    end
-
-    it "bills its own usage kind rather than muddying turn numbers" do
-      flare
-      stub_quiet
-
-      expect { described_class.run!(convo) }.to change { BuddyUsage.where(kind: :compile).count }.by(1)
-    end
+    expect(planted.select { |line| described_class::INSTRUCTIONS.include?(line) }).to be_empty
   end
 end

@@ -45,16 +45,7 @@ RSpec.describe Buddy::Supersede do
     action.reload.buttons
   end
 
-  # Prod 1164/1166, 1 Oct. iCapital confirmed a Zoom interview for Mon Oct 5 at
-  # 9am; at 3:07pm they wrote "Please ignore the last confirmation" and gave Wed
-  # Oct 7 at 8am instead. The Oct 7 note was filed and the calendar is right,
-  # but the Oct 5 CARD stayed pending - one tap away from booking a slot that
-  # had been called off.
-  #
-  # Three of these: iCapital again on 21 Sep ("Please disregarded the last
-  # email", two minutes behind the first) and KODE Health on 25 Sep. Two put the
-  # cancelled slot on the calendar, agenda items 1159 and 1174, both deleted by
-  # hand.
+  # A second booking mail for the same job replaces the first meeting.
   describe "a rescheduled interview" do
     # `job_search` is owner-only (Buddy::Features::OWNER_ONLY), so a fixture
     # account cannot reach add_job_note at all - the call is dropped before a
@@ -95,33 +86,21 @@ RSpec.describe Buddy::Supersede do
       }])
     end
 
-    # add_job_note files on arrival now, so there is no pending card for a
-    # correction to retire - and no card one tap away from booking a slot that
-    # had been called off, which is what the incident above actually was.
-    #
-    # What leaves ONE meeting is `JobNote#withdraw_booking`: both mails are
-    # filed, and the booking that was replaced keeps its note and loses its
-    # date, which is the half that owned the calendar entry.
-    it "files both bookings and leaves ONE meeting on the calendar" do
+    # add_job_note files on arrival, so `JobNote#withdraw_booking` is what
+    # leaves ONE meeting: the replaced booking keeps its note and loses its date.
+    # The key is the JOB, because the words are what a reschedule changes.
+    it "files both bookings, keyed on the job, and leaves ONE meeting on the calendar", :aggregate_failures do
       book("c1", 3.days.from_now.change(hour: 9, min: 0, sec: 0, usec: 0).iso8601)
       book("c2", 5.days.from_now.change(hour: 8, min: 0, sec: 0, usec: 0).iso8601)
 
       first, second = checklists.to_a
       expect(rows(first).first["status"]).to eq("executed")
+      expect(rows(first).first["merge_key"]).to eq("add_job_note:scheduled:job:#{job.id}")
       expect(rows(second).first["status"]).to eq("executed")
 
       booked = job.notes.where(tag: :scheduled)
       expect(booked.count).to eq(2)
       expect(booked.where.not(follow_up_at: nil).count).to eq(1)
-    end
-
-    # Keyed on the JOB, because the words are the one thing a reschedule is
-    # certain to change - a key built from them can never match the booking it
-    # replaces.
-    it "keys a booking on the job rather than on what the mail said" do
-      book("c1", "2026-10-05T09:00:00-06:00")
-
-      expect(rows(checklists.first).first["merge_key"]).to eq("add_job_note:scheduled:job:#{job.id}")
     end
 
     # Everything that is not a booking stays keyed on its words, so two
@@ -138,43 +117,23 @@ RSpec.describe Buddy::Supersede do
   end
 
   describe "a corrected list item" do
-    it "retires the earlier row and leaves the corrected one live" do
+    # Both rows point at the same ListItem, so undoing the stale one would
+    # delete what the corrected one just filed.
+    it "retires the earlier row, leaving the corrected one live and the retired one un-undoable", :aggregate_failures do
       add_item("c1")
       add_item("c2", section: "Costco")
 
       first, second = checklists.to_a
       expect(rows(first).first["status"]).to eq("superseded")
+      expect(rows(first).first["superseded_from"]).to eq("executed")
+      expect(rows(first).first["undoable"]).to be(false)
+      expect(first.byte_message.reload.metadata["buttons"].first["status"]).to eq("superseded")
       expect(rows(second).first["status"]).to eq("executed")
       expect(rows(second).first["sublabel"]).to include("Costco")
-    end
 
-    it "remembers that the retired row had actually run" do
-      add_item("c1")
-      add_item("c2", section: "Costco")
-
-      expect(rows(checklists.first).first["superseded_from"]).to eq("executed")
-    end
-
-    # The real hazard: both rows point at the same ListItem, so undoing the
-    # stale one would delete what the corrected one just filed.
-    it "takes undo off the retired row" do
-      add_item("c1")
-      add_item("c2", section: "Costco")
-
-      stale = checklists.first
-      expect(rows(stale).first["undoable"]).to be(false)
-
-      Buddy::ProposalExecutor.undo!(stale.id, 1)
+      Buddy::ProposalExecutor.undo!(first.id, 1)
 
       expect(list.list_items.reload.pluck(:name)).to eq(["Trail Mix"])
-    end
-
-    it "re-renders the retired row for the client" do
-      add_item("c1")
-      add_item("c2", section: "Costco")
-
-      buttons = checklists.first.byte_message.reload.metadata["buttons"]
-      expect(buttons.first["status"]).to eq("superseded")
     end
   end
 
@@ -186,9 +145,8 @@ RSpec.describe Buddy::Supersede do
       expect(rows(checklists.first).first["status"]).to eq("executed")
     end
 
-    # merge_key means "the same thing in one breath", which is not the same as
-    # "the same thing forever". A second glass of water an hour later is a
-    # second completion, and retiring the first would erase it.
+    # merge_key means "the same thing in one breath", not "forever": a second
+    # glass of water is a second completion.
     it "keeps a repeatable action that happens to carry the same merge_key" do
       # `target_count` is what says out loud that this one is meant to be done
       # several times a day - and it is what keeps the duplicate guard off it

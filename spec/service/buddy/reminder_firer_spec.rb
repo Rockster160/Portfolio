@@ -62,12 +62,12 @@ RSpec.describe Buddy::ReminderFirer do
 
     # Nothing is posted and nothing is pushed; the chip is what explains the
     # silence without breaking it.
-    it "stays quiet on a day it has already been done" do
+    it "stays quiet on a day it has already been done", :aggregate_failures do
       shower!(completed: true)
       described_class.fire!(standing!)
 
       expect(bodies.join).not_to include("Reminder: Time to shower!")
-      expect(bodies.join).to include("Skipped")
+      expect(WebPushNotifications).not_to have_received(:send_to_byte)
     end
 
     # Going terminal here would retire the rule on its first firing, and nothing
@@ -85,11 +85,9 @@ RSpec.describe Buddy::ReminderFirer do
     end
   end
 
-  # 21 Aug: Byte briefed once a minute for ten minutes until the reminder was
-  # cancelled by hand. Agenda item 1006 ("Focus") started at 8:30, the briefing
-  # is pulled 30 minutes ahead of the first thing, and 8:30 minus 30 is 8:00 -
-  # exactly the time it had just fired at. Every roll-forward recomputed the
-  # same past time, and a `fire_at` in the past is due on every tick.
+  # The briefing is pulled 30 minutes ahead of the day's first thing, so an
+  # 8:30 event recomputes the 8:00 it just fired at; a past `fire_at` is due on
+  # every tick, and today's own 8:30 slot would be a second briefing.
   describe "the Today briefing rolling forward" do
     let(:zone)   { ActiveSupport::TimeZone[user.timezone.to_s] }
     let!(:agenda) { Agenda.create!(user: user, name: "Mine") }
@@ -106,7 +104,7 @@ RSpec.describe Buddy::ReminderFirer do
                          start_at: at, end_at: at + 1.hour)
     end
 
-    it "lands tomorrow, not on a time that has already gone" do
+    it "lands tomorrow, not on a time that has already gone or later the same morning", :aggregate_failures do
       travel_to(zone.local(2026, 8, 21, 8, 0)) do
         event!(zone.local(2026, 8, 21, 8, 30))
         reminder = briefing!(fire_at: zone.local(2026, 8, 21, 8, 0))
@@ -115,19 +113,6 @@ RSpec.describe Buddy::ReminderFirer do
 
         expect(reminder.reload.fire_at).to be > Time.current
         expect(reminder.fire_at.in_time_zone(zone).to_date).to eq(Date.new(2026, 8, 22))
-      end
-    end
-
-    # The other half: rolling from `now` lands on today's own 8:30 slot, which
-    # the briefing fired BEFORE. That's a second briefing the same morning.
-    it "doesn't brief twice on the morning it fired early" do
-      travel_to(zone.local(2026, 8, 21, 8, 0)) do
-        event!(zone.local(2026, 8, 21, 8, 30))
-        reminder = briefing!(fire_at: zone.local(2026, 8, 21, 8, 0))
-
-        described_class.fire!(reminder)
-
-        expect(reminder.reload.fire_at.in_time_zone(zone).to_date).not_to eq(Date.new(2026, 8, 21))
       end
     end
 
@@ -157,17 +142,12 @@ RSpec.describe Buddy::ReminderFirer do
   end
 
   describe "an ordinary reminder" do
-    it "says it, with nothing stuck on the front" do
+    # Someone with a day full of these reads the push title a dozen times, so
+    # it is the words themselves.
+    it "says it and pushes the words themselves", :aggregate_failures do
       described_class.fire!(remind!("take the trash out"))
 
       expect(bodies.last).to eq("Reminder: take the trash out")
-    end
-
-    # Someone with a day full of these reads the same character a dozen times
-    # before they get to any of the words.
-    it "pushes the words themselves, not a glyph and then the words" do
-      described_class.fire!(remind!("take the trash out"))
-
       expect(WebPushNotifications).to have_received(:send_to_byte)
         .with(hash_including(title: "take the trash out"))
     end
@@ -185,18 +165,12 @@ RSpec.describe Buddy::ReminderFirer do
       )
     }
 
-    it "runs the routine it names rather than reading it out" do
-      expect { described_class.fire!(remind!("run my wind down routine")) }
-        .to change { ActionEvent.where(user_id: user.id).count }.by(1)
-
-      expect(bodies).not_to include(a_string_starting_with("Reminder:"))
-    end
-
-    it "takes the other run-verbs people actually type" do
-      %w[trigger fire start].each { |verb|
-        expect { described_class.fire!(remind!("#{verb} wind down")) }
+    it "runs the routine it names, by any run-verb, rather than reading it out", :aggregate_failures do
+      ["run my wind down routine", "trigger wind down", "fire wind down", "start wind down"].each { |text|
+        expect { described_class.fire!(remind!(text)) }
           .to change { ActionEvent.where(user_id: user.id).count }.by(1)
       }
+      expect(bodies).not_to include(a_string_starting_with("Reminder:"))
     end
 
     it "fires a Jil task by name and says which one" do
@@ -231,9 +205,8 @@ RSpec.describe Buddy::ReminderFirer do
     end
   end
 
-  # The morning routine ran its whole scene twice on two mornings in three. The
-  # HASS call inside it hangs for a 60s timeout, which is longer than the gap
-  # between sweeps, and for that whole minute `fire_at` still read as due.
+  # A dispatch can hang longer than the gap between sweeps, so the row rolls
+  # forward before dispatching or the next sweep runs it again.
   describe "while the dispatch is still running" do
     let!(:task) {
       Task.create!(user: user, name: "Good Morning", listener: "good-morning",

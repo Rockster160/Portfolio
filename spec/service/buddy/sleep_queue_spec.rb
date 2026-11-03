@@ -18,20 +18,6 @@ RSpec.describe "Buddy sleep queue", type: :model do
     allow(MonitorChannel).to receive(:broadcast_to)
   end
 
-  describe "holding while asleep" do
-    it "queues a Buddy message instead of dispatching when asleep" do
-      Buddy::SleepGuard.sleep_until!(user, 1.hour.from_now)
-      msg = conversation.byte_messages.create!(user: user, direction: :outbound, body: "do the dishes")
-
-      expect(ByteLocal).not_to receive(:deliver)
-      # simulate the dispatch branch the controller runs
-      expect(Buddy::SleepGuard.sleeping?(user)).to be(true)
-      msg.update!(state: :queued) if conversation.buddy? && Buddy::SleepGuard.sleeping?(user)
-
-      expect(msg.reload).to be_queued
-    end
-  end
-
   describe "waking + draining" do
     it "clears sleep and delivers every queued turn oldest-first" do
       Buddy::SleepGuard.sleep_until!(user, 1.hour.from_now)

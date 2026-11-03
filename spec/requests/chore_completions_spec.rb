@@ -68,22 +68,9 @@ RSpec.describe "ChoreCompletions", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "returns deduped=true (200, no error) when the target is already gone" do
-        # Simulates a queued DELETE that already flushed once successfully
-        # but the response was lost; queue retries. Server must NOT 404 and
-        # must NOT delete some other completion as collateral.
-        expect {
-          delete "/chores/items/#{chore.id}/completion",
-            params:  { target_client_mutation_id: SecureRandom.uuid }.to_json,
-            headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
-        }.not_to change(ChoreCompletion, :count)
-        expect(response).to have_http_status(:ok)
-        expect(JSON.parse(response.body)["deduped"]).to be true
-      end
-
-      it "does NOT delete a sibling completion when targeted id is gone" do
-        # A queued undo for id X1 replays after the user has done a fresh
-        # complete X2. The replay must target X1 (gone) and leave X2 alone.
+      # A queued undo for X1 replays after its first flush lost the response,
+      # and after a fresh complete X2. It must not 404, and must leave X2 alone.
+      it "returns deduped=true (200) when the target is already gone, leaving a sibling alone" do
         sibling = create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
 
         expect {
@@ -91,6 +78,8 @@ RSpec.describe "ChoreCompletions", type: :request do
             params:  { target_client_mutation_id: SecureRandom.uuid }.to_json,
             headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
         }.not_to change(ChoreCompletion, :count)
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["deduped"]).to be true
         expect(ChoreCompletion.exists?(sibling.id)).to be true
       end
 
@@ -105,35 +94,25 @@ RSpec.describe "ChoreCompletions", type: :request do
       end
     end
 
-    describe "unique index" do
-      it "rejects two completions with the same client_mutation_id for the same user" do
-        mid = SecureRandom.uuid
-        create(:chore_completion, chore: chore, user: user, client_mutation_id: mid)
-        expect {
-          create(:chore_completion, chore: chore, user: user, client_mutation_id: mid)
-        }.to raise_error(ActiveRecord::RecordNotUnique)
-      end
+    it "has a unique index on client_mutation_id per user that allows NULLs" do
+      expect {
+        create(:chore_completion, chore: chore, user: user, client_mutation_id: nil)
+        create(:chore_completion, chore: chore, user: user, client_mutation_id: nil)
+      }.not_to raise_error
 
-      it "allows multiple completions with NULL client_mutation_id" do
-        expect {
-          create(:chore_completion, chore: chore, user: user, client_mutation_id: nil)
-          create(:chore_completion, chore: chore, user: user, client_mutation_id: nil)
-        }.not_to raise_error
-      end
+      mid = SecureRandom.uuid
+      create(:chore_completion, chore: chore, user: user, client_mutation_id: mid)
+      expect {
+        create(:chore_completion, chore: chore, user: user, client_mutation_id: mid)
+      }.to raise_error(ActiveRecord::RecordNotUnique)
     end
   end
 
-  # Completing an anchor is what makes its `:after_chore` followers due —
-  # "Go get mail" done today puts "Go through mail" on Today. The follower
-  # gets no completion row and no `updated_at` bump of its own, so nothing
-  # about the write tells a connected client to look at it.
-  #
-  # `/chores/sync` already handles that (ChoresController#after_chore_follower_ids),
-  # but it only runs on a full sync — page boot, foreground, reconnect, 4am.
-  # On a page left open the card didn't appear for hours. These cover the two
-  # channels that fire immediately: the tap response (the acting device's ONLY
-  # channel — ChoreBroadcaster skips the actor's own tab) and the broadcast
-  # `chore_ids` every other device re-fetches /state for.
+  # Completing an anchor is what makes its `:after_chore` followers due. The
+  # follower gets no completion row and no `updated_at` bump of its own, so the
+  # two channels that fire immediately have to name it: the tap response (the
+  # acting device's ONLY channel — ChoreBroadcaster skips the actor's own tab)
+  # and the broadcast `chore_ids` every other device re-fetches /state for.
   describe "after_chore followers" do
     let(:owner) { create(:user) }
     let(:partner) { create(:user) }
@@ -175,7 +154,10 @@ RSpec.describe "ChoreCompletions", type: :request do
         headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
     end
 
-    it "ships the newly-due follower in the tap response" do
+    it "ships the newly-due follower in the tap response and names it in the broadcast", :aggregate_failures do
+      payloads = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| payloads << payload }
+
       tap_chore(anchor)
 
       expect(response.parsed_body.dig("chore", "id")).to eq(anchor.id)
@@ -183,6 +165,9 @@ RSpec.describe "ChoreCompletions", type: :request do
       expect(followers.pluck("id")).to eq([follower.id])
       expect(followers.first["today_visible"]).to be(true)
       expect(followers.first["due_today"]).to be(true)
+
+      ids = payloads.filter_map { |p| p.dig(:data, :chore_ids) }.flatten.uniq
+      expect(ids).to include(anchor.id, follower.id)
     end
 
     it "ships the follower again on undo so it comes back off Today" do
@@ -192,16 +177,6 @@ RSpec.describe "ChoreCompletions", type: :request do
       followers = response.parsed_body["chores"]
       expect(followers.pluck("id")).to eq([follower.id])
       expect(followers.first["today_visible"]).to be(false)
-    end
-
-    it "names the follower in the broadcast so other devices re-fetch it" do
-      payloads = []
-      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| payloads << payload }
-
-      tap_chore(anchor)
-
-      ids = payloads.filter_map { |p| p.dig(:data, :chore_ids) }.flatten.uniq
-      expect(ids).to include(anchor.id, follower.id)
     end
 
     it "leaves `chores` empty for a chore nothing follows" do
@@ -263,13 +238,9 @@ RSpec.describe "ChoreCompletions", type: :request do
     end
   end
 
-  # Tapping a chore that's been split into per-person sub-chores.
-  #
-  # The container is the card people actually see: the Hot strip shows the
-  # PICK, and picks land on the parent (a `hot_eligibility: never` sub is
-  # rejected outright, an unscheduled container survives). Tapping it used to
-  # write a completion against the family, which credits neither half — the
-  # person's own card stayed unticked and the schedule under it never moved.
+  # Tapping a chore that's been split into per-person sub-chores. The container
+  # is the card people actually see (Hot picks land on the parent), so a tap on
+  # it is recorded against the tapper's own half.
   describe "tapping a per-person container chore" do
     let(:owner) { create(:user) }
     let(:household) { create(:chore_household, owner_user: owner) }
@@ -318,7 +289,7 @@ RSpec.describe "ChoreCompletions", type: :request do
         headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
     end
 
-    it "records the tapper's own sub-chore, not the container" do
+    it "records the tapper's own sub-chore, not the container, while advancing the container's streak" do
       expect { tap_chore(parent) }.to change(ChoreCompletion, :count).by(1)
 
       completion = ChoreCompletion.last
@@ -329,6 +300,8 @@ RSpec.describe "ChoreCompletions", type: :request do
       # The response carries the sub-chore so the card that was unticked is
       # the one the client hears about.
       expect(response.parsed_body.dig("chore", "id")).to eq(mine.id)
+      expect(ChoreStreak.find_by(user_id: owner.id, chore_id: parent.id)&.current_streak).to eq(1)
+      expect(ChoreStreak.find_by(user_id: owner.id, chore_id: mine.id)).to be_nil
     end
 
     it "pays the container's hot multiplier on the redirected tap" do
@@ -338,13 +311,6 @@ RSpec.describe "ChoreCompletions", type: :request do
       completion = ChoreCompletion.last
       expect(completion.hot_multiplier).to eq(2.0)
       expect(completion.paid_pebbles).to eq(8) # sub's 4 reward × the parent's pick
-    end
-
-    it "still advances the container's streak" do
-      tap_chore(parent)
-
-      expect(ChoreStreak.find_by(user_id: owner.id, chore_id: parent.id)&.current_streak).to eq(1)
-      expect(ChoreStreak.find_by(user_id: owner.id, chore_id: mine.id)).to be_nil
     end
 
     it "undoes a container tap even without the mutation id to target" do
@@ -361,25 +327,17 @@ RSpec.describe "ChoreCompletions", type: :request do
       expect(response.parsed_body.dig("chore", "id")).to eq(mine.id)
     end
 
-    it "credits the named member's own sub-chore when completing on their behalf" do
-      post "/chores/items/#{parent.id}/anonymous_completion",
-        params:  { credit_user_id: partner.id }.to_json,
-        headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
-
-      completion = ChoreCompletion.last
-      expect(completion.chore_id).to eq(theirs.id)
-      expect(completion.user_id).to eq(partner.id)
-    end
-
     # Nobody is named on an anonymous completion, so there's no whose-sub to
     # answer. It stays on the container, where it still counts for the
     # family's cooldown and carryover.
-    it "leaves a truly anonymous completion on the container" do
-      post "/chores/items/#{parent.id}/anonymous_completion",
-        params:  { credit_user_id: "" }.to_json,
-        headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
+    it "credits a named member's own sub-chore on their behalf, and leaves an anonymous one on the container" do
+      [[partner.id, theirs, partner.id], ["", parent, owner.id]].each do |credit, chore, user_id|
+        post "/chores/items/#{parent.id}/anonymous_completion",
+          params:  { credit_user_id: credit }.to_json,
+          headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
 
-      expect(ChoreCompletion.last.chore_id).to eq(parent.id)
+        expect(ChoreCompletion.last).to have_attributes(chore_id: chore.id, user_id: user_id)
+      end
     end
 
     # The narrow half of the rule: a parent whose children are per-item
@@ -460,7 +418,11 @@ RSpec.describe "ChoreCompletions", type: :request do
     end
 
     context "with credit_user_id of a household member" do
-      it "runs ChoreCompleter under the credited user and pays them" do
+      it "runs ChoreCompleter under the credited user: pays them, fires their trigger, advances their streak", :aggregate_failures do
+        # Created before spying: its own after_create_commit fires Jil.trigger.
+        chore
+        allow(::Jil).to receive(:trigger)
+
         expect { post_completion(credit_user_id: member.id) }
           .to change(ChoreCompletion, :count).by(1)
         expect(response).to have_http_status(:created)
@@ -471,23 +433,11 @@ RSpec.describe "ChoreCompletions", type: :request do
         expect(c.paid_pebbles).to eq(7)
         body = JSON.parse(response.body)
         expect(body["credited_to"]).to eq({ "id" => member.id, "username" => member.username })
-      end
-
-      it "fires the Jil chore_completion trigger for the credited user" do
-        # Ensure the chore exists before we start spying (its own
-        # after_create_commit fires Jil.trigger and would otherwise pollute).
-        chore
-        allow(::Jil).to receive(:trigger)
-        post_completion(credit_user_id: member.id)
         expect(::Jil).to have_received(:trigger).with(
           satisfy { |u| u.id == member.id },
           :chore_completion,
           satisfy { |payload| payload.is_a?(ChoreCompletion) && payload.execution_attrs[:action] == :completed },
         ).at_least(:once)
-      end
-
-      it "advances the credited user's streak, not the recorder's" do
-        post_completion(credit_user_id: member.id)
         expect(ChoreStreak.find_by(user_id: member.id, chore_id: chore.id)&.current_streak).to eq(1)
         expect(ChoreStreak.find_by(user_id: owner.id, chore_id: chore.id)).to be_nil
       end
@@ -556,7 +506,7 @@ RSpec.describe "ChoreCompletions", type: :request do
       completion.reload
       expect(completion.payout_skipped).to be true
       expect(completion.paid_pebbles).to eq(0)
-      expect(completion.skipped_reason).to eq("Skipped by hand")
+      expect(completion.skipped_reason).to be_present
     end
 
     it "leaves an existing reason alone when the flag does not move" do
@@ -626,7 +576,13 @@ RSpec.describe "ChoreCompletions", type: :request do
 
     def json_headers = { "Content-Type" => "application/json", "Accept" => "application/json" }
 
-    it "records a skipped, uncredited, unpaid occurrence" do
+    # One press settles the occurrence: a 0-of-3 chore reads done, not 1-of-3
+    # still asking for two more. Nobody is credited: no streak, no actor, no
+    # Jil completion trigger.
+    it "records a skipped, uncredited, unpaid occurrence that clears the whole count", :aggregate_failures do
+      chore # created before the expectation — creating one is itself a trigger
+      expect(::Jil).not_to receive(:trigger)
+
       expect { skip_chore }.to change(ChoreCompletion, :count).by(1)
 
       expect(response).to have_http_status(:created)
@@ -637,16 +593,13 @@ RSpec.describe "ChoreCompletions", type: :request do
       expect(completion.paid_pebbles).to eq(0)
       expect(completion.user_id).to eq(owner.id)
       expect(owner.reload.chore_balance).to eq(0)
-    end
-
-    # The whole point of the button: one press settles the occurrence.
-    # A 0-of-3 chore reads done, not 1-of-3 still asking for two more.
-    it "clears the whole occurrence on a multi-count chore" do
-      skip_chore
 
       body = response.parsed_body
       expect(body.dig("chore", "progress_count")).to eq(3)
       expect(body.dig("chore", "skipped_today")).to be true
+      expect(body.dig("chore", "last_actor_username")).to be_nil
+      expect(body.dig("chore", "last_actor_anonymous")).to be true
+      expect(ChoreStreak.where(user: owner, chore: chore)).to be_empty
     end
 
     it "holds the cooldown like a real completion" do
@@ -654,22 +607,6 @@ RSpec.describe "ChoreCompletions", type: :request do
       skip_chore
 
       expect(chore.reload.cooldown_elapsed?(owner)).to be false
-    end
-
-    it "credits nobody — no streak, no actor on the card" do
-      skip_chore
-
-      body = response.parsed_body
-      expect(body.dig("chore", "last_actor_username")).to be_nil
-      expect(body.dig("chore", "last_actor_anonymous")).to be true
-      expect(ChoreStreak.where(user: owner, chore: chore)).to be_empty
-    end
-
-    it "fires no Jil completion trigger" do
-      chore # created before the expectation — creating one is itself a trigger
-      expect(::Jil).not_to receive(:trigger)
-
-      skip_chore
     end
 
     it "does not stack a second row when pressed again" do

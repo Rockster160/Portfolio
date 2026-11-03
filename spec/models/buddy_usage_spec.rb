@@ -147,13 +147,9 @@ RSpec.describe BuddyUsage do
   end
 
   describe "#cache_hit_rate" do
-    it "reports the share of input served from the prompt cache" do
-      row = described_class.record!(result, user: user, message: message)
+    it "reports the share of input served from the prompt cache, and zero when nothing was sent" do
+      expect(described_class.record!(result, user: user, message: message).cache_hit_rate).to eq(0.8)
 
-      expect(row.cache_hit_rate).to eq(0.8)
-    end
-
-    it "is zero rather than dividing by zero when nothing was sent" do
       row = described_class.record!(
         result(usage: { input_tokens: 0, cached_input_tokens: 0, output_tokens: 5, reasoning_tokens: 0 }),
         user: user, message: message,

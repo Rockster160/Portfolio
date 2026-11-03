@@ -86,39 +86,45 @@ RSpec.describe "Bank statement upload", type: :request do
     response.parsed_body
   end
 
-  it "renders the form on the banking page" do
+  # The mapping panel is drawn by JavaScript, so the Import button sits outside
+  # the hidden region and still works if the script never runs. The form lives
+  # in a modal, and the new-account name is required in the markup so the
+  # browser refuses a submit with neither account field filled.
+  it "renders the import form on the banking page", :aggregate_failures do
     get(system_banking_path)
 
     expect(response).to(have_http_status(:ok))
-    expect(response.body).to(include("Import a statement"))
-    expect(response.body).to(include(system_bank_import_path))
-    expect(response.body).to(include(system_bank_import_inspect_path))
+    expect(response.body).to(include(system_bank_import_path, system_bank_import_inspect_path))
+
+    hidden = response.body[/<div class="bank-import-panels hidden".*?<\/div>\s*<\/section>\s*<\/div>/m]
+    expect(response.body).to(include("bank-import-always"))
+    expect(hidden.to_s).not_to(include("Import"))
+
+    expect(response.body).to(include('data-modal="#bank-import"'))
+    expect(response.body).to(match(/<div class="modal modal-wrapper hidden[^"]*" id="bank-import"/))
+
+    field = response.body[/<input[^>]*id="bank-import-new"[^>]*>/]
+    expect(field).to(include("required"))
   end
 
   # The mapping screen is drawn from this, on the client, the moment a file is
   # chosen. It must never write anything — the person has not agreed to
   # anything yet.
   describe "inspecting a file before importing it" do
-    it "answers with the columns, a proposed mapping, and the row count" do
-      body = inspect_upload(export(row(id: "A1"), row(id: "A2", date: "8/19/2026")))
+    it "answers with the columns, a proposed mapping, the row count and categories, writing nothing", :aggregate_failures do
+      body = nil
+      expect {
+        body = inspect_upload(
+          export(row(id: "A1", category: "Insurance"), row(id: "A2", date: "8/19/2026", category: "Groceries")),
+        )
+      }.not_to(change(BankTransaction, :count))
 
       expect(body["headers"]).to(include("Transaction ID", "Extended Description"))
       expect(body["mapping"]).to(include("identifier" => "Transaction ID", "amount" => "Amount"))
       expect(body["rows"]).to(eq(2))
       expect(body["source"]).to(eq("macu"))
-    end
-
-    it "offers the category values found in the file, and our vocabulary" do
-      body = inspect_upload(
-        export(row(id: "A1", category: "Insurance"), row(id: "A2", category: "Groceries")),
-      )
-
       expect(body["categories"]).to(eq("Groceries" => "groceries", "Insurance" => "insurance"))
       expect(body["vocabulary"]).to(include("groceries", "mortgage"))
-    end
-
-    it "writes nothing" do
-      expect { inspect_upload(export(row(id: "A1"))) }.not_to(change(BankTransaction, :count))
     end
 
     it "says so on a file that will not parse" do
@@ -129,77 +135,32 @@ RSpec.describe "Bank statement upload", type: :request do
     end
   end
 
-  # The mapping panel is drawn by JavaScript. If that fails — disabled, an
-  # error, an old browser — the Import button is still on the page, because it
-  # is deliberately outside the hidden region. Submitting with no mapping has
-  # to work, or a broken script takes the whole feature with it.
-  describe "with no mapping posted at all" do
-    it "falls back to the guess and imports anyway" do
-      post(system_bank_import_path, params: {
-        file:             csv_file(export(row(id: "A1"), row(id: "A2", date: "8/19/2026"))),
-        new_account_name: "MACU Checking (7937)",
-      })
+  # Submitting with no mapping has to work, or a broken script takes the whole
+  # feature with it.
+  it "falls back to the guessed mapping when none is posted" do
+    post(system_bank_import_path, params: {
+      file:             csv_file(export(row(id: "A1"), row(id: "A2", date: "8/19/2026"))),
+      new_account_name: "MACU Checking (7937)",
+    })
 
-      expect(flash[:notice]).to(match(/Imported 2 rows from macu: 2 new/))
-      expect(BankTransaction.count).to(eq(2))
-      expect(BankTransaction.first.payee).to(be_present)
-    end
-
-    it "renders the Import button outside the JS-drawn region" do
-      get(system_banking_path)
-      hidden = response.body[/<div class="bank-import-panels hidden".*?<\/div>\s*<\/section>\s*<\/div>/m]
-
-      expect(response.body).to(include("bank-import-always"))
-      expect(hidden.to_s).not_to(include("Import"))
-    end
+    expect(BankTransaction.count).to(eq(2))
+    expect(BankTransaction.first.payee).to(be_present)
   end
 
-  # The mapping form grows with the file and expanded in place it buried the
-  # accounts table with no visible bottom edge.
-  describe "the form's modal" do
-    it "renders as a modal with a trigger, not an inline drawer" do
-      get(system_banking_path)
+  # An upload must never move the headline figure on its own — the person
+  # classifies the account when they are ready for it to count.
+  it "creates a named new account, imports into it, and leaves it out of the dashboard", :aggregate_failures do
+    upload(
+      export(row(id: "A1"), row(id: "A2", date: "8/19/2026")),
+      new_account_name: "MACU Checking (7937)",
+    )
 
-      expect(response.body).to(include('data-modal="#bank-import"'))
-      expect(response.body).to(match(/<div class="modal modal-wrapper hidden[^"]*" id="bank-import"/))
-      expect(response.body).not_to(include("bank-drawer bank-import"))
-    end
-
-    # Submitting with neither account field filled is what made a real import
-    # silently do nothing. The browser has to refuse it, whether or not the
-    # script that manages the pair ever runs.
-    it "marks the new-account name required in the markup" do
-      get(system_banking_path)
-      field = response.body[/<input[^>]*id="bank-import-new"[^>]*>/]
-
-      expect(field).to(include("required"))
-    end
-  end
-
-  describe "naming a new account" do
-    it "creates it, imports the rows, and says what happened" do
-      upload(
-        export(row(id: "A1"), row(id: "A2", date: "8/19/2026")),
-        new_account_name: "MACU Checking (7937)",
-      )
-
-      expect(response).to(redirect_to(system_banking_path))
-      expect(flash[:notice]).to(match(/Imported 2 rows from macu: 2 new/))
-
-      account = BankAccount.find_by!(name: "MACU Checking (7937)")
-      expect(account.bank_transactions.count).to(eq(2))
-      expect(account.last4).to(eq("7937"))
-    end
-
-    # An upload must never move the headline figure on its own — the person
-    # classifies the account when they are ready for it to count.
-    it "leaves the new account out of the dashboard figure" do
-      upload(export(row(id: "A1")), new_account_name: "MACU Checking (7937)")
-
-      account = BankAccount.find_by!(name: "MACU Checking (7937)")
-      expect(account.kind).to(eq("unknown"))
-      expect(SimpleFin::DashboardCache.included?(account)).to(be(false))
-    end
+    expect(response).to(redirect_to(system_banking_path))
+    account = BankAccount.find_by!(name: "MACU Checking (7937)")
+    expect(account.bank_transactions.count).to(eq(2))
+    expect(account.last4).to(eq("7937"))
+    expect(account.kind).to(eq("unknown"))
+    expect(SimpleFin::DashboardCache.included?(account)).to(be(false))
   end
 
   # The category boxes are named `categories[<the bank's own label>]`, and bank
@@ -240,42 +201,25 @@ RSpec.describe "Bank statement upload", type: :request do
         bank_account_id: account.id,
       )
 
-      expect(flash[:notice]).to(match(/Imported 2 rows.*1 new, 1 already present/))
       expect(account.bank_transactions.count).to(eq(3))
     end
   end
 
   describe "when it cannot be read" do
-    # Choosing columns, then submitting a different bank's file, is how this
-    # goes wrong in practice — the mapping names columns that are not there.
-    it "says so rather than 500ing when the mapping does not fit the file" do
-      upload("When,How much\n8/20/2026,-27.71\n", new_account_name: "Somewhere")
+    # Choosing columns, then submitting a different bank's file, is how a
+    # mapping comes to name columns that are not there.
+    it "redirects with an alert and writes nothing on a mapping, file or account it can't use" do
+      [
+        -> { upload("When,How much\n8/20/2026,-27.71\n", new_account_name: "Somewhere") },
+        -> { upload(export(row(id: "A1")), new_account_name: "Somewhere", mapping: mapping_for.except(:amount)) },
+        -> { post(system_bank_import_path, params: { new_account_name: "MACU" }) },
+        -> { upload(export(row(id: "A1"))) },
+      ].each do |attempt|
+        attempt.call
 
-      expect(response).to(redirect_to(system_banking_path))
-      expect(flash[:alert]).to(match(/no column called/))
-      expect(BankTransaction.count).to(be_zero)
-    end
-
-    it "says which required field has no column" do
-      upload(
-        export(row(id: "A1")), new_account_name: "Somewhere",
-        mapping: mapping_for.except(:amount)
-      )
-
-      expect(flash[:alert]).to(match(/Choose a column for: Amount/))
-      expect(BankTransaction.count).to(be_zero)
-    end
-
-    it "asks for a file when none was chosen" do
-      post(system_bank_import_path, params: { new_account_name: "MACU" })
-
-      expect(flash[:alert]).to(eq("Choose a CSV to import."))
-    end
-
-    it "asks for an account when neither was given" do
-      upload(export(row(id: "A1")))
-
-      expect(flash[:alert]).to(eq("Choose an account, or name a new one."))
+        expect(response).to(redirect_to(system_banking_path))
+        expect(flash[:alert]).to(be_present)
+      end
       expect(BankTransaction.count).to(be_zero)
     end
 

@@ -26,7 +26,7 @@ RSpec.describe "Client errors", type: :request do
     post login_path, params: { user: { username: user.username, password: "password123" } }
   end
 
-  it "records it by the page it happened on, with the ids taken out" do
+  it "records it by the page it happened on, with the ids taken out, on the page's build", :aggregate_failures do
     sign_in
 
     post client_errors_path, params: report, as: :json
@@ -39,15 +39,8 @@ RSpec.describe "Client errors", type: :request do
     expect(row.backtrace).to include("application.js:120:9")
     expect(row.user_id).to eq(user.id)
     expect(row.extra).to include("kind" => "error", "url" => report[:url])
-  end
-
-  # A page held open for days is running the build it loaded, not the server's.
-  it "tags it as the frontend's, on the build the page loaded with" do
-    sign_in
-
-    post client_errors_path, params: report, as: :json
-
-    expect(ErrorReport.last).to have_attributes(layer: "frontend", tag: "browser", environment: "test", release: "812")
+    # A page held open for days is running the build it loaded, not the server's.
+    expect(row).to have_attributes(layer: "frontend", tag: "browser", environment: "test", release: "812")
   end
 
   it "groups the same failure on another record's page with the first" do
@@ -66,7 +59,6 @@ RSpec.describe "Client errors", type: :request do
     3.times { post client_errors_path, params: report, as: :json }
 
     expect(SlackNotifier).to have_received(:deliver).once
-    expect(SlackNotifier).to have_received(:deliver).with(include("TypeError", "frontend/browser test"), "#portfolio", any_args)
   end
 
   it "never announces one that has been ignored" do

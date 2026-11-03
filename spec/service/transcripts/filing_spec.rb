@@ -72,24 +72,17 @@ RSpec.describe Transcripts::Filing do
   describe "no answer worth acting on" do
     # The expensive mistake: a debrief filed on the wrong company reads as a
     # conversation he never had, and nothing on the page would say otherwise.
-    it "leaves a recording alone when two interviews could both be it" do
+    # Unfiled, but not unanswerable: the index asks with the candidates.
+    it "leaves a recording alone when two interviews could both be it, naming both as candidates" do
       booking(job, Time.zone.parse("2026-10-29 14:00"), minutes: 60)
       booking(other, Time.zone.parse("2026-10-29 14:30"), minutes: 60)
       transcript = recording!(Time.zone.parse("2026-10-29 14:05"), minutes: 55)
 
       expect(described_class.call(transcript)).to be_nil
       expect(transcript.reload).not_to be_filed
-    end
-
-    # Unfiled, but not unanswerable: the index asks with these.
-    it "still names both of them as candidates" do
-      booking(job, Time.zone.parse("2026-10-29 14:00"), minutes: 60)
-      booking(other, Time.zone.parse("2026-10-29 14:30"), minutes: 60)
-      transcript = recording!(Time.zone.parse("2026-10-29 14:05"), minutes: 55)
-
-      found = described_class.candidates(transcript).map { |note| note.job_application.company }
-
-      expect(found).to contain_exactly("Podium", "Brightwheel")
+      expect(described_class.candidates(transcript).map { |note| note.job_application.company }).to contain_exactly(
+        "Podium", "Brightwheel",
+      )
     end
 
     it "leaves a recording alone when nothing was booked anywhere near it" do

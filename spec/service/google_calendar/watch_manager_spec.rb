@@ -62,35 +62,20 @@ RSpec.describe GoogleCalendar::WatchManager do
       expect(agenda.watch_expires_at).to be_nil
     end
 
-    it "swallows 404/410 from a channel that's already gone server-side" do
-      agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
-      allow(api).to receive(:stop_watch).and_raise(
-        RestClient::NotFound.new(instance_double(RestClient::Response, code: 404, body: "")),
-      )
-
-      expect { described_class.stop!(agenda) }.not_to raise_error
-      expect(agenda.reload.watch_channel_id).to be_nil
-    end
-
     # The disconnect path destroys the agenda the instant this returns, so
-    # anything raised here is a 500 on a button whose whole job is removal —
-    # and the calendar stays connected.
-    it "swallows a token Google no longer accepts" do
-      agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
-      allow(api).to receive(:stop_watch).and_raise(
+    # anything raised here is a 500 on a button whose whole job is removal.
+    it "swallows a channel already gone, a revoked token, or Google being unreachable" do
+      [
+        RestClient::NotFound.new(instance_double(RestClient::Response, code: 404, body: "")),
         RestClient::Unauthorized.new(instance_double(RestClient::Response, code: 401, body: "")),
-      )
+        SocketError.new("getaddrinfo"),
+      ].each do |error|
+        agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
+        allow(api).to receive(:stop_watch).and_raise(error)
 
-      expect { described_class.stop!(agenda) }.not_to raise_error
-      expect(agenda.reload.watch_channel_id).to be_nil
-    end
-
-    it "swallows Google being unreachable" do
-      agenda.update!(watch_channel_id: "ch-1", watch_resource_id: "res-1")
-      allow(api).to receive(:stop_watch).and_raise(SocketError.new("getaddrinfo"))
-
-      expect { described_class.stop!(agenda) }.not_to raise_error
-      expect(agenda.reload.watch_resource_id).to be_nil
+        expect { described_class.stop!(agenda) }.not_to raise_error
+        expect(agenda.reload.watch_channel_id).to be_nil, error.class.name
+      end
     end
   end
 
@@ -106,22 +91,17 @@ RSpec.describe GoogleCalendar::WatchManager do
   end
 
   describe "watch failure handling" do
-    it "captures Forbidden into watch_failed_at and returns nil" do
-      err = RestClient::Forbidden.new(instance_double(RestClient::Response, code: 403, body: "{}"))
-      allow(api).to receive(:watch_events).and_raise(err)
+    it "captures a Forbidden or BadRequest denial into watch_failed_at and returns nil" do
+      [RestClient::Forbidden, RestClient::BadRequest].each do |klass|
+        agenda.update!(watch_failed_at: nil)
+        allow(api).to receive(:watch_events).and_raise(
+          klass.new(instance_double(RestClient::Response, code: 400, body: "{}")),
+        )
 
-      result = described_class.start!(agenda)
-      expect(result).to be_nil
-      expect(agenda.reload.watch_failed_at).to be_present
-      expect(agenda.watch_channel_id).to be_nil
-    end
-
-    it "captures BadRequest the same way (some Google denies use 400)" do
-      err = RestClient::BadRequest.new(instance_double(RestClient::Response, code: 400, body: "{}"))
-      allow(api).to receive(:watch_events).and_raise(err)
-
-      described_class.start!(agenda)
-      expect(agenda.reload.watch_failed_at).to be_present
+        expect(described_class.start!(agenda)).to be_nil
+        expect(agenda.reload.watch_failed_at).to be_present, klass.name
+        expect(agenda.watch_channel_id).to be_nil
+      end
     end
 
     it "clears watch_failed_at on a successful start" do

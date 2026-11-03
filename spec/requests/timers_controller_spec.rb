@@ -8,15 +8,10 @@ RSpec.describe TimersController do
   end
 
   describe "GET /timers" do
-    it "renders the page shell" do
-      get timers_path
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("timers-page")
-      expect(response.body).to include("timers-bootstrap")
-    end
-
-    it "seeds default quick buttons on first visit" do
+    it "renders the page shell, seeding default quick buttons on first visit" do
       expect { get timers_path }.to change { user.timer_quick_buttons.count }.from(0).to(7)
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("timers-page", "timers-bootstrap")
     end
   end
 
@@ -167,18 +162,13 @@ RSpec.describe TimersController do
   describe "DELETE /timers/items/:id" do
     let!(:timer) { create(:timer, user: user, duration_ms: 60_000) }
 
-    it "hard-deletes the row so it can't resurrect on reload" do
+    it "hard-deletes the row and its share tokens so it can't resurrect on reload" do
+      TimerShareToken.create!(user: user, timer: timer)
       expect {
         delete timer_routes_item_path(timer), as: :json
       }.to change { Timer.unscoped.where(id: timer.id).count }.from(1).to(0)
       expect(response).to have_http_status(:ok)
-    end
-
-    it "removes share tokens via dependent: :destroy" do
-      TimerShareToken.create!(user: user, timer: timer)
-      expect {
-        delete timer_routes_item_path(timer), as: :json
-      }.to change { TimerShareToken.where(timer_id: timer.id).count }.from(1).to(0)
+      expect(TimerShareToken.where(timer_id: timer.id)).to be_empty
     end
   end
 
@@ -187,21 +177,15 @@ RSpec.describe TimersController do
       create(:timer, user: user, kind: :counter, duration_ms: nil, value: 43, step: 3)
     }
 
-    it "scales `by` through the counter's step" do
-      post timer_routes_increment_item_path(counter), params: { by: 1 }, as: :json
-      expect(counter.reload.value).to eq(46)
-    end
+    it "scales `by` through the counter's step, and applies `amount` as typed" do
+      [[{ by: 1 }, 46], [{ amount: 18 }, 61], [{ amount: -18 }, 25]].each do |params, value|
+        counter.update!(value: 43)
+        post timer_routes_increment_item_path(counter), params: params, as: :json
 
-    it "applies `amount` as typed, whatever the step is" do
-      post timer_routes_increment_item_path(counter), params: { amount: 18 }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(counter.reload.value).to eq(61)
-      expect(response.parsed_body.dig("timer", "value")).to eq(61)
-    end
-
-    it "applies a negative `amount`" do
-      post timer_routes_increment_item_path(counter), params: { amount: -18 }, as: :json
-      expect(counter.reload.value).to eq(25)
+        expect(response).to have_http_status(:ok)
+        expect(counter.reload.value).to eq(value), params.to_s
+        expect(response.parsed_body.dig("timer", "value")).to eq(value)
+      end
     end
   end
 
@@ -217,14 +201,10 @@ RSpec.describe TimersController do
         as: :json
     end
 
-    it "creates one timer per row on the page in a single request" do
+    it "creates one timer per row in a single request, the first name typed at the top" do
       expect { bulk(%w[Rocco Eve Chelsea]) }.to change { page.timers.count }.from(0).to(3)
       expect(response).to have_http_status(:created)
       expect(response.parsed_body["timers"].map { |t| t["name"] }).to eq(%w[Rocco Eve Chelsea])
-    end
-
-    it "orders them so the first name typed sits at the top of the board" do
-      bulk(%w[Rocco Eve Chelsea])
       expect(page.timers.ordered.map(&:name)).to eq(%w[Rocco Eve Chelsea])
     end
 
@@ -234,13 +214,9 @@ RSpec.describe TimersController do
       expect(page.timers.ordered.map(&:name)).to eq(%w[Chelsea Jack Rocco Eve])
     end
 
-    it "keeps callbacks sent with a row" do
-      bulk(%w[Steep], callbacks: [{ id: "cb", when: { type: :complete }, then: { type: :sound, chime: :soft } }])
+    it "keeps callbacks and card size sent with a row" do
+      bulk(%w[Steep], width: 3, callbacks: [{ id: "cb", when: { type: :complete }, then: { type: :sound, chime: :soft } }])
       expect(page.timers.first.callbacks.first["then"]["chime"]).to eq("soft")
-    end
-
-    it "keeps a row's card size" do
-      bulk(%w[Rocco], width: 3)
       expect(page.timers.first.width).to eq(3)
     end
 

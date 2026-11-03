@@ -48,48 +48,24 @@ RSpec.describe JobSearch do
   end
 
   describe "what it looks through" do
-    it "finds a role" do
-      job("Netflix", role: "Staff Engineer")
-
-      expect(search("staff")).to eq(["Netflix"])
-    end
-
-    it "finds who a note says you spoke to" do
-      job("Netflix").notes.create!(tag: :recruiter_call, spoke_to: "Dana Whitfield")
-
-      expect(search("whitfield")).to eq(["Netflix"])
-    end
-
-    it "finds the words in a note" do
-      job("Netflix").notes.create!(tag: :note, body: "Mostly Rails, some Go.")
-
-      expect(search("rails")).to eq(["Netflix"])
-    end
-
-    it "finds a status" do
-      job("Netflix", status: :rejected)
-      job("Anrok")
-
-      expect(search("rejected")).to eq(["Netflix"])
-    end
-
-    it "finds what kind of thing a note was" do
-      job("Netflix").notes.create!(tag: :take_home, body: "Two hours.")
-      job("Anrok")
-
-      expect(search("take-home")).to eq(["Netflix"])
-    end
-
-    it "finds a link" do
+    it "finds a role, who was spoken to, note words, a status, a note's kind, a link and a source" do
+      job("Quill", role: "Staff Engineer")
+      job("Ember").notes.create!(tag: :recruiter_call, spoke_to: "Dana Whitfield")
+      job("Harbor").notes.create!(tag: :note, body: "Mostly Rails, some Go.")
+      job("Juniper", status: :rejected)
+      job("Orchid").notes.create!(tag: :take_home, body: "Two hours.")
       job("Samsara", url: "https://www.samsara.com/company/careers/roles/7588828")
-
-      expect(search("7588828")).to eq(["Samsara"])
-    end
-
-    it "finds where the listing came from" do
       job("TheLadders", source: "LinkedIn")
 
-      expect(search("linkedin")).to eq(["TheLadders"])
+      {
+        "staff"     => ["Quill"],
+        "whitfield" => ["Ember"],
+        "rails"     => ["Harbor"],
+        "rejected"  => ["Juniper"],
+        "take-home" => ["Orchid"],
+        "7588828"   => ["Samsara"],
+        "linkedin"  => ["TheLadders"],
+      }.each { |query, found| expect(search(query)).to eq(found), query }
     end
   end
 

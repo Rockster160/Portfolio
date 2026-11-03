@@ -1,17 +1,10 @@
 require "rails_helper"
 
-# Eve turned Suki's text up and the messages grew, but the receipts, the
-# tool-use rows and the timestamps stayed exactly as small as they were.
-#
 # `--byte-font-scale` is applied in ONE place — `font-size` on `.byte-msg` —
-# and the comment there states the invariant the whole feature rests on:
-# "Everything inside a bubble either inherits this or is expressed as a
-# percentage of it." Nothing enforced that, so anything added later carrying a
-# plain `font-size: 11.5px` silently opted itself out. Ten rules had.
-#
-# Asserted against the COMPILED cascade rather than the source, because the bug
-# isn't visible in any single edit. It's a property of the whole sheet, which is
-# the one thing a person reading a diff cannot see.
+# and everything inside a bubble must inherit it or be a percentage of it. A
+# plain px size anywhere in a bubble opts that element out of the scale.
+# Asserted against the COMPILED cascade, since it is a property of the whole
+# sheet rather than of any one rule.
 RSpec.describe "Byte thread font scaling" do
   # The parts of a message bubble a reader reads. The pet's own chrome (hero,
   # drawer, kiosk pad, header) is deliberately not in scope, and neither is the

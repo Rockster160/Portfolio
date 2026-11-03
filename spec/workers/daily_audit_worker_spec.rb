@@ -10,13 +10,9 @@ RSpec.describe DailyAuditWorker do
     allow(BuddyDeliverWorker).to receive(:perform_async)
   end
 
-  it "runs the audit" do
-    expect(ByteDailyAudit).to receive(:run!).with(user)
+  it "runs the audit, posting its prompt into the thread" do
+    expect(ByteDailyAudit).to receive(:run!).with(user).and_call_original
 
-    described_class.new.perform
-  end
-
-  it "posts the prompt into the thread" do
     expect { described_class.new.perform }.to change { ByteDailyAudit.conversation(user).byte_messages.count }.by(1)
   end
 
@@ -31,23 +27,16 @@ RSpec.describe DailyAuditWorker do
     expect { described_class.new.perform }.not_to change(counted, :call)
   end
 
-  # The dev box runs the same cron schedule against its own database, so
-  # `already_ran?` sees nothing and lets a second audit through — one that
-  # publishes into the PRODUCTION thread, because the Mac reports to a single
-  # callback. Prod 4935, 5040 and 5100 are the three that got out that way.
+  # The dev box runs the same cron schedule against its own database, where
+  # `already_ran?` sees nothing, and the Mac reports into the PRODUCTION thread.
   context "when it is not production" do
     before { allow(Rails.env).to receive(:production?).and_return(false) }
 
-    it "posts nothing" do
+    it "does not run the audit or post anything" do
+      expect(ByteDailyAudit).not_to receive(:run!)
       counted = -> { ByteDailyAudit.conversation(user).byte_messages.count }
 
       expect { described_class.new.perform }.not_to change(counted, :call)
-    end
-
-    it "does not run the audit at all" do
-      expect(ByteDailyAudit).not_to receive(:run!)
-
-      described_class.new.perform
     end
   end
 

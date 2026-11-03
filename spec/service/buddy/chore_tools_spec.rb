@@ -87,10 +87,8 @@ RSpec.describe "Buddy chore tools" do
     end
   end
 
-  # Prod 2440: "Log 2 water as Hint Raspberry and then 3 water without a note"
-  # created only the 2 noted waters — the 3 un-noted ones collapsed into a
-  # duplicate of the first call (note was in VOLATILE_ARGS + missing from the
-  # merge_key), while the reply claimed all 5 went in.
+  # A note is part of a completion's identity, so batches that differ only by
+  # note must not collapse into one.
   describe "a note on a completion" do
     let(:user)   { FactoryBot.create(:user) }
     let!(:chore) { FactoryBot.create(:chore, name: "8oz Water", created_by_user: user) }
@@ -150,10 +148,7 @@ RSpec.describe "Buddy chore tools" do
   end
 
   # A chore asked for now is a chore for now. `marked_due_at` is the "appears on
-  # Today" stamp (ChoreSerializer#today_visible?), and create_chore only set it
-  # when the model passed an explicit `due` — so "add calibrating the printer as a
-  # 5p chore" got a cheerful "it's on there" and landed on nothing: not the Today
-  # tab, not Buddy's pending list.
+  # Today" stamp (ChoreSerializer#today_visible?).
   describe "a new chore due today" do
     let(:user)       { create(:user) }
     let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
@@ -202,9 +197,7 @@ RSpec.describe "Buddy chore tools" do
       expect(ChoreDay.current(user, at: chore.marked_due_at)).to eq(today)
     end
 
-    # The other half. Buddy's buckets called ANY marked-due chore backlog, with no
-    # look at the date, so the chore it had just stamped for today came back
-    # described as overdue.
+    # A stamp only means backlog when it is from before today.
     describe "which list Buddy sees it on" do
       def buckets
         Buddy::Context.build(user, convo)
@@ -216,17 +209,12 @@ RSpec.describe "Buddy chore tools" do
         )
       end
 
-      it "puts a chore stamped for today on the pending list, not the backlog" do
+      it "puts a chore stamped for today on the pending list as due today, not the backlog" do
         chore!(marked_at: ChoreDay.starts_at(today, user) + 1.hour)
 
         expect(buckets[:chores_pending_today].pluck(:name)).to include("Calibrate printer")
-        expect(buckets[:chores_overdue_backlog]).to be_empty
-      end
-
-      it "marks it as actually due today rather than merely existing" do
-        chore!(marked_at: ChoreDay.starts_at(today, user) + 1.hour)
-
         expect(buckets[:chores_pending_today].first[:due_today]).to be(true)
+        expect(buckets[:chores_overdue_backlog]).to be_empty
       end
 
       it "still calls a stamp from before today a carryover" do
@@ -243,15 +231,6 @@ RSpec.describe "Buddy chore tools" do
         expect(buckets[:chores_pending_today]).to be_empty
         expect(buckets[:chores_overdue_backlog]).to be_empty
       end
-    end
-
-    it "says on the row that it's for today" do
-      result = Buddy::ProposalBuilder.create(
-        user: user, byte_message: msg,
-        markers: [{ tool_name: :create_chore, payload: { name: "Calibrate printer" }, span: [0, 0] }]
-      )
-
-      expect(result[:action].buttons.first["sublabel"].to_s).to include("due")
     end
   end
 
@@ -323,37 +302,26 @@ RSpec.describe "Buddy chore tools" do
     end
 
     describe "create_chore" do
-      it "sets the priority the person asked for" do
-        result, = run(:create_chore, { name: "Fix the roof leak", priority: "critical" })
+      it "sets the priority asked for (on the label too), defaults to normal, and rejects a non-level" do
+        result, resolved, tool = run(:create_chore, { name: "Fix the roof leak", priority: "critical" })
         expect(Chore.find(result[:chore_id]).priority).to eq("critical")
-      end
+        expect(tool[:label].call(resolved, Buddy::ToolContext.new(user))[:sub]).to include("critical")
 
-      it "leaves it at normal when they didn't say" do
         result, = run(:create_chore, { name: "Water the ficus" })
         expect(Chore.find(result[:chore_id]).priority).to eq("normal")
-      end
 
-      it "rejects a word that isn't a level instead of silently defaulting" do
         expect { run(:create_chore, { name: "Fix the roof", priority: "urgent" }) }
           .to raise_error(/unknown priority/)
-      end
-
-      it "shows the priority on the proposal label" do
-        _, resolved, tool = run(:create_chore, { name: "Fix the roof leak", priority: "high" })
-        label = tool[:label].call(resolved, Buddy::ToolContext.new(user))
-        expect(label[:sub]).to include("high priority")
       end
     end
 
     describe "edit_chore" do
       let!(:chore) { create(:chore, created_by_user: user, name: "Litter Box", priority: :normal) }
 
-      it "moves an existing chore's priority" do
+      it "moves an existing chore's priority, normalizing casing" do
         run(:edit_chore, { chore: "Litter Box", priority: "high" })
         expect(chore.reload.priority).to eq("high")
-      end
 
-      it "normalizes casing" do
         run(:edit_chore, { chore: "Litter Box", priority: "  Critical " })
         expect(chore.reload.priority).to eq("critical")
       end
@@ -378,18 +346,12 @@ RSpec.describe "Buddy chore tools" do
       end
     end
 
-    describe "context visibility" do
-      it "surfaces a non-default priority on the chore's context row" do
-        chore = create(:chore, created_by_user: user, priority: :critical)
-        slim = Buddy::Context.send(:slim_chore, chore)
-        expect(slim[:priority]).to eq("critical")
-      end
+    it "surfaces a non-default priority on the chore's context row, and omits an ordinary one" do
+      critical = create(:chore, created_by_user: user, priority: :critical)
+      ordinary = create(:chore, created_by_user: user, priority: :normal)
 
-      it "omits the field entirely for an ordinary chore" do
-        chore = create(:chore, created_by_user: user, priority: :normal)
-        slim = Buddy::Context.send(:slim_chore, chore)
-        expect(slim).not_to have_key(:priority)
-      end
+      expect(Buddy::Context.send(:slim_chore, critical)[:priority]).to eq("critical")
+      expect(Buddy::Context.send(:slim_chore, ordinary)).not_to have_key(:priority)
     end
   end
 
@@ -458,10 +420,7 @@ RSpec.describe "Buddy chore tools" do
     end
   end
 
-  # Prod 1227-1235: Buddy marked two waters, forgot the "Hint Raspberry" note, and
-  # then spent four exchanges insisting it couldn't put the note on afterwards -
-  # undoing an unrelated chore along the way. There was no tool for changing a
-  # completion that had already landed. There is now.
+  # Changing a completion that has already landed.
   describe "edit_chore_completion" do
     let(:user)  { create(:user) }
     let(:chore) { create(:chore, created_by_user: user, name: "8oz Water") }
@@ -499,7 +458,6 @@ RSpec.describe "Buddy chore tools" do
 
       expect(completion.reload.note).to eq("Hint Raspberry")
       expect(out[:result][:changed]).to eq(1)
-      expect(tool[:receipt].call(out[:result], ctx)).to eq("Updated the 8oz Water completion ✓")
     end
 
     # complete_chore(count: 2) writes two rows, so "both of them" has to reach
@@ -514,8 +472,7 @@ RSpec.describe "Buddy chore tools" do
       expect(newer.reload.note).to eq("Hint Raspberry")
       expect(older.reload.note).to eq("Hint Raspberry")
       expect(oldest.reload.note).to be_blank
-      expect(out[:confirm][:summary]).to eq("Update 2 8oz Water completions?")
-      expect(out[:label][:title]).to eq("2× 8oz Water")
+      expect(out[:result][:changed]).to eq(2)
     end
 
     it "corrects the time and moves the chore-day with it" do
@@ -529,25 +486,16 @@ RSpec.describe "Buddy chore tools" do
       expect(ChoreStreak).to have_received(:rebuild_for!).with(user, chore)
     end
 
-    it "refuses a call that changes nothing" do
-      complete!(at: 5.minutes.ago)
-
-      expect { tool[:confirm].call({ chore: "water" }, ctx) }
-        .to raise_error(/pass a note or a time/)
-    end
-
-    it "says so when there's no completion to edit" do
+    it "refuses when there's no completion to edit" do
       expect { tool[:confirm].call({ chore: "water", note: "x" }, ctx) }
         .to raise_error(/no matching completion/)
     end
 
-    it "asks for fewer than requested rather than failing when only one exists" do
+    it "refuses a call that changes nothing, and edits fewer than requested when only one exists" do
       complete!(at: 5.minutes.ago)
 
-      out = run({ chore: "water", note: "Hint Raspberry", recent: 2 })
-
-      expect(out[:result][:changed]).to eq(1)
-      expect(out[:confirm][:summary]).to eq("Update the 8oz Water completion?")
+      expect { tool[:confirm].call({ chore: "water" }, ctx) }.to raise_error(/note or a time/)
+      expect(run({ chore: "water", note: "Hint Raspberry", recent: 2 })[:result][:changed]).to eq(1)
     end
 
     describe "undo" do

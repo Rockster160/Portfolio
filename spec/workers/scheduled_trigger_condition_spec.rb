@@ -50,24 +50,15 @@ RSpec.describe "ScheduledTrigger conditions" do
     expect(::Jil).to have_received(:trigger).with(user, "custom", hash_including(:timestamp), any_args)
   end
 
-  it "does not fire once the condition stops holding" do
-    completed!
-    trigger!(condition: condition)
-
-    run!
-
-    expect(::Jil).not_to have_received(:trigger).with(user, "custom", any_args)
-  end
-
-  # A skipped trigger is a FINISHED trigger. Left un-started or un-completed it
-  # would be picked up again on the next sweep, every few seconds, forever —
-  # and nothing downstream should have to learn a third state.
-  it "completes the row either way, so a skipped one isn't stuck" do
+  # A skipped trigger is a FINISHED trigger; left un-completed it would be
+  # picked up again on every sweep.
+  it "does not fire once the condition stops holding, and completes the row anyway" do
     completed!
     sched = trigger!(condition: condition)
 
     run!
 
+    expect(::Jil).not_to have_received(:trigger).with(user, "custom", any_args)
     expect(sched.reload.started_at).to be_present
     expect(sched.completed_at).to be_present
   end

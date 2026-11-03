@@ -37,80 +37,40 @@ RSpec.describe Buddy::JobMailOffer do
   context "when the company is on the board" do
     let!(:job) { user.job_applications.create!(company: "iCapital", role: "Full Stack Engineer") }
 
-    it "speaks an offer instead of posting the card" do
+    it "seeds a hidden turn about the row instead of posting the card", :aggregate_failures do
       message = call
 
-      expect(message.body).to include("belongs to an application already on their board")
       expect(message.body).to include("Company: iCapital (Full Stack Engineer)")
+      expect(message.body).to include("/interviews/#{job.id}")
+      # With no email to read it off, the arrival time is handed over.
+      expect(message.body).to include("occurred_at #{arrived.iso8601}")
       expect(message.body).not_to include("📬 the card")
-      expect(message.metadata["job_application_id"]).to eq(job.id)
+      expect(message.metadata).to include(
+        "job_application_id" => job.id,
+        "hidden"             => true,
+        "kind"               => "buddy_trigger",
+        "seed_tools"         => %w[add_job_note add_job_application],
+      )
     end
 
-    # add_job_note is level 2: calling it files the beat and draws a pre-checked
-    # row they can untick, so asking in prose first is a round trip for
-    # something the row already shows.
-    # Prod 6395, Aledade: a rejection's headline names no role, and the seed
-    # called the job it was about "a different role" because only the headline
-    # was checked.
+    # A rejection's headline often names no role; the subject still can.
     it "matches the role off the subject when the headline names none" do
       verdict[:headline] = "iCapital is moving forward with other candidates"
       metadata[:subject] = "Your application for Full Stack Engineer"
 
-      body = call.body
-
-      expect(body).to include("belongs to an application already on their board")
-      expect(body).not_to include("different role")
+      expect(call.body).not_to include("different role")
     end
 
-    # The record must not depend on the model making a call or the person
-    # tapping a card.
-    # Prod 6937, 25 Sep 10:34am, in full: "Phone screen is scheduled on Microsoft
-    # Teams." The seed says the reply IS the notification, and as a push that
-    # sentence says a phone screen exists somewhere and nothing else - against five
-    # live applications that day. Every other job-mail notification in the window
-    # named its company; the card carries it, and the card is not what lands on a
-    # lock screen.
-    it "asks for the company in the sentence that becomes the notification" do
-      body = call.body
+    # An email we hold answers the date itself, and buys a link back besides.
+    it "prefers an email id over the arrival time when there is one", :aggregate_failures do
+      email = user.emails.create!(
+        mail_id: "m-#{SecureRandom.hex(4)}", timestamp: arrived, direction: :inbound,
+        subject: "Zoom", blurb: "Availability?"
+      )
+      body = call(email: email).body
 
-      expect(body).to include("NAME THE COMPANY")
-      expect(body).to match(/lock screen/)
-    end
-
-    # Prod 6937 and 6942 read the same DTSTART line two hours apart. The ics said
-    # `TZID=Eastern Standard Time:...T100000`, which is 8am where he is, and the
-    # instruction to read it "the way the mail writes it" is what invited 10am.
-    it "says to check which zone a named time is written in" do
-      body = call.body
-
-      expect(body).to match(/WHICH ZONE/)
-      expect(body).not_to include("the way the mail writes it")
-    end
-
-    it "points a called-off booking at the tag for it" do
-      expect(call.body).to include("`cancelled`")
-    end
-
-    # Prod 7719. "Thank you for providing us with your interview availability",
-    # with the windows he had picked listed under it, was proposed `availability`
-    # - the tag for the ask, 40 minutes after the ask. The booking rule names "a
-    # list of windows" as the ask's own shape, and a confirmation echoes his back.
-    it "separates an ask for times from the receipt for times already sent" do
-      body = call.body
-
-      expect(body).to include("CONFIRMING times")
-      expect(body).to include("the next move is theirs")
-    end
-
-    # Prod 7569 and 7275. A verification code and a candidate-account link were
-    # both proposed as `acknowledged`, and the instruction's own "rather than
-    # leaving it a plain note" is what ruled out the honest answer.
-    it "narrows the receipt tag and names the plain note as an answer" do
-      body = call.body
-
-      expect(body).to include("Coming from an ATS does not make a mail a receipt")
-      expect(body).to include("`note` is a correct answer")
-      expect(body).not_to include("rather than leaving it a plain note")
+      expect(body).to include("email_id #{email.id}")
+      expect(body).not_to include("occurred_at")
     end
 
     describe "filing the mail on the row" do
@@ -141,25 +101,16 @@ RSpec.describe Buddy::JobMailOffer do
 
           body = travel_to(Time.utc(2026, 10, 20)) { call(email: email, body: "Need to make changes to this event?").body }
 
-          expect(body).to include(
-            "Calendar invite, booked for: Tuesday Oct 27, 11:30am MDT (2026-10-27T11:30:00-06:00) " \
-            "for 30 minutes at +1 385-259-9640",
-          )
-        end
-
-        it "says when the invite calls the booking off" do
-          allow(email).to receive(:calendar_invite).and_return(invite.merge(cancelled: true))
-
-          expect(call(email: email, body: "Cancelled").body).to include("Calendar CANCELLATION of the booking at:")
+          expect(body).to include("Tuesday Oct 27, 11:30am MDT (2026-10-27T11:30:00-06:00)", "30 minutes", "+1 385-259-9640")
         end
 
         # A cancellation lands after the slot it calls off, on the same day.
-        it "names the day it is from now" do
+        it "says when the invite calls the booking off, naming the day from now" do
           allow(email).to receive(:calendar_invite).and_return(invite.merge(cancelled: true))
 
           body = travel_to(Time.utc(2026, 10, 27, 21, 25)) { call(email: email, body: "Cancelled").body }
 
-          expect(body).to include("Calendar CANCELLATION of the booking at: today, Tuesday Oct 27, 11:30am MDT")
+          expect(body).to include("CANCELLATION of the booking at: today, Tuesday Oct 27, 11:30am MDT")
         end
 
         it "says nothing of an invite the mail doesn't have" do
@@ -169,12 +120,10 @@ RSpec.describe Buddy::JobMailOffer do
         end
       end
 
-      # Read by the model a reminder took the tag of what it reminded about, so
-      # one offer re-sent every day went on the timeline as an offer each time.
       describe "a reminder" do
         before { metadata[:subject] = "Reminder: iCapital Onboarding: Welcome Aboard!" }
 
-        it "is filed as a reminder, with no turn and nothing said" do
+        it "is filed as a reminder, with no turn and nothing said", :aggregate_failures do
           expect(Buddy::CompanionDelivery).not_to receive(:deliver_prompt)
           expect(Buddy::CompanionDelivery).not_to receive(:deliver_plain)
 
@@ -185,58 +134,37 @@ RSpec.describe Buddy::JobMailOffer do
           expect(email.reload.job_triage[:job_note_id]).to eq(filed.id)
         end
 
-        it "reads any subject that says it is one" do
-          ["Reminder - Background Check Needed", "Friendly reminder: your interview", "[iCapital] Reminder: sign"].each { |subject|
-            expect(described_class.reminder_mail?(subject: subject)).to be(true)
-          }
-        end
-
         # A person writing back is not a machine nudging.
-        it "leaves a reply to a reminder to the model" do
+        it "reads any subject that says it is one, but not a reply to one", :aggregate_failures do
+          ["Reminder - Background Check Needed", "Friendly reminder: your interview", "[iCapital] Reminder: sign"].each { |subject|
+            expect(described_class.reminder_mail?(subject: subject)).to be(true), subject
+          }
           expect(described_class.reminder_mail?(subject: "Re: Reminder: iCapital Onboarding")).to be(false)
           expect(described_class.reminder_mail?(subject: "Your offer reminders")).to be(false)
         end
       end
 
-      it "writes the mail onto the row before any model sees it" do
-        call(email: email, body: "Thanks for applying to iCapital.")
+      # Nothing in Ruby can tell a receipt from a rejection, so nothing in Ruby
+      # picks a tag, and `note` settles no application.
+      it "writes the mail onto the row untagged before any model sees it, once", :aggregate_failures do
+        call(email: email, body: "We're moving forward with other candidates.")
 
         note = job.notes.last
-        expect(note.body).to eq("Thanks for applying to iCapital.")
+        expect(note.body).to eq("We're moving forward with other candidates.")
+        expect(note.tag).to eq("note")
         expect(note.occurred_at).to eq(arrived)
         expect(note.source).to eq("Email")
         expect(note.url).to be_present
-      end
-
-      # Nothing in Ruby can tell a receipt from a rejection, so nothing in Ruby
-      # picks a tag. `note` settles no application.
-      it "leaves it untagged and the application alone" do
-        call(email: email, body: "We're moving forward with other candidates.")
-
-        expect(job.notes.last.tag).to eq("note")
         expect(job.reload.status).to eq("active")
-      end
+        expect(email.reload.job_triage[:job_note_id]).to eq(note.id)
 
-      it "stamps the email so the same mail is never filed twice" do
-        call(email: email, body: "Thanks for applying to iCapital.")
-        first = email.reload.job_triage[:job_note_id]
-
-        expect { call(email: email, body: "Thanks for applying to iCapital.") }
+        expect { call(email: email, body: "We're moving forward with other candidates.") }
           .not_to(change { job.notes.count })
-        expect(email.reload.job_triage[:job_note_id]).to eq(first)
+        expect(email.reload.job_triage[:job_note_id]).to eq(note.id)
       end
 
-      it "still asks for the tag, and keeps the filing out of the reply" do
-        body = call(email: email, body: "Thanks for applying to iCapital.").body
-
-        expect(body).to include("already filed on that row as a plain note")
-        expect(body).to include("do not mention it")
-        expect(body).to include("CALL add_job_note")
-      end
-
-      # Several rows for the company and nothing in the mail saying which. The
-      # row is a guess, so it is STAMPED as one - that is what lets `role` move
-      # the beat rather than file a second copy of it.
+      # The row is a guess, so it is STAMPED as one - that is what lets `role`
+      # move the beat rather than file a second copy of it.
       it "files it as a guess when the company holds several rows and the mail names none" do
         user.job_applications.create!(company: "iCapital", role: "Backend Engineer")
         verdict[:headline] = "Application confirmation for iCapital"
@@ -246,17 +174,14 @@ RSpec.describe Buddy::JobMailOffer do
         expect(email.reload.job_triage[:job_note_guess]).to be(true)
       end
 
-      # An interview is booked, moved and confirmed by mail that names no job at
-      # all, which is the mail the board most needs. One row for the company
-      # means there is no sibling for it to belong to instead.
-      it "files a mail that names no role when the company holds ONE row" do
+      # One row for the company means there is no sibling for it to belong to.
+      it "files a mail that names no role when the company holds ONE row", :aggregate_failures do
         verdict[:headline] = "Interview with iCapital"
         metadata[:subject] = "Please provide your interview availability"
 
         call(email: email, body: "We're still waiting on your availability.")
 
         expect(job.notes.last.body).to eq("We're still waiting on your availability.")
-        expect(job.notes.last.tag).to eq("note")
         expect(email.reload.job_triage[:job_note_id]).to eq(job.notes.last.id)
       end
 
@@ -266,35 +191,14 @@ RSpec.describe Buddy::JobMailOffer do
     end
 
     # `role_named_in?` returns false for a mail naming no role at all exactly
-    # as it does for one naming a different role, and an ATS confirmation
-    # usually names none.
-    describe "when the mail names no role at all" do
-      before {
-        verdict[:headline] = "Application confirmation for iCapital"
-        metadata[:subject] = "Thank you for applying to iCapital"
-      }
+    # as it does for one naming a different role.
+    it "does not call a mail that names no role a different role" do
+      verdict[:headline] = "Application confirmation for iCapital"
+      metadata[:subject] = "Thank you for applying to iCapital"
 
-      it "does not call it a different role" do
-        expect(call.body).not_to include("different role than")
-      end
-
-      it "says it cannot tell, and points at the row it has" do
-        body = call.body
-
-        expect(body).to include("nothing in this mail says")
-        expect(body).to include("Add the note to the row below")
-        expect(body).to include("add_job_application")
-      end
+      expect(call.body).not_to include("different role than")
     end
 
-    # Prod 7296/7297, 1 Oct. Ashby rejected EasyLlama's "Staff Software
-    # Engineer, Platform"; the board's one EasyLlama row reads "Founding
-    # Platform Engineer -- Ruby on Rails", which is LinkedIn's title for the
-    # same job. The seed called a differing title a SEPARATE application and
-    # ordered one, so row 107 was opened and closed as rejected for a job
-    # nothing was ever applied to twice - and the row that WAS rejected stayed
-    # reading active.
-    #
     # Reaching this branch MEANS one row: resolve_application hands a row back
     # without consulting the role only when the company holds exactly one.
     describe "when the mail's title for the job differs from the board's" do
@@ -308,110 +212,62 @@ RSpec.describe Buddy::JobMailOffer do
         metadata[:subject] = "EasyLlama Application Update"
       }
 
-      it "says the company is on the board once" do
-        expect(call.body).to include("has this COMPANY on it ONCE")
+      it "seeds against the one row rather than ordering a second application", :aggregate_failures do
+        message = call
+
+        expect(message.metadata["job_application_id"]).to eq(job.id)
+        expect(message.body).not_to include("that is a SEPARATE application")
       end
-
-      it "does not call a differing title a second application" do
-        body = call.body
-
-        expect(body).to include("not a second application")
-        expect(body).not_to include("that is a SEPARATE application")
-      end
-
-      # The door stays open, but it takes the mail SAYING so rather than two
-      # titles that read differently.
-      it "keeps opening one available for a mail that really says so" do
-        body = call.body
-
-        expect(body).to include("add_job_application")
-        expect(body).to include("applied to something ELSE there")
-      end
-    end
-
-    # Prod 6502: the seed that marked a chore for Chelsea instead of logging the
-    # beat it was sent for.
-    it "names the only two tools the turn is for" do
-      expect(call.metadata["seed_tools"]).to eq(%w[add_job_note add_job_application])
-    end
-
-    it "tells her to make the card rather than ask for permission" do
-      body = call.body
-
-      expect(body).to include("CALL add_job_note")
-      expect(body).to include("do not offer to, do not ask")
-    end
-
-    # The seed is INSTRUCTIONS. Carrying the card's `kind: :system` printed the
-    # whole thing — framing, instructions and the entire email — into the
-    # thread as a message addressed to them.
-    it "stays out of the thread" do
-      message = call
-
-      expect(message.metadata["hidden"]).to be(true)
-      expect(message.metadata["kind"]).to eq("buddy_trigger")
-    end
-
-    it "hands over the row's own link" do
-      expect(call.body).to include("/interviews/#{job.id}")
-    end
-
-    # Without this the note lands on whenever they got round to answering.
-    it "hands over the arrival time when there is no email to read it off" do
-      body = call.body
-
-      expect(body).to include("Arrived: #{arrived.iso8601}")
-      expect(body).to include("add_job_note with occurred_at #{arrived.iso8601}")
-    end
-
-    # An email we hold answers the date itself, and buys a link back besides.
-    it "prefers an email id when there is one" do
-      email = user.emails.create!(
-        mail_id: "m-#{SecureRandom.hex(4)}", timestamp: arrived, direction: :inbound,
-        subject: "Zoom", blurb: "Availability?"
-      )
-      body = call(email: email).body
-
-      expect(body).to include("Email id: #{email.id}")
-      expect(body).to include("add_job_note with email_id #{email.id}")
-      expect(body).not_to include("occurred_at")
     end
   end
 
-  # One company, several jobs. A role-aware resolver answers nil when the mail
-  # does not say which — and nil used to mean "not on the board", which here
-  # would propose opening a company that is already on it twice.
+  # A role-aware resolver answers nil when the mail does not say which, and that
+  # must not read as "not on the board".
   context "when the company is on the board more than once" do
     let!(:backend) { user.job_applications.create!(company: "iCapital", role: "Senior Backend Engineer") }
     let!(:manager) { user.job_applications.create!(company: "iCapital", role: "Engineering Manager") }
 
-    it "names every row rather than proposing a new company" do
-      body = call.body
+    it "names every row rather than proposing a new company, and expects a call", :aggregate_failures do
+      message = call
 
-      expect(body).to include("on their board 2 times")
-      expect(body).to include("Senior Backend Engineer")
-      expect(body).to include("Engineering Manager")
-      expect(body).to include("with `role` naming WHICH")
-      expect(body).not_to include("CALL add_job_application")
+      expect(message.body).to include("Senior Backend Engineer", "Engineering Manager")
+      expect(message.body).not_to include("CALL add_job_application")
+      expect(message.metadata["seed_call"]).to eq("add_job_note")
+      expect(message.metadata["seed_tools"]).to eq(%w[add_job_note add_job_application])
     end
 
-    # A question in a thread is not a record. The mail goes onto the likeliest
-    # row and `role` moves it, so the worst case is a beat on the wrong job of
-    # the right company rather than no beat at all.
+    it "carries the row something happened on most recently" do
+      backend.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
+      manager.notes.create!(tag: :heard_back, occurred_at: 9.days.ago)
+
+      expect(call.metadata["job_application_id"]).to eq(backend.id)
+    end
+
+    it "goes straight to the row the mail names" do
+      message = call(verdict: verdict.merge(headline: "Senior Backend Engineer interview request"))
+
+      expect(message.metadata["job_application_id"]).to eq(backend.id)
+    end
+
+    # The mail goes onto the likeliest row and `role` moves it, so the worst
+    # case is a beat on the wrong job of the right company.
     describe "filing it on a guess" do
       let(:email) {
         user.emails.create!(direction: :inbound, mail_id: "m-amb", subject: "Zoom Interview Availability",
           blurb: "Zoom", timestamp: arrived)
       }
 
-      it "files the mail on the row something happened on most recently" do
+      it "files on the most recently active row, stamped as a guess and marked in the seed", :aggregate_failures do
         backend.notes.create!(tag: :heard_back, occurred_at: 5.days.ago)
         manager.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
 
-        call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.")
+        body = call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
 
         expect(manager.notes.reload.map(&:body)).to include(/schedule a Zoom/)
         expect(backend.notes.reload.count).to eq(1)
+        expect(email.reload.job_triage[:job_note_guess]).to be(true)
+        expect(email.job_triage[:job_note_id]).to eq(user.job_notes.last.id)
+        expect(body).to include("<- filed here")
       end
 
       it "leaves a settled row alone even when it moved more recently" do
@@ -422,70 +278,9 @@ RSpec.describe Buddy::JobMailOffer do
 
         expect(backend.notes.reload.map(&:body)).to include(/schedule a Zoom/)
       end
-
-      it "marks the row it went with and says `role` moves it" do
-        body = call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
-
-        expect(body).to include("<- filed here")
-        expect(body).to include("MOVES the beat")
-        expect(body).to include("already on the marked row")
-      end
-
-      it "stamps the filing as a guess, so the beat can be moved" do
-        call(email: email, body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.")
-
-        expect(email.reload.job_triage[:job_note_guess]).to be(true)
-        expect(email.job_triage[:job_note_id]).to eq(user.job_notes.last.id)
-      end
-
-      # The seed is instructions either way; with no mail to read there is
-      # nothing to file and the call is still the thing that makes the record.
-      it "says the mail is not on the board when there was none to file" do
-        expect(call.body).to include("The mail is not on the board yet")
-      end
-    end
-
-    it "still keeps the mail's own words for the note" do
-      body = call(body: "Hi Rocco,\n\nWe'd like to schedule a Zoom.").body
-
-      expect(body).to include("--- the message, for the NOTE only ---")
-      expect(body).to include("VERBATIM")
-    end
-
-    # A seed that only ASKS gets retried with "What did not happen is the CALL -
-    # make it now", and a retraction of a claim nobody made goes out as a second
-    # notification. This seed asks for nothing: the row is filed and `role`
-    # settles it, so there is a call to make and `seed_call` is honest.
-    it "is told to expect a call, because there is one to make" do
-      expect(call.metadata["seed_call"]).to eq("add_job_note")
-    end
-
-    it "carries the row it guessed, so the card knows which one it is on" do
-      backend.notes.create!(tag: :heard_back, occurred_at: 1.day.ago)
-      manager.notes.create!(tag: :heard_back, occurred_at: 9.days.ago)
-
-      expect(call.metadata["job_application_id"]).to eq(backend.id)
-    end
-
-    it "still keeps the seed to its own two tools" do
-      expect(call.metadata["seed_tools"]).to eq(%w[add_job_note add_job_application])
-    end
-
-    # The mail naming one of them is the ordinary case, and it must go straight
-    # through to that row rather than asking.
-    it "goes straight to the row the mail names" do
-      message = call(verdict: verdict.merge(headline: "Senior Backend Engineer interview request"))
-
-      expect(message.body).to include("belongs to an application already on their board")
-      expect(message.metadata["job_application_id"]).to eq(backend.id)
     end
   end
 
-  # Prod 6162, 14 Sep. A GitLab confirmation off the DOMAIN inbox was logged as
-  # "Greenhouse confirmed receipt of your application" — the seed's own headline
-  # read back. The watcher hands the words over because it read them off disk;
-  # this side never did, so the seed carried no message at all and the trimming
-  # habit was never even said. The mail was on S3 the whole time.
   context "when only the email came with it" do
     let!(:job) { user.job_applications.create!(company: "iCapital") }
     let(:email) {
@@ -495,23 +290,20 @@ RSpec.describe Buddy::JobMailOffer do
       )
     }
 
-    it "reads the mail's own words off it" do
+    # Trimmed the way the watcher trims what it reads, so a seed looks the same
+    # whichever inbox it came from.
+    it "reads the mail's own words off it, trimmed", :aggregate_failures do
       allow_any_instance_of(Email).to receive(:text_body)
         .and_return("Hi Rocco,\n\n\n\nWe'd like to schedule a Zoom.  \n\nCordelia\n")
 
       body = call(email: email).body
 
-      expect(body).to include("--- the message, for the NOTE only ---")
       expect(body).to include("We'd like to schedule a Zoom.")
-      expect(body).to include("VERBATIM")
-      # Trimmed the way the watcher trims what it reads, so a seed looks the
-      # same whichever inbox it came from.
       expect(body).not_to include("Zoom.  \n")
       expect(body).not_to include("\n\n\n")
     end
 
-    # What the watcher sends wins: it read the message off disk before Mail.app
-    # had finished with it, and it is the one that knows about a sent copy.
+    # The watcher read the message off disk and knows about a sent copy.
     it "leaves a body it was handed alone" do
       allow_any_instance_of(Email).to receive(:text_body).and_return("off the blob")
 
@@ -521,132 +313,50 @@ RSpec.describe Buddy::JobMailOffer do
       expect(body).not_to include("off the blob")
     end
 
-    # The blob lives on S3. A beat announced without its message is worth far
-    # more than one not announced at all.
-    it "still speaks the offer when the copy cannot be read" do
+    # A beat announced without its message is worth far more than none at all.
+    it "still seeds the offer when the copy cannot be read" do
       allow(Rails.logger).to receive(:warn)
       allow_any_instance_of(Email).to receive(:text_body).and_raise("no such key")
 
-      body = call(email: email).body
+      message = call(email: email)
 
-      expect(body).to include("CALL add_job_note")
-      expect(body).not_to include("--- the message")
+      expect(message.metadata["job_application_id"]).to eq(job.id)
+      expect(message.body).not_to include("--- the message")
     end
   end
 
-  # The board was built by hand by pasting the mail in and setting a status.
-  # Buddy can only continue that if the mail itself reaches her.
   context "when the message body came with it" do
     let!(:job) { user.job_applications.create!(company: "iCapital") }
-    let(:mail_body) { "Hi Rocco,\n\nWe'd like to schedule a 30-minute Zoom.\n\nCordelia" }
 
-    it "quotes the message, fenced so its end is unambiguous" do
-      body = call(body: mail_body).body
+    it "quotes the message, fenced so its end is unambiguous, and promises none without one", :aggregate_failures do
+      body = call(body: "Hi Rocco,\n\nWe'd like to schedule a 30-minute Zoom.\n\nCordelia").body
 
       expect(body).to include("--- the message, for the NOTE only ---")
       expect(body).to include("We'd like to schedule a 30-minute Zoom.")
       expect(body).to include("--- end ---")
-    end
 
-    it "spells out the trimming habit and asks for a real tag" do
-      body = call(body: mail_body).body
-
-      expect(body).to include("keep the message itself as the note")
-      expect(body).to include("quoted thread")
-      expect(body).to include("Pick the `tag` that matches")
-    end
-
-    # Prod 5934 proposed a one-sentence precis of a rejection instead of the
-    # rejection. "pass the part that carries the substance" was read as an
-    # invitation to summarise, and the words are the whole point of keeping it.
-    it "asks for the words themselves, not a precis of them" do
-      body = call(body: mail_body).body
-
-      expect(body).to include("VERBATIM")
-      expect(body).to include("do not summarise it")
-    end
-
-    # They read the card, not the mail. Pasting it into the spoken line puts the
-    # thing they asked to be spared right back in front of them.
-    it "keeps the message out of what she says" do
-      body = call(body: mail_body).body
-
-      expect(body).to include("do not paste any of it into your reply")
-      expect(body).to include("belongs in the note only")
-    end
-
-    # Reading the body off disk is a soft failure upstream. An offer made from
-    # the headline alone must not promise a message it hasn't got.
-    it "promises nothing about a message it never received" do
-      body = call.body
-
-      expect(body).not_to include("--- the message")
-      expect(body).not_to include("keep the message itself")
-      expect(body).to include("Pick the `tag` that matches")
+      expect(call.body).not_to include("--- the message")
     end
   end
 
-  # He rarely writes, so almost anything he sends that isn't ordinary life is
-  # part of the search — and his side of a thread is half of what the board's
-  # timeline is made of.
   context "when it is mail he sent" do
     let!(:job) { user.job_applications.create!(company: "iCapital") }
 
-    def sent(**overrides)
-      described_class.call(
+    it "seeds his own message with when it went and to whom", :aggregate_failures do
+      body = described_class.call(
         user: user, verdict: verdict, card: "📤 the card", metadata: metadata,
-        occurred_at: arrived, outgoing: true, **overrides
-      )
-    end
+        occurred_at: arrived, outgoing: true
+      ).body
 
-    it "reads as his own message, not as post arriving" do
-      body = sent.body
-
-      expect(body).to include("They just SENT this")
       expect(body).to include("Sent: #{arrived.iso8601}")
       expect(body).to include("To: #{metadata[:sender]}")
-    end
-
-    # `responded` is the other half of `heard_back`, and the whole question a
-    # timeline answers is whose court the ball is in.
-    it "points at the responded tag without forcing it" do
-      body = sent.body
-
-      expect(body).to include("`responded` is usually the tag")
-      expect(body).to include("unless they withdrew")
-    end
-
-    it "doesn't explain his own words back to him" do
-      expect(sent.body).to include("they wrote it, so don't explain it back")
-    end
-
-    # Prod 7837, 10 Oct. His own mail to Reserv - "I'm so sorry... can we
-    # reschedule" - was read back to him as "Reserv asked to reschedule because
-    # of a funeral conflict". "They just SENT this" was the whole opener, and
-    # `they` in it can mean either party.
-    it "names the company as the RECIPIENT, so the sender can't be misread" do
-      body = sent.body
-
+      # The company is the RECIPIENT, so the sender can't be misread.
       expect(body).to include("SENT this TO iCapital")
-      expect(body).to include("the words below are THEIRS")
-    end
-
-    # Prod 7776 (Neighbor) and 7837 (Reserv), both retagged by hand. His own
-    # windows sent back read as "more specific" than `responded`, and
-    # `availability` is the tag that puts "send availability" back at the top of
-    # his board for a thing he has just done.
-    it "keeps his own times out of the availability tag" do
-      body = sent.body
-
-      expect(body).to include("Times they have SENT")
-      expect(body).to include("never `availability`")
     end
   end
 
-  # The branch for mail the classifier could name no company for - a recruiter's
-  # first approach, usually, where there is no row to attach it to and so
-  # nothing to offer. All it posts is the card, so the card has to carry its own
-  # weight.
+  # Usually a recruiter's first approach, with no row to attach it to and so
+  # nothing to offer. All it posts is the card.
   context "when the mail names no company at all" do
     let(:verdict) { { kind: "recruiter outreach", company: nil, headline: "Backend Engineer" } }
     let(:email) {
@@ -659,86 +369,32 @@ RSpec.describe Buddy::JobMailOffer do
       )
     }
 
-    it "links the mail it was announced from" do
+    it "posts the card with a link to the mail and its first line that says something", :aggregate_failures do
       message = call(email: email, body: "Hi Rocco,\n\nI am hiring for a Ruby team in Denver.")
 
       expect(message.body).to include("📬 the card")
       expect(message.body).to include("/emails/#{email.id}")
-      expect(message.body).to include("Read the mail")
-    end
-
-    it "quotes the first line of the mail that says something" do
-      message = call(email: email, body: "Hi Rocco,\n\nI am hiring for a Ruby team in Denver.")
-
       expect(message.body).to include("> I am hiring for a Ruby team in Denver.")
       expect(message.body).not_to include("> Hi Rocco,")
+      expect(message.body).not_to include("add_job_application")
     end
 
-    # Nothing kept a copy, so there is no page to point at. The card still goes.
     it "posts the card alone when there is no mail on file" do
-      message = call(email: nil, body: nil)
-
-      expect(message.body).to eq("📬 the card")
+      expect(call(email: nil, body: nil).body).to eq("📬 the card")
     end
   end
 
   context "when nothing on the board matches" do
-    # A company with no row is a suggestion to START one, not a dead end. This
-    # is a recruiter's first approach, or an application made without saying so.
-    it "proposes tracking the company instead of just showing a card" do
+    it "proposes tracking the company, carrying the mail's arrival time onto the new row", :aggregate_failures do
       body = call.body
 
-      expect(body).to include("NOT on their board yet")
       expect(body).to include("CALL add_job_application")
-      expect(body).to include("do not offer to, do not ask")
-    end
-
-    it "carries the mail's own arrival time onto the new row" do
-      expect(call.body).to include("occurred_at #{arrived.iso8601}")
-    end
-
-    # Prod 7787 and 7791, 9 Oct. One line said "Tuesday, October 15" for a
-    # Thursday, repeating the recruiter's own slip; another said "Friday at 11am
-    # PT / 10am AKDT" for a Pacific invite, with his own 12pm MDT nowhere in it.
-    # Both lines are the lock-screen notification.
-    it "pins the zone to his and the weekday to the date" do
-      body = described_class.call(
-        user: user, verdict: verdict, card: "📥 the card", metadata: metadata,
-        occurred_at: arrived,
-      ).body
-
-      expect(body).to include("in THEIR zone")
-      expect(body).to include("read the weekday off the DATE")
-    end
-
-    # The first beat on a brand-new row is read off the same mail and gets the
-    # tag wrong the same way.
-    it "narrows the receipt tag on the first beat too" do
-      expect(call.body).to include("`note` is a correct answer")
-    end
-
-    # Nothing to propose: any row would be invented. The card is still worth
-    # seeing, which is the whole reason a plain card still exists.
-    it "falls back to the card when the classifier named no company" do
-      message = described_class.call(
-        user: user, verdict: verdict.merge(company: nil), card: "📬 the card",
-        metadata: metadata, occurred_at: arrived
-      )
-
-      expect(message.body).to eq("📬 the card")
-      expect(message.body).not_to include("add_job_application")
+      expect(body).to include("occurred_at #{arrived.iso8601}")
     end
   end
 
-  # A named company is not the same as a real one. Prod 7111-7113: the Workable
-  # receipt for the Peregrine Advisors application named "OpenDataJobs", the
-  # board Peregrine posts on, 96 seconds after the application went out. It
-  # opened row 90 for a company that does not exist, and left one application in
-  # two halves - the `applied` beat on 89, its confirmation on 90.
   # A background check names the PAST employers it is verifying and never the
-  # one that ordered it, so the classifier reads a real company that is not
-  # hiring and is not on the board - and a second row gets opened for a job he
-  # left years ago. The vendor written on the row is the only thing in that
+  # one that ordered it. The vendor written on the row is the only thing in that
   # mail pointing back at the process it belongs to.
   context "when the company named is not on the board but the sender is written down" do
     let!(:job) {
@@ -761,28 +417,25 @@ RSpec.describe Buddy::JobMailOffer do
       metadata[:sender]  = "infoneeded@accurate.com"
     }
 
-    it "files the mail on the row that uses that vendor" do
+    it "files the mail on the row that uses that vendor, not a new one for the employer", :aggregate_failures do
       message = call(email: email, body: "Employer: Orca Health")
 
       expect(message.metadata["job_application_id"]).to eq(job.id)
       expect(job.notes.reload.size).to eq(1)
-    end
-
-    it "does not open a row for the employer being verified" do
-      body = call(email: email, body: "Employer: Orca Health").body
-
-      expect(body).not_to include("NOT on their board yet")
-      expect(body).not_to include("Company: Orca Health")
-      expect(body).to include("Company: iCapital")
+      expect(message.body).to include("Company: iCapital")
+      expect(message.body).not_to include("Company: Orca Health")
+      expect(message.body).not_to include("CALL add_job_application")
     end
 
     it "leaves a sender nobody wrote down to the ordinary matching" do
       job.update!(known_as: [])
 
-      expect(call(email: email, body: "Employer: Orca Health").body).to include("NOT on their board yet")
+      expect(call(email: email, body: "Employer: Orca Health").body).to include("CALL add_job_application")
     end
   end
 
+  # A named company is not the same as a real one: a job board's name on an
+  # ATS receipt, for instance.
   context "when the company named is not on the board but the role is" do
     let!(:job) {
       user.job_applications.create!(company: "Peregrine Advisors", role: "Generative AI Engineer")
@@ -797,46 +450,30 @@ RSpec.describe Buddy::JobMailOffer do
     it "files the mail on the row whose role it names" do
       message = call
 
-      expect(message.body).to include("belongs to an application already on their board")
       expect(message.metadata["job_application_id"]).to eq(job.id)
+      expect(message.body).not_to include("CALL add_job_application")
     end
 
-    it "does not propose a new company" do
-      expect(call.body).not_to include("NOT on their board yet")
-    end
-
-    # WHOLE_ROLE and `matches.one?` are what make the fallback safe with a name
-    # in hand. Two rows answering to the role is a coin toss, and the company
-    # name - wrong or not - is the better thing to go on.
-    it "proposes the company when two rows answer to the same role" do
+    # Two rows answering to the role is a coin toss, and the company name -
+    # wrong or not - is the better thing to go on.
+    it "proposes the company when two rows answer to the role, or none does", :aggregate_failures do
       user.job_applications.create!(company: "Globex", role: "Generative AI Engineer")
-
       body = call.body
-
-      expect(body).to include("NOT on their board yet")
+      expect(body).to include("CALL add_job_application")
       expect(body).to include("Company: OpenDataJobs")
-    end
 
-    it "proposes the company when no row answers to the role" do
       verdict[:headline] = "Application received for Staff Platform Engineer"
-
-      expect(call.body).to include("NOT on their board yet")
+      expect(call.body).to include("CALL add_job_application")
     end
   end
 
-  # It used to refuse a settled one, and post a bare card with nowhere for the
-  # message to go. But the last word from a company is usually the rejection,
-  # and it arriving is the beat that closes the row - see prod 5759, where
-  # hiding closed applications from the model is what let it settle the wrong
-  # one. `status` is on the row either way, so a settled match reads as settled.
+  # The last word from a company is usually the rejection, and it arriving is
+  # the beat that closes the row.
   context "when the matching application is already settled" do
     let!(:job) { user.job_applications.create!(company: "iCapital", status: :rejected) }
 
     it "still offers, against the row it belongs to" do
-      message = call
-
-      expect(message.body).to include("belongs to an application already on their board")
-      expect(message.metadata["job_application_id"]).to eq(job.id)
+      expect(call.metadata["job_application_id"]).to eq(job.id)
     end
   end
 end

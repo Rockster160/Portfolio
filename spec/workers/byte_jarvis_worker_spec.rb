@@ -12,28 +12,30 @@ RSpec.describe ByteJarvisWorker do
     )
   }
 
-  it "posts a Jarvis response back as an inbound message on the same conversation" do
-    allow(::Jarvis).to receive(:command).with(user, message.body).and_return("done — kitchen on")
+  it "posts the response into the reply bubble it opened first, and clears the composer's spinner" do
+    seen = nil
+    allow(::Jarvis).to receive(:command).with(user, message.body) {
+      seen = convo.byte_messages.inbound.last&.dup
+      "done — kitchen on"
+    }
 
     expect {
       described_class.new.perform(message.id)
     }.to change { convo.byte_messages.inbound.count }.by(1)
 
+    expect(seen).to have_attributes(state: "streaming", body: "")
     reply = convo.byte_messages.inbound.last
-    expect(reply.body).to eq("done — kitchen on")
-    expect(reply.state).to eq("delivered")
+    expect(reply).to have_attributes(state: "delivered", body: "done — kitchen on")
     expect(reply.metadata["kind"]).to eq("jarvis")
     expect(reply.metadata["in_reply_to"]).to eq(message.id)
-  end
-
-  it "flips a pending outbound to sent so the composer's spinner clears" do
-    allow(::Jarvis).to receive(:command).and_return("k")
-    described_class.new.perform(message.id)
     expect(message.reload.state).to eq("sent")
   end
 
-  it "handles Jarvis raising by surfacing a failed system message" do
+  # A bubble left spinning next to an error reads as two things having gone
+  # wrong, and a pet left thinking reads as one still running.
+  it "replaces the bubble with a failed message and settles the face when Jarvis raises" do
     allow(::Jarvis).to receive(:command).and_raise(StandardError, "boom")
+    allow(Buddy::ExpressionState).to receive(:settle!)
 
     expect {
       described_class.new.perform(message.id)
@@ -41,56 +43,27 @@ RSpec.describe ByteJarvisWorker do
 
     err = convo.byte_messages.inbound.last
     expect(err.state).to eq("failed")
-    expect(err.body).to include("Jarvis error")
     expect(err.metadata["error"]).to eq(true)
+    expect(convo.byte_messages.inbound.where(state: :streaming)).to be_empty
+    expect(Buddy::ExpressionState).to have_received(:settle!).with(convo)
   end
 
   it "is a no-op for a missing message id" do
     expect { described_class.new.perform(-1) }.not_to raise_error
   end
 
-  # Prod, 26 Aug 16:49: ".close blinds" reached a Home Assistant that was down,
-  # the POST sat on RestClient's 60-second read timeout, and the thread showed
-  # nothing at all for a full minute - no receipt, no pending state, no face.
-  # The reply when it finally came was correct, but for that minute there was no
-  # way to tell a stalled command from one that never sent. Buddy's own turns
-  # have always shown a thinking face; a Jarvis aside is the one route into a
-  # Buddy thread that didn't, and it's the route with the longest wait on it.
+  # A command can sit on a slow device for a long time, so the thread shows a
+  # thinking face and an open bubble while it runs.
   describe "while the command is still running" do
-    it "shows that it's in hand before Jarvis is called" do
+    it "shows that it's in hand before Jarvis is called, and settles once the reply is out" do
       order = []
       allow(Buddy::ExpressionState).to receive(:thinking!) { order << :thinking }
+      allow(Buddy::ExpressionState).to receive(:settle!) { order << :settle }
       allow(::Jarvis).to receive(:command) { order.push(:command) && "k" }
 
       described_class.new.perform(message.id)
 
-      expect(order).to eq(%i[thinking command])
-    end
-
-    # The face says the companion is busy; the bubble says which command it's
-    # busy with, sitting in the thread under the words they typed.
-    it "opens the reply bubble before Jarvis is called" do
-      seen = nil
-      allow(::Jarvis).to receive(:command) {
-        seen = convo.byte_messages.inbound.last
-        "k"
-      }
-
-      described_class.new.perform(message.id)
-
-      expect(seen).to have_attributes(state: "streaming", body: "")
-      expect(seen.metadata["kind"]).to eq("jarvis")
-    end
-
-    it "fills that same row in rather than posting a second one" do
-      allow(::Jarvis).to receive(:command).and_return("done — kitchen on")
-
-      expect { described_class.new.perform(message.id) }
-        .to change { convo.byte_messages.inbound.count }.by(1)
-
-      expect(convo.byte_messages.inbound.last).to have_attributes(
-        state: "delivered", body: "done — kitchen on",
-      )
+      expect(order).to eq(%i[thinking command settle])
     end
 
     it "takes the bubble away when the chip is the whole answer" do
@@ -104,36 +77,6 @@ RSpec.describe ByteJarvisWorker do
 
       expect(convo.byte_messages.inbound.where(state: :streaming)).to be_empty
       expect(convo.byte_messages.inbound.pluck(:body)).to eq(["Called **Darkness**"])
-    end
-
-    # A bubble left spinning next to an error message reads as two things
-    # having gone wrong.
-    it "takes the bubble away when Jarvis raises" do
-      allow(::Jarvis).to receive(:command).and_raise(StandardError, "boom")
-
-      described_class.new.perform(message.id)
-
-      expect(convo.byte_messages.inbound.where(state: :streaming)).to be_empty
-      expect(convo.byte_messages.inbound.last.body).to include("Jarvis error")
-    end
-
-    it "settles the face again once the reply is out" do
-      allow(::Jarvis).to receive(:command).and_return("k")
-      allow(Buddy::ExpressionState).to receive(:settle!)
-
-      described_class.new.perform(message.id)
-
-      expect(Buddy::ExpressionState).to have_received(:settle!).with(convo)
-    end
-
-    # Otherwise a command that blows up leaves the pet thinking forever.
-    it "settles it even when Jarvis raises" do
-      allow(::Jarvis).to receive(:command).and_raise(StandardError, "boom")
-      allow(Buddy::ExpressionState).to receive(:settle!)
-
-      described_class.new.perform(message.id)
-
-      expect(Buddy::ExpressionState).to have_received(:settle!).with(convo)
     end
   end
 

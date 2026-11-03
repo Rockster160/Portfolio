@@ -7,15 +7,11 @@ RSpec.describe BuddyIdeaSettleWorker do
   }
 
   describe "#perform" do
-    it "settles the conversation it was handed" do
+    it "settles the conversation it was handed, passing on whether the stretch is over" do
       expect(Buddy::IdeaDwell).to receive(:settle!).with(conversation, over: false)
-
-      described_class.new.perform(conversation.id)
-    end
-
-    it "passes on a caller that already knows the stretch is over" do
       expect(Buddy::IdeaDwell).to receive(:settle!).with(conversation, over: true)
 
+      described_class.new.perform(conversation.id)
       described_class.new.perform(conversation.id, true)
     end
 

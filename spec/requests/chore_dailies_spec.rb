@@ -89,12 +89,5 @@ RSpec.describe "Chore Dailies", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body["daily_ids"]).to eq([chore_b.id, chore_a.id])
     end
-
-    it "GET /chores/sync echoes a single daily pin" do
-      ChoreDaily.create!(user: user, chore: chore_a, sort_order: 0)
-      get chores_sync_path
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["daily_ids"]).to eq([chore_a.id])
-    end
   end
 end

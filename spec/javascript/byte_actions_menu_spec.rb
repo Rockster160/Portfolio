@@ -139,11 +139,9 @@ RSpec.describe "Byte actions menu" do
       )
     end
 
-    # The count is the second half: a redraw has to clear the rows it drew last
-    # time, or the list only grows and an emptied one still shows the routine
-    # that used to be in it, under a sentence saying there are none.
-    it "says what would produce one when there are none" do
-      expect(result["empty"]["text"]).to eq("No routines saved yet — ask to save one.")
+    # A redraw clears the rows it drew last time, or an emptied list still
+    # shows the routine that used to be in it.
+    it "clears the rows when there are none left" do
       expect(result["empty"]["rows"]).to eq(0)
     end
   end

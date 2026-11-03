@@ -71,37 +71,19 @@ RSpec.describe AgendaTravelChain::OverrideParser do
     end
 
     describe "dwell durations on waypoints" do
-      it "parses trailing `Nm` as dwell minutes" do
-        expect(p.parse("before:Costco 15m")[:before]).to eq([
-          { location: "Costco", dwell_seconds: 900 },
-        ])
-      end
-
-      it "parses trailing `Nh` as dwell hours" do
-        expect(p.parse("before:Office 2h")[:before]).to eq([
-          { location: "Office", dwell_seconds: 7200 },
-        ])
-      end
-
-      it "parses combined `NhMm` (with or without spaces)" do
-        expect(p.parse("before:Office 1h30m")[:before]).to eq([
-          { location: "Office", dwell_seconds: 5400 },
-        ])
-        expect(p.parse("before:Office 1h 30m")[:before]).to eq([
-          { location: "Office", dwell_seconds: 5400 },
-        ])
-      end
-
-      it "accepts longer unit forms (min, hrs, hour, hours)" do
-        expect(p.parse("before:Costco 45min")[:before]).to eq([
-          { location: "Costco", dwell_seconds: 2700 },
-        ])
-        expect(p.parse("before:Office 2hrs")[:before]).to eq([
-          { location: "Office", dwell_seconds: 7200 },
-        ])
-        expect(p.parse("before:Office 1hour")[:before]).to eq([
-          { location: "Office", dwell_seconds: 3600 },
-        ])
+      it "reads a trailing duration in any unit form as the dwell" do
+        [
+          ["Costco 15m",    "Costco", 900],
+          ["Office 2h",     "Office", 7200],
+          ["Office 1h30m",  "Office", 5400],
+          ["Office 1h 30m", "Office", 5400],
+          ["Costco 45min",  "Costco", 2700],
+          ["Office 2hrs",   "Office", 7200],
+          ["Office 1hour",  "Office", 3600],
+        ].each do |entry, location, seconds|
+          expect(p.parse("before:#{entry}")[:before]).to eq([{ location: location, dwell_seconds: seconds }]),
+            entry
+        end
       end
 
       it "handles a mix of waypoints with and without dwells" do

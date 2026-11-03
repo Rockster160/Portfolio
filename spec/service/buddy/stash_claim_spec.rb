@@ -16,50 +16,27 @@ RSpec.describe Buddy::StashClaim do
 
   def trim(body) = described_class.trim(body, facts)
 
-  # The sentence, verbatim. There is no front room and there are no drinks.
   it "drops a float that renamed the thought" do
     body = "Morning! Also, that front room drinks thing for Rocco is still sitting there if you want to come back to it later!"
 
     expect(trim(body)).to eq("Morning!")
   end
 
-  # The same shape, said right, on the morning after. This is the sentence the
-  # guard exists to leave alone.
-  it "keeps a float that names it as they wrote it" do
-    body = "Also, that Desk storage for Rocco thing is still sitting there, if you want to keep nudging it along!"
-
-    expect(trim(body)).to eq(body)
-  end
-
-  # Half of what makes the line its own is enough - a float abbreviates the
-  # same way an ATS headline does, and demanding the whole phrase would cut
-  # the ordinary case. See NAMED_ENOUGH.
-  it "keeps a float that names most of it" do
-    body = "The desk storage idea is still sitting there if you fancy it."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  # The guard only ever looks at sentences that are about nothing else on the
-  # day. A sentence carrying a real item is news, whatever it also mentions.
-  it "leaves a sentence about something real on the day alone" do
-    body = "Rocco's hike with Nathan is at 6am, and it's still sitting on the calendar."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  it "leaves a figure alone" do
-    body = "That Rocco thing has been sitting there about 6 weeks now."
-
-    expect(trim(body)).to eq(body)
-  end
-
-  # Warmth names nothing, reaches for nothing, and must survive. Only a
-  # sentence that touches the thought's own words is ever a candidate.
-  it "leaves the greeting and the sign-off alone" do
-    body = "Hey hey, good morning! Hope it's a gentle one."
-
-    expect(trim(body)).to eq(body)
+  # Half of the name is enough (see NAMED_ENOUGH). Only a sentence about
+  # nothing else on the day, touching the thought's own words, is a candidate;
+  # a figure, a real item, or plain warmth is left alone.
+  it "keeps a float that names it, and every sentence that isn't a float", :aggregate_failures do
+    [
+      "Also, that Desk storage for Rocco thing is still sitting there, if you want to keep nudging it along!",
+      "The desk storage idea is still sitting there if you fancy it.",
+      "Rocco's hike with Nathan is at 6am, and it's still sitting on the calendar.",
+      "That Rocco thing has been sitting there about 6 weeks now.",
+      "Hey hey, good morning! Hope it's a gentle one.",
+      # `(6 weeks)` would put `week` in the name's vocabulary; the age isn't part of it.
+      "It feels like a good week to keep plugging away gently.",
+      # Never hand back less than a sentence.
+      "That front room drinks thing for Rocco is still sitting there!",
+    ].each { |body| expect(trim(body)).to eq(body), body }
   end
 
   # Asked before `dropped_briefing_facts` complains the AGE went missing, and
@@ -68,19 +45,10 @@ RSpec.describe Buddy::StashClaim do
   describe ".named?" do
     def named?(body) = described_class.named?(body, facts)
 
-    it "is true when the thought is named as they wrote it" do
+    it "is true only when the thought is named as they wrote it", :aggregate_failures do
       expect(named?("Also, that Desk storage for Rocco thing is still sitting there!")).to be(true)
-    end
-
-    it "is false when the briefing never floated it" do
       expect(named?("Morning! Hike with Nathan at 6am, high of 72.")).to be(false)
-    end
-
-    it "is false when the float reached for it and named something else" do
       expect(named?("that front room drinks thing for Rocco is still sitting there")).to be(false)
-    end
-
-    it "is false when the seed carried no stash" do
       expect(described_class.named?("Desk storage for Rocco", facts.except(:stash))).to be(false)
     end
   end
@@ -89,20 +57,5 @@ RSpec.describe Buddy::StashClaim do
     body = "Also, that front room drinks thing for Rocco is still sitting there!"
 
     expect(described_class.trim(body, facts.except(:stash))).to eq(body)
-  end
-
-  # Never hand back less than a sentence, same as the repairs either side.
-  it "keeps a body that was nothing but the float" do
-    body = "That front room drinks thing for Rocco is still sitting there!"
-
-    expect(trim(body)).to eq(body)
-  end
-
-  # `(6 weeks)` puts `week` into the line's vocabulary, and `week` is a word
-  # every briefing ever written contains. The thought is read without its age.
-  it "does not treat the age bracket as part of the name" do
-    body = "It feels like a good week to keep plugging away gently."
-
-    expect(trim(body)).to eq(body)
   end
 end

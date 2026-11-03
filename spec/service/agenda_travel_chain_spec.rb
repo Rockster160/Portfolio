@@ -1,15 +1,7 @@
 require "rails_helper"
 
-# Phase 1 wiring smoke. Confirms every public surface loads cleanly and the
-# basic chain detection behaves end-to-end against stubbed AddressBook calls.
-# Deep edge-case coverage lives in the focused specs alongside each module.
 RSpec.describe AgendaTravelChain do
-  describe "module-level surface" do
-    it "exposes run_for / refresh_for" do
-      expect(described_class).to respond_to(:run_for)
-      expect(described_class).to respond_to(:refresh_for)
-    end
-
+  describe "the sync worker" do
     # `until_executing`, deliberately, and not `until_executed`. The job
     # recomputes to whatever the row says when it RUNS, so a lock held through
     # execution discards any edit landing mid-run — the enqueue is coalesced
@@ -17,13 +9,8 @@ RSpec.describe AgendaTravelChain do
     # afterwards. Prod left two rows holding a leave_at for their old start:
     # agenda_items 1069 (moved by the Buddy tool) and 1048 (moved by a PATCH
     # from the UI). Two writers, one pipeline.
-    it "the worker dedups without discarding a change made mid-run" do
+    it "dedups without discarding a change made mid-run" do
       expect(AgendaTravelChainSyncWorker.sidekiq_options).to include("lock" => :until_executing)
-    end
-
-    it "the Custom Jil method dispatches to refresh_travel_time" do
-      methods = Jil::Methods::Custom.instance_methods(false)
-      expect(methods).to include(:refresh_travel_time)
     end
   end
 

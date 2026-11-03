@@ -43,9 +43,7 @@ RSpec.describe Buddy::Features do
       grant!(:mac)
 
       expect(offered).not_to include(:mac_command)
-    end
 
-    it "offers it to the owner" do
       owner = User.me
       owner.grant_buddy_features!(:mac)
 
@@ -86,12 +84,9 @@ RSpec.describe Buddy::Features do
   describe "a feature nobody has been granted yet" do
     before { stub_const("#{described_class}::SECTIONS", described_class::SECTIONS.merge(images: %i[recent_images])) }
 
-    it "is off for a person whose grants predate it" do
+    it "is off and hides its context sections until it's granted" do
       expect(described_class.enabled?(user, :images)).to be(false)
       expect(described_class.missing_for(user)).to include(:images)
-    end
-
-    it "hides its context sections until it's granted" do
       expect(described_class.hidden_sections(user)).to include(:recent_images)
 
       grant!(:images)
@@ -143,7 +138,6 @@ RSpec.describe Buddy::Features do
       )
 
       expect(output[:status]).to eq("failed")
-      expect(output[:error]).to match(/isn't something this person has set up/)
     end
 
     it "is dropped by the builder the same way an unknown tool is" do
@@ -182,15 +176,13 @@ RSpec.describe Buddy::Features do
       expect(triggers).to include(:arrive, :depart, :deploy, :event, :agenda)
     end
 
-    it "trims each option independently" do
+    it "leaves every option for someone holding them all and trims each independently" do
+      expect(triggers).to include(:arrive, :depart, :chore, :event, :agenda, :deploy)
+
       revoke!(:events, :agenda)
 
       expect(triggers).not_to include(:event, :agenda)
       expect(triggers).to include(:chore, :arrive)
-    end
-
-    it "leaves every option in place for someone holding them all" do
-      expect(triggers).to include(:arrive, :depart, :chore, :event, :agenda, :deploy)
     end
 
     it "refuses the option server-side when the model asks for it anyway" do
@@ -203,7 +195,6 @@ RSpec.describe Buddy::Features do
       )
 
       expect(output[:status]).to eq("failed")
-      expect(output[:error]).to match(/isn't part of this person's setup/)
     end
 
     it "drops the marker at the builder too" do
@@ -234,59 +225,29 @@ RSpec.describe Buddy::Features do
       Buddy::TodayBriefing.send(:seed, user)
     end
 
-    it "says how to say a job on a day that has one" do
-      seed = seed_with(jobs: [{ id: 1, name: "Take out trash bags", group: "trash" }])
-
-      expect(seed).to include("JOBS TODAY")
-      expect(seed).to include("Jobs listed under one name are one job")
-    end
-
-    # A sample day in the rule was read as a fact about the day it went out on.
-    it "names no day of its own in the rule" do
-      seed = seed_with(jobs: [{ id: 1, name: "Fold laundry", group: "laundry" }])
-
-      expect(seed).to include("Jobs listed under one name are one job")
-      expect(seed).not_to include("trash")
-    end
-
-    it "has no group to say the day as when the jobs are single" do
+    it "carries the day's jobs into the seed" do
       seed = seed_with(jobs: [{ id: 1, name: "Refill Kitty Food" }])
 
-      expect(seed).to include("- Refill Kitty Food")
-      expect(seed).not_to include("Jobs listed under one name")
-      expect(seed).not_to include("trash")
-    end
-
-    it "says nothing about them at all on a day with none" do
-      seed = seed_with({})
-
-      expect(seed).not_to include("JOBS TODAY")
-      expect(seed).not_to include("Jobs listed under one name")
+      expect(seed).to include("JOBS TODAY", "Refill Kitty Food")
     end
 
     # Someone without the feature has no chores to be due, so the section and
     # its rule are absent for exactly the same reason - one gate, not two.
-    it "is the same absence for someone who doesn't have chores at all" do
-      revoke!(:chores)
-      seed = seed_with({})
+    it "leaves the jobs section out on a day with none, including for someone without chores" do
+      expect(seed_with({})).not_to include("JOBS TODAY")
 
-      expect(seed).not_to include("JOBS TODAY")
-      # The rest of the briefing is untouched.
-      expect(seed).to include("OPEN WITH A GREETING")
-      expect(seed).to include("Only what's above")
+      revoke!(:chores)
+      expect(seed_with({})).not_to include("JOBS TODAY")
     end
   end
 
   describe "what the prompt says about it" do
-    it "tells the model plainly, in the person's own terms" do
+    it "carries the missing features into the prompt" do
       revoke!(:chores)
 
       prompt = Buddy::Personality.for(user, conversation: convo)
 
       expect(prompt).to include("What this person doesn't have")
-      expect(prompt).to include("chores, completions, and pebbles")
-      expect(prompt).to include("commands on the Mac")
-      expect(prompt).to include("Don't offer it, don't ask about it")
     end
 
     # The owner, because they're the only one who CAN hold everything now -

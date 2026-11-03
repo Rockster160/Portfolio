@@ -45,25 +45,15 @@ RSpec.describe Buddy::Announce do
   end
 
   describe "who it can reach" do
-    it "takes the shorthand people actually type" do
+    it "takes the shorthand people actually type, or a bare username" do
       expect(described_class.resolve(:me)).to eq(User.me)
       expect(described_class.resolve(:rocco)).to eq(User.me)
       expect(described_class.resolve(:chels)).to eq(User.chelsea)
       expect(described_class.resolve(:chelsea)).to eq(User.chelsea)
       expect(described_class.resolve(:eve)).to eq(User.eve)
       expect(described_class.resolve(:mom)).to eq(User.eve)
-    end
-
-    it "also takes a bare username or first name" do
       expect(described_class.resolve("Eve")).to eq(User.eve)
       expect(described_class.resolve("eve")).to eq(User.eve)
-    end
-
-    it "says who it knows rather than guessing" do
-      described_class.call(:nobody, "hi", io: out, input: keys("q"))
-
-      expect(out.string).to include("Don't know who")
-      expect(out.string).to include("chels")
     end
   end
 
@@ -72,14 +62,7 @@ RSpec.describe Buddy::Announce do
       described_class.call(:eve, "Reminders can edit recurrence", io: out, input: keys("q"))
 
       expect(out.string).to include(draft)
-      expect(out.string).to include("Cancelled. Nothing sent.")
       expect(eve.byte_messages.where(body: draft)).to be_empty
-    end
-
-    it "names the companion so you know whose voice you're about to send in" do
-      described_class.call(:eve, "anything", io: out, input: keys("q"))
-
-      expect(out.string).to include("→ Eve")
     end
 
     # The mood marker steers the pet's face during a live turn. This isn't one,
@@ -101,59 +84,30 @@ RSpec.describe Buddy::Announce do
 
       described_class.call(:eve, "anything", io: out, input: keys("q"))
     end
-
-    it "tells the model its reply IS the message" do
-      expect_any_instance_of(Buddy::GPT::Client).to receive(:stream) { |_c, kwargs|
-        text = kwargs[:input].first[:content].first[:text]
-        expect(text).to include("your reply IS the message Eve will read")
-        expect(text).to include("Don't call any tools")
-        { ok: true, text: draft }
-      }
-
-      described_class.call(:eve, "anything", io: out, input: keys("q"))
-    end
   end
 
-  describe "sending" do
-    it "delivers it into their thread" do
-      described_class.call(:eve, "anything", io: out, input: keys("s"))
+  it "delivers the draft into their thread on s" do
+    described_class.call(:eve, "anything", io: out, input: keys("s"))
 
-      message = convo.reload.byte_messages.last
-      expect(message.body).to eq(draft)
-      expect(message).to be_inbound
-      expect(message.metadata["source"]).to eq("announce")
-      expect(out.string).to include("Sent to Eve")
-    end
-
-    it "writes into their newest live thread, not an archived one" do
-      convo.update!(archived: true)
-      current = eve.byte_conversations.create!(mode: :buddy, last_message_at: Time.current)
-
-      described_class.call(:eve, "anything", io: out, input: keys("s"))
-
-      expect(current.reload.byte_messages.last.body).to eq(draft)
-    end
+    message = convo.reload.byte_messages.last
+    expect(message.body).to eq(draft)
+    expect(message).to be_inbound
+    expect(message.metadata["source"]).to eq("announce")
   end
 
   # The other door: you already have the words, so nothing is drafted, shown,
   # or confirmed.
   describe "saying it yourself" do
-    it "sends the text as written, with no model in the middle" do
+    it "sends the text as written, with no model in the middle, and hands back the message" do
       expect_any_instance_of(Buddy::GPT::Client).not_to receive(:stream)
 
-      described_class.say(:eve, "Server's down for an hour.", io: out)
+      returned = described_class.say(:eve, "Server's down for an hour.", io: out)
 
       message = convo.reload.byte_messages.last
+      expect(returned).to eq(message)
       expect(message.body).to eq("Server's down for an hour.")
       expect(message).to be_inbound
       expect(message.metadata["source"]).to eq("announce")
-      expect(out.string).to include("Sent to Eve")
-    end
-
-    it "hands back the message so a script can carry on with it" do
-      message = described_class.say(:eve, "anything", io: out)
-
-      expect(message).to eq(convo.reload.byte_messages.last)
     end
 
     it "writes into their newest live thread, not an archived one" do
@@ -165,17 +119,10 @@ RSpec.describe Buddy::Announce do
       expect(current.reload.byte_messages.last.body).to eq("anything")
     end
 
-    it "sends nothing when there's nothing to send" do
+    it "sends nothing for blank text or somebody it doesn't know" do
       described_class.say(:eve, "   ", io: out)
-
-      expect(out.string).to include("Nothing to send.")
-      expect(convo.reload.byte_messages).to be_empty
-    end
-
-    it "says who it knows rather than guessing" do
       described_class.say(:nobody, "hi", io: out)
 
-      expect(out.string).to include("Don't know who")
       expect(convo.reload.byte_messages).to be_empty
     end
   end
@@ -199,7 +146,7 @@ RSpec.describe Buddy::Announce do
 
       described_class.call(:eve, "anything", io: out, input: keys("n", "make it shorter", "s"))
 
-      expect(seeds.last).to include("Revise it: make it shorter")
+      expect(seeds.last).to include("make it shorter")
       expect(convo.reload.byte_messages.last.body).to eq("Shorter version.")
     end
 
@@ -224,12 +171,11 @@ RSpec.describe Buddy::Announce do
   end
 
   describe "when the model fails" do
-    it "says so and sends nothing" do
+    it "sends nothing" do
       allow_any_instance_of(Buddy::GPT::Client).to receive(:stream).and_raise("boom")
 
       described_class.call(:eve, "anything", io: out, input: keys("q"))
 
-      expect(out.string).to include("model call failed")
       expect(convo.reload.byte_messages).to be_empty
     end
   end

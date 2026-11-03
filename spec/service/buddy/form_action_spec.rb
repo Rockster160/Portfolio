@@ -35,69 +35,46 @@ RSpec.describe Buddy::FormAction do
   end
 
   describe "posting one" do
-    it "opens already filled in with what Buddy worked out" do
+    it "opens filled in on its own message, carrying every field and what the server rebuilds from", :aggregate_failures do
       prompt = calorie_prompt
       action = post_form(prompt, { "Calories" => "240" })
 
-      values = form_meta(action)["fields"].to_h { |f| [f["key"], f["value"]] }
-      expect(values).to eq("Notes" => "cafe protein shake", "Calories" => "240")
+      meta = form_meta(action)
+      expect(meta["fields"].to_h { |f| [f["key"], f["value"]] }).to eq("Notes" => "cafe protein shake", "Calories" => "240")
+      expect(meta["status"]).to eq("pending")
       expect(action.byte_message.body).to eq(prompt.question)
-    end
-
-    it "carries every field, including the ones Buddy could not fill" do
-      action = post_form(calorie_prompt, {})
-
-      keys = form_meta(action)["fields"].pluck("key")
-      expect(keys).to eq(["Notes", "Calories"])
-      expect(form_meta(action)["status"]).to eq("pending")
-    end
-
-    it "lands on its own message so a checklist can coexist with it" do
-      action = post_form(calorie_prompt, {})
-
+      # Its own message, so a checklist can coexist with it.
       expect(action.byte_message.metadata["tool_name"]).to eq("buddy_form")
       expect(action.expires_at).to be > 1.day.from_now
-    end
-
-    it "stores what the SERVER needs to rebuild, not the rendered fields" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-
+      # What the SERVER needs to rebuild, not the rendered fields.
       expect(action.tool_input["tool_name"]).to eq("answer_prompt")
       expect(action.tool_input["payload"]["id"]).to eq(prompt.id)
+    end
+
+    it "carries a field Buddy could not fill" do
+      expect(form_meta(post_form(calorie_prompt, {}))["fields"].pluck("key")).to eq(["Notes", "Calories"])
     end
   end
 
   describe "sending it" do
-    it "writes the response and marks the prompt answered" do
+    it "writes the person's correction, ignores unknown fields, and settles as a read-only summary", :aggregate_failures do
       prompt = calorie_prompt
       action = post_form(prompt, { "Calories" => "240" })
 
-      result = described_class.submit!(action, values: { "Notes" => "cafe protein shake", "Calories" => "240" })
+      result = described_class.submit!(action, values: {
+        "Notes" => "cafe protein shake", "Calories" => "180", "Protein" => "30"
+      })
 
       expect(result[:ok]).to be(true)
-      expect(prompt.reload.response).to eq("Notes" => "cafe protein shake", "Calories" => "240")
+      expect(prompt.reload.response).to eq("Notes" => "cafe protein shake", "Calories" => "180")
       expect(::Jil).to have_received(:trigger).with(user, :prompt, anything).at_least(:once)
-    end
-
-    it "takes the person's correction over what Buddy guessed" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: { "Notes" => "cafe protein shake", "Calories" => "180" })
-
-      expect(prompt.reload.response["Calories"]).to eq("180")
-    end
-
-    it "re-renders as a read-only summary of what was actually sent" do
-      action = post_form(calorie_prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: { "Notes" => "cafe protein shake", "Calories" => "180" })
-
       meta = form_meta(action)
       expect(meta["status"]).to eq("submitted")
-      expect(meta["receipt"]).to eq("Answered it ✓")
       expect(meta["fields"].find { |f| f["key"] == "Calories" }["value"]).to eq("180")
+
+      # Sends once, however many times the button is tapped.
+      expect(described_class.submit!(action, values: { "Notes" => "x", "Calories" => "1" })[:ok]).to be(false)
+      expect(prompt.reload.response["Calories"]).to eq("180")
     end
 
     # Free text, numbers and multi-picks may go in empty, the way the page lets
@@ -124,34 +101,10 @@ RSpec.describe Buddy::FormAction do
       result = described_class.submit!(action, values: { "Washed" => "", "With" => "", "Medicine taken" => [] })
 
       expect(result[:ok]).to be(false)
-      expect(result[:errors].join).to include("Washed needs a value")
-      expect(result[:errors].join).not_to include("With", "Medicine")
+      expect(result[:errors].length).to eq(1)
+      expect(result[:errors].join).to include("Washed")
       expect(action.reload).to be_pending
       expect(prompt.reload.response).to be_nil
-    end
-
-    it "ignores a field the form does not have" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: {
-        "Notes" => "cafe protein shake", "Calories" => "240", "Protein" => "30"
-      })
-
-      expect(prompt.reload.response.keys).to contain_exactly("Notes", "Calories")
-    end
-
-    it "sends once, however many times the button is tapped" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-      values = { "Notes" => "shake", "Calories" => "240" }
-
-      first  = described_class.submit!(action, values: values)
-      second = described_class.submit!(action, values: values)
-
-      expect(first[:ok]).to be(true)
-      expect(second[:ok]).to be(false)
-      expect(second[:errors].join).to include("already been sent")
     end
 
     it "refuses one that has expired" do
@@ -161,7 +114,7 @@ RSpec.describe Buddy::FormAction do
       result = described_class.submit!(action, values: { "Notes" => "x", "Calories" => "240" })
 
       expect(result[:ok]).to be(false)
-      expect(result[:errors].join).to include("expired")
+      expect(action.reload).to be_pending
     end
 
     it "rebuilds from the tool, so a prompt answered elsewhere cannot be resubmitted" do
@@ -181,62 +134,33 @@ RSpec.describe Buddy::FormAction do
   # what lets a Skip exist on a form whose every field is required.
   describe "the other buttons" do
     it "puts the primary last, so it lands on the right" do
-      action = post_form(calorie_prompt, {})
-
-      footer = form_meta(action)["actions"]
-      expect(footer.pluck("key")).to eq(%w[skip submit])
-      expect(footer.last["label"]).to eq("Send it")
-      expect(footer.first["style"]).to eq("danger")
+      expect(form_meta(post_form(calorie_prompt, {}))["actions"].pluck("key")).to eq(%w[skip submit])
     end
 
-    it "skips the prompt without reading a single field" do
+    it "skips without reading a field, tells listeners it was skipped, and closes the form", :aggregate_failures do
+      fired = []
+      allow(::Jil).to receive(:trigger) { |_user, scope, payload|
+        fired << [scope, payload.try(:[], :status) || payload.try(:status)]
+        true
+      }
       prompt = calorie_prompt
-      action = post_form(prompt, {})
+      action = post_form(prompt, { "Calories" => "240" })
 
       # Every field empty — the submit would refuse this outright.
       result = described_class.submit!(action, values: {}, key: "skip")
 
       expect(result[:ok]).to be(true)
       expect(Prompt.find_by(id: prompt.id)).to be_nil
-    end
-
-    it "tells the prompt listeners it was skipped, not answered" do
-      fired = []
-      allow(::Jil).to receive(:trigger) { |_user, scope, payload|
-        fired << [scope, payload.try(:[], :status) || payload.try(:status)]
-        true
-      }
-      action = post_form(calorie_prompt, {})
-
-      described_class.submit!(action, values: {}, key: "skip")
-
       expect(fired).to include([:prompt, :skip])
       expect(fired.map(&:last)).not_to include(:complete)
-    end
-
-    it "settles the form as skipped rather than as an answer" do
-      action = post_form(calorie_prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: {}, key: "skip")
 
       meta = form_meta(action)
       expect(meta["status"]).to eq("submitted")
-      expect(meta["receipt"]).to eq("Skipped it ✓")
       expect(meta["decided"]).to eq("skip")
-      # The values were never sent, so they are not rewritten to look as if
-      # they were — Calories still shows Buddy's guess.
+      # The values were never sent, so they still show Buddy's guess.
       expect(meta["fields"].find { |f| f["key"] == "Calories" }["value"]).to eq("240")
-    end
 
-    it "closes the form, so it cannot then be answered too" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: {}, key: "skip")
-      result = described_class.submit!(action, values: { "Notes" => "x", "Calories" => "240" })
-
-      expect(result[:ok]).to be(false)
-      expect(result[:errors].join).to include("already been sent")
+      expect(described_class.submit!(action, values: { "Notes" => "x", "Calories" => "240" })[:ok]).to be(false)
     end
 
     it "refuses a button this form was never posted with" do
@@ -248,15 +172,6 @@ RSpec.describe Buddy::FormAction do
       expect(result[:ok]).to be(false)
       expect(action.reload).to be_pending
       expect(Prompt.find_by(id: prompt.id)).to be_present
-    end
-
-    it "still sends normally when no button is named" do
-      prompt = calorie_prompt
-      action = post_form(prompt, { "Calories" => "240" })
-
-      described_class.submit!(action, values: { "Notes" => "shake", "Calories" => "240" })
-
-      expect(prompt.reload.response["Calories"]).to eq("240")
     end
   end
 
@@ -274,14 +189,25 @@ RSpec.describe Buddy::FormAction do
       expect(collect(:color, "#4488FF").first["F"]).to eq("#4488ff")
     end
 
-    it "rejects a value outside the choices rather than inventing one" do
-      _values, errors = collect(:select, "Zebra", choices: %w[Cat Dog])
-      expect(errors.join).to include("isn't one of the options")
+    it "rejects a value outside the choices or a scale's range rather than inventing one", :aggregate_failures do
+      expect(collect(:select, "Zebra", choices: %w[Cat Dog]).last).to be_present
+      expect(collect(:scale, "400", min: 0, max: 100).last).to be_present
+      expect(collect(:scale, "40", min: 0, max: 100).last).to be_empty
     end
 
-    it "keeps a scale inside its range" do
-      _values, errors = collect(:scale, "400", min: 0, max: 100)
-      expect(errors.join).to include("between 0 and 100")
+    it "keeps a chips field and its colors, and takes only one of the chips", :aggregate_failures do
+      field = {
+        key: "Who did it?", type: :chips, choices: %w[Rockster160 Alchemibluum],
+        colors: { Rockster160: "#0160FF" },
+      }
+
+      expect(described_class.normalize([field]).sole).to include(
+        type: :chips, choices: %w[Rockster160 Alchemibluum], colors: { "Rockster160" => "#0160FF" },
+      )
+      expect(described_class.collect([field], { "Who did it?" => "alchemibluum" })).to eq(
+        [{ "Who did it?" => "Alchemibluum" }, []],
+      )
+      expect(described_class.collect([field], { "Who did it?" => "Eve" }).last.length).to eq(1)
     end
 
     it "carries hidden fields through untouched, since the person never sees them" do

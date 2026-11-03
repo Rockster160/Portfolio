@@ -1,4 +1,4 @@
-RSpec.describe "ESPLED alternating case bug" do
+RSpec.describe "Custom function returning a Global.case" do
   let(:user) { User.me }
 
   let!(:broadcast_task) {
@@ -39,7 +39,7 @@ RSpec.describe "ESPLED alternating case bug" do
 
   after { broadcast_task.destroy; espled_task.destroy }
 
-  it "does not alternate failures across multiple runs" do
+  it "succeeds on every repeated call, not every other one" do
     5.times do |i|
       exe = ::Jil::Executor.call(user, <<-'JIL', {})
         aff8c = Custom.ESPLED({

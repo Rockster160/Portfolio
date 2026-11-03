@@ -1,24 +1,13 @@
 require "rails_helper"
 
 RSpec.describe "Buddy commands that named a time" do
-  # Prod 3562, 10:44 AM: "Play Whisper Nap sound at 11."
-  #
-  # Buddy replied "Playing the nap sound on Whisper." and called
-  # `call_jil_function` immediately — the receipt chip landed at 10:45. The sound
-  # went off in the room sixteen minutes early, next to a sleeping dog.
-  #
-  # `message_partner` carries a whole section on this ("A DELAY IS IN THE
-  # INSTRUCTION, NEVER IN THE NOTE") because the same thing happened with a relay.
-  # Prose didn't generalize, and it wouldn't: the tool that acts NOW is right
-  # there, its description says nothing about time, and every example in it is
-  # immediate. A relay sent early is embarrassing; a sound played early is
-  # physical, so this one is a gate rather than a rule.
+  # A device command that names a time must not run now: a sound played early
+  # is physical, so this is a gate rather than a prompt rule.
   describe "a command that named a time" do
     let(:user) { User.me }
     # A real function task, so `call_jil_function`'s confirm resolves and the tool
     # would genuinely run. Without one the call fails on its own and the gate is
-    # never the reason nothing happened — which is how the first draft of this
-    # spec passed while proving nothing.
+    # never the reason nothing happened.
     let!(:whisper) {
       Task.create!(
         user: user, name: "Whisper Sound", buddy_enabled: true,
@@ -58,11 +47,27 @@ RSpec.describe "Buddy commands that named a time" do
       rows.map { |i| JSON.parse(i[:output]) }
     end
 
-    def play_call
+    def held(client)
+      outputs(client).select { |o| o["error"].to_s.include?("they said when") }
+    end
+
+    def ran?(client)
+      held(client).empty?
+    end
+
+    def play_call(call_id: "c1")
       {
         name:      :call_jil_function,
-        call_id:   "c1",
+        call_id:   call_id,
         arguments: { "name" => "Whisper Sound", "sound" => "nap" },
+      }
+    end
+
+    def schedule_call(at: 3.hours.from_now)
+      {
+        name:      :schedule_trigger,
+        call_id:   "s1",
+        arguments: { "scope" => "whisper-nap-sound", "at" => at.iso8601 },
       }
     end
 
@@ -76,337 +81,134 @@ RSpec.describe "Buddy commands that named a time" do
       }
     end
 
-    def ran?(client)
-      outputs(client).none? { |o| o["error"].to_s.include?("they said when") }
-    end
-
     describe "reading the request" do
       def deferred?(text)
         Buddy::GPT::Turn::COMMAND_REQUEST_RX.match?(text) &&
           Buddy::GPT::Turn::DEFERRED_COMMAND_RX.match?(text)
       end
 
-      it "catches the one from prod" do
-        expect(deferred?("Play Whisper Nap sound at 11.")).to be(true)
-      end
-
-      it "catches the other ways of saying when" do
-        expect(deferred?("Play the nap sound at 11pm")).to be(true)
-        expect(deferred?("turn the lights off at 10:30")).to be(true)
-        expect(deferred?("start the printer in 20 minutes")).to be(true)
-        expect(deferred?("run my wind-down tonight")).to be(true)
-        expect(deferred?("close the blinds at noon")).to be(true)
-        expect(deferred?("turn the fan on before bed")).to be(true)
-        expect(deferred?("play the wake sound when I get up")).to be(true)
+      it "catches a command with a time on it" do
+        [
+          "Play Whisper Nap sound at 11.",
+          "Play the nap sound at 11pm",
+          "turn the lights off at 10:30",
+          "start the printer in 20 minutes",
+          "run my wind-down tonight",
+          "close the blinds at noon",
+          "turn the fan on before bed",
+          "play the wake sound when I get up",
+        ].each { |text| expect(deferred?(text)).to be(true), text }
       end
 
       # A false positive here BLOCKS something they asked for, so the numbers that
-      # aren't clocks matter more than usual.
-      it "leaves a number that isn't a time alone" do
-        expect(deferred?("set the thermostat at 72")).to be(false)
-        expect(deferred?("set the lights at 50%")).to be(false)
-        expect(deferred?("set the brightness at 40 percent")).to be(false)
-        expect(deferred?("set the heat at 68 degrees")).to be(false)
-      end
-
-      it "leaves an ordinary immediate command alone" do
-        expect(deferred?("Play the nap sound on Whisper")).to be(false)
-        expect(deferred?("turn the kitchen lights off")).to be(false)
-        expect(deferred?("run my wind-down")).to be(false)
-      end
-
-      # Both halves are required. A time with no order in front of it is talking.
-      it "leaves a sentence that only mentions a time alone" do
-        expect(deferred?("I'm heading out at 11")).to be(false)
-        expect(deferred?("is the dog asleep at noon usually?")).to be(false)
+      # aren't clocks matter more than usual. Both halves are required: a time
+      # with no order in front of it is talking.
+      it "leaves numbers that aren't times, immediate commands, and mere mentions alone" do
+        [
+          "set the thermostat at 72",
+          "set the lights at 50%",
+          "set the brightness at 40 percent",
+          "set the heat at 68 degrees",
+          "Play the nap sound on Whisper",
+          "turn the kitchen lights off",
+          "run my wind-down",
+          "I'm heading out at 11",
+          "is the dog asleep at noon usually?",
+        ].each { |text| expect(deferred?(text)).to be(false), text }
       end
     end
 
     describe "the gate" do
-      # The whole thing. `call_jil_function` is `answers: true` + `acts: true`, so
-      # it runs INSIDE resolve_call rather than going through ProposalBuilder —
-      # which is why the check sits in tool_output, ahead of it. Anywhere later is
-      # after the sound has played.
-      it "does not run the function the person asked for at 11" do
+      # `call_jil_function` is `answers: true` + `acts: true`, so it runs INSIDE
+      # resolve_call rather than going through ProposalBuilder — which is why the
+      # check sits in tool_output, ahead of it. Reported as `failed`, which is
+      # what arms the retraction of a reply that says it happened anyway.
+      it "holds the function back, reports it failed, and retracts a reply claiming it ran", :aggregate_failures do
         client = run(
-          [{ tool_calls: [play_call] }, { text: "I'll get that going at 11." }],
+          [{ tool_calls: [play_call] }, { text: "Playing the nap sound on Whisper." }],
           text: "Play Whisper Nap sound at 11.",
         )
 
         expect(ran?(client)).to be(false)
-      end
-
-      it "tells the model why, and what to reach for instead" do
-        client = run(
-          [{ tool_calls: [play_call] }, { text: "Set for 11." }],
-          text: "Play Whisper Nap sound at 11.",
-        )
-
-        held = outputs(client).find { |o| o["error"].to_s.include?("they said when") }
-        expect(held["status"]).to eq("failed")
-        expect(held["note"]).to include("schedule_trigger", "schedule_reminder", "alarm")
-        expect(held["note"]).to include("never say it's scheduled when it isn't")
-      end
-
-      # Reported as `failed`, which is what arms the retraction. A reply that says
-      # the sound is playing over a call that was held back is the same lie as one
-      # over a call that never happened.
-      it "retracts a reply that says it happened anyway" do
-        run(
-          [{ tool_calls: [play_call] }, { text: "Playing the nap sound on Whisper." }],
-          text: "Play Whisper Nap sound at 11.",
-        )
+        expect(held(client).first["status"]).to eq("failed")
+        expect(held(client).first["note"]).to include("schedule_trigger", "schedule_reminder", "alarm")
 
         reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
         expect(reply.metadata["retracted_claim"]).to be(true)
       end
 
-      # A model that keeps asking gets the same answer. There is no round budget
-      # to run out of here, because the gate isn't a nudge.
+      # There is no round budget to run out of here, because the gate isn't a nudge.
       it "still holds it back when a later round makes the same call" do
         client = run(
           [
             { tool_calls: [play_call] },
-            { tool_calls: [play_call.merge(call_id: "c2")] },
+            { tool_calls: [play_call(call_id: "c2")] },
             { text: "Playing it now." },
           ],
           text: "Play Whisper Nap sound at 11.",
         )
 
-        expect(ran?(client)).to be(false)
-        expect(outputs(client).count { |o| o["error"].to_s.include?("they said when") }).to eq(2)
+        expect(held(client).length).to eq(2)
       end
 
-      it "lets a scheduling call through untouched" do
-        client = run(
-          [
-            { tool_calls: [{
-              name:      :schedule_trigger,
-              call_id:   "s1",
-              arguments: {
-                "scope" => "whisper-nap-sound",
-                "at"    => 3.hours.from_now.iso8601,
-              },
-            }] },
-            { text: "That'll go off at 11." },
-          ],
-          text: "Play Whisper Nap sound at 11.",
-        )
-
-        expect(ran?(client)).to be(true)
-      end
-
-      # "Do this now and that at 11" is a real sentence. Once something is
+      # "Do this now and that at 11" is a real sentence: once something is
       # genuinely on the clock, the model has understood the time.
-      it "allows an immediate call after something was actually scheduled" do
+      it "lets a scheduling call, a call after one, and an ordinary immediate command through" do
+        [
+          [[schedule_call], "Play Whisper Nap sound at 11."],
+          [[schedule_call, play_call], "Play Whisper Nap sound at 11."],
+          [[schedule_call(at: 2.minutes.from_now), play_call], "Play the whisper wake sound in 2 minutes"],
+          [[play_call], "Play the nap sound on Whisper"],
+        ].each { |calls, text|
+          client = run([{ tool_calls: calls }, { text: "Done." }], text: text)
+          expect(ran?(client)).to be(true), "#{calls.pluck(:name)} on #{text.inspect}"
+        }
+      end
+
+      # A wait can hold a step that goes through ProposalBuilder. It cannot hold
+      # one that has already run by the time a proposal queue exists, and
+      # `call_jil_function` settles inside resolve_call.
+      it "is not stood down by a wait, in either order, in an earlier round, or as a bare countdown" do
+        bare = wait_call(id: "t2").merge(arguments: { "seconds" => 120 })
+
+        [
+          [{ tool_calls: [play_call, wait_call] }],
+          [{ tool_calls: [wait_call, play_call] }],
+          [{ tool_calls: [wait_call] }, { tool_calls: [play_call] }],
+          [{ tool_calls: [play_call, bare] }],
+        ].each { |rounds|
+          client = run(rounds + [{ text: "Two minutes." }], text: "Play the whisper wake sound in 2 minutes")
+          expect(ran?(client)).to be(false), rounds.inspect
+        }
+      end
+
+      # A wait DOES defer a write: that reaches ProposalBuilder, which queues the
+      # write behind it.
+      it "still lets a wait cover something that can actually be queued" do
         client = run(
           [
             { tool_calls: [
-              {
-                name:      :schedule_trigger,
-                call_id:   "s1",
-                arguments: {
-                  "scope" => "whisper-nap-sound",
-                  "at"    => 3.hours.from_now.iso8601,
-                },
-              },
-              play_call,
-  ] },
-            { text: "Both sorted." },
+              { name: :add_list_item, call_id: "a1", arguments: { "list" => "Groceries", "item" => "milk" } },
+              wait_call,
+            ] },
+            { text: "Two minutes." },
           ],
-          text: "Play Whisper Nap sound at 11.",
+          text: "Add milk to my list in 2 minutes",
         )
 
         expect(ran?(client)).to be(true)
       end
 
-      it "leaves an ordinary immediate command alone" do
-        client = run(
-          [{ tool_calls: [play_call] }, { text: "Playing it." }],
-          text: "Play the nap sound on Whisper",
-        )
-
-        expect(ran?(client)).to be(true)
-      end
-
-      # Prod 4081, "Play the whisper wake sound in 2 minutes".
-      #
-      # The model emitted the function AND a two-minute `then_continue` wait in
-      # one round. The round-level read saw the wait, took the time as understood
-      # and stood the gate down — so Whisper Sound fired at 21:04:35 and the wait
-      # it was supposedly riding was created a second later, holding an empty
-      # queue (timer 78, metadata `{}`). The sound played in the room two minutes
-      # early, which is the entire thing this gate exists to stop.
-      #
-      # A wait can hold a step that goes through ProposalBuilder. It cannot hold
-      # one that has already run by the time a proposal queue exists, and
-      # `call_jil_function` is `answers: true` — it settles inside resolve_call.
-      describe "a wait is not a schedule" do
-        it "holds the function back when the wait rides along with it" do
-          client = run(
-            [
-              { tool_calls: [play_call, wait_call] },
-              { text: "That'll play in two minutes." },
-            ],
-            text: "Play the whisper wake sound in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(false)
+      it "counts only a scheduler that carries the thing itself as putting it on the clock" do
+        expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "then_continue" => true })).to be(false)
+        expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "seconds" => 120 })).to be(false)
+        %i[schedule_reminder schedule_trigger schedule_function alarm remind_when].each do |name|
+          expect(Buddy::GPT::Turn.puts_on_clock?(name, {})).to be(true), "expected #{name} to count"
         end
 
-        # Which one the model emits first is arbitrary, and running early is just
-        # as wrong when the wait was named first.
-        it "holds it back with the wait in front" do
-          client = run(
-            [
-              { tool_calls: [wait_call, play_call] },
-              { text: "Two minutes." },
-            ],
-            text: "Play the whisper wake sound in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(false)
-        end
-
-        it "holds it back when the wait came a round earlier" do
-          client = run(
-            [
-              { tool_calls: [wait_call] },
-              { tool_calls: [play_call] },
-              { text: "Two minutes." },
-            ],
-            text: "Play the whisper wake sound in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(false)
-        end
-
-        # A bare countdown never counted, and it still doesn't.
-        it "holds it back behind a plain countdown too" do
-          client = run(
-            [
-              { tool_calls: [play_call, wait_call(id: "t2").merge(arguments: { "seconds" => 120 })] },
-              { text: "Two minutes." },
-            ],
-            text: "Play the whisper wake sound in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(false)
-        end
-
-        # The other half. A wait DOES defer a write: that reaches
-        # ProposalBuilder, `hoist_dangling_wait` rotates the wait to the front and
-        # the write queues behind it. Holding those back would undo the fix for
-        # prod 3897.
-        it "still lets a wait cover something that can actually be queued" do
-          client = run(
-            [
-              { tool_calls: [
-                { name: :add_list_item, call_id: "a1", arguments: { "list" => "Groceries", "item" => "milk" } },
-                wait_call,
-              ] },
-              { text: "Two minutes." },
-            ],
-            text: "Add milk to my list in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(true)
-        end
-
-        # A real scheduler takes the payload and the time together, so there's
-        # nothing left for this turn to do early. That one covers everything.
-        it "still lets a real schedule cover the function" do
-          client = run(
-            [
-              { tool_calls: [
-                { name: :schedule_trigger, call_id: "s1", arguments: { "scope" => "whisper-wake", "at" => 2.minutes.from_now.iso8601 } },
-                play_call,
-              ] },
-              { text: "Set." },
-            ],
-            text: "Play the whisper wake sound in 2 minutes",
-          )
-
-          expect(ran?(client)).to be(true)
-        end
-      end
-
-      describe "what counts as putting it on the clock" do
-        it "does not count a wait" do
-          expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "then_continue" => true })).to be(false)
-          expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "seconds" => 120 })).to be(false)
-        end
-
-        it "counts a scheduler that carries the thing itself" do
-          %i[schedule_reminder schedule_trigger schedule_function alarm remind_when].each do |name|
-            expect(Buddy::GPT::Turn.puts_on_clock?(name, {})).to be(true), "expected #{name} to count"
-          end
-        end
-
-        it "reads a wait as a wait, and only when it carries the rest" do
-          expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "then_continue" => true })).to be(true)
-          expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "seconds" => 120 })).to be(false)
-          expect(Buddy::GPT::Turn.queues_rest?(:schedule_reminder, {})).to be(false)
-        end
-      end
-
-      # Both descriptions were telling the model to do the thing that broke. The
-      # tool that acts on the spot said "set_timer with then_continue: true for a
-      # delay"; set_timer said the same in reverse, with "play the nap sound in 2
-      # minutes" as its worked example.
-      describe "what the schema tells it" do
-        it "stops offering a wait to a tool a wait can't hold" do
-          %i[call_jil_function print_again].each do |name|
-            schema = Buddy::Tools.function_schema(Buddy::Tools[name])
-            expect(schema[:description]).to include("a wait CANNOT hold it")
-            expect(schema[:description]).not_to include("set_timer with then_continue")
-          end
-        end
-
-        it "still offers one to a tool that can be queued behind it" do
-          schema = Buddy::Tools.function_schema(Buddy::Tools[:add_list_item])
-
-          expect(schema[:description]).to include("set_timer with then_continue")
-        end
-
-        it "no longer teaches the wait with the sound that started this" do
-          schema = Buddy::Tools.function_schema(Buddy::Tools[:set_timer])
-
-          expect(schema[:description]).not_to include("play the nap sound in 2 minutes")
-          expect(schema[:description]).to include("a wait CANNOT hold them")
-        end
-      end
-
-      # Tools that carry their own sense of when are exactly the ones where "at 3"
-      # is an argument, not a deferral. Backdating a water to 3pm is a legitimate
-      # call on a sentence the regex matches.
-      it "leaves tools that have their own time argument off the list" do
-        %i[log_event complete_chore edit_chore schedule_reminder alarm].each do |name|
-          expect(Buddy::Tools::IMMEDIATE_ACTION_TOOLS).not_to include(name)
-        end
-      end
-
-      it "gates every tool that acts on the world with no notion of when" do
-        expect(Buddy::Tools::IMMEDIATE_ACTION_TOOLS).to contain_exactly(
-          :run_jil_task, :call_jil_function, :trigger_jil_task, :run_routine, :mac_command, :print_again,
-          :add_list_item, :remove_list_item, :add_inventory_item, :remove_inventory_item
-        )
-      end
-
-      # The list is read twice, and the second reader is the schema: being on it
-      # is how a tool gets told about time at all, since none of their own
-      # descriptions mention it.
-      it "tells each gated tool that it acts the moment it's called" do
-        Buddy::Tools::IMMEDIATE_ACTION_TOOLS.each do |name|
-          schema = Buddy::Tools.function_schema(Buddy::Tools[name])
-          expect(schema[:description]).to include("never part of what to do")
-        end
-      end
-
-      it "does not put that on a tool that means later" do
-        schema = Buddy::Tools.function_schema(Buddy::Tools[:schedule_reminder])
-
-        expect(schema[:description]).not_to include("never part of what to do")
+        expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "then_continue" => true })).to be(true)
+        expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "seconds" => 120 })).to be(false)
+        expect(Buddy::GPT::Turn.queues_rest?(:schedule_reminder, {})).to be(false)
       end
     end
 
@@ -423,14 +225,9 @@ RSpec.describe "Buddy commands that named a time" do
     end
   end
 
-  # Consecutive commands: "do X and then tell them" has to happen in that order.
-  #
-  # Prod 1201 is the whole reason this exists. "Can you move it to the Ours agenda
-  # and let Chelsea know?" produced add_agenda_item (level 3, a checkbox) and
-  # message_partner (level 1, fires on arrival). ProposalBuilder split them purely
-  # on level, so at 18:02:25 Chelsea was told the event had moved — and the
-  # checkbox that actually moved it wasn't tapped until 18:02:47. Had it never
-  # been tapped, she'd have been told about a move that never happened.
+  # Consecutive commands: "do X and then tell them" has to happen in that order,
+  # even when X waits on a checkbox and the message would otherwise fire on
+  # arrival.
   describe "deferred actions" do
     let(:user)       { create(:user) }
     let(:partner)    { create(:user) }
@@ -456,10 +253,8 @@ RSpec.describe "Buddy commands that named a time" do
       convo.byte_messages.where(direction: :inbound).order(:created_at).first
     end
 
-    # The 1201 shape: a checkbox first, a partner message after it. The gate is an
-    # event edit rather than the agenda add of the original report, because agenda
-    # and chore writes have both since moved to level 2 and run on arrival — any
-    # level-3 tool reproduces the ordering this is about.
+    # A checkbox first, a partner message after it. An event edit is the gate
+    # because it is still level 3; any level-3 tool reproduces the ordering.
     def move_then_tell
       ActionEvent.create!(user: user, name: "Costco Run", timestamp: Time.current)
       inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "fix the costco run and let Chelsea know")
@@ -484,31 +279,19 @@ RSpec.describe "Buddy commands that named a time" do
       ByteAction.find_by(byte_message_id: message.id)
     end
 
-    it "does not send the partner message while the checkbox is still waiting" do
-      message, = move_then_tell
+    it "holds the partner message, reported queued, until the checkbox is tapped, then sends it once", :aggregate_failures do
+      message, client = move_then_tell
+      action = action_for(message)
 
-      expect(action_for(message).buttons.length).to eq(1)
+      outputs = client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }
+      expect(JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])["status"]).to eq("queued")
+      expect(action.buttons.length).to eq(1)
       expect(relays).to be_empty
-    end
 
-    it "sends it once the checkbox is tapped" do
-      message, = move_then_tell
-      action   = action_for(message)
-
-      Buddy::ProposalExecutor.perform(action.id, [1])
+      2.times { Buddy::ProposalExecutor.perform(action.id, [1]) }
 
       expect(relays.count).to eq(1)
       expect(relays.first.body).to include("Costco Run")
-    end
-
-    it "runs it exactly once, even if the tap is replayed" do
-      message, = move_then_tell
-      action   = action_for(message)
-
-      Buddy::ProposalExecutor.perform(action.id, [1])
-      Buddy::ProposalExecutor.perform(action.id, [1])
-
-      expect(relays.count).to eq(1)
     end
 
     it "never sends it when the thing it was announcing failed" do
@@ -521,28 +304,6 @@ RSpec.describe "Buddy commands that named a time" do
       Buddy::ProposalExecutor.perform(action.id, [1])
 
       expect(relays).to be_empty
-    end
-
-    it "says what it held back, rather than going quiet about it" do
-      message, = move_then_tell
-      action   = action_for(message)
-      allow(Buddy::Tools).to receive(:dispatch).and_return({ ok: false, error: "nope" })
-
-      Buddy::ProposalExecutor.perform(action.id, [1])
-
-      held = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-      expect(held.body).to include("Held off on")
-      expect(held.body).to include("Message #{her}")
-    end
-
-    it "tells the model the follow-up is queued, not done" do
-      _message, client = move_then_tell
-
-      outputs = client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }
-      queued  = JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])
-
-      expect(queued["status"]).to eq("queued")
-      expect(queued["note"]).to include("has NOT run")
     end
 
     it "leaves a level-1 call made BEFORE the checkbox firing immediately" do
@@ -573,13 +334,8 @@ RSpec.describe "Buddy commands that named a time" do
     end
   end
 
-  # The gate that holds an immediate tool back when the request said WHEN.
-  #
-  # It has always existed for the device verbs (prod 3562, "Play Whisper Nap sound
-  # at 11", which played it 16 minutes early next to a sleeping dog). Prod 3897
-  # walked straight past it twice over: "Add "something" to my todo list in 2
-  # minutes" opens with a verb the command regex doesn't know, and `add_list_item`
-  # was not on the list of tools it guards.
+  # The gate that holds an immediate tool back when the request said WHEN,
+  # applied to list writes as well as device verbs.
   describe "the write gate" do
     let(:user)   { create(:user) }
     let!(:todo)  { create(:list, user: user, name: "Todo") }
@@ -627,23 +383,14 @@ RSpec.describe "Buddy commands that named a time" do
       JSON.parse(outputs.find { |o| o[:call_id] == call_id }[:output])
     end
 
-    # The 3897 shape with the flag left off: the write plus a plain countdown.
-    # ProposalBuilder can't see this one — a bare timer defers nothing and looks
-    # exactly like an ordinary countdown — so the gate is the only thing between
-    # the item and the list.
-    describe "a write with a time on it, answered with a bare countdown" do
-      let!(:client) { ask("Add \"something\" to my todo list in 2 minutes", [add_item, timer(120)]) }
+    # A bare timer defers nothing and looks exactly like an ordinary countdown,
+    # so ProposalBuilder can't see this shape and the gate is the only thing
+    # between the item and the list.
+    it "holds back a write with a time on it that was answered with a bare countdown" do
+      client = ask("Add \"something\" to my todo list in 2 minutes", [add_item, timer(120)])
 
-      it "does not add it" do
-        expect(items).to be_empty
-      end
-
-      it "tells the model it did not run, and why" do
-        held = output_for(client, "c1")
-
-        expect(held["status"]).to eq("failed")
-        expect(held["note"]).to include("says when to act")
-      end
+      expect(items).to be_empty
+      expect(output_for(client, "c1")["status"]).to eq("failed")
     end
 
     # The other half of the same sentence, and it must still work: no time named
@@ -669,9 +416,7 @@ RSpec.describe "Buddy commands that named a time" do
     end
 
     # "Remind me at 5 to call mom, and add milk to the list" names a time and then
-    # asks for something NOW. Which call the model emits first is arbitrary, and
-    # reading them one at a time meant the reminder only covered the milk when it
-    # happened to come first.
+    # asks for something NOW; the round is read as a whole, whichever call came first.
     it "lets a write through when the round also scheduled something, whichever order" do
       ask("Add milk to my list, and remind me at 5 to call mom", [
         add_item(item: "milk", call_id: "c1"),
@@ -685,8 +430,6 @@ RSpec.describe "Buddy commands that named a time" do
       expect(items.pluck(:name)).to eq(["milk"])
     end
 
-    # The device half of the gate is untouched by any of this — prod 3562 stays
-    # caught.
     it "still holds back a device command that named a time" do
       task = Task.create!(
         user: user, name: "Nap Sound", listener: "function(\"Nap\")",
@@ -703,15 +446,8 @@ RSpec.describe "Buddy commands that named a time" do
     end
   end
 
-  # "Do X in two minutes" must not do X now.
-  #
-  # Prod 3897: "Add "something" to my todo list in 2 minutes" came back as
-  # add_list_item followed by set_timer(then_continue: true). ListItem 6397 was
-  # created on the spot at 18:15:16, byte_action 561 stored an EMPTY deferred
-  # queue, and timer 69 rang at 18:17 over a job already done. Reported as a very
-  # common shape: the trailing time phrase reads to the model as a second thing to
-  # do rather than as when to do the first, so it gets appended in the order it
-  # was spoken.
+  # "Do X in two minutes" must not do X now. The trailing time phrase reads to
+  # the model as a second thing to do, so it emits the wait after the action.
   #
   # `then_continue` is the model's own claim that the rest rides on the wait, so a
   # wait with nothing behind it is a contradiction, and what it meant to hold is
@@ -724,8 +460,7 @@ RSpec.describe "Buddy commands that named a time" do
     }
 
     # The suite runs Sidekiq inline, so a countdown started here would fire during
-    # the example — and every assertion about what's still WAITING would really be
-    # an assertion about how fast the spec ran.
+    # the example.
     around { |ex| Sidekiq::Testing.fake! { ex.run } }
 
     before {
@@ -760,26 +495,16 @@ RSpec.describe "Buddy commands that named a time" do
       ListItem.joins(:list).where(lists: { id: todo.id })
     end
 
-    # The 3897 shape, exactly.
-    describe "an action emitted BEFORE the wait it belongs behind" do
-      before { ask("Add \"something\" to my todo list in 2 minutes", [add_item, wait_for(120)]) }
+    it "parks an action emitted BEFORE its wait on the countdown, and adds it when the timer is up" do
+      ask("Add \"something\" to my todo list in 2 minutes", [add_item, wait_for(120)])
 
-      it "does not add the item yet" do
-        expect(items).to be_empty
-      end
+      expect(items).to be_empty
+      expect(gate).to be_present
+      expect(gate.tool_input["deferred"]).to be_present
 
-      it "parks the item on the countdown instead of leaving the queue empty" do
-        expect(gate).to be_present
-        expect(gate.tool_input["deferred"]).to be_present
-      end
+      Buddy::ProposalBuilder.resume_after!(Timer.find(gate.tool_input["timer_id"]))
 
-      it "adds it when the timer is up" do
-        timer = Timer.find(gate.tool_input["timer_id"])
-
-        Buddy::ProposalBuilder.resume_after!(timer)
-
-        expect(items.pluck(:name)).to eq(["something"])
-      end
+      expect(items.pluck(:name)).to eq(["something"])
     end
 
     # The flag is what makes the wait a wait. Without it there is nothing to

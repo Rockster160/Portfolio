@@ -115,22 +115,16 @@ RSpec.describe "Background processes", type: :request do
   describe "DELETE /api/v1/background_processes/:key" do
     before { sign_in! }
 
-    it "clears it and says so" do
-      post "/api/v1/background_processes", params: { key: "jobhunt:line", name: "Preparing" }
-      delete "/api/v1/background_processes/jobhunt:line"
-
-      expect(json["cleared"]).to be(true)
-      expect(BackgroundProcess.live_for(user)).to be_empty
-    end
-
     # The browser encodes the colon in "jobhunt:line" as %3A, so the path the
     # strip actually sends is not the one written here by hand.
-    it "takes the key url-encoded" do
-      post "/api/v1/background_processes", params: { key: "jobhunt:line", name: "Preparing" }
-      delete "/api/v1/background_processes/jobhunt%3Aline"
+    it "clears it and says so, with the key plain or url-encoded" do
+      ["jobhunt:line", "jobhunt%3Aline"].each do |key|
+        post "/api/v1/background_processes", params: { key: "jobhunt:line", name: "Preparing" }
+        delete "/api/v1/background_processes/#{key}"
 
-      expect(json["cleared"]).to be(true)
-      expect(BackgroundProcess.live_for(user)).to be_empty
+        expect(json["cleared"]).to be(true)
+        expect(BackgroundProcess.live_for(user)).to be_empty
+      end
     end
 
     it "says ok for a key with nothing behind it" do

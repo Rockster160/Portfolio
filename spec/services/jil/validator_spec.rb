@@ -26,83 +26,68 @@ RSpec.describe Jil::Validator do
   end
 
   describe "valid code" do
-    it "accepts basic variable assignment and method calls" do
-      expect_valid('x = String.new("hello")::String')
-    end
-
-    it "accepts Hash.new with Keyval content block" do
-      expect_valid(<<~'JIL'.strip)
-        h = Hash.new({
-          a1 = Keyval.new("key", "value")::Keyval
-        })::Hash
-      JIL
-    end
-
-    it "accepts ActionEvent.create with ActionEventData content block" do
-      expect_valid(<<~'JIL'.strip)
-        evt = ActionEvent.create({
-          a1 = ActionEventData.name("Test")::ActionEventData
-          a2 = ActionEventData.notes("Notes")::ActionEventData
-        })::ActionEvent
-      JIL
-    end
-
-    it "accepts Prompt.create with Hash variable as data" do
-      expect_valid(<<~'JIL'.strip)
-        params = Hash.keyval("source", "test")::Hash
-        p = Prompt.create("Title", params, {
-          q1 = PromptQuestion.text("Question", "default")::PromptQuestion
-        }, true)::Prompt
-      JIL
-    end
-
-    it "accepts ActionEventData.data with content block" do
-      expect_valid(<<~'JIL'.strip)
-        h = Hash.keyval("key", "val")::Hash
-        evt = ActionEvent.create({
-          a1 = ActionEventData.data({
-            a2 = Global.ref(h)::Hash
-          })::ActionEventData
-        })::ActionEvent
-      JIL
-    end
-
-    it "accepts Global.if with content blocks" do
-      expect_valid(<<~'JIL'.strip)
-        cond = Boolean.new(true)::Boolean
-        r = Global.if({
-          a1 = Global.ref(cond)::Boolean
-        }, {
-          a2 = String.new("yes")::String
-        }, {
-          a3 = String.new("no")::String
-        })::Any
-      JIL
-    end
-
-    it "accepts Custom function calls" do
-      expect_valid('r = Custom.MyFunction("arg1", "arg2")::Hash')
-    end
-
-    it "accepts Keyword.Object in enumeration" do
-      expect_valid(<<~'JIL'.strip)
-        arr = Array.new({
-          a1 = String.new("x")::String
-        })::Array
-        r = arr.select({
-          item = Keyword.Object()::String
-          b1 = item.contains?("x")::Boolean
-        })::Array
-      JIL
-    end
-
-    it "accepts chained operations" do
-      expect_valid(<<~'JIL'.strip)
-        x = Numeric.new(5)::Numeric
-        y = Numeric.op(x, "+", 3)::Numeric
-        z = y.round(2)::Numeric
-        b = z.positive?()::Boolean
-      JIL
+    it "accepts each well-formed shape" do
+      {
+        "assignment and method call"            => 'x = String.new("hello")::String',
+        "Hash.new with Keyval content block"    => <<~'JIL',
+          h = Hash.new({
+            a1 = Keyval.new("key", "value")::Keyval
+          })::Hash
+        JIL
+        "ActionEvent.create with content block" => <<~'JIL',
+          evt = ActionEvent.create({
+            a1 = ActionEventData.name("Test")::ActionEventData
+            a2 = ActionEventData.notes("Notes")::ActionEventData
+          })::ActionEvent
+        JIL
+        "Prompt.create with a Hash variable"    => <<~'JIL',
+          params = Hash.keyval("source", "test")::Hash
+          p = Prompt.create("Title", params, {
+            q1 = PromptQuestion.text("Question", "default")::PromptQuestion
+          }, true)::Prompt
+        JIL
+        "ActionEventData.data content block"    => <<~'JIL',
+          h = Hash.keyval("key", "val")::Hash
+          evt = ActionEvent.create({
+            a1 = ActionEventData.data({
+              a2 = Global.ref(h)::Hash
+            })::ActionEventData
+          })::ActionEvent
+        JIL
+        "Global.if with content blocks"         => <<~'JIL',
+          cond = Boolean.new(true)::Boolean
+          r = Global.if({
+            a1 = Global.ref(cond)::Boolean
+          }, {
+            a2 = String.new("yes")::String
+          }, {
+            a3 = String.new("no")::String
+          })::Any
+        JIL
+        "Custom function calls"                 => 'r = Custom.MyFunction("arg1", "arg2")::Hash',
+        "Keyword.Object in enumeration"         => <<~'JIL',
+          arr = Array.new({
+            a1 = String.new("x")::String
+          })::Array
+          r = arr.select({
+            item = Keyword.Object()::String
+            b1 = item.contains?("x")::Boolean
+          })::Array
+        JIL
+        "chained operations"                    => <<~'JIL',
+          x = Numeric.new(5)::Numeric
+          y = Numeric.op(x, "+", 3)::Numeric
+          z = y.round(2)::Numeric
+          b = z.positive?()::Boolean
+        JIL
+        "escaped quotes inside a string arg"    => <<~'JIL',
+          msg = String.new("Not done")::String
+          sent = Global.command("Ping me \"#{msg}\"")::String
+        JIL
+      }.each { |shape, code|
+        result = validate(code.strip)
+        expect(result.errors).to be_empty, "#{shape}: #{result.errors.map(&:message).join("\n")}"
+      }
     end
   end
 
@@ -300,7 +285,6 @@ RSpec.describe Jil::Validator do
         })::Array
       JIL
     end
-
   end
 
   describe "method existence" do

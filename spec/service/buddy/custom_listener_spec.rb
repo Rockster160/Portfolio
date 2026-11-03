@@ -1,14 +1,7 @@
 require "rails_helper"
 
-# Prod 1455: "watch my Claude list and send me a notification any time anything
-# gets added" got "I can't watch a list for new additions from here." The bus
-# was already there - BuddyWatch rides Jil::Executor.trigger, which fires `item`
-# for every list addition - but a watch could only be assembled from five named
-# triggers, and its match hash compared top-level keys, while a list item nests
-# its list under `list: { id, name }`.
-#
-# A watch can now be a Jil listener string instead, matched by the same code a
-# Jil task uses, which brings dot-paths, regex and ANY along with it.
+# A watch can be a Jil listener string, matched by the same code a Jil task
+# uses, which brings nested paths, regex and ANY along with it.
 RSpec.describe "Buddy custom listeners" do
   let(:user)   { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
@@ -34,23 +27,13 @@ RSpec.describe "Buddy custom listeners" do
   end
 
   describe "watching a list" do
-    it "fires when something is added to the named list" do
+    it "fires on an addition to the named list only", :aggregate_failures do
       set!("item:action:added item:list:name:/^Claude$/")
       watch = BuddyWatch.last
 
       expect(watch.matches?(item_payload(list_name: "Claude"))).to be(true)
-    end
-
-    it "ignores a different list" do
-      set!("item:action:added item:list:name:/^Claude$/")
-
-      expect(BuddyWatch.last.matches?(item_payload(list_name: "Shopping"))).to be(false)
-    end
-
-    it "ignores a removal when the listener asked for additions" do
-      set!("item:action:added item:list:name:/^Claude$/")
-
-      expect(BuddyWatch.last.matches?(item_payload(list_name: "Claude", action: "removed"))).to be(false)
+      expect(watch.matches?(item_payload(list_name: "Shopping"))).to be(false)
+      expect(watch.matches?(item_payload(list_name: "Claude", action: "removed"))).to be(false)
     end
 
     # The reason the match hash couldn't do this: it compares top-level keys,
@@ -71,12 +54,9 @@ RSpec.describe "Buddy custom listeners" do
   end
 
   describe "refusing one that could never fire" do
-    it "rejects a scope nothing has ever triggered" do
-      expect { set!("sparkle:action:added") }.to raise_error(/nothing here has ever fired a "sparkle" trigger/)
-    end
-
-    it "rejects an empty listener" do
-      expect { set!("") }.to raise_error(/needs a `listener`/)
+    it "rejects a scope nothing has ever triggered, or an empty listener" do
+      expect { set!("sparkle:action:added") }.to raise_error(/sparkle/)
+      expect { set!("") }.to raise_error(/listener/)
     end
 
     it "refuses to store one past the tool either" do
@@ -91,22 +71,16 @@ RSpec.describe "Buddy custom listeners" do
   end
 
   describe "what the person can see" do
-    # They read what they asked for; the syntax is detail underneath. "when
-    # item:action:added fires" tells them nothing they wanted to know.
-    it "describes the condition in their words, not in syntax" do
+    it "describes the condition in their words, normalizing a 'whenever' opener" do
       result = set!("item:action:added")
 
       expect(result[:human_when]).to eq("when something is added to the Claude list")
       expect(result[:listener]).to eq("item:action:added")
+      expect(set!("item:list:id:7", phrase: "whenever milk shows up")[:human_when]).to eq("when milk shows up")
     end
 
     it "refuses a custom watch with no plain description" do
       expect { set!("item:action:added", phrase: "") }.to raise_error(/when_phrase/)
-    end
-
-    it "normalizes a 'whenever' opener so the framing reads right" do
-      expect(set!("item:action:added", phrase: "whenever milk shows up")[:human_when])
-        .to eq("when milk shows up")
     end
 
     # The description says what they asked for; the listener says what's really
@@ -123,14 +97,6 @@ RSpec.describe "Buddy custom listeners" do
 
       watch = Buddy::Context.send(:active_watches, convo).first
       expect(watch[:listener]).to eq("item:action:added")
-    end
-
-    it "shows it on the receipt too, the one moment a wrong listener is catchable" do
-      result  = set!("item:action:added")
-      receipt = tool[:receipt].call(result, ctx)
-
-      expect(receipt).to include("when something is added to the Claude list")
-      expect(receipt).to include("`item:action:added`")
     end
   end
 
@@ -172,13 +138,9 @@ RSpec.describe "Buddy custom listeners" do
     end
   end
 
-  # Prod 3743/3746. "Let me know the next time somebody comes to the door" set a
-  # doorbell-RING watch. Thirty seconds later: "No, not doorbell ring. Again. I
-  # want to know the next time the doorbell SEES a person." That wrote a SECOND
-  # watch with a different listener - and a correction rewrites the listener, so
-  # the twin check, which compares them with string equality, structurally could
-  # never see it. Nothing cancelled the first, and 74 minutes on it fired the
-  # exact notification he had refused in capitals.
+  # A correction rewrites the listener, so the twin check (string equality)
+  # can't see it; a watch set moments ago on the same scope is surfaced instead
+  # so the correction can retire it.
   describe "a watch set moments after another on the same trigger" do
     def summary_for(listener, text: "the other one")
       args = {
@@ -195,9 +157,7 @@ RSpec.describe "Buddy custom listeners" do
 
       summary = summary_for("item:action:removed item:list:name:/^Claude$/")
 
-      expect(summary).to include("JUST set on item")
-      expect(summary).to include("milk landed")
-      expect(summary).to include("cancel_reminder")
+      expect(summary).to include("JUST set", "milk landed", "cancel_reminder")
     end
 
     # The twin warning is the more specific of the two and says something this

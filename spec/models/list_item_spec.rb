@@ -1,18 +1,10 @@
 require "rails_helper"
 
 RSpec.describe ListItem do
-  # What a list-item trigger carries, and therefore what a listener can filter on.
-  #
-  # Prod Aug 3: a watch for "anything landing in the Claude list under Ocs-Backend"
-  # saved as `item:action:added item:list:name:/^Claude$/
-  # item:section:name:/^Ocs-Backend$/` and never fired once. The listener was
-  # valid - Jil::ListenerMatch can only tell you a listener PARSES, never that its
-  # keys exist in the payload - but `jil_serialize` emitted a bare `section_id`
-  # and no `section` object, so the term could not match anything, ever.
-  #
-  # The three write paths (ListItem model helpers, ListItemsController,
-  # Api::V1::ListItemsController) all serialize through `jil_serialize`, so this
-  # covers all of them.
+  # What a list-item trigger carries, and therefore what a listener can filter
+  # on. Jil::ListenerMatch can only tell you a listener PARSES, never that its
+  # keys exist in the payload. The model helpers and both list-item controllers
+  # all serialize through `jil_serialize`, so this covers all of them.
   describe "the jil payload" do
     let(:user)    { create(:user) }
     let(:list)    { create(:list, name: "Claude", user: user) }
@@ -23,47 +15,26 @@ RSpec.describe ListItem do
       create(:list_item, list: list, name: ">qa-scoring Done", section: section).jil_serialize(action: :added)
     end
 
-    describe "#jil_serialize" do
-      it "nests the section by name, the way a listener addresses it" do
-        expect(payload_for(backend)["section"]).to include("id" => backend.id, "name" => "Ocs-Backend")
-      end
+    # Rails drops a nil association from `include`, so the key is absent
+    # rather than null.
+    it "nests the section by name beside the list, and leaves it out when there is none" do
+      payload = payload_for(backend)
 
-      # Rails drops a nil association from `include`, so the key is absent rather
-      # than null. Same outcome for a listener either way - nothing to match.
-      it "leaves it out entirely when the item isn't in one" do
-        expect(payload_for(nil)).not_to have_key("section")
-      end
-
-      it "still carries the list, which is what already worked" do
-        expect(payload_for(backend)["list"]).to include("name" => "Claude")
-      end
+      expect(payload["section"]).to include("id" => backend.id, "name" => "Ocs-Backend")
+      expect(payload["list"]).to include("name" => "Claude")
+      expect(payload_for(nil)).not_to have_key("section")
     end
 
-    # The listener from prod, matched by the same code that runs in production.
-    describe "the watch that wouldn't fire" do
-      let(:watch) { "item:action:added item:list:name:/^Claude$/ item:section:name:/^Ocs-Backend$/" }
+    it "lets a section watch fire only for that section, and a list watch for anything on the list" do
+      watch = "item:action:added item:list:name:/^Claude$/ item:section:name:/^Ocs-Backend$/"
+      broad = "item:action:added item:list:name:/^Claude$/"
+      fires = ->(listener, section) { Jil::ListenerMatch.call(listener, :item, payload_for(section)) }
 
-      def fires?(section) = Jil::ListenerMatch.call(watch, :item, payload_for(section))
-
-      it "fires for an item in that section" do
-        expect(fires?(backend)).to be(true)
-      end
-
-      it "stays quiet for a different section" do
-        expect(fires?(other)).to be(false)
-      end
-
-      it "stays quiet for an item with no section" do
-        expect(fires?(nil)).to be(false)
-      end
-
-      # The broader watch this one replaced. Adding a key must not change it.
-      it "leaves a list-only watch matching everything on the list" do
-        broad = "item:action:added item:list:name:/^Claude$/"
-
-        expect(Jil::ListenerMatch.call(broad, :item, payload_for(nil))).to be(true)
-        expect(Jil::ListenerMatch.call(broad, :item, payload_for(other))).to be(true)
-      end
+      expect(fires.call(watch, backend)).to be(true)
+      expect(fires.call(watch, other)).to be(false)
+      expect(fires.call(watch, nil)).to be(false)
+      expect(fires.call(broad, nil)).to be(true)
+      expect(fires.call(broad, other)).to be(true)
     end
   end
 
@@ -83,29 +54,19 @@ RSpec.describe ListItem do
 
     def last_fire = fired.last
 
-    describe ".add" do
-      it "fires :item added attributed to the list owner" do
-        item = list.list_items.add("Milk")
+    it "fires :item added attributed to the list owner, from .add and List#add_items" do
+      item = list.list_items.add("Milk")
 
-        u, scope, data = last_fire
-        expect(u).to eq(user)
-        expect(scope).to eq(:item)
-        expect(data[:action]).to eq(:added)
-        expect(data[:name]).to eq("Milk")
-        expect(data.dig(:list, :name)).to eq(list.name)
-        expect(item).to be_persisted
-      end
-    end
+      u, scope, data = last_fire
+      expect(u).to eq(user)
+      expect(scope).to eq(:item)
+      expect(data[:action]).to eq(:added)
+      expect(data[:name]).to eq("Milk")
+      expect(data.dig(:list, :name)).to eq(list.name)
+      expect(item).to be_persisted
 
-    describe ".by_name_then_update (List#add_items path)" do
-      it "fires :item added" do
-        list.add_items(name: "Eggs")
-
-        _u, scope, data = last_fire
-        expect(scope).to eq(:item)
-        expect(data[:action]).to eq(:added)
-        expect(data[:name]).to eq("Eggs")
-      end
+      list.add_items(name: "Eggs")
+      expect(last_fire[2]).to include(action: :added, name: "Eggs")
     end
 
     describe "List#ensure_item" do
@@ -155,31 +116,16 @@ RSpec.describe ListItem do
       end
     end
 
-    describe ".remove" do
-      it "fires :item removed" do
-        list.list_items.add("Bread")
-        fired.clear
+    it "fires removed from .remove, and added/removed/added from .toggle" do
+      list.list_items.add("Bread")
+      list.list_items.remove("Bread")
+      expect(last_fire[2]).to include(action: :removed, name: "Bread")
 
-        list.list_items.remove("Bread")
-
-        _u, scope, data = last_fire
-        expect(scope).to eq(:item)
-        expect(data[:action]).to eq(:removed)
-        expect(data[:name]).to eq("Bread")
-      end
-    end
-
-    describe ".toggle" do
-      it "fires added, then removed, then added again" do
+      actions = 3.times.map {
         list.list_items.toggle("Soda")
-        expect(last_fire[2][:action]).to eq(:added)
-
-        list.list_items.toggle("Soda")
-        expect(last_fire[2][:action]).to eq(:removed)
-
-        list.list_items.toggle("Soda")
-        expect(last_fire[2][:action]).to eq(:added)
-      end
+        last_fire[2][:action]
+      }
+      expect(actions).to eq(%i[added removed added])
     end
 
     it "fires once per owner when the list is co-owned" do
@@ -201,13 +147,8 @@ RSpec.describe ListItem do
       expect(fired.map(&:first)).to contain_exactly(user)
     end
 
-    it "does NOT fire when the list has no owner to attribute it to" do
-      ownerless = List.create!(name: "Orphan")
-      ownerless.list_items.add("Ghost")
-      expect(fired).to be_empty
-    end
-
-    it "does NOT fire for a blank-name item that never persists" do
+    it "does NOT fire for an ownerless list or a blank name that never persists" do
+      List.create!(name: "Orphan").list_items.add("Ghost")
       list.list_items.add("")
       expect(fired).to be_empty
     end
@@ -229,12 +170,9 @@ RSpec.describe ListItem do
       sent
     end
 
-    # Prod, nightly at 9pm: Jil task 512 holds ONE `List.find("Before Bed")`
-    # and calls `add` on it three times to put the evening's items back. The
-    # first add loads `list_items`; the association memoizes, and the second
-    # and third adds then broadcast that first read. All three snapshots said
-    # the list held only "Pickup Whisper Dinner" — which is what the dashboard
-    # showed until it was reloaded, while all three rows sat in the database.
+    # A Jil task can hold one List and call `add` on it several times. The
+    # first add loads `list_items` and the association memoizes, so later
+    # snapshots must not broadcast that first read.
     it "reads the database, not the collection it loaded before the writes" do
       names = ["Pickup Whisper Dinner", "Kitchen & Living 90% Reset", "Dish washer running/delay"]
       names.each { |n| list.list_items.add(n) }
@@ -299,30 +237,20 @@ RSpec.describe ListItem do
       item.soft_destroy
     end
 
-    it "acks the label and the section, without the > or the state" do
+    it "acks the label and the section, without the > or any state the hooks write", :aggregate_failures do
       remove(">memory Done")
-
       expect(PetWorker).to have_received(:tell).with(:ack, ["memory"], ["Portfolio"])
-    end
 
-    it "strips every state the hooks write" do
       ["…", "...", "Permission", "Error", "Rate limited", "Stopped", "Stalled"].each { |state|
         remove(">keyb #{state}")
       }
-
       expect(PetWorker).to have_received(:tell).with(:ack, ["keyb"], ["Portfolio"]).exactly(7).times
-    end
 
-    it "leaves a label that merely ends in a state word alone" do
       remove(">abandon Done")
-
       expect(PetWorker).to have_received(:tell).with(:ack, ["abandon"], ["Portfolio"])
-    end
 
-    it "sends the label alone when the row has no section" do
-      remove(">keyb Done", section: nil)
-
-      expect(PetWorker).to have_received(:tell).with(:ack, ["keyb"], [])
+      remove(">solo Done", section: nil)
+      expect(PetWorker).to have_received(:tell).with(:ack, ["solo"], [])
     end
 
     it "acks when the box is checked" do
@@ -332,28 +260,11 @@ RSpec.describe ListItem do
       expect(PetWorker).to have_received(:tell).with(:ack, ["memory"], ["Portfolio"])
     end
 
-    it "says nothing when the hooks replace their own row" do
+    it "says nothing for the hooks' own replacement, an empty name, or anyone else's list" do
       remove(">memory …", quiet: true)
-
-      expect(PetWorker).not_to have_received(:tell)
-    end
-
-    it "says nothing when nothing is left of the name" do
       remove(">Done")
-
-      expect(PetWorker).not_to have_received(:tell)
-    end
-
-    it "says nothing for a row on any other list" do
-      other = create(:list, name: "Groceries", user: User.me)
-      create(:list_item, list: other, name: ">memory Done").soft_destroy
-
-      expect(PetWorker).not_to have_received(:tell)
-    end
-
-    it "says nothing for someone else's Claude list" do
-      theirs = create(:list, name: "Claude", user: create(:user))
-      create(:list_item, list: theirs, name: ">memory Done").soft_destroy
+      create(:list_item, list: create(:list, name: "Groceries", user: User.me), name: ">memory Done").soft_destroy
+      create(:list_item, list: create(:list, name: "Claude", user: create(:user)), name: ">memory Done").soft_destroy
 
       expect(PetWorker).not_to have_received(:tell)
     end

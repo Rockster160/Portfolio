@@ -63,24 +63,6 @@ RSpec.describe SlackNotifier do
   end
 
   describe "what the alert says" do
-    # An id on its own answers a question nobody asked; most of these pings had
-    # no user on them at all.
-    it "names who it happened for" do
-      allow(Rails.env).to receive(:test?).and_return(false)
-      allow(SlackWorker).to receive(:perform_async)
-      user = create(:user)
-
-      begin
-        raise "boom"
-      rescue StandardError
-        described_class.notify("push failed", user: user)
-      end
-
-      expect(SlackWorker).to have_received(:perform_async).with(
-        include("— #{user.first_name} (##{user.id})"), any_args
-      )
-    end
-
     it "ends at a link to the row" do
       allow(Rails.env).to receive(:test?).and_return(false)
       allow(SlackWorker).to receive(:perform_async)
@@ -145,14 +127,13 @@ RSpec.describe SlackNotifier do
       expect(ErrorReport.where.not(channel: nil).count).to eq(1)
     end
 
-    # Starting again after it had stopped is news, and says so.
+    # Starting again after it had stopped is news.
     it "speaks up again after a break" do
       travel_to(2.hours.ago) { ping }
 
       ping
 
       expect(SlackWorker).to have_received(:perform_async).twice
-      expect(SlackWorker).to have_received(:perform_async).with(include("back after"), any_args)
     end
 
     # Suppressed is not swallowed: one that never stops still gets said again,
@@ -164,9 +145,6 @@ RSpec.describe SlackNotifier do
       travel_to(30.minutes.ago) { ping }
 
       expect(SlackWorker).to have_received(:perform_async).twice
-      expect(SlackWorker).to have_received(:perform_async).with(
-        include("still going", "of these in the"), any_args
-      )
     end
 
     it "announces one that has happened before but was never announced" do

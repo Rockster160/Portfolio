@@ -1,13 +1,7 @@
 require "rails_helper"
 
-# The board already paints "Waiting on you" at the top of the interviews page,
-# and that page was the only place it was ever visible. Byte is where the day is
-# read, so an availability request could sit for days unless somebody went
-# looking for it.
-#
-# A chip rather than an alert: an alert owns a bubble in the thread and a bar
-# across the foot of the hero, which is one of a dozen applications taking the
-# weight of a house-level condition.
+# An application waiting on him gets a `waiting` chip on Byte's strip until the
+# ball is back in the company's court.
 RSpec.describe Buddy::JobWaiting do
   let(:user) { create(:user) }
   let(:job) { user.job_applications.create!(company: "Reserv", role: "Staff Engineer") }
@@ -19,22 +13,16 @@ RSpec.describe Buddy::JobWaiting do
   end
 
   describe "a beat that is his to answer" do
-    it "puts up a waiting chip naming what is owed, linked to the application" do
+    # `waiting` is the state the strip colours as asking for a person, sorts to
+    # the front, and exempts from ageing out - so it stays until it is done.
+    it "puts up a waiting chip linked to the application, never claiming to be in progress", :aggregate_failures do
       job.notes.create!(tag: :availability, occurred_at: 1.hour.ago)
 
       expect(chip).to be_waiting
-      expect(chip.name).to eq("Send availability")
-      expect(chip.detail).to eq("Reserv — Staff Engineer")
-      expect(chip.links).to eq([{ "label" => "Reserv", "url" => job.interview_url }])
-    end
-
-    # `waiting` is the state the strip colours as asking for a person, sorts to
-    # the front, and exempts from ageing out - so it stays until it is done.
-    it "never claims to be work in progress" do
-      job.notes.create!(tag: :take_home, occurred_at: 1.hour.ago)
-
       expect(chip).not_to be_running
       expect(chip).not_to be_stale
+      expect(chip.name).to eq(JobNote::BALL_IN_COURT["availability"])
+      expect(chip.links).to eq([{ "label" => "Reserv", "url" => job.interview_url }])
     end
 
     # The name is the whole chip and gets 20 characters.
@@ -73,7 +61,7 @@ RSpec.describe Buddy::JobWaiting do
 
       expect { job.notes.create!(tag: :take_home, occurred_at: 1.hour.ago) }
         .not_to change(BackgroundProcess, :count)
-      expect(chip.name).to eq("Take-home to do")
+      expect(chip.name).to eq(JobNote::BALL_IN_COURT["take_home"])
     end
   end
 

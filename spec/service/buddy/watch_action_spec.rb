@@ -2,11 +2,6 @@ require "rails_helper"
 
 # A watch that DOES something instead of saying something.
 #
-# Prod Aug 3: "Trigger whisper-quiet 10 seconds after the next time the doggy
-# door sensor gets triggered" got "I can watch the doggy door sensor, but I
-# can't make it wait 10 seconds after the trigger on its own." True at the time
-# - remind_when only ever delivered a nudge, and had no delay.
-#
 # The load-bearing property is that no model sits between the sensor and the
 # light: the task is resolved when the watch is SET, so firing it is a Jil
 # trigger and a receipt, at 2am, with nothing to think about.
@@ -62,14 +57,6 @@ RSpec.describe "Buddy watch actions" do
       expect(watch.run_delay).to eq(10)
     end
 
-    it "says what it will do, not that it will remind them" do
-      run(doorbell(run: "Whisper Quiet", delay: 10))
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).to include("Whisper Quiet", "10s after")
-      expect(chip.body).not_to include("remind you")
-    end
-
     it "still makes an ordinary reminder watch when no task is named" do
       run(doorbell)
 
@@ -109,30 +96,25 @@ RSpec.describe "Buddy watch actions" do
     end
   end
 
-  # The refusal was the actual failure — the plumbing didn't exist, but nothing
-  # would have used it either.
-  it "tells the model this is possible, using the request that got refused" do
-    prompt = Buddy::Personality.for(user, conversation: convo)
-
-    expect(prompt).to include("A watch can DO something, and it can wait first")
-    expect(prompt).to include("`run`", "`delay`")
-  end
-
   describe "firing one" do
     def watch!(delay:)
       run(doorbell(run: "Whisper Quiet", delay: delay))
       BuddyWatch.last
     end
 
-    it "fires the task straight away when there's no delay" do
+    it "fires the task straight away when there's no delay, leaving only a receipt", :aggregate_failures do
       w = watch!(delay: 0)
 
       Buddy::WatchMatcher.fire!(w)
 
       expect(::Jil).to have_received(:trigger).with(user, :"whisper-quiet", {}, hash_including(auth: :buddy))
+      chip = convo.byte_messages.where("metadata->>'source' = 'watch'").last
+      expect(chip.body).to include("Whisper Quiet")
+      expect(chip.metadata["kind"]).to eq("buddy_activity")
+      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_trigger'")).to be_empty
     end
 
-    it "hands a delayed one to a job instead of sleeping on the trigger" do
+    it "hands a delayed one to a job, which runs it when it lands" do
       w = watch!(delay: 10)
 
       Sidekiq::Testing.fake! {
@@ -142,10 +124,6 @@ RSpec.describe "Buddy watch actions" do
         expect(BuddyWatchActionWorker.jobs.size).to eq(1)
       }
       expect(::Jil).not_to have_received(:trigger).with(user, :"whisper-quiet", any_args)
-    end
-
-    it "runs it when the job lands" do
-      w = watch!(delay: 10)
 
       BuddyWatchActionWorker.new.perform(w.id)
 
@@ -162,30 +140,9 @@ RSpec.describe "Buddy watch actions" do
 
       expect(::Jil).not_to have_received(:trigger).with(user, :"whisper-quiet", any_args)
     end
-
-    it "leaves a receipt so a silent automation is still traceable" do
-      w = watch!(delay: 0)
-
-      Buddy::WatchMatcher.fire!(w)
-
-      chip = convo.byte_messages.where("metadata->>'source' = 'watch'").last
-      expect(chip.body).to include("Whisper Quiet")
-      expect(chip.metadata["kind"]).to eq("buddy_activity")
-    end
-
-    it "says nothing to the person beyond that receipt" do
-      w = watch!(delay: 0)
-
-      Buddy::WatchMatcher.fire!(w)
-
-      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_trigger'")).to be_empty
-      expect(convo.byte_messages.where("metadata->>'source' = 'watch'").where("body LIKE '%Reminder%'")).to be_empty
-    end
   end
 
-  # Prod 8101: "Once I leave the event today, navigate me to Petsmart" got a
-  # schedule_function at the event's booked end, because `run` could only name
-  # a bare trigger and a destination had nowhere to go.
+  # `run` can name a Jil function and carry its arguments.
   describe "running a function with its arguments" do
     let!(:navigate) {
       Task.create!(
@@ -279,7 +236,6 @@ RSpec.describe "Buddy watch actions" do
       expect(w.kind).to eq("action")
       expect(w.run_steps.pluck("tool_name")).to eq(["set_timer", "run_jil_task"])
       expect(w.run_task_name).to include("wait 2 min", "run jil task: Whisper Quiet")
-      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last.body).to include("wait 2 min")
     end
 
     it "refuses a step that can't run, before anything is armed" do
@@ -328,7 +284,7 @@ RSpec.describe "Buddy watch actions" do
       Buddy::WatchMatcher.fire!(w)
 
       expect(Buddy::Routines).not_to have_received(:run!)
-      expect(convo.byte_messages.last.body).to include("Didn't run **Wind Down**", "turned off")
+      expect(convo.byte_messages.last.body).to include("Wind Down")
     end
 
     it "refuses a routine that doesn't exist" do

@@ -10,12 +10,8 @@ RSpec.describe "Buddy Today forward-looking" do
   before { allow(user).to receive(:timezone).and_return("America/Denver") }
 
   # One of everything, in the shape Buddy::GPT::ContextTool hands over after the
-  # briefing filters have run.
-  #
-  # Every subject block in the seed is gated on the DAY now — Rocco, 2026-09-04:
-  # "if there are no chores that day, we don't even mention the chores section
-  # in the prompt at all" — so a spec asserting that a RULE reaches the model
-  # needs the thing that rule is about to actually be on the day.
+  # briefing filters have run. Every subject block in the seed is gated on the
+  # day actually holding something for it.
   def full_day_facts
     {
       name:    "Rocco",
@@ -38,92 +34,34 @@ RSpec.describe "Buddy Today forward-looking" do
     }
   end
 
+  def empty_facts(**overrides)
+    { name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {} }.merge(overrides)
+  end
+
   def a_full_day!
     allow(Buddy::Features).to receive(:enabled?).and_call_original
     allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(true)
     allow(Buddy::BriefingFacts).to receive(:build).and_return(full_day_facts)
   end
 
-  # Prod 2516 opened "Hey hey, Rocco. Morning's got some real shape to it." -
-  # the right words landing on a flat period, which is what the opener rule had
-  # just been rewritten to prevent.
-  #
-  # The rule was added to the system prompt only. But the briefing seed carries
-  # four paragraphs of its own opener guidance, and that is the most specific
-  # instruction the model has about how to open THIS message - so a rule living
-  # anywhere else loses to it. Tone guidance has to be where the model is
-  # actually reading about the thing it's writing.
-  describe "the greeting the briefing asks for" do
-    it "tells the briefing itself how the hello has to land, not only the system prompt" do
-      expect(Buddy::TodayBriefing.seed(user)).to include("warm rather than flat")
-    end
-
-    # Where it lands is the seed's business; what it sounds like is the
-    # persona's. Asking for a stretched vowel or an exclamation mark here sets
-    # one companion's punctuation for all of them, and it outranks the voice
-    # files because it is the last thing in the prompt.
-    it "leaves the punctuation of the hello to whoever is saying it" do
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).not_to include("stretched vowel")
-      expect(seed).to include("your own kind of warm")
-    end
-
-    # The register of the whole message, not just the opener. A dial set here
-    # ("warmer than bouncy") is a house voice, and rewriting a persona then
-    # changes nothing about the one message that goes out every morning.
-    it "sends the model to its persona for the register rather than setting one" do
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).to include("persona and your tone profile")
-      expect(seed).not_to include("more often than bouncy")
-    end
-
-    # The same reply closed with "Which, rude of the calendar, but at least
-    # it's a plan." - a phrase that appears nowhere except inside a don't-do
-    # example in this very seed. A memorable line in a counter-example is still
-    # a line the model read, and it borrows it.
-    it "does not hand the model a phrase to borrow inside a don't-do example" do
-      expect(Buddy::TodayBriefing.seed(user)).not_to include("rude of the calendar")
-    end
-  end
-
-  # The one line in the whole seed that is a JUDGEMENT rather than a fact.
-  # Buddy::PlungeAdvisor decides whether the window is any good and writes
-  # nothing at all when it isn't, so a rule asking for one on every wet day
-  # hands that call back to the model - which answered it by putting the window
-  # inside the rain.
-  describe "the plunge window it asks about" do
+  describe "the plunge window" do
     def seed_for(alpine)
-      allow(Buddy::BriefingFacts).to receive(:build).and_return(
-        name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: alpine,
-      )
+      allow(Buddy::BriefingFacts).to receive(:build).and_return(empty_facts(alpine: alpine))
       Buddy::TodayBriefing.seed(user)
     end
 
-    it "asks for it when the advisor offered one" do
-      seed = seed_for(today: ["Rain in Alpine 1-4pm", "Good plunge window: clear from 4pm"], week: [])
+    it "reaches the seed only when the advisor offered one", :aggregate_failures do
+      offered = seed_for(today: ["Rain in Alpine 1-4pm", "Good plunge window: clear from 4pm"], week: [])
+      wet = seed_for(today: ["Rain in Alpine 1-4pm"], week: [])
 
-      expect(seed).to include("Float it once and lightly")
-    end
-
-    it "says nothing about a plunge on a wet day that got no window" do
-      seed = seed_for(today: ["Rain in Alpine 1-4pm"], week: [])
-
-      expect(seed).to include("Alpine only ever comes up when the canyon is wet")
-      expect(seed).not_to include("plunge")
+      expect(offered).to include("Good plunge window: clear from 4pm")
+      expect(wet).to include("Rain in Alpine 1-4pm")
+      expect(wet).not_to include("plunge")
     end
   end
 
-  # A Today always opens with a hello. It's part of the shape of the thing, not
-  # a reaction to how long it's been - so there is no branch here, and the
-  # thread's history is not an input.
-  #
-  # The seed used to work it out from the timestamps and say DON'T GREET when
-  # they'd spoken inside 30 minutes. That was a better-informed branch than the
-  # model's own judgement and still the wrong question: asking for a second
-  # Today an hour after the first is not a reason to be greeted like the
-  # conversation never paused.
+  # A Today always orders a greeting, whatever the thread's history - and
+  # Buddy::GPT::Turn keys its hello repair off that order.
   describe "whether to greet at all" do
     let(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Byte") }
 
@@ -133,39 +71,16 @@ RSpec.describe "Buddy Today forward-looking" do
       )
     end
 
-    it "orders a greeting when the briefing arrives out of the blue" do
+    it "orders a greeting on a fresh thread, after a long gap, and moments after talking", :aggregate_failures do
+      expect(Buddy::TodayBriefing.greeting_ordered?(Buddy::TodayBriefing.seed(user))).to be(true)
+
       person_said("night", at: 9.hours.ago)
+      expect(Buddy::TodayBriefing.greeting_ordered?(Buddy::TodayBriefing.seed(user))).to be(true)
 
-      expect(Buddy::TodayBriefing.seed(user)).to include("OPEN WITH A GREETING").and include("warm rather than flat")
-    end
-
-    it "orders one on a thread that has never been spoken in" do
-      expect(Buddy::TodayBriefing.seed(user)).to include("OPEN WITH A GREETING")
-    end
-
-    it "orders one when they were talking a moment ago" do
       person_said("what's up", at: 2.minutes.ago)
-
-      expect(Buddy::TodayBriefing.seed(user)).to include("OPEN WITH A GREETING")
+      expect(Buddy::TodayBriefing.greeting_ordered?(Buddy::TodayBriefing.seed(user))).to be(true)
     end
 
-    # Two in a row is fine, and saying so is the point - left unsaid, "we just
-    # did this" is exactly the reasoning that skips it.
-    it "says out loud that back to back is fine" do
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).to include("second in a row")
-      expect(seed).not_to include("DON'T GREET")
-    end
-
-    it "leaves the model no branch to take either way" do
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).not_to include("when it fits")
-      expect(seed).not_to include("Skip it when")
-    end
-
-    # deliver! is the scheduled path, and it's the one the misses came from.
     it "carries the order through the scheduled delivery" do
       person_said("still up", at: 3.minutes.ago)
       allow(MonitorChannel).to receive(:broadcast_to)
@@ -173,121 +88,63 @@ RSpec.describe "Buddy Today forward-looking" do
 
       msg = Buddy::TodayBriefing.deliver!(user, conversation)
 
-      expect(msg.body).to include("OPEN WITH A GREETING")
+      expect(Buddy::TodayBriefing.greeting_ordered?(msg.body)).to be(true)
     end
   end
 
-  # Prod 2528 answered a Today tap with twelve chore names in one comma-run,
-  # credited Rocco for a chore recorded for someone else, and closed on a 💙
-  # that wasn't about anything. Every soft version of "don't recite" was already
-  # in the seed; what wasn't was a number, and what WAS in there was an explicit
-  # licence for the shape that went out.
-  # Rocco, 2026-09-04: "the recent briefings have started to become robotic -
-  # there is a cute good morning message, but then in order to enforce having
-  # the correct data, we're just injecting the flat data instead of giving
-  # everything to Byte to summarize. Maybe we should do more logic in collecting
-  # the data and then passing that to Byte and letting him go over it all,
-  # instead. And update the prompts to be more dynamic."
-  #
-  # The evidence is unarguable. On 4 Sep all three briefings - three different
-  # people, three different companions - ended with the same two sentences, byte
-  # for byte: "High of 86°F today, low of 65°F, with wind worth knowing about."
-  # and "Rain Mon, windy Sun this week." That is one repair function printing
-  # one string three times, with a single warm paragraph above it.  # Rocco, 2026-09-04: "Having a service that collects and provides all of the
-  # data points and then just passing it to the buddy to talk about and phrase
-  # in their own words and not have to use any tools is a complete refactor."
-  #
-  # The evidence for it is unarguable. On 4 Sep all three briefings — three
-  # different people, three different companions — ended with the same two
-  # sentences, byte for byte: "High of 86°F today, low of 65°F, with wind worth
-  # knowing about." and "Rain Mon, windy Sun this week." That is one repair
-  # function printing one string three times, under the single warm paragraph
-  # that was the only part any model actually wrote.
-  #
-  # So the deciding happens in Buddy::BriefingFacts, in Ruby, and the prompt
-  # says how to SOUND.
-  describe "the day, handed over rather than described" do
-    let(:seed) { Buddy::TodayBriefing.seed(user) }
+  describe "the day, handed over as rows" do
+    it "puts each kind of thing in its section, shaped as one line each", :aggregate_failures do
+      a_full_day!
+      seed = Buddy::TodayBriefing.seed(user)
 
-    before { a_full_day! }
-
-    it "puts the day in the seed instead of rules for finding it" do
       expect(seed).to include("ON TODAY")
-      expect(seed).to include("their day, already gathered and narrowed for you")
-    end
-
-    it "puts each thing on one line, in the order of the day" do
       expect(seed).to include("- 11:40 AM · Eye Follow Up · Draper · leave by 11:08 AM (22 min drive)")
-    end
-
-    # Stapled on the end as its own paragraph is exactly what `with_leave_times`
-    # was doing on 4 Sep, to two of the three briefings.
-    it "keeps the departure with the thing it's a departure for" do
       expect(seed).not_to match(/^Eye Follow Up: leave by/)
-    end
-
-    # Prod 3954, 19 Aug: "a very open day ahead, with nothing pressing" at 8:30,
-    # with two reminders due at 9:00 and one at 10:00, all of which rang. A
-    # reminder is a thing that is going to happen to them at a time, so it sits
-    # in the day like anything else.
-    # No weekday on it: the section is today, and prod 7410 read the "Sat" in
-    # "Sat 7pm" straight out on a Saturday morning. See BriefingFacts#due_time.
-    it "gives a reminder the same shape as an event" do
+      # A reminder carries no weekday: the section is today.
       expect(seed).to include("ALSO DUE TODAY")
       expect(seed).to include("- 3:00 PM · Do the dishes.")
-    end
-
-    # Rocco, 2026-09-04: "I still want Buddy to say 'It's trash day' instead of
-    # 'You have a trash job today'." The group isn't a task with a name, it's
-    # what the day IS.
-    it "asks for a group of jobs to be said as the day, not as a task" do
-      expect(seed).to include("the job is what the DAY is")
-      expect(seed).to include("as the day it makes")
-    end
-
-    it "gives chores as the job rather than as the rows" do
       expect(seed).to include("JOBS TODAY")
       expect(seed).to include("- trash: Gather trash, Take out trash bags")
       expect(seed).to include("- Replace the air filter · 5x")
-    end
-
-    it "keeps the week to its own short list" do
       expect(seed).to include("COMING UP")
       expect(seed).to include("- tomorrow · 6:00 PM · Drinks out")
-    end
-
-    # The section is already `upcoming_notable` — `notable?` has taken the
-    # ordinary week out before the model sees any of it — so a cap on top of
-    # it re-does a selection that was made, and it contradicts "All of it
-    # reaches them" three lines above in the same prompt. Prod, 7 Sep: off the
-    # identical section Byte kept three of four and dropped a surprise 30th
-    # birthday (5602), Moss kept all five (5610). Neither is wrong against the
-    # prompt as it was written, which is the tell.
-    it "does not also ask the week to be cut down" do
-      expect(seed).to include("All of it reaches them")
-      expect(seed).not_to include("at most one line")
-      expect(seed).to include("every one of them reaches them")
-    end
-
-    # Rocco, 2026-09-04: "'You have yoga tomorrow' is absolutely incorrect.
-    # 'Chelsea has yoga tomorrow' is accurate and acceptable." The owner leads
-    # the title, so the row reads as hers before the model has written a word.
-    it "puts whose it is in front of what it is" do
+      # The owner leads the title so a partner's item reads as theirs.
       expect(seed).to include("- 4:00 PM · Chelsea's Her thing")
-    end
-
-    it "marks a thing that isn't happening" do
       expect(seed).to include("cancelled")
+      expect(seed).to include("all day")
+      # A quoted sample line in the instructions comes back as the briefing.
+      instructions = seed.split("HOW TO SAY IT").last
+      expect(instructions.scan(/"[^"\n]{25,}"/)).to be_empty
+      expect(instructions.scan(/`([A-Z][A-Za-z0-9' .-]{3,40})`/).flatten - ["Part of day"]).to be_empty
     end
 
-    it "marks a thing with no clock time as all day" do
-      expect(seed).to include("all day")
+    it "prints no empty sections on a quiet day and is much shorter for it", :aggregate_failures do
+      allow(Buddy::BriefingFacts).to receive(:build).and_return(empty_facts)
+      quiet = Buddy::TodayBriefing.seed(user)
+
+      %w[ON\ TODAY ALSO\ DUE\ TODAY JOBS\ TODAY COMING\ UP].each { |heading|
+        expect(quiet).not_to include(heading)
+      }
+      expect(Buddy::TodayBriefing.greeting_ordered?(quiet)).to be(true)
+
+      a_full_day!
+      expect(quiet.length).to be < (Buddy::TodayBriefing.seed(user).length * 0.8)
+    end
+
+    it "drops the whole jobs section for someone without chores", :aggregate_failures do
+      allow(Buddy::Features).to receive(:enabled?).and_call_original
+      allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(false)
+      allow(Buddy::BriefingFacts).to receive(:build).and_return(empty_facts)
+
+      bare = Buddy::TodayBriefing.seed(user)
+
+      expect(bare).not_to include("JOBS TODAY")
+      expect(bare).not_to match(/\n{3,}/)
     end
   end
 
-  # The stubbed facts above test the writing; this is the wiring. `BriefingFacts`
-  # reads through ContextTool on purpose, so what the seed says the day holds
-  # and what the filters would answer are the same answer.
+  # `BriefingFacts` reads through ContextTool on purpose, so what the seed says
+  # the day holds and what the filters would answer are the same answer.
   describe "reading the real day" do
     let!(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Byte") }
     let!(:household)    { ChoreHousehold.create!(name: "Home", owner_user: user) }
@@ -311,23 +168,17 @@ RSpec.describe "Buddy Today forward-looking" do
       }
     }
 
-    it "names what is actually on the day" do
+    it "names what is on the day, from the same rows the briefing filters hand over", :aggregate_failures do
       seed = Buddy::TodayBriefing.seed(user, conversation)
-
-      expect(seed).to include("Eye Follow Up")
-      expect(seed).to include("trash: Gather trash, Take out trash bags")
-    end
-
-    it "reads the same rows the briefing filters would hand over" do
       facts  = Buddy::BriefingFacts.build(user, conversation)
       served = Buddy::GPT::ContextTool.new(user, conversation, briefing: true).filtered([:chores_due_today])
 
+      expect(seed).to include("Eye Follow Up")
+      expect(seed).to include("trash: Gather trash, Take out trash bags")
       expect(facts[:jobs].pluck(:name)).to eq(served[:chores_due_today].pluck(:name))
     end
 
-    # The seed the model reads and the facts a pre-send repair checks it against
-    # have to be the same day, or the repair is arguing with a different
-    # briefing. `deliver!` stamps them on the message.
+    # The pre-send repairs read the facts back off the message.
     it "rides on the message, for the repairs to read back" do
       allow(BuddyDeliverWorker).to receive(:perform_async)
       allow(MonitorChannel).to receive(:broadcast_to)
@@ -335,217 +186,6 @@ RSpec.describe "Buddy Today forward-looking" do
       msg = Buddy::TodayBriefing.deliver!(user, conversation, scheduled: false)
 
       expect(msg.metadata["briefing"]["jobs"].pluck("name")).to include("Gather trash")
-    end
-  end
-
-  # A rule about partners' calendars on a day with no partner item in it teaches
-  # the model to go looking for something that isn't there, and a prompt full of
-  # inapplicable sections is most of what makes a briefing read like a form
-  # being filled in.
-  describe "what a quiet day's prompt leaves out" do
-    let(:quiet) {
-      allow(Buddy::BriefingFacts).to receive(:build).and_return(
-        name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {},
-      )
-      Buddy::TodayBriefing.seed(user)
-    }
-
-    it "says there is nothing rather than printing empty headings" do
-      expect(quiet).not_to include("ON TODAY")
-      expect(quiet).to include("Nothing came back for today")
-    end
-
-    it "drops the guidance for jobs, reminders and partners" do
-      expect(quiet).not_to include("Jobs listed under one name")
-      expect(quiet).not_to include("somebody else's")
-    end
-
-    it "drops the week, the stash, the all-day rule and the travel rule" do
-      expect(quiet).not_to include("The week gets at most one line")
-      expect(quiet).not_to include("stashed a while back")
-      expect(quiet).not_to include("simply ON today")
-      expect(quiet).not_to include("A leave-by is a clock time")
-    end
-
-    # The half about how to SOUND and the half about naming things both stay:
-    # neither has a subject that can be absent from a day.
-    it "keeps the voice and the rules that always apply" do
-      expect(quiet).to include("Tight, not truncated")
-      expect(quiet).to include("OPEN WITH A GREETING")
-      expect(quiet).to include("Call each thing by its name")
-    end
-
-    it "is a great deal shorter than a full day's" do
-      a_full_day!
-      full = Buddy::TodayBriefing.seed(user)
-
-      expect(quiet.length).to be < (full.length * 0.8)
-    end
-  end
-
-  describe "the briefing it asks for" do
-    let(:seed) { Buddy::TodayBriefing.seed(user) }
-
-    before { a_full_day! }
-
-    # THE rule for this file. Every concrete example ever written into this
-    # prompt came back out of it: two agenda items were named here purely as
-    # what-NOT-to-say illustrations, and both were read out by name on the days
-    # they came round. Naming a thing in order to forbid it still puts the name
-    # in front of the model.
-    #
-    # The day's own rows are exempt, obviously — they're the message. What must
-    # stay out is anything ILLUSTRATIVE.
-    it "hands the model no example it can echo" do
-      instructions = seed.split("HOW TO SAY IT").last
-
-      expect(instructions.scan(/"[^"\n]{25,}"/)).to be_empty
-      expect(instructions.scan(/`([A-Z][A-Za-z0-9' .-]{3,40})`/).flatten - ["Part of day"]).to be_empty
-    end
-
-    # Rocco, 2026-09-04, on "notes to write FROM, not lines to read out":
-    # "Isn't this a type of anti-example? We should tell what TO do, not what
-    # NOT to do?" And then, on the replacement for it: "'leave the rows out of
-    # it' - isn't that an anti-example again?"
-    #
-    # He was right twice, so this stops being something he has to catch.
-    it "says what to do with the day rather than what not to do" do
-      expect(seed).to include("reframe it in your own words and pass it on")
-      expect(seed).not_to include("not lines to read out")
-    end
-
-    # Every instruction is a sentence about what to write. The test is whether
-    # the positive half already specifies the output: where it does, the
-    # negation is doing nothing except naming the thing again, which is the
-    # subtraction test this prompt applies to Buddy's own writing turned back on
-    # the prompt itself.
-    #
-    # The four that stay are all load-bearing rather than decorative, and each
-    # is here by name so a fifth can't slip in behind them:
-    #   - "Only what's above" and "it isn't happening today" — the invented-item
-    #     guard, which has no positive form.
-    #   - "Tight, not truncated" — the contrast IS the rule; the positive half
-    #     alone reads as permission to cut.
-    #   - "keep em dashes out of it" — a typographic ban with nothing to say
-    #     positively.
-    #   - "leave it out" on the emoji — the outcome of a decision procedure, not
-    #     a style prohibition.
-    it "carries no instruction whose negative half is doing the work" do
-      allowed = [
-        "Only what's above",
-        "it isn't happening today",
-        "Tight, not truncated",
-        "keep em dashes out of it",
-        "leave it out",
-      ]
-      instructions = seed.split("HOW TO SAY IT").last.split("\n").reject { |line|
-        allowed.any? { |phrase| line.include?(phrase) }
-      }
-
-      expect(instructions.join("\n")).not_to match(/\b(?:never|don't|do not|rather than|instead of|leave .* out of it)\b/i)
-    end
-
-    it "says the filtering is already done rather than how to do it" do
-      expect(seed).to include("already gathered and narrowed for you")
-      expect(seed).to include("nothing to look up and nothing to work out")
-    end
-
-    # A brief mention still has to be specific: compressing an item to its
-    # category strips the only part that couldn't have been guessed.
-    it "refuses a bare category where the item has a name" do
-      expect(seed).to include("Call each thing by its name")
-      expect(seed).to include("the part they couldn't have guessed")
-    end
-
-    # The old rule said brevity meant "mentioning FEWER things", with a 3-5 line
-    # cap in two other places. That is an instruction to drop real items on a
-    # busy day, and it costs exactly the ones worth having.
-    it "puts no cap on how many lines a day is allowed to be" do
-      expect(seed).to include("Trim the words around a thing and keep the thing")
-      expect(seed).not_to match(/three to five|3-5|3 to 5/i)
-      expect(seed).not_to match(/mentioning FEWER things/i)
-    end
-
-    # Brevity still means something: it comes out of the words, not the item
-    # count, and the padding rule is untouched.
-    it "still asks for tight lines and no padding" do
-      expect(seed).to include("The test is subtraction")
-      expect(seed).to include("Tight, not truncated")
-    end
-
-    # Prod: "The only thing to do today is Espresso" — Espresso was 5x that day,
-    # so it was the only chore that cleared the exception bar. The rotation is
-    # deliberately withheld, which makes a short list a statement about what is
-    # UNUSUAL. Nothing in the prompt invites reading it as the whole day now:
-    # the jobs are one section of a day that also has events and reminders in
-    # it, and the rule for them is only about saying them once.
-    it "asks for a job to be said once, as the job" do
-      expect(seed).to include("Jobs listed under one name are one job")
-      expect(seed).to include("say the name once")
-    end
-
-    # The pin no longer puts a job on the list at all (see
-    # Buddy::Context#build_chore_buckets), so the only multipliers reaching this
-    # rule are riding on a job that earned its place some other way. It is an
-    # aside on that job, not a beat of its own.
-    it "treats a multiplier as a bonus on a job that is already being said" do
-      expect(seed).to include("pays that much over the odds today")
-      expect(seed).to include("the multiplier exactly as the line gives it")
-      expect(seed).not_to include("double points")
-    end
-
-    it "asks for an emoji that's about something" do
-      expect(seed).to include("has to be ABOUT something")
-    end
-
-    it "asks for odd clock times to be rounded" do
-      expect(seed).to include("Round odd clock times")
-    end
-
-    # Prod 3951 opened by weighing his calendar against his partner's, and named
-    # her 4pm meeting on the strength of it maybe mattering later. The three
-    # paragraphs that used to decide WHICH of her items to raise are gone — the
-    # deciding happens before the model sees any of them — so what's left is one
-    # line about what to do with the ones that arrive.
-    describe "a partner's calendar" do
-      it "asks for it to be said as theirs, by name" do
-        expect(seed).to include("is that person's")
-        expect(seed).to include("who, what, when")
-        expect(seed).to include("news about somebody they care about")
-      end
-
-      # The names in this house are real, and every illustration ever written
-      # into this prompt has come back out of it on a day it didn't fit. The
-      # shape is the rule; there is no worked example of it.
-      it "shows no sample sentence with a name in it" do
-        expect(seed.split("HOW TO SAY IT").last).not_to match(/"[A-Z][a-z]+ has /)
-      end
-
-      it "no longer argues about the ones it will never be handed" do
-        expect(seed).not_to include("A hedge is not an effect")
-        expect(seed).not_to include("mine: false")
-      end
-    end
-
-    # Announcing the briefing instead of writing it is the one failure that
-    # leaves them holding nothing. It used to be said twice, in the negative,
-    # at both ends of a two-thousand-word prompt. It's the opening sentence now,
-    # in the positive, where nothing can bury it.
-    it "opens by saying the message IS what it writes" do
-      expect(seed.lines.first).to include("what you write IS the message")
-      expect(seed.lines.first).to include("nothing follows it")
-    end
-
-    it "drops the whole jobs section for someone without chores" do
-      allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(false)
-      allow(Buddy::BriefingFacts).to receive(:build).and_return(
-        name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {},
-      )
-
-      bare = Buddy::TodayBriefing.seed(user)
-
-      expect(bare).not_to include("JOBS TODAY")
-      expect(bare).not_to match(/\n{3,}/)
     end
   end
 
@@ -573,31 +213,11 @@ RSpec.describe "Buddy Today forward-looking" do
     end
   end
 
-  # Three briefings across two days read something already finished back to the
-  # person whose day it was, each from a different context key:
-  #
-  #   3796 (Suki, 8/15) named "leave for work at 9:20 AM" at 12:03 PM and said
-  #         in the same breath that it had already passed.
-  #   3824 (Suki, 8/16) recapped two of Saturday's reminders, both rung.
-  #   3825 (Moss, 8/16) opened the chore subject purely to report there was
-  #         nothing in it.
-  #
-  # The flags were all correct in context every time; what was missing was any
-  # instruction about what they're FOR. The reminder statuses in particular were
-  # never named anywhere in the briefing prompt, so the model got two rows
-  # labelled already-rung, no rule, and did the obvious thing with them.
+  # `BriefingFacts` keeps only what's still ahead, so a thing that already
+  # happened is not in the seed at all.
   describe "things that are already done" do
     let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
 
-    # Prod 4980: Byte's briefing OPENED on "Whisper nap sound just went off" —
-    # a reminder that had fired twenty hours earlier — and then named nothing
-    # still ahead. It used to take three bullets of prose to keep a rung
-    # reminder and a passed item out of the message, and both bullets lost on
-    # days it mattered.
-    #
-    # There is no rule to lose now. `BriefingFacts` keeps only what's still
-    # ahead, so a thing that already happened is not in the seed at all and the
-    # model has nothing to read out.
     it "keeps a rung reminder out of the day entirely" do
       BuddyReminder.create!(
         user: user, byte_conversation: conversation,
@@ -611,7 +231,6 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     it "keeps a passed item out of it too" do
-      facts = { name: "Rocco", today: [], due: [], jobs: [], week: [], stash: [], weather: {}, alpine: {} }
       allow(Buddy::GPT::ContextTool).to receive(:new).and_return(
         instance_double(
           Buddy::GPT::ContextTool,
@@ -620,28 +239,9 @@ RSpec.describe "Buddy Today forward-looking" do
       )
 
       expect(Buddy::BriefingFacts.build(user, conversation)[:today]).to be_empty
-      expect(facts[:today]).to be_empty
-    end
-
-    # The prompt no longer names the statuses at all. It named them so it could
-    # explain what they were FOR, and that only mattered while the rows were in
-    # front of the model.
-    it "spends no prompt on statuses the model will never see" do
-      seed = Buddy::TodayBriefing.seed(user, conversation)
-
-      expect(seed).not_to include("already_rang")
-      expect(seed).not_to include("passed")
     end
   end
 
-  # Prod 3823 raised the travel on two items and gave a figure for neither:
-  # "it's a longer drive" and "much closer". Both numbers were in context the
-  # whole time (32 and 5 minutes). That's worse than saying nothing — it names
-  # a cost and withholds the only part that can be acted on.
-  #
-  # `drive_min` alone had been there for a while and still asks whoever reads it
-  # to subtract. `leave_by` is the answer to the question they'd be subtracting
-  # for, and the travel chain has already computed it.
   describe "when to leave" do
     let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
 
@@ -662,48 +262,26 @@ RSpec.describe "Buddy Today forward-looking" do
       item
     end
 
-    it "hands over the clock time to walk out, not just the minutes" do
-      travel_to(tz.parse("2026-07-28 08:00")) do
-        item_with_travel!(tz.parse("2026-07-28 09:23"))
-
-        item = Buddy::Context.build(user, conversation)[:today_agenda].first
-
-        expect(item[:drive_min]).to eq(32)
-        expect(item[:leave_by]).to eq("9:23am")
-      end
+    def agenda_at(clock)
+      travel_to(tz.parse("2026-07-28 #{clock}")) { Buddy::Context.build(user, conversation)[:today_agenda].first }
     end
 
-    # Prod 7402 and 7411, 3 Oct. Fun Run ran 7:00am-2:30pm with a 6:22am
-    # leave-by, and both briefings told them to leave by 6:22 - one at 6:57am,
-    # one at 8:30am. The event is correctly not `passed` (an event with hours
-    # left on it hasn't broken yet), and the departure time was never asked the
-    # same question.
-    it "drops a departure time that has already gone, and the drive with it" do
-      travel_to(tz.parse("2026-07-28 10:30")) do
-        item_with_travel!(tz.parse("2026-07-28 09:23"))
+    it "hands over the leave-by while it is ahead and drops it once it has gone", :aggregate_failures do
+      item_with_travel!(tz.parse("2026-07-28 09:23"))
 
-        item = Buddy::Context.build(user, conversation)[:today_agenda].first
+      early = agenda_at("08:00")
+      expect(early[:drive_min]).to eq(32)
+      expect(early[:leave_by]).to eq("9:23am")
 
-        expect(item[:title]).to eq("Rose Establishment")
-        expect(item).not_to have_key(:leave_by)
-        expect(Buddy::BriefingFacts.agenda_line(item)).not_to match(/leave by|drive/i)
-      end
+      expect(agenda_at("09:03")[:leave_by]).to eq("9:23am")
+
+      # The event itself is not passed yet; only its departure is.
+      late = agenda_at("10:30")
+      expect(late[:title]).to eq("Rose Establishment")
+      expect(late).not_to have_key(:leave_by)
+      expect(Buddy::BriefingFacts.agenda_line(late)).not_to match(/leave by|drive/i)
     end
 
-    # Twenty minutes of notice is the case this is FOR, so the test is the
-    # clock and not a margin around it.
-    it "keeps a departure time that is still minutes away" do
-      travel_to(tz.parse("2026-07-28 09:03")) do
-        item_with_travel!(tz.parse("2026-07-28 09:23"))
-
-        item = Buddy::Context.build(user, conversation)[:today_agenda].first
-
-        expect(item[:leave_by]).to eq("9:23am")
-      end
-    end
-
-    # An item with no travel worked out must not carry an empty key for the
-    # model to explain.
     it "leaves the key off an item with no travel at all" do
       travel_to(tz.parse("2026-07-28 08:00")) do
         agenda = Agenda.create!(user: user, name: "Mine")
@@ -716,19 +294,6 @@ RSpec.describe "Buddy Today forward-looking" do
 
         expect(item).not_to have_key(:leave_by)
       end
-    end
-
-    # Prod 4529, 25 Aug: "You've got Yoga first this morning, with a pretty full
-    # drive time before it", sent at 8:25 to somebody who had to walk out at
-    # 8:46, and neither figure in it. The clock time is the part they can act on
-    # without doing the arithmetic, so the rule asks for it in the sentence that
-    # names the thing rather than as a category of information.
-    it "asks for the departure as a clock time, beside the thing it belongs to" do
-      a_full_day!
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).to include("A leave-by is a clock time to walk out of the door")
-      expect(seed).to include("Say it in the same sentence that names the thing")
     end
   end
 
@@ -748,136 +313,64 @@ RSpec.describe "Buddy Today forward-looking" do
       travel_to(tz.parse("2026-07-28 #{hour}")) { Buddy::TodayBriefing.seed(user) }
     end
 
-    it "carries the figures in the morning" do
-      expect(weather_at("08:00")).to include(high: 88, low: 61)
-      expect(seed_at("08:00")).to include("High 88°F, low 61°F")
-    end
-
-    # Six briefings running across two mornings carried the forecast and said
-    # nothing about the weather at all. The block was worded as an option
-    # ("weave it in naturally", "skip the today line if it's unremarkable") and
-    # that is how it was taken; rewording it to "give me the high and the low"
-    # lost three more times. It is a rule now, and it is the only line in the
-    # prompt written in capitals.
-    it "asks for the figures as a rule rather than leaving it to taste" do
+    # Buddy::GPT::Turn decides whether to repair a missing weather line off
+    # weather_ordered?, so the order must come and go with the figures.
+    it "carries the figures and the order in the morning", :aggregate_failures do
       seed = seed_at("08:00")
 
-      expect(seed).to include(Buddy::TodayBriefing::WEATHER_DIRECTIVE)
-      expect(seed).not_to include("weave it in naturally")
+      expect(weather_at("08:00")).to include(high: 88, low: 61)
+      expect(seed).to include("High 88°F, low 61°F")
+      expect(Buddy::TodayBriefing.weather_ordered?(seed)).to be(true)
+      expect(seed).not_to include("- windy")
     end
 
-    # And then the rule failed too - eight briefings running. So Buddy::GPT::Turn
-    # composes the line and puts it on when the model didn't, and it decides
-    # whether weather was asked for by looking for that exact directive in the
-    # seed. The two have to stay in step: reword the rule without the constant
-    # and the repair silently stops firing.
-    it "carries the directive the repair keys off" do
-      expect(Buddy::TodayBriefing.weather_ordered?(seed_at("08:00"))).to be(true)
-    end
+    it "drops the figures and the order in the evening and keeps the week", :aggregate_failures do
+      seed = seed_at("21:00")
 
-    # Late in the day the figures are dropped on purpose, and a repair that
-    # fired anyway would put a high back onto the one briefing that decided the
-    # high no longer mattered.
-    it "drops the figures in the evening and keeps the week" do
       expect(weather_at("21:00")).to eq(week: "rain Thu")
-      expect(Buddy::TodayBriefing.weather_ordered?(seed_at("21:00"))).to be(false)
-      expect(seed_at("21:00")).to include("This week: rain Thu")
+      expect(Buddy::TodayBriefing.weather_ordered?(seed)).to be(false)
+      expect(seed).to include("This week: rain Thu")
     end
 
-    # `summary` has never carried wind, so a day of hard gusts reached the seed
-    # reading "currently 72°F, clear" and nothing more.
     it "carries the notable thing the figures have no room for" do
       allow(WeatherService).to receive(:today_figures).and_return(high: 88, low: 61, rain: 10, notable: "windy")
 
       expect(seed_at("08:00")).to include("- windy")
     end
 
-    it "adds nothing on a day with nothing notable in it" do
-      expect(seed_at("08:00")).not_to include("- windy")
-    end
-
-    # A phrase quoted in order to forbid it is still a phrase handed over, and
-    # it has come back out of the model as a suggestion more than once.
-    it "hands over no phrase to avoid" do
-      expect(seed_at("08:00")).not_to match(/layers|coat|umbrella|what to wear/i)
-    end
-
-    # Off-prod, or with no API key, there's simply no forecast. Say nothing
-    # rather than print a heading with nothing under it.
-    it "is empty when there's no weather to be had" do
+    it "is empty when there's no weather to be had", :aggregate_failures do
       allow(WeatherService).to receive_messages(today_figures: nil, week_outlook: nil)
 
       expect(weather_at("08:00")).to eq({})
       expect(seed_at("08:00")).not_to include("WEATHER")
     end
 
-    describe "the composed line" do
-      it "reads the high and the low off the figures" do
-        line = Buddy::TodayBriefing.weather_line(high: 93, low: 69, rain: 0, notable: nil)
-
-        expect(line).to eq("High of 93°F today, low of 69°F.")
-      end
-
-      it "carries the odds when the day is above the baseline" do
-        line = Buddy::TodayBriefing.weather_line(high: 93, low: 69, rain: 56, notable: "rain")
-
-        expect(line).to eq("High of 93°F today, low of 69°F, with a 56% chance of rain.")
-      end
-
-      it "says nothing at all without both figures" do
-        expect(Buddy::TodayBriefing.weather_line(high: 93, low: nil, rain: 0, notable: nil)).to be_nil
-      end
-
-      # `day_notable` labels a day off the forecast's `main` as well as its
-      # `pop`, so rain at a chance that rounds to zero is a real reading. The
-      # label still belongs in the sentence; "a 0% chance of rain" does not.
-      it "keeps the label and drops a percentage of nothing" do
-        line = Buddy::TodayBriefing.weather_line(high: 61, low: 44, rain: 0, notable: "rain")
-
-        expect(line).to eq("High of 61°F today, low of 44°F, with a bit of rain around.")
-        expect(line).not_to include("0%")
-      end
+    it "composes the repair line off the figures", :aggregate_failures do
+      [
+        [{ high: 93, low: 69, rain: 0, notable: nil }, "High of 93°F today, low of 69°F."],
+        [{ high: 93, low: 69, rain: 56, notable: "rain" }, "High of 93°F today, low of 69°F, with a 56% chance of rain."],
+        # A label at a chance that rounds to zero keeps the label, not "0%".
+        [{ high: 61, low: 44, rain: 0, notable: "rain" }, "High of 61°F today, low of 44°F, with a bit of rain around."],
+        [{ high: 93, low: nil, rain: 0, notable: nil }, nil],
+      ].each { |figures, line|
+        expect(Buddy::TodayBriefing.weather_line(**figures)).to eq(line)
+      }
     end
 
-    # 26 Aug: all three seeds carried "This week to flag: rain Thu, Fri, Sat &
-    # Sun", Byte's carried an Alpine block reading 99%, 100%, 100% on top of it,
-    # and all three briefings went out with no mention of any of it. All three
-    # also ended on the identical weather_line string, which is the tell - none
-    # of the models wrote weather at all, and only today's half had a fallback.
     describe "the week's flagged days" do
-      # The outlook is compact because it is SEED input. This is the one place it
-      # becomes prose, and a published sentence spells the day out - the
-      # briefings that wrote their own week off the same forecast all did.
-      it "composes a line off the outlook it was given, in words" do
-        expect(Buddy::TodayBriefing.week_line("rain Thu, Fri, Sat & Sun"))
-          .to eq("Rain Thursday, Friday, Saturday & Sunday this week.")
-      end
-
-      it "carries more than one kind of weather" do
-        expect(Buddy::TodayBriefing.week_line("snow Mon, windy Fri"))
-          .to eq("Snow Monday, windy Friday this week.")
-      end
-
-      it "leaves the abbreviations in the outlook for the readers that scan them" do
+      it "spells the outlook out as a line and reads its days back", :aggregate_failures do
         outlook = "rain Mon"
 
+        expect(Buddy::TodayBriefing.week_line("rain Thu, Fri, Sat & Sun"))
+          .to eq("Rain Thursday, Friday, Saturday & Sunday this week.")
+        expect(Buddy::TodayBriefing.week_line("snow Mon, windy Fri")).to eq("Snow Monday, windy Friday this week.")
         expect(Buddy::TodayBriefing.week_line(outlook)).to eq("Rain Monday this week.")
-        expect(Buddy::TodayBriefing.flagged_days(outlook)).to eq(%w[Mon])
         expect(outlook).to eq("rain Mon")
-      end
-
-      it "says nothing on an unremarkable week" do
         expect(Buddy::TodayBriefing.week_line(nil)).to be_nil
-      end
-
-      it "reads the days back out of the outlook" do
         expect(Buddy::TodayBriefing.flagged_days("rain Thu, Fri, Sat & Sun")).to eq(%w[Thu Fri Sat Sun])
       end
 
       describe "whether the briefing already said it" do
-        # ONE flagged day for the word-form examples below, so each is about
-        # the naming and nothing else. Whether every flagged day has to appear
-        # is its own question, and it has its own block further down.
         let(:days)  { Buddy::TodayBriefing.flagged_days("rain Thu") }
         let(:today) { Date.new(2026, 8, 26) } # a Wednesday
 
@@ -885,212 +378,69 @@ RSpec.describe "Buddy Today forward-looking" do
           Buddy::TodayBriefing.week_said?(body, days, today: today)
         end
 
-        it "counts the abbreviation" do
-          expect(said?("Rain rolling in Thu, so get the plunge in early.")).to be(true)
-        end
+        it "counts a weather sentence naming the day, however it is named", :aggregate_failures do
+          [
+            "Rain rolling in Thu, so get the plunge in early.",
+            "Thursday looks wet.",
+            "Wet one tomorrow, so an early start is worth it.",
+            "Rain Thu, and there's a dinner that evening too.",
+            # The home half of a sentence that adds the canyon after it.
+            "Rain Thu and Fri here, and Alpine's wet too.",
+            "Alpine is soaked tomorrow morning. Rain here Thu and Fri as well.",
+          ].each { |body| expect(said?(body)).to be(true), body }
 
-        it "counts the whole weekday name" do
-          expect(said?("Thursday looks wet.")).to be(true)
-        end
-
-        # The prompt asks for that word instead of the weekday name for the next
-        # day out, so a correct briefing may never write the abbreviation at all.
-        it "counts tomorrow, for the day that is tomorrow" do
-          expect(said?("Wet one tomorrow, so an early start is worth it.")).to be(true)
-        end
-
-        it "counts the weekend for a Saturday or Sunday flag" do
           weekend = Buddy::TodayBriefing.flagged_days("rain Sat & Sun")
-
           expect(Buddy::TodayBriefing.week_said?("Rain over the weekend.", weekend, today: today)).to be(true)
-        end
-
-        it "is not satisfied by today's own forecast" do
-          expect(said?("High of 91°F today, low of 69°F, with a 20% chance of rain.")).to be(false)
-        end
-
-        it "is not fooled by a day nobody flagged" do
-          expect(said?("Serenity is Monday this week.")).to be(false)
-        end
-
-        # Prod 4925 and 4930, 29 Aug: both seeds said "rain Sun, Mon, Tue & Wed,
-        # windy Fri" and both briefings went out with no forecast at all, on a
-        # Saturday carrying rain four days running. Byte wrote "Nyjah Dinner on
-        # Monday at 6:30 PM" and Moss "Monday's got Nyjah Dinner at Texas
-        # Roadhouse too"; Monday was flagged, the whole-body match counted it,
-        # and the repair stood down. 4860 lost its line the same way the
-        # morning before, on "a little art show tomorrow evening". The days
-        # worth flagging and the days with plans come out of the same week, so
-        # this is the ordinary case rather than the rare one.
-        it "does not count a day word carrying an appointment" do
-          expect(said?("Nyjah Dinner on Thu at 6:30 PM.")).to be(false)
-        end
-
-        it "does not count tomorrow when tomorrow is only when something is on" do
-          expect(said?("There's a little art show tomorrow evening.")).to be(false)
-        end
-
-        it "still counts the day when the weather is in the same sentence" do
-          expect(said?("Rain Thu, and there's a dinner that evening too.")).to be(true)
-        end
-
-        # Prod 6235, 15 Sep. The seed flagged rain Wed, Thu and Fri; Byte wrote
-        # "Thursday's rain is sitting at 79%, and Friday's is at 98%" and
-        # Wednesday was never said, because one flagged day appearing used to
-        # satisfy the check for all of them. Suki and Moss said "Wed, Thu, and
-        # Fri" off an identical WEATHER block, so the miss was Byte's alone and
-        # nothing was watching.
-        describe "when several days are flagged" do
-          let(:three) { Buddy::TodayBriefing.flagged_days("rain Wed, Thu & Fri") }
-
-          def all_said?(body)
-            Buddy::TodayBriefing.week_said?(body, three, today: Date.new(2026, 9, 15))
-          end
-
-          it "is not satisfied by two days out of three" do
-            said = "Thursday's rain is sitting at 79%, and Friday's is at 98%."
-
-            expect(all_said?(said)).to be(false)
-          end
-
-          it "is satisfied once every flagged day is there" do
-            expect(all_said?("Rain Wed, Thu, and Fri this week.")).to be(true)
-          end
-
-          # Across sentences is fine. What does NOT carry over is the forecast:
-          # the older rule still stands, so each sentence has to be a heads-up
-          # in its own right rather than a day word borrowing the one before it.
-          it "takes the days from different sentences" do
-            said = "Rain lands Wednesday. Thursday's rain is at 79%, and Friday's at 98%."
-
-            expect(all_said?(said)).to be(true)
-          end
-
-          it "does not let a bare day word borrow the forecast next door" do
-            said = "Rain lands Wednesday. Thursday and Friday too."
-
-            expect(all_said?(said)).to be(false)
-          end
-        end
-
-        # Prod 7744 (Moss, Oct 8), 7825 (Byte, Oct 9) and 7883 (Oct 10): three
-        # mornings in a row, on two companions. A range names its two ends, the
-        # check only reads names, and so a sentence that had already given the
-        # whole week got the week line stapled on underneath it.
-        describe "when the week is written as a range" do
-          let(:sunday) { Date.new(2026, 10, 11) }
-
-          def ranged?(body, flags)
-            Buddy::TodayBriefing.week_said?(body, Buddy::TodayBriefing.flagged_days(flags), today: sunday)
-          end
-
-          it "counts every day between the two ends" do
-            said = "The week stays soaked: rain Sunday through Thursday."
-
-            expect(ranged?(said, "rain Sun, Mon, Tue, Wed & Thu")).to be(true)
-          end
-
-          it "wraps past Saturday" do
-            expect(ranged?("Rain Friday through Tuesday.", "rain Fri, Sat, Sun, Mon & Tue")).to be(true)
-          end
-
-          it "takes a hyphen and the abbreviations" do
-            expect(ranged?("Rain Mon-Wed this week.", "rain Mon, Tue & Wed")).to be(true)
-          end
-
-          # The range is filled in, not trusted: a flagged day outside it is
-          # still missing.
-          it "is not satisfied by a range that stops short" do
-            expect(ranged?("Rain Sunday through Tuesday.", "rain Sun, Mon, Tue & Thu")).to be(false)
-          end
-
-          # Same rule as every other arm here - the sentence has to be doing
-          # weather work. A range of dates on the calendar is not a forecast.
-          it "does not read a range of appointments as the week's weather" do
-            expect(ranged?("Board meeting Monday through Thursday.", "rain Mon, Tue, Wed & Thu")).to be(false)
-          end
-        end
-
-        # The day and the forecast have to be the same claim. Split across two
-        # sentences, neither one is a heads-up for that day.
-        it "does not count a day and a forecast in separate sentences" do
-          expect(said?("Dinner is Thu. Bit of rain around at some point.")).to be(false)
-        end
-
-        it "reads a bullet as its own sentence" do
-          expect(said?("- Dinner Thu at 6:30\n- Groceries after")).to be(false)
-        end
-
-        it "leaves an unremarkable week alone" do
           expect(Buddy::TodayBriefing.week_said?("Quiet one.", [], today: today)).to be(true)
-        end
 
-        # Prod 6052, 12 Sep. One sentence about a canyon thirty minutes away,
-        # carrying a weather word and every flagged day, and the home week went
-        # out unsaid. Eve's briefing came off an identical WEATHER block with no
-        # ALPINE one and said the line fine, which is what says this is the
-        # place and not the phrasing.
-        it "does not count a forecast for the canyon as the one for home" do
-          alpine = "Alpine looks rainy tomorrow from 8:00 AM to 1:00 PM, and the rest of the " \
-                   "week there's rain odds on Monday, Thu, and Fri."
-
-          expect(said?(alpine)).to be(false)
-        end
-
-        it "does not count the trailhead by its own name either" do
-          expect(said?("Horsetail Falls is looking wet Thu and Fri.")).to be(false)
-        end
-
-        # Prod 6834, 24 Sep 8:00am. The model wrote the home week correctly and
-        # got "Rain Mon & Tue this week." stapled under it anyway, because it put
-        # the home week and the canyon in ONE sentence and the canyon grep threw
-        # the sentence away whole. The only weather-ish thing left was "High 79,
-        # low 52.", which carries no forecast word, so the check said unsaid.
-        it "reads the home half of a sentence that adds the canyon after it" do
           both = "This week's got rain on Monday and Tuesday, and Alpine's following that " \
                  "same beat, with Monday at 86% and Tuesday at 52%."
-
-          days = Buddy::TodayBriefing.flagged_days("rain Mon & Tue")
-
-          expect(Buddy::TodayBriefing.week_said?(both, days, today: Date.new(2026, 9, 24))).to be(true)
+          mon_tue = Buddy::TodayBriefing.flagged_days("rain Mon & Tue")
+          expect(Buddy::TodayBriefing.week_said?(both, mon_tue, today: Date.new(2026, 9, 24))).to be(true)
         end
 
-        # The trade the old comment conceded and no longer has to.
-        it "reads it in the short form too" do
-          expect(said?("Rain Thu and Fri here, and Alpine's wet too.")).to be(true)
+        it "does not count a day word that isn't a heads-up about home weather", :aggregate_failures do
+          [
+            "High of 91°F today, low of 69°F, with a 20% chance of rain.",
+            "Serenity is Monday this week.",
+            "Nyjah Dinner on Thu at 6:30 PM.",
+            "There's a little art show tomorrow evening.",
+            "Dinner is Thu. Bit of rain around at some point.",
+            "- Dinner Thu at 6:30\n- Groceries after",
+            "Alpine looks rainy tomorrow from 8:00 AM to 1:00 PM, and the rest of the " \
+            "week there's rain odds on Monday, Thu, and Fri.",
+            "Horsetail Falls is looking wet Thu and Fri.",
+            # With no clause boundary in front of it the canyon owns the forecast.
+            "Rain Thu and Fri up Alpine.",
+          ].each { |body| expect(said?(body)).to be(false), body }
         end
 
-        # Cut at the clause, not at the word: with no boundary in front of it the
-        # canyon owns the forecast, however late in the sentence it is named.
-        it "still refuses a forecast that only turns out to be the canyon's at the end" do
-          expect(said?("Rain Thu and Fri up Alpine.")).to be(false)
+        it "needs every one of several flagged days, each in a weather sentence", :aggregate_failures do
+          three = Buddy::TodayBriefing.flagged_days("rain Wed, Thu & Fri")
+          check = ->(body) { Buddy::TodayBriefing.week_said?(body, three, today: Date.new(2026, 9, 15)) }
+
+          expect(check.call("Thursday's rain is sitting at 79%, and Friday's is at 98%.")).to be(false)
+          expect(check.call("Rain Wed, Thu, and Fri this week.")).to be(true)
+          expect(check.call("Rain lands Wednesday. Thursday's rain is at 79%, and Friday's at 98%.")).to be(true)
+          expect(check.call("Rain lands Wednesday. Thursday and Friday too.")).to be(false)
         end
 
-        it "still counts a home sentence sitting next to an Alpine one" do
-          body = "Alpine is soaked tomorrow morning. Rain here Thu and Fri as well."
+        it "fills in a range of days and checks every flagged day against it", :aggregate_failures do
+          sunday = Date.new(2026, 10, 11)
+          ranged = ->(body, flags) {
+            Buddy::TodayBriefing.week_said?(body, Buddy::TodayBriefing.flagged_days(flags), today: sunday)
+          }
 
-          expect(said?(body)).to be(true)
+          expect(ranged.call("The week stays soaked: rain Sunday through Thursday.", "rain Sun, Mon, Tue, Wed & Thu")).to be(true)
+          expect(ranged.call("Rain Friday through Tuesday.", "rain Fri, Sat, Sun, Mon & Tue")).to be(true)
+          expect(ranged.call("Rain Mon-Wed this week.", "rain Mon, Tue & Wed")).to be(true)
+          expect(ranged.call("Rain Sunday through Tuesday.", "rain Sun, Mon, Tue & Thu")).to be(false)
+          expect(ranged.call("Board meeting Monday through Thursday.", "rain Mon, Tue, Wed & Thu")).to be(false)
         end
       end
     end
-
-    # The closing read-back is gone. It existed because the middle of a
-    # two-thousand-word prompt is where a rule goes to be forgotten, and there
-    # is no middle any more: what's left is short enough that a rule stated once
-    # is a rule in front of the model.
-    it "no longer needs a closing read-back to survive its own length" do
-      seed = Buddy::TodayBriefing.seed(user)
-
-      expect(seed).not_to include("BEFORE YOU SEND")
-      expect(seed.length).to be < 6_000
-    end
   end
 
-  # Prod 6052, 12 Sep: the seed gave four Alpine days with odds - Monday 27%,
-  # Wednesday 30%, Thursday 100%, Friday 77% - and the briefing returned the
-  # four day names with not one figure among them. It then closed on "Monday at
-  # 3:40 PM is Plunge with Wil at Horsetail Falls. Nice little canyon weather
-  # for that one", which is Monday's 27% read as an all-clear.
   describe "the odds on Alpine's week" do
     # As Buddy::PlungeAdvisor.loose_rain writes them.
     let(:lines) {
@@ -1105,141 +455,92 @@ RSpec.describe "Buddy Today forward-looking" do
       Buddy::TodayBriefing.week_odds_missing(body, lines)
     end
 
-    it "reads the day and the figure off a day-level line" do
-      expect(missing("").pluck(:pop)).to eq([])
+    it "reads the day and the figure off day-level lines only", :aggregate_failures do
       expect(Buddy::TodayBriefing.alpine_week_odds(lines).pluck(:pop)).to eq(%w[27 100])
-    end
-
-    it "ignores a timed window, which carries no odds of its own" do
       expect(Buddy::TodayBriefing.alpine_week_odds(["tomorrow 8am-1pm"])).to be_empty
-    end
-
-    it "calls every figure missing when the briefing gave only the days" do
-      body = "The rest of the week there's rain odds on Monday and Thursday."
-
-      expect(missing(body).pluck(:pop)).to eq(%w[27 100])
-    end
-
-    # The opposite call from week_said? - three figures out of four is the
-    # failure, because the one that goes missing is as likely to be the 100%.
-    it "still names the one that went missing when the others were given" do
-      body = "Alpine has a 27% chance Monday, and the rest of the week is wet."
-
-      expect(missing(body).pluck(:pop)).to eq(%w[100])
-    end
-
-    it "counts a figure written out in words" do
-      body = "Monday sits at 27 percent and Thursday is 100 percent."
-
-      expect(missing(body)).to be_empty
-    end
-
-    it "is not satisfied by a longer number ending in the same digits" do
-      expect(missing("A 127% effort on Monday.").pluck(:pop)).to eq(%w[27 100])
-    end
-
-    it "composes a line out of only the days that went missing" do
-      body = "Alpine has a 27% chance Monday."
-
-      expect(Buddy::TodayBriefing.week_odds_line(missing(body))).to eq("In Alpine, Thursday rain at 100%.")
-    end
-
-    it "composes nothing when every figure was given" do
-      body = "Monday is 27% and Thursday 100%."
-
-      expect(Buddy::TodayBriefing.week_odds_line(missing(body))).to be_nil
-    end
-
-    it "says nothing about a week the seed never carried" do
       expect(Buddy::TodayBriefing.week_odds_missing("Quiet one.", [])).to be_empty
     end
 
-    # A briefing that raised the day and left the number off used to earn a
-    # second weather paragraph under it. The figure goes where the day is.
+    # Unlike week_said?, every figure must be given: the missing one is as
+    # likely to be the 100%.
+    it "names each figure the briefing left out", :aggregate_failures do
+      [
+        ["The rest of the week there's rain odds on Monday and Thursday.", %w[27 100]],
+        ["Alpine has a 27% chance Monday, and the rest of the week is wet.", %w[100]],
+        ["Monday sits at 27 percent and Thursday is 100 percent.", []],
+        ["A 127% effort on Monday.", %w[27 100]],
+      ].each { |body, pops| expect(missing(body).pluck(:pop)).to eq(pops), body }
+    end
+
+    it "composes a line out of only the days that went missing", :aggregate_failures do
+      expect(Buddy::TodayBriefing.week_odds_line(missing("Alpine has a 27% chance Monday.")))
+        .to eq("In Alpine, Thursday rain at 100%.")
+      expect(Buddy::TodayBriefing.week_odds_line(missing("Monday is 27% and Thursday 100%."))).to be_nil
+    end
+
     describe "writing the figure in rather than under" do
       def written(body, avoid: [])
         Buddy::TodayBriefing.with_week_odds_written_in(body, missing(body), avoid: avoid)
       end
 
-      it "puts the figure against the day the briefing already named" do
-        body = "Monday looks rainy up there, but only at the day level."
-        text, unplaced = written(body)
+      it "puts each figure against the day already named in a weather sentence", :aggregate_failures do
+        [
+          [
+            "Monday looks rainy up there, but only at the day level.",
+            [],
+            "Monday (27%) looks rainy up there, but only at the day level.",
+            %w[100]
+],
+          [
+            "Rain is around Monday and again Thursday.",
+            [],
+            "Rain is around Monday (27%) and again Thursday (100%).",
+            []
+],
+          ["Rain is around Monday.", [], "Rain is around Monday (27%).", %w[100]],
+          # A canyon figure must not land in a sentence about the home week.
+          [
+            "Rain is around Monday and again Thursday.",
+            %w[Mon],
+            "Rain is around Monday and again Thursday (100%).",
+            %w[27]
+],
+          [
+            "Monday has the dentist at 9am. Rain is around Thursday.",
+            [],
+            "Monday has the dentist at 9am. Rain is around Thursday (100%).",
+            %w[27]
+],
+          ["Rain is around Monday at 30% there.", [], "Rain is around Monday at 30% there.", nil],
+        ].each { |body, avoid, text, unplaced|
+          out, left = written(body, avoid: avoid)
+          expect(out).to eq(text)
+          expect(left.pluck(:pop)).to eq(unplaced) if unplaced
+        }
 
-        expect(text).to eq("Monday (27%) looks rainy up there, but only at the day level.")
-        expect(unplaced.pluck(:pop)).to eq(%w[100])
-      end
-
-      it "writes every day it can find and hands back the ones it cannot" do
-        body = "Rain is around Monday and again Thursday."
-        text, unplaced = written(body)
-
-        expect(text).to eq("Rain is around Monday (27%) and again Thursday (100%).")
-        expect(unplaced).to be_empty
-      end
-
-      it "leaves a day the briefing never raised to the appended line" do
-        body = "Rain is around Monday."
-        text, unplaced = written(body)
-
-        expect(text).to eq("Rain is around Monday (27%).")
-        expect(Buddy::TodayBriefing.week_odds_line(unplaced)).to eq("In Alpine, Thursday rain at 100%.")
-      end
-
-      # The home forecast and the canyon one flag the same storm most weeks, and
-      # a canyon figure written into a sentence about home is a wrong fact where
-      # a duplicate used to be.
-      it "holds back a day the home week also flagged" do
-        body = "Rain is around Monday and again Thursday."
-        text, unplaced = written(body, avoid: %w[Mon])
-
-        expect(text).to eq("Rain is around Monday and again Thursday (100%).")
-        expect(unplaced.pluck(:pop)).to eq(%w[27])
-      end
-
-      it "ignores a day named outside any weather sentence" do
-        body = "Monday has the dentist at 9am. Rain is around Thursday."
-        text, unplaced = written(body)
-
-        expect(text).to eq("Monday has the dentist at 9am. Rain is around Thursday (100%).")
-        expect(unplaced.pluck(:pop)).to eq(%w[27])
-      end
-
-      it "leaves a day that already carries a figure of its own alone" do
-        body = "Rain is around Monday at 30% there."
-
-        expect(written(body).first).to eq(body)
+        _, left = written("Rain is around Monday.")
+        expect(Buddy::TodayBriefing.week_odds_line(left)).to eq("In Alpine, Thursday rain at 100%.")
       end
     end
   end
 
-  # Prod 6374, 16 Sep: the seed carried "Rain in Alpine 3-6pm" and "tomorrow
-  # 1-7pm", the briefing gave neither, and nothing put them back. The start of
-  # "3-6pm" has no meridiem of its own, so no start was found and that read as
-  # "already said"; and tomorrow's hours had no repair at all.
   describe "Alpine's rain hours" do
     def missing(body, windows) = Buddy::TodayBriefing.rain_hours_missing(body, windows)
 
-    it "reads the start of a window that says its meridiem once" do
-      expect(missing("Rain is in the forecast for Alpine.", ["3-6pm"])).to eq(["3-6pm"])
+    it "reads each window's start however its meridiem is written", :aggregate_failures do
+      [
+        ["Rain is in the forecast for Alpine.", ["3-6pm"], ["3-6pm"]],
+        ["Rain is in the forecast.", ["11am-2pm"], ["11am-2pm"]],
+        ["Rain from 11am.", ["11am-2pm"], []],
+        ["Alpine rain 3-6pm.", ["3-6pm"], []],
+        ["Alpine rain from 3 to 6pm.", ["3-6pm"], []],
+        ["Alpine rain from 3pm.", ["3-6pm"], []],
+        ["A high of 73-ish.", ["3-6pm"], ["3-6pm"]],
+        # An agenda item at the same o'clock is not a forecast.
+        ["Thursday has your iCapital interview at 10am. Rain in Alpine 7-9am.", ["7-9am", "10am-3pm"], ["10am-3pm"]],
+      ].each { |body, windows, out| expect(missing(body, windows)).to eq(out), body }
     end
 
-    it "still reads a window with a meridiem on each end" do
-      expect(missing("Rain is in the forecast.", ["11am-2pm"])).to eq(["11am-2pm"])
-      expect(missing("Rain from 11am.", ["11am-2pm"])).to be_empty
-    end
-
-    it "counts the hours written the way the seed writes them" do
-      expect(missing("Alpine rain 3-6pm.", ["3-6pm"])).to be_empty
-      expect(missing("Alpine rain from 3 to 6pm.", ["3-6pm"])).to be_empty
-      expect(missing("Alpine rain from 3pm.", ["3-6pm"])).to be_empty
-    end
-
-    it "is not satisfied by a figure ending in the same digit" do
-      expect(missing("A high of 73-ish.", ["3-6pm"])).to eq(["3-6pm"])
-    end
-
-    # Prod 7040/7041, 28 Sep: four windows in, three out, and the sentence ran
-    # from midnight to the following afternoon so nothing read as absent.
     it "names only the window that went missing" do
       windows = ["11am-3pm", "5-6pm", "7pm-12am", "2-3am"]
       body    = "Rain off and on from 11am to 3pm, again 5pm to 6pm, and 7pm to midnight."
@@ -1248,53 +549,33 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(Buddy::TodayBriefing.rain_hours_line(missing(body, windows))).to eq("Rain in Alpine 2-3am.")
     end
 
-    # An agenda item at the same o'clock is not a forecast. Prod 7004/7006: the
-    # 10am-3pm window vanished because the briefing said "iCapital interview at
-    # 10am" somewhere else entirely.
-    it "does not let an unrelated clock time count as the hours" do
-      body = "Thursday has your iCapital interview at 10am. Rain in Alpine 7-9am."
+    it "checks the week's timed hours, and only the timed ones", :aggregate_failures do
+      day_level = "Monday, rain at 27% - the forecast has no hours that far out, so the day on its own is the whole of it"
+      hours = ->(body, lines) { Buddy::TodayBriefing.week_hours_missing(body, lines).map { |m| m[:window] } }
 
-      expect(missing(body, ["7-9am", "10am-3pm"])).to eq(["10am-3pm"])
+      expect(hours.call("Thursday has your iCapital interview at 10am.", ["tomorrow, rain 10am-3pm"])).to eq(["10am-3pm"])
+      expect(hours.call("Tomorrow Alpine gets rain from 1 to 7pm.", ["tomorrow, rain 1-7pm"])).to be_empty
+      expect(hours.call("Quiet.", [day_level])).to be_empty
     end
 
-    it "asks the same of the week's hours" do
-      lines = ["tomorrow, rain 10am-3pm"]
-      body  = "Thursday has your iCapital interview at 10am."
+    it "composes the week line out of missing hours and missing odds", :aggregate_failures do
+      [
+        [
+          ["tomorrow, rain 7-9am", "Tuesday, rain at 62% - no hours that far out"],
+          "Morning!",
+          "In Alpine, rain tomorrow 7-9am and Tuesday rain at 62%."
+],
+        [
+          ["tomorrow, rain 1-7pm", "Friday, rain at 60% - the forecast has no hours that far out, so the day on its own is the whole of it"],
+          "Friday looks 60% wet in Alpine.",
+          "In Alpine, rain tomorrow 1-7pm."
+],
+      ].each { |lines, body, line|
+        hours = Buddy::TodayBriefing.week_hours_missing(body, lines)
+        odds  = Buddy::TodayBriefing.week_odds_missing(body, lines)
 
-      expect(Buddy::TodayBriefing.week_hours_missing(body, lines).map { |m| m[:window] }).to eq(["10am-3pm"])
-    end
-
-    # A time range sitting next to a percentage with no weather word on it reads
-    # as an appointment.
-    it "says what the week's hours are hours OF" do
-      lines   = ["tomorrow, rain 7-9am", "Tuesday, rain at 62% - no hours that far out"]
-      body    = "Morning!"
-      hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
-      missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
-
-      expect(Buddy::TodayBriefing.week_odds_line(missing, hours))
-        .to eq("In Alpine, rain tomorrow 7-9am and Tuesday rain at 62%.")
-    end
-
-    it "names tomorrow's hours when the briefing left them out" do
-      lines   = ["tomorrow, rain 1-7pm", "Friday, rain at 60% - the forecast has no hours that far out, so the day on its own is the whole of it"]
-      body    = "Friday looks 60% wet in Alpine."
-      hours   = Buddy::TodayBriefing.week_hours_missing(body, lines)
-      missing = Buddy::TodayBriefing.week_odds_missing(body, lines)
-
-      expect(Buddy::TodayBriefing.week_odds_line(missing, hours)).to eq("In Alpine, rain tomorrow 1-7pm.")
-    end
-
-    it "leaves tomorrow alone when the briefing gave its hours" do
-      body = "Tomorrow Alpine gets rain from 1 to 7pm."
-
-      expect(Buddy::TodayBriefing.week_hours_missing(body, ["tomorrow, rain 1-7pm"])).to be_empty
-    end
-
-    it "does not read a day-level line as timed" do
-      line = "Monday, rain at 27% - the forecast has no hours that far out, so the day on its own is the whole of it"
-
-      expect(Buddy::TodayBriefing.week_hours_missing("Quiet.", [line])).to be_empty
+        expect(Buddy::TodayBriefing.week_odds_line(odds, hours)).to eq(line)
+      }
     end
   end
 

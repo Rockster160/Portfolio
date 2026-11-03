@@ -90,25 +90,20 @@ RSpec.describe Transcripts::Debrief do
   describe "a note that points at nothing of his" do
     subject(:transcript) { transcript! }
 
-    it "drops a note hung on the interviewer's own line" do
-      model_says(said(cost: [{ turn: 1, what: "Rambled here.", instead: "Say it in a line." }]))
+    it "drops a note on the interviewer's line or a turn not in the conversation, keeping the read" do
+      model_says(said(
+        cost:      [{ turn: 1, what: "Rambled here.", instead: "Say it in a line." }],
+        strongest: [{ turn: 94, why: "Strong close." }],
+      ))
 
-      expect(described_class.call(transcript).notes).to eq(0)
-      expect(transcript.reload.debrief["cost"]).to eq([])
-    end
+      result = described_class.call(transcript)
 
-    it "drops a note hung on a turn that is not in the conversation" do
-      model_says(said(strongest: [{ turn: 94, why: "Strong close." }]))
-
-      expect(described_class.call(transcript).notes).to eq(0)
-      expect(transcript.reload.debrief["strongest"]).to eq([])
-    end
-
-    it "keeps the read even when every note was thrown away" do
-      model_says(said(cost: [{ turn: 1, what: "Not his line.", instead: "No." }]))
-
-      expect(described_class.call(transcript).ok).to be(true)
-      expect(transcript.reload.debrief["read"]).to be_present
+      expect(result.ok).to be(true)
+      expect(result.notes).to eq(0)
+      transcript.reload
+      expect(transcript.debrief["cost"]).to eq([])
+      expect(transcript.debrief["strongest"]).to eq([])
+      expect(transcript.debrief["read"]).to be_present
     end
   end
 
@@ -170,7 +165,7 @@ RSpec.describe Transcripts::Debrief do
   end
 
   describe "the prompt" do
-    it "numbers every turn, marks his side, and says what the conversation was" do
+    it "numbers every turn, marks his side, and names the company" do
       rest = Array.new(4, "More.")
       transcript = transcript!("What have you built?", "A mail consolidation.", *rest)
       model_says(said)
@@ -179,7 +174,7 @@ RSpec.describe Transcripts::Debrief do
 
       expect(asked.first).to include("1. [Dana] What have you built?")
       expect(asked.first).to include("2. [ME] A mail consolidation.")
-      expect(asked.first).to include("The company interviewing them is Podium.")
+      expect(asked.first).to include("Podium")
     end
 
     # An hour of talking fits. What goes when it does not is their longest

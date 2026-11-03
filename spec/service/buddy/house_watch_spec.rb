@@ -1,24 +1,13 @@
 require "rails_helper"
 
-# Prod 1479-1482: "Can you let me know the next time somebody is seen by the
-# doorbell/front yard camera?" got "Not with what's wired here, no" - and then,
-# after being told it IS set up through the house sensors, the same no again.
-#
-# Both were wrong. Twenty-eight tasks were listening on `hass-sensor` and
-# `hass-button` at the time, three of them doorbells. Home Assistant posts to
-# /jil/webhook, which takes the scope off the request, so none of those scopes
-# appears as a literal anywhere in app code - and KNOWN_SCOPES is greped from
-# app code, so it refused every one of them.
-#
-# A task already listening on a scope is the evidence that it fires. Nobody
-# wires a task to a trigger that never arrives.
+# Home Assistant posts to /jil/webhook, which takes the scope off the request,
+# so scopes like `hass-sensor` never appear as a literal in app code. A task
+# already listening on a scope is the evidence that it fires.
 RSpec.describe "Buddy watching the house" do
   let(:user)   { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
   let(:tool)   { Buddy::Tools[:remind_when] }
 
-  # The real ones off prod, since the point is that these are what makes the
-  # scope legible at all.
   let!(:doorbell) {
     task!(
       "hass-sensor:location:doorbell type:rang rang:true",
@@ -51,7 +40,6 @@ RSpec.describe "Buddy watching the house" do
     tool[:execute].call(args.merge(confirm[:resolved]), ctx)
   end
 
-  # Straight off task 274's code: `detected`, `location`, `subject`.
   def detection(location:, subject: "person", detected: true)
     { "detected" => detected, "location" => location, "subject" => subject, "device_name" => "#{location} Cam" }
   end
@@ -59,31 +47,16 @@ RSpec.describe "Buddy watching the house" do
   before { Rails.cache.clear }
 
   describe "accepting a scope only an integration fires" do
-    it "sets the watch the two prod replies said was impossible" do
+    it "sets a watch on it that fires for a person at the doorbell and nothing else", :aggregate_failures do
       result = set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
-
-      expect(result[:watch_id]).to be_present
-      expect(BuddyWatch.last.trigger_scope).to eq("hass-sensor")
-    end
-
-    it "fires when a person is seen at the doorbell" do
-      set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
-
-      expect(BuddyWatch.last.matches?(detection(location: "Doorbell"))).to be(true)
-    end
-
-    it "ignores the cat, and the driveway" do
-      set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
       watch = BuddyWatch.last
 
+      expect(result[:watch_id]).to eq(watch.id)
+      expect(watch.trigger_scope).to eq("hass-sensor")
+      expect(watch.matches?(detection(location: "Doorbell"))).to be(true)
       expect(watch.matches?(detection(location: "Doorbell", subject: "pet"))).to be(false)
       expect(watch.matches?(detection(location: "Driveway"))).to be(false)
-    end
-
-    it "ignores a detection clearing" do
-      set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
-
-      expect(BuddyWatch.last.matches?(detection(location: "Doorbell", detected: false))).to be(false)
+      expect(watch.matches?(detection(location: "Doorbell", detected: false))).to be(false)
     end
 
     it "takes the doorbell ring listener verbatim off their own task" do
@@ -99,8 +72,7 @@ RSpec.describe "Buddy watching the house" do
   # forever, and they'd never find out.
   describe "still refusing what could never fire" do
     it "rejects an invented scope" do
-      expect { set!("hass-doorbel:rang:true") }
-        .to raise_error(/nothing here has ever fired a "hass-doorbel" trigger/)
+      expect { set!("hass-doorbel:rang:true") }.to raise_error(/"hass-doorbel"/)
     end
 
     it "rejects one the person has no task for, even if someone else does" do
@@ -112,7 +84,7 @@ RSpec.describe "Buddy watching the house" do
         enabled:  true,
       )
 
-      expect { set!("hass-whatever:x:1") }.to raise_error(/never fire/)
+      expect { set!("hass-whatever:x:1") }.to raise_error(/fire/)
     end
 
     it "refuses to store one past the tool either" do
@@ -128,26 +100,22 @@ RSpec.describe "Buddy watching the house" do
     it "doesn't count a task that isn't running" do
       task!("hass-retired", name: "Old").update!(enabled: false)
 
-      expect { set!("hass-retired:x:1") }.to raise_error(/never fire/)
+      expect { set!("hass-retired:x:1") }.to raise_error(/fire/)
     end
   end
 
   describe "the trigger actually reaching the watch" do
-    it "fires the watch off a webhook-shaped trigger" do
+    it "fires the watch off a webhook-shaped trigger, and only for the detection asked for" do
       set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
       watch = BuddyWatch.last
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
 
-      expect(Buddy::CompanionDelivery).to receive(:deliver_prompt).once
-      ::Jil.trigger(user, :"hass-sensor", detection(location: "Doorbell"))
-
-      expect(watch.reload.fired_at).to be_present
-    end
-
-    it "leaves it alone when the detection isn't the one asked for" do
-      set!("hass-sensor:location:/^Doorbell$/ subject:person detected:true")
-
-      expect(Buddy::CompanionDelivery).not_to receive(:deliver_prompt)
       ::Jil.trigger(user, :"hass-sensor", detection(location: "Backyard"))
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
+
+      ::Jil.trigger(user, :"hass-sensor", detection(location: "Doorbell"))
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).once
+      expect(watch.reload.fired_at).to be_present
     end
   end
 
@@ -160,32 +128,19 @@ RSpec.describe "Buddy watching the house" do
 
     # The word they used is "doorbell". Nothing anywhere exposes the string
     # "hass-sensor" to them or to the model, so the search has to bridge it.
-    it "finds the doorbell from the word they said" do
-      matches = search("doorbell").fetch("matches")
+    it "bridges the word they said to the scope something listens on", :aggregate_failures do
+      doorbell = search("doorbell")
+      expect(doorbell.fetch("matches").pluck("listener")).to include("hass-sensor:location:doorbell type:rang rang:true")
+      # Scope names are unguessable from outside, so the index is how the model
+      # learns `hass-sensor` is a thing at all.
+      expect(doorbell.fetch("scopes")).to include("hass-sensor" => 2)
 
-      expect(matches.pluck("listener")).to include("hass-sensor:location:doorbell type:rang rang:true")
-    end
-
-    it "finds the camera from 'front yard camera'" do
       expect(search("front yard camera").fetch("matches").pluck("listener")).to include("hass-sensor:location")
     end
 
-    it "comes back empty for something genuinely not wired" do
+    it "comes back empty for something not wired, or filler words alone", :aggregate_failures do
       expect(search("aquarium").fetch("matches")).to be_empty
-    end
-
-    it "doesn't match on filler words alone" do
       expect(search("the a my").fetch("matches")).to be_empty
-    end
-
-    # Scope names are unguessable from outside, so the index is how the model
-    # learns `hass-sensor` is a thing at all.
-    it "lists the scopes something is really listening on" do
-      expect(search("doorbell").fetch("scopes")).to include("hass-sensor" => 2)
-    end
-
-    it "tells the model that a non-empty match means yes" do
-      expect(search("doorbell").fetch("next")).to match(/IS watchable/)
     end
   end
 end

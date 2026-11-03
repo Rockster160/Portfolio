@@ -1,17 +1,11 @@
 require "rails_helper"
 require "chunky_png"
 
-# Glimmer's nine poses were spliced out of one sheet, and the splice left four
-# of them framed high in the 500×500 canvas — neutral sat with its content
-# centered at 40% and a fifth of the frame empty below it. Since the hero draws
-# the face layer `background-size: contain` into a square box, that framing IS
-# the vertical position: she rendered noticeably above the middle of her half of
-# the kiosk, and jumped when her mood changed to one of the well-framed poses.
-#
-# Re-splicing the sheet is the way that comes back, so the invariant is checked
-# rather than left to the eye. Scoped to Glimmer deliberately: Byte's face PNG
-# is a small overlay on a separate body layer, and Moss and Suki bake their
-# characters at their own framings.
+# The hero draws Glimmer's face layer `background-size: contain` into a square
+# box, so where a pose's content sits in its 500×500 canvas IS its vertical
+# position on screen. Every pose has to be centered, or she jumps between moods.
+# Scoped to Glimmer: Byte's face is an overlay on a separate body layer, and Moss
+# and Suki bake their characters at their own framings.
 RSpec.describe "Glimmer face assets" do
   faces = Rails.root.glob("app/assets/images/buddy/glimmer/face_*.png").sort
 

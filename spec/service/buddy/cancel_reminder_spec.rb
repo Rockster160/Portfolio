@@ -1,9 +1,5 @@
 require "rails_helper"
 
-# Prod 2817-2834, in one sitting: Byte removed the RIGHT doorbell watch on its
-# first attempt, then removed the wrong one three times and insisted the first
-# was still there. Three things made that possible, and all three are covered
-# here.
 RSpec.describe "cancel_reminder tool" do
   let(:user)  { create(:user) }
   let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
@@ -19,8 +15,7 @@ RSpec.describe "cancel_reminder tool" do
     Buddy::WatchMatcher.bust_scope_cache!
     "hass-sensor"
   }
-  # Both real watches from that thread. Byte-for-byte identical bodies; the
-  # listener is the only thing telling them apart.
+  # Identical bodies; the listener is the only thing telling them apart.
   let!(:rang) {
     BuddyWatch.create!(
       user: user, byte_conversation: convo, body: "🔔 Someone's at the doorbell.",
@@ -43,14 +38,9 @@ RSpec.describe "cancel_reminder tool" do
   end
 
   describe "two rows worded the same" do
-    it "refuses to pick one and names both by id" do
+    it "refuses to pick one, naming both by id and condition" do
       expect { confirm("doorbell") }
-        .to raise_error(/say which by id.*##{rang.id}.*##{person.id}/m)
-    end
-
-    it "quotes the condition, since that's the only thing separating them" do
-      expect { confirm("doorbell") }.to raise_error(/type:rang/)
-      expect { confirm("doorbell") }.to raise_error(/subject:person/)
+        .to raise_error(/##{rang.id}.*##{person.id}/m) { |e| expect(e.message).to include("type:rang", "subject:person") }
     end
 
     it "takes an id without complaint" do
@@ -58,45 +48,24 @@ RSpec.describe "cancel_reminder tool" do
     end
   end
 
-  # It set `cancelled_at`, which is the panel's OFF toggle rather than its
-  # delete: "That just disabled the one I DO want... And it's disabling them
-  # instead of deleting them."
-  describe "removing one" do
-    it "deletes the row rather than switching it off" do
-      run(rang.id.to_s)
+  # `cancelled_at` is the panel's OFF toggle, not its delete.
+  it "deletes the row rather than switching it off, and hands back an undo that restores it", :aggregate_failures do
+    result = run(rang.id.to_s)
 
-      expect(BuddyWatch.find_by(id: rang.id)).to be_nil
-      expect(BuddyWatch.find_by(id: person.id)).to be_present
-    end
+    expect(BuddyWatch.find_by(id: rang.id)).to be_nil
+    expect(BuddyWatch.find_by(id: person.id)).to be_present
+    expect(tool[:receipt].call(result, ctx)).to include("type:rang")
 
-    it "hands back an undo that puts the whole row back" do
-      revert = run(rang.id.to_s)[:revert]
-
-      expect(Buddy::Reverter).to be_reversible(revert)
-      expect { Buddy::Reverter.call(revert) }.to change(BuddyWatch, :count).by(1)
-      expect(BuddyWatch.last.listener).to eq("hass-sensor:location:doorbell type:rang rang:true")
-    end
-
-    # "Reminder cancelled ✓", three times, for three different rows.
-    it "names what went, and what told it apart" do
-      receipt = tool[:receipt].call(run(rang.id.to_s), ctx)
-
-      expect(receipt).to include("Someone's at the doorbell")
-      expect(receipt).to include("type:rang")
-    end
-
-    it "calls a watch a watch" do
-      expect(tool[:receipt].call(run(rang.id.to_s), ctx)).to include("Removed watch")
-    end
+    expect(Buddy::Reverter).to be_reversible(result[:revert])
+    expect { Buddy::Reverter.call(result[:revert]) }.to change(BuddyWatch, :count).by(1)
+    expect(BuddyWatch.last.listener).to eq("hass-sensor:location:doorbell type:rang rang:true")
   end
 
   describe "a row the person switched off from the panel" do
     before { person.update!(cancelled_at: Time.current) }
 
-    # "I'm still seeing it in the Reminders list" was true, and so was "I
-    # cancelled it". A switched-off row is still a row.
+    # A switched-off row is still a row.
     it "is still findable and still removable" do
-      expect(confirm(person.id.to_s)[:summary]).to include("already switched off")
       run(person.id.to_s)
       expect(BuddyWatch.find_by(id: person.id)).to be_nil
     end
@@ -110,15 +79,8 @@ RSpec.describe "cancel_reminder tool" do
     end
   end
 
-  # Prod 3849 -> 3855, 47 minutes apart. "You can stop the reminder about the
-  # Bamboo and houseplants, thank you!" put up a pending checkbox (byte_action
-  # 548), nobody tapped it, and the reminder fired at noon anyway: "Lol I just
-  # told you that you can delete that reminder forever!"
-  #
-  # Nothing in the wording was wrong - "you can clear it off with one tap" was
-  # true. The row was level 3 only because no level was declared, while the
-  # tools that CREATE these are level 1 on the reasoning that setting one is
-  # safe because THIS undoes it. Removing one is exactly as reversible.
+  # Removing one is as reversible as setting one, so it runs on proposal
+  # rather than waiting on a tap.
   describe "how confidently it removes" do
     let!(:message) {
       convo.byte_messages.create!(
@@ -140,24 +102,17 @@ RSpec.describe "cancel_reminder tool" do
       )
     end
 
-    it "takes the reminder away when they say so, rather than offering to" do
-      button = proposed[:action].buttons.first
+    it "takes the reminder away on proposal and leaves a ticked row that untick restores" do
+      action = proposed[:action]
+      button = action.buttons.first
 
       expect(button["status"]).to eq("executed")
+      expect(button["undoable"]).to be(true)
       expect(BuddyReminder.find_by(id: noon.id)).to be_nil
-    end
 
-    it "leaves the row ticked and untickable, so undo is one tap the other way" do
-      action = proposed[:action]
-
-      expect(action.buttons.first["undoable"]).to be(true)
-      expect { Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"]) }
+      expect { Buddy::ProposalExecutor.undo!(action.id, button["id"]) }
         .to change(BuddyReminder, :count).by(1)
       expect(BuddyReminder.last.body).to eq("Check the bamboo tree and water all the plants.")
-    end
-
-    it "is declared at the level that makes both of those true" do
-      expect(tool[:level]).to eq(2)
     end
   end
 

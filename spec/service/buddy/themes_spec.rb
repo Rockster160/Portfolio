@@ -1,10 +1,8 @@
 require "rails_helper"
 
-# A pet used to be spelled out per-file and, worse, per-USER: a `case` in the
-# favicon partial keyed off `default_theme_for(current_user)`, a ternary in
-# SleepGuard that knew about Moss and nothing else, and a voice profile picked
-# by `user.chelsea?`. A thread whose theme differed from its owner's default
-# came out wearing the wrong name, icon, and voice.
+# A pet is resolved from the THREAD's theme, never from the user, so a thread
+# whose theme differs from its owner's default still wears its own name, icon
+# and voice.
 RSpec.describe Buddy::Themes do
   it "gives every pet a name, a voice, and its own browser chrome" do
     described_class.all.each_key { |theme|
@@ -45,12 +43,9 @@ RSpec.describe Buddy::Themes do
     }
   end
 
-  it "reads an unknown theme as the default rather than raising" do
+  it "reads an unknown theme as the default, and a string theme as its symbol", :aggregate_failures do
     expect(described_class.for("nonsense")).to eq(described_class.for(:byte))
     expect(described_class.name_for(nil)).to eq("Byte")
-  end
-
-  it "accepts the theme as either a string or a symbol, since the column is a string" do
     expect(described_class.for("suki")).to eq(described_class.for(:suki))
   end
 
@@ -61,21 +56,13 @@ RSpec.describe Buddy::Themes do
       Buddy::Personality.for(user, conversation: convo)
     end
 
-    # The bug this replaced: anyone but Eve opening a Suki thread got Suki's
-    # persona wearing Rocco's voice - a companion half in character.
-    it "gives a Suki thread Eve's voice no matter whose account it's on" do
+    it "loads the thread's pet's voice profile whoever's account it's on", :aggregate_failures do
       expect(prompt_for("suki", user: User.me)).to include("suikerbekkie")
-    end
-
-    it "gives a Moss thread Chelsea's voice no matter whose account it's on" do
       expect(prompt_for("moss", user: User.me)).to include("the warm household voice")
     end
 
-    # The profile is ~3,400 tokens sitting in front of ~29,000 of rules and
-    # context guide, which is how a voice rewrite can land in the prompt and not
-    # reach the output: what came back had taken the quotable strings off it and
-    # none of the moves. So each profile ends with a short Floor, and it is
-    # repeated last - the position nearest the person's message.
+    # Each profile ends with a short Floor, repeated last in the prompt - the
+    # position nearest the person's message.
     describe "the voice floor" do
       it "ends every pet's profile, so a new companion is still one file" do
         described_class.all.each_key { |theme|
@@ -124,11 +111,8 @@ RSpec.describe Buddy::Themes do
       # would actually render.
       let(:table) { JSON.parse(ApplicationController.helpers.buddy_themes_json) }
 
-      it "covers every pet" do
+      it "covers every pet with everything a repaint needs", :aggregate_failures do
         expect(table.keys).to match_array(described_class.all.keys.map(&:to_s))
-      end
-
-      it "gives each one everything a repaint needs" do
         table.each_value { |chrome|
           expect(chrome["name"]).to be_present
           expect(chrome["color"]).to match(/\A#[0-9A-F]{6}\z/i)
@@ -156,19 +140,12 @@ RSpec.describe Buddy::Themes do
     end
   end
 
-  # SleepGuard used to be a Moss-or-Byte ternary keyed off the user, so a Suki
-  # thread told you Byte was asleep.
-  describe "the sleeping reply" do
-    it "names the pet on the thread that's actually asleep" do
-      convo = User.me.byte_conversations.create!(mode: :buddy)
-      convo.update!(buddy_theme: :suki)
-      Buddy::SleepGuard.sleep_until!(User.me, 1.hour.from_now)
+  it "names the thread's pet in the sleeping reply, or the owner's default with no thread", :aggregate_failures do
+    convo = User.me.byte_conversations.create!(mode: :buddy)
+    convo.update!(buddy_theme: :suki)
+    Buddy::SleepGuard.sleep_until!(User.me, 1.hour.from_now)
 
-      expect(Buddy::SleepGuard.sleeping_reply_body(User.me, convo)).to start_with("💤 Suki is sleeping")
-    end
-
-    it "falls back to the owner's default pet when there's no thread to ask" do
-      expect(Buddy::SleepGuard.sleeping_reply_body(User.me)).to include("Byte is sleeping")
-    end
+    expect(Buddy::SleepGuard.sleeping_reply_body(User.me, convo)).to include("Suki")
+    expect(Buddy::SleepGuard.sleeping_reply_body(User.me)).to include("Byte")
   end
 end

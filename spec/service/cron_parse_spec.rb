@@ -392,11 +392,8 @@ RSpec.describe CronParse do
         end
       }
 
-      it "saves, and warns about the one that's missing" do
-        expect(placeholder.cron_warnings.join).to include("school:bell", "doesn't exist yet")
-      end
-
-      it "still schedules off the anchor that is ready" do
+      it "saves, warns about the one that's missing, and schedules off the one that is ready" do
+        expect(placeholder.cron_warnings.join).to include("school:bell")
         expect(placeholder.next_trigger_at).to be_within(1.second).of(tz.local(2026, 8, 19, 17, 0))
       end
 

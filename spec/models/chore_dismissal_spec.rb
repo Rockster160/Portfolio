@@ -44,21 +44,12 @@ RSpec.describe Chore do
   describe ".dismissed_until_for" do
     let(:today) { ChoreDay.current(user) }
 
-    it "lands a day-skip on the chore-day itself" do
+    # A month is a calendar month rather than 30 days, and a string span arrives
+    # from params as readily as a symbol.
+    it "lands each span on the chore-day it reaches", :aggregate_failures do
       expect(described_class.dismissed_until_for(:day, user)).to eq(today)
-    end
-
-    it "lands a week-skip seven days out" do
       expect(described_class.dismissed_until_for(:week, user)).to eq(today + 7)
-    end
-
-    # A calendar month rather than 30 days - said on the 31st, 30 days is five
-    # weeks away and reads as a mistake.
-    it "lands a month-skip a calendar month out" do
       expect(described_class.dismissed_until_for(:month, user)).to eq(today + 1.month)
-    end
-
-    it "takes a string as readily as a symbol, since one arrives from params" do
       expect(described_class.dismissed_until_for("week", user)).to eq(today + 7)
     end
 

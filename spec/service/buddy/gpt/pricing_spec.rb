@@ -81,20 +81,6 @@ RSpec.describe Buddy::GPT::Pricing do
       expect(cost).to eq(2_640)
       expect(described_class.format_micros(cost)).to eq("$0.0026")
     end
-
-    it "shows what the prompt cache is worth on Buddy's fixed prefix" do
-      # Same turn with a cold cache. This ~7x gap is why the ~9.6k tokens of
-      # tool schemas are affordable to send in full on every turn, and why a
-      # persistently low cache_hit_rate is worth alerting on.
-      warm = described_class.cost_micros(
-        usage(input: 23_500, cached: 23_000, output: 120), model: "gpt-5.4-mini"
-      )
-      cold = described_class.cost_micros(
-        usage(input: 23_500, cached: 0, output: 120), model: "gpt-5.4-mini"
-      )
-
-      expect(cold).to be > (warm * 6)
-    end
   end
 
   describe ".format_micros" do

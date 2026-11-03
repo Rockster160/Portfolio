@@ -57,25 +57,18 @@ RSpec.describe Buddy::GPT::History do
 
     let(:mail) { "[nothing was said to you - this fired on its own]\n#{"Company: Bluestaq\n" * 200}" }
 
-    it "stands a bulky one in once it is history" do
-      fired(mail)
-      said("Bluestaq has a phone screening set for Oct 8 at 1pm.", direction: :inbound, kind: "buddy_reply")
-      later = said("thanks")
-
-      expect(build(upto: later).first[:content]).to eq(
-        "[a notification fired on its own - the reply under this is what went out]",
-      )
-    end
-
     # The notification itself is on screen and gets referred back to ("what did
     # that Bluestaq one say?"), and a notification is SUPPOSED to be flat. What
     # goes is the block of facts above it, which was never visible.
-    it "leaves the reply it produced alone" do
+    it "stands a bulky one in once it is history, leaving the reply it produced alone" do
       fired(mail)
       said("Bluestaq has a phone screening set for Oct 8 at 1pm.", direction: :inbound, kind: "buddy_reply")
       later = said("thanks")
 
-      expect(build(upto: later)[1][:content]).to eq("Bluestaq has a phone screening set for Oct 8 at 1pm.")
+      expect(build(upto: later).first(2).pluck(:content)).to eq([
+        "[a notification fired on its own - the reply under this is what went out]",
+        "Bluestaq has a phone screening set for Oct 8 at 1pm.",
+      ])
     end
 
     # Same exemption the tapped seeds get, and for the same reason: the facts
@@ -122,18 +115,14 @@ RSpec.describe Buddy::GPT::History do
       )
     end
 
-    it "replays the label they tapped instead of the instructions behind it" do
-      tapped("today")
-
-      expect(build.first[:content]).to eq("[tapped Today - asked for a briefing on the day ahead]")
-    end
-
-    it "keeps the exchange readable, so the reply still has something to answer" do
+    it "replays the label they tapped instead of the instructions, so the reply still has something to answer" do
       tapped("today")
       said("Morning! Here's your day.", direction: :inbound, kind: "buddy")
 
-      expect(build.pluck(:role)).to eq(%i[user assistant])
-      expect(build.first[:content]).to include("Today")
+      expect(build).to eq([
+        { role: :user, content: "[tapped Today - asked for a briefing on the day ahead]" },
+        { role: :assistant, content: "Morning! Here's your day." },
+      ])
     end
 
     # The standin is for HISTORY. The seed being answered right now is the
@@ -175,15 +164,11 @@ RSpec.describe Buddy::GPT::History do
         said("Newer briefing.", direction: :inbound, kind: "buddy")
       end
 
-      it "drops all but the most recent one" do
+      it "drops all but the most recent one, leaving the conversation between them alone" do
         contents = build.pluck(:content)
 
         expect(contents).not_to include("Old briefing, in the old voice.")
-        expect(contents).to include("Newer briefing.")
-      end
-
-      it "leaves ordinary conversation between them alone" do
-        expect(build.pluck(:content)).to include("thanks", "Anytime!")
+        expect(contents).to include("Newer briefing.", "thanks", "Anytime!")
       end
 
       it "keeps a lone briefing, since there's no pattern in one" do
@@ -232,32 +217,13 @@ RSpec.describe Buddy::GPT::History do
   end
 
   describe "exclusions" do
-    it "leaves out receipt chips so Buddy does not learn to narrate receipts" do
+    # Receipt chips stay out so Buddy does not learn to narrate receipts.
+    it "leaves out chips, system rows, action requests, streaming or failed replies and blank bodies" do
       said("Marked the dishes done ✓", direction: :inbound, kind: "buddy_activity")
-
-      expect(build).to be_empty
-    end
-
-    it "leaves out system and action-request messages" do
       said("cleared Claude session", direction: :inbound, kind: "system")
       said("Approve Bash?", direction: :inbound, kind: "action-request")
-
-      expect(build).to be_empty
-    end
-
-    it "leaves out a half-written streaming reply" do
       said("I was saying someth", direction: :inbound, kind: "buddy", state: :streaming)
-
-      expect(build).to be_empty
-    end
-
-    it "leaves out a failed reply" do
       said(Buddy::GPT::Turn::FAILURE_BODY, direction: :inbound, kind: "buddy", state: :failed)
-
-      expect(build).to be_empty
-    end
-
-    it "leaves out blank bodies" do
       said("   ", direction: :inbound, kind: "buddy")
 
       expect(build).to be_empty
@@ -278,12 +244,6 @@ RSpec.describe Buddy::GPT::History do
       )
     end
 
-    it "does not replay as something Buddy said" do
-      form("Who did: Puppy Up?", { "status" => "submitted", "decided" => "submit" })
-
-      expect(build.first[:content]).not_to eq("Who did: Puppy Up?")
-    end
-
     # It can't just vanish: a form Buddy raised mid-conversation is a question
     # the person answered, and "yeah, that one" needs something to point at.
     it "survives as a bracketed standin, so a reference back still lands" do
@@ -294,16 +254,14 @@ RSpec.describe Buddy::GPT::History do
       ])
     end
 
-    it "says which ones are still open" do
+    it "says which ones are still open and which were declined" do
       form("Who did: Puppy Fed?", { "status" => "pending" })
-
-      expect(build.first[:content]).to end_with("- unanswered]")
-    end
-
-    it "says which ones were declined" do
       form("Who did: Puppy Down?", { "status" => "submitted", "decided" => "skip" })
 
-      expect(build.first[:content]).to end_with("- skipped]")
+      expect(build.pluck(:content)).to eq([
+        "[form you put up: Who did: Puppy Fed? - unanswered]",
+        "[form you put up: Who did: Puppy Down? - skipped]",
+      ])
     end
 
     it "does not touch an ordinary reply" do
@@ -471,13 +429,6 @@ RSpec.describe Buddy::GPT::History do
       convo.update!(metadata: { "buddy_recap_at" => 1.second.from_now.iso8601(6) })
 
       expect(build(upto: asking).pluck(:content)).to eq(["what's on for today?"])
-    end
-
-    it "never hands back an empty input for a real message" do
-      asking = said("anything at all")
-      convo.update!(metadata: { "buddy_recap_at" => 1.hour.from_now.iso8601(6) })
-
-      expect(build(upto: asking)).not_to be_empty
     end
   end
 

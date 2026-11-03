@@ -20,9 +20,9 @@ RSpec.describe Jil::Methods::Chore do
       Jil::Executor.call(user, code, event.with_jil_attrs(action: action))
     end
 
-    it "creates a partner completion on :added" do
+    it "creates a partner completion on :added, carrying the notes and mirroring edits" do
       at = Time.zone.local(2026, 5, 28, 14, 0, 0)
-      event = user.action_events.create!(name: "Wordle", timestamp: at)
+      event = user.action_events.create!(name: "Wordle", notes: "5/6 — guessed FERAL", timestamp: at)
 
       trigger_event(event, :added)
 
@@ -30,28 +30,11 @@ RSpec.describe Jil::Methods::Chore do
       expect(completion).to be_present
       expect(completion.completed_at).to be_within(1.second).of(at)
       expect(completion.metadata).not_to have_key("source")
-    end
-
-    it "copies the event's notes onto the new completion" do
-      at = Time.zone.local(2026, 5, 28, 14, 0, 0)
-      event = user.action_events.create!(name: "Wordle", notes: "5/6 — guessed FERAL", timestamp: at)
-
-      trigger_event(event, :added)
-
-      completion = chore.chore_completions.find_by(user_id: user.id)
       expect(completion.note).to eq("5/6 — guessed FERAL")
-    end
-
-    it "mirrors a note edit on :changed" do
-      at = Time.zone.local(2026, 5, 28, 14, 0, 0)
-      event = user.action_events.create!(name: "Wordle", notes: "first", timestamp: at)
-      trigger_event(event, :added)
 
       event.update!(notes: "edited")
       trigger_event(event, :changed)
-
-      completion = chore.chore_completions.find_by(user_id: user.id)
-      expect(completion.note).to eq("edited")
+      expect(completion.reload.note).to eq("edited")
     end
 
     it "adopts an existing completion at the same time (no duplicate)" do
@@ -126,22 +109,20 @@ RSpec.describe Jil::Methods::Chore do
       Jil::Executor.call(user, code, event)
     end
 
-    it "matches when both name and notes match exactly (AND)" do
-      match = user.action_events.create!(name: "Whisper", notes: "Training", timestamp: Time.current)
-      call("Whisper training", { name: "Whisper", notes: "Training" }, match.with_jil_attrs(action: :added))
-      expect(training_chore.chore_completions.count).to eq(1)
-    end
-
-    it "skips events whose name matches but notes don't" do
-      ev = user.action_events.create!(name: "Whisper", notes: "Nap", timestamp: Time.current)
-      call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :added))
-      expect(training_chore.chore_completions.count).to eq(0)
-    end
-
-    it "skips events whose notes match but name doesn't" do
-      ev = user.action_events.create!(name: "OtherThing", notes: "Training", timestamp: Time.current)
-      call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :added))
-      expect(training_chore.chore_completions.count).to eq(0)
+    it "matches only when both name and notes match (AND), case-insensitively" do
+      attrs = { name: "Whisper", notes: "Training" }
+      [
+        [{ name: "Whisper", notes: "Training" }, 1],
+        [{ name: "whisper", notes: "training" }, 1],
+        [{ name: "Whisper", notes: "Nap" }, 0],
+        [{ name: "OtherThing", notes: "Training" }, 0],
+      ].each { |event_attrs, created|
+        ev = user.action_events.create!(**event_attrs, timestamp: Time.current)
+        expect {
+          call("Whisper training", attrs, ev.with_jil_attrs(action: :added))
+        }.to change { training_chore.chore_completions.count }.by(created), event_attrs.inspect
+        training_chore.chore_completions.delete_all
+      }
     end
 
     it "name-only attrs (no notes key) match any notes" do
@@ -153,22 +134,14 @@ RSpec.describe Jil::Methods::Chore do
       expect(training_chore.chore_completions.count).to eq(2)
     end
 
-    it "match is case-insensitive on both name and notes" do
-      ev = user.action_events.create!(name: "whisper", notes: "training", timestamp: Time.current)
-      call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :added))
-      expect(training_chore.chore_completions.count).to eq(1)
-    end
-
     it "removes the partner completion when notes are edited to no longer match" do
       ev = user.action_events.create!(name: "Whisper", notes: "Training", timestamp: Time.current)
       call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :added))
       expect(training_chore.chore_completions.count).to eq(1)
 
-      old_ts = ev.timestamp
       ev.update!(notes: "Nap")
       call("Whisper training", { name: "Whisper", notes: "Training" }, ev.with_jil_attrs(action: :changed, changes: { "notes" => ["Training", "Nap"] }))
       expect(training_chore.chore_completions.count).to eq(0)
-      _ = old_ts
     end
 
     it "still removes the linked completion on :removed regardless of attrs match" do
@@ -333,26 +306,14 @@ RSpec.describe Jil::Methods::Chore do
       JIL
     }
 
-    it "returns true for a matching event" do
-      ev = user.action_events.create!(name: "Whisper", notes: "Up", timestamp: Time.current)
-      ctx = Jil::Executor.call(user, code, ev).ctx
-      expect(ctx.dig(:vars, :result, :value)).to be(true)
-    end
+    it "matches by the query, and a blank query matches anything" do
+      up = user.action_events.create!(name: "Whisper", notes: "Up", timestamp: Time.current)
+      down = user.action_events.create!(name: "Whisper", notes: "Down", timestamp: Time.current)
+      expect(Jil::Executor.call(user, code, up).ctx.dig(:vars, :result, :value)).to be(true)
+      expect(Jil::Executor.call(user, code, down).ctx.dig(:vars, :result, :value)).to be(false)
 
-    it "returns false for a non-matching event" do
-      ev = user.action_events.create!(name: "Whisper", notes: "Down", timestamp: Time.current)
-      ctx = Jil::Executor.call(user, code, ev).ctx
-      expect(ctx.dig(:vars, :result, :value)).to be(false)
-    end
-
-    it "blank query returns true" do
-      ev = user.action_events.create!(name: "Anything", timestamp: Time.current)
-      ctx = Jil::Executor.call(
-        user,
-        "event = Global.input_data()::ActionEvent\nresult = event.matches?(\"\")::Boolean",
-        ev,
-      ).ctx
-      expect(ctx.dig(:vars, :result, :value)).to be(true)
+      blank = "event = Global.input_data()::ActionEvent\nresult = event.matches?(\"\")::Boolean"
+      expect(Jil::Executor.call(user, blank, down).ctx.dig(:vars, :result, :value)).to be(true)
     end
   end
 
@@ -392,29 +353,14 @@ RSpec.describe Jil::Methods::Chore do
   end
 
   describe "#mark_due / #unmark_due" do
-    it "Chore.mark_due stamps marked_due_at on the matched chore" do
-      code = <<~'JIL'
-        result = Chore.mark_due("Wordle")::Chore
-      JIL
-      expect { Jil::Executor.call(user, code) }
-        .to change { chore.reload.marked_due_at }.from(nil)
+    it "stamps marked_due_at on the matched chore, clears it, and tolerates no match" do
+      mark = -> { chore.reload.marked_due_at }
+      expect { Jil::Executor.call(user, 'result = Chore.mark_due("Wordle")::Chore') }.to change(mark, :call).from(nil)
       expect(chore.marked_due_at).to be_within(2.seconds).of(Time.current)
-    end
 
-    it "Chore.unmark_due clears the stamp" do
-      chore.update!(marked_due_at: 1.hour.ago)
-      code = <<~'JIL'
-        result = Chore.unmark_due("Wordle")::Chore
-      JIL
-      expect { Jil::Executor.call(user, code) }
-        .to change { chore.reload.marked_due_at }.to(nil)
-    end
+      expect { Jil::Executor.call(user, 'result = Chore.unmark_due("Wordle")::Chore') }.to change(mark, :call).to(nil)
 
-    it "Chore.mark_due no-matches returns nil without raising" do
-      code = <<~'JIL'
-        result = Chore.mark_due("Nonexistent")::Chore
-      JIL
-      expect { Jil::Executor.call(user, code) }.not_to raise_error
+      expect { Jil::Executor.call(user, 'result = Chore.mark_due("Nonexistent")::Chore') }.not_to raise_error
     end
   end
 
@@ -428,41 +374,25 @@ RSpec.describe Jil::Methods::Chore do
       ).result
     end
 
-    it "is false before today's occurrence is done" do
+    it "is true only for a completion on today's chore-day" do
       expect(done_today("Wordle")).to be(false)
-    end
+      expect(done_today("Nonexistent")).to be(false)
 
-    it "is true once it's been completed today" do
-      ChoreCompleter.new(chore, user, at: Time.current).call
-      expect(done_today("Wordle")).to be(true)
-    end
-
-    it "is false for a completion on an earlier day" do
       ChoreCompleter.new(chore, user, at: 2.days.ago).call
       expect(done_today("Wordle")).to be(false)
-    end
 
-    it "is false when nothing matches" do
-      expect(done_today("Nonexistent")).to be(false)
+      ChoreCompleter.new(chore, user, at: Time.current).call
+      expect(done_today("Wordle")).to be(true)
     end
   end
 
   describe "#complete" do
-    it "name-only form completes at Time.current with no note" do
-      code = <<~'JIL'
-        c = Chore.complete("Wordle")::Any
-      JIL
-      expect { Jil::Executor.call(user, code) }
-        .to change { user.chore_completions.count }.by(1)
-      expect(user.chore_completions.order(:id).last.note).to be_blank
-    end
-
-    it "empty-block form (migration target) is equivalent to name-only" do
-      code = <<~'JIL'
-        c = Chore.complete("Wordle", {})::Any
-      JIL
-      expect { Jil::Executor.call(user, code) }
-        .to change { user.chore_completions.count }.by(1)
+    it "name-only and empty-block forms complete with no note" do
+      ['c = Chore.complete("Wordle")::Any', 'c = Chore.complete("Wordle", {})::Any'].each { |code|
+        completions = -> { user.chore_completions.count }
+        expect { Jil::Executor.call(user, code) }.to change(completions, :call).by(1), code
+        expect(user.chore_completions.order(:id).last.note).to be_blank
+      }
     end
 
     it "persists the note set via ChoreCompletionData content block" do

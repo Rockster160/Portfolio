@@ -30,11 +30,8 @@ RSpec.describe JobTranscript do
 
     # The file is the record and the title is how it is found again. A name
     # taken off the filename beats `Transcript` under three of them.
-    it "names itself after the file when nothing else named it" do
+    it "names itself after the file unless a title was given" do
       expect(ingested.title).to eq("bluestaq hm")
-    end
-
-    it "keeps a title that was given" do
       expect(ingested(title: "Hiring manager").title).to eq("Hiring manager")
     end
 

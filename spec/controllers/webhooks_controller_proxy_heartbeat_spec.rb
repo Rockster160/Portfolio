@@ -13,22 +13,15 @@ RSpec.describe WebhooksController, type: :controller do
   end
 
   describe "POST #proxy_heartbeat" do
-    it "stamps the check-in for the signed-in owner" do
-      allow(controller).to receive(:current_user).and_return(user)
-
-      post :proxy_heartbeat
-
-      expect(response).to have_http_status(:ok)
-      expect(ProxyRequest.relay_last_seen_at).to be_within(5.seconds).of(Time.current)
-    end
-
     # The address is the point: a hung NIC moves the Mac to a different one
     # while the relay keeps checking in, and prod has no other way to learn it.
-    it "records the LAN address the relay reports" do
+    it "stamps the check-in and the LAN address the relay reports", :aggregate_failures do
       allow(controller).to receive(:current_user).and_return(user)
 
       post :proxy_heartbeat, params: { lan_ip: "192.168.0.160", interface: "en7" }
 
+      expect(response).to have_http_status(:ok)
+      expect(ProxyRequest.relay_last_seen_at).to be_within(5.seconds).of(Time.current)
       expect(ProxyRequest.relay_lan[:ip]).to eq("192.168.0.160")
       expect(ProxyRequest.relay_lan[:interface]).to eq("en7")
     end

@@ -28,6 +28,9 @@ RSpec.describe GamePlay::Stats do
       expect(by_value[2][:expected]).to eq((1.0 / 36).round(2))
       expect(by_value[12][:expected]).to eq((1.0 / 36).round(2))
       expect(by_value[7][:count]).to eq(1)
+
+      # Fair-dice mean and SD for 2d6: 7 and sqrt(35/6).
+      expect(stats[:summary][:expected]).to include(mean: 7.0, sd: Math.sqrt(35.0 / 6).round(2))
     end
   end
 
@@ -59,15 +62,6 @@ RSpec.describe GamePlay::Stats do
       expect(summary[:per_player]["Rocco"][:sd]).to eq(Math.sqrt(3).round(2))
       expect(summary[:per_player]["Chelsea"]).to include(count: 2, mean: 11.0, median: 11.0, modes: [])
       expect(summary[:table]).to include(count: 5, mean: 8.0, median: 7.0, modes: [7])
-    end
-
-    it "gives the fair-dice mean and SD for 2d6 (7 and sqrt(35/6))" do
-      roll!("Rocco", 7, at: 1.minute.ago)
-
-      expected = described_class.for_play(play)[:summary][:expected]
-
-      expect(expected[:mean]).to eq(7.0)
-      expect(expected[:sd]).to eq(Math.sqrt(35.0 / 6).round(2))
     end
 
     it "counts a one-off d20 as one die but keeps it out of the 2d6 averages" do

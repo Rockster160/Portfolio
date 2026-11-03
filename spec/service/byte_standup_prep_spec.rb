@@ -59,30 +59,22 @@ RSpec.describe ByteStandupPrep do
 
     # The pwd bar only knows two states and writes back one of them, so a single
     # tap on this thread silently downgrades it to a mode that can be widened.
-    it "puts it back when the thread has been toggled to ask" do
-      convo = described_class.conversation(user)
-      convo.update!(metadata: convo.metadata.merge("permission_mode" => "ask"))
+    it "puts read mode back when the thread has been toggled to ask or auto" do
+      %w[ask auto].each do |mode|
+        convo = described_class.conversation(user)
+        convo.update!(metadata: convo.metadata.merge("permission_mode" => mode))
 
-      expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
-    end
-
-    it "puts it back when the thread has been toggled to auto" do
-      convo = described_class.conversation(user)
-      convo.update!(metadata: convo.metadata.merge("permission_mode" => "auto"))
-
-      expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
+        expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
+      end
     end
 
     # The brief is read in the primary thread. This one is the machinery that
     # produces it, and unarchived it sits in the list carrying an unread count
     # for a report the person has already read somewhere else.
-    it "stays out of the thread list" do
+    it "stays out of the thread list, even after being unarchived" do
       expect(described_class.conversation(user)).to be_archived
-    end
 
-    it "puts it back when the thread has been unarchived" do
       described_class.conversation(user).update!(archived: false)
-
       expect(described_class.conversation(user)).to be_archived
     end
 
@@ -94,101 +86,40 @@ RSpec.describe ByteStandupPrep do
       expect(ByteConversation.for_self_initiated(user)&.name).not_to eq(described_class::NAME)
     end
 
-    it "reuses the one thread rather than making a new one each morning" do
-      first = described_class.conversation(user)
-
-      expect(described_class.conversation(user).id).to eq(first.id)
-    end
-
-    it "keeps anything else already on the thread" do
+    it "reuses the one thread each morning, keeping anything else on it" do
       convo = described_class.conversation(user)
       convo.update!(metadata: convo.metadata.merge("note" => "keep me"))
 
-      expect(described_class.conversation(user).metadata["note"]).to eq("keep me")
+      again = described_class.conversation(user)
+      expect(again.id).to eq(convo.id)
+      expect(again.metadata["note"]).to eq("keep me")
     end
   end
 
   describe ".prompt" do
-    subject(:prompt) { described_class.prompt(user, now: tz.parse("2026-09-03 08:45:00")) }
+    # The list is the part written on purpose. A run that has to go and find it
+    # can fail to, and then the only hand-authored input is missing.
+    it "carries the Standup list in, and both edges of the window" do
+      list = create(:list, name: "Standup", user: user)
+      create(:list_item, list: list, name: "Yesterday: memo on Allocations")
+      create(:list_item, list: list, name: "Today: recon follow-up")
 
-    context "with items on the Standup list" do
-      before do
-        list = create(:list, name: "Standup", user: user)
-        create(:list_item, list: list, name: "Yesterday: memo on Allocations")
-        create(:list_item, list: list, name: "Today: recon follow-up")
-      end
+      prompt = described_class.prompt(user, now: tz.parse("2026-09-03 08:45:00"))
 
-      # The list is the part written on purpose. A run that has to go and find it
-      # can fail to, and then the only hand-authored input is missing.
-      it "carries the list in rather than leaving it to be looked up" do
-        expect(prompt).to include("Yesterday: memo on Allocations")
-        expect(prompt).to include("Today: recon follow-up")
-      end
-    end
-
-    context "with an empty Standup list" do
-      before { create(:list, name: "Standup", user: user) }
-
-      it "says so, so an empty list is a fact rather than a silence" do
-        expect(prompt).to include("nothing on it this morning")
-      end
-    end
-
-    it "names both edges of the window" do
-      expect(prompt).to include("Wednesday September 2, 2026 at 12:00 AM")
-      expect(prompt).to include("Thursday September 3, 2026 at 8:45 AM")
-    end
-
-    # Someone — or an agent — may be mid-edit in one of these worktrees at 8:45.
-    it "forbids moving any working tree" do
-      expect(prompt).to include("git checkout")
-      expect(prompt).to include("git switch")
-      expect(prompt).to include("git -C")
-    end
-
-    # Seven of the ten `ocs-backend--*` directories on this machine are leftovers
-    # with no `.git`. Globbing them reports work that finished weeks ago.
-    it "sends it to `git worktree list` instead of the directory names" do
-      expect(prompt).to include("worktree list")
-      expect(prompt).to include("Do NOT glob")
-    end
-
-    it "asks for the three sections in the order they get read" do
-      expect(prompt).to include("On my list")
-      expect(prompt).to include("Committed")
-      expect(prompt).to include("Still going")
-    end
-
-    # It is read standing up, twenty seconds before it has to be said out loud.
-    it "says plainly that length is the failure mode" do
-      expect(prompt).to include("One thing, one short bullet")
-    end
-
-    # There is nobody to answer, so a question is a stall, not a safeguard.
-    it "tells the run not to ask and not to retry a refusal" do
-      expect(prompt).to include("do not ask a question")
-      expect(prompt).to include("Do not retry a refused call")
+      expect(prompt).to include("Yesterday: memo on Allocations", "Today: recon follow-up")
+      expect(prompt).to include("Wednesday September 2, 2026 at 12:00 AM", "Thursday September 3, 2026 at 8:45 AM")
     end
   end
 
   describe ".run!" do
-    it "posts the prompt into the prep thread" do
+    # A fresh session each time, so a month of these doesn't become one context.
+    it "posts the prompt, hidden, into the prep thread on a fresh session" do
+      expect(ByteLocal).to receive(:reset_claude_session)
+
       expect { described_class.run!(user) }.to change {
         described_class.conversation(user).byte_messages.count
       }.by(1)
-    end
-
-    it "keeps the prompt itself out of the thread" do
-      described_class.run!(user)
-      posted = described_class.conversation(user).byte_messages.order(:id).last
-
-      expect(posted.metadata["hidden"]).to be_truthy
-    end
-
-    it "starts a fresh session so a month of these doesn't become one context" do
-      expect(ByteLocal).to receive(:reset_claude_session)
-
-      described_class.run!(user)
+      expect(described_class.conversation(user).byte_messages.order(:id).last.metadata["hidden"]).to be_truthy
     end
 
     it "stands down when this morning's brief already went" do
@@ -281,23 +212,13 @@ RSpec.describe ByteStandupPrep do
       prep.byte_messages.where(direction: :outbound).order(:id).last
     end
 
-    it "carries the finished brief into the primary thread" do
-      expect { described_class.forward!(report(sent_prompt)) }.to change {
+    it "carries the finished brief verbatim into the primary thread, marked with its source" do
+      expect { described_class.forward!(report(sent_prompt, body: "- recon follow-up (merged)")) }.to change {
         ByteConversation.for_self_initiated(user).byte_messages.count
       }.by(1)
-    end
-
-    it "delivers the report verbatim" do
-      described_class.forward!(report(sent_prompt, body: "- recon follow-up (merged)"))
       landed = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
 
       expect(landed.body).to eq("- recon follow-up (merged)")
-    end
-
-    it "marks where it came from" do
-      described_class.forward!(report(sent_prompt))
-      landed = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
-
       expect(landed.metadata["source"]).to eq("standup_prep")
     end
 

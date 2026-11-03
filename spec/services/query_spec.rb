@@ -23,28 +23,15 @@ RSpec.describe ApplicationRecord, type: :model do
       expect(sql).to eq("(((\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%') AND (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%')))")
     end
 
-    it "returns records matching words with negates" do
+    it "returns records matching words with negates, by - or !" do
+      expect(query("workout !climbing")).to eq(query("workout -climbing"))
       sql = query("workout -climbing")
       expect(sql).to eq("(((\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%') AND (NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))))")
     end
 
-    it "returns records matching words with negates" do
-      sql = query("workout !climbing")
-      expect(sql).to eq("(((\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%') AND (NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))))")
-    end
-
-    it "returns records with starting negates" do
+    it "returns records with starting negates, by - or !" do
+      expect(query("!climbing")).to eq(query("-climbing"))
       sql = query("-climbing")
-      expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))")
-    end
-
-    # it "returns records with starting negates" do
-    #   sql = query("-climbing workout")
-    #   expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%') AND (\"name\"::TEXT ILIKE '%workout%' OR \"notes\"::TEXT ILIKE '%workout%'))")
-    # end
-
-    it "returns records with starting negates" do
-      sql = query("!climbing")
       expect(sql).to eq("(NOT (\"name\"::TEXT ILIKE '%climbing%' OR \"notes\"::TEXT ILIKE '%climbing%'))")
     end
 
@@ -104,12 +91,8 @@ RSpec.describe ApplicationRecord, type: :model do
     end
 
     it "returns records matching the query with nested OR and NOT conditions" do
+      expect(query("name::(zish OR \"z*\") -zip")).to eq(query("name::(zish OR \"z*\") NOT zip"))
       sql = query("name::(zish OR \"z*\") NOT zip")
-      expect(sql).to eq("((((name ILIKE 'zish') OR (name ILIKE 'z*')) AND (NOT (\"name\"::TEXT ILIKE '%zip%' OR \"notes\"::TEXT ILIKE '%zip%'))))")
-    end
-
-    it "returns records matching the query with nested OR and NOT conditions using dash" do
-      sql = query("name::(zish OR \"z*\") -zip")
       expect(sql).to eq("((((name ILIKE 'zish') OR (name ILIKE 'z*')) AND (NOT (\"name\"::TEXT ILIKE '%zip%' OR \"notes\"::TEXT ILIKE '%zip%'))))")
     end
 
@@ -118,13 +101,9 @@ RSpec.describe ApplicationRecord, type: :model do
       expect(sql).to eq("(((timestamp > '2024-11-12 07:00:00') AND (((name ILIKE 'food') OR (name ILIKE 'drink') OR (name ILIKE 'treat') OR (name ILIKE 'snack') OR (name ILIKE 'soda')) OR ((name ILIKE 'workout') OR (name ILIKE 'Z') OR (name ILIKE 'Zish')))))")
     end
 
-    it "returns records matching id with colon operator" do
+    it "returns records matching id with colon or double-colon operator" do
+      expect(query("id::44045")).to eq(query("id:44045"))
       sql = query("id:44045")
-      expect(sql).to eq("((id = 44045))")
-    end
-
-    it "returns records matching id with double-colon operator" do
-      sql = query("id::44045")
       expect(sql).to eq("((id = 44045))")
     end
 

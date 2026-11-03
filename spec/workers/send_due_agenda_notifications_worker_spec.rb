@@ -20,10 +20,12 @@ RSpec.describe SendDueAgendaNotificationsWorker do
       expect(item.reload.notified_at).to be_present
     end
 
-    it "skips items the user completed already" do
+    it "skips items the user completed already, and items beyond the catchup window" do
       stub_push
       create(:agenda_item, agenda: agenda, kind: :task, start_at: 1.minute.ago,
         completed_at: Time.current)
+      create(:agenda_item, agenda: agenda, kind: :task,
+        start_at: (described_class::CATCHUP_WINDOW + 5.minutes).ago)
       described_class.new.perform
       expect(WebPushNotifications).not_to have_received(:send_to)
     end
@@ -35,14 +37,6 @@ RSpec.describe SendDueAgendaNotificationsWorker do
       described_class.new.perform
       expect(WebPushNotifications).to have_received(:send_to).once
       expect(item.reload.notified_at).to be_present
-    end
-
-    it "ignores items beyond the catchup window" do
-      stub_push
-      create(:agenda_item, agenda: agenda, kind: :task,
-        start_at: (described_class::CATCHUP_WINDOW + 5.minutes).ago)
-      described_class.new.perform
-      expect(WebPushNotifications).not_to have_received(:send_to)
     end
 
     it "marks notified_at even when no users were eligible (no retroactive pings)" do
@@ -86,29 +80,22 @@ RSpec.describe SendDueAgendaNotificationsWorker do
   end
 
   describe "recurrence axis" do
-    it "skips a recurring event for a user who only wants one-off events" do
+    it "notifies a user who only wants one-off events for the one-off, not the recurring one" do
       stub_push
       AgendaNotificationSetting.create!(user: owner, agenda: agenda,
         notify_event_recurring: false)
       sched = create(:agenda_schedule, agenda: agenda, kind: :event,
         start_time: "09:00", duration_minutes: 30,
         recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      _materialized = sched.agenda_items.create!(
+      sched.agenda_items.create!(
         agenda: agenda, kind: :event, name: "Standup",
         start_at: 1.minute.ago, end_at: 1.hour.from_now,
       )
-      described_class.new.perform
-      expect(WebPushNotifications).not_to have_received(:send_to)
-    end
-
-    it "notifies for a one-off event under the same setting" do
-      stub_push
-      AgendaNotificationSetting.create!(user: owner, agenda: agenda,
-        notify_event_recurring: false)
       create(:agenda_item, agenda: agenda, kind: :event, name: "Lunch",
         start_at: 1.minute.ago, end_at: 1.hour.from_now)
       described_class.new.perform
       expect(WebPushNotifications).to have_received(:send_to).once
+      expect(WebPushNotifications).to have_received(:send_to).with(owner, hash_including(title: "Lunch"), channel: :agenda)
     end
   end
 
@@ -133,13 +120,6 @@ RSpec.describe SendDueAgendaNotificationsWorker do
   end
 
   describe "rescheduling re-arms the notification" do
-    it "clears notified_at when start_at is moved into the future" do
-      item = create(:agenda_item, agenda: agenda, kind: :task,
-        start_at: 1.minute.ago, notified_at: Time.current)
-      item.update!(start_at: 1.hour.from_now)
-      expect(item.reload.notified_at).to be_nil
-    end
-
     it "leaves notified_at alone when start_at is moved into the past (no retroactive pings)" do
       item = create(:agenda_item, agenda: agenda, kind: :task,
         start_at: Time.current, notified_at: Time.current)
@@ -173,9 +153,11 @@ RSpec.describe SendDueAgendaNotificationsWorker do
 
     before { stub_push }
 
-    it "fires :agenda_event action::started for an event at start_at + includes agenda_name" do
+    it "fires :agenda_event action::started for an event (not a task) at start_at, with agenda_name" do
       item = create(:agenda_item, agenda: workout_agenda, kind: :event,
         name: "Squats", start_at: 1.minute.ago, end_at: 1.hour.from_now)
+      task = create(:agenda_item, agenda: workout_agenda, kind: :task,
+        name: "Stretch", start_at: 1.minute.ago)
       allow(::Jil).to receive(:trigger)
 
       described_class.new.perform
@@ -189,22 +171,18 @@ RSpec.describe SendDueAgendaNotificationsWorker do
             payload[:agenda_name] == "Workout"
         }
       )
+      expect(::Jil).not_to have_received(:trigger).with(
+        owner, :agenda_event, satisfy { |payload| payload.try(:id) == task.id }
+      )
     end
 
-    it "does NOT fire :agenda_event for a task at start_at (events only)" do
-      create(:agenda_item, agenda: workout_agenda, kind: :task,
-        name: "Stretch", start_at: 1.minute.ago)
-      allow(::Jil).to receive(:trigger)
-
-      described_class.new.perform
-
-      expect(::Jil).not_to have_received(:trigger).with(owner, :agenda_event, anything)
-    end
-
-    it "fires :agenda_event action::ended at end_at and stamps ended_fired_at" do
+    it "fires :agenda_event action::ended at end_at once, stamping ended_fired_at" do
       item = create(:agenda_item, agenda: workout_agenda, kind: :event,
         name: "Squats", start_at: 1.hour.ago, end_at: 1.minute.ago,
         notified_at: 1.hour.ago) # already started, only end fires now
+      already_ended = create(:agenda_item, agenda: workout_agenda, kind: :event,
+        name: "Lunges", start_at: 1.hour.ago, end_at: 1.minute.ago,
+        notified_at: 1.hour.ago, ended_fired_at: 30.seconds.ago)
       allow(::Jil).to receive(:trigger)
 
       described_class.new.perform
@@ -219,19 +197,8 @@ RSpec.describe SendDueAgendaNotificationsWorker do
         }
       )
       expect(item.reload.ended_fired_at).to be_present
-    end
-
-    it "doesn't re-fire :ended on subsequent ticks (ended_fired_at dedup)" do
-      item = create(:agenda_item, agenda: workout_agenda, kind: :event,
-        name: "Squats", start_at: 1.hour.ago, end_at: 1.minute.ago,
-        notified_at: 1.hour.ago, ended_fired_at: 30.seconds.ago)
-      allow(::Jil).to receive(:trigger)
-
-      described_class.new.perform
-
       expect(::Jil).not_to have_received(:trigger).with(
-        owner, :agenda_event,
-        satisfy { |payload| payload.is_a?(AgendaItem) && payload.id == item.id }
+        owner, :agenda_event, satisfy { |payload| payload.try(:id) == already_ended.id }
       )
     end
 

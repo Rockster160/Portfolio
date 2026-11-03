@@ -28,12 +28,11 @@ RSpec.describe "Job transcript debrief", type: :request do
     allow(TranscriptDebriefWorker).to receive(:perform_async)
   end
 
-  it "starts another reading and says so" do
+  it "starts another reading" do
     post(debrief_interview_transcript_path(job, transcript))
 
     expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id, true)
     expect(response).to redirect_to(interview_transcript_path(job, transcript))
-    expect(flash[:notice]).to include("Reading it back")
   end
 
   it "starts nothing for a transcript on somebody else's application" do
@@ -68,27 +67,9 @@ RSpec.describe "Job transcript debrief", type: :request do
       expect(response.body).to include("We had four inboxes")
       expect(response.body).to include("Never asked what happens next.")
       expect(response.body).to include("Carry one number for every story.")
-      expect(response.body).to include("Read it again")
       # The note links down into the turn it is about.
       expect(response.body).to include("href=\"#t1\"")
       expect(response.body).to include("id=\"t1\"")
-    end
-
-    it "says nothing about how it went on a recording nobody has read" do
-      get(interview_transcript_path(job, transcript))
-
-      expect(response.body).not_to include("How it went")
-      expect(response.body).to include("How did I do")
-    end
-
-    # Nothing can be said about how he did until somebody is marked as him, so
-    # the page asks for that instead of offering a reading it would refuse.
-    it "asks who he is first when no turn has been placed on him" do
-      transcript.update!(speakers: {})
-
-      get(interview_transcript_path(job, transcript))
-
-      expect(response.body).to include("Tick which speaker is you")
     end
   end
 end

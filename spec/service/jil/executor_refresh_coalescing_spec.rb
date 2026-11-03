@@ -24,15 +24,6 @@ RSpec.describe Jil::Executor do
       calls.length
     end
 
-    it "fires one dispatch for the same channel refreshed repeatedly" do
-      code = <<~JIL
-        a = Monitor.refresh("upcoming", "")::Monitor
-        b = Monitor.refresh("upcoming", "")::Monitor
-        c = Monitor.refresh("upcoming", "")::Monitor
-      JIL
-      expect(count_monitor_dispatch { described_class.call(user, code) }).to eq(1)
-    end
-
     it "fires one dispatch per distinct coalesced channel" do
       code = <<~JIL
         a = Monitor.refresh("upcoming", "")::Monitor

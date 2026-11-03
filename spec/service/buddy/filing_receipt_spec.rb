@@ -11,49 +11,33 @@ RSpec.describe Buddy::FilingReceipt do
     call(:add_job_note, { "company" => "iCapital", "summary" => "Disclosed the side business during onboarding." })
   }
 
-  describe "a reply that only reports the filing" do
-    it "becomes the company and the summary" do
-      out = described_class.mend("Set. It’s noted as their response on the iCapital row.", [note])
+  it "replaces a reply that only reports the filing with the company and summary", :aggregate_failures do
+    named  = call(:add_job_note, { "company" => "iCapital", "summary" => "iCapital confirmed Day 1 emails are coming." })
+    opened = call(:add_job_application, { "company" => "Podium", "summary" => "Recruiter reached out about Staff AI Engineer." })
 
-      expect(out).to eq("iCapital: Disclosed the side business during onboarding.")
-    end
-
-    it "takes the summary alone when it already names the company" do
-      named = call(:add_job_note, { "company" => "iCapital", "summary" => "iCapital confirmed Day 1 emails are coming." })
-
-      expect(described_class.mend("Done!", [named])).to eq("iCapital confirmed Day 1 emails are coming.")
-    end
-
-    it "reads a new company's row the same way" do
-      opened = call(:add_job_application, { "company" => "Podium", "summary" => "Recruiter reached out about Staff AI Engineer." })
-
-      expect(described_class.mend("Logged, it's on the board.", [opened])).to eq(
-        "Podium: Recruiter reached out about Staff AI Engineer.",
-      )
+    [
+      ["Set. It’s noted as their response on the iCapital row.", note, "iCapital: Disclosed the side business during onboarding."],
+      # The summary alone when it already names the company.
+      ["Done!", named, "iCapital confirmed Day 1 emails are coming."],
+      ["Logged, it's on the board.", opened, "Podium: Recruiter reached out about Staff AI Engineer."],
+    ].each do |body, filed, expected|
+      expect(described_class.mend(body, [filed])).to eq(expected), body
     end
   end
 
-  describe "what it leaves alone" do
-    it "keeps a sentence about the mail" do
-      body = "iCapital says the PCIIA is standard and riders can't be attached."
+  it "leaves a reply alone that says more, or when there is nothing to say instead", :aggregate_failures do
+    bare = call(:add_job_note, { "company" => "iCapital", "tag" => "responded" })
 
-      expect(described_class.mend(body, [note])).to eq(body)
-    end
-
-    it "keeps a booking that opens on the same word" do
-      body = "Set for Tuesday at 11:30am with RingCentral."
-
-      expect(described_class.mend(body, [note])).to eq(body)
-    end
-
-    it "keeps the receipt when the call wrote no summary" do
-      bare = call(:add_job_note, { "company" => "iCapital", "tag" => "responded" })
-
-      expect(described_class.mend("Done.", [bare])).to eq("Done.")
-    end
-
-    it "keeps the receipt when nothing was filed" do
-      expect(described_class.mend("Done.", [call(:log_event, { "name" => "Coffee" })])).to eq("Done.")
+    [
+      ["iCapital says the PCIIA is standard and riders can't be attached.", note],
+      # A booking that opens on the same word as a receipt.
+      ["Set for Tuesday at 11:30am with RingCentral.", note],
+      # The call wrote no summary.
+      ["Done.", bare],
+      # Nothing was filed.
+      ["Done.", call(:log_event, { "name" => "Coffee" })],
+    ].each do |body, filed|
+      expect(described_class.mend(body, [filed])).to eq(body), body
     end
   end
 end

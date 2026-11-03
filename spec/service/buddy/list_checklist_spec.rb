@@ -33,10 +33,11 @@ RSpec.describe Buddy::ListChecklist do
       }
     }
 
-    it "reads in list order, first step first" do
+    it "reads in list order, first step first, with nothing said about what didn't fit", :aggregate_failures do
       post!
 
       expect(action.buttons.pluck("label")).to eq(%w[Cook Cool Chop Grate Assemble])
+      expect(user.byte_messages.last.body).to eq("Still to do:")
     end
 
     # The cap still bites against the list's own order, so a long list shows the
@@ -52,46 +53,21 @@ RSpec.describe Buddy::ListChecklist do
     end
   end
 
-  # Rocco: "It should cap at probably 10 or so." A card is read at a glance and
-  # tapped; thirty boxes is a page, and it pushes whatever was said above it out
-  # of sight for rows nobody is going to tick.
-  context "with more items than fit on a card" do
-    before { 14.times { |i| create(:list_item, list: list, name: "Item #{i + 1}") } }
+  # A quiet truncation reads as the whole list: four things get ticked off and
+  # the list is believed to be clear. The count is small print on the card,
+  # not something to buzz a phone with.
+  it "draws only the first ten, says how many did not fit, and keeps that out of the push", :aggregate_failures do
+    14.times { |i| create(:list_item, list: list, name: "Item #{i + 1}") }
+    expect(Buddy::CompanionDelivery).to receive(:deliver_plain).with(
+      hash_including(push_title: "Still to do:"),
+    ).and_call_original
 
-    it "draws only the first ten" do
-      expect(post!).to eq(described_class::MAX_ROWS)
-      expect(action.buttons.length).to eq(10)
-      expect(action.buttons.pluck("label")).to include("Item 1", "Item 10")
-      expect(action.buttons.pluck("label")).not_to include("Item 11")
-    end
+    expect(post!).to eq(described_class::MAX_ROWS)
 
-    # A quiet truncation reads as the whole list, which is worse than a long
-    # card: four things get ticked off and the list is believed to be clear.
-    it "says how many did not fit" do
-      post!
-
-      expect(user.byte_messages.last.body).to include("+4 more on the list")
-    end
-
-    # ...and that small print is about the card, not something to buzz a phone
-    # with.
-    it "keeps it out of the push" do
-      expect(Buddy::CompanionDelivery).to receive(:deliver_plain).with(
-        hash_including(push_title: "Still to do:"),
-      ).and_call_original
-
-      post!
-    end
-  end
-
-  context "with a list that fits" do
-    before { create(:list_item, list: list, name: "Lock the back door") }
-
-    it "says nothing about what didn't fit" do
-      post!
-
-      expect(user.byte_messages.last.body).to eq("Still to do:")
-    end
+    expect(action.buttons.length).to eq(10)
+    expect(action.buttons.pluck("label")).to include("Item 1", "Item 10")
+    expect(action.buttons.pluck("label")).not_to include("Item 11")
+    expect(user.byte_messages.last.body).to include("4 more")
   end
 
   context "with items on the list" do
@@ -100,37 +76,23 @@ RSpec.describe Buddy::ListChecklist do
       create(:list_item, list: list, name: "Start the dishwasher")
     end
 
-    it "returns how many boxes went up" do
-      expect(post!).to eq(2)
-    end
+    # A level-2 tool drawn the normal way would arrive already ticked with the
+    # list already emptied, so every row stays pending.
+    it "posts one pushed message whose pending rows point at remove_list_item", :aggregate_failures do
+      expect(WebPushNotifications).to receive(:send_to_byte).with(hash_including(title: "Still to do:"))
 
-    it "gives every item its own row" do
-      post!
+      expect(post!).to eq(2)
 
       expect(action.buttons.pluck("label")).to match_array(["Lock the back door", "Start the dishwasher"])
-    end
-
-    # Empty boxes. A level-2 tool drawn the normal way would arrive already
-    # ticked with the list already emptied, which is the bug this exists around.
-    it "leaves every row pending" do
-      post!
-
       expect(action.buttons.pluck("status").uniq).to eq(["pending"])
       expect(list.reload.list_items.count).to eq(2)
-    end
-
-    it "points each row at remove_list_item with what that tool executes on" do
-      post!
 
       row = action.buttons.find { |b| b["label"] == "Lock the back door" }
       expect(row["tool_name"]).to eq("remove_list_item")
       expect(row["payload"]).to include("list_id" => list.id, "item" => "Lock the back door")
-    end
-
-    it "posts one message carrying the checklist, and pushes it" do
-      expect(WebPushNotifications).to receive(:send_to_byte).with(hash_including(title: "Still to do:"))
-
-      post!
+      # The rows are the list, so the per-row kind chip is off.
+      expect(row).to have_key("kind_label")
+      expect(row["kind_label"]).to be_nil
 
       message = action.byte_message
       expect(message.body).to eq("Still to do:")
@@ -143,37 +105,16 @@ RSpec.describe Buddy::ListChecklist do
       expect(message.metadata["buttons"].length).to eq(2)
     end
 
-    # The rows are the list, so a chip repeating the tool name down the card
-    # would say "Remove List Item" where the item names go.
-    it "turns the per-row kind chip off and words the hint as checking off" do
-      post!
-
-      row = action.buttons.first
-      expect(row).to have_key("kind_label")
-      expect(row["kind_label"]).to be_nil
-      expect(row["hint"]).to eq("tap" => "Tap when it's done", "done" => "Done - untick to put it back")
-    end
-
-    # Ticking a row is what the whole thing is for: it runs the proposal the row
-    # carries, which takes the item off the list.
-    it "removes the item from the list when its row is executed" do
+    it "removes the item when its row is executed and leaves the unticked rows live", :aggregate_failures do
       post!
       row = action.buttons.find { |b| b["label"] == "Start the dishwasher" }
 
       Buddy::ProposalExecutor.perform(action.id, [row["id"]])
 
       expect(list.reload.list_items.pluck(:name)).to eq(["Lock the back door"])
-      expect(action.reload.buttons.find { |b| b["id"] == row["id"] }["status"]).to eq("executed")
-    end
-
-    it "leaves the unticked rows live" do
-      post!
-      row = action.buttons.first
-
-      Buddy::ProposalExecutor.perform(action.id, [row["id"]])
-
-      still_open = action.reload.buttons.reject { |b| b["id"] == row["id"] }
-      expect(still_open.pluck("status")).to eq(["pending"])
+      action.reload
+      expect(action.buttons.find { |b| b["id"] == row["id"] }["status"]).to eq("executed")
+      expect(action.buttons.reject { |b| b["id"] == row["id"] }.pluck("status")).to eq(["pending"])
       expect(action).to be_pending
     end
 

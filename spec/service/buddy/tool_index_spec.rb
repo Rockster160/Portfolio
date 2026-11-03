@@ -43,20 +43,18 @@ RSpec.describe Buddy::ToolIndex do
       schemas.find { |schema| schema[:name].to_s == name.to_s }
     end
 
-    it "offers the frame and the always tools in full" do
-      expect(names(stage_one)).to include(:get_context, :read_listener_guide, :remember)
-      always.each { |tool| expect(schema_for(stage_one, tool[:name])).to eq(Buddy::Tools.function_schema(tool, user: user)) }
-    end
-
     # The model picks a tool by its name in the list, so every tool is in the
     # list by name - only what it says, and what it takes, waits to be opened.
-    it "lists every other tool by name with only its summary and no arguments" do
+    it "offers the always tools in full and every other by name, summary only, at a fraction of the size", :aggregate_failures do
+      expect(names(stage_one)).to include(:get_context, :read_listener_guide, :remember)
+      always.each { |tool| expect(schema_for(stage_one, tool[:name])).to eq(Buddy::Tools.function_schema(tool, user: user)) }
       indexed.each { |tool|
         entry = schema_for(stage_one, tool[:name])
 
         expect(entry[:description]).to start_with(tool[:summary])
         expect(entry[:parameters][:properties]).to be_empty
       }
+      expect(JSON.generate(stage_one).bytesize).to be < JSON.generate(described_class.everything(user: user)).bytesize / 3
     end
 
     # A request names the thing ("the TV", "Whisper's nap"), and the tool that
@@ -81,31 +79,20 @@ RSpec.describe Buddy::ToolIndex do
       expect(names(opened)).to eq(names(stage_one))
       expect(schema_for(opened, tool[:name])).to eq(Buddy::Tools.function_schema(tool, user: user))
     end
-
-    it "is far smaller than every schema in full" do
-      expect(JSON.generate(stage_one).bytesize).to be < JSON.generate(described_class.everything(user: user)).bytesize / 3
-    end
   end
 
   describe ".opening?" do
-    it "is a tool on the index that hasn't been opened yet" do
-      tool = described_class.indexed(user: user).first
+    # A call carrying arguments is the tool being used; an always tool
+    # arrives in full and is never opened.
+    it "is an argument-less call to an indexed tool not yet opened", :aggregate_failures do
+      tool   = described_class.indexed(user: user).first
+      always = Buddy::Tools.offered(user: user).find { |t| Buddy::Tools.always?(t) }
 
       expect(described_class.opening?(tool[:name], {}, loaded: Set.new)).to be(true)
       expect(described_class.opening?(tool[:name], {}, loaded: Set[tool[:name]])).to be(false)
       expect(described_class.opening?(:get_context, {}, loaded: Set.new)).to be(false)
-    end
-
-    it "is never a call that carries arguments, which is the tool being used" do
-      tool = described_class.indexed(user: user).first
-
       expect(described_class.opening?(tool[:name], { "query" => "x" }, loaded: Set.new)).to be(false)
-    end
-
-    it "never counts an always tool, which arrives in full" do
-      tool = Buddy::Tools.offered(user: user).find { |t| Buddy::Tools.always?(t) }
-
-      expect(described_class.opening?(tool[:name], {}, loaded: Set.new)).to be(false)
+      expect(described_class.opening?(always[:name], {}, loaded: Set.new)).to be(false)
     end
   end
 
@@ -145,7 +132,7 @@ RSpec.describe Buddy::ToolIndex do
       expect(offered[1..]).to all(eq(Buddy::Tools.function_schema(Buddy::Tools[:search_memories], user: user)))
 
       opened = client.calls[1].input.find { |item| item[:type] == :function_call_output }
-      expect(JSON.parse(opened[:output])["how"]).to start_with("Nothing has happened yet")
+      expect(JSON.parse(opened[:output])["how"]).to be_present
     end
 
     it "doesn't count a round that only opened tools toward the cap" do

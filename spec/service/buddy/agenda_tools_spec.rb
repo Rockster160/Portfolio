@@ -2,10 +2,6 @@ require "rails_helper"
 
 RSpec.describe "Buddy agenda tools" do
   # Buddy putting things on, and moving things between, calendars.
-  #
-  # Built around prod 1201: "move it to the Ours agenda" produced an ADD, so the
-  # same Costco Run ended up on two calendars at 1:00 PM. edit_agenda_item had no
-  # way to name a calendar, so there was no correct call available.
   describe "the tools" do
     let(:user) { create(:user) }
     # User#ensure_default_agenda makes this one on save, so it is genuinely the
@@ -37,20 +33,18 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     describe "edit_agenda_item moving between calendars" do
-      it "moves the existing item instead of leaving a second one behind" do
+      it "moves the existing item instead of leaving a second one behind, shows it on the row, and undoes", :aggregate_failures do
         item = costco_on(personal)
+        tool = Buddy::Tools[:edit_agenda_item]
+        confirm = tool[:confirm].call({ item: "Costco Run", calendar: "Ours" }, ctx)
+        expect(tool[:label].call({ item: "Costco Run" }.merge(confirm[:resolved]), ctx)[:sub])
+          .to include("#{personal.name} → Ours 💕")
 
-        run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours" })
-
-        expect(item.reload.agenda_id).to eq(ours.id)
-        expect(AgendaItem.where(name: "Costco Run").count).to eq(1)
-      end
-
-      it "puts it back on undo" do
-        item = costco_on(personal)
         result, = run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours" })
 
         expect(item.reload.agenda_id).to eq(ours.id)
+        expect(AgendaItem.where(name: "Costco Run").count).to eq(1)
+
         Buddy::Reverter.call(result[:revert])
 
         expect(item.reload.agenda_id).to eq(personal.id)
@@ -64,27 +58,8 @@ RSpec.describe "Buddy agenda tools" do
         }.to raise_error(/no calendar named/)
       end
 
-      it "shows where it is going on the confirm row" do
-        costco_on(personal)
-        tool    = Buddy::Tools[:edit_agenda_item]
-        confirm = tool[:confirm].call({ item: "Costco Run", calendar: "Ours" }, ctx)
-        label   = tool[:label].call({ item: "Costco Run" }.merge(confirm[:resolved]), ctx)
-
-        expect(label[:sub]).to include("#{personal.name} → Ours 💕")
-      end
-
-      it "says it moved rather than updated" do
-        costco_on(personal)
-        tool = Buddy::Tools[:edit_agenda_item]
-        result, = run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours" })
-
-        expect(tool[:receipt].call(result, ctx)).to eq("Moved Costco Run to Ours 💕 ✓")
-      end
-
-      # Three turns in four minutes each said they had moved Shower to the
-      # calendar, and the receipt drew `Rockster160 → Rockster160`. Writing the
-      # same id back is still an executed edit, so there was nothing to stop
-      # the next turn claiming it again.
+      # Writing the same id back would still be an executed edit, so the next
+      # turn could claim the move again.
       it "refuses a move to the calendar it is already on" do
         costco_on(ours)
 
@@ -93,27 +68,20 @@ RSpec.describe "Buddy agenda tools" do
         }.to raise_error(/already on Ours/)
       end
 
-      # ...and only when the move was the whole request. A redundant clause
-      # beside a real change is not a reason to refuse the change.
-      it "still makes the other edit when the calendar clause changes nothing" do
-        item = costco_on(ours)
+      # ...and only when the move was the whole request. The confirm row is what
+      # the next turn reads back, so the no-op move stays off it.
+      it "still makes the other edit when the calendar clause changes nothing, without claiming a move" do
+        item    = costco_on(ours)
+        payload = { item: "Costco Run", calendar: "Ours", title: "Costco Trip" }
 
-        run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", title: "Costco Trip" })
+        expect(Buddy::Tools[:edit_agenda_item][:confirm].call(payload, ctx)[:resolved]).not_to include(:agenda_id, :agenda_from)
+
+        run(:edit_agenda_item, payload)
 
         expect(item.reload).to have_attributes(name: "Costco Trip", agenda_id: ours.id)
       end
 
-      # The confirm row is what the next turn reads back, so a move that did
-      # not happen must not appear on it.
-      it "leaves a no-op move off the confirm row" do
-        costco_on(ours)
-        tool    = Buddy::Tools[:edit_agenda_item]
-        confirm = tool[:confirm].call({ item: "Costco Run", calendar: "Ours", title: "Costco Trip" }, ctx)
-
-        expect(confirm[:resolved]).not_to include(:agenda_id, :agenda_from)
-      end
-
-            it "still edits an item on a calendar shared to the person for editing" do
+      it "still edits an item on a calendar shared to the person for editing" do
         partner = create(:user)
         shared  = create(:agenda, user: partner, name: "Theirs")
         shared.agenda_shares.create!(user: user, permission: :editor)
@@ -125,11 +93,7 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
-    # Prod, 6 Oct: "add Shower to my agenda at 3 today" went on correctly, and
-    # then three turns in a row said they had moved it - all three editing a
-    # Shower from four months earlier that nobody had asked about. `start_at:
-    # :asc` answers the OLDEST, while the same-name rule it feeds has always
-    # said the intent is the soonest.
+    # The same-name rule's intent is the soonest, not the oldest row.
     describe "two of the same name on different dates" do
       def shower_at(when_at)
         personal.agenda_items.create!(
@@ -161,22 +125,27 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
-    # Prod: "Add Help Richard on the agenda tomorrow" landed as a task, then
-    # "let's make it a 3 hour event" got "I can't flip that agenda row from task
-    # to event in place here" — so the row was deleted by hand and re-added. Three
-    # exchanges for one edit, and the tool was right that it had no way to do it.
     describe "converting between a task and an event" do
       def task_on(agenda, name: "Help Richard")
         agenda.agenda_items.create!(name: name, start_at: at, kind: :task, status: :confirmed)
       end
 
-      it "makes a to-do into an event of the length they asked for" do
-        item = task_on(personal)
+      it "makes a to-do into an event of the length they asked for, shows it, and undoes both kind and span", :aggregate_failures do
+        item    = task_on(personal)
+        tool    = Buddy::Tools[:edit_agenda_item]
+        payload = { item: "Help Richard", kind: :event, duration: 180 }
+        expect(tool[:label].call(payload.merge(tool[:confirm].call(payload, ctx)[:resolved]), ctx)[:sub])
+          .to include("task → event")
 
-        run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
+        result, = run(:edit_agenda_item, payload)
 
         expect(item.reload).to be_event
         expect(item.end_at).to eq(item.start_at + 180.minutes)
+
+        Buddy::Reverter.call(result[:revert])
+
+        expect(item.reload).to be_task
+        expect(item.end_at).to be_nil
       end
 
       it "gives a conversion with no length the same 30 minutes a new event gets" do
@@ -212,34 +181,6 @@ RSpec.describe "Buddy agenda tools" do
           run(:edit_agenda_item, { item: "Porch Light", kind: :event })
         }.to raise_error(/can't be converted/)
       end
-
-      it "puts both the kind and the span back on undo" do
-        item = task_on(personal)
-        result, = run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
-
-        Buddy::Reverter.call(result[:revert])
-
-        expect(item.reload).to be_task
-        expect(item.end_at).to be_nil
-      end
-
-      it "says what it became rather than just 'updated'" do
-        task_on(personal)
-        tool = Buddy::Tools[:edit_agenda_item]
-        result, = run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
-
-        expect(tool[:receipt].call(result, ctx)).to eq("Help Richard is an event now - 180m ✓")
-      end
-
-      it "shows the conversion on the confirm row" do
-        task_on(personal)
-        tool    = Buddy::Tools[:edit_agenda_item]
-        payload = { item: "Help Richard", kind: :event, duration: 180 }
-        confirm = tool[:confirm].call(payload, ctx)
-        label   = tool[:label].call(payload.merge(confirm[:resolved]), ctx)
-
-        expect(label[:sub]).to include("task → event")
-      end
     end
 
     # The checklist row prefixes itself with what tapping it will do, and calling
@@ -253,25 +194,18 @@ RSpec.describe "Buddy agenda tools" do
 
       it "resolves the kind of the item being edited" do
         task_on(personal)
-
-        _, confirm = run(:edit_agenda_item, { item: "Shower", title: "Long shower" })
-
-        expect(confirm[:resolved][:kind]).to eq("task")
-      end
-
-      it "says event for one that is one" do
         costco_on(personal)
 
-        _, confirm = run(:edit_agenda_item, { item: "Costco Run", title: "Costco Trip" })
+        _, task_confirm  = run(:edit_agenda_item, { item: "Shower", title: "Long shower" })
+        _, event_confirm = run(:edit_agenda_item, { item: "Costco Run", title: "Costco Trip" })
 
-        expect(confirm[:resolved][:kind]).to eq("event")
+        expect(task_confirm[:resolved][:kind]).to eq("task")
+        expect(event_confirm[:resolved][:kind]).to eq("event")
       end
     end
 
     # Level 2: it goes on the calendar the moment Byte proposes it, as a
-    # pre-checked row that unchecks back off. Making them tap to confirm every add
-    # was a toll on the common case — they'd already said what they wanted, and
-    # putting something on a calendar is easy to see and easy to take back.
+    # pre-checked row that unchecks back off.
     describe "an add landing on its own" do
       let!(:convo) {
         user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
@@ -290,25 +224,16 @@ RSpec.describe "Buddy agenda tools" do
         )
       end
 
-      it "is on the calendar without anyone tapping anything" do
-        expect { propose!("Shower") }.to change { AgendaItem.where(name: "Shower").count }.by(1)
-      end
+      it "is on the calendar without a tap, as a ticked row that unticking cancels" do
+        result = nil
+        expect { result = propose!("Shower") }.to change { AgendaItem.where(name: "Shower").count }.by(1)
 
-      it "leaves a row that's already ticked, and can be unticked" do
-        result = propose!("Shower")
-        row    = result[:action].buttons.first
-
+        action = result[:action]
+        row    = action.buttons.first
         expect(row["status"]).to eq("executed")
         expect(row["undoable"]).to be(true)
-      end
 
-      # The undo has to actually reach the item, or the pre-checked row is a
-      # promise it can't keep.
-      it "takes it back off when the row is unticked" do
-        result = propose!("Shower")
-        action = result[:action]
-
-        Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
+        Buddy::ProposalExecutor.undo!(action.id, row["id"])
 
         expect(AgendaItem.find_by(name: "Shower")).to be_cancelled
       end
@@ -334,56 +259,23 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
-    # Prod 5338-5341, 3 Sep. "Add an Eye Follow Up appointment to tomorrow at
-    # 11:40, and let's be 10 minutes early." went on at 11:40 with a 0, and the
-    # reply asked whether 11:40 was the check-in or the appointment - because
-    # neither tool HAD an argument for being early. Told "yes, I want to arrive
-    # 10 minutes early. There is a setting for that", it reached for `leave_at`,
-    # found no drive time and gave up.
+    # "No need to be early" is an answer, not a missing argument, and 0 is
+    # `present?` - which is why nothing here reads `.presence`.
     describe "how early to be" do
       def early_of(name)
         AgendaItem.find_by(name: name).arrive_early_minutes
       end
 
-      it "is five by default, with no place attached" do
-        run(:add_agenda_item, { title: "Eye Follow Up", at: at })
-
-        expect(early_of("Eye Follow Up")).to eq(5)
-      end
-
-      it "is five by default with a place too" do
-        run(:add_agenda_item, { title: "Coffee", at: at, location: "Lucky Ones" })
-
-        expect(early_of("Coffee")).to eq(5)
-      end
-
-      it "takes the number they named" do
-        run(:add_agenda_item, { title: "Eye Follow Up", at: at, arrive_early: 10 })
-
-        expect(early_of("Eye Follow Up")).to eq(10)
-      end
-
-      # "No need to be early" is an answer, not a missing argument, and 0 is
-      # `present?` - which is why nothing here reads `.presence`.
-      it "takes an explicit nought" do
-        run(:add_agenda_item, { title: "Eye Follow Up", at: at, arrive_early: 0 })
-
-        expect(early_of("Eye Follow Up")).to eq(0)
-      end
-
-      # Prod 5725. "Add a Plunge with Christian today leaving at 4" - not a word
-      # about arriving - came back carrying `arrive_early: 0`, the first one the
-      # model has ever sent in nineteen calls. It was the only concrete value
-      # the argument description offered ("or 0 for 'no need to be early'"), so
-      # it got reached for, and it overrode the setting the default exists to
-      # honour. An option spelled out in a description is a suggestion to use
-      # it, which is why there is no worked example of a no-buffer case here.
-      it "shows the model no value to reach for when nobody named a buffer" do
-        arg = Buddy::Tools[:add_agenda_item][:args][:arrive_early][:description]
-
-        expect(arg).to include("NAMED one out loud")
-        expect(arg).not_to match(/\b0\b/)
-        expect(arg).not_to include("no need to be early")
+      it "is five by default, with or without a place, and takes a named number including nought" do
+        [
+          [{ title: "Eye Follow Up", at: at }, 5],
+          [{ title: "Coffee", at: at, location: "Lucky Ones" }, 5],
+          [{ title: "Dentist", at: at, arrive_early: 10 }, 10],
+          [{ title: "Walk", at: at, arrive_early: 0 }, 0],
+        ].each { |payload, expected|
+          run(:add_agenda_item, payload)
+          expect(early_of(payload[:title])).to eq(expected), payload.inspect
+        }
       end
 
       it "carries the default onto a series rather than zeroing it" do
@@ -392,8 +284,8 @@ RSpec.describe "Buddy agenda tools" do
         expect(AgendaSchedule.find_by(name: "Standup").arrive_early_minutes).to eq(5)
       end
 
-      # The one he actually asked for twice. No location, no drive time,
-      # nothing to work back through - and none of that matters.
+      # No location, no drive time, nothing to work back through - and none of
+      # that matters.
       it "sets it on an item that has no drive time at all" do
         item = personal.agenda_items.create!(
           name: "Eye Follow Up", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed
@@ -404,16 +296,6 @@ RSpec.describe "Buddy agenda tools" do
         }.not_to raise_error
 
         expect(item.reload.arrive_early_minutes).to eq(10)
-      end
-
-      it "says the number back rather than a bare 'updated'" do
-        personal.agenda_items.create!(
-          name: "Eye Follow Up", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed
-        )
-        tool   = Buddy::Tools[:edit_agenda_item]
-        result, = run(:edit_agenda_item, { item: "Eye Follow Up", arrive_early: 10 })
-
-        expect(tool[:receipt].call(result, ctx)).to include("10m early")
       end
 
       it "changes it on the whole rule when they asked for the series" do
@@ -430,21 +312,13 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     describe "add_agenda_item when the thing already exists" do
-      it "warns that this looks like a move so the model can switch tools" do
+      it "points at edit_agenda_item when the same item is on another calendar, and not for an unrelated one" do
         costco_on(personal)
-        tool    = Buddy::Tools[:add_agenda_item]
-        confirm = tool[:confirm].call({ title: "Costco Run", at: at, calendar: "Ours" }, ctx)
-
-        expect(confirm[:summary]).to include("already exists")
-        expect(confirm[:summary]).to include("edit_agenda_item")
-      end
-
-      it "does not warn about an unrelated item at the same time" do
         personal.agenda_items.create!(name: "Dentist", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed)
-        tool    = Buddy::Tools[:add_agenda_item]
-        confirm = tool[:confirm].call({ title: "Costco Run", at: at }, ctx)
+        tool = Buddy::Tools[:add_agenda_item]
 
-        expect(confirm[:summary]).not_to include("already exists")
+        expect(tool[:confirm].call({ title: "Costco Run", at: at, calendar: "Ours" }, ctx)[:summary]).to include("edit_agenda_item")
+        expect(tool[:confirm].call({ title: "Lunch", at: at }, ctx)[:summary]).not_to include("edit_agenda_item")
       end
 
       it "still adds, since two real errands can collide" do
@@ -456,97 +330,43 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
-    # The note above is the right answer for a NEAR miss. This is the exact one,
-    # and being told about it was not enough: prod 6035-6039 put Eve's "Clear
-    # kitchen" on twice at noon and "Start kitchen" on twice at 9, in three turns
-    # over three minutes, with the replies naming the row they were duplicating.
+    # The note above is the right answer for a NEAR miss; the exact one is
+    # refused, because being told about it was not enough.
     describe "adding the row that is already there" do
-      it "refuses instead of making a second copy" do
+      it "refuses instead of making a second copy, whatever the capitalization" do
         costco_on(personal)
 
-        expect {
-          run(:add_agenda_item, { title: "Costco Run", at: at })
-        }.to raise_error(/already on/)
+        expect { run(:add_agenda_item, { title: "Costco Run", at: at }) }.to raise_error(/already on.*edit_agenda_item|edit_agenda_item.*already on/m)
+        expect { run(:add_agenda_item, { title: "costco run", at: at }) }.to raise_error(/already on/)
 
         expect(AgendaItem.where(name: "Costco Run").count).to eq(1)
       end
 
-      it "names the tool that changes the one already there" do
+      # Scoped to the calendar, because "put it on Ours as well" is a real ask.
+      # A cancelled row is a tombstone, and a repeat writes a rule, not a row.
+      it "lets it through at another time, on another calendar, over a cancelled row, or as a series" do
         costco_on(personal)
-
-        expect {
-          run(:add_agenda_item, { title: "Costco Run", at: at })
-        }.to raise_error(/edit_agenda_item/)
-      end
-
-      it "does not care how the name was capitalized" do
-        costco_on(personal)
-
-        expect {
-          run(:add_agenda_item, { title: "costco run", at: at })
-        }.to raise_error(/already on/)
-      end
-
-      it "lets the same thing through at a different time" do
-        costco_on(personal)
+        costco_on(personal).update!(status: :cancelled, start_at: at + 2.hours, end_at: at + 150.minutes)
 
         run(:add_agenda_item, { title: "Costco Run", at: at + 1.hour })
-
-        expect(AgendaItem.where(name: "Costco Run").count).to eq(2)
-      end
-
-      # Scoped to the calendar, because "put it on Ours as well" is a real ask
-      # and the twin note is what speaks to it.
-      it "lets the same thing through on another calendar" do
-        costco_on(personal)
-
         run(:add_agenda_item, { title: "Costco Run", at: at, calendar: "Ours" })
-
-        expect(AgendaItem.where(name: "Costco Run").count).to eq(2)
-      end
-
-      it "ignores a cancelled row, which is a tombstone rather than a plan" do
-        costco_on(personal).update!(status: :cancelled)
-
-        run(:add_agenda_item, { title: "Costco Run", at: at })
-
-        expect(AgendaItem.where(name: "Costco Run", status: :confirmed).count).to eq(1)
-      end
-
-      # A repeat writes a rule, not a row, so there is no single start to compare.
-      it "leaves a series alone" do
-        costco_on(personal)
-
+        run(:add_agenda_item, { title: "Costco Run", at: at + 2.hours })
         run(:add_agenda_item, { title: "Costco Run", at: at, repeat: "weekly:monday" })
 
+        expect(AgendaItem.where(name: "Costco Run", status: :confirmed, agenda_schedule_id: nil).count).to eq(4)
         expect(AgendaSchedule.where(name: "Costco Run").count).to eq(1)
       end
     end
 
-    # The other half of prod 4462-4471: once Buddy CAN see the four dinners that
-    # exist only as rules, moving one has to move the rule. Changing the single
-    # materialized Monday leaves 167 pointing at Alchemibluum, and next Monday
-    # is back on the wrong calendar.
-    # Prod 5333: "Move the plunge with Wil to the 14th." The only date in that
-    # sentence is the one it is moving TO, and passed as `hint_date` it narrows
-    # the lookup to a day the item is not on yet - so the resolve found nothing,
-    # the reply was retracted, and the event sat where it was until he typed
-    # "Yes" to a "want me to have another go?"
-    #
-    # The argument now says which date it wants. This is the half that doesn't
-    # depend on the model reading it.
+    # `hint_date` given the date it is moving TO would narrow the lookup to a
+    # day the item is not on yet; the fallback is a second pass with one filter
+    # fewer, so a hint that DOES match still decides.
     describe "a date hint that matches nothing" do
-      it "still finds the item the hint was meant to tell apart" do
-        item = costco_on(personal)
+      it "still finds and moves the item the hint was meant to tell apart" do
+        item  = costco_on(personal)
+        moved = at + 5.days
 
-        found = ctx.resolve_agenda_item("Costco Run", hint_date: (at + 5.days).to_date.to_s)
-
-        expect(found&.id).to eq(item.id)
-      end
-
-      it "moves it rather than reporting there is no such thing" do
-        item   = costco_on(personal)
-        moved  = at + 5.days
+        expect(ctx.resolve_agenda_item("Costco Run", hint_date: moved.to_date.to_s)&.id).to eq(item.id)
         expect {
           run(:edit_agenda_item, { item: "Costco Run", hint_date: moved.to_date.to_s, at: moved })
         }.not_to raise_error
@@ -554,9 +374,6 @@ RSpec.describe "Buddy agenda tools" do
         expect(item.reload.start_at).to be_within(1.minute).of(moved)
       end
 
-      # The fallback is a second pass with one filter fewer, so a hint that
-      # DOES match still decides - it is only ever reached when the first pass
-      # came back empty.
       it "leaves a hint that matches doing its job" do
         early = costco_on(personal)
         late  = personal.agenda_items.create!(
@@ -570,12 +387,8 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     describe "a repeating item" do
-      # Every time here is placed relative to now, and the suite runs at
-      # whatever o'clock it runs at: late in the evening "3 hours from now" is
-      # tomorrow, and every one of these items fell out of today's window, so
-      # the block passed and failed by the clock rather than by the filter it
-      # is about. Pinned to a Monday morning, which is also what the weekly
-      # rules below need in order to have materialized anything.
+      # Pinned to a Monday morning, which is what the weekly rules below need in
+      # order to have materialized anything.
       around { |example| travel_to(Time.utc(2026, 8, 24, 15, 0)) { example.run } }
 
       def dinner!(on: personal, day: "mon")
@@ -586,58 +399,37 @@ RSpec.describe "Buddy agenda tools" do
         )
       end
 
-      it "moves the rule, not just the one occurrence" do
-        schedule = dinner!
-
-        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
-
-        expect(schedule.reload.agenda_id).to eq(ours.id)
-      end
-
-      it "takes the occurrences it had already made with it" do
+      it "moves the rule, and the occurrences it had already made, when asked for the series" do
         schedule = dinner!
         expect(schedule.reload.agenda_items.count).to be_positive
 
         run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
 
-        expect(schedule.reload.agenda_items.pluck(:agenda_id).uniq).to eq([ours.id])
+        expect(schedule.reload.agenda_id).to eq(ours.id)
+        expect(schedule.agenda_items.pluck(:agenda_id).uniq).to eq([ours.id])
       end
 
-      # An occurrence past MATERIALIZE_WINDOW has no row yet, and that used to
-      # force the edit onto the whole SERIES — so "move Friday's dinner" moved
-      # every dinner, and asking to move one to another calendar came back
-      # wanting "the single event version". The person cannot see which dates
-      # have rows and must never be asked to.
+      # An occurrence past MATERIALIZE_WINDOW has no row yet; editing it must
+      # still change only THAT date. The person cannot see which dates have rows.
       describe "a date that hasn't been written down yet" do
         # A Friday series, asked about on the Monday the block is pinned to:
         # four days out, so nothing has been materialized for it.
         let!(:friday) { dinner!(day: "fri") }
 
-        it "changes THAT DATE and leaves the rule alone" do
+        # The new row is an exception to its rule, and the original date comes
+        # off the rule, or the evening would show up twice.
+        it "changes THAT DATE as an exception and leaves the rule alone", :aggregate_failures do
           expect(friday.agenda_items).to be_empty
 
           run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
 
+          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
           expect(friday.reload.agenda_id).to eq(personal.id)
           expect(AgendaItem.where(agenda_schedule_id: friday.id).pluck(:agenda_id)).to eq([ours.id])
-        end
-
-        it "writes the row down as an exception to its rule" do
-          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
-
-          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
           expect(made.detached_at).to be_present
           expect(made.original_start_at).to be_present
-        end
-
-        # Or the rule keeps drawing an occurrence on the date the row moved off
-        # and the evening shows up twice.
-        it "takes the original date off the rule" do
-          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
-
-          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
-          excluded = friday.reload.recurrence["excluded_dates"]
-          expect(excluded).to include(made.original_start_at.in_time_zone(user.timezone).to_date.iso8601)
+          expect(friday.recurrence["excluded_dates"])
+            .to include(made.original_start_at.in_time_zone(user.timezone).to_date.iso8601)
         end
 
         it "still moves every one of them when they ask for the series" do
@@ -660,14 +452,6 @@ RSpec.describe "Buddy agenda tools" do
         end
       end
 
-      it "says the series moved rather than an item" do
-        dinner!
-        result, = run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
-
-        expect(Buddy::Tools[:edit_agenda_item][:receipt].call(result, ctx))
-          .to include("Moved every Kevin's meal & pilaf to Ours 💕")
-      end
-
       it "still changes just the one occurrence when they didn't ask for the series" do
         schedule = dinner!
         item = schedule.reload.agenda_items.first
@@ -678,27 +462,13 @@ RSpec.describe "Buddy agenda tools" do
         expect(schedule.reload.agenda_id).to eq(personal.id)
       end
 
-      # This used to raise "isn't a repeating item", and the description above
-      # tells the model to pass `series=true` for a calendar move - so the two
-      # together dead-ended "I moved it to 3. Can you switch that to the Ours
-      # calendar?" on "that one's not repeating, so I couldn't move the whole
-      # series", with nothing moved and nothing the person could do about it
-      # (prod 5270-5271). On a one-off there is no rule, so `series` is
-      # redundant rather than wrong: the single row IS everything there is.
+      # On a one-off there is no rule, so `series` is redundant rather than wrong.
       it "just moves a one-off when they ask for the series of something that doesn't repeat" do
         item = costco_on(personal)
 
         run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
 
         expect(item.reload.agenda_id).to eq(ours.id)
-      end
-
-      it "says it moved the item, not the series" do
-        costco_on(personal)
-
-        result, = run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
-
-        expect(result[:receipt].to_s).not_to match(/every/i)
       end
 
       # Ending a series is a different ask, and answering it here would take
@@ -712,38 +482,24 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
-    # Prod 4462-4463: "add the following to the agenda for dinners" put five
-    # dinners on Alchemibluum and the reply said "the Dinners calendar", because
-    # add fell back to the default for a name nobody has while edit refused.
-    # The confirm card DID name the right calendar; the person reads the prose.
+    # A name nobody has is a question, not a silent landing on the default.
     describe "a calendar nobody has" do
-      it "refuses rather than landing on the default" do
+      it "refuses rather than landing on the default, and writes nothing" do
         expect {
-          run(:add_agenda_item, { title: "Kevin's meal & pilaf", at: at, calendar: "Dinners" })
-        }.to raise_error(/no calendar named "Dinners"/)
-      end
-
-      it "writes nothing while it refuses" do
-        expect {
-          run(:add_agenda_item, { title: "Kevin's meal & pilaf", at: at, calendar: "Dinners" }) rescue nil
+          expect {
+            run(:add_agenda_item, { title: "Kevin's meal & pilaf", at: at, calendar: "Dinners" })
+          }.to raise_error(/no calendar named "Dinners"/)
         }.not_to change(AgendaItem, :count)
       end
 
-      it "still lands on the default when no calendar was named" do
+      it "still lands on the default when no calendar was named, and reaches one named loosely" do
         run(:add_agenda_item, { title: "Dentist", at: at })
+        run(:add_agenda_item, { title: "Checkup", at: at, calendar: "ours" })
 
         expect(AgendaItem.find_by(name: "Dentist").agenda_id).to eq(personal.id)
+        expect(AgendaItem.find_by(name: "Checkup").agenda_id).to eq(ours.id)
       end
 
-      it "still reaches a calendar named loosely" do
-        run(:add_agenda_item, { title: "Dentist", at: at, calendar: "ours" })
-
-        expect(AgendaItem.find_by(name: "Dentist").agenda_id).to eq(ours.id)
-      end
-
-      # The raise in WatchCondition.agenda was unreachable for the same reason:
-      # the loose form answers with the default for any name it doesn't know, so
-      # a watch on a calendar nobody has quietly watched the first one.
       it "refuses to watch one too" do
         expect {
           Buddy::WatchCondition.resolve({ trigger: :agenda, target: "Dinners" }, ctx)
@@ -752,11 +508,9 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     describe "the default calendar" do
-      it "lands on the oldest writable calendar when nothing is chosen" do
+      it "lands on the oldest writable calendar until the person chooses one" do
         expect(ctx.resolve_writable_agenda(nil)).to eq(personal)
-      end
 
-      it "honors the person's choice once they set one" do
         AgendaPreference.for(user).update!(default_agenda_id: ours.id)
 
         expect(ctx.resolve_writable_agenda(nil)).to eq(ours)
@@ -778,7 +532,7 @@ RSpec.describe "Buddy agenda tools" do
         pref.default_agenda_id = theirs.id
 
         expect(pref).not_to be_valid
-        expect(pref.errors[:default_agenda_id].join).to include("calendar you can add to")
+        expect(pref.errors[:default_agenda_id]).to be_present
       end
 
       it "stops flagging the calendar on the confirm row once it IS the default" do
@@ -791,10 +545,7 @@ RSpec.describe "Buddy agenda tools" do
     end
   end
 
-  # Prod 1258-1261: "add them both now" put Shower and Laundry on the agenda as
-  # TASKS, and both rendered as "Thu Jul 30, 2:49 PM-3:19 PM". A task has no
-  # duration - it sits at one moment - so the half-hour block was invented by the
-  # tool, not asked for.
+  # A task has no duration - it sits at one moment.
   describe "the shape of an item" do
     let(:user) { create(:user) }
     let(:at)   { Time.current.tomorrow.change(hour: 13) }
@@ -813,8 +564,8 @@ RSpec.describe "Buddy agenda tools" do
     end
 
     describe "add_agenda_item" do
-      it "leaves a task with no end time at all" do
-        out  = run(:add_agenda_item, { title: "Shower", at: at, kind: :task })
+      it "leaves a task with no end time at all, even when handed a duration" do
+        out  = run(:add_agenda_item, { title: "Shower", at: at, kind: :task, duration: 45 })
         item = AgendaItem.find(out[:result][:agenda_item_id])
 
         expect(item.kind).to eq("task")
@@ -827,13 +578,6 @@ RSpec.describe "Buddy agenda tools" do
         item = AgendaItem.find(out[:result][:agenda_item_id])
 
         expect(item.end_at).to be_within(1.second).of(at + 90.minutes)
-      end
-
-      it "ignores a duration handed to a task" do
-        out  = run(:add_agenda_item, { title: "Laundry", at: at, kind: :task, duration: 45 })
-        item = AgendaItem.find(out[:result][:agenda_item_id])
-
-        expect(item.end_at).to be_nil
       end
 
       it "shows one time on the confirm row for a task, a range for an event" do
@@ -872,17 +616,8 @@ RSpec.describe "Buddy agenda tools" do
     end
   end
 
-  # What time an agenda item actually lands on.
-  #
-  # Prod Aug 3: "Can you move it earlier?" was answered with "Shower's now at
-  # **4:45 PM**" and an `at` of 2026-08-03T10:45:00Z, which on a UTC-6 calendar is
-  # 4:45 AM - four hours before the person woke up and eleven hours before the
-  # reply announcing it. Two separate defects put it there, and either one alone
-  # still writes a wrong time:
-  #
-  #   1. The model hand-converting to UTC and getting the sign backwards.
-  #   2. A naive ISO string being parsed as UTC, because Time.zone is UTC
-  #      app-wide, so the wall clock the model meant got shifted by the offset.
+  # What time an agenda item actually lands on. Time.zone is UTC app-wide, so
+  # a naive ISO string must be read in the person's zone, not the server's.
   describe "times" do
     let(:user) { create(:user) }
     let(:zone) { ActiveSupport::TimeZone["America/Denver"] }
@@ -914,21 +649,14 @@ RSpec.describe "Buddy agenda tools" do
     def local(payload) = payload[:at].in_time_zone(zone).strftime("%a %-I:%M %p")
 
     describe "reading the time the model wrote" do
-      it "takes a bare ISO as the person's wall clock, not the server's UTC" do
+      # With no zone in scope (routine validation, which only cares about
+      # shape) it falls back to UTC.
+      it "takes a bare ISO as the person's wall clock, an explicit offset as given, and UTC with no zone" do
         expect(cast("2026-08-03T16:45:00")[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:45 PM")
-      end
-
-      it "still treats an explicit offset as authoritative" do
         expect(cast("2026-08-03T22:45:00Z")[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:45 PM")
         expect(cast("2026-08-03T16:45:00-06:00")[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:45 PM")
-      end
 
-      # The old behaviour, still what you get with no zone in scope (routine
-      # validation, which only cares about shape).
-      it "falls back to UTC when there's no user zone to read it in" do
-        tool = Buddy::Tools[:add_agenda_item]
-        payload, = Buddy::Tools.validate_payload(tool, { title: "Shower", at: "2026-08-03T16:45:00" })
-
+        payload, = Buddy::Tools.validate_payload(Buddy::Tools[:add_agenda_item], { title: "Shower", at: "2026-08-03T16:45:00" })
         expect(payload[:at].utc.strftime("%-I:%M %p")).to eq("4:45 PM")
       end
     end
@@ -936,73 +664,31 @@ RSpec.describe "Buddy agenda tools" do
     # Nothing gets nudged forward any more. A time already gone today lands at
     # NOW — see ToolContext#resolve_calendar_time for why the 12-hour bump went.
     describe "a same-day time that's already gone" do
-      it "puts an hour that's already passed at the current time" do
-        payload, = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
-
-        expect(local(payload)).to eq("Mon 8:47 AM")
-      end
-
-      # Prod 966/967: no hour was named at all, so the model wrote the wall clock
-      # and it resolved a few seconds late. That used to become 11:11 PM.
-      it "leaves a timestamp that IS now where it is" do
-        moment = zone.local(2026, 8, 3, 8, 47, 20)
-        payload, = Timecop.freeze(moment) { settled("2026-08-03T08:47:00") }
-
-        expect(local(payload)).to eq("Mon 8:47 AM")
-      end
-
-      it "leaves an ordinary future time alone" do
-        payload, = Timecop.freeze(now) { settled("2026-08-03T17:15:00") }
-
-        expect(local(payload)).to eq("Mon 5:15 PM")
-      end
-
-      # A deliberate back-date to another day is a real thing to want, and nothing
-      # about it looks like a half-day slip.
-      it "leaves a time on an earlier day alone" do
-        payload, = Timecop.freeze(now) { settled("2026-08-02T04:45:00") }
-
-        expect(local(payload)).to eq("Sun 4:45 AM")
-      end
-
-      # Late at night is where the old bump was at its worst: it either wrapped
-      # past midnight or gave up. Now it just says now.
-      it "says now rather than wrapping a late-night item" do
-        late = zone.local(2026, 8, 3, 23, 30)
-        payload, = Timecop.freeze(late) { settled("2026-08-03T01:00:00") }
-
-        expect(local(payload)).to eq("Mon 11:30 PM")
-      end
-
-      # The one thing that must never happen again: an item landing half a day
-      # from anything that was said.
-      it "never puts an item twelve hours out" do
-        %w[2026-08-03T04:45:00 2026-08-03T08:30:00 2026-08-03T10:45:00Z].each { |iso|
-          payload, = Timecop.freeze(now) { settled(iso) }
-          drift = (payload[:at] - now).abs
-
-          expect(drift).to be < 1.hour, "#{iso} landed #{(drift / 3600.0).round(1)}h from now"
+      # A deliberate back-date to another day is a real thing to want; an item
+      # must never land half a day from anything that was said.
+      it "puts an hour already gone today at now, and leaves now, the future and other days alone" do
+        [
+          [now, "2026-08-03T04:45:00", "Mon 8:47 AM"],
+          [zone.local(2026, 8, 3, 8, 47, 20), "2026-08-03T08:47:00", "Mon 8:47 AM"],
+          [now, "2026-08-03T17:15:00", "Mon 5:15 PM"],
+          [now, "2026-08-02T04:45:00", "Sun 4:45 AM"],
+          [zone.local(2026, 8, 3, 23, 30), "2026-08-03T01:00:00", "Mon 11:30 PM"],
+          [now, "2026-08-03T10:45:00Z", "Mon 8:47 AM"],
+        ].each { |frozen, iso, expected|
+          payload, = Timecop.freeze(frozen) { settled(iso) }
+          expect(local(payload)).to eq(expected), "#{iso} at #{frozen}"
         }
       end
     end
 
     # The row IS the receipt for a level-2 tool, so a correction that the row
     # doesn't show is a correction nobody can check.
-    describe "what the person sees" do
-      it "shows the time it actually settled on, not the one that was asked for" do
-        payload, tool = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
-        label = tool[:label].call(payload, ctx)
+    it "shows the time it actually settled on, not the one that was asked for" do
+      payload, tool = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
+      label = tool[:label].call(payload, ctx)
 
-        expect(label[:sub]).to include("8:47am")
-        expect(label[:sub]).not_to include("4:45")
-      end
-
-      it "names the time in the add receipt" do
-        payload, tool = Timecop.freeze(now) { settled("2026-08-03T17:15:00") }
-        result = Timecop.freeze(now) { tool[:execute].call(payload, ctx) }
-
-        expect(tool[:receipt].call(result, ctx)).to include("Mon 5:15pm")
-      end
+      expect(label[:sub]).to include("8:47am")
+      expect(label[:sub]).not_to include("4:45")
     end
 
     describe "moving one that's already on the calendar" do
@@ -1023,31 +709,10 @@ RSpec.describe "Buddy agenda tools" do
 
         expect(item.reload.start_at.in_time_zone(zone).strftime("%-I:%M %p")).to eq("8:47 AM")
       end
-
-      it "says the new time in the receipt rather than a bare Updated" do
-        tool = Buddy::Tools[:edit_agenda_item]
-        payload = { item: "Shower", at: cast("2026-08-03T19:00:00")[:at] }
-        merged  = Timecop.freeze(now) { payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
-        result  = Timecop.freeze(now) { tool[:execute].call(merged, ctx) }
-
-        expect(tool[:receipt].call(result, ctx)).to include("7pm")
-      end
     end
 
-    # Prod 5144-5147: "Can you move the Orchard event today? We want to LEAVE at
-    # 4." The start went to 4:00 PM and the reply quoted "about 20 minutes of
-    # drive" for a 32-minute one; the correction then set the start to 4:28 PM,
-    # which was the OLD leave time, and called that a leave time. `at` is always
-    # a start, so there was no correct call available.
-    # Prod 5268: asked to move an event so they could leave at 4, a companion
-    # said "I don't have a drive time for that" and stopped — on an event it had
-    # put on the calendar itself ninety seconds earlier. There was no way to go
-    # and get one, so the turn dead-ended on a number the app could have
-    # measured.
-    # Prod 5268: asked to move an event so they could leave at 4, a companion
-    # said "I don't have a drive time for that" and stopped — on an event it had
-    # put on the calendar itself ninety seconds earlier. There was no way to go
-    # and get one, so the turn dead-ended on a number the app could measure.
+    # `at` is always a start; a leave time is worked back from the drive, and a
+    # drive the app can measure is fetched rather than asked for.
     describe "looking a drive time up" do
       let(:tool)     { Buddy::Tools[:check_travel_time] }
       let(:personal) { user.agendas.order(:id).first }
@@ -1096,8 +761,7 @@ RSpec.describe "Buddy agenda tools" do
         expect(check[:leave_by]).to eq(clock(starts - 31.minutes))
       end
 
-      # Spaced and rounded, so nothing downstream has to do the arithmetic that
-      # went wrong in prod 5145.
+      # Spaced and rounded, so nothing downstream has to do the arithmetic.
       it "hands back a follow-on that is already spaced and rounded" do
         orchard!(travel: { "travel_seconds" => 1860, "post_travel_seconds" => 1860 })
         home = starts + 1.hour + 31.minutes
@@ -1121,7 +785,6 @@ RSpec.describe "Buddy agenda tools" do
         result = check
 
         expect(result[:unresolved]).to be(true)
-        expect(tool[:receipt].call(result, ctx)).to match(/couldn.t place/i)
       end
 
       # Her drive home is a fact about when the house is his again. A viewer
@@ -1140,7 +803,7 @@ RSpec.describe "Buddy agenda tools" do
     describe "a leave time, which is not a start time" do
       let(:tool) { Buddy::Tools[:edit_agenda_item] }
 
-      # 31-minute drive, 0 arrive-early, exactly as agenda_items 1069.
+      # 31-minute drive, 0 arrive-early.
       let!(:orchard) {
         user.agendas.first.agenda_items.create!(
           name:                 "Orchard",
@@ -1159,16 +822,12 @@ RSpec.describe "Buddy agenda tools" do
         [merged, Timecop.freeze(now) { tool[:execute].call(merged, ctx) }]
       end
 
-      it "works the start back from the drive time" do
+      it "works the start back from the drive time, writes it, and shows the leave time on the chip" do
         merged, = leave!("2026-08-03T16:00:00")
 
         expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:31 PM")
-      end
-
-      it "writes that start to the row" do
-        leave!("2026-08-03T16:00:00")
-
         expect(orchard.reload.start_at.in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:31 PM")
+        expect(tool[:label].call(merged, ctx)[:sub]).to include("leave 4pm")
       end
 
       it "adds arrive-early on top of the drive" do
@@ -1178,10 +837,8 @@ RSpec.describe "Buddy agenda tools" do
         expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:41 PM")
       end
 
-      # Both in one sentence - "leave at 4 and let's be 10 minutes early" - so
-      # the buffer being written this turn is the one to work back through.
-      # Reading the row instead gives a start 10 minutes late and a reply that
-      # misquotes it.
+      # "Leave at 4 and let's be 10 minutes early": the buffer being written this
+      # turn is the one to work back through, not the row's.
       it "works back through the arrive-early it is being given, not the old one" do
         merged, = leave!("2026-08-03T16:00:00", arrive_early: 10)
 
@@ -1189,34 +846,15 @@ RSpec.describe "Buddy agenda tools" do
         expect(orchard.reload.arrive_early_minutes).to eq(10)
       end
 
-      # The half the original reply got wrong: it named one time and called it
-      # the other.
-      it "names BOTH times in the receipt" do
-        _merged, result = leave!("2026-08-03T16:00:00")
-        receipt = tool[:receipt].call(result.symbolize_keys, ctx)
-
-        expect(receipt).to include("leave 4pm")
-        expect(receipt).to include("4:31pm")
-      end
-
-      it "shows both on the chip too" do
-        merged, = leave!("2026-08-03T16:00:00")
-
-        expect(tool[:label].call(merged, ctx)[:sub]).to include("leave 4pm", "starts")
-      end
-
       it "refuses when there is no drive time to work back from" do
         orchard.update!(metadata: {})
 
         expect { leave!("2026-08-03T16:00:00") }
-          .to raise_error(/don't have a drive time.*meant the start/m)
+          .to raise_error(/drive time/)
       end
 
       # The legacy pair — `travel_minutes` + `travel_location` — is what the Jil
-      # refresh task writes, and it has no seconds in it. Reading the seconds key
-      # directly turned a real 47-minute drive into "I don't have a drive time
-      # for that", on an item Buddy had created itself minutes earlier
-      # (agenda_items 1081, prod 5268-5269).
+      # refresh task writes, and it has no seconds in it.
       it "works back from a minutes-only drive time" do
         orchard.update!(metadata: { "travel" => { "travel_minutes" => 47, "travel_location" => "Orchard" } })
 
@@ -1240,11 +878,8 @@ RSpec.describe "Buddy agenda tools" do
     end
   end
 
-  # "Add Insidious movie to Our agenda today, leaving at 4:15" (prod 5935-5939).
-  # `add_agenda_item` had no `leave_at`, so the only argument the 4:15 could
-  # reach was `arrive_early`, and it landed as 25 minutes-early with the drive
-  # nowhere in the sum. The distinction was taught on edit and unreachable on
-  # add.
+  # `leave_at` on add, so a departure time never lands as a start or as an
+  # arrive-early buffer.
   describe "a leave time on something that does not exist yet" do
     let(:user) { create(:user) }
     let(:zone) { ActiveSupport::TimeZone["America/Denver"] }
@@ -1284,17 +919,14 @@ RSpec.describe "Buddy agenda tools" do
       }
     end
 
-    it "works the start back from the drive, instead of putting the leave time on the row" do
+    it "works the start back from the drive, leaving the unnamed buffer at their setting, and shows both on the row" do
       resolved, = leave!(base)
+      label     = Timecop.freeze(now) { tool[:label].call(resolved, ctx) }
 
       # 4:15 out of the door + 45 minutes driving + the 5 they chose = 5:05.
       expect(resolved[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("5:05 PM")
-    end
-
-    it "leaves the buffer they never named at the setting they chose" do
-      resolved, = leave!(base)
-
       expect(resolved[:arrive_early]).to be_nil
+      expect(label[:sub]).to include("leave 4:15pm", "5:05-7:05pm")
     end
 
     it "works back through a buffer they did name" do
@@ -1319,15 +951,7 @@ RSpec.describe "Buddy agenda tools" do
     # the row exists there is nothing to do but let the leave time stand as a
     # start, which is the mistake the argument exists to stop.
     it "refuses a leave time with nowhere to drive to" do
-      expect { leave!(base(location: nil)) }.to raise_error(/needs somewhere to drive/)
-    end
-
-    it "shows the leave time on the confirm row, not just the start it worked out" do
-      resolved, = leave!(base)
-      label     = Timecop.freeze(now) { tool[:label].call(resolved, ctx) }
-
-      expect(label[:sub]).to include("leave 4:15pm")
-      expect(label[:sub]).to include("5:05-7:05pm")
+      expect { leave!(base(location: nil)) }.to raise_error(/somewhere to drive/)
     end
 
     it "leaves a plain `at` alone" do

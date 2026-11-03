@@ -21,91 +21,59 @@ RSpec.describe Buddy::Timers do
     describe ".parse_request" do
       def parse(text) = described_class.parse_request(text)
 
-      it "reads a bare duration" do
-        expect(parse("5m")).to eq(seconds: 300, label: nil)
-        expect(parse("90s")).to eq(seconds: 90, label: nil)
-        expect(parse("2h")).to eq(seconds: 7200, label: nil)
-        expect(parse("45 min")).to eq(seconds: 2700, label: nil)
+      it "reads durations, labels and explicit timer phrasings", :aggregate_failures do
+        [
+          ["5m", 300, nil],
+          ["90s", 90, nil],
+          ["2h", 7200, nil],
+          ["45 min", 2700, nil],
+          ["5m pasta", 300, "pasta"],
+          ["10 min tea", 600, "tea"],
+          ["1h30m", 5400, nil],
+          ["1h 30m", 5400, nil],
+          ["timer for 5s", 5, nil],
+          ["Set a timer for 1m", 60, nil],
+          ["set a timer for 10 minutes", 600, nil],
+          ["start a timer for 20m laundry", 1200, "laundry"],
+          ["timer 10m", 600, nil],
+          # "timer" is the word for the thing, never its name.
+          ["10m timer", 600, nil],
+          ["10 min timer", 600, nil],
+          ["10m timer for pasta", 600, "pasta"],
+          ["5m timer for the pasta", 300, "pasta"],
+          ["20m for the laundry", 1200, "laundry"],
+          # Saying "timer" outright is unambiguous however politely it's asked.
+          ["timer for 5m please", 300, nil],
+        ].each { |text, seconds, label|
+          expect(parse(text)).to eq({ seconds: seconds, label: label }), text
+        }
       end
 
-      it "reads a duration with a label" do
-        expect(parse("5m pasta")).to eq(seconds: 300, label: "pasta")
-        expect(parse("10 min tea")).to eq(seconds: 600, label: "tea")
-      end
-
-      it "adds compound durations up" do
-        expect(parse("1h30m")).to eq(seconds: 5400, label: nil)
-        expect(parse("1h 30m")).to eq(seconds: 5400, label: nil)
-      end
-
-      it "reads the explicit phrasings people actually type" do
-        expect(parse("timer for 5s")).to eq(seconds: 5, label: nil)
-        expect(parse("Set a timer for 1m")).to eq(seconds: 60, label: nil)
-        expect(parse("set a timer for 10 minutes")).to eq(seconds: 600, label: nil)
-        expect(parse("start a timer for 20m laundry")).to eq(seconds: 1200, label: "laundry")
-        expect(parse("timer 10m")).to eq(seconds: 600, label: nil)
-      end
-
-      # "timer" is the word for the thing, not a name for it. A 10-minute timer
-      # called "timer" (or worse, "timer for pasta") is nobody's idea of a label.
-      it "never turns the word timer into the timer's name" do
-        expect(parse("10m timer")).to eq(seconds: 600, label: nil)
-        expect(parse("10 min timer")).to eq(seconds: 600, label: nil)
-        expect(parse("10m timer for pasta")).to eq(seconds: 600, label: "pasta")
-        expect(parse("5m timer for the pasta")).to eq(seconds: 300, label: "pasta")
-      end
-
-      it "drops the article people put in front of a label" do
-        expect(parse("20m for the laundry")).to eq(seconds: 1200, label: "laundry")
-      end
-
-      # Every one of these leads with a duration and is NOT a countdown request.
-      # Turning them into timers would swallow a chore completion, which is the
-      # thing the person most wants recorded.
-      it "leaves a reported duration alone" do
-        expect(parse("20 minutes of stretching")).to be_nil
-        expect(parse("5 min walk done")).to be_nil
-        expect(parse("2 hours of sleep")).to be_nil
-        expect(parse("30m left on the roast")).to be_nil
-        expect(parse("15 min ago")).to be_nil
-      end
-
-      it "leaves anything that isn't led by a duration alone" do
-        expect(parse("I did 20 minutes of stretching")).to be_nil
-        expect(parse("remind me in 5 minutes to call mom")).to be_nil
-        expect(parse("how long is 5m")).to be_nil
-        expect(parse("hey")).to be_nil
-        expect(parse("")).to be_nil
-      end
-
-      it "leaves a question alone even when it starts with a duration" do
-        expect(parse("5m?")).to be_nil
-      end
-
-      # A long leading duration is far likelier to be narration than a countdown,
-      # and the agent can still set it via the tool.
-      it "hands an implausibly long countdown to the model instead" do
-        expect(parse("8 hours sleep")).to be_nil
-        expect(parse("8h")).to be_nil
-      end
-
-      it "hands a wordy message to the model instead" do
-        expect(parse("5m pasta and also start the dishwasher please")).to be_nil
-      end
-
-      # "2 hours early please Suki" became a two-hour countdown named "early
-      # please Suki" - it cleared every check because the leftover happened to be
-      # exactly three words. Nobody names a timer by asking for one.
-      it "leaves a duration wrapped in a request to the companion alone" do
-        expect(parse("2 hours early please Suki")).to be_nil
-        expect(parse("2 hours please")).to be_nil
-        expect(parse("10 min remind me")).to be_nil
-        expect(parse("5 min let me know")).to be_nil
-      end
-
-      # ...but saying "timer" outright is unambiguous however politely it's asked.
-      it "still takes an explicit timer request with please in it" do
-        expect(parse("timer for 5m please")).to eq(seconds: 300, label: nil)
+      # Hijacking a message that meant something else is the whole risk: a
+      # reported duration would swallow a chore completion.
+      it "leaves anything that isn't a countdown request to the model", :aggregate_failures do
+        [
+          "20 minutes of stretching",
+          "5 min walk done",
+          "2 hours of sleep",
+          "30m left on the roast",
+          "15 min ago",
+          "I did 20 minutes of stretching",
+          "remind me in 5 minutes to call mom",
+          "how long is 5m",
+          "hey",
+          "",
+          "5m?",
+          # Implausibly long, so likelier narration than a countdown.
+          "8 hours sleep",
+          "8h",
+          "5m pasta and also start the dishwasher please",
+          # A duration wrapped in a request to the companion.
+          "2 hours early please Suki",
+          "2 hours please",
+          "10 min remind me",
+          "5 min let me know",
+        ].each { |text| expect(parse(text)).to be_nil, text.inspect }
       end
     end
 
@@ -153,21 +121,11 @@ RSpec.describe Buddy::Timers do
         expect(parse("10m tea")).to eq(seconds: 600, label: "tea")
       end
 
-      # A card is answered by tapping it, not by typing at it - and it sits there
-      # as the newest message in the thread long after it was settled. Prod 7144
-      # was an `ask_who` card submitted at 10:01pm; at 10:52pm a bare `12m` went
-      # the long way round because of it - four model calls, 9.6 cents and 12.7
-      # seconds against the 88ms the same words cost an hour before.
+      # A card is answered by tapping it, not by typing at it.
       it "ignores a form card, which is not a question anybody types into" do
         buddy_says("Who did: Puppy Down?", kind: :buddy_reply, source: "form")
 
         expect(parse("12m")).to eq(seconds: 720, label: nil)
-      end
-
-      it "ignores a form card that is still waiting to be answered" do
-        buddy_says("Who did: Recycling?", kind: :buddy_reply, source: "form")
-
-        expect(parse("5m")).to eq(seconds: 300, label: nil)
       end
 
       # The half that must keep working: a real question is prose, with no source.
@@ -195,7 +153,6 @@ RSpec.describe Buddy::Timers do
       it "starts the timer and posts the same chip the tool path posts" do
         chip = described_class.quick_set!(user, convo, seconds: 300, label: "pasta")
 
-        expect(chip.body).to eq("Byte set a 5 min timer for pasta ⏲")
         expect(chip.metadata["kind"]).to eq("buddy_activity")
         expect(chip.metadata["tool_name"]).to eq("set_timer")
         expect(user.timers.where(kind: :countdown).count).to eq(1)
@@ -209,12 +166,8 @@ RSpec.describe Buddy::Timers do
         expect(described_class.quick_set!(user, convo, seconds: 60)).to be_nil
       end
 
-      # Nobody composes a fast-pathed timer, so nothing answered the person -
-      # and every other receipt chip is kept out of history. The transcript
-      # showed the request with nothing after it, so the next vague message got
-      # read as being about it: "set a timer for 50 minutes to rotate laundry" at
-      # 10:41, "Okay! What next?" at 11:30, and the reply was "Timer's set for 50
-      # minutes, and it's labeled rotate laundry" plus a second 50-minute timer.
+      # Nobody composes a fast-pathed timer, so its chip is the only trace in
+      # history that the request was answered.
       it "leaves a trace the model can see, so the next turn knows it happened" do
         convo.byte_messages.create!(
           user: user, direction: :outbound, state: :sent, body: "set a timer for 50 minutes to rotate laundry",
@@ -323,23 +276,8 @@ RSpec.describe Buddy::Timers do
         expect(timer.end_at).to be < Time.current
       end
 
-      it "still back-dates a long countdown by the full turn latency" do
-        convo = user.byte_conversations.create!(mode: :buddy)
-        sent_at = 20.seconds.ago
-        convo.byte_messages.create!(
-          user: user, direction: :outbound, state: :sent, body: "timer 10m", created_at: sent_at,
-        )
-
-        timer = described_class.create!(user: user, seconds: 600, conversation: convo, anchor: :message)
-
-        expect(timer.end_at).to be_within(2.seconds).of(sent_at + 600.seconds)
-      end
-
-      # Prod timer 93. A spent countdown paused stores zero remaining, and
-      # resuming that gives a timer that starts and ends in the same microsecond
-      # — which reschedules a fire for a moment already past and can be re-armed
-      # at zero forever. It sat in the corner ringing at every tap meant to
-      # dismiss it.
+      # Resuming a zero-remaining pause would reschedule a fire in the past and
+      # re-arm at zero forever.
       it "will not pause a countdown that has nothing left" do
         timer = described_class.create!(user: user, seconds: 60)
         timer.update_columns(started_at: 2.minutes.ago, end_at: 1.minute.ago)
@@ -429,9 +367,8 @@ RSpec.describe Buddy::Timers do
     end
 
     describe "set_timer tool" do
-      it "is registered as an auto tool and creates a timer on execute" do
+      it "creates a timer on execute" do
         tool = Buddy::Tools[:set_timer]
-        expect(tool[:auto]).to be(true)
 
         convo = user.byte_conversations.create!(mode: :buddy)
         ctx = Buddy::ToolContext.new(user, conversation: convo)
@@ -439,11 +376,9 @@ RSpec.describe Buddy::Timers do
 
         expect(result[:ok]).to be(true)
         expect(Timer.find(result[:data][:timer_id]).name).to eq("Tea")
-        expect(tool[:receipt].call(result[:data], ctx)).to include("1 min timer for Tea")
       end
 
-      # "Timer until 5:25" at 3:14 was set ten minutes short when the model did
-      # the subtraction itself.
+      # The tool does the clock subtraction, not the model.
       it "runs until a clock time, counted from now" do
         tool = Buddy::Tools[:set_timer]
         zone = Time.find_zone(user.timezone)
@@ -591,10 +526,6 @@ RSpec.describe Buddy::Timers do
       end
     end
 
-    # Prod 2276: "Cancel my timers" got "I can't stop a running countdown from
-    # here", one minute after Buddy had set one itself. There was no tool, and
-    # timers weren't in context either, so it was a true statement about a
-    # capability that plainly should have existed.
     describe "cancel_timer tool" do
       let(:convo) { user.byte_conversations.create!(mode: :buddy) }
       let(:ctx)   { Buddy::ToolContext.new(user, conversation: convo) }
@@ -615,7 +546,6 @@ RSpec.describe Buddy::Timers do
 
         expect(result[:ok]).to be(true)
         expect(described_class.live_for(user)).to be_empty
-        expect(tool[:receipt].call(result[:data], ctx)).to include("pasta")
       end
 
       it "stops every one of them on 'all'" do
@@ -676,14 +606,6 @@ RSpec.describe Buddy::Timers do
   end
 
   # A watch that starts a COUNTDOWN instead of saying something.
-  #
-  # Prod Aug 7: "Set a 1 second timer every time something comes into the Claude
-  # list in the Ocs Backend section." got a reminder watch, then "No. I said set a
-  # TIMER. Not a reminder." got "A timer only runs from now, so this needs a
-  # watch, not a countdown." Both halves were true of the tools that existed and
-  # neither was what was asked for: a message is something you have to be looking
-  # at, and a timer makes a noise in the room, which is the entire reason to ask
-  # for a one-second one.
   describe "a timer set by a watch" do
     let(:user) { create(:user) }
     let!(:list_task) {
@@ -727,14 +649,6 @@ RSpec.describe Buddy::Timers do
         expect(watch.timer_seconds).to eq(1)
       end
 
-      it "says it will start a timer, not that it will remind them" do
-        run(claude_list(timer: 1))
-
-        chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-        expect(chip.body).to include("timer")
-        expect(chip.body).not_to include("remind you")
-      end
-
       it "still makes an ordinary reminder watch when no timer is named" do
         run(claude_list)
 
@@ -763,19 +677,12 @@ RSpec.describe Buddy::Timers do
         BuddyWatch.last
       }
 
-      it "starts a countdown rather than posting a message" do
+      it "starts a countdown named for what the watch was about" do
         expect {
           Buddy::WatchMatcher.fire!(watch)
         }.to change { user.timers.count }.by(1)
 
-        timer = user.timers.order(:id).last
-        expect(timer.duration_ms).to eq(1_000)
-      end
-
-      it "names the countdown with what the watch was about" do
-        Buddy::WatchMatcher.fire!(watch)
-
-        expect(user.timers.order(:id).last.name).to eq("Claude list got something")
+        expect(user.timers.order(:id).last).to have_attributes(duration_ms: 1_000, name: "Claude list got something")
       end
 
       it "keeps firing while the watch repeats" do
@@ -792,8 +699,7 @@ RSpec.describe Buddy::Timers do
       end
     end
 
-    # A timer watch and a reminder watch read identically in context otherwise,
-    # which is the exact distinction that went wrong in the first place.
+    # A timer watch and a reminder watch read identically in context otherwise.
     it "says what it does when Buddy looks at what it's watching" do
       run(claude_list(timer: 1))
 

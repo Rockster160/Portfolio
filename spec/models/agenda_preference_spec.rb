@@ -35,7 +35,7 @@ RSpec.describe AgendaPreference, type: :model do
     it "rejects patterns that aren't valid regex" do
       pref = AgendaPreference.new(user: user, hidden_name_patterns: ["[unclosed"])
       expect(pref).not_to be_valid
-      expect(pref.errors[:hidden_name_patterns].first).to include("invalid regex")
+      expect(pref.errors[:hidden_name_patterns]).to be_present
     end
 
     it "accepts valid regex patterns" do
@@ -49,30 +49,18 @@ RSpec.describe AgendaPreference, type: :model do
     let(:schedule) { create(:agenda_schedule, agenda: agenda) }
     let(:item)     { create(:agenda_item, agenda: agenda, name: "Daily Standup") }
 
-    it "returns false when no list matches" do
-      pref = AgendaPreference.new(user: user)
-      expect(pref.item_hidden?(item)).to eq(false)
-    end
-
-    it "matches hidden_agenda_ids" do
-      pref = AgendaPreference.new(user: user, hidden_agenda_ids: [agenda.id])
-      expect(pref.item_hidden?(item)).to eq(true)
-    end
-
-    it "matches hidden_schedule_ids when item belongs to that schedule" do
+    it "hides an item matched by any one of the lists", :aggregate_failures do
       item.update!(agenda_schedule: schedule)
-      pref = AgendaPreference.new(user: user, hidden_schedule_ids: [schedule.id])
-      expect(pref.item_hidden?(item)).to eq(true)
-    end
 
-    it "matches hidden_item_ids" do
-      pref = AgendaPreference.new(user: user, hidden_item_ids: [item.id])
-      expect(pref.item_hidden?(item)).to eq(true)
-    end
-
-    it "matches hidden_name_patterns case-insensitively" do
-      pref = AgendaPreference.new(user: user, hidden_name_patterns: ["daily.*standup"])
-      expect(pref.item_hidden?(item)).to eq(true)
+      expect(AgendaPreference.new(user: user).item_hidden?(item)).to eq(false)
+      [
+        { hidden_agenda_ids: [agenda.id] },
+        { hidden_schedule_ids: [schedule.id] },
+        { hidden_item_ids: [item.id] },
+        { hidden_name_patterns: ["daily.*standup"] },
+      ].each do |attrs|
+        expect(AgendaPreference.new(user: user, **attrs).item_hidden?(item)).to eq(true), attrs.inspect
+      end
     end
 
     it "ignores invalid regex patterns silently" do

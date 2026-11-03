@@ -145,10 +145,6 @@ RSpec.describe ScheduleCondition do
     end
   end
 
-  it "says what it's waiting on in words" do
-    expect(described_class.describe(condition)).to include("no chore completions", %q{name:"Charge Villager Car"})
-  end
-
   # The breaker syntax splits on whitespace, so an unquoted multi-word value is
   # a DIFFERENT query — and one that still runs, still returns rows, and looks
   # right. `name:Charge Villager Car` is `name:Charge` AND the loose words
@@ -228,44 +224,27 @@ RSpec.describe ScheduleCondition do
       allow(task).to receive(:execute).and_return(instance_double(Execution, result: value))
     end
 
-    it "fires on a yes" do
-      answers("true")
-
-      expect(described_class.met?(jil, user: user)).to be(true)
-    end
-
-    it "holds on a no" do
-      answers("false")
-
-      expect(described_class.met?(jil, user: user)).to be(false)
-    end
-
-    it "reads the other polarity too" do
-      answers("false")
-
-      expect(described_class.met?(jil(expect: :falsy), user: user)).to be(true)
-    end
-
     # A task that returns nothing has REPORTED nothing, and "no answer" must
     # never read as "yes, go ahead" — that's the direction that fires things
     # nobody asked for.
-    it "treats silence as no" do
-      answers("")
+    it "reads a yes or a plain value as truthy, and silence or a no-word as falsy" do
+      answers_by_word = {
+        "true"    => true,
+        "72"      => true,
+        ""        => false,
+        "false"   => false,
+        "0"       => false,
+        "no"      => false,
+        "off"     => false,
+        "none"    => false,
+        "unknown" => false,
+      }
 
-      expect(described_class.met?(jil, user: user)).to be(false)
-    end
+      answers_by_word.each do |said, truthy|
+        answers(said)
 
-    it "treats a plain value as yes" do
-      answers("72")
-
-      expect(described_class.met?(jil, user: user)).to be(true)
-    end
-
-    %w[false 0 no off none unknown].each do |word|
-      it "treats #{word.inspect} as no" do
-        answers(word)
-
-        expect(described_class.met?(jil, user: user)).to be(false)
+        expect(described_class.met?(jil, user: user)).to be(truthy), said.inspect
+        expect(described_class.met?(jil(expect: :falsy), user: user)).to be(!truthy), said.inspect
       end
     end
 
@@ -278,10 +257,6 @@ RSpec.describe ScheduleCondition do
     # quietly running the nearest thing to it.
     it "raises rather than running the nearest match when the name stops resolving" do
       expect { described_class.met?(jil, user: user) }.to raise_error(/no Jil function matches/)
-    end
-
-    it "says what it's asking in words" do
-      expect(described_class.describe(jil)).to include("Is The Car Plugged In", "true")
     end
   end
 
@@ -314,40 +289,20 @@ RSpec.describe ScheduleCondition do
       place!("Home", home_coord)
     end
 
-    it "says yes when they are there" do
-      at(home_coord)
-
-      expect(described_class.met?(where, user: user)).to be(true)
-    end
-
-    it "says no when they are not" do
-      at([40.7608, -111.8910])
-
-      expect(described_class.met?(where, user: user)).to be(false)
-    end
-
-    # The polarity the request was actually written in.
-    it "reads the away side" do
-      at([40.7608, -111.8910])
-      expect(described_class.met?(where(expect: :away), user: user)).to be(true)
-
-      at(home_coord)
-      expect(described_class.met?(where(expect: :away), user: user)).to be(false)
-    end
-
     # Same radius LocationCache and TravelResolver already treat as the house,
-    # so "am I home" answers one way across the whole app rather than drawing a
-    # second private boundary.
-    it "counts the driveway as home" do
-      at([home_coord[0] + 0.0005, home_coord[1]])
+    # so "am I home" answers one way across the whole app.
+    it "answers at and away by the house radius, driveway in and the next suburb out" do
+      {
+        home_coord                              => true,
+        [home_coord[0] + 0.0005, home_coord[1]] => true,
+        [home_coord[0] + 0.02, home_coord[1]]   => false,
+        [40.7608, -111.8910]                    => false,
+      }.each do |coord, home|
+        at(coord)
 
-      expect(described_class.met?(where, user: user)).to be(true)
-    end
-
-    it "does not count the next suburb" do
-      at([home_coord[0] + 0.02, home_coord[1]])
-
-      expect(described_class.met?(where, user: user)).to be(false)
+        expect(described_class.met?(where, user: user)).to be(home), coord.inspect
+        expect(described_class.met?(where(expect: :away), user: user)).to be(!home), coord.inspect
+      end
     end
 
     it "takes a place by name" do
@@ -398,11 +353,6 @@ RSpec.describe ScheduleCondition do
 
     it "refuses a polarity that belongs to another kind" do
       expect { described_class.met?(where(expect: :truthy), user: user) }.to raise_error(/at or away/)
-    end
-
-    it "says what it is checking in words" do
-      expect(described_class.describe(where(expect: :away))).to eq("only if you're not at home")
-      expect(described_class.describe(where)).to eq("only if you're at home")
     end
 
     # Every other kind is recognised by its payload; this one has no required

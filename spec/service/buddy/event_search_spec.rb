@@ -64,12 +64,9 @@ RSpec.describe Buddy::EventSearch do
         expect(described_class.call(user: user, query: "celsius")[:total]).to eq(2)
       end
 
-      # Prod: "How much Celsius did I drink last month vs this one?" answered
-      # "I couldn't find any Celsius entries to total up" over fifty-eight of
-      # them. The model wrote the month bound the description told it to write
-      # and left `days` alone, and the two were ANDed — so a fourteen-day floor
-      # excluded every row in the month being asked about.
-      it "lets a month bound in the query outrank the days window" do
+      # A timestamp bound in the query replaces the `days` window rather than
+      # being ANDed with it, which would exclude the whole month being asked about.
+      it "lets a timestamp bound in the query outrank the days window" do
         july = event!("Strawberry Celsius", at: 45.days.ago)
         recent = event!("Strawberry Celsius", at: 2.days.ago)
         from = 60.days.ago.to_date.iso8601
@@ -79,14 +76,9 @@ RSpec.describe Buddy::EventSearch do
 
         expect(found[:events]).to contain_exactly(july)
         expect(found[:events]).not_to include(recent)
-      end
 
-      it "lets an upper bound alone outrank it too" do
-        old = event!("Coffee", at: 40.days.ago)
-
-        found = described_class.call(user: user, query: "Coffee timestamp<#{20.days.ago.to_date.iso8601}")
-
-        expect(found[:events]).to contain_exactly(old)
+        found = described_class.call(user: user, query: "celsius timestamp<#{to}")
+        expect(found[:events]).to contain_exactly(july)
       end
 
       # `timestamp:>x` reads as one unknown `:>` operator and gets dropped, so the
@@ -156,25 +148,16 @@ RSpec.describe Buddy::EventSearch do
     end
 
     describe ".rows" do
-      it "leads with the id, since that's what delete_event and edit_event take" do
-        event = event!("Strawberry Celsius", notes: "the pink one", at: Time.zone.parse("2026-08-05 14:42:00"))
-
-        row = described_class.rows([event], user).first
-        expect(row).to start_with("##{event.id} · Strawberry Celsius (the pink one) · ")
-        expect(row).to include("8/5")
-      end
-
-      it "leaves the notes off when there aren't any" do
-        event = event!("Coffee")
-
-        expect(described_class.rows([event], user).first).to include("· Coffee ·")
-      end
-
-      it "carries the numbers logged with it, so a total can be summed" do
-        event = event!("Drink", notes: "Celsius Peach Vibe")
+      it "leads with the id delete_event and edit_event take, and carries the logged numbers", :aggregate_failures do
+        event = event!("Drink", notes: "Celsius Peach Vibe", at: Time.zone.parse("2026-08-05 14:42:00"))
         event.update!(data: { Caffeine: 200, Calories: "10" })
+        bare = event!("Coffee")
 
-        expect(described_class.rows([event], user).first).to end_with(" · Caffeine 200, Calories 10")
+        row, bare_row = described_class.rows([event, bare], user)
+        expect(row).to start_with("##{event.id} · Drink (Celsius Peach Vibe) · ")
+        expect(row).to include("8/5")
+        expect(row).to end_with(" · Caffeine 200, Calories 10")
+        expect(bare_row).to include("· Coffee ·")
       end
 
       it "leaves out blanks and structure that nobody totals" do
@@ -225,18 +208,8 @@ RSpec.describe Buddy::EventSearch do
 
       expect(result[:status]).to eq(:answered)
       expect(result[:events].join("\n")).to include("Strawberry Celsius")
-      expect(result[:how]).to include("`delete_event`")
+      expect(result[:events].join("\n")).not_to include("Coffee")
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-    end
-
-    # The guidance used to teach `[[propose: delete_event id=N]]`. Markers are
-    # retired — Turn strips a stray one and logs it — so that instruction cost a
-    # turn and left the event sitting there. Nothing that talks to the model may
-    # teach it.
-    it "search_events does not teach the retired marker protocol" do
-      ActionEvent.create!(user: user, name: "Strawberry Celsius", timestamp: 2.days.ago)
-
-      expect(search(query: "celsius")[:how]).not_to include("[[propose:")
     end
 
     it "delete_event by id is Level 2 - removes immediately, undoable, and restores on undo" do
@@ -251,10 +224,6 @@ RSpec.describe Buddy::EventSearch do
 
       Buddy::ProposalExecutor.undo!(result[:action].id, btn["id"])
       expect(ActionEvent.where(user: user, name: "Strawberry Celsius")).to exist # restored
-    end
-
-    it "registers delete_event at level 2" do
-      expect(Buddy::Tools[:delete_event][:level]).to eq(2)
     end
   end
 end

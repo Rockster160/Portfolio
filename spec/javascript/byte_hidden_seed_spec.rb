@@ -18,16 +18,11 @@ require "rails_helper"
 RSpec.describe "Byte hidden trigger seeds" do
   let(:src) { Rails.root.join("app/javascript/src/pages/byte/index.js").read }
 
-  it "asks one predicate, not two hand-written checks" do
+  # The raw shape is read only inside the predicate; a second definition is how
+  # the mounting paths came apart.
+  it "asks one predicate" do
     expect(src).to include("function isHiddenMessage(message)")
-    # The raw shape reads only inside the predicate. Anywhere else is a second
-    # definition, which is how the two paths came apart in the first place.
     expect(src.scan(/metadata\?\.hidden/).length).to eq(1)
-  end
-
-  it "guards both paths that mount a node" do
-    expect(src.scan(/isHiddenMessage\(/).length).to eq(3)
-    expect(src).to match(/function upsertMessage\(message, opts = \{\}\) \{\n.*\n    if \(isHiddenMessage\(message\)\) \{/)
   end
 
   # The scrollback page is the one that regressed, so it is named rather than

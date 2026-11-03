@@ -18,20 +18,15 @@ RSpec.describe Buddy::ImageDescriber do
 
   before { allow(described_class).to receive(:source_url).and_return("https://example.test/shed.jpg") }
 
-  it "writes what the picture is of, with its tags" do
+  it "writes what the picture is of, its tags, and when it arrived rather than when it was described", :aggregate_failures do
     model_says('{"body": "Two bikes leaning against a shed door.", "tags": ["bike", "shed"]}')
+    taken = 3.days.ago.change(usec: 0)
 
-    record = described_class.describe!(user: user, blob: blob, taken_at: 2.days.ago)
+    record = described_class.describe!(user: user, blob: blob, taken_at: taken)
 
     expect(record.body).to eq("Two bikes leaning against a shed door.")
     expect(record.tag_list).to eq(%w[bike shed])
-  end
-
-  it "keeps when the picture arrived, not when it got described" do
-    model_says('{"body": "A shed.", "tags": []}')
-    taken = 3.days.ago.change(usec: 0)
-
-    expect(described_class.describe!(user: user, blob: blob, taken_at: taken).taken_at).to eq(taken)
+    expect(record.taken_at).to eq(taken)
   end
 
   it "survives the model wrapping its JSON in a fence" do
@@ -40,23 +35,18 @@ RSpec.describe Buddy::ImageDescriber do
     expect(described_class.describe!(user: user, blob: blob, taken_at: Time.current).body).to eq("A shed.")
   end
 
-  it "writes nothing rather than a wrong sentence when the reply isn't readable" do
-    model_says("I'm not able to help with that.")
+  it "writes nothing rather than a wrong sentence when the reply is unreadable or empty", :aggregate_failures do
+    ["I'm not able to help with that.", '{"body": "", "tags": []}'].each do |reply|
+      model_says(reply)
 
-    expect(described_class.describe!(user: user, blob: blob, taken_at: Time.current)).to be_nil
+      expect(described_class.describe!(user: user, blob: blob, taken_at: Time.current)).to be_nil
+    end
     expect(ImageDescription.count).to eq(0)
-  end
-
-  it "writes nothing when the image came back empty" do
-    model_says('{"body": "", "tags": []}')
-
-    expect(described_class.describe!(user: user, blob: blob, taken_at: Time.current)).to be_nil
   end
 
   # A picture without a description is the situation before any of this
   # existed, and never a reason to fail whatever queued the work.
   it "does not raise when the call fails" do
-    model_says(nil)
     allow(Buddy::GPT::Client).to receive(:new).and_return(FakeBuddyClient.new([{ error: "rate limited" }]))
 
     expect { described_class.describe!(user: user, blob: blob, taken_at: Time.current) }.not_to raise_error

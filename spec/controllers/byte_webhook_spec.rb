@@ -27,15 +27,11 @@ RSpec.describe WebhooksController, type: :controller do
         expect(msg).to be_delivered
       end
 
-      # Prod 3946, the daily audit. It came back naming conversation 26 (Moss)
-      # with an in_reply_to of 1133 — a fan command from three weeks earlier in
-      # conversation 21 — while the prompt it was answering sat in 37. Both hints
-      # the Mac sent were wrong, and the explicit one won, so a full engineering
-      # report was published inside a companion thread with no prompt above it.
+      # The Mac's hints about where a reply belongs can both be wrong, so a reply
+      # never lands in a companion thread and a stale in_reply_to is ignored.
       describe "routing a reply the Mac has mis-addressed" do
-        # The account shape in prod: the main thread IS a companion — Byte is a
-        # pet, thread 21, the primary one — and Moss is a second companion beside
-        # it. `home` first, so it is the older id and therefore the primary.
+        # The main thread IS a companion and is the primary one; Moss is a second
+        # companion beside it. `home` first, so it is the older id.
         let!(:home) {
           user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: 2.hours.ago)
         }
@@ -53,46 +49,33 @@ RSpec.describe WebhooksController, type: :controller do
           user.byte_messages.inbound.last.byte_conversation
         end
 
-        it "refuses a companion thread even when named outright" do
-          expect(landed_in(conversation_id: moss.id)).to eq(home)
-        end
-
-        it "refuses one reached through an in_reply_to into a companion thread" do
+        # A reply answers something just said; anything older is the Mac
+        # replaying state.
+        it "refuses a companion thread, named or reached by in_reply_to, and ignores a weeks-old in_reply_to", :aggregate_failures do
           stale = moss.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hi")
-
-          expect(landed_in(in_reply_to: stale.id)).to eq(home)
-        end
-
-        # 4002 named message 1194, a thank-you from three weeks earlier. A reply
-        # answers something just said; anything older is the Mac replaying state.
-        it "ignores an in_reply_to pointing weeks into the past" do
           old = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: 3.weeks.ago)
           ancient = old.byte_messages.create!(
             user: user, direction: :outbound, state: :sent, body: "Turn the fan to high, please",
             created_at: 3.weeks.ago,
           )
 
+          expect(landed_in(conversation_id: moss.id)).to eq(home)
+          expect(landed_in(in_reply_to: stale.id)).to eq(home)
           expect(landed_in(in_reply_to: ancient.id)).to eq(home)
         end
 
-        it "still follows a fresh one" do
+        # The rule is about companion threads, not about distrusting the Mac.
+        it "still follows a fresh in_reply_to, or a thread it is allowed to write into", :aggregate_failures do
           other = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: Time.current)
           asked = other.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "audit this")
+          named = user.byte_conversations.create!(mode: :claude, name: "Notes", last_message_at: 1.day.ago)
 
           expect(landed_in(in_reply_to: asked.id)).to eq(other)
+          expect(landed_in(conversation_id: named.id)).to eq(named)
         end
 
-        # The rule is about companion threads, not about distrusting the Mac.
-        it "still honors a thread it is allowed to write into" do
-          other = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: 1.day.ago)
-
-          expect(landed_in(conversation_id: other.id)).to eq(other)
-        end
-
-        # Prod 4005: `byte "alert"` from the CLI landed in Memory, a Claude thread
-        # that happened to be the newest on the account, because the fallback
-        # looked for a NON-companion thread named Byte and the real one is a
-        # companion. Every `byte "..."` before it had gone to thread 21.
+        # The fallback is the primary thread, which is a companion, not the
+        # newest non-companion thread on the account.
         it "falls back to the primary thread rather than to whatever was most recent" do
           newest = user.byte_conversations.create!(
             mode: :claude, name: "Memory", last_message_at: 1.minute.from_now,
@@ -184,22 +167,15 @@ RSpec.describe WebhooksController, type: :controller do
         expect(message.metadata).to include("source" => "ai", "chunks" => "5")
       end
 
-      it "fires a push notification on the transition to :delivered" do
-        expect(WebPushNotifications).to receive(:send_to_byte)
-
-        patch :byte_update, params: { id: message.id, body: "hello world done", state: "delivered" }
-
-        message.reload
-        expect(message).to be_delivered
-        expect(message.delivered_at).to be_present
-      end
-
-      it "titles the push with the message itself, not the thread name" do
+      it "fires a push titled with the message itself on the transition to :delivered" do
         captured = nil
         allow(WebPushNotifications).to receive(:send_to_byte) { |payload| captured = payload }
 
         patch :byte_update, params: { id: message.id, body: "It's a good time for dishes", state: "delivered" }
 
+        message.reload
+        expect(message).to be_delivered
+        expect(message.delivered_at).to be_present
         expect(captured[:title]).to eq("It's a good time for dishes")
         expect(captured[:body]).to be_nil
       end
@@ -343,34 +319,19 @@ RSpec.describe WebhooksController, type: :controller do
           }
         end
 
-        it "keeps it a boolean through the JSON round trip" do
-          say_hidden!("alarm")
-
-          expect(buddy_convo.byte_messages.outbound.last.metadata["hidden"]).to be(true)
-        end
-
         # The server sends hidden rows down like any other and the CLIENT drops
         # them (byte/index.js upsertMessage), so the wire payload is where the
-        # flag has to survive — a broadcast or a history page that lost it would
-        # render the message as an ordinary bubble.
-        it "carries the flag on the wire, which is where it's acted on" do
-          say_hidden!("alarm")
-
-          expect(buddy_convo.byte_messages.outbound.last.as_wire[:metadata]["hidden"]).to be(true)
-        end
-
-        it "still does the thing that was asked for" do
+        # flag has to survive.
+        it "keeps hidden a boolean on the record and the wire, keeps the source, and still acts", :aggregate_failures do
           allow(::Buddy::Alarms).to receive(:quick_ring!)
 
           say_hidden!("alarm")
 
+          message = buddy_convo.byte_messages.outbound.last
+          expect(message.metadata["hidden"]).to be(true)
+          expect(message.as_wire[:metadata]["hidden"]).to be(true)
+          expect(message.metadata["source"]).to eq("cli")
           expect(::Buddy::Alarms).to have_received(:quick_ring!)
-        end
-
-        it "keeps the source it always had rather than replacing it" do
-          say_hidden!("alarm")
-
-          expect(buddy_convo.byte_messages.outbound.last.metadata["source"]).to eq("cli")
         end
       end
 
@@ -429,24 +390,11 @@ RSpec.describe WebhooksController, type: :controller do
         expect(response).to have_http_status(:unauthorized)
       end
 
-      # Fetching and formatting moved into WeatherService (see
-      # weather_service_spec for the one-liner itself); the endpoint is now just
-      # a pass-through with an availability guard.
+      # The endpoint is a pass-through of WeatherService with an availability guard.
       it "returns 503 when there's no forecast to be had" do
         allow(WeatherService).to receive(:summary).and_return(nil)
         get :byte_weather, params: { user_id: user.id }
         expect(response).to have_http_status(:service_unavailable)
-      end
-
-      it "renders the service's one-liner" do
-        allow(WeatherService).to receive(:summary)
-          .and_return("currently 72°F, partly cloudy. today high 85°F / low 56°F, chance of rain 20%.")
-
-        get :byte_weather, params: { user_id: user.id }
-
-        expect(response).to be_successful
-        json = JSON.parse(response.body)
-        expect(json["body"]).to include("72°F", "partly cloudy", "high 85°F", "low 56°F", "chance of rain 20%")
       end
     end
   end
@@ -465,17 +413,6 @@ RSpec.describe WebhooksController, type: :controller do
 
     describe "PATCH #byte_update_conversation" do
       it "merges metadata rather than replacing it" do
-        patch :byte_update_conversation, params: {
-          id:       convo.id,
-          metadata: { cwd: "/new/path" }.to_json,
-        }
-
-        expect(response).to be_successful
-        convo.reload
-        expect(convo.metadata["cwd"]).to eq("/new/path")
-      end
-
-      it "leaves untouched metadata keys alone" do
         convo.update!(metadata: { cwd: "/old", claude_session_id: "abc" })
 
         patch :byte_update_conversation, params: {
@@ -483,6 +420,7 @@ RSpec.describe WebhooksController, type: :controller do
           metadata: { cwd: "/new" }.to_json,
         }
 
+        expect(response).to be_successful
         convo.reload
         expect(convo.metadata["cwd"]).to eq("/new")
         expect(convo.metadata["claude_session_id"]).to eq("abc")

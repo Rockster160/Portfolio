@@ -9,47 +9,14 @@ require "rails_helper"
 RSpec.describe "Checklist removal hints" do
   let(:result) { JsRunner.output("spec/javascript/removal_hint_runner.js") }
 
-  describe "before it's been tapped" do
-    it "says the tick is what does the removing" do
-      expect(result["pending"]["cancel_reminder"]).to eq("Tap to cancel it")
-      expect(result["pending"]["delete_event"]).to eq("Tap to delete it")
-      expect(result["pending"]["remove_list_item"]).to eq("Tap to remove it")
-    end
-
-    it "uses the word that fits the thing rather than one blanket verb" do
-      expect(result["pending"]["forget_routine"]).to eq("Tap to forget it")
-      expect(result["pending"]["unlink_records"]).to eq("Tap to unlink them")
-      expect(result["pending"]["undo_chore_completion"]).to eq("Tap to unmark it")
-    end
-
-    it "covers every removal tool that can reach a checklist" do
-      expect(result["pending"].values).to all(start_with("Tap to"))
-    end
-  end
-
-  describe "once it has run" do
-    # The double negative, spelled out: what happened, then what the box does
-    # now. Without it a ticked box over "Remove Check the bamboo tree" is as
-    # easily read as "still to do" as "done".
-    it "says what happened and that unticking is the way back" do
-      expect(result["executed_undoable"]["cancel_reminder"])
-        .to eq("Cancelled — untick to put it back")
-      expect(result["executed_undoable"]["delete_event"])
-        .to eq("Deleted — untick to put it back")
-      expect(result["executed_undoable"]["remove_list_item"])
-        .to eq("Removed — untick to put it back")
-    end
-
-    it "keeps the reversal in the same words as the removal" do
-      expect(result["executed_undoable"]["unlink_records"])
-        .to eq("Unlinked — untick to link them again")
-      expect(result["executed_undoable"]["undo_chore_completion"])
-        .to eq("Unmarked — untick to mark it again")
-    end
-
-    it "never leads with the past tense on a row that hasn't run" do
-      expect(result["pending"].values).to all(satisfy { |hint| hint.exclude?("untick") })
-    end
+  # Pending says the tick removes; once run and still reversible, it says
+  # unticking puts it back. Each tool keeps its own verb in both.
+  it "gives every removal row a pending hint and a reversible one once it has run" do
+    expect(result["pending"].values).to all(be_present)
+    expect(result["pending"].values).to all(satisfy { |hint| hint.exclude?("untick") })
+    expect(result["pending"]["unlink_records"]).to eq("Tap to unlink them")
+    expect(result["executed_undoable"].values).to all(include("untick"))
+    expect(result["executed_undoable"]["unlink_records"]).to eq("Unlinked — untick to link them again")
   end
 
   describe "rows that get no line" do

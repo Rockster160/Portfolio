@@ -1,4 +1,3 @@
-# spec/requests/oauth_flow_spec.rb
 require "rails_helper"
 
 RSpec.describe "OAuth Flow", type: :request do
@@ -11,18 +10,13 @@ RSpec.describe "OAuth Flow", type: :request do
   }
 
   before do
-    # Simulate a logged-in user via Auth helper which Doorkeeper uses
-    allow_any_instance_of(Auth)
-      .to receive(:current_user).and_return(user)
-    allow_any_instance_of(AuthHelper)
-      .to receive(:current_user).and_return(user)
-    allow_any_instance_of(ApplicationController)
-      .to receive(:current_user).and_return(user)
-    allow_any_instance_of(Doorkeeper::AuthorizationsController)
-      .to receive(:current_user).and_return(user)
+    allow_any_instance_of(Auth).to receive(:current_user).and_return(user)
+    allow_any_instance_of(AuthHelper).to receive(:current_user).and_return(user)
+    allow_any_instance_of(ApplicationController).to receive(:current_user).and_return(user)
+    allow_any_instance_of(Doorkeeper::AuthorizationsController).to receive(:current_user).and_return(user)
   end
 
-  it "issues an authorization code" do
+  it "issues an authorization code and exchanges it for a token" do
     get "/oauth/authorize", params: {
       response_type: "code",
       client_id:     client.uid,
@@ -32,19 +26,6 @@ RSpec.describe "OAuth Flow", type: :request do
       Accept:         "application/json",
     }
     expect(response).to be_redirect
-    # Extract auth code from the redirect url query params if needed
-  end
-
-  it "exchanges code for token" do
-    # First get the auth code
-    get "/oauth/authorize", params: {
-      response_type: "code",
-      client_id:     client.uid,
-      redirect_uri:  client.redirect_uri,
-    }, headers: {
-      "Content-Type": "application/json",
-      Accept:         "application/json",
-    }
     auth_code = CGI.parse(URI.parse(response.location).query)["code"].first
 
     post "/oauth/token", params: {

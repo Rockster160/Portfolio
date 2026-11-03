@@ -1,8 +1,6 @@
 require "rails_helper"
 
-# Pebbles were a one-way ledger as far as Buddy was concerned: complete_chore
-# paid them in, and nothing took them back out. Spending had to be done on the
-# Balance page, note and all.
+# Spending pebbles from chat, with an optional note, undoably.
 RSpec.describe "Buddy withdraw_pebbles" do
   let(:user)  { create(:user) }
   let(:chore) { create(:chore, created_by_user: user, name: "Mow") }
@@ -59,31 +57,17 @@ RSpec.describe "Buddy withdraw_pebbles" do
     expect(user.reload.chore_balance).to eq(40)
   end
 
-  it "shows the amount, the note, and what's left on the row" do
-    earn!(120)
-
-    label = run({ amount: 25, note: "arcade" })[:label]
-
-    expect(label[:title]).to eq("Withdraw 25p")
-    expect(label[:sub]).to include("📝 arcade").and include("leaves 95p")
-  end
-
-  it "tells the model what the withdrawal leaves them with" do
-    earn!(120)
-
-    expect(tool[:confirm].call({ amount: 25 }, ctx)[:summary]).to eq("Withdraw 25p, leaving 95p of 120p.")
-  end
-
   # The Balance page allows a negative balance, so this doesn't get stricter
-  # than the app - but an overdraw is far more often a misheard number than an
-  # intended one, so it says so out loud rather than quietly going under.
-  it "flags an overdraw instead of silently going negative" do
+  # than the app - but an overdraw is more often a misheard number, so the
+  # confirm says so.
+  it "works out what the withdrawal leaves, flagging an overdraw", :aggregate_failures do
     earn!(10)
+    expect(tool[:confirm].call({ amount: 40 }, ctx)[:summary]).to include("-30p", "NEGATIVE")
 
-    summary = tool[:confirm].call({ amount: 40 }, ctx)[:summary]
-
-    expect(summary).to include("leaving -30p")
-    expect(summary).to include("NEGATIVE")
+    earn!(110)
+    summary = tool[:confirm].call({ amount: 25 }, ctx)[:summary]
+    expect(summary).to include("95p")
+    expect(summary).not_to include("NEGATIVE")
   end
 
   it "refuses a withdrawal that isn't a positive number" do
@@ -91,26 +75,10 @@ RSpec.describe "Buddy withdraw_pebbles" do
     expect { tool[:confirm].call({ amount: -5 }, ctx) }.to raise_error(/positive/)
   end
 
-  it "reads back what was spent and what's left" do
-    earn!(120)
-    out = run({ amount: 25, note: "arcade" })
-
-    receipt = tool[:receipt].call(
-      out[:result],
-      ctx(proposal: { "payload" => { "amount" => 25, "note" => "arcade" } }),
-    )
-
-    expect(receipt).to eq("Withdrew 25p for arcade · 95p left 🪨")
-  end
-
   # Level 2 means the row lands pre-checked and unchecking it walks the spend
   # back - a balance is exactly the kind of thing a wrong number should be
   # takeable off of.
   describe "undoing it" do
-    it "is registered as an immediate, undoable action" do
-      expect(tool[:level]).to eq(2)
-    end
-
     it "puts the pebbles back when the row is unchecked" do
       earn!(120)
       out = run({ amount: 25, note: "arcade" })

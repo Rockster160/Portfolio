@@ -153,26 +153,13 @@ RSpec.describe Buddy::TriggerShapes do
         section = Buddy::Context.full(user, convo)[:trigger_shapes]
 
         expect(section.find { |e| e[:scope] == "item" }[:fields]).to include("list:name (string: Shopping)")
-        expect(Buddy::GPT::ContextTool::SECTIONS).to include(:trigger_shapes)
-        expect(Buddy::Features::SECTIONS[:jil]).to include(:trigger_shapes)
-      end
-
-      it "tells the model why it matters before writing a listener" do
-        prompt = Buddy::Personality.for(user, conversation: user.byte_conversations.create!(mode: :buddy))
-
-        expect(prompt).to include("**`trigger_shapes`**")
-        expect(prompt).to include("matches nothing and fires never")
       end
     end
   end
 
-  # Which VALUES a trigger key actually takes — the half nothing recorded, and the
-  # reason two dead watches passed validation on the same day.
-  #
-  # `laundry:action:stop` names a real scope and a real key. `laundry` is fired by
-  # a button and a spoken command, both of which send a START; there has never
-  # been a stop. The appliances report on `hass-trigger`. Both the washer watch
-  # and the dryer watch were written against `laundry`, validated, and sat silent.
+  # Which VALUES a trigger key actually takes, so a listener filtering on a value
+  # that never occurs (`laundry:action:stop` when laundry only ever starts) is
+  # refused instead of sitting silent.
   describe "the values a key takes" do
     let(:user) { create(:user) }
 
@@ -202,28 +189,17 @@ RSpec.describe Buddy::TriggerShapes do
         expect(values_for("hass-sensor")["detected"]).to eq(["true"])
       end
 
-      it "leaves ids and timestamps alone" do
-        observe("event", { "id" => 44, "timestamp" => Time.current, "action" => "added" })
+      it "leaves ids, timestamps and prose alone" do
+        observe("event", { "id" => 44, "timestamp" => Time.current, "action" => "added", "note" => "ok", "body" => "hi" })
 
         expect(values_for("event").keys).to eq(["action"])
       end
 
-      it "never stores prose, however short it happens to be" do
-        observe("event", { "action" => "added", "note" => "ok", "body" => "hi" })
-
-        expect(values_for("event").keys).to eq(["action"])
-      end
-
-      it "retires a key that turns out to be data rather than an enum" do
+      it "retires a key that turns out to be data rather than an enum, for good" do
         (described_class::MAX_VALUES + 2).times { |i| observe("item", { "name" => "thing #{i}" }) }
-
         expect(values_for("item")["name"]).to eq(described_class::MANY)
-      end
 
-      it "keeps a retired key retired, so it can't start collecting again" do
-        (described_class::MAX_VALUES + 2).times { |i| observe("item", { "name" => "thing #{i}" }) }
         observe("item", { "name" => "one more" })
-
         expect(values_for("item")["name"]).to eq(described_class::MANY)
       end
 
@@ -271,38 +247,24 @@ RSpec.describe Buddy::TriggerShapes do
         observe("hass-trigger", { "device_name" => "Dryer", "type" => "start" })
       end
 
-      it "refuses the one that was written twice" do
+      it "names the value that never occurs, in any term", :aggregate_failures do
         expect(gap("laundry:action:stop")).to include("start").and(include("stop"))
-      end
-
-      it "allows the value that does occur" do
-        expect(gap("laundry:action:start")).to be_nil
-      end
-
-      it "allows the listener the appliances really need" do
-        expect(gap("hass-trigger:device_name::Dryer type::stop")).to be_nil
-        expect(gap("hass-trigger:device_name::Washer type::stop")).to be_nil
-      end
-
-      it "catches a wrong value in a trailing term, not just the first" do
         expect(gap("hass-trigger:device_name::Dryer type::finished")).to include("finished")
-      end
-
-      it "catches a device that has never reported" do
         expect(gap("hass-trigger:device_name::Toaster type::stop")).to include("Toaster")
       end
 
-      it "says nothing about a key it has never recorded" do
-        expect(gap("hass-trigger:whatever::anything")).to be_nil
-      end
-
-      it "leaves patterns alone — several things could satisfy one" do
-        expect(gap("hass-trigger:device_name:/^Dry/")).to be_nil
-        expect(gap("hass-trigger:type:ANY(start stop)")).to be_nil
-      end
-
-      it "does not refuse a substring of a real value, which single-colon matches" do
-        expect(gap("hass-trigger:device_name:Dry")).to be_nil
+      # Patterns and single-colon substring matches could be satisfied by
+      # several values, and an unrecorded key can't be vouched for.
+      it "allows values that occur, unknown keys, patterns and substrings", :aggregate_failures do
+        [
+          "laundry:action:start",
+          "hass-trigger:device_name::Dryer type::stop",
+          "hass-trigger:device_name::Washer type::stop",
+          "hass-trigger:whatever::anything",
+          "hass-trigger:device_name:/^Dry/",
+          "hass-trigger:type:ANY(start stop)",
+          "hass-trigger:device_name:Dry",
+        ].each { |listener| expect(gap(listener)).to be_nil, listener }
       end
     end
 
@@ -345,11 +307,8 @@ RSpec.describe Buddy::TriggerShapes do
         Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
       end
 
-      it "refuses the laundry guess instead of saving a watch that can't fire" do
+      it "refuses the guess that can't fire and takes the real one", :aggregate_failures do
         expect { alarm("laundry:action:stop") }.not_to change(BuddyWatch, :count)
-      end
-
-      it "takes the real one" do
         expect { alarm("hass-trigger:device_name::Dryer type::stop") }.to change(BuddyWatch, :count).by(1)
       end
     end

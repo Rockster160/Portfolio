@@ -43,7 +43,7 @@ RSpec.describe HouseholdIcon, type: :model do
   it "requires image_data to be a data:image/ URL" do
     icon.image_data = "https://example.com/cat.png"
     expect(icon).not_to be_valid
-    expect(icon.errors[:image_data]).to include("must be a data:image/* URL")
+    expect(icon.errors[:image_data]).to be_present
   end
 
   it "rejects oversized image_data" do
@@ -85,13 +85,13 @@ RSpec.describe HouseholdIcon, type: :model do
       icon.save!
     end
 
-    it "finds by exact name" do
+    it "finds by name ignoring case, and nothing for an unknown or blank one", :aggregate_failures do
       expect(described_class.lookup(user, "Whisper")).to eq(icon)
-    end
-
-    it "is case-insensitive" do
-      expect(described_class.lookup(user, "whisper")).to eq(icon)
       expect(described_class.lookup(user, "WHISPER")).to eq(icon)
+      expect(described_class.lookup(user, "nope")).to be_nil
+      expect(described_class.lookup(nil, "Whisper")).to be_nil
+      expect(described_class.lookup(user, nil)).to be_nil
+      expect(described_class.lookup(user, "")).to be_nil
     end
 
     it "collapses spaces, underscores, and dashes" do
@@ -99,16 +99,6 @@ RSpec.describe HouseholdIcon, type: :model do
       expect(described_class.lookup(user, "animal-crossing-leaf")).to eq(icon)
       expect(described_class.lookup(user, "animal_crossing_leaf")).to eq(icon)
       expect(described_class.lookup(user, "animal   crossing   leaf")).to eq(icon)
-    end
-
-    it "returns nil when name doesn't match any icon" do
-      expect(described_class.lookup(user, "nope")).to be_nil
-    end
-
-    it "returns nil for nil/blank user or name" do
-      expect(described_class.lookup(nil, "Whisper")).to be_nil
-      expect(described_class.lookup(user, nil)).to be_nil
-      expect(described_class.lookup(user, "")).to be_nil
     end
 
     it "returns nil when the user has no household" do

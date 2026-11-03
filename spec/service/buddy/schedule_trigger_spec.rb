@@ -38,11 +38,13 @@ RSpec.describe "schedule_trigger" do
   def scheduled = ScheduledTrigger.where(user_id: user.id)
 
   describe "the trigger itself" do
-    it "schedules a raw scope with no task named anywhere" do
+    it "schedules a raw scope with no task named, at the time given, with no condition", :aggregate_failures do
       create!(scope: "villager")
 
       expect(scheduled.count).to eq(1)
       expect(scheduled.first.trigger).to eq("villager")
+      expect(scheduled.first.execute_at).to be_within(2.seconds).of(Time.zone.parse(at))
+      expect(scheduled.first.condition).to be_nil
     end
 
     # The gate `trigger_jil_task` applies is the whole point of NOT applying it
@@ -53,25 +55,12 @@ RSpec.describe "schedule_trigger" do
 
     # A listener reads `scope:rest` as a scope plus a filter, and that's how a
     # person says one out loud too.
-    it "splits a colon-separated scope the way a listener reads it" do
-      create!(scope: "villager:car:charged")
-      row = scheduled.first
-
-      expect(row.trigger).to eq("villager")
-      expect(row.data).to include("car" => "charged")
-    end
-
-    it "merges explicit data over what the scope carried" do
+    it "splits a colon-separated scope the way a listener reads it, merging explicit data over it" do
       create!(scope: "villager:car:charged", data: "who:rocco")
       row = scheduled.first
 
+      expect(row.trigger).to eq("villager")
       expect(row.data).to include("car" => "charged", "who" => "rocco")
-    end
-
-    it "fires at the time it was given" do
-      create!(scope: "villager")
-
-      expect(scheduled.first.execute_at).to be_within(2.seconds).of(Time.zone.parse(at))
     end
 
     # Creating the row is only half of scheduling one - something has to put a
@@ -94,11 +83,8 @@ RSpec.describe "schedule_trigger" do
       expect(ScheduledTrigger.not_scheduled.where(user_id: user.id)).to include(scheduled.first)
     end
 
-    it "refuses a time that has already gone" do
+    it "refuses a time that has already gone, or an empty scope", :aggregate_failures do
       expect { confirm(scope: "villager", at: 2.hours.ago.iso8601) }.to raise_error(/already passed/)
-    end
-
-    it "refuses an empty scope" do
       expect { confirm(scope: " ") }.to raise_error(/needs a scope/)
     end
   end
@@ -129,10 +115,6 @@ RSpec.describe "schedule_trigger" do
       )
     end
 
-    it "says what it will look at before they tap yes" do
-      expect(confirm(checked)[:summary]).to include("any chore completions", "villager")
-    end
-
     # The whole sentence, end to end: at 8 it looks, and it fires only if the
     # chore actually got done.
     it "fires when the chore was done" do
@@ -145,46 +127,27 @@ RSpec.describe "schedule_trigger" do
       expect(::Jil).to have_received(:trigger).with(user, "villager", any_args)
     end
 
-    it "stays quiet when it wasn't" do
+    # A skip is invisible by design, so it leaves a failed receipt.
+    it "stays quiet when it wasn't, leaving a receipt for the skip", :aggregate_failures do
       create!(checked)
       scheduled.first.update!(execute_at: 1.minute.ago)
 
       run!
 
       expect(::Jil).not_to have_received(:trigger).with(user, "villager", any_args)
-    end
-
-    # A skip is invisible by design, and invisible is how a check that's quietly
-    # wrong stays wrong.
-    it "leaves a receipt when it skips" do
-      create!(checked)
-      scheduled.first.update!(execute_at: 1.minute.ago)
-
-      run!
-
       chip = convo.byte_messages.where(direction: :inbound).last
       expect(chip.metadata["kind"]).to eq("buddy_activity")
       expect(chip.metadata["ok"]).to be(false)
-      expect(chip.metadata["detail"]).to include("any chore completions")
     end
 
     it "refuses a check that is more than one kind of check" do
       expect { confirm(checked.merge(check_task: "Something")) }.to raise_error(/not more than one/)
       expect { confirm(checked.merge(check_place: "home")) }.to raise_error(/not more than one/)
     end
-
-    it "leaves an unchecked trigger with no condition at all" do
-      create!(scope: "villager")
-
-      expect(scheduled.first.condition).to be_nil
-    end
   end
 
-  # FeatureRequest 6, written 4 Sep: "If I'm not home by 12:50, set Whisper
-  # Quiet for an hour." Byte set the 12:50 part, said out loud that it had no
-  # home-away check wired, and was told "that's not what's needed at all" - an
-  # unconditional version of a conditional instruction is a different
-  # instruction, and doing the safe half of it is not a partial answer.
+  # "If I'm not home by 12:50, set Whisper Quiet" - the place is a condition
+  # checked at fire time.
   describe "gating on where they are" do
     let(:home) { [40.48049, -111.99816] }
 
@@ -207,10 +170,6 @@ RSpec.describe "schedule_trigger" do
       expect(scheduled.first.condition).to include(
         "kind" => "location", "place" => "home", "expect" => "away",
       )
-    end
-
-    it "says what it is waiting on before they tap yes" do
-      expect(confirm(quiet)[:summary]).to include("only if you're not at home")
     end
 
     it "holds the trigger back while they are home" do

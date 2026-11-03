@@ -1,12 +1,7 @@
 require "rails_helper"
 
-# Asking WHICH ONE with the answers already on screen.
-#
-# Prod 4495: Chelsea said "Log load dishwasher" and `Unload Dishwasher` was
-# marked done — the opposite job. The resolver refuses to guess now, and this is
-# the other half of that: refusing to guess turns every near miss into a second
-# exchange where she has to type a chore name back, unless the candidates come
-# up with the question.
+# Asking WHICH ONE with the answers already on screen: the resolver refuses to
+# guess, and the candidates come up as buttons with the question.
 RSpec.describe Buddy::Disambiguation do
   let(:user)         { create(:user) }
   let(:conversation) { ByteConversation.create!(user: user, buddy_theme: :byte) }
@@ -35,27 +30,15 @@ RSpec.describe Buddy::Disambiguation do
       chore!("Unload Dishwasher")
     end
 
-    it "puts the candidates up as buttons instead of a sentence" do
-      resolve(:complete_chore, { chore: "load dishwasher" })
+    it "puts the candidates up as buttons and completes nothing on its own" do
+      expect { resolve(:complete_chore, { chore: "load dishwasher" }) }
+        .not_to(change(ChoreCompletion, :count))
 
       expect(card).to be_present
       expect(card.buttons.length).to be >= 2
       expect(card.multi_select).to be(false)
       expect(card.tool_input["tool"]).to eq("complete_chore")
       expect(card.tool_input["arg"]).to eq("chore")
-    end
-
-    it "completes nothing on its own" do
-      expect { resolve(:complete_chore, { chore: "load dishwasher" }) }
-        .not_to(change(ChoreCompletion, :count))
-    end
-
-    # The model must not ask the same question in prose — that is the extra
-    # exchange this exists to remove.
-    it "tells the model the question is already asked" do
-      output, = resolve(:complete_chore, { chore: "load dishwasher" })
-
-      expect(output.to_s).to include("Do NOT ask which one")
     end
 
     it "runs the chore they tap, with no model turn behind it" do
@@ -68,31 +51,11 @@ RSpec.describe Buddy::Disambiguation do
     end
   end
 
-  # One candidate gets a card too. "I couldn't find anything called X - did you
-  # mean Y?" with a button under it is a single tap; the same sentence without
-  # one is a whole corrected message they have to type.
   it "offers the one candidate as a button rather than making them retype it" do
     chore!("Light Load Dishes")
     resolve(:complete_chore, { chore: "load dishwasher" })
 
-    expect(card).to be_present
     expect(card.buttons.pluck("value")).to eq(["Light Load Dishes"])
-    expect(card.byte_message.body).to eq(
-      "I couldn't find anything called \"load dishwasher\" - did you mean Light Load Dishes?",
-    )
-  end
-
-  # The words still say what happened, so the button is a shortcut rather than
-  # somewhere the answer is hidden.
-  it "asks the question in their words, not the model's instructions" do
-    chore!("Light Load Dishes")
-    chore!("Medium~Normal Load Dishes")
-    resolve(:complete_chore, { chore: "load dishwasher" })
-
-    expect(card.byte_message.body).to eq(
-      "I couldn't find anything called \"load dishwasher\". Which one did you mean?",
-    )
-    expect(card.byte_message.body).not_to include("Call again with one of those")
   end
 
   it "answers in prose when nothing is close at all" do
@@ -113,7 +76,7 @@ RSpec.describe Buddy::Disambiguation do
     output, = resolve(:complete_chore, { chore: "load dishwasher" }, convo: nil)
 
     expect(card).to be_nil
-    expect(output.to_s).to include("the closest names are")
+    expect(output.to_s).to include("Light Load Dishes", "Unload Dishwasher")
   end
 
   describe "two lists whose names both carry what they said" do

@@ -9,12 +9,12 @@ RSpec.describe IpVisit, type: :model do
       expect(visit.last_seen_at).to be_present
     end
 
-    it "reports the count of visits that came before this one" do
+    it "reports the count of visits that came before this one, on a single row" do
       expect(described_class.record!("203.0.113.8")).to eq(0)
       expect(described_class.record!("203.0.113.8")).to eq(1)
       expect(described_class.record!("203.0.113.8")).to eq(2)
 
-      expect(described_class.find_by(ip_address: "203.0.113.8").visit_count).to eq(3)
+      expect(described_class.where(ip_address: "203.0.113.8").pluck(:visit_count)).to eq([3])
     end
 
     it "keeps first_seen_at fixed and moves last_seen_at forward" do
@@ -26,12 +26,6 @@ RSpec.describe IpVisit, type: :model do
       visit = described_class.find_by(ip_address: "203.0.113.9")
       expect(visit.first_seen_at).to be_within(1.second).of(first_seen)
       expect(visit.last_seen_at).to be > visit.first_seen_at
-    end
-
-    it "never creates a second row for the same IP" do
-      3.times { described_class.record!("203.0.113.10") }
-
-      expect(described_class.where(ip_address: "203.0.113.10").count).to eq(1)
     end
 
     it "counts each IP independently" do

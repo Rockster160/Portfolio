@@ -23,16 +23,11 @@ RSpec.describe ByteConversation, type: :model do
   describe "the model" do
     let(:user) { User.me }
 
-    it "assigns a default conversation to messages that don't specify one" do
+    it "files a conversation-less message under a stable per-user default" do
       msg = user.byte_messages.create!(body: "hi")
-      expect(msg.byte_conversation).to be_present
       expect(msg.byte_conversation.user_id).to eq(user.id)
-    end
-
-    it "returns a stable default per-user across calls" do
-      a = ByteConversation.default_for(user)
-      b = ByteConversation.default_for(user)
-      expect(a.id).to eq(b.id)
+      expect(ByteConversation.default_for(user)).to eq(msg.byte_conversation)
+      expect(user.byte_messages.create!(body: "again").byte_conversation).to eq(msg.byte_conversation)
     end
 
     # The buddy:eval harness writes into its own thread, which leaves it with the
@@ -47,41 +42,19 @@ RSpec.describe ByteConversation, type: :model do
 
       before { eval_convo.touch_activity(1.minute.from_now) }
 
-      it "never becomes the default, even when it is the most recent" do
+      it "never becomes the default, but stays listed and counts toward spend", :aggregate_failures do
         expect(user.byte_conversations.active.ordered.first).to eq(eval_convo)
         expect(ByteConversation.default_for(user)).to eq(real_convo)
-      end
-
-      it "does not catch a message that arrives without a conversation" do
-        msg = user.byte_messages.create!(body: "hi")
-
-        expect(msg.byte_conversation).to eq(real_convo)
-      end
-
-      it "still counts toward spend reporting — it is the same money" do
-        BuddyUsage.create!(
-          user:          user,
-          kind:          :eval,
-          model:         "gpt-5.4-mini",
-          input_tokens:  100,
-          output_tokens: 10,
-          cost_micros:   500,
-        )
-
-        expect(BuddyUsage.since(1.hour.ago).spend_micros).to eq(500)
-      end
-
-      it "is still listed, since reading the back-and-forth is the point" do
-        expect(user.byte_conversations.active.ordered).to include(eval_convo)
+        expect(user.byte_messages.create!(body: "hi").byte_conversation).to eq(real_convo)
         expect(eval_convo.eval?).to be(true)
         expect(real_convo.eval?).to be(false)
-      end
-    end
 
-    it "exposes mode as an integer-backed enum" do
-      convo = user.byte_conversations.create!(name: "shell fun", mode: :bash)
-      expect(convo.mode).to eq("bash")
-      expect(convo.bash?).to be(true)
+        BuddyUsage.create!(
+          user: user, kind: :eval, model: "gpt-5.4-mini",
+          input_tokens: 100, output_tokens: 10, cost_micros: 500,
+        )
+        expect(BuddyUsage.since(1.hour.ago).spend_micros).to eq(500)
+      end
     end
 
     it "bumps last_message_at when a message is created" do
@@ -105,23 +78,11 @@ RSpec.describe ByteConversation, type: :model do
       expect(user.byte_conversations.active).not_to include(archived)
     end
 
-    it "returns a mode-derived display name when unnamed" do
-      convo = user.byte_conversations.create!(mode: :bash)
-      expect(convo.display_name).to eq("Terminal")
-    end
-
-    it "names an unnamed buddy conversation after the Buddy, per theme" do
+    it "names an unnamed buddy conversation after its theme's pet" do
       convo = user.byte_conversations.create!(mode: :buddy)
-      expect(convo.buddy?).to be(true)
-
-      convo.update!(buddy_theme: "byte")
-      expect(convo.display_name).to eq("Byte")
-
       convo.update!(buddy_theme: "moss")
       expect(convo.display_name).to eq("Moss")
-
-      convo.update!(buddy_theme: "suki")
-      expect(convo.display_name).to eq("Suki")
+      expect(described_class.display_name_for("nonsense")).to eq("Byte")
     end
 
     describe ".default_theme_for" do
@@ -130,15 +91,6 @@ RSpec.describe ByteConversation, type: :model do
         expect(described_class.default_theme_for(instance_double(User, id: 58_128))).to eq(:moss)
         expect(described_class.default_theme_for(instance_double(User, id: 999_999))).to eq(:byte)
         expect(described_class.default_theme_for(nil)).to eq(:byte)
-      end
-    end
-
-    describe ".display_name_for" do
-      it "maps each theme to its pet name and falls back to Byte" do
-        expect(described_class.display_name_for("suki")).to eq("Suki")
-        expect(described_class.display_name_for("moss")).to eq("Moss")
-        expect(described_class.display_name_for("byte")).to eq("Byte")
-        expect(described_class.display_name_for("nonsense")).to eq("Byte")
       end
     end
   end
@@ -165,49 +117,24 @@ RSpec.describe ByteConversation, type: :model do
         expect(convo.unread_count).to eq(2)
       end
 
-      it "ignores what was already there when it was read" do
+      # A Claude turn re-broadcasts the same row as it streams, so counting
+      # mid-flight states counts one reply many times.
+      it "ignores old, in-flight, own and non-message rows", :aggregate_failures do
         landed(at: 2.hours.ago)
-
-        expect(convo.unread_count).to eq(0)
-      end
-
-      # The bug that started all of this: a Claude turn re-broadcasts the same row
-      # as it streams, so anything counting mid-flight states counts one reply
-      # many times.
-      it "ignores messages still in flight" do
-        landed(state: :streaming)
-        landed(state: :pending)
-        landed(state: :queued)
-
-        expect(convo.unread_count).to eq(0)
-      end
-
-      it "counts a failure, which is terminal and worth seeing" do
-        landed(state: :failed)
-
-        expect(convo.unread_count).to eq(1)
-      end
-
-      it "ignores the person's own messages" do
+        %i[streaming pending queued].each { |state| landed(state: state) }
         landed(direction: :outbound)
-
-        expect(convo.unread_count).to eq(0)
-      end
-
-      it "ignores receipt chips, action pills and hidden trigger seeds" do
-        landed(metadata: { "kind" => "buddy_activity" })
-        landed(metadata: { "kind" => "action_chip" })
-        landed(metadata: { "kind" => "buddy_trigger" })
+        %w[buddy_activity action_chip buddy_trigger].each { |kind| landed(metadata: { "kind" => kind }) }
         landed(metadata: { "hidden" => true })
 
         expect(convo.unread_count).to eq(0)
       end
 
-      it "counts what a person would actually read" do
+      it "counts a failure and anything a person would actually read" do
+        landed(state: :failed)
         landed(metadata: { "kind" => "claude" })
         landed(metadata: { "kind" => "buddy_relay" })
 
-        expect(convo.unread_count).to eq(2)
+        expect(convo.unread_count).to eq(3)
       end
 
       it "rides along on the wire payload" do

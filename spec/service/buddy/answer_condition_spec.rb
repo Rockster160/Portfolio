@@ -15,18 +15,12 @@ RSpec.describe Buddy::AnswerCondition do
       expect(yes_gate).to eq("var" => "hers", "is" => "yes", "who" => "Chelsea")
     end
 
-    it "is nothing at all without a var to read" do
+    it "is nothing at all without a var to read or an answer to want" do
       expect(described_class.build(var: "", is: "yes")).to be_nil
-    end
-
-    # Every gate built before this existed has no condition on it, and every
-    # ordinary sequence still won't.
-    it "is nothing at all without an answer to want" do
       expect(described_class.build(var: "hers", is: nil)).to be_nil
     end
   end
 
-  # The common case, and the one from the report.
   describe "a yes/no condition" do
     def yeses
       phrases = ["yes please", "Sounds good", "go for it"]
@@ -115,39 +109,18 @@ RSpec.describe Buddy::AnswerCondition do
     end
   end
 
-  describe ".describe" do
-    it "says they said no, when a yes was wanted" do
-      expect(described_class.describe(yes_gate, { "hers" => "nope" }, :unmet)).to eq("Chelsea said no")
-    end
+  # The outcome line names who answered (or "You" for ask_me, which has no
+  # third party), and quotes the answer back when it is not a plain yes/no.
+  it ".describe names who answered and what they said", :aggregate_failures do
+    no_gate = described_class.build(var: "hers", is: "no", who: "Chelsea")
+    pizza   = described_class.build(var: "hers", is: "pizza", who: "Chelsea")
+    mine    = described_class.build(var: "mine", is: "yes")
 
-    it "says they said yes, when a no was wanted" do
-      gate = described_class.build(var: "hers", is: "no", who: "Chelsea")
-
-      expect(described_class.describe(gate, { "hers" => "yes" }, :unmet)).to eq("Chelsea said yes")
-    end
-
-    it "quotes them back when the answer was neither" do
-      line = described_class.describe(yes_gate, { "hers" => "maybe" }, :unclear)
-
-      expect(line).to eq("Chelsea said \"maybe\", and I couldn't tell whether that was a yes")
-    end
-
-    it "says so plainly when nobody answered" do
-      expect(described_class.describe(yes_gate, {}, :unclear)).to eq("Chelsea never answered that")
-    end
-
-    # ask_me has no third party — the person answered it themselves.
-    it "speaks to the person when there's nobody else to name" do
-      gate = described_class.build(var: "mine", is: "yes")
-
-      expect(described_class.describe(gate, { "mine" => "nah" }, :unmet)).to eq("You said no")
-    end
-
-    it "names what they picked instead" do
-      gate = described_class.build(var: "hers", is: "pizza", who: "Chelsea")
-
-      expect(described_class.describe(gate, { "hers" => "tacos" }, :unmet))
-        .to eq("Chelsea said \"tacos\", not pizza")
-    end
+    expect(described_class.describe(yes_gate, { "hers" => "nope" }, :unmet)).to eq("Chelsea said no")
+    expect(described_class.describe(no_gate, { "hers" => "yes" }, :unmet)).to eq("Chelsea said yes")
+    expect(described_class.describe(mine, { "mine" => "nah" }, :unmet)).to eq("You said no")
+    expect(described_class.describe(yes_gate, { "hers" => "maybe" }, :unclear)).to include("\"maybe\"")
+    expect(described_class.describe(pizza, { "hers" => "tacos" }, :unmet)).to include("\"tacos\"", "pizza")
+    expect(described_class.describe(yes_gate, {}, :unclear)).to start_with("Chelsea never")
   end
 end

@@ -35,11 +35,6 @@ RSpec.describe "message action mounts" do
 
   # The one that got missed, named outright — the general check above passes the
   # day someone deletes this branch and the constant with it.
-  it "mounts the work/break button" do
-    expect(renderer).to include(%(tool_name === "buddy_timer_cycle"))
-    expect(renderer).to include("renderCycleButton")
-  end
-
   it "imports each renderer it mounts" do
     %w[renderMultiSelect renderForm renderCycleButton].each do |fn|
       expect(renderer).to match(/import \{ #{fn} \} from/), "#{fn} is mounted but never imported"

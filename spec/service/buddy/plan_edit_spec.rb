@@ -61,12 +61,16 @@ RSpec.describe "Buddy plans" do
   end
 
   describe "making one" do
-    it "puts every row from one reply in the same plan" do
+    it "puts every row from one reply in the same plan, tagged in context", :aggregate_failures do
       set_up!(garage_watch, midnight_check)
 
       ids = [BuddyWatch.last.plan_id, BuddyReminder.last.plan_id]
       expect(ids.uniq.length).to eq(1)
       expect(ids.first).to be_present
+
+      context = Buddy::Context.build(user, convo)
+      expect(context[:upcoming_reminders].first[:plan]).to eq(ids.first)
+      expect(context[:active_watches].first[:plan]).to eq(ids.first)
     end
 
     it "keeps two replies' rows apart" do
@@ -75,14 +79,6 @@ RSpec.describe "Buddy plans" do
 
       expect(BuddyWatch.last.plan_id).not_to eq(BuddyReminder.last.plan_id)
     end
-
-    it "tags both rows with the plan in context" do
-      set_up!(garage_watch, midnight_check)
-      context = Buddy::Context.build(user, convo)
-
-      expect(context[:upcoming_reminders].first[:plan]).to eq(BuddyWatch.last.plan_id)
-      expect(context[:active_watches].first[:plan]).to eq(BuddyWatch.last.plan_id)
-    end
   end
 
   describe "changing one" do
@@ -90,10 +86,10 @@ RSpec.describe "Buddy plans" do
 
     let(:plan_id) { BuddyWatch.last.plan_id }
 
-    it "moves every timed part by a shift" do
+    it "finds it by words from any part and moves every timed part by a shift" do
       was = BuddyReminder.last.fire_at
 
-      edit(plan: plan_id, shift: "+1h")
+      edit(plan: "garage shut", shift: "+1h")
 
       expect(BuddyReminder.last.fire_at).to be_within(1.second).of(was + 1.hour)
     end
@@ -105,23 +101,13 @@ RSpec.describe "Buddy plans" do
       expect(BuddyReminder.last.condition).to be_nil
     end
 
-    it "finds it by words from any part" do
-      edit(plan: "garage shut", shift: "+1h")
-
-      expect(BuddyReminder.last.fire_at).to be > 4.hours.from_now
-    end
-
-    it "puts one condition on every part that acts" do
+    it "puts one condition on every part that acts, and clears it with an empty list", :aggregate_failures do
       edit(plan: plan_id, only_if: [{ after: "22:00", before: "06:00" }].to_json)
 
       expect(BuddyWatch.last.condition).to include("kind" => "time", "after" => "22:00")
       expect(BuddyReminder.last.condition).to include("kind" => "time")
-    end
 
-    it "clears the conditions with an empty list" do
-      edit(plan: plan_id, only_if: [{ after: "22:00" }].to_json)
       edit(plan: plan_id, only_if: "[]")
-
       expect(BuddyWatch.last.condition).to be_nil
     end
 
@@ -143,12 +129,13 @@ RSpec.describe "Buddy plans" do
     end
 
     # Two parts speak, so "change the wording" doesn't say which.
-    it "asks which part when wording could mean either" do
-      expect { edit(plan: plan_id, text: "Garage!") }.to raise_error(/2 parts of this plan says something.*pass one's id/)
-    end
+    it "refuses wording that could mean either part, or a shift into the past, before anything moves", :aggregate_failures do
+      was = BuddyReminder.last.fire_at
 
-    it "refuses a shift into the past before anything moves" do
+      expect { edit(plan: plan_id, text: "Garage!") }.to raise_error(RuntimeError)
       expect { edit(plan: plan_id, shift: "-5h") }.to raise_error(/in the past/)
+      expect(BuddyReminder.last.fire_at).to eq(was)
+      expect(BuddyWatch.last.body).to eq("🚪 The garage just opened.")
     end
 
     it "puts every part back when undone" do
@@ -181,20 +168,17 @@ RSpec.describe "Buddy plans" do
       travel_to(Time.find_zone("America/Denver").parse("2026-10-23 #{clock}"), &block)
     end
 
-    it "fires inside the window" do
+    # The garage opened, but not after ten - only half of what it waits for -
+    # so a one-shot stays armed.
+    it "stays armed outside the window and fires inside it", :aggregate_failures do
       watch = night_watch!
-      at("23:00") { Buddy::WatchMatcher.fire!(watch) }
 
-      expect(watch.reload.fired_at).to be_present
-    end
-
-    # The garage opened, but not after ten - only half of what it waits for.
-    it "stays armed outside it, one-shot or not" do
-      watch = night_watch!
       at("15:00") { Buddy::WatchMatcher.fire!(watch) }
-
       expect(watch.reload.fired_at).to be_nil
       expect(watch.last_fired_at).to be_nil
+
+      at("23:00") { Buddy::WatchMatcher.fire!(watch) }
+      expect(watch.reload.fired_at).to be_present
     end
 
     it "leaves a chip saying why, once an hour at most" do
@@ -207,13 +191,6 @@ RSpec.describe "Buddy plans" do
 
       at("16:30") { Buddy::WatchMatcher.fire!(watch.reload) }
       expect(chips.call).to eq(2)
-    end
-
-    it "says what it waits on in the receipt" do
-      night_watch!
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).to include("only if it's after 10pm and before 6am")
     end
   end
 end

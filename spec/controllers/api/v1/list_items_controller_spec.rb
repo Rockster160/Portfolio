@@ -117,26 +117,18 @@ RSpec.describe Api::V1::ListItemsController, type: :controller do
     # same as asking for none: a revive has to land back where it was, or every
     # tick-then-re-add through a path that doesn't mention sections would quietly
     # empty the list's sections out.
-    it "keeps the old section when no section is given" do
-      first = add_item("master", "Portfolio")
-      first.soft_destroy
+    it "keeps the old section when no section is given, or a blank one" do
+      [{}, { section: "" }].each do |section_param|
+        first = add_item("master", "Portfolio")
+        first.soft_destroy
 
-      post :create, params: { list_id: list.id, name: "master" }, format: :json
-      again = ListItem.with_deleted.find(response.parsed_body.dig("data", "id"))
+        post :create, params: { list_id: list.id, name: "master", **section_param }, format: :json
+        again = ListItem.with_deleted.find(response.parsed_body.dig("data", "id"))
 
-      expect(again.id).to eq(first.id)
-      expect(again.section).to eq(portfolio)
-      expect(again).not_to be_deleted
-    end
-
-    it "keeps the old section when the section is given but blank" do
-      first = add_item("master", "Portfolio")
-      first.soft_destroy
-
-      again = add_item("master", "")
-
-      expect(again.id).to eq(first.id)
-      expect(again.section).to eq(portfolio)
+        expect(again.id).to eq(first.id)
+        expect(again.section).to eq(portfolio)
+        expect(again).not_to be_deleted
+      end
     end
 
     it "still finds an item in another section when no section is given" do
@@ -150,13 +142,9 @@ RSpec.describe Api::V1::ListItemsController, type: :controller do
       expect(again.section).to eq(broker)
     end
 
-    it "leaves an item sectionless when the section does not exist" do
-      new_item = add_item("master", "NotAProject")
+    it "leaves an item sectionless when the section does not exist, moving a revived one out" do
+      expect(add_item("other", "NotAProject").section_id).to be_nil
 
-      expect(new_item.section_id).to be_nil
-    end
-
-    it "moves an item out of its old section when the new one does not exist" do
       first = add_item("master", "Portfolio")
       first.soft_destroy
 

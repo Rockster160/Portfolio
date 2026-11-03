@@ -25,34 +25,21 @@ RSpec.describe Emails::StoreRaw do
     ].compact.join("\n")
   end
 
-  it "keeps one row with the mail's own headers on it" do
+  # The raw bytes go to S3, not the plaintext. `inbound_mailboxes` is US and
+  # `outbound_mailboxes` is THEM, so an arriving mail files the sender as the
+  # other party. It lands read: it was already read in Gmail.
+  it "keeps one read row with the mail's own headers, the sender as the other party, and the bytes on S3", :aggregate_failures do
     email = described_class.call(user: user, raw: rfc822)
 
     expect(email.subject).to eq("Thank you for applying to ApartmentIQ!")
     expect(email.mail_id).to eq("abc123@greenhouse-mail.io")
     expect(email.timestamp).to eq(Time.parse("Fri, 11 Sep 2026 09:28:11 -0600"))
     expect(email.blurb).to include("Thanks for applying to ApartmentIQ!")
-  end
-
-  # The bytes themselves, not the plaintext — the whole point is having the mail
-  # to go back to.
-  it "puts the message itself on S3" do
-    email = described_class.call(user: user, raw: rfc822)
-
-    expect(email.mail_blob).to be_attached
     expect(email.mail_blob.download).to include("Message-ID: <abc123@greenhouse-mail.io>")
-  end
-
-  # `inbound_mailboxes` is US and `outbound_mailboxes` is THEM. The names
-  # describe the direction the mail travelled, so on something they sent, the
-  # two swap over — and the `with_outbound_address` scopes read the wrong half
-  # of every sent mail if they don't.
-  it "files an arriving mail with the sender as the other party" do
-    email = described_class.call(user: user, raw: rfc822)
-
     expect(email).to be_inbound
     expect(email.outbound_mailboxes.first[:address]).to eq("no-reply@us.greenhouse-mail.io")
     expect(email.inbound_mailboxes.first[:address]).to eq("rocco@example.com")
+    expect(email.read_at).to be_present
   end
 
   it "swaps them round on one they sent" do
@@ -61,12 +48,6 @@ RSpec.describe Emails::StoreRaw do
     expect(email).to be_outbound
     expect(email.inbound_mailboxes.first[:address]).to eq("no-reply@us.greenhouse-mail.io")
     expect(email.outbound_mailboxes.first[:address]).to eq("rocco@example.com")
-  end
-
-  # They read it in Gmail days before this row existed. Landing unread puts a
-  # number on the app's mail badge for something already dealt with elsewhere.
-  it "arrives already read" do
-    expect(described_class.call(user: user, raw: rfc822).read_at).to be_present
   end
 
   it "carries the watcher's verdict so nothing triages it a second time" do

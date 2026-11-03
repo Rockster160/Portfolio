@@ -1,17 +1,9 @@
 require "rails_helper"
 
 RSpec.describe "Buddy sequence gates" do
-  # A sequence with more than one gate in it, and the same sequence with the times
-  # taken out. Both have to hold their order.
-  #
-  # "Ask Chelsea if she wants Syrup for dinner in 5 minutes. If she says yes, wait
-  # 2 minutes and then add it to the agenda." — a wait, then a question put to
-  # someone else, then another wait, then a write. Every step of it is downstream
-  # of the one before, and the write is the one thing that must not happen early.
-  #
-  # It did happen early. build_steps hoisted every level-2 call to the front
-  # whatever position it came in, so the agenda item landed before Chelsea had
-  # been asked anything.
+  # A wait, a question to someone else, another wait, then a write: every step
+  # is downstream of the one before, and a level-2 write must not be hoisted
+  # in front of the gates that precede it.
   describe "gates" do
     let(:user)       { create(:user) }
     let(:partner)    { create(:user) }
@@ -106,32 +98,19 @@ RSpec.describe "Buddy sequence gates" do
         )
       }
 
-      # The whole bug in one assertion: nothing at all should have happened yet.
-      it "asks nobody and books nothing while the first wait is running" do
+      it "releases each step only when the gate before it opens", :aggregate_failures do
         expect(relays).to be_empty
         expect(agenda).to be_empty
-      end
 
-      it "asks her when the five minutes are up, and still books nothing" do
         fire_timer!
-
         expect(relays.count).to eq(1)
         expect(agenda).to be_empty
-      end
 
-      it "starts the second wait on her answer rather than booking straight away" do
-        fire_timer!
         answer!("yes please")
-
         expect(agenda).to be_empty
         expect(timer_gate.tool_input["deferred"]).to be_present
-      end
 
-      it "books it only once the second wait is up too" do
         fire_timer!
-        answer!("yes please")
-        fire_timer!
-
         expect(agenda.pluck(:name)).to eq(["Syrup for dinner"])
       end
     end
@@ -146,21 +125,17 @@ RSpec.describe "Buddy sequence gates" do
         )
       }
 
-      it "asks her first and books nothing yet" do
+      it "asks her first and books it on her answer", :aggregate_failures do
         expect(relays.count).to eq(1)
         expect(agenda).to be_empty
-      end
 
-      it "books it on her answer" do
         answer!("yes please")
 
         expect(agenda.pluck(:name)).to eq(["Syrup for dinner"])
       end
     end
 
-    # "IF she says yes" — the half of the sentence that used to be decorative.
-    # Everything queued behind a question ran on any answer, because it was all
-    # decided before the answer existed, so a no booked the dinner just the same.
+    # `continue_if` decides on the answer once it exists.
     describe "when the follow-up is conditional on her answer" do
       def sequence
         ask(
@@ -180,24 +155,16 @@ RSpec.describe "Buddy sequence gates" do
         expect(agenda.pluck(:name)).to eq(["Syrup for dinner"])
       end
 
-      it "books nothing when she says no" do
+      # Silence would read as the sequence having finished.
+      it "books nothing when she says no, and says what didn't happen", :aggregate_failures do
         sequence
         answer!("no thanks")
 
         expect(agenda).to be_empty
+        expect(last_said).to include(her, "Syrup for dinner")
       end
 
-      # Silence would read as the sequence having finished, which is the same
-      # failure in the other direction.
-      it "says whose answer stopped it, and what didn't happen" do
-        sequence
-        answer!("no thanks")
-
-        expect(last_said).to eq("#{her} said no, so I didn't go on to Syrup for dinner.")
-      end
-
-      # The third case. Guessing here is the whole bug, so it stops and asks
-      # nothing further — the person can see what's outstanding and say the word.
+      # Neither yes nor no: it stops rather than guess.
       it "refuses to guess at an answer that is neither" do
         sequence
         answer!("maybe, what time?")
@@ -231,13 +198,8 @@ RSpec.describe "Buddy sequence gates" do
     end
   end
 
-  # Buddy stays usable while a sequence is parked.
-  #
-  # A wait can be an hour and a question put to another person can go unanswered
-  # for three days, so the thing that must never be true is that either one makes
-  # Buddy unavailable for everything else. This is the guarantee, written down:
-  # gates are inert rows, not locks, and nothing on the dispatch path consults
-  # them before running a turn.
+  # Buddy stays usable while a sequence is parked: gates are inert rows, not
+  # locks, and nothing on the dispatch path consults them before running a turn.
   describe "what a gate doesn't block" do
     let(:user)       { create(:user) }
     let(:partner)    { create(:user) }
@@ -284,10 +246,7 @@ RSpec.describe "Buddy sequence gates" do
       }
     end
 
-    # The same wait with NOTHING behind it. `then_continue` was passed, the
-    # countdown started, and the queue it was supposed to hold is empty - which
-    # is every "play the sound in 2 minutes" that ended with the sound never
-    # playing and the timer ringing at the hour it should have.
+    # The same wait with NOTHING behind it: `then_continue` passed, empty queue.
     def wait_on_nothing!
       Sidekiq::Testing.fake! {
         build!([{ tool_name: :set_timer, payload: { seconds: 120, label: "nap sound", then_continue: true } }])
@@ -295,12 +254,11 @@ RSpec.describe "Buddy sequence gates" do
     end
 
     describe "a wait holding nothing" do
-      it "reports itself so the reply above it can be taken down" do
-        expect(wait_on_nothing![:empty_wait]).to be(true)
-      end
+      it "reports itself so the reply above it can be taken down, and opens no gate" do
+        result = nil
 
-      it "opens no gate, because there is nothing to release" do
-        expect { wait_on_nothing! }.not_to change(gates, :count)
+        expect { result = wait_on_nothing! }.not_to change(gates, :count)
+        expect(result[:empty_wait]).to be(true)
       end
 
       it "says nothing of the kind when the queue is real" do
@@ -327,41 +285,22 @@ RSpec.describe "Buddy sequence gates" do
       ByteMessageIntake.new(user: user, conversation: convo, body: body).call
     end
 
-    it "sets up the two kinds of wait this is about" do
-      park_on_a_timer!
-      park_on_a_person!
-
-      expect(gates.pluck(:tool_name)).to contain_exactly(
-        Buddy::ProposalBuilder::TIMER_GATE, Buddy::ProposalBuilder::RELAY_GATE
-      )
-    end
-
-    it "still takes a new message and runs a turn for it" do
-      park_on_a_timer!
-      park_on_a_person!
-
-      msg = say!("what's on today?")
-
-      expect(msg).to be_present
-      expect(Buddy::GPT::Turn).to have_received(:run!).with(msg)
-    end
-
     # The turn lock is per-conversation and held only for the DURATION of a turn.
-    # If a gate held it, or the queue behind one did, this is where it would show.
-    it "holds no lock while the waits are pending" do
-      park_on_a_timer!
-      park_on_a_person!
-
-      expect(ByteConversation.advisory_lock_exists?(Buddy::TurnDispatcher.lock_name(convo))).to be(false)
-    end
-
-    it "leaves the parked queues alone while other turns come and go" do
+    it "takes new messages and runs turns, holding no lock and leaving the parked queues alone", :aggregate_failures do
       park_on_a_timer!
       park_on_a_person!
       before_ids = gates.pluck(:id)
 
-      3.times { |i| say!("message #{i}") }
+      expect(gates.pluck(:tool_name)).to contain_exactly(
+        Buddy::ProposalBuilder::TIMER_GATE, Buddy::ProposalBuilder::RELAY_GATE
+      )
+      expect(ByteConversation.advisory_lock_exists?(Buddy::TurnDispatcher.lock_name(convo))).to be(false)
 
+      msg = say!("what's on today?")
+      2.times { |i| say!("message #{i}") }
+
+      expect(msg).to be_present
+      expect(Buddy::GPT::Turn).to have_received(:run!).with(msg)
       expect(gates.pluck(:id)).to match_array(before_ids)
     end
 

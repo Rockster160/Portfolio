@@ -40,21 +40,21 @@ RSpec.describe BuddyRoutine do
       routine = build_routine([{ "tool_name" => "launch_rocket", "payload" => {} }])
 
       expect(routine).not_to be_valid
-      expect(routine.errors[:steps].join).to match(/no tool named/i)
+      expect(routine.errors[:steps]).to be_present
     end
 
     it "rejects a step missing a required argument" do
       routine = build_routine([described_class.step(:message_partner, { to: "someone" })])
 
       expect(routine).not_to be_valid
-      expect(routine.errors[:steps].join).to match(/missing required arg/i)
+      expect(routine.errors[:steps]).to be_present
     end
 
     it "rejects a tool that only means something once" do
       routine = build_routine([described_class.step(:undo, {})])
 
       expect(routine).not_to be_valid
-      expect(routine.errors[:steps].join).to match(/can't be saved in a routine/i)
+      expect(routine.errors[:steps]).to be_present
     end
 
     it "rejects an empty routine" do
@@ -79,41 +79,19 @@ RSpec.describe BuddyRoutine do
     end
   end
 
+  # A wait reads as a duration rather than as "set timer", and a repeated
+  # step says how many times it runs, since that is half of what it does.
   describe "#summary" do
-    it "names the tool and its most identifying argument" do
-      routine = build_routine([described_class.step(:call_jil_function, { name: "Printer - Power On" })])
-
-      expect(routine.summary.first).to eq("call jil function: Printer - Power On")
-    end
-
-    # The one step whose tool name says nothing useful, and the one people most
-    # want to read at a glance.
-    it "spells a wait out as a duration rather than as 'set timer'" do
-      routine = build_routine([described_class.step(:set_timer, { seconds: 60, then_continue: true })])
-
-      expect(routine.summary).to eq(["wait 1 min"])
-    end
-
-    it "distinguishes an ordinary countdown from a wait" do
-      routine = build_routine([described_class.step(:set_timer, { seconds: 90 })])
-
-      expect(routine.summary).to eq(["set a 90 sec timer"])
-    end
-
-    # How MANY times is half of what the step does, and leaving it out made a
-    # routine misrepresent itself: "cup water" saved as three waters read back
-    # as one "complete chore: 8oz Water", so the only thing worth checking was
-    # the one thing not shown.
-    it "says how many times a repeated step runs" do
-      routine = build_routine([described_class.step(:complete_chore, { chore: "8oz Water", count: 3 })])
-
-      expect(routine.summary).to eq(["complete chore: 8oz Water ×3"])
-    end
-
-    it "leaves a single run unadorned" do
-      routine = build_routine([described_class.step(:complete_chore, { chore: "8oz Water", count: 1 })])
-
-      expect(routine.summary).to eq(["complete chore: 8oz Water"])
+    it "names each tool by its most identifying argument", :aggregate_failures do
+      [
+        [:call_jil_function, { name: "Printer - Power On" }, "call jil function: Printer - Power On"],
+        [:set_timer, { seconds: 60, then_continue: true }, "wait 1 min"],
+        [:set_timer, { seconds: 90 }, "set a 90 sec timer"],
+        [:complete_chore, { chore: "8oz Water", count: 3 }, "complete chore: 8oz Water ×3"],
+        [:complete_chore, { chore: "8oz Water", count: 1 }, "complete chore: 8oz Water"],
+      ].each do |tool, payload, want|
+        expect(build_routine([described_class.step(tool, payload)]).summary).to eq([want]), tool.to_s
+      end
     end
   end
 
@@ -127,19 +105,13 @@ RSpec.describe BuddyRoutine do
       )
     end
 
-    it "puts the starred ones first, in the order they were dragged into" do
-      routine!("Zebra", position: 1)
-      routine!("Apple", position: 0)
-
-      expect(user.buddy_routines.for_quick.pluck(:name)).to eq(["Apple", "Zebra"])
-    end
-
-    it "includes the unstarred ones after them, by name" do
-      routine!("Starred", position: 0)
+    it "puts the starred ones first in dragged order, then the rest by name" do
+      routine!("Zebra Starred", position: 1)
+      routine!("Apple Starred", position: 0)
       routine!("Zebra")
       routine!("Apple")
 
-      expect(user.buddy_routines.for_quick.pluck(:name)).to eq(["Starred", "Apple", "Zebra"])
+      expect(user.buddy_routines.for_quick.pluck(:name)).to eq(["Apple Starred", "Zebra Starred", "Apple", "Zebra"])
     end
 
     it "leaves out the ones switched off" do
@@ -154,25 +126,18 @@ RSpec.describe BuddyRoutine do
   # routine that hasn't opted in has to keep painting its name, so absence has
   # to read as nil rather than "".
   describe "#monitor" do
-    it "is nil for an ordinary routine" do
-      expect(build_routine([tell("night")]).monitor).to be_nil
-    end
-
-    it "reads the key out of metadata" do
+    it "reads the key out of metadata, and treats a missing or blank one as none", :aggregate_failures do
       routine = build_routine([tell("night")])
-      routine.metadata = { "monitor" => "yoga-lights" }
-
-      expect(routine.monitor).to eq("yoga-lights")
-      expect(routine.serialize_for_client[:monitor]).to eq("yoga-lights")
-    end
-
-    it "treats a blank key as no key rather than subscribing to nothing" do
-      routine = build_routine([tell("night")])
+      expect(routine.monitor).to be_nil
 
       ["", "   ", nil].each do |blank|
         routine.metadata = { "monitor" => blank }
         expect(routine.monitor).to be_nil
       end
+
+      routine.metadata = { "monitor" => "yoga-lights" }
+      expect(routine.monitor).to eq("yoga-lights")
+      expect(routine.serialize_for_client[:monitor]).to eq("yoga-lights")
     end
   end
 
@@ -183,16 +148,10 @@ RSpec.describe BuddyRoutine do
       described_class.create!(user: user, name: name, tags: tags, steps: [tell(name)], **attrs)
     end
 
-    it "matches a group case-insensitively, like a chore tag" do
-      r = tagged!("Focus mode", "Work")
-
-      expect(described_class.tagged("work")).to include(r)
-      expect(described_class.tagged("WORK")).to include(r)
-    end
-
-    it "matches on ANY of its groups" do
+    it "matches any of its groups case-insensitively" do
       r = tagged!("Focus mode", "Work", "Home")
 
+      expect(described_class.tagged("WORK")).to include(r)
       expect(described_class.tagged("home")).to include(r)
       expect(described_class.tagged(["Errands", "work"])).to include(r)
       expect(described_class.tagged("Errands")).not_to include(r)

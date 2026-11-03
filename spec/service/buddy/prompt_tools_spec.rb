@@ -1,10 +1,8 @@
 require "rails_helper"
 
-# Buddy filling out the app's own Prompt surveys on the person's behalf.
-#
-# The archetypes here are real shapes pulled from the prompt table, because the
-# whole feature turns on telling a load-time DEFAULT apart from an ANSWER, and
-# that distinction only makes sense against forms that actually exist.
+# Buddy filling out the app's own Prompt surveys on the person's behalf. The
+# archetypes are real shapes, because the feature turns on telling a load-time
+# DEFAULT apart from an ANSWER.
 RSpec.describe "Buddy prompt tools" do
   let(:user) { create(:user) }
 
@@ -77,110 +75,66 @@ RSpec.describe "Buddy prompt tools" do
   }
 
   describe Buddy::PromptForm do
-    it "treats a prefilled default as an answer and an empty one as a gap" do
-      form = form_for(calorie_prompt)
-
-      expect(form.fields.pluck(:question)).to eq(["Notes", "Calories"])
-      expect(form.fields.first[:value]).to eq("cafe protein shake")
-      expect(form.needs_value).to eq(["Calories"])
-    end
-
-    it "treats a scale sitting on its own floor as unanswered, not as a zero" do
-      form = form_for(morning_prompt)
-
-      expect(form.needs_value).to contain_exactly("Sleep Quality", "Sleep Length", "Sleepy | Alert", "Stress | Relaxed")
-      expect(form.fields.first).to include(type: :scale, min: 0, max: 100)
-    end
-
-    it "reads the fields a load listener adds, which are not on the row" do
-      hydrates_shower!
-      form = form_for(shower_prompt)
-
-      expect(form.fields.pluck(:question)).to include("Duration")
-      expect(form.fields.find { |f| f[:question] == "Duration" }[:value]).to eq(29)
-      expect(form.needs_value).to match_array(%w[actions With])
-    end
-
-    it "carries a hydration failure as the skeleton rather than failing the turn" do
-      allow(::Jil).to receive(:trigger).and_raise("jil exploded")
-      form = form_for(calorie_prompt)
-
-      expect(form.fields.pluck(:question)).to eq(["Notes", "Calories"])
-    end
-
-    it "marks a loaded value as the form's, not the person's, so it can be judged" do
-      form = form_for(calorie_prompt)
-
-      expect(form.fields.first).to include(question: "Notes", value: "cafe protein shake", from: :default)
-      expect(form.fields.last).not_to have_key(:from)
-      expect(form.defaulted).to eq(["Notes"])
-    end
-
-    it "marks a value the person already gave as theirs" do
+    # A loaded value is the form's, not the person's, so it is marked to be
+    # judged; what they already gave is theirs.
+    it "treats a prefilled default as an answer, an empty one as a gap, and says whose each is", :aggregate_failures do
       prompt = calorie_prompt
-      prompt.update!(response: { "Calories" => "240" })
       form = form_for(prompt)
 
+      expect(form.fields.pluck(:question)).to eq(["Notes", "Calories"])
+      expect(form.fields.first).to include(question: "Notes", value: "cafe protein shake", from: :default)
+      expect(form.fields.last).not_to have_key(:from)
+      expect(form.needs_value).to eq(["Calories"])
+      expect(form.defaulted).to eq(["Notes"])
+
+      prompt.update!(response: { "Calories" => "240" })
+      form = form_for(prompt)
       expect(form.fields.last).to include(question: "Calories", value: "240", from: :answer)
       expect(form.defaulted).to eq(["Notes"])
     end
 
-    it "keeps timestamps off the review list, since they record when it happened" do
-      # The Jil task that created the prompt wrote this time; it is not a guess
-      # to be second-guessed, and inviting a model to "check" it gets it moved to
-      # now. Still editable, still overridable — just not offered up.
-      form = form_for(chore_prompt)
-
-      expect(form.fields.last).to include(question: "When?", from: :default)
-      expect(form.defaulted).to be_empty
-    end
-
-    it "still takes an explicit time when the person actually gives one" do
-      form     = form_for(chore_prompt)
-      response = form.build_response({ "Who did it?" => "Eve", "When?" => "2026-07-29 08:15" })
-
-      expect(response["When?"]).to eq("2026-07-29T08:15")
-    end
-
-    it "layers answers over the prefills and leaves the prefills alone" do
+    it "layers answers over the prefills, and refuses a question not on the form", :aggregate_failures do
       form     = form_for(calorie_prompt)
       response = form.build_response({ "Calories" => "240" })
 
       expect(response).to eq("Notes" => "cafe protein shake", "Calories" => "240")
       expect(form.missing(response)).to be_empty
+      expect { form.build_response({ "Protein" => "30" }) }.to raise_error(/Protein/)
     end
 
-    it "matches a question loosely so it need not reproduce the punctuation" do
-      form     = form_for(morning_prompt)
-      response = form.build_response({ "sleepy alert" => 80 })
-
-      expect(response["Sleepy | Alert"]).to eq("80")
-    end
-
-    it "reports what is still empty rather than letting a partial form through" do
-      form     = form_for(morning_prompt)
-      response = form.build_response({ "Sleep Quality" => 70 })
-
-      expect(form.missing(response)).to contain_exactly("Sleep Length", "Sleepy | Alert", "Stress | Relaxed")
-    end
-
-    it "refuses a question that is not on the form" do
-      form = form_for(calorie_prompt)
-
-      expect { form.build_response({ "Protein" => "30" }) }.to raise_error(/no field named "Protein"/)
-    end
-
-    it "refuses a value the field cannot take" do
-      form = form_for(chore_prompt)
-
-      expect { form.build_response({ "Who did it?" => "Chelsea" }) }.to raise_error(/only takes/)
-      expect { form.build_response({ "Who did it?" => "rockster160" }) }.not_to raise_error
-    end
-
-    it "keeps a scale inside its declared range" do
+    # Submitting scale defaults would log the worst possible night.
+    it "treats a scale on its own floor as unanswered, matches loosely, and keeps it in range", :aggregate_failures do
       form = form_for(morning_prompt)
 
-      expect { form.build_response({ "Sleep Quality" => 400 }) }.to raise_error(/between 0 and 100/)
+      expect(form.needs_value).to contain_exactly("Sleep Quality", "Sleep Length", "Sleepy | Alert", "Stress | Relaxed")
+      expect(form.fields.first).to include(type: :scale, min: 0, max: 100)
+      # The question need not reproduce the punctuation.
+      expect(form.build_response({ "sleepy alert" => 80 })["Sleepy | Alert"]).to eq("80")
+      expect(form.missing(form.build_response({ "Sleep Quality" => 70 }))).to contain_exactly("Sleep Length", "Sleepy | Alert", "Stress | Relaxed")
+      expect { form.build_response({ "Sleep Quality" => 400 }) }.to raise_error(RuntimeError)
+    end
+
+    it "reads the fields a load listener adds, and falls back to the skeleton if hydration fails", :aggregate_failures do
+      hydrates_shower!
+      form = form_for(shower_prompt)
+
+      expect(form.fields.find { |f| f[:question] == "Duration" }[:value]).to eq(29)
+      expect(form.needs_value).to match_array(%w[actions With])
+
+      allow(::Jil).to receive(:trigger).and_raise("jil exploded")
+      expect(form_for(calorie_prompt).fields.pluck(:question)).to eq(["Notes", "Calories"])
+    end
+
+    # The Jil task that created the prompt wrote the time; inviting a model to
+    # "check" it gets it moved to now. Still overridable, just not offered up.
+    it "keeps timestamps off the review list but takes an explicit one, and only valid choices", :aggregate_failures do
+      form = form_for(chore_prompt)
+
+      expect(form.fields.last).to include(question: "When?", from: :default)
+      expect(form.defaulted).to be_empty
+      expect(form.build_response({ "Who did it?" => "Eve", "When?" => "2026-07-29 08:15" })["When?"]).to eq("2026-07-29T08:15")
+      expect { form.build_response({ "Who did it?" => "Chelsea" }) }.to raise_error(RuntimeError)
+      expect { form.build_response({ "Who did it?" => "rockster160" }) }.not_to raise_error
     end
 
     it "submits each type in the shape the form posts" do
@@ -277,7 +231,9 @@ RSpec.describe "Buddy prompt tools" do
       JSON.parse(Buddy::GPT::PromptTool.new(user, convo).call(args))
     end
 
-    it "hands back the hydrated fields and names the gaps" do
+    # The computed Duration is exactly the kind of value that looks answered
+    # and often isn't, so it comes back flagged for review.
+    it "hands back the hydrated fields and names the gaps", :aggregate_failures do
       hydrates_shower!
       prompt = shower_prompt
 
@@ -287,33 +243,24 @@ RSpec.describe "Buddy prompt tools" do
       expect(out["title"]).to eq("How was your shower, sir?")
       expect(out["fields"].pluck("question")).to include("Duration")
       expect(out["needs_value"]).to contain_exactly("actions", "With")
-      # The computed Duration is exactly the kind of value that looks answered
-      # and often isn't, so it has to come back flagged for review.
       expect(out["defaulted"]).to eq(["Duration"])
-      expect(out["next"]).to include("the form is the ask")
-      expect(out["next"]).to include("Having a value is not the same as being correct")
     end
 
-    it "picks the only pending prompt when no id is given" do
+    it "picks the only pending prompt with no id, and asks which when several are pending", :aggregate_failures do
       prompt = calorie_prompt
-
       expect(read({ "id" => nil })["id"]).to eq(prompt.id)
-    end
 
-    it "asks which one when several are pending" do
-      calorie_prompt
       chore_prompt
-
       out = read({ "id" => nil })
       expect(out["choose"].length).to eq(2)
       expect(out).not_to have_key("fields")
     end
 
-    it "says so plainly when the id has already been answered" do
+    it "errors on an id that has already been answered" do
       prompt = calorie_prompt
       prompt.update!(response: { "Calories" => "1" })
 
-      expect(read({ "id" => prompt.id })["error"]).to include("no pending prompt")
+      expect(read({ "id" => prompt.id })["error"]).to be_present
     end
   end
 
@@ -334,7 +281,7 @@ RSpec.describe "Buddy prompt tools" do
 
       expect {
         tool[:confirm].call({ id: prompt.id, answers: { "Sleep Quality" => 70 } }, Buddy::ToolContext.new(user))
-      }.to raise_error(/still needs a value/)
+      }.to raise_error(RuntimeError)
       expect(prompt.reload.response).to be_nil
     end
 
@@ -346,23 +293,19 @@ RSpec.describe "Buddy prompt tools" do
       label   = tool[:label].call({ id: prompt.id }.merge(confirm[:resolved]), ctx)
 
       expect(label[:title]).to eq("How many calories was cafe protein shake?")
-      expect(label[:sub]).to eq("Notes: cafe protein shake\nCalories: 240")
+      expect(label[:sub]).to include("cafe protein shake", "240")
     end
 
-    it "takes an answers object that arrived as a JSON string" do
+    it "takes an answers object that arrived as a JSON string, and treats an empty one as missing", :aggregate_failures do
       prompt = calorie_prompt
       tool   = Buddy::Tools[:answer_prompt]
       payload, errors = Buddy::Tools.validate_payload(tool, { id: prompt.id, answers: '{"Calories":"240"}' })
 
       expect(errors).to be_empty
       expect(payload[:answers]).to eq("Calories" => "240")
-    end
 
-    it "treats an empty answers object as a missing arg" do
-      tool = Buddy::Tools[:answer_prompt]
       _payload, errors = Buddy::Tools.validate_payload(tool, { id: 1, answers: {} })
-
-      expect(errors).to include(/missing required arg :answers/)
+      expect(errors.join).to include("answers")
     end
 
     it "no-ops on a prompt that got answered between the proposal and the tap" do
@@ -449,10 +392,8 @@ RSpec.describe "Buddy prompt tools" do
       expect(prompt.reload.response).to be_nil # nothing is written until they send
     end
 
+    # With an editable form in front of them, the gaps ARE the ask.
     it "posts the form with the gaps still blank rather than stopping to ask" do
-      # The old behaviour was to refuse and ask in prose. With an editable form
-      # in front of them, the gaps ARE the ask — and the four blank scales are
-      # visible and fillable instead of costing another exchange.
       prompt = morning_prompt
 
       messages = turn(

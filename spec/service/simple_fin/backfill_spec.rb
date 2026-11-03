@@ -79,53 +79,25 @@ RSpec.describe SimpleFin::Backfill do
       expect(described_class.call.status).to eq(:idle)
     end
 
-    it "asks for the window just before the oldest transaction held" do
+    # Each window overlaps the one already covered, because a transaction can
+    # post days after it was made; and none exceeds the Bridge's cap, since the
+    # client raises above it and that would abort the whole walk.
+    it "walks back a window per run from the oldest transaction held, overlapping and within the cap", :aggregate_failures do
       transaction("TRN-A", anchor)
       requests = stub_fetch(created: 3)
 
       described_class.call
-
       expect(requests.length).to eq(1)
       expect(requests.first[:start_date].to_date).to eq((anchor - 87.days).to_date)
       expect(requests.first[:end_date].to_date).to eq((anchor + 3.days).to_date)
-    end
+      expect(requests.first[:end_date] - requests.first[:start_date]).to eq(90.days)
 
-    # A transaction can post days after it was made, landing inside a window
-    # already fetched. Exactly-adjacent windows would step over it.
-    it "overlaps the window it already covered" do
-      transaction("TRN-A", anchor)
-      requests = stub_fetch(created: 3)
-
-      described_class.call
-      span = requests.first[:end_date] - requests.first[:start_date]
-
-      expect(requests.first[:end_date]).to be > anchor
-      expect(span).to eq(90.days)
-    end
-
-    # The client raises above 90 days, so a window that drifted over the cap
-    # would abort the whole walk rather than fetch less.
-    it "never asks for more than the Bridge allows" do
-      transaction("TRN-A", anchor)
-      requests = stub_fetch(created: 1)
-
-      3.times { described_class.call }
-
+      2.times { described_class.call }
+      expect(requests.length).to eq(3)
+      expect(requests.second[:start_date].to_date).to eq((anchor - 174.days).to_date)
       expect(requests).to all(satisfy { |args|
         (args[:end_date] - args[:start_date]) <= SimpleFin::Client::MAX_RANGE_DAYS.days
       })
-    end
-
-    it "walks a further window back on the next run" do
-      transaction("TRN-A", anchor)
-      requests = stub_fetch(created: 3)
-
-      described_class.call
-      described_class.call
-
-      expect(requests.length).to eq(2)
-      expect(requests.second[:start_date]).to be < requests.first[:start_date]
-      expect(requests.second[:start_date].to_date).to eq((anchor - 174.days).to_date)
     end
 
     # The cursor is the oldest date ASKED for, not the oldest row held. An
@@ -324,21 +296,14 @@ RSpec.describe SimpleFin::Backfill do
     end
 
     # Full wherever it finished. "Complete" means nothing older exists, not
-    # that the floor was reached — a walk that runs dry in 2019 still fills.
-    it "fills completely once finished, even short of the floor" do
-      transaction("TRN-A", anchor)
-      stub_fetch(created: 0)
-      3.times { described_class.call }
-
-      expect(described_class.progress.percent).to eq(100)
-    end
-
-    it "has none remaining once finished" do
+    # that the floor was reached: a walk that runs dry in 2019 still fills.
+    it "fills completely with none remaining once finished, even short of the floor" do
       transaction("TRN-A", anchor)
       stub_fetch(created: 0)
       3.times { described_class.call }
 
       progress = described_class.progress
+      expect(progress.percent).to eq(100)
       expect(progress.done).to be(true)
       expect(progress.windows_remaining).to be_zero
     end

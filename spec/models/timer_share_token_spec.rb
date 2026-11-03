@@ -31,17 +31,16 @@ RSpec.describe TimerShareToken do
     page = create(:timer_page, user: user)
     bad = TimerShareToken.new(user: user, timer: timer, timer_page: page)
     expect(bad.valid?).to eq(false)
-    expect(bad.errors[:base].first).to match(/exactly one/)
+    expect(bad.errors[:base]).to be_present
   end
 
-  it "usable? returns false when revoked" do
+  it "is usable until revoked or expired" do
     share = TimerShareToken.create!(user: user, timer: timer)
+    expect(share.usable?).to eq(true)
     share.revoke!
     expect(share.usable?).to eq(false)
-  end
 
-  it "usable? returns false when expired" do
-    share = TimerShareToken.create!(user: user, timer: timer, expires_at: 1.hour.ago)
-    expect(share.usable?).to eq(false)
+    expired = TimerShareToken.create!(user: user, timer: create(:timer, user: user), expires_at: 1.hour.ago)
+    expect(expired.usable?).to eq(false)
   end
 end

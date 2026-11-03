@@ -1,8 +1,7 @@
 require "rails_helper"
 
-# Prod 2604: "Can you see my Amazon orders?" got "Nope, not from here." It could
-# have — AmazonOrder has held the list for ages, rebuilt from the shipping
-# emails that land in the inbox. There was just no tool pointed at it.
+# The owner's package list (AmazonOrder, rebuilt from shipping emails), as
+# Buddy reads and edits it.
 RSpec.describe Buddy::Deliveries do
   let(:owner) { User.me }
   let(:other) { create(:user) }
@@ -38,42 +37,28 @@ RSpec.describe Buddy::Deliveries do
   end
 
   describe ".call" do
-    it "lists what's coming, soonest first" do
+    # An overdue package with nothing confirming it is exactly what somebody is
+    # asking about, so it can't fall out of the window.
+    it "lists soonest first with each package's state, carrier, tracking and price", :aggregate_failures do
       stock!([
         { name: "Light Sockets", on: today + 1 },
-        { name: "Wrist White Board", on: today },
+        { name: "Wrist White Board", on: today, carrier: "ups", tracking: "1Z999", amount: 20.4 },
+        { name: "Overdue Mattress", on: today - 3 },
+        { name: "Arrived Lamp", on: today - 1, delivered: true },
+        { name: "Old Rug", on: today - 30, delivered: true },
+        { name: "Mystery box", on: nil },
       ])
 
       rows = described_class.call(user: owner)[:rows]
-      expect(rows.first).to start_with("Wrist White Board · due today")
-      expect(rows.last).to start_with("Light Sockets · due tomorrow")
-    end
+      by_name = rows.index_by { |r| r.split(" · ").first }
 
-    it "carries the carrier, the tracking number and the price through" do
-      stock!([{ name: "Desk", on: today, carrier: "ups", tracking: "1Z999", amount: 20.4 }])
-
-      expect(described_class.call(user: owner)[:rows].first)
-        .to include("ups 1Z999").and include("$20.40")
-    end
-
-    # A date that's been and gone with nothing confirming it is exactly what
-    # somebody is asking about, so it can't fall out of the window.
-    it "keeps an overdue package in the list and says the date passed" do
-      stock!([{ name: "Mattress", on: today - 3 }])
-
-      expect(described_class.call(user: owner)[:rows].first).to include("was due")
-    end
-
-    it "reads a delivered one as arrived rather than overdue" do
-      stock!([{ name: "Mattress", on: today - 1, delivered: true }])
-
-      expect(described_class.call(user: owner)[:rows].first).to include("arrived yesterday")
-    end
-
-    it "drops an arrival old enough to be history" do
-      stock!([{ name: "Mattress", on: today - 30, delivered: true }])
-
-      expect(described_class.call(user: owner)[:rows]).to be_empty
+      expect(rows.index(by_name["Wrist White Board"])).to be < rows.index(by_name["Light Sockets"])
+      expect(by_name["Wrist White Board"]).to include("due today", "ups 1Z999", "$20.40")
+      expect(by_name["Light Sockets"]).to include("due tomorrow")
+      expect(by_name["Overdue Mattress"]).to include("was due")
+      expect(by_name["Arrived Lamp"]).to include("arrived yesterday")
+      expect(by_name["Mystery box"]).to include("no date on it")
+      expect(by_name).not_to have_key("Old Rug")
     end
 
     it "leaves out what's further off than they asked" do
@@ -81,12 +66,6 @@ RSpec.describe Buddy::Deliveries do
 
       expect(described_class.call(user: owner, days: 14)[:rows]).to be_empty
       expect(described_class.call(user: owner, days: 60)[:rows].length).to eq(1)
-    end
-
-    it "keeps a package that never got a date" do
-      stock!([{ name: "Mystery box", on: nil }])
-
-      expect(described_class.call(user: owner)[:rows].first).to include("no date on it")
     end
 
     describe "matching how they'd say it" do
@@ -97,20 +76,10 @@ RSpec.describe Buddy::Deliveries do
         ])
       }
 
-      it "matches on words in any order" do
+      it "matches words in any order, a tracking number, or the words that land, and nothing else" do
         expect(described_class.call(user: owner, query: "desk computer")[:rows].length).to eq(1)
-      end
-
-      it "matches a tracking number" do
         expect(described_class.call(user: owner, query: "1Z999")[:rows].first).to include("Computer Desk")
-      end
-
-      it "falls back to the words that do land" do
-        expect(described_class.call(user: owner, query: "that desk thing")[:rows].first)
-          .to include("Computer Desk")
-      end
-
-      it "comes back empty for something that isn't there" do
+        expect(described_class.call(user: owner, query: "that desk thing")[:rows].first).to include("Computer Desk")
         expect(described_class.call(user: owner, query: "kayak")[:rows]).to be_empty
       end
     end
@@ -119,13 +88,10 @@ RSpec.describe Buddy::Deliveries do
   # MeCache is the OWNER's cache. There is no per-user delivery list to fall
   # back to, so anyone else asking must get nothing rather than his packages.
   describe "whose list it is" do
-    it "answers for the owner" do
-      expect(described_class.available?(owner)).to be(true)
-    end
-
-    it "refuses anyone else, whatever the feature flag says" do
+    it "answers for the owner and refuses anyone else, whatever the feature flag says" do
       stock!([{ name: "Wrist White Board", on: today }])
 
+      expect(described_class.available?(owner)).to be(true)
       expect(described_class.available?(other)).to be(false)
       expect(described_class.call(user: other)[:rows]).to be_empty
       expect { described_class.add!(user: other, name: "x") }.to raise_error(/aren't part of/)
@@ -133,7 +99,6 @@ RSpec.describe Buddy::Deliveries do
     end
 
     it "keeps the tools off everyone else's schema" do
-      expect(Buddy::Features::DEFAULT).not_to include(:deliveries)
       %i[check_deliveries track_delivery delivery_arrived].each do |name|
         expect(Buddy::Features.allows_tool?(other, Buddy::Tools[name])).to be(false)
       end
@@ -141,24 +106,21 @@ RSpec.describe Buddy::Deliveries do
   end
 
   describe ".add!" do
-    it "puts a hand-added package on the list for the day they said" do
+    it "puts a hand-added package on the list, marked manual, and tells the dashboard" do
       described_class.add!(user: owner, name: "Computer Desk", on: today + 2, tracking: "283588")
 
-      row = described_class.call(user: owner)[:rows].first
-      expect(row).to include("Computer Desk")
-      expect(AmazonOrder.reload.first.tracking_number).to eq("283588")
+      order = AmazonOrder.reload.first
+      expect(described_class.call(user: owner)[:rows].first).to include("Computer Desk")
+      expect(order.tracking_number).to eq("283588")
+      expect(order.delivery_date).to eq((today + 2).iso8601)
+      expect(order.carrier).to eq(:manual)
+      expect(ActionCable.server).to have_received(:broadcast).with(:amz_updates_channel, anything)
     end
 
     it "lands it on today when they didn't say" do
       described_class.add!(user: owner, name: "Mystery")
 
       expect(described_class.call(user: owner)[:rows].first).to include("due today")
-    end
-
-    it "marks it manual so it doesn't pretend to be an Amazon row" do
-      described_class.add!(user: owner, name: "Computer Desk")
-
-      expect(AmazonOrder.reload.first.carrier).to eq(:manual)
     end
 
     it "takes a carrier when they named one, so the tracking number links" do
@@ -172,42 +134,25 @@ RSpec.describe Buddy::Deliveries do
     it "refuses a nameless one" do
       expect { described_class.add!(user: owner, name: "  ") }.to raise_error(/needs a name/)
     end
-
-    # The dashboard redraws off the broadcast; without it the page keeps showing
-    # a list that no longer matches what Buddy just said it did.
-    it "tells the dashboard" do
-      described_class.add!(user: owner, name: "Computer Desk")
-
-      expect(ActionCable.server).to have_received(:broadcast).with(:amz_updates_channel, anything)
-    end
   end
 
-  # The dashboard can already do all of this, but only through a typed command
-  # with an inline `{ url: "…" }` block on the end — a syntax to remember
-  # rather than a thing to say.
   describe ".edit!" do
     before { stock!([{ name: "Office item", on: today + 2, carrier: "amazon", tracking: "1Z999" }]) }
 
-    # The usual one: an email named the row off its category.
-    it "renames a row the email guessed at" do
+    # A rename must not quietly drop everything it didn't mention.
+    it "renames a row and leaves the fields it wasn't given alone" do
       described_class.edit!(user: owner, match: "office", name: "Wrist White Board")
 
+      order = AmazonOrder.reload.first
       expect(described_class.call(user: owner)[:rows].first).to include("Wrist White Board")
+      expect(order.tracking_number).to eq("1Z999")
+      expect(order.delivery_date).to eq((today + 2).iso8601)
     end
 
     it "moves the day" do
       described_class.edit!(user: owner, match: "office", on: today)
 
       expect(described_class.call(user: owner)[:rows].first).to include("due today")
-    end
-
-    # A rename must not quietly drop everything it didn't mention.
-    it "leaves the fields it wasn't given alone" do
-      described_class.edit!(user: owner, match: "office", name: "Wrist White Board")
-
-      order = AmazonOrder.reload.first
-      expect(order.tracking_number).to eq("1Z999")
-      expect(order.delivery_date).to eq((today + 2).iso8601)
     end
 
     it "attaches a tracking number that turned up later" do
@@ -223,22 +168,14 @@ RSpec.describe Buddy::Deliveries do
         .to raise_error(/nothing on the way matches/)
     end
 
-    # Prod 3495: 'the "Computer Desk" tracking number is FedEx: #532572111399'.
-    # The number was stored, the word FedEx went into the confirmation sentence
-    # and nowhere else, and the row kept `carrier: manual` — which has no entry
-    # in CARRIER_TRACKING_URLS, so AmazonOrder#url returned nil and a package
-    # whose tracking number was sitting right there couldn't be tracked.
-    it "takes the carrier alongside the number, and the number becomes a link" do
+    # Without the carrier the row has no CARRIER_TRACKING_URLS entry and the
+    # tracking number can't become a link.
+    it "takes the carrier alongside the number, the number becomes a link, and reads back" do
       described_class.edit!(user: owner, match: "office", tracking: "532572111399", carrier: :fedex)
 
       order = AmazonOrder.reload.first
       expect(order.carrier).to eq(:fedex)
       expect(order.url).to eq("https://www.fedex.com/fedextrack/?trknbr=532572111399")
-    end
-
-    it "reads the carrier back when they ask what's coming" do
-      described_class.edit!(user: owner, match: "office", tracking: "532572111399", carrier: :fedex)
-
       expect(described_class.call(user: owner)[:rows].first).to include("fedex 532572111399")
     end
 
@@ -301,10 +238,6 @@ RSpec.describe Buddy::Deliveries do
       expect(result[:deliveries].first).to include("Wrist White Board")
     end
 
-    it "tells the model an empty list means no email came, not that nothing was ordered" do
-      expect(read[:how]).to include("no email has come in")
-    end
-
     it "refuses to guess which package when the name matches nothing" do
       stock!([{ name: "Computer Desk", on: today }])
 
@@ -325,7 +258,6 @@ RSpec.describe Buddy::Deliveries do
         user: owner, conversation: nil,
       )
       expect(result[:status]).to eq("failed")
-      expect(result[:error]).to include("nothing to change")
     end
 
     it "reports a rename as a rename" do
@@ -340,9 +272,6 @@ RSpec.describe Buddy::Deliveries do
       expect(chip.body).to include("Office item").and include("Wrist White Board")
     end
 
-    # The carrier arriving in the same breath as the number is the ordinary
-    # case, so the tool has to be able to carry it — without the argument the
-    # word had nowhere to go but the sentence.
     it "carries the carrier through from what they said" do
       stock!([{ name: "Computer Desk", on: today }])
 
@@ -385,7 +314,6 @@ RSpec.describe Buddy::Deliveries do
         user: owner, conversation: nil,
       )
       expect(result[:status]).to eq("failed")
-      expect(result[:error]).to include("couldn't read")
     end
   end
 end

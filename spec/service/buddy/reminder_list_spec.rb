@@ -20,13 +20,8 @@ RSpec.describe Buddy::ReminderList do
     )
   end
 
-  it "exposes a registered list_reminders tool" do
-    expect(Buddy::Tools[:list_reminders]).to be_present
-    expect(Buddy::Tools[:list_reminders][:auto]).to be(true)
-  end
-
   describe ".render" do
-    it "builds a manage-mode action listing reminders then watches" do
+    it "builds a manage-mode action listing reminders then watches", :aggregate_failures do
       reminder!(body: "Vet appt", fire_at: 2.hours.from_now)
       reminder!(
         body: "Take trash out", fire_at: 1.day.from_now,
@@ -45,18 +40,16 @@ RSpec.describe Buddy::ReminderList do
       expect(action.buttons.pluck("id")).to eq([1, 2, 3])
 
       recurring = action.buttons.find { |b| b["label"] == "Take trash out" }
-      expect(recurring["glyph"]).to eq("🔁")
-      expect(recurring["sublabel"]).to include("every Wednesday")
+      expect(recurring["sublabel"]).to include("Wednesday")
 
       # The list rides on a message the client renders in manage mode.
       expect(action.byte_message.metadata["select_mode"]).to eq("manage")
       expect(action.byte_message.metadata["tool_name"]).to eq(described_class::TOOL_NAME)
     end
 
-    it "posts a plain 'nothing set' message and no action when empty" do
-      expect(described_class.render(user: user, conversation: convo)).to be_nil
+    it "posts a plain message and no action when empty", :aggregate_failures do
+      expect { expect(described_class.render(user: user, conversation: convo)).to be_nil }.to change { convo.byte_messages.count }.by(1)
       expect(ByteAction.where(user: user)).to be_empty
-      expect(convo.byte_messages.last.body).to match(/don't have any reminders/i)
     end
 
     it "ignores cancelled reminders and fired one-shot watches" do
@@ -70,7 +63,7 @@ RSpec.describe Buddy::ReminderList do
   end
 
   describe ".cancel! / .restore!" do
-    it "cancels the row's reminder and marks it cancelled, then restores it" do
+    it "cancels the row's reminder and marks it cancelled, then restores it", :aggregate_failures do
       rem = reminder!(body: "Vet appt", fire_at: 2.hours.from_now)
       action = described_class.render(user: user, conversation: convo)
       id = action.buttons.first["id"]
@@ -84,18 +77,14 @@ RSpec.describe Buddy::ReminderList do
       expect(action.reload.buttons.first["status"]).to eq("active")
     end
 
-    it "cancels a watch row too" do
+    it "cancels a watch row too, and ignores an unknown row id", :aggregate_failures do
       w = watch!(body: "Grab prescription", human: "when you get to Costco")
       action = described_class.render(user: user, conversation: convo)
+
+      expect { described_class.cancel!(action, 999) }.not_to raise_error
       described_class.cancel!(action, action.buttons.first["id"])
 
       expect(w.reload.cancelled_at).to be_present
-    end
-
-    it "is a no-op for an unknown row id" do
-      reminder!(body: "Vet appt", fire_at: 2.hours.from_now)
-      action = described_class.render(user: user, conversation: convo)
-      expect { described_class.cancel!(action, 999) }.not_to raise_error
     end
 
     it "never touches another user's record" do

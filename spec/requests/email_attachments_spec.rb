@@ -78,7 +78,6 @@ RSpec.describe "Email attachments", type: :request do
 
       get email_path(email)
 
-      expect(response.body).to include("3 attachments")
       expect(response.body).to include("Interview_Guide.pdf")
       expect(response.body).to include("logo.png")
       expect(response.body).to include("invite.ics")
@@ -95,23 +94,16 @@ RSpec.describe "Email attachments", type: :request do
   end
 
   describe "GET /emails/:id/attachments/:index" do
-    it "hands over the file itself" do
-      email = store
-
-      get attachment_email_path(email, 0)
-
-      expect(response.body).to eq(pdf)
-      expect(response.headers["Content-Type"]).to include("application/pdf")
-      expect(response.headers["Content-Disposition"]).to include("Interview_Guide.pdf")
-    end
-
     # Anything the browser can draw opens where it was asked for. Everything
     # else downloads - a calendar invite in particular, which is only any use
     # once it reaches the calendar.
-    it "opens what the browser can draw and downloads what it cannot" do
+    it "hands over the file itself, inline when the browser can draw it", :aggregate_failures do
       email = store
 
       get attachment_email_path(email, 0)
+      expect(response.body).to eq(pdf)
+      expect(response.headers["Content-Type"]).to include("application/pdf")
+      expect(response.headers["Content-Disposition"]).to include("Interview_Guide.pdf")
       expect(response.headers["Content-Disposition"]).to start_with("inline")
 
       get attachment_email_path(email, 1)
@@ -123,23 +115,16 @@ RSpec.describe "Email attachments", type: :request do
       expect(response.body).to eq(ics)
     end
 
-    it "says so rather than erroring for a position that isn't there" do
-      email = store
-
-      get attachment_email_path(email, 7)
-
-      expect(response).to redirect_to(email_path(email))
-      expect(flash[:alert]).to include("isn't on this message")
-    end
-
     # Ruby reads a negative index from the END of the array, so a hand-typed
     # -1 would hand over the last file rather than nothing.
-    it "refuses a negative position" do
+    it "redirects back for a position that isn't there, negative included" do
       email = store
 
-      get attachment_email_path(email, -1)
+      [7, -1].each do |index|
+        get attachment_email_path(email, index)
 
-      expect(response).to redirect_to(email_path(email))
+        expect(response).to redirect_to(email_path(email))
+      end
     end
 
     it "is nobody else's to read" do

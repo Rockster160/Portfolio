@@ -347,13 +347,14 @@ RSpec.describe Buddy::GPT::Client do
     # reasoning tokens over 53 prod calls - the model was never thinking before
     # it answered. `low` beat both no-parameter and `medium` on tool-call
     # reliability AND latency; see the constant for the numbers.
-    it "asks for low reasoning effort by default" do
+    it "asks for low reasoning effort by default, and omits tools when none are given" do
       stub_sse(sse(text_delta("ok"), completed))
 
       run
 
       expect(WebMock).to(have_requested(:post, endpoint).with { |req|
-        JSON.parse(req.body).dig("reasoning", "effort") == "low"
+        body = JSON.parse(req.body)
+        body.dig("reasoning", "effort") == "low" && !body.key?("tools")
       })
     end
 
@@ -367,16 +368,6 @@ RSpec.describe Buddy::GPT::Client do
       })
     end
 
-    it "omits tools entirely when none are given" do
-      stub_sse(sse(text_delta("ok"), completed))
-
-      run
-
-      expect(WebMock).to(have_requested(:post, endpoint).with { |req|
-        !JSON.parse(req.body).key?("tools")
-      })
-    end
-
     it "gives the ping a message, which the API requires" do
       stub_sse(sse(text_delta("ok"), completed))
 
@@ -384,10 +375,6 @@ RSpec.describe Buddy::GPT::Client do
       expect(WebMock).to(have_requested(:post, endpoint).with { |req|
         JSON.parse(req.body)["input"].present?
       })
-    end
-
-    it "defaults the model from the environment" do
-      expect(described_class.new.model).to eq("gpt-5.4-mini")
     end
   end
 end

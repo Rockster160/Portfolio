@@ -8,19 +8,7 @@ RSpec.describe Jil::Methods::Contact, type: :service do
   describe ".tags binding" do
     before { contact.tags << tag }
 
-    it "returns the contact's tag names via Jil" do
-      ctx = Jil::Executor.call(user,
-        <<~'JIL',
-          c = Contact.find("Target")::Contact
-          t = c.tags()::Array
-          *out = Global.ref(t)::Array
-        JIL
-      )
-
-      expect(ctx.ctx[:vars][:t][:value]).to eq(["store"])
-    end
-
-    it "Array.include? works against contact tags" do
+    it "returns the contact's tag names, which Array.include? reads" do
       ctx = Jil::Executor.call(user,
         <<~'JIL',
           c = Contact.find("Target")::Contact
@@ -29,6 +17,7 @@ RSpec.describe Jil::Methods::Contact, type: :service do
         JIL
       )
 
+      expect(ctx.ctx[:vars][:t][:value]).to eq(["store"])
       expect(ctx.ctx[:vars][:is_store][:value]).to be(true)
     end
   end

@@ -4,14 +4,8 @@ require "rails_helper"
 # Whisper's events.
 #
 # Every one of her events is an ActionEvent on the OWNER's account, and
-# WatchMatcher only ever looks at watches belonging to the user whose trigger
-# fired. So a watch filed under whoever asked is armed, listed, and dead - the
-# exact failure a watch must not have, because it's indistinguishable from a
-# condition that hasn't happened yet.
-#
-# Same shape and same fix as the agenda-owner case in cross_user_watch_spec:
-# own it by the person the trigger reaches, and route the telling back through
-# notify_user.
+# WatchMatcher only looks at watches belonging to the user whose trigger fired,
+# so the watch is owned by him and tells the asker through notify_user.
 RSpec.describe "Buddy watching Whisper" do
   let(:rocco) { create(:user) }
   let(:eve)   { create(:user, username: "Eve") }
@@ -68,50 +62,33 @@ RSpec.describe "Buddy watching Whisper" do
   end
 
   describe "which state" do
-    {
-      "up"      => "Up",
-      "nap"     => "Nap",
-      "bedtime" => "Sleep",
-      "home"    => "Home",
-      "out"     => "Gone",
-    }.each { |target, notes|
-      it "watches the #{notes} event for #{target.inspect}" do
-        watch, = set_watch(eve, eve_convo, target)
-        expect(watch.listener).to end_with("notes::#{notes}")
-      end
-    }
-
-    it "takes the words people actually use" do
-      expect(set_watch(eve, eve_convo, "wakes up").first.listener).to end_with("notes::Up")
-      expect(set_watch(eve, eve_convo, "naptime").first.listener).to end_with("notes::Nap")
-      expect(set_watch(eve, eve_convo, "comes home").first.listener).to end_with("notes::Home")
+    it "maps each state, and the words people use for it, to its event note", :aggregate_failures do
+      {
+        "up"            => "Up",
+        "nap"           => "Nap",
+        "bedtime"       => "Sleep",
+        "home"          => "Home",
+        "out"           => "Gone",
+        "wakes up"      => "Up",
+        "naptime"       => "Nap",
+        "comes home"    => "Home",
+        "for the night" => "Sleep",
+        "overnight"     => "Sleep",
+      }.each { |target, notes|
+        expect(set_watch(eve, eve_convo, target).first.listener).to end_with("notes::#{notes}"), target
+      }
     end
 
-    it "reads the words that can only be the night" do
-      expect(set_watch(eve, eve_convo, "for the night").first.listener).to end_with("notes::Sleep")
-      expect(set_watch(eve, eve_convo, "overnight").first.listener).to end_with("notes::Sleep")
-    end
+    # "Down" or "bed" is a nap as often as bedtime, and guessing silently sets
+    # a watch that fires at the wrong end of the day. "nap" and "bedtime",
+    # the answers it asks for, resolve above.
+    it "asks which one rather than guessing at a word that could be either", :aggregate_failures do
+      ctx = Buddy::ToolContext.new(eve, conversation: eve_convo)
 
-    # She goes "down" for a nap at two and "down" for the night at nine, and
-    # "goes to bed" about the nap is the commoner of the two. Picking either one
-    # silently sets a watch that fires at the wrong end of the day - or eight
-    # hours late - and from outside that looks like a dog who didn't go to
-    # sleep, not like a watch that was filed wrong.
-    ["down", "goes down", "sleep", "asleep", "goes to sleep", "bed", "goes to bed"].each { |word|
-      it "asks which one rather than guessing at #{word.inspect}" do
-        ctx = Buddy::ToolContext.new(eve, conversation: eve_convo)
-
+      ["down", "goes down", "sleep", "asleep", "goes to sleep", "bed", "goes to bed"].each { |word|
         expect { tool[:confirm].call({ text: "x", trigger: :whisper, target: word }, ctx) }
-          .to raise_error(/nap as often as it's her bedtime.*Never pick one silently/m)
-      end
-    }
-
-    # The ask is answerable: the words it tells the model to come back with are
-    # the ones that resolve. An ambiguity check that rejected its own remedy
-    # would loop the conversation forever.
-    it "accepts the two answers it asks for" do
-      expect(set_watch(eve, eve_convo, "nap").first.listener).to end_with("notes::Nap")
-      expect(set_watch(eve, eve_convo, "bedtime").first.listener).to end_with("notes::Sleep")
+          .to raise_error(/bedtime/), word
+      }
     end
 
     it "lists the real states when handed something else" do
@@ -122,9 +99,7 @@ RSpec.describe "Buddy watching Whisper" do
     end
   end
 
-  # The reason this isn't the plain `event` trigger: every one of her events is
-  # named "Whisper" and only the notes say which. An `event` watch on the name
-  # would fire on pees, walks, baths and dinners too.
+  # Every one of her events is named "Whisper" and only the notes say which.
   describe "what it matches" do
     it "fires on her waking up and nothing else she does" do
       watch, = set_watch(eve, eve_convo, "up")

@@ -40,13 +40,7 @@ RSpec.describe "schedule_reminder anchored to what's coming up" do
     expect(reminder.anchor).to eq("agenda:interview-30m")
     expect(reminder.kind).to eq("prompt")
     expect(reminder).to be_recurring
-  end
-
-  it "creates the key, because the key is the subscription" do
-    interview!
-
-    ask(text: "Read up on them", anchor: "agenda:interview-30m")
-
+    # The key is the subscription.
     expect(Anchor.keys_for(user)).to include("agenda:interview")
   end
 
@@ -85,41 +79,18 @@ RSpec.describe "schedule_reminder anchored to what's coming up" do
     expect(reminder.reload.fire_at).to be_within(1.second).of(noon + 2.hours + 30.minutes)
   end
 
-  # The row used to show the minute it currently worked out to, which is a true
-  # sentence about the wrong thing: it reads as a one-off on Thursday, where
-  # what is set is every interview there will ever be.
-  describe "how it reads in the list" do
-    def row_for(reminder)
-      Buddy::ReminderPresenter.rows(user, include_off: true).find { |r| r[:record_id] == reminder.id }
-    end
+  # There is no clock to edit, and a repeat editor over the top of an anchor
+  # is an invitation to overwrite it.
+  it "hands the reminders-list editor no time and no repeat rule", :aggregate_failures do
+    interview!
+    ask(text: "Read up on them", anchor: "agenda:interview-30m")
 
-    it "says the rule, with the time it works out to after it" do
-      interview!
-      ask(text: "Read up on them", anchor: "agenda:interview-30m")
-
-      row = row_for(BuddyReminder.where(user: user).last)
-      expect(row[:sublabel]).to start_with("30 minutes before the next interview")
-      expect(row[:sublabel]).to include("next")
-    end
-
-    it "still reads as something that is set when nothing is booked" do
-      ask(text: "Read up on them", anchor: "agenda:interview-30m")
-
-      row = row_for(BuddyReminder.where(user: user).last)
-      expect(row[:sublabel]).to eq("30 minutes before the next interview · nothing on it yet")
-    end
-
-    # There is no clock to edit, and a repeat editor over the top of an anchor
-    # is an invitation to overwrite it.
-    it "hands the editor no time and no repeat rule" do
-      interview!
-      ask(text: "Read up on them", anchor: "agenda:interview-30m")
-
-      row = row_for(BuddyReminder.where(user: user).last)
-      expect(row[:at]).to be_nil
-      expect(row[:anchored]).to be(true)
-      expect(row[:freq]).to be_nil
-    end
+    reminder = BuddyReminder.where(user: user).last
+    row = Buddy::ReminderPresenter.rows(user, include_off: true).find { |r| r[:record_id] == reminder.id }
+    expect(row[:at]).to be_nil
+    expect(row[:anchored]).to be(true)
+    expect(row[:freq]).to be_nil
+    expect(row[:sublabel]).to be_present
   end
 
   it "is over rather than instantly due once the interview has been" do

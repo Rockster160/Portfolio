@@ -22,28 +22,18 @@ RSpec.describe "Byte timer alerts setting", type: :request do
   end
 
   describe User do
-    it "is on for a kiosk nobody has touched" do
-      user.update!(byte_prefs: {})
-
+    it "is on for an untouched kiosk and round-trips without touching other preferences", :aggregate_failures do
+      user.update!(byte_prefs: { "font_scale" => 130 })
       expect(user.byte_timer_alerts?(:kiosk)).to be(true)
-    end
 
-    it "round-trips the kiosk off and back on" do
       user.set_byte_timer_alerts(:kiosk, false)
       user.save!
       expect(user.reload.byte_timer_alerts?(:kiosk)).to be(false)
+      expect(user.byte_font_scale).to eq(130)
 
       user.set_byte_timer_alerts(:kiosk, true)
       user.save!
       expect(user.reload.byte_timer_alerts?(:kiosk)).to be(true)
-    end
-
-    it "leaves the rest of the preferences alone" do
-      user.update!(byte_prefs: { "font_scale" => 130 })
-      user.set_byte_timer_alerts(:kiosk, false)
-      user.save!
-
-      expect(user.reload.byte_font_scale).to eq(130)
     end
 
     it "ignores a surface that is not the kiosk" do
@@ -67,7 +57,7 @@ RSpec.describe "Byte timer alerts setting", type: :request do
       )
     }
 
-    it "stores one board off, leaving the other boards and the kiosk on" do
+    it "stores one board off, leaving the other boards and the kiosk on, and back on", :aggregate_failures do
       post byte_timer_alerts_path, params: { surface: "board", conversation_id: board.id, on: false }, as: :json
 
       expect(response).to have_http_status(:ok)
@@ -75,10 +65,6 @@ RSpec.describe "Byte timer alerts setting", type: :request do
       expect(board.reload.timer_alerts?).to be(false)
       expect(other.reload.timer_alerts?).to be(true)
       expect(user.reload.byte_timer_alerts?(:kiosk)).to be(true)
-    end
-
-    it "turns a board back on" do
-      board.update!(metadata: board.metadata.merge("timer_alerts" => false))
 
       post byte_timer_alerts_path, params: { surface: "board", conversation_id: board.id, on: true }, as: :json
 

@@ -3,16 +3,11 @@ require "rails_helper"
 # call_jil_function acts AND reports, inside the turn. The function runs while
 # the model is still deciding what to say, and its return value goes back as the
 # tool output, so the reply is written knowing the outcome.
-#
-# It used to fire after the reply and relay a return value through a whole
-# second turn. Prod 2789 is what that cost: "Close the garage" got "Kk! Garage's
-# closing." written 17 seconds before the call landed, alongside a separate
-# read whose (pre-toggle) answer became the follow-up message.
 RSpec.describe "call_jil_function tool" do
   let(:user)   { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
 
-  # Mirrors prod task 435: a sensor reader whose whole point is what it returns.
+  # A sensor reader whose whole point is what it returns.
   let!(:sensor_task) {
     Task.create!(
       user:          user,
@@ -49,8 +44,7 @@ RSpec.describe "call_jil_function tool" do
   end
 
   describe "the answer" do
-    # Verbatim from prod execution 5219077, so this is written against what
-    # these functions really return rather than a tidied-up guess.
+    # The shape these functions really return.
     let(:real_output) { "laundry_gate is closed (raw state: off, last changed: 2026-07-30T02:14:14.188937+00:00)" }
 
     it "hands what the function returned back to the model in the same turn" do
@@ -62,9 +56,7 @@ RSpec.describe "call_jil_function tool" do
       expect(result[:answer]).to include("laundry_gate is closed")
     end
 
-    # Prod 2636: handed `18:58:03+00:00` and told to convert it, the model
-    # answered "6:58 PM" — the same digits with the offset thrown away, six
-    # hours out. It reads a clock fine and moves one badly, so the conversion
+    # The model reads a clock fine and moves one badly, so the conversion
     # happens before it ever sees the line (see Buddy::RawOutput).
     it "localizes a UTC stamp rather than asking the model to convert one" do
       stub_execution(real_output)
@@ -78,35 +70,13 @@ RSpec.describe "call_jil_function tool" do
       expect(result[:answer]).not_to include("+00:00")
     end
 
-    it "tells the model to drop the internal key, leave the time be, and never invent a state" do
-      stub_execution(real_output)
-
-      result = run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
-
-      expect(result[:how]).to include("`laundry_gate`")
-      expect(result[:how]).to include("ALREADY their local time")
-      expect(result[:how]).to include("couldn't get a reading")
-    end
-
-    # The 2789 shape: the function reports that it deliberately did nothing.
-    # Byte has to relay that instead of narrating the action it asked for.
-    it "warns the model that a function may report having done nothing" do
+    it "relays a command's own report, and no answer at all when it returned only blanks" do
       stub_execution("The garage was already closed, so nothing was sent.")
+      expect(run({ name: "HASS Sensor State", sensor: "kennel" })[:answer])
+        .to eq("The garage was already closed, so nothing was sent.")
 
-      result = run({ name: "HASS Sensor State", sensor: "kennel" })
-
-      expect(result[:answer]).to eq("The garage was already closed, so nothing was sent.")
-      expect(result[:how]).to include("already that way")
-    end
-
-    it "says plainly that a silent command returned nothing rather than leaving it open" do
       stub_execution("   ")
-
-      result = run({ name: "HASS Sensor State", sensor: "kennel" })
-
-      expect(result).not_to have_key(:answer)
-      expect(result[:how]).to include("returned nothing to report")
-      expect(result[:how]).to include("don't invent a result")
+      expect(run({ name: "HASS Sensor State", sensor: "kennel" })).not_to have_key(:answer)
     end
   end
 
@@ -216,23 +186,15 @@ RSpec.describe "call_jil_function tool" do
         captured
       end
 
-      it "orders by the signature, not by the order the keys arrived in" do
+      it "orders by the signature, not by key order, and still names every arg at the top level" do
         input = captured_for({ name: "HASS Blinds", which: "all", action: "close", position: 0 })
 
         expect(input["params"]).to eq(["close", "all", 0])
-      end
-
-      it "still names every arg at the top level for a task reading them that way" do
-        input = captured_for({ name: "HASS Blinds", which: "all", action: "close", position: 0 })
-
         expect(input).to include("action" => "close", "which" => "all", "position" => 0)
       end
 
-      # Prod byte_message 3845. `lockdown` was saved {action, which, position};
-      # its steps live in a jsonb column, Postgres sorts object keys by length
-      # then bytes, and it came back {name, which, action, position}. HASS Blinds
-      # ran with action="all", which="close", matched no case, sent no HASSPOST,
-      # and the reply said "Lockdown's in" over a house with the blinds up.
+      # Routine steps live in jsonb, and Postgres sorts object keys by length
+      # then bytes, so a saved payload comes back in a different key order.
       it "survives the routine round trip that scrambled it" do
         routine = BuddyRoutine.create!(
           user:  user,
@@ -253,8 +215,7 @@ RSpec.describe "call_jil_function tool" do
         expect(captured_for(saved)["params"]).to eq(["close", "all", 0])
       end
 
-      # The other half: an arg left out used to slide every later arg onto the
-      # wrong slot. "Close the blinds" with no position is a real request.
+      # An arg left out must not slide every later arg onto the wrong slot.
       it "fills an unsent arg with the signature's default rather than shifting" do
         input = captured_for({ name: "HASS Blinds", which: "stairs" })
 

@@ -1,10 +1,7 @@
 require "rails_helper"
 
-# Prod 2547: "Send a reminder to Chelsea in 10 minutes that we need to remind
-# mom to remember puppy!" set an ordinary reminder and pinged Rocco. There was
-# no way to aim a clock reminder at anyone - `remind_when` had `notify` and
-# `schedule_reminder` didn't - so the closest available thing was the wrong
-# thing, and the person who was supposed to act never heard about it.
+# A clock reminder aimed at someone else in the household: it stays the
+# setter's row, and fires as a relay from them.
 RSpec.describe "a reminder set for someone else" do
   let(:household) { create(:chore_household) }
   let(:rocco)     { create(:user) }
@@ -33,32 +30,21 @@ RSpec.describe "a reminder set for someone else" do
   end
 
   describe "setting it" do
-    it "records who it's for instead of aiming it back at the asker" do
+    it "records who it's for, on the setter's own row, and says so on the receipt", :aggregate_failures do
       schedule(text: "we need to remind mom about the puppy", at: soon.iso8601, notify: chelsea.first_name)
 
       reminder = BuddyReminder.last
       expect(reminder.notify_user_id).to eq(chelsea.id)
       # Still Rocco's row - he set it, so it's his to see and cancel.
       expect(reminder.user_id).to eq(rocco.id)
+      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last.body).to include(chelsea.first_name)
     end
 
-    it "says who it's for on the receipt, not just that it's set" do
-      schedule(text: "remind mom about the puppy", at: soon.iso8601, notify: chelsea.first_name)
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).to include(chelsea.first_name)
-      expect(chip.body).not_to match(/remind you|send you/i)
-    end
-
-    it "leaves an ordinary reminder alone" do
+    it "leaves an ordinary reminder, or one naming themselves, aimed at no one else", :aggregate_failures do
       schedule(text: "check the oven", at: soon.iso8601)
-
       expect(BuddyReminder.last.notify_user_id).to be_nil
-    end
 
-    it "treats naming themselves as an ordinary reminder" do
-      schedule(text: "check the oven", at: soon.iso8601, notify: "me")
-
+      schedule(text: "check the stove", at: soon.iso8601, notify: "me")
       expect(BuddyReminder.last.notify_user_id).to be_nil
     end
 
@@ -68,16 +54,14 @@ RSpec.describe "a reminder set for someone else" do
       tool = Buddy::Tools[:schedule_reminder]
       ctx  = Buddy::ToolContext.new(rocco, conversation: convo)
 
-      expect { tool[:confirm].call({ text: "x", at: soon.iso8601, notify: "Blorp" }, ctx) }
-        .to raise_error(/not sure who Blorp is/i)
+      expect { tool[:confirm].call({ text: "x", at: soon.iso8601, notify: "Blorp" }, ctx) }.to raise_error(/Blorp/)
     end
 
     # Two people can legitimately need the same nudge at the same minute.
     it "doesn't call a reminder for someone else a duplicate of one for themselves" do
       schedule(text: "leave for the airport", at: soon.iso8601)
 
-      expect { schedule(text: "leave for the airport", at: soon.iso8601, notify: chelsea.first_name) }
-        .to change(BuddyReminder, :count).by(1)
+      expect { schedule(text: "leave for the airport", at: soon.iso8601, notify: chelsea.first_name) }.to change(BuddyReminder, :count).by(1)
     end
   end
 
@@ -92,41 +76,22 @@ RSpec.describe "a reminder set for someone else" do
     end
 
     # A reminder aimed at somebody else is a message from the person who set it,
-    # just one that leaves later — so it goes out bridged, the same way an
-    # immediate message_partner does.
-    it "reaches her as a message from the person who set it" do
-      fire!
+    # just one that leaves later - so it goes out bridged, like message_partner,
+    # and leaves him the copy that says it went.
+    it "reaches her as a relay from him, in her thread, with his copy, and closes the reminder", :aggregate_failures do
+      reminder = fire!
 
       relay = BuddyRelay.last
-      expect(relay.from_user).to eq(rocco)
-      expect(relay.to_user).to eq(chelsea)
+      expect(relay).to have_attributes(from_user: rocco, to_user: chelsea, status: "delivered")
       expect(relay.body).to eq("we need to remind mom about the puppy")
-      expect(relay.status).to eq("delivered")
-    end
-
-    it "lands in her thread carrying his companion, not hers" do
-      fire!
 
       hers_copy = chelsea.byte_messages.where("metadata->>'kind' = 'buddy_relay'").last
       expect(hers_copy.byte_conversation).to eq(hers)
       expect(hers_copy.body).to eq("we need to remind mom about the puppy")
       expect(hers_copy.metadata.dig("relay_peer", "name")).to be_present
-    end
-
-    # Prod 2555-2569, the whole reason this changed. The note arrived exactly as
-    # asked and left nothing on Rocco's side, so he asked "did it send?", got a
-    # guess, and a second copy went out for real.
-    it "leaves him the copy that says it went" do
-      fire!
 
       copy = rocco.byte_messages.where("metadata->>'source' = 'relay_copy'").last
-      expect(copy).to be_present
       expect(copy.body).to eq("we need to remind mom about the puppy")
-    end
-
-    it "still closes the reminder out" do
-      reminder = fire!
-
       expect(reminder.reload.fired_at).to be_present
     end
 
@@ -147,6 +112,6 @@ RSpec.describe "a reminder set for someone else" do
     )
 
     row = Buddy::ReminderPresenter.rows(rocco).first
-    expect(row[:sublabel]).to start_with("to #{chelsea.first_name} · ")
+    expect(row[:sublabel]).to include(chelsea.first_name)
   end
 end

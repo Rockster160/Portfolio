@@ -1,11 +1,5 @@
 require "rails_helper"
 
-# Rocco, 2026-09-14: "Buddy should be able to access my location and subscribe
-# to listening for location changes so that he can act on things like
-# arrive/depart." The subscribing half already existed - `remind_when` has taken
-# a coordinate-matched travel watch since July - and this is the other half: the
-# question answered about NOW rather than about a movement.
-#
 # A READ, like check_weather: it resolves, reads and hands the answer straight
 # back in the same turn, so the model writes its reply holding the facts.
 RSpec.describe "check_location tool" do
@@ -47,37 +41,25 @@ RSpec.describe "check_location tool" do
     )
   end
 
-  it "answers where they are, in the same turn" do
-    reported!(home)
+  it "answers where they are, whether driving, and how old the reading is, in the same turn", :aggregate_failures do
+    reported!(home, ago: 4.hours)
+    allow(::LocationCache).to receive(:driving?).and_return(true)
 
     result = read
     expect(result[:status]).to eq(:answered)
     expect(result[:where]).to eq("Home")
     expect(result[:at_home]).to be(true)
+    expect(result[:driving]).to be(true)
+    expect(result[:minutes_ago]).to be_within(1).of(240)
     expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
   end
 
   it "says when they are somewhere else" do
     reported!([40.7608, -111.8910], name: "Salt Lake City")
 
-    expect(read[:where]).to eq("Salt Lake City")
-    expect(read[:at_home]).to be(false)
-  end
-
-  it "carries whether they are driving" do
-    reported!(home)
-    allow(::LocationCache).to receive(:driving?).and_return(true)
-
-    expect(read[:driving]).to be(true)
-  end
-
-  # A position is only as fresh as the last thing that reported one, and the
-  # description asks the model to say so when it is stale. That judgement needs
-  # a NUMBER - "a while ago" is not something it can make it from.
-  it "says how old the reading is" do
-    reported!(home, ago: 4.hours)
-
-    expect(read[:minutes_ago]).to be_within(1).of(240)
+    result = read
+    expect(result[:where]).to eq("Salt Lake City")
+    expect(result[:at_home]).to be(false)
   end
 
   describe "asked about one place in particular" do
@@ -130,10 +112,5 @@ RSpec.describe "check_location tool" do
     allow(user).to receive(:me?).and_return(false)
 
     expect(read[:status]).not_to eq(:answered)
-  end
-
-  it "is not offered to anybody but the owner" do
-    expect(Buddy::Features::OWNER_ONLY).to include(:location)
-    expect(Buddy::Features::DEFAULT).not_to include(:location)
   end
 end

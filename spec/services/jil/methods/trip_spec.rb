@@ -29,40 +29,27 @@ RSpec.describe Jil::Methods::Trip do
     allow(::Jil).to receive(:trigger)
   end
 
-  it "start(item) initialises state at leg 0" do
+  it "starts at leg 0 from an item, its id as a string, or a Hash carrying the id" do
     expect(trip.start(item)).to be(true)
     expect(::TripState.current(user)[:leg_index]).to eq(0)
-  end
 
-  it "start(item_id_as_string) resolves via AgendaItem.locate_for_user" do
-    expect(trip.start(item.id.to_s)).to be(true)
-    expect(::TripState.current(user)[:agenda_item_id]).to eq(item.id)
-  end
+    [item.id.to_s, { "id" => item.id }].each { |ref|
+      expect(trip.start(ref)).to be(true), ref.inspect
+      expect(::TripState.current(user)[:agenda_item_id]).to eq(item.id)
+    }
 
-  it "start({id: …}) accepts a Hash carrying an id" do
-    expect(trip.start({ "id" => item.id })).to be(true)
-    expect(::TripState.current(user)[:agenda_item_id]).to eq(item.id)
-  end
-
-  it "start returns false when the id doesn't resolve to a real item" do
     expect(trip.start(999_999)).to be(false)
   end
 
-  it "active?, current_stop, next_stop reflect TripState" do
+  it "walks the stops through advance, and finish clears the trip" do
     trip.start(item)
     expect(trip.active?).to be(true)
     expect(trip.current_stop).to eq("Costco")
     expect(trip.next_stop).to eq("Office")
-  end
 
-  it "advance bumps the leg index" do
-    trip.start(item)
     trip.advance
     expect(trip.current_stop).to eq("Office")
-  end
 
-  it "finish clears the trip" do
-    trip.start(item)
     trip.finish
     expect(trip.active?).to be(false)
     expect(trip.current_stop).to eq("")

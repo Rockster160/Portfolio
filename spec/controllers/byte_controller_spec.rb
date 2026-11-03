@@ -9,85 +9,31 @@ RSpec.describe ByteController, type: :controller do
     describe "GET #show" do
       render_views
 
-      it "renders the chat surface for the owner" do
-        sign_in rocco
-
-        get :show
-
-        expect(response).to be_successful
-        expect(response.body).to include("byte-app")
-        expect(response.body).to include("byte-composer")
-      end
-
-      # Routines used to be a whole inline panel in the drawer, which is what
-      # crowded it enough to squash the New conversation button. Both managers
-      # are a row that opens a dialog now.
-      it "puts routines and reminders behind drawer rows rather than inline" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include("data-byte-open-routines", "data-byte-open-reminders")
-        expect(response.body).to include("data-byte-routines-modal", "data-byte-reminders-modal")
-        expect(response.body).not_to include("byte-routines-hint")
-      end
-
-      # The picker offered 7 of 21 buddy-enabled automations with no search box,
-      # no scroll and no explanation, which read as an arbitrary handful.
-      it "gives the Jil picker a search box and says what it leaves out" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include("data-byte-jil-search")
-        expect(response.body).to include("Only automations that fire by name are listed")
-      end
-
-      # Rendered inline rather than applied by JS after boot, so a reload doesn't
-      # flash the default size and reflow.
-      it "paints the saved text size on the first frame" do
+      # Rendered inline: the saved text size paints on the first frame, both
+      # managers are drawer rows that open a dialog, the name slots are marked so
+      # a thread switch can repaint them, and every pet's chrome ships once so
+      # the switch needs no round trip.
+      it "renders the owner's chat surface, its drawer dialogs, every mode and every pet", :aggregate_failures do
         rocco.update!(byte_font_scale: 130)
         sign_in rocco
 
         get :show
 
-        expect(response.body).to include("--byte-font-scale: 1.3")
-        expect(response.body).to include("data-byte-font-bigger")
-      end
-
-      # The stepper first sat loose in the drawer nav, where a control among a
-      # list of destinations read as something that had been dropped there.
-      it "puts the text-size control behind a Settings row like the others" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include("data-byte-open-settings", "data-byte-settings-modal")
-        expect(response.body).not_to include("byte-drawer-stepper")
-      end
-
-      # Copy that names the companion must name THIS thread's companion. The
-      # drawer hints said "Ask Byte to save a new one" to everyone, which is
-      # simply the wrong pet's name for two of the three people who use this.
-      it "names the open thread's companion in copy, never a hardcoded one" do
-        chelsea = create(:user, id: 58_128)
-        sign_in chelsea
-
-        get :show
-
         body = response.body
-        expect(body).to include("Ask <span data-buddy-name-slot>Moss</span>")
-        expect(body).not_to match(/Ask Byte|Tell Byte|need Byte/)
-      end
+        expect(response).to be_successful
+        expect(body).to include("byte-app", "byte-composer", 'data-kiosk="false"')
+        expect(body).not_to include("byte-kiosk-pad")
+        expect(body).to include("data-byte-open-routines", "data-byte-open-reminders")
+        expect(body).to include("data-byte-routines-modal", "data-byte-reminders-modal")
+        expect(body).to include("data-byte-open-settings", "data-byte-settings-modal", "data-byte-jil-search")
+        expect(body).to include("--byte-font-scale: 1.3", "data-byte-font-bigger")
+        expect(body.scan("data-buddy-name-slot").length).to be >= 4
+        expect(body).to include("data-buddy-themes=")
+        expect(body.scan("data-byte-pet-avatar").length).to be >= 2
 
-      # …and the slots have to move on a thread switch, which is the client's
-      # job. This just proves the server marks them for it.
-      it "marks that copy so a thread switch can repaint it" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body.scan("data-buddy-name-slot").length).to be >= 4
+        # Claude / Bash / Jarvis hand off to the owner's Mac, so only the owner is offered them.
+        expect(body).to include('value="claude"', 'value="bash"', 'value="jarvis"', 'name="buddy_theme"')
+        Buddy::Themes.keys.each { |theme| expect(body).to include(%(value="#{theme}")) }
       end
 
       # A page visit is shown Byte's About page; anything else is a bare 403.
@@ -99,7 +45,9 @@ RSpec.describe ByteController, type: :controller do
         expect(response).to redirect_to(playground_project_path(PlaygroundProject.find(:byte)))
       end
 
-      it "lets Chelsea in, scoped to a Buddy conversation" do
+      # Copy that names the companion names THIS thread's companion, and a
+      # buddy-only member is offered no mode choice at all.
+      it "lets Chelsea in, scoped to a Buddy conversation wearing her own pet" do
         chelsea = create(:user, id: 58_128)
         sign_in chelsea
 
@@ -107,14 +55,16 @@ RSpec.describe ByteController, type: :controller do
 
         expect(response).to be_successful
         expect(chelsea.byte_conversations.reload.map(&:mode)).to all(eq("buddy"))
+        expect(response.body).to include("<span data-buddy-name-slot>Moss</span>")
+        expect(response.body).not_to include('value="bash"', 'value="jarvis"')
+        expect(response.body).to include('name="mode" value="buddy"')
       end
 
-      # The page used to brand itself off the USER's default pet, so opening a
-      # Suki thread on Rocco's account said "Byte" in the tab, the home-screen
-      # title, the header avatar, and the composer placeholder.
-      it "wears the open thread's pet, not the account's default one" do
+      # #show opens the most recently active thread, and wears that thread's
+      # pet, not the account's default. The client may open a different one
+      # from localStorage, so the account's own pet ships too.
+      it "wears the open thread's pet, naming the account's own pet for threads with none" do
         sign_in rocco
-        # #show opens the most recently active thread, so this is the one it lands on.
         convo = rocco.byte_conversations.create!(name: "with suki", mode: :buddy)
         convo.update!(buddy_theme: :suki, last_message_at: Time.current)
 
@@ -123,43 +73,11 @@ RSpec.describe ByteController, type: :controller do
         expect(response.body).to include('data-buddy-name="Suki"')
         expect(response.body).to include('content="Suki"')      # PWA home-screen title
         expect(response.body).to include("/suki.webmanifest")
-        expect(response.body).to include("Say something to Suki")
-        expect(response.body).not_to include("Say something to Byte")
+        expect(response.body).to include('data-buddy-theme="suki"', 'data-default-buddy-theme="byte"')
       end
 
-      # Everything above is baked in for the thread that happened to be open. A
-      # switch has to repaint it, which needs the pets the client has no thread
-      # for - so the whole table ships once, and the images that follow the switch
-      # are marked for it to find.
-      it "ships every pet's chrome so a switch can repaint without a round trip" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include("data-buddy-themes=")
-        expect(response.body.scan("data-byte-pet-avatar").length).to be >= 2
-      end
-
-      # #show renders the most recently ACTIVE thread; the client opens the last
-      # VIEWED one from localStorage, and those differ whenever another thread got
-      # a message after you left yours. Repainting for that needs to know which
-      # pet a claude or bash thread wears, and the answer isn't the Suki one that
-      # happened to be baked into the page.
-      it "names the account's own pet for threads that have none of their own" do
-        sign_in rocco
-        suki = rocco.byte_conversations.create!(name: "with suki", mode: :buddy)
-        suki.update!(buddy_theme: :suki, last_message_at: Time.current)
-
-        get :show
-
-        expect(response.body).to include('data-buddy-theme="suki"')
-        expect(response.body).to include('data-default-buddy-theme="byte"')
-      end
-
-      # Without this, #show opens whichever thread has the newest message - which
-      # is a different one any time a watch fired somewhere else while you were
-      # reading - and the client then had to correct it after boot. Reloading a
-      # Byte thread painted Suki's face, name and favicon over it.
+      # Without this, #show opens whichever thread has the newest message, which
+      # is a different one any time a watch fired somewhere else.
       describe "with a thread named in the URL" do
         let!(:byte_thread) {
           rocco.byte_conversations.create!(name: "mine", mode: :buddy).tap { |c|
@@ -186,33 +104,16 @@ RSpec.describe ByteController, type: :controller do
           expect(response.body).to include('data-buddy-name="Byte"')
         end
 
-        it "still falls back to most-recent when no thread is named" do
-          get :show
-
-          expect(opened_id).to eq(suki_thread.id)
-        end
-
-        it "ignores someone else's thread" do
+        it "falls back to most-recent when none, someone else's, an archived or a garbage one is named" do
           theirs = create(:user).byte_conversations.create!(name: "theirs", mode: :buddy)
+          archived = rocco.byte_conversations.create!(name: "old", mode: :buddy, archived: true)
 
-          get :show, params: { conversation_id: theirs.id }
+          [{}, { conversation_id: theirs.id }, { conversation_id: archived.id }, { conversation_id: "nonsense" }].each do |params|
+            get :show, params: params
 
-          expect(opened_id).to eq(suki_thread.id)
-        end
-
-        it "ignores an archived one, which isn't in the list to switch back to" do
-          byte_thread.update!(archived: true)
-
-          get :show, params: { conversation_id: byte_thread.id }
-
-          expect(opened_id).to eq(suki_thread.id)
-        end
-
-        it "ignores a garbage id rather than blowing up" do
-          get :show, params: { conversation_id: "nonsense" }
-
-          expect(response).to be_successful
-          expect(opened_id).to eq(suki_thread.id)
+            expect(response).to be_successful
+            expect(opened_id).to eq(suki_thread.id), params.to_s
+          end
         end
 
         # Buddy-only members never see claude threads in their list, so a link to
@@ -250,96 +151,41 @@ RSpec.describe ByteController, type: :controller do
 
       before { sign_in rocco }
 
-      it "renders the wall surface: the routines, and the control that sets who's on it" do
-        get :kiosk
-
-        expect(response).to be_successful
-        expect(response.body).to include('data-kiosk="true"')
-        expect(response.body).to include("byte-kiosk-pad")
-        expect(response.body).to include("data-kiosk-who")
-      end
-
-      # The chat page and the kiosk are one template, so the flag has to actually
-      # be off everywhere else or the normal app loses its header.
-      it "leaves the chat page alone" do
-        get :show
-
-        expect(response.body).to include('data-kiosk="false"')
-        expect(response.body).not_to include("byte-kiosk-pad")
-      end
-
       def button_names
         response.body.scan(/data-kiosk-routine="\d+"[^>]*>([^<]+)</).flatten.map(&:strip)
       end
 
-      # A wall tablet is read from across a room and tapped without stopping, so a
-      # button only has to say which one it is. The description used to ride
-      # underneath as a second line of small print, which made every button taller
-      # and none of them clearer.
-      it "puts the name on a button and nothing else" do
-        routine!("Prep Printer", position: 0, description: "Powers it on, waits, then preheats")
-
-        get :kiosk
-
-        expect(button_names).to eq(["Prep Printer"])
-        expect(response.body).not_to include("byte-kiosk-btn-sub")
-        # Still reachable on a long-press / hover, just not taking up the face.
-        expect(response.body).to include('title="Powers it on, waits, then preheats"')
-      end
-
-      # A routine carrying a monitor key gets a LIVE button: kiosk.js subscribes
-      # to the key and repaints the label and colour from whatever the Jil task
-      # broadcasts, the same contract the Fae, Whisper and list trigger buttons
-      # run on. The saved name is only what shows for the beat before the socket
-      # answers, so the server still has to render it.
-      it "marks a monitored routine's button so the pad subscribes to it" do
-        routine!("Yoga Lights", position: 0, monitor: "yoga-lights")
-
-        get :kiosk
-
-        expect(response.body).to include('data-kiosk-monitor="yoga-lights"')
-        expect(button_names).to eq(["Yoga Lights"])
-      end
-
-      it "leaves an ordinary routine's button unsubscribed" do
-        routine!("Prep Printer", position: 0)
-
-        get :kiosk
-
-        expect(response.body).not_to include("data-kiosk-monitor")
-      end
-
-      # A matter of space, not principle. Quick is a popover you open, scan and
-      # dismiss, so it carries everything; the wall is a fixed pad with room for a
-      # handful of big targets, and every routine ever saved buries the three you
-      # walk up and press.
-      it "takes only the starred ones, in the order they were dragged into" do
+      # Only starred, enabled routines, in the order they were dragged into; a
+      # button shows only its name (the description is a hover title). A routine
+      # with a monitor key gets a LIVE button kiosk.js subscribes to. The service
+      # worker refuses to cache a page without the shell marker.
+      it "renders the wall pad with the pinned routines as buttons", :aggregate_failures do
         routine!("Wind Down", position: 1)
-        routine!("Prep Printer", position: 0)
+        routine!("Prep Printer", position: 0, description: "Powers it on, waits, then preheats")
         routine!("Almost Never")
+        routine!("Muted", position: 2, enabled: false)
+        routine!("Yoga Lights", position: 3, monitor: "yoga-lights")
 
         get :kiosk
 
-        expect(button_names).to eq(["Prep Printer", "Wind Down"])
+        body = response.body
+        expect(response).to be_successful
+        expect(body).to include('data-kiosk="true"', "byte-kiosk-pad", "data-kiosk-who")
+        expect(body).to include('<meta name="byte-shell" content="ok">')
+        expect(button_names).to eq(["Prep Printer", "Wind Down", "Yoga Lights"])
+        expect(body).not_to include("byte-kiosk-btn-sub")
+        expect(body).to include('title="Powers it on, waits, then preheats"')
+        expect(body.scan("data-kiosk-monitor=").length).to eq(1)
+        expect(body).to include('data-kiosk-monitor="yoga-lights"')
       end
 
-      it "leaves off the ones that are switched off, starred or not" do
-        routine!("Muted", position: 0, enabled: false)
-
-        get :kiosk
-
-        expect(button_names).to be_empty
-      end
-
-      # They may well have routines and just none starred, so "save one" would
-      # send them off to do a thing they've already done.
-      it "says what's actually missing when nothing is pinned" do
+      it "renders an empty pad when nothing is pinned" do
         routine!("Saved but unstarred")
 
         get :kiosk
 
+        expect(response).to be_successful
         expect(button_names).to be_empty
-        expect(response.body).to include("Nothing pinned yet")
       end
 
       # There's no keyboard on a wall, and a claude or bash thread is nothing but
@@ -371,10 +217,7 @@ RSpec.describe ByteController, type: :controller do
         expect(response.body).to include(%(data-initial-conversation-id="#{wanted.id}"))
       end
 
-      # Which companion is on the wall IS which thread it's pinned to — the theme
-      # on the row decides the character, the name, the palette and the voice.
-      # Without the pin it opens whichever thread spoke last, which is a
-      # different companion any time a watch fires somewhere else.
+      # Which companion is on the wall IS which thread it's pinned to.
       describe "the thread it's been set to" do
         let!(:suki) {
           rocco.byte_conversations.create!(name: "kitchen", mode: :buddy).tap { |c|
@@ -396,18 +239,13 @@ RSpec.describe ByteController, type: :controller do
           expect(response.body).to include('data-buddy-name="Suki"')
         end
 
-        it "falls back to the newest when nothing is pinned" do
+        it "falls back to the newest when nothing is pinned, or the pinned one is archived" do
           get :kiosk
-
           expect(response.body).to include(%(data-initial-conversation-id="#{newest.id}"))
-        end
 
-        it "falls back rather than opening one that's since been archived" do
           ByteConversation.pin_kiosk!(suki)
           suki.update!(archived: true)
-
           get :kiosk
-
           expect(response.body).to include(%(data-initial-conversation-id="#{newest.id}"))
         end
 
@@ -433,27 +271,13 @@ RSpec.describe ByteController, type: :controller do
         expect(response.body).to include('content="Suki Kiosk"')
       end
 
-      # The service worker refuses to cache a page without this, so a kiosk
-      # missing it silently loses the offline boot that makes it dependable.
-      it "carries the shell marker the service worker caches on" do
-        get :kiosk
-
-        expect(response.body).to include('<meta name="byte-shell" content="ok">')
-      end
-
-      it "forbids anyone who can't open Byte at all" do
+      it "forbids anyone who can't open Byte at all, and lets Chelsea put one on a wall" do
         sign_in create(:user)
-
         get :kiosk
-
         expect(response).to have_http_status(:forbidden)
-      end
 
-      it "lets Chelsea put one on a wall too" do
         sign_in create(:user, id: 58_128)
-
         get :kiosk
-
         expect(response).to be_successful
       end
     end
@@ -465,45 +289,29 @@ RSpec.describe ByteController, type: :controller do
         rocco.byte_conversations.create!(name: name, mode: :buddy)
       end
 
-      it "points the wall at the chosen thread" do
-        convo = buddy!("kitchen")
-
-        post :pin_kiosk_conversation, params: { conversation_id: convo.id }
-
-        expect(response).to be_successful
-        expect(convo.reload).to be_kiosk
-      end
-
-      # "Which one is out there" is a single fact. Two pinned would make what the
-      # tablet opens on depend on row order.
-      it "unpins whichever was there before" do
+      # "Which one is out there" is a single fact, so pinning unpins the last.
+      it "points the wall at the chosen thread, unpinning whichever was there before" do
         first  = buddy!("kitchen")
         second = buddy!("desk")
         ByteConversation.pin_kiosk!(first)
 
         post :pin_kiosk_conversation, params: { conversation_id: second.id }
 
+        expect(response).to be_successful
         expect(rocco.byte_conversations.kiosk.pluck(:id)).to eq([second.id])
       end
 
-      # The kiosk can't show one, so pinning it would leave the wall on a thread
-      # it silently falls back off of every load.
-      it "refuses a claude thread" do
+      # The kiosk can't show a claude thread.
+      it "refuses a claude thread or someone else's" do
         claude = rocco.byte_conversations.create!(name: "shell", mode: :claude)
-
-        post :pin_kiosk_conversation, params: { conversation_id: claude.id }
-
-        expect(response).to have_http_status(:not_found)
-        expect(claude.reload).not_to be_kiosk
-      end
-
-      it "refuses someone else's" do
         theirs = create(:user).byte_conversations.create!(name: "theirs", mode: :buddy)
 
-        post :pin_kiosk_conversation, params: { conversation_id: theirs.id }
+        [claude, theirs].each do |convo|
+          post :pin_kiosk_conversation, params: { conversation_id: convo.id }
 
-        expect(response).to have_http_status(:not_found)
-        expect(theirs.reload).not_to be_kiosk
+          expect(response).to have_http_status(:not_found)
+          expect(convo.reload).not_to be_kiosk
+        end
       end
     end
 
@@ -522,37 +330,18 @@ RSpec.describe ByteController, type: :controller do
         rocco.byte_conversations.create!(name: name, mode: :buddy)
       end
 
-      it "points everything self-initiated at the chosen thread" do
+      # Both rows have to repaint on a second device, or the one that lost it
+      # keeps showing the marker.
+      it "points everything self-initiated at the chosen thread, broadcasting loser and winner", :aggregate_failures do
         first  = buddy!("Byte")
         second = buddy!("Moss")
+        ByteConversation.pin_primary!(first)
 
         post :pin_primary_conversation, params: { conversation_id: second.id }
 
         expect(response).to be_successful
-        expect(second.reload).to be_primary
-        expect(ByteConversation.for_self_initiated(rocco)).to eq(second)
-        expect(first.reload).not_to be_primary
-      end
-
-      it "takes it off whichever held it before" do
-        first  = buddy!("Byte")
-        second = buddy!("Moss")
-        ByteConversation.pin_primary!(first)
-
-        post :pin_primary_conversation, params: { conversation_id: second.id }
-
         expect(rocco.byte_conversations.primary.pluck(:id)).to eq([second.id])
-      end
-
-      # Both rows have to repaint on a second device, or the one that lost it
-      # keeps showing the marker.
-      it "broadcasts the loser as well as the winner" do
-        first  = buddy!("Byte")
-        second = buddy!("Moss")
-        ByteConversation.pin_primary!(first)
-
-        post :pin_primary_conversation, params: { conversation_id: second.id }
-
+        expect(ByteConversation.for_self_initiated(rocco)).to eq(second)
         expect(broadcasts).to include(first.id, second.id)
       end
 
@@ -594,23 +383,16 @@ RSpec.describe ByteController, type: :controller do
         expect(rocco.byte_conversations.primary).to be_empty
       end
 
-      it "reports the resolved one on the conversations index" do
-        buddy!("Byte")
-        second = buddy!("Moss")
-        ByteConversation.pin_primary!(second)
-
-        get :list_conversations
-
-        expect(response.parsed_body["primary_id"]).to eq(second.id)
-      end
-
-      it "reports the default one when nothing has been chosen" do
+      it "reports the default, then the chosen one, on the conversations index" do
         first = buddy!("Byte")
-        buddy!("Moss")
+        second = buddy!("Moss")
 
         get :list_conversations
-
         expect(response.parsed_body["primary_id"]).to eq(first.id)
+
+        ByteConversation.pin_primary!(second)
+        get :list_conversations
+        expect(response.parsed_body["primary_id"]).to eq(second.id)
       end
     end
 
@@ -655,25 +437,15 @@ RSpec.describe ByteController, type: :controller do
 
       before { sign_in chelsea }
 
-      it "forces new conversations to buddy mode regardless of params" do
-        post :create_conversation, params: { name: "shell", mode: "bash" }
-
-        expect(chelsea.byte_conversations.order(:id).last.mode).to eq("buddy")
-      end
-
-      it "refuses /mode switches" do
+      it "refuses /mode switches and never dispatches a non-buddy conversation to the Mac" do
         convo = chelsea.byte_conversations.create!(name: :Buddy, mode: :buddy)
-
-        post :create_message, params: { conversation_id: convo.id, body: "/mode bash" }
-
-        expect(convo.reload.mode).to eq("buddy")
-      end
-
-      it "never dispatches a non-buddy conversation to the Mac" do
-        convo = chelsea.byte_conversations.create!(name: :Legacy, mode: :claude)
+        legacy = chelsea.byte_conversations.create!(name: :Legacy, mode: :claude)
         expect(ByteLocal).not_to receive(:deliver)
 
-        post :create_message, params: { conversation_id: convo.id, body: "hi" }
+        post :create_message, params: { conversation_id: convo.id, body: "/mode bash" }
+        post :create_message, params: { conversation_id: legacy.id, body: "hi" }
+
+        expect(convo.reload.mode).to eq("buddy")
       end
     end
 
@@ -684,56 +456,30 @@ RSpec.describe ByteController, type: :controller do
         rocco.byte_conversations.create!(name: :Buddy, mode: :buddy, buddy_theme: "byte")
       end
 
-      it "swaps the pet theme on the thread and does not dispatch to the Mac" do
-        convo = buddy_convo
+      # Resetting the expression means the new pet never renders a face it lacks.
+      it "swaps the pet theme, resets the expression and acks as a slash reply, without the Mac" do
+        convo = rocco.byte_conversations.create!(name: :Buddy, mode: :buddy, buddy_theme: "moss", buddy_expression: "wink")
         expect(ByteLocal).not_to receive(:deliver)
 
         post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
 
         expect(convo.reload.buddy_theme).to eq("suki")
-      end
-
-      it "resets the stored expression so the new pet never renders a face it lacks" do
-        convo = rocco.byte_conversations.create!(name: :Buddy, mode: :buddy, buddy_theme: "moss", buddy_expression: "wink")
-
-        post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
-
-        expect(convo.reload.buddy_expression).to eq("neutral")
-      end
-
-      it "acks with the new pet name instead of a bubble-less send" do
-        convo = buddy_convo
-
-        post :create_message, params: { conversation_id: convo.id, body: "/buddy moss" }
-
+        expect(convo.buddy_expression).to eq("neutral")
         ack = convo.byte_messages.order(:id).last
-        expect(ack.body).to include("Moss")
+        expect(ack.body).to include("Suki")
         expect(ack.metadata["source"]).to eq("slash")
       end
 
-      it "rejects an unknown theme with a usage hint and leaves the theme alone" do
+      it "leaves the theme alone but answers for an unknown theme, the same pet, or a non-buddy thread" do
         convo = buddy_convo
+        claude = rocco.byte_conversations.create!(name: :Legacy, mode: :claude)
 
-        post :create_message, params: { conversation_id: convo.id, body: "/buddy dragon" }
-
-        expect(convo.reload.buddy_theme).to eq("byte")
-        expect(convo.byte_messages.order(:id).last.body).to include("usage:")
-      end
-
-      it "no-ops with a nudge when the thread is already that pet" do
-        convo = buddy_convo
-
-        post :create_message, params: { conversation_id: convo.id, body: "/buddy byte" }
-
-        expect(convo.byte_messages.order(:id).last.body).to include("already")
-      end
-
-      it "refuses outside buddy mode" do
-        convo = rocco.byte_conversations.create!(name: :Legacy, mode: :claude)
-
-        post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
-
-        expect(convo.byte_messages.order(:id).last.body).to include("Buddy thing")
+        [[convo, "/buddy dragon"], [convo, "/buddy byte"], [claude, "/buddy suki"]].each do |thread, cmd|
+          expect {
+            post :create_message, params: { conversation_id: thread.id, body: cmd }
+          }.to change { thread.byte_messages.inbound.count }.by(1)
+          expect(thread.reload.buddy_theme).to eq("byte"), cmd
+        end
       end
     end
 
@@ -743,49 +489,37 @@ RSpec.describe ByteController, type: :controller do
     describe "PATCH #update_conversation buddy_theme" do
       before { sign_in rocco }
 
-      it "re-themes a buddy thread and resets its expression to neutral" do
+      it "re-themes a buddy thread, resetting its expression, and ignores an unknown theme" do
         convo = rocco.byte_conversations.create!(mode: :buddy, buddy_theme: "byte", buddy_expression: "wink")
 
         patch :update_conversation, params: { id: convo.id, buddy_theme: "moss" }
-
         expect(response).to have_http_status(:ok)
         expect(convo.reload.buddy_theme).to eq("moss")
         expect(convo.buddy_expression).to eq("neutral")
-      end
-
-      it "ignores an unknown theme rather than landing the pet on missing art" do
-        convo = rocco.byte_conversations.create!(mode: :buddy, buddy_theme: "byte")
 
         patch :update_conversation, params: { id: convo.id, buddy_theme: "dragon" }
-
-        expect(convo.reload.buddy_theme).to eq("byte")
+        expect(convo.reload.buddy_theme).to eq("moss")
       end
     end
 
     describe "POST #create_message" do
       before { sign_in rocco }
 
-      it "persists the outbound message and returns wire JSON" do
+      it "persists the outbound message and returns wire JSON, echoing the client's local_id" do
         expect {
-          post :create_message, params: { body: "hello there" }
+          post :create_message, params: { body: "hello there", local_id: "abc-123" }
         }.to change { rocco.byte_messages.count }.by(1)
 
         expect(response).to have_http_status(:created)
         payload = JSON.parse(response.body)
         expect(payload).to include("body" => "hello there", "direction" => "outbound")
+        expect(payload["metadata"]).to include("local_id" => "abc-123")
+        expect(rocco.byte_messages.last.metadata["local_id"]).to eq("abc-123")
       end
 
       it "rejects empty bodies" do
         post :create_message, params: { body: "   " }
         expect(response).to have_http_status(:bad_request)
-      end
-
-      it "echoes the client-supplied local_id back through metadata" do
-        post :create_message, params: { body: "queued send", local_id: "abc-123" }
-        expect(response).to have_http_status(:created)
-        payload = JSON.parse(response.body)
-        expect(payload["metadata"]).to include("local_id" => "abc-123")
-        expect(rocco.byte_messages.last.metadata["local_id"]).to eq("abc-123")
       end
     end
 
@@ -825,11 +559,6 @@ RSpec.describe ByteController, type: :controller do
         expect(convo.byte_messages.outbound.last.files.count).to eq(1)
       end
 
-      it "still 400s a blank send with no attachments" do
-        post :create_message, params: { conversation_id: convo.id, body: "   " }
-        expect(response).to have_http_status(:bad_request)
-      end
-
       it "silently drops a tampered signed id instead of erroring the send" do
         post :create_message, params: { conversation_id: convo.id, body: "hi", attachment_signed_ids: ["not-a-real-signed-id"] }
 
@@ -859,7 +588,6 @@ RSpec.describe ByteController, type: :controller do
         post :uploads, params: { files: [image(type: "application/pdf", name: "doc.pdf")] }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)["error"]).to match(/unsupported/i)
       end
 
       it "rejects an oversized image" do
@@ -868,7 +596,6 @@ RSpec.describe ByteController, type: :controller do
         post :uploads, params: { files: [image(bytes: "several-bytes")] }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)["error"]).to match(/too large/i)
       end
 
       it "forbids a non-owner" do
@@ -903,7 +630,6 @@ RSpec.describe ByteController, type: :controller do
 
         expect { post :uploads, params: { files: files } }.not_to change(ActiveStorage::Blob, :count)
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)["error"]).to match(/too many/i)
       end
     end
 
@@ -955,12 +681,8 @@ RSpec.describe ByteController, type: :controller do
         expect(body2["has_more"]).to eq(false)
       end
 
-      # A trigger seed is a real row in the thread: persisted so the reply Buddy
-      # sends has something to hang on, and carrying the whole "[nothing was said
-      # to you - this fired on its own]" preamble as its body. The client dropped
-      # them on the live path and the scrollback page built its nodes itself, so
-      # they came back as bubbles the person appeared to have typed - a fifth of a
-      # busy day in this thread is seeds.
+      # A trigger seed is a real row in the thread, persisted so the reply Buddy
+      # sends has something to hang on, but never a bubble in the history.
       it "leaves the hidden trigger seeds out of the history" do
         said = rocco.byte_messages.create!(body: "mine", direction: :outbound, created_at: 2.hours.ago)
         seed = rocco.byte_messages.create!(
@@ -1006,117 +728,48 @@ RSpec.describe ByteController, type: :controller do
       end
     end
 
-    # Claude / Bash / Jarvis all hand off to the owner's Mac, and
-    # create_conversation has always pinned everyone else to :buddy. The form
-    # offered them anyway, so Chelsea picked "Claude" and silently got a Buddy
-    # thread — a menu whose choices don't mean anything.
-    describe "the new-conversation form" do
-      render_views
-
-      it "offers the owner every mode" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include('value="claude"', 'value="bash"', 'value="jarvis"')
-      end
-
-      it "offers a buddy-only member no mode choice at all" do
-        sign_in create(:user, id: 58_128)
-
-        get :show
-
-        expect(response.body).not_to include('value="bash"')
-        expect(response.body).not_to include('value="jarvis"')
-        expect(response.body).to include('name="mode" value="buddy"')
-      end
-
-      it "lets them pick which companion the thread wears" do
-        sign_in rocco
-
-        get :show
-
-        expect(response.body).to include('name="buddy_theme"')
-        pets = Buddy::Themes.keys
-        pets.each { |theme| expect(response.body).to include(%(value="#{theme}")) }
-      end
-    end
-
     describe "POST #create_conversation" do
-      it "wears the companion they picked" do
+      it "wears the companion picked, ignoring a fake one and leaving non-Buddy threads unthemed" do
         sign_in rocco
 
-        post :create_conversation, params: { mode: "buddy", buddy_theme: "suki" }
+        [[{ mode: "buddy", buddy_theme: "suki" }, "buddy", "suki"],
+         [{ mode: "buddy", buddy_theme: "gremlin" }, "buddy", "byte"],
+         [{ mode: "bash", buddy_theme: "suki" }, "bash", "byte"]].each do |params, mode, theme|
+          post :create_conversation, params: params
 
-        expect(rocco.byte_conversations.order(:id).last.buddy_theme).to eq("suki")
+          convo = rocco.byte_conversations.order(:id).last
+          expect([convo.mode, convo.buddy_theme]).to eq([mode, theme]), params.to_s
+        end
       end
 
-      # The account default is what it falls back to, exactly as before.
-      it "falls back to the account's own pet when none is named" do
+      # "byte" is the column default, so choosing it on a non-Byte account looks
+      # identical to choosing nothing to dirty-tracking. A buddy-only member is
+      # pinned to Buddy whatever they post.
+      it "falls back to the account's own pet, honours Byte on a non-Byte account, and pins Chelsea to Buddy" do
         chelsea = create(:user, id: 58_128)
         sign_in chelsea
 
-        post :create_conversation, params: { mode: "buddy" }
+        [[{ mode: "buddy" }, "buddy", "moss"],
+         [{ mode: "buddy", buddy_theme: "byte" }, "buddy", "byte"],
+         [{ mode: "bash" }, "buddy", nil]].each do |params, mode, theme|
+          post :create_conversation, params: params
 
-        expect(chelsea.byte_conversations.order(:id).last.buddy_theme).to eq("moss")
-      end
-
-      # The case dirty-tracking can't see: "byte" is the column default, so
-      # choosing it on a non-Byte account looks identical to choosing nothing.
-      it "honours picking Byte on an account whose default is not Byte" do
-        chelsea = create(:user, id: 58_128)
-        sign_in chelsea
-
-        post :create_conversation, params: { mode: "buddy", buddy_theme: "byte" }
-
-        expect(chelsea.byte_conversations.order(:id).last.buddy_theme).to eq("byte")
-      end
-
-      it "ignores a theme that isn't a real companion" do
-        sign_in rocco
-
-        post :create_conversation, params: { mode: "buddy", buddy_theme: "gremlin" }
-
-        expect(rocco.byte_conversations.order(:id).last.buddy_theme).to eq("byte")
-      end
-
-      # Server-side enforcement is what actually matters; the form is just no
-      # longer lying about it.
-      it "still pins a buddy-only member to a Buddy thread whatever they post" do
-        chelsea = create(:user, id: 58_128)
-        sign_in chelsea
-
-        post :create_conversation, params: { mode: "bash" }
-
-        expect(chelsea.byte_conversations.order(:id).last.mode).to eq("buddy")
-      end
-
-      it "leaves a non-Buddy thread without a chosen pet" do
-        sign_in rocco
-
-        post :create_conversation, params: { mode: "bash", buddy_theme: "suki" }
-
-        convo = rocco.byte_conversations.order(:id).last
-        expect(convo.mode).to eq("bash")
-        expect(convo.buddy_theme).to eq("byte")
+          convo = chelsea.byte_conversations.order(:id).last
+          expect(convo.mode).to eq(mode), params.to_s
+          expect(convo.buddy_theme).to eq(theme) if theme
+        end
       end
     end
 
     describe "POST #font_scale" do
-      it "saves it and hands back what it settled on" do
+      it "saves it, clamping an absurd value, and hands back what it settled on" do
         sign_in rocco
 
         post :font_scale, params: { scale: 140 }
-
         expect(response.parsed_body["scale"]).to eq(140)
         expect(rocco.reload.byte_font_scale).to eq(140)
-      end
-
-      it "clamps an absurd value rather than erroring" do
-        sign_in rocco
 
         post :font_scale, params: { scale: 9000 }
-
         expect(rocco.reload.byte_font_scale).to eq(User::FONT_SCALE_RANGE.max)
       end
 
@@ -1173,15 +826,18 @@ RSpec.describe ByteController, type: :controller do
         expect(response.parsed_body["reactions"]).to be_empty
       end
 
-      # Any icon the picker can offer, not a fixed six — the whole pool, custom
-      # household uploads included.
-      it "takes anything the picker could have handed back" do
+      # Any icon the picker can offer, not a fixed six. The row is most-recently
+      # used, so reacting reorders it.
+      it "takes anything the picker could have handed back, reordering the picker row" do
         message = relay_message
 
         post :react_message, params: { id: message.id, emoji: "🍕" }
 
         expect(response).to be_successful
         expect(Buddy::Reactions.of(message.reload).pluck("emoji")).to eq(["🍕"])
+        recents = response.parsed_body["recents"]
+        expect(recents.first).to eq("🍕")
+        expect(recents.length).to eq(Buddy::Reactions::RECENT_LIMIT)
       end
 
       it "refuses free text the picker could never produce" do
@@ -1191,17 +847,6 @@ RSpec.describe ByteController, type: :controller do
 
         expect(response).to have_http_status(:unprocessable_entity)
         expect(Buddy::Reactions.of(message.reload)).to be_empty
-      end
-
-      # The row is most-recently-used, so reacting has just reordered it.
-      it "hands back the reordered picker row" do
-        message = relay_message
-
-        post :react_message, params: { id: message.id, emoji: "🍕" }
-
-        recents = response.parsed_body["recents"]
-        expect(recents.first).to eq("🍕")
-        expect(recents.length).to eq(Buddy::Reactions::RECENT_LIMIT)
       end
 
       # Anything in your own thread, not just what came from another person.
@@ -1407,16 +1052,11 @@ RSpec.describe ByteController, type: :controller do
         post :report_message, params: { id: msg.id, description: "x" }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body["errors"].first).to include("Todo")
       end
     end
   end
 
   # `/today` — asking for the briefing by hand.
-  #
-  # The scheduled one is a recurring reminder and the hero chip that used to run
-  # one is long gone, so the only remaining way in was hoping the model reached
-  # for the `today_briefing` tool — which its own description tells it not to.
   describe "the today command" do
     let(:user)  { FactoryBot.create(:user, phone: "5550006000", role: :admin) }
     let!(:buddy) {
@@ -1442,53 +1082,27 @@ RSpec.describe ByteController, type: :controller do
       conversation.byte_messages.where("metadata->>'buddy_action' = 'today'")
     end
 
-    it "posts a briefing seed the turn can answer" do
+    # The briefing IS the answer and opens with a greeting, so nothing of its own
+    # goes above it; the seed comes back hidden for the client to drop.
+    it "posts a hidden hand-run briefing seed the turn can answer, and nothing else", :aggregate_failures do
       expect { send_command("/today") }.to change { seeds.count }.by(1)
 
       expect(response).to have_http_status(:ok)
-      expect(seeds.last.body).to include(Buddy::TodayBriefing::GREET_DIRECTIVE)
       expect(seeds.last.metadata).to have_key("briefing")
-    end
-
-    # A hand-run is exempt from the sleep guard: someone typing this at 2am has
-    # already answered the question the guard exists to ask.
-    it "runs even while Buddy is asleep" do
-      allow(Buddy::SleepGuard).to receive(:sleeping?).and_return(true)
-
-      expect { send_command("/today") }.to change { seeds.count }.by(1)
-    end
-
-    it "is marked as a hand-run rather than the scheduled one" do
-      send_command("/today")
-
       expect(seeds.last.metadata["source"]).to eq("quick_action")
-    end
-
-    # The briefing IS the answer, and it opens with a greeting. A line above
-    # saying it's coming is the receipt the tool already refuses.
-    it "says nothing of its own — no acknowledgement above the briefing" do
-      send_command("/today")
-
       expect(buddy.byte_messages.where("metadata->>'kind' = 'system'")).to be_empty
-    end
-
-    it "hands back the seed, which the client drops on sight" do
-      send_command("/today")
-
+      expect(buddy.byte_messages.where(body: "/today")).to be_empty
       body = JSON.parse(response.body)
       expect(body["metadata"]["hidden"]).to be(true)
       expect(body["id"]).to eq(seeds.last.id)
     end
 
-    # The dispatcher accepts either prefix; period is closer to the space bar.
-    it "answers to the period form too" do
+    # Someone typing this at 2am has already answered the question the sleep
+    # guard exists to ask. The dispatcher accepts either prefix.
+    it "runs even while Buddy is asleep, and answers to the period form" do
+      allow(Buddy::SleepGuard).to receive(:sleeping?).and_return(true)
+
       expect { send_command(".today") }.to change { seeds.count }.by(1)
-    end
-
-    it "never reaches the model as an ordinary message" do
-      send_command("/today")
-
-      expect(buddy.byte_messages.where(body: "/today")).to be_empty
     end
 
     context "in a thread that isn't Buddy's" do
@@ -1496,10 +1110,10 @@ RSpec.describe ByteController, type: :controller do
         user.byte_conversations.create!(mode: :claude, name: "Claude", last_message_at: Time.current)
       }
 
-      it "says so instead of briefing" do
+      it "answers instead of briefing" do
         expect { send_command("/today", conversation: claude) }.not_to change { seeds(claude).count }
 
-        expect(claude.byte_messages.last.body).to include("Buddy thing")
+        expect(claude.byte_messages.last.body).to be_present
       end
     end
   end

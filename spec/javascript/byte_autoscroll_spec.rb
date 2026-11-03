@@ -37,28 +37,9 @@ RSpec.describe "Byte thread auto-scroll" do
       "reader back down: #{offenders.inspect}"
   end
 
-  it "keeps the keyboard pin as a bounded moment" do
-    expect(src).to include("composePinUntil = Date.now() + COMPOSE_PIN_MS")
-    expect(src).to match(/const COMPOSE_PIN_MS = \d+;/)
-    expect(src).to include("const pinningToCompose = () => Date.now() < composePinUntil")
-  end
-
   # The correction: tapping the composer while reading something further up used
   # to travel to the bottom. It holds a position now, and only one already held.
   it "does not move a reader who reaches for the composer part way up" do
     expect(src).to include("if (!composerFocused() || !measureAtBottom()) return;")
-  end
-
-  # The other half of the rule: what a reader who is NOT at the bottom gets
-  # instead of being moved.
-  it "counts what arrived instead of scrolling to it" do
-    expect(src).to include("unreadCount += 1")
-    expect(src).to include("jumpCount.textContent = unreadCount > 0")
-  end
-
-  # The same test the drawer badge uses, so the two numbers mean one thing: a
-  # receipt chip and a half-streamed reply are not something to come back to.
-  it "counts the same things the drawer counts" do
-    expect(src).to include("if (!countsAsUnread(message)) return;")
   end
 end

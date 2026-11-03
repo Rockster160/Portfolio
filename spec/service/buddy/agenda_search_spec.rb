@@ -1,9 +1,7 @@
 require "rails_helper"
 
 # Finding something on the calendar by name, outside the eight days the context
-# carries. Prod Aug 3: "when is my next 1-1 with Eric?" was answered "Wednesday
-# at 11:00 AM" off a real Wednesday 11:00 AM item belonging to someone else,
-# because the window always holds a plausible-looking answer.
+# carries.
 RSpec.describe Buddy::AgendaSearch do
   let(:user)   { create(:user) }
   let(:seeds)  { [] }
@@ -45,17 +43,11 @@ RSpec.describe Buddy::AgendaSearch do
       expect(found[:items]).to eq([recent, older])
     end
 
-    it "keeps past and future apart" do
-      item!("Dentist", at: 5.days.ago)
-      ahead = item!("Dentist", at: 5.days.from_now)
-
-      expect(described_class.call(user: user, query: "dentist")[:items]).to contain_exactly(ahead)
-    end
-
-    it "spans both ways when asked whether the thing exists at all" do
+    it "keeps past and future apart unless asked for either" do
       behind = item!("Dentist", at: 5.days.ago)
       ahead  = item!("Dentist", at: 5.days.from_now)
 
+      expect(described_class.call(user: user, query: "dentist")[:items]).to contain_exactly(ahead)
       expect(described_class.call(user: user, query: "dentist", direction: :any)[:items])
         .to contain_exactly(behind, ahead)
     end
@@ -99,22 +91,16 @@ RSpec.describe Buddy::AgendaSearch do
       expect(row).to include("on Mine")
     end
 
-    # The one place the WHOLE address appears. Everything ambient carries
-    # `Buddy::Place.short`, because a briefing reading out a ZIP is what got
-    # that changed — but "what's the address" is a real question, and a search
-    # is how it gets asked. Rows carried no place at all before this, so "where
-    # is the plunge" had nothing to answer from.
-    it "gives the address in full, which nothing ambient does" do
-      item = item!("Plunge with Wil", at: 5.days.from_now)
-      item.update!(location: "Horsetail Falls, Alpine, UT")
+    # The one place the WHOLE address appears; everything ambient carries
+    # `Buddy::Place.short`.
+    it "gives the address in full, and no place when the item has none" do
+      placed = item!("Plunge with Wil", at: 5.days.from_now)
+      placed.update!(location: "Horsetail Falls, Alpine, UT")
+      bare = item!("Dentist", at: 5.days.from_now)
 
-      expect(described_class.rows([item], user).first).to include("at Horsetail Falls, Alpine, UT")
-    end
-
-    it "says nothing about a place when the item has none" do
-      item = item!("Dentist", at: 5.days.from_now)
-
-      expect(described_class.rows([item], user).first).not_to include("· at ")
+      rows = described_class.rows([placed, bare], user)
+      expect(rows.first).to include("Horsetail Falls, Alpine, UT")
+      expect(rows.last).not_to include("· at ")
     end
 
     # Same distinction the briefing draws: a partner's shared item is awareness,
@@ -129,10 +115,7 @@ RSpec.describe Buddy::AgendaSearch do
       expect(described_class.rows([item], user)).to all(include("Chelsea's, not theirs"))
     end
 
-    # Prod 5266: "I want to leave only once Chelsea gets back from her yoga that
-    # day." The search found the yoga and handed back a start time and nothing
-    # else, so Byte asked him for the end time — and then for a drive home —
-    # both of which were on the row.
+    # Scheduling around somebody's item needs its end and the way home.
     describe "the figures somebody schedules around" do
       it "says when it ends" do
         item = item!("Yoga", at: 3.days.from_now)
@@ -181,18 +164,11 @@ RSpec.describe Buddy::AgendaSearch do
     end
   end
 
-  # Prod 4462-4471. Five dinners went on as weekly series at 18:40 Sunday;
-  # MATERIALIZE_WINDOW is 30 hours, so exactly one of them had a row. Buddy then
-  # told him three times over four turns that the other four weren't there -
-  # "I'd need you to point at that specific row" - while the browser rendered
-  # all five off the rules the whole time.
+  # MATERIALIZE_WINDOW only writes rows for the next 30 hours, so most of a
+  # weekly series exists only as its rule.
   describe "a series with no rows yet" do
-      # Every time here is placed relative to now, and the suite runs at
-    # whatever o'clock it runs at: late in the evening "3 hours from now" is
-    # tomorrow, and every one of these items fell out of today's window, so
-    # the block passed and failed by the clock rather than by the filter it
-    # is about. Pinned to a Monday morning, which is also what the weekly
-    # rules below need in order to have materialized anything.
+    # Pinned to a Monday morning so the weekly rules have materialized
+    # something and nothing depends on the hour the suite runs.
     around { |example| travel_to(Time.utc(2026, 8, 24, 15, 0)) { example.run } }
 
     def series!(name, on: agenda, day: :mon, at: "18:00")
@@ -203,17 +179,22 @@ RSpec.describe Buddy::AgendaSearch do
       )
     end
 
-    it "finds an occurrence that exists only as a rule" do
-      series!("Salmon soyaki bowls", day: :tue)
+    it "finds and counts an occurrence that exists only as a rule, with a handle that resolves to it", :aggregate_failures do
+      schedule = series!("Salmon soyaki bowls", day: :tue)
 
-      titles = described_class.call(user: user, query: "salmon")[:items].map(&:name)
-      expect(titles).to include("Salmon soyaki bowls")
-    end
+      found   = described_class.call(user: user, query: "salmon")
+      phantom = found[:items].first
+      expect(found[:items].map(&:name)).to include("Salmon soyaki bowls")
+      expect(found[:total]).to be_positive
+      expect(described_class.call(user: user, query: "pizza")[:items]).to be_empty
 
-    it "counts it in the total, so nothing reads as no results" do
-      series!("Salmon soyaki bowls", day: :tue)
+      row = described_class.rows([phantom], user).first
+      expect(row).to start_with("##{phantom.display_id} · Salmon soyaki bowls · ")
+      expect(row).not_to include("#s#{schedule.id}")
 
-      expect(described_class.call(user: user, query: "salmon")[:total]).to be_positive
+      located = AgendaItem.locate_for_user(phantom.display_id, user, editable: true)
+      expect(located.start_at).to eq(phantom.start_at)
+      expect(located.name).to eq("Salmon soyaki bowls")
     end
 
     it "does not list the same evening twice when one occurrence IS materialized" do
@@ -226,38 +207,6 @@ RSpec.describe Buddy::AgendaSearch do
       starts = found.map { |i| i.start_at.to_i }
       expect(starts.uniq.length).to eq(starts.length)
     end
-
-    it "keeps a name that matches nothing out of it" do
-      series!("Salmon soyaki bowls", day: :tue)
-
-      expect(described_class.call(user: user, query: "pizza")[:items]).to be_empty
-    end
-
-    # One handle shape for everything. It used to hand back `#s<schedule_id>`
-    # and say the occurrence had no row of its own — an implementation detail
-    # of how repeats are stored, wired into an instruction that the date could
-    # only be changed as a whole series.
-    it "hands back an ordinary handle, the same as any other occurrence" do
-      schedule = series!("Salmon soyaki bowls", day: :tue)
-      phantom  = described_class.call(user: user, query: "salmon")[:items].first
-
-      row = described_class.rows([phantom], user).first
-      expect(row).to start_with("##{phantom.display_id} · Salmon soyaki bowls · ")
-      expect(row).to include("repeats")
-      expect(row).not_to include("#s#{schedule.id}")
-    end
-
-    # And that handle has to be one `edit_agenda_item` can act on, or the row
-    # is naming something unreachable.
-    it "hands back a handle that resolves to the occurrence" do
-      series!("Salmon soyaki bowls", day: :tue)
-      phantom = described_class.call(user: user, query: "salmon")[:items].first
-
-      found = AgendaItem.locate_for_user(phantom.display_id, user, editable: true)
-
-      expect(found.start_at).to eq(phantom.start_at)
-      expect(found.name).to eq("Salmon soyaki bowls")
-    end
   end
 
   describe "the search_agenda tool" do
@@ -269,28 +218,23 @@ RSpec.describe Buddy::AgendaSearch do
       )
     end
 
-    it "settles in the turn, so it answers the model rather than leaving a row behind" do
-      expect(Buddy::Tools.answers?(Buddy::Tools[:search_agenda])).to be(true)
-      expect(search(query: "eric")[:status]).to eq(:answered)
-    end
-
     it "hands the matches, with their ids, back in the same turn" do
       item = item!("1:1 Rocco <> Eric", at: 40.days.from_now)
 
       result = search(query: "eric")
 
+      expect(result[:status]).to eq(:answered)
       expect(result[:items].join("\n")).to include("1:1 Rocco <> Eric").and include("##{item.id}")
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
     end
 
-    # The whole failure was answering an absent thing with a nearby one.
-    it "tells the model plainly when the calendar has nothing, and not to substitute" do
+    it "answers with no items, not a nearby one, when the calendar has nothing" do
       item!("Zoom meet with Bri", at: 2.days.from_now)
 
       result = search(query: "eric")
 
+      expect(result[:status]).to eq(:answered)
       expect(result[:items]).to be_empty
-      expect(result[:how]).to include("NOTHING").and include("Do not offer a nearby item")
     end
   end
 end

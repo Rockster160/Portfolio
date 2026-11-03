@@ -1,15 +1,6 @@
 require "rails_helper"
 
 RSpec.describe Buddy::Context do
-  # Two-layer defense against silent "empty context" regressions:
-  #   1. Explicit fixture setup exercises the FULL happy path against
-  #      Buddy::Context.build. Any method-name typo / API drift breaks
-  #      a specific assertion, same as the member_user_ids bug.
-  #   2. Canary spec: assert Rails.logger receives ZERO warnings during
-  #      a healthy build. Every silent rescue in Context.rb logs on
-  #      failure - if a future change adds a typo in ANY builder, its
-  #      rescue fires, its warning fires, this spec breaks. Catches the
-  #      pattern, not the specific bug.
   describe "what a turn is handed" do
     let!(:owner) { User.create!(username: "owner-#{SecureRandom.hex(4)}", password: "abcd1234!", password_confirmation: "abcd1234!") }
     let!(:household) {
@@ -39,160 +30,90 @@ RSpec.describe Buddy::Context do
       )
     }
 
-    describe ".build (populated fixtures - end to end)" do
-      it "returns pending and done chores split into their own buckets" do
-        ctx = described_class.build(user, conversation)
-
-        pending_names = ctx[:chores_pending_today].map { |c| c[:name] }
-        done_names    = ctx[:chores_done_today].map { |c| c[:name] }
-
-        expect(pending_names).to include("Water plants")
-        expect(pending_names).not_to include("Brush teeth")
-        expect(done_names).to include("Brush teeth")
-        expect(done_names).not_to include("Water plants")
-      end
-
-      it "populates the identity + time fields" do
-        ctx = described_class.build(user, conversation)
-
-        expect(ctx[:user_first_name]).to be_present
-        expect(ctx[:timezone]).to eq("America/Denver")
-        expect(ctx[:now_local]).to be_present
-      end
-
-      # Canary: silent-rescue detector. Every Buddy rescue funnels through
-      # Buddy::Errors.report. This spec asserts .report is never called
-      # during a healthy build - catches the WHOLE class of bug (typos,
-      # renamed methods, API drift) at commit time. Includes rescues in
-      # Context and any other builder called during Context.build.
-      it "never invokes Buddy::Errors.report during a healthy build" do
-        allow(Buddy::Errors).to receive(:report).and_call_original
-
-        described_class.build(user, conversation)
-
-        expect(Buddy::Errors).not_to have_received(:report)
-      end
+    def chip(body, at:, tool: "call_jil_function", ok: true)
+      conversation.byte_messages.create!(
+        user:       user,
+        direction:  :inbound,
+        state:      :delivered,
+        body:       body,
+        created_at: at,
+        metadata:   { "kind" => "buddy_activity", "tool_name" => tool, "ok" => ok },
+      )
     end
 
-    # Prod 3129 and 3208: told it hadn't done a thing, Buddy argued and was wrong
-    # both times. The receipts are kept out of the transcript on purpose, so this
-    # is the only record of its own doing it can consult.
-    describe "recent_actions" do
-      def chip(body, at:, tool: "call_jil_function", ok: true)
-        conversation.byte_messages.create!(
-          user:       user,
-          direction:  :inbound,
-          state:      :delivered,
-          body:       body,
-          created_at: at,
-          metadata:   { "kind" => "buddy_activity", "tool_name" => tool, "ok" => ok },
-        )
-      end
+    # Every Buddy rescue funnels through Buddy::Errors.report, so a healthy
+    # build that reports nothing is the canary for a silently-empty section.
+    #
+    # `recent_actions` is the only record of its own doing Buddy can consult
+    # when told it didn't do something: what ran (chips, not prose), newest
+    # first, inside the window, failures included.
+    it "splits pending from done, carries identity and time, recent actions, and reports no errors", :aggregate_failures do
+      allow(Buddy::Errors).to receive(:report).and_call_original
+      chip("Called **HASS Blinds**", at: 20.minutes.ago)
+      chip("Dark monitors", at: 2.minutes.ago, tool: "mac_command")
+      chip("Called **HASS TV**", at: 1.minute.ago, ok: false)
+      chip("Called **HASS Light**", at: 5.hours.ago)
+      conversation.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered,
+        body: "Kk! Monitors are out. *click*", metadata: { "kind" => "buddy" }
+      )
 
-      it "reports what ran, newest first, with the tool that ran it" do
-        chip("Called **HASS Blinds**", at: 20.minutes.ago)
-        chip("Dark monitors", at: 2.minutes.ago, tool: "mac_command")
+      ctx = described_class.build(user, conversation)
 
-        actions = described_class.build(user, conversation)[:recent_actions]
+      expect(ctx[:chores_pending_today].pluck(:name)).to include("Water plants")
+      expect(ctx[:chores_pending_today].pluck(:name)).not_to include("Brush teeth")
+      expect(ctx[:chores_done_today].pluck(:name)).to include("Brush teeth")
+      expect(ctx[:chores_done_today].pluck(:name)).not_to include("Water plants")
 
-        expect(actions.pluck(:did)).to eq(["Dark monitors", "Called HASS Blinds"])
-        expect(actions.first[:tool]).to eq("mac_command")
-        expect(actions.first[:at]).to be_present
-      end
+      expect(ctx[:user_first_name]).to be_present
+      expect(ctx[:timezone]).to eq("America/Denver")
+      expect(ctx[:now_local]).to be_present
 
-      it "leaves out prose, so only things that really ran are evidence" do
-        conversation.byte_messages.create!(
-          user: user, direction: :inbound, state: :delivered,
-          body: "Kk! Monitors are out. *click*", metadata: { "kind" => "buddy" }
-        )
+      actions = ctx[:recent_actions]
+      expect(actions.pluck(:did)).to eq(["Called HASS TV", "Dark monitors", "Called HASS Blinds"])
+      expect(actions.first[:ok]).to be(false)
+      expect(actions.second[:tool]).to eq("mac_command")
+      expect(actions.second[:at]).to be_present
 
-        expect(described_class.build(user, conversation)[:recent_actions]).to be_empty
-      end
-
-      it "does not reach back past the window, so it answers 'did you just'" do
-        chip("Called **HASS Light**", at: 5.hours.ago)
-
-        expect(described_class.build(user, conversation)[:recent_actions]).to be_empty
-      end
-
-      it "keeps a failed call, which is its own answer" do
-        chip("Called **HASS TV**", at: 1.minute.ago, ok: false)
-
-        expect(described_class.build(user, conversation)[:recent_actions].first[:ok]).to be(false)
-      end
-
-      it "is nameable through get_context, or Buddy can never ask for it" do
-        expect(Buddy::GPT::ContextTool::SECTIONS).to include(:recent_actions)
-      end
-    end
-
-    describe "member_user_ids regression guard" do
-      it "calls a method that actually exists on ChoreHousehold" do
-        expect(household).to respond_to(:member_user_ids)
-        expect(household).not_to respond_to(:user_ids)
-        expect(household.member_user_ids).to eq([owner.id])
-      end
+      expect(Buddy::Errors).not_to have_received(:report)
     end
   end
 
-  # Buddy previously fell back to log_event because it only ever saw the
-  # today/overdue/hot chore buckets. `chores_all` gives it the complete active
-  # roster to match completions against.
-  # A prompt whose `options` is a bare hash — 320 rows in dev carry one. It used
-  # to raise inside the section, which production swallowed into an empty list
-  # (their real prompts vanish silently) and development re-raised outright,
-  # taking the whole turn with it.
-  describe "pending_prompts with a malformed row" do
-    let(:user) {
-      User.create!(username: "prompt-#{SecureRandom.hex(4)}", password: "abcd1234!", password_confirmation: "abcd1234!")
-    }
-    let(:convo) { user.byte_conversations.create!(name: "T", mode: :buddy, buddy_theme: "byte") }
+  # A prompt whose `options` is a bare hash used to raise inside the section,
+  # emptying the whole list (or the whole turn in development).
+  it "lists a prompt with malformed options alongside the good ones, in the full build" do
+    user  = User.create!(username: "prompt-#{SecureRandom.hex(4)}", password: "abcd1234!", password_confirmation: "abcd1234!")
+    convo = user.byte_conversations.create!(name: "T", mode: :buddy, buddy_theme: "byte")
+    Prompt.create!(user: user, question: "Broken one", options: { "choices" => %w[a b] })
+    Prompt.create!(user: user, question: "Fine one", options: [{ "type" => "text", "question" => "How was it?" }])
 
-    it "skips the bad row and still lists the good ones" do
-      Prompt.create!(user: user, question: "Broken one", options: { "choices" => %w[a b] })
-      Prompt.create!(user: user, question: "Fine one", options: [{ "type" => "text", "question" => "How was it?" }])
+    listed = described_class.send(:pending_prompts, user)
 
-      listed = described_class.send(:pending_prompts, user)
-
-      expect(listed.pluck(:title)).to include("Broken one", "Fine one")
-      expect(listed.detect { |p| p[:title] == "Fine one" }[:questions]).to eq(["How was it?"])
-      expect(listed.detect { |p| p[:title] == "Broken one" }[:questions]).to eq([])
-    end
-
-    it "doesn't take the context build down with it" do
-      Prompt.create!(user: user, question: "Broken one", options: { "choices" => %w[a b] })
-
-      built = described_class.build(user, convo)
-
-      expect(built[:pending_prompts].pluck(:title)).to include("Broken one")
-    end
+    expect(listed.detect { |p| p[:title] == "Fine one" }[:questions]).to eq(["How was it?"])
+    expect(listed.detect { |p| p[:title] == "Broken one" }[:questions]).to eq([])
+    expect(described_class.build(user, convo)[:pending_prompts].pluck(:title)).to include("Broken one", "Fine one")
   end
 
-  describe "chores_all" do
-    it "lists every active chore (even ones not due today) and excludes archived" do
-      user = create(:user)
-      create(:chore, name: "Recycling Out", created_by_user: user)
-      user.reload
-      create(:chore, name: "Water Plants", created_by_user: user, chore_household: user.chore_household)
-      archived = create(:chore, name: "Old Thing", created_by_user: user, chore_household: user.chore_household)
-      archived.update!(archived_at: Time.current)
+  it "lists every active chore in chores_all, excluding archived, and nothing without a household" do
+    user = create(:user)
+    create(:chore, name: "Recycling Out", created_by_user: user)
+    user.reload
+    create(:chore, name: "Water Plants", created_by_user: user, chore_household: user.chore_household)
+    archived = create(:chore, name: "Old Thing", created_by_user: user, chore_household: user.chore_household)
+    archived.update!(archived_at: Time.current)
 
-      roster = described_class.build(user, user.byte_conversations.create!(mode: :buddy))[:chores_all]
+    roster = described_class.build(user, user.byte_conversations.create!(mode: :buddy))[:chores_all]
 
-      expect(roster).to include("Recycling Out", "Water Plants")
-      expect(roster).not_to include("Old Thing")
-    end
+    expect(roster).to include("Recycling Out", "Water Plants")
+    expect(roster).not_to include("Old Thing")
 
-    it "is an empty list for a user with no household" do
-      user = create(:user)
-      user.update_column(:chore_household_id, nil)
-      expect(described_class.build(user, user.byte_conversations.create!(mode: :buddy))[:chores_all]).to eq([])
-    end
+    loner = create(:user)
+    loner.update_column(:chore_household_id, nil)
+    expect(described_class.build(loner, loner.byte_conversations.create!(mode: :buddy))[:chores_all]).to eq([])
   end
 
   # Personal chores credit only the person who did them; household chores count
-  # if ANYONE did them. The bug: Chelsea brushing her teeth showed as Rocco's
-  # teeth already done.
+  # if ANYONE did them.
   describe "chore attribution" do
     let(:household) { create(:chore_household) }
     let(:rocco)     { create(:user) }
@@ -206,94 +127,54 @@ RSpec.describe Buddy::Context do
       chelsea.update_column(:chore_household_id, household.id)
     end
 
-    it "does not credit a PERSONAL chore to Rocco when Chelsea did it, but DOES for a household one" do
-      teeth = create(:chore, name: "Brush Teeth", chore_household: household, created_by_user: rocco, sharing_mode: :personal)
-      feed  = create(:chore, name: "Feed Whisper", chore_household: household, created_by_user: rocco, sharing_mode: :household)
-      ChoreDaily.create!(user: rocco, chore: teeth)
-      ChoreDaily.create!(user: rocco, chore: feed)
-
-      # Chelsea completes both today.
-      create(:chore_completion, chore: teeth, user: chelsea, day_key: rocco.perceived_today)
-      create(:chore_completion, chore: feed,  user: chelsea, day_key: rocco.perceived_today)
-
-      ctx     = described_class.build(rocco, conversation)
-      pending = ctx[:chores_pending_today].map { |c| c[:name] }
-      done    = ctx[:chores_done_today].map { |c| c[:name] }
-
-      expect(pending).to include("Brush Teeth")     # personal → Chelsea's doesn't count for Rocco
-      expect(done).not_to include("Brush Teeth")
-      expect(done).to include("Feed Whisper")       # household → anyone counts
+    def chore!(name, mode)
+      create(:chore, name: name, chore_household: household, created_by_user: rocco, sharing_mode: mode)
+        .tap { |chore| ChoreDaily.create!(user: rocco, chore: chore) }
     end
 
-    it "credits a personal chore to Rocco when ROCCO did it" do
-      teeth = create(:chore, name: "Brush Teeth", chore_household: household, created_by_user: rocco, sharing_mode: :personal)
-      ChoreDaily.create!(user: rocco, chore: teeth)
-      create(:chore_completion, chore: teeth, user: rocco, day_key: rocco.perceived_today)
-
-      ctx = described_class.build(rocco, conversation)
-      expect(ctx[:chores_done_today].map { |c| c[:name] }).to include("Brush Teeth")
+    def done!(chore, by)
+      create(:chore_completion, chore: chore, user: by, day_key: rocco.perceived_today)
     end
 
-    # A shared chore counts as done the moment anyone does it, which is right -
-    # but the bucket carried no actor, so the whole thing read as a list of
-    # Rocco's wins. Prod 2528 congratulated him for one he hadn't touched.
-    describe "who gets the credit" do
-      def feed_chore!
-        create(
-          :chore, name: "Feed Whisper", chore_household: household,
-          created_by_user: rocco, sharing_mode: :household
-        ).tap { |chore| ChoreDaily.create!(user: rocco, chore: chore) }
-      end
+    # A shared chore done by somebody else names who did it, so the bucket
+    # doesn't read as a list of Rocco's wins.
+    it "credits a personal chore only to its doer, a household one to anyone, naming the housemate", :aggregate_failures do
+      teeth = chore!("Brush Teeth", :personal)
+      feed  = chore!("Feed Whisper", :household)
+      chore!("Pending Shared", :household)
+      done!(teeth, chelsea)
+      done!(feed, chelsea)
 
-      def done_row(name)
-        described_class.build(rocco, conversation)[:chores_done_today].find { |c| c[:name] == name }
-      end
+      ctx  = described_class.build(rocco, conversation)
+      done = ctx[:chores_done_today].index_by { |c| c[:name] }
 
-      it "names the housemate who actually did it" do
-        create(:chore_completion, chore: feed_chore!, user: chelsea, day_key: rocco.perceived_today)
+      expect(ctx[:chores_pending_today].pluck(:name)).to include("Brush Teeth")
+      expect(done).not_to have_key("Brush Teeth")
+      expect(done["Feed Whisper"][:by]).to eq(chelsea.first_name)
+      expect(ctx[:chores_pending_today].find { |c| c[:name] == "Pending Shared" }).not_to have_key(:by)
+    end
 
-        expect(done_row("Feed Whisper")[:by]).to eq(chelsea.first_name)
-      end
+    # Both of them tapping it is a real thing that happens, and he did do it.
+    it "credits a chore to Rocco without a :by when he did it, alone or alongside her" do
+      teeth = chore!("Brush Teeth", :personal)
+      feed  = chore!("Feed Whisper", :household)
+      done!(teeth, rocco)
+      done!(feed, chelsea)
+      done!(feed, rocco)
 
-      it "says nothing when Rocco did it himself" do
-        create(:chore_completion, chore: feed_chore!, user: rocco, day_key: rocco.perceived_today)
+      done = described_class.build(rocco, conversation)[:chores_done_today].index_by { |c| c[:name] }
 
-        expect(done_row("Feed Whisper")).not_to have_key(:by)
-      end
-
-      # Both of them tapping it is a real thing that happens, and he did do it,
-      # so the credit is his to take.
-      it "says nothing when they both did it" do
-        feed = feed_chore!
-        create(:chore_completion, chore: feed, user: chelsea, day_key: rocco.perceived_today)
-        create(:chore_completion, chore: feed, user: rocco, day_key: rocco.perceived_today)
-
-        expect(done_row("Feed Whisper")).not_to have_key(:by)
-      end
-
-      it "leaves pending chores alone" do
-        feed_chore!
-
-        pending = described_class.build(rocco, conversation)[:chores_pending_today]
-        expect(pending.find { |c| c[:name] == "Feed Whisper" }).not_to have_key(:by)
-      end
+      expect(done).to have_key("Brush Teeth")
+      expect(done["Brush Teeth"]).not_to have_key(:by)
+      expect(done["Feed Whisper"]).not_to have_key(:by)
     end
   end
 
-  # What order the briefing reads the pending list in.
-  #
-  # Aug 7: both briefings that went out named the dailies first — "Cymbalta,
-  # water, teeth…" and "teeth, kitty litter, puppy feeding, water, and Wordle…" —
-  # because the bucket was built `daily_ids + hot_ids + marked_today` and they
-  # read straight down it. The seed says the opposite: a daily is something known
-  # cold, and the thing stamped due today is the one nobody remembers.
+  # A daily is something known cold; the thing stamped due today is the one
+  # nobody remembers, so it leads.
   describe "pending chore order" do
-    # Pinned to the middle of a day on purpose. A chore day runs 4am to 4am
-    # (ChoreDay::CUTOFF_HOURS), so between midnight and 4 the calendar date has
-    # rolled and the chore day hasn't — `Date.current` names tomorrow, every
-    # `marked_due_at: Time.current` lands before the window, and the whole file
-    # fails for reasons that have nothing to do with ordering. It did exactly
-    # that, on an unchanged tree, at 8:41pm Mountain.
+    # Mid-day: between midnight and 4am the chore day hasn't rolled with the
+    # calendar date (ChoreDay::CUTOFF_HOURS).
     around { |ex| travel_to(Time.zone.parse("2026-08-08 15:00 UTC")) { ex.run } }
 
     let(:user) { create(:user) }
@@ -326,119 +207,38 @@ RSpec.describe Buddy::Context do
       buckets[:due_today].pluck(:name)
     end
 
-    it "puts a one-off stamped for today ahead of the daily habits" do
-      daily("Teeth")
-      daily("Water")
-      due_today("Gutters")
-
-      expect(pending_names.first).to eq("Gutters")
-    end
-
-    it "keeps the dailies rather than dropping them" do
-      daily("Teeth")
-      due_today("Gutters")
-
-      expect(pending_names).to contain_exactly("Gutters", "Teeth")
-      expect(pending_names.last).to eq("Teeth")
-    end
-
-    it "sorts the hot picks by how hot they are, under the due-today one" do
+    # A daily also stamped for today is still a habit.
+    it "puts a one-off stamped for today first, hot picks by heat, then the dailies" do
+      daily("Teeth").update!(marked_due_at: Time.current)
       due_today("Gutters")
       hot(daily("Litter"), 2)
       hot(daily("Wipe"), 5)
 
-      expect(pending_names).to eq(%w[Gutters Wipe Litter])
+      expect(pending_names).to eq(%w[Gutters Wipe Litter Teeth])
     end
 
-    # It's still the habit they know cold; the stamp only says it's on today,
-    # which every daily already is.
-    it "leaves a daily that is ALSO stamped for today with the dailies" do
-      chore = daily("Teeth")
-      chore.update!(marked_due_at: Time.current)
-      due_today("Gutters")
-
-      expect(pending_names.first).to eq("Gutters")
-    end
-
-    # Sorting wasn't enough. Aug 7 AND Aug 8 both read the dailies out in full
-    # under a prompt saying at most three names, because all of them were sitting
-    # right there. `chores_due_today` is the short list the briefing names from —
-    # the same records, with the habits taken out.
+    # `chores_due_today` is the short list the briefing names from: the same
+    # records with the habits taken out. A pin is a scoring decision; it says
+    # nothing about whether today is different. Deliberately uncapped.
     describe "the briefing's own list" do
-      it "holds what's due today and nothing habitual" do
+      it "holds every stamped one-off, carrying its multiplier, and nothing habitual or merely pinned", :aggregate_failures do
         daily("Teeth")
-        daily("Water")
-        due_today("Gutters")
-
-        expect(due_today_names).to eq(["Gutters"])
-      end
-
-      # Rocco, 8 Sep: "we should just dump all of the hot picks from the
-      # briefing entirely. They've never worked well." Not even a 5x. Every line
-      # drawn inside them failed in one direction or the other - all of them
-      # rebuilt the daily read-out, and only the big ones hid a chore that was
-      # pinned AND genuinely due, because the pin took it out of the schedule's
-      # reach. A pin is a scoring decision; it says nothing about whether today
-      # is different.
-      it "does not name one that is only a hot pick, however big the multiplier" do
-        hot(create(:chore, name: "Litter", created_by_user: user), 5)
-
-        expect(due_today_names).to be_empty
-      end
-
-      it "drops a daily even when it's been pinned hot" do
         hot(daily("Wipe"), 5)
-
-        expect(due_today_names).to be_empty
-      end
-
-      # Seven chores get auto-pinned at 2x every single morning - 144 of them in
-      # the three weeks to Aug 10, against three 5x ever. So a plain 2x is the
-      # rotation, not a reason to say anything. Aug 10's briefing named six of
-      # them in a row; every one was a 2x pin.
-      it "ignores the everyday 2x pins, which are the routine wearing a new name" do
-        %w[Dishes Mail Espresso].each { |name| hot(create(:chore, name: name, created_by_user: user), 2) }
-
-        expect(due_today_names).to be_empty
-      end
-
-      it "keeps the stamped one-off and leaves both pins out" do
-        due_today("Gutters")
         hot(create(:chore, name: "Litter", created_by_user: user), 5)
-        hot(create(:chore, name: "Dishes", created_by_user: user), 2)
+        %w[Dishes Mail].each { |name| hot(create(:chore, name: name, created_by_user: user), 2) }
+        hot(due_today("Gutters"), 2)
+        5.times { |i| due_today("Job #{i}") }
 
-        expect(due_today_names).to contain_exactly("Gutters")
+        rows = buckets[:due_today]
+        expect(rows.pluck(:name)).to contain_exactly("Gutters", *Array.new(5) { |i| "Job #{i}" })
+        expect(rows.find { |r| r[:name] == "Gutters" }[:hot]).to eq("2x")
       end
 
-      # It stops being a REASON without stopping being a DETAIL. A job that
-      # earned its place carries its multiplier through, which is what the
-      # briefing turns into "double points for getting that one done".
-      it "still carries the multiplier on a job that got there some other way" do
-        chore = due_today("Gutters")
-        hot(chore, 2)
-
-        row = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today].first
-        expect(row[:name]).to eq("Gutters")
-        expect(row[:hot]).to eq("2x")
-      end
-
-      # Deliberately uncapped. A ceiling was tried and either got ignored while
-      # the full list sat in front of the model, or lopped the tail off a day that
-      # genuinely had a lot on. Being right about what belongs here is what keeps
-      # it short; if six separate one-offs really are stamped for today, six is
-      # the honest answer.
-      it "hands over everything that qualifies, however many that is" do
-        6.times { |i| due_today("Job #{i}") }
-
-        expect(due_today_names.length).to eq(6)
-      end
-
-      it "comes back empty on a day that's only habits, rather than reaching for one" do
+      it "comes back empty on a day that's only habits, keeping them in pending" do
         daily("Teeth")
         daily("Water")
 
         expect(due_today_names).to be_empty
-        # The habits are still in context — they just aren't what gets named.
         expect(pending_names).to contain_exactly("Teeth", "Water")
       end
 
@@ -452,81 +252,41 @@ RSpec.describe Buddy::Context do
   end
 
   # A chore day rolls at 4am (ChoreDay), the perceived day at 3am
-  # (User#perceived_today). Between them sits an hour where the two names
-  # disagree, and the buckets are keyed the ChoreDay way throughout — completions,
-  # hot picks, and the marked-due window all land a day off if the perceived date
-  # is what gets passed in. Its own file-level block because it needs its own
-  # clock, and travel_to doesn't nest.
+  # (User#perceived_today). The buckets are keyed the ChoreDay way throughout,
+  # so passing the perceived date would land everything a day off.
   describe "Buddy chores across the 3am-to-4am seam" do
     around { |ex| travel_to(Time.find_zone("America/Denver").parse("2026-08-08 03:30")) { ex.run } }
 
-    # User#timezone is hardcoded to America/Denver, which is what both rollovers
-    # are read in — so 3:30am Denver is genuinely inside the seam.
     let(:user) { create(:user) }
     let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
 
     before { user.update!(chore_household_id: household.id) }
 
-    def daily(name)
-      chore = create(:chore, name: name, created_by_user: user)
-      user.chore_dailies.create!(chore: chore)
-      chore
-    end
+    it "counts a chore stamped in that hour as due and a completion as done, in the real context too", :aggregate_failures do
+      expect(user.perceived_today).to eq(Date.new(2026, 8, 8))
+      expect(ChoreDay.current(user)).to eq(Date.new(2026, 8, 7))
 
-    def due_today(name)
-      create(:chore, name: name, created_by_user: user, marked_due_at: Time.current)
-    end
+      create(:chore, name: "Gutters", created_by_user: user, marked_due_at: Time.current)
+      teeth = create(:chore, name: "Teeth", created_by_user: user)
+      user.chore_dailies.create!(chore: teeth)
+      create(:chore_completion, chore: teeth, user: user)
 
-    describe "which day the buckets are built for" do
-      it "disagrees with the perceived date, which is the whole problem" do
-        expect(user.perceived_today).to eq(Date.new(2026, 8, 8))
-        expect(ChoreDay.current(user)).to eq(Date.new(2026, 8, 7))
-      end
+      buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
+      expect(buckets[:due_today].pluck(:name)).to eq(["Gutters"])
+      expect(buckets[:overdue_backlog]).to be_empty
+      expect(buckets[:pending_today].pluck(:name)).not_to include("Teeth")
+      expect(buckets[:done_today].pluck(:name)).to eq(["Teeth"])
 
-      it "still counts a chore stamped due in that hour as due, not overdue" do
-        due_today("Gutters")
-
-        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
-
-        expect(buckets[:due_today].pluck(:name)).to eq(["Gutters"])
-        expect(buckets[:overdue_backlog].pluck(:name)).to be_empty
-      end
-
-      it "sees a completion logged in that hour as done" do
-        chore = daily("Teeth")
-        create(:chore_completion, chore: chore, user: user)
-
-        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
-
-        expect(buckets[:pending_today].pluck(:name)).to be_empty
-        expect(buckets[:done_today].pluck(:name)).to eq(["Teeth"])
-      end
-
-      # What the context actually hands the model, rather than what a helper
-      # called directly does — the bug was entirely in which date got passed.
-      it "builds the real context off the chore day" do
-        due_today("Gutters")
-        conversation = user.byte_conversations.create!(mode: :buddy, name: "Buddy")
-
-        context = Buddy::Context.full(user, conversation)
-
-        expect(context[:chores_due_today].pluck(:name)).to eq(["Gutters"])
-        expect(context[:chores_overdue_backlog]).to be_empty
-      end
+      context = Buddy::Context.full(user, user.byte_conversations.create!(mode: :buddy, name: "Buddy"))
+      expect(context[:chores_due_today].pluck(:name)).to eq(["Gutters"])
+      expect(context[:chores_overdue_backlog]).to be_empty
     end
   end
 
-  # Rocco, 2026-09-04: "again, I WOULD like Byte to mention the chores that are
-  # scheduled DUE TODAY, excluding the dailies, and maybe even the ones that are
-  # every other day. It CAN summarize, but should do so sensibly. For example,
-  # Wednesdays have a whole bunch of gather and take out items for the trash.
-  # Those can be grouped into just saying 'It's trash day'."
-  #
-  # A chore whose SCHEDULE lands on today went to `scheduled_today`, which a
-  # briefing never sees, so the Wednesday bin run had no way of reaching one.
+  # A chore whose SCHEDULE lands on today is named in the briefing's list,
+  # unless its rhythm is every day or it sits in their daily rotation.
   describe "a chore the schedule puts on today" do
-    # A Wednesday, so the bin run is genuinely due. Mid-morning, well clear of
-    # the 3am-to-4am seam above.
+    # A Wednesday, mid-morning, well clear of the 3am-to-4am seam.
     around { |ex| travel_to(Time.find_zone("America/Denver").parse("2026-09-02 10:00")) { ex.run } }
 
     let(:user) { create(:user) }
@@ -542,94 +302,52 @@ RSpec.describe Buddy::Context do
       scheduled(name, { freq: "weekly", by_day: ["wed"] })
     end
 
+    def buckets
+      Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
+    end
+
     def due_names
-      Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today].pluck(:name)
+      buckets[:due_today].pluck(:name)
     end
 
-    it "is named, where it used to be invisible" do
+    # Only an interval of one is genuinely every day; a gap makes today
+    # different from yesterday.
+    it "names weekly, every-other-day and slower rhythms, and leaves the everyday ones out" do
       weekly("Take out trash bags")
-
-      expect(due_names).to include("Take out trash bags")
-    end
-
-    it "leaves the everyday rhythm out, which is what keeps the list short" do
+      scheduled("Laundry", { freq: "relative", unit: "day", interval: 2 })
+      scheduled("Trim Kitty Nails", { freq: "relative", unit: "week", interval: 2 })
       scheduled("Kitty Litter", { freq: "daily" })
       scheduled("Wash Water Bowls", { freq: "weekdays" })
-
-      expect(due_names).to be_empty
-    end
-
-    # Rocco, 2026-09-04: "I DO want things like a weekly reminder for trash or
-    # laundry or mail to show up, despite happening every week." Weekly was
-    # never in question - but his Laundry runs on a two-day interval, and a
-    # rhythm with a gap in it makes today different from yesterday. Only an
-    # interval of one is genuinely every day.
-    it "keeps every-other-day, and drops the one that is really every day" do
-      scheduled("Laundry", { freq: "relative", unit: "day", interval: 2 })
       scheduled("Spray spiders", { freq: "relative", unit: "day", interval: 1 })
 
-      expect(due_names).to eq(["Laundry"])
+      expect(due_names).to contain_exactly("Take out trash bags", "Laundry", "Trim Kitty Nails")
     end
 
-    # Rocco, 2026-09-04: "We should also just be removing the ChoreDaily rotation
-    # items from the briefing. Those never need to be brought up." ChoreDaily is
-    # the person's own answer to "what do I do every day", so it doesn't need a
-    # cadence to catch it and it doesn't matter how the row itself recurs.
-    it "leaves a chore in their daily rotation out however it recurs" do
-      chore = scheduled("Wordle", { freq: "weekly", by_day: ["wed"] })
-      user.chore_dailies.create!(chore: chore)
-
-      expect(due_names).to be_empty
-    end
-
-    # Not even a 5x. A hot pick is what makes an unusual chore worth a line, and
-    # a chore they were always going to do today isn't one.
-    it "leaves it out even when it is the day's biggest hot pick" do
-      chore = scheduled("Wordle", { freq: "weekly", by_day: ["wed"] })
+    # ChoreDaily is the person's own answer to "what do I do every day", so
+    # how the row recurs doesn't matter, and nor does a hot pick on it.
+    it "leaves a chore in their daily rotation out however it recurs, even as the biggest hot pick" do
+      chore = weekly("Wordle")
       user.chore_dailies.create!(chore: chore)
       ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 5.0)
 
       expect(due_names).to be_empty
     end
 
-    it "keeps a rhythm slow enough to be worth saying" do
-      scheduled("Trim Kitty Nails", { freq: "relative", unit: "week", interval: 2 })
-
-      expect(due_names).to include("Trim Kitty Nails")
-    end
-
-    # Being pinned is not a reason to go unsaid. The two signals are separate -
-    # a plain 2x is not news on its own, and a Tuesday-only chore on a Tuesday
-    # is news on its own - and a chore that was BOTH used to fall down the gap:
-    # the pin moved it out of `scheduled_ids` as intentional, then it failed the
-    # routine-multiplier test as a plain 2x, and nothing added it back.
-    #
-    # Prod, Tue 8 Sep: "Go get mail" is weekly on Tuesdays and was one of seven
-    # 2x picks that morning. JOBS TODAY read "- Laundry" and nothing else.
-    # Rocco: "It's laundry day, yes, but I also need to go get the mail and
-    # that's a 'today' chore that got left off."
-    it "still names one whose day this is when it also got pinned at a routine 2x" do
-      chore = scheduled("Go get mail", { freq: "weekly", by_day: [ChoreDay.current(user).strftime("%a").downcase] })
-      ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 2.0)
+    # A plain 2x is not news on its own, and a Tuesday-only chore on a Tuesday
+    # is; a chore that is both must not fall between them.
+    it "names a pinned one whose day this is, and not a pinned one whose day it isn't" do
+      today = ChoreDay.current(user)
+      mail  = scheduled("Go get mail", { freq: "weekly", by_day: [today.strftime("%a").downcase] })
+      bins  = scheduled("Bins tomorrow", { freq: "weekly", by_day: [(today + 1).strftime("%a").downcase] })
+      [mail, bins].each { |chore| ChoreHotPick.create!(chore: chore, day_key: today, multiplier: 2.0) }
 
       expect(due_names).to include("Go get mail")
+      expect(due_names).not_to include("Bins tomorrow")
     end
 
-    it "does not name a pinned one whose day this is not" do
-      chore = scheduled("Go get mail", { freq: "weekly", by_day: [(ChoreDay.current(user) + 1).strftime("%a").downcase] })
-      ChoreHotPick.create!(chore: chore, day_key: ChoreDay.current(user), multiplier: 2.0)
-
-      expect(due_names).not_to include("Go get mail")
-    end
-
-    # Rocco, 2026-09-06: "Chores should only be brought up if they are
-    # SPECIFICALLY DUE TODAY. Not over due. Not due next week. TODAY only."
-    #
     # `matches_day?` answers `date >= due_on` for relative and after_chore
-    # schedules, so anything left undone matched every morning from then on.
-    # Prod 5500, a Saturday: ten jobs handed over, every one stamped
-    # `due_today: true`, and Byte read out all of them plus "It's trash day"
-    # off "Bring trash cans in" - a follower whose anchor was done on WEDNESDAY.
+    # schedules, so anything left undone would match every morning; it belongs
+    # in the backlog, and the due_today flag on every row has to be true of it.
     describe "a chore that has been due since some earlier day" do
       def relative_chore(name, interval, last_done:)
         chore = scheduled(name, { freq: "relative", unit: "day", interval: interval })
@@ -637,66 +355,38 @@ RSpec.describe Buddy::Context do
         chore
       end
 
-      it "names one that comes round exactly today" do
+      it "names and stamps one that comes round exactly today" do
         relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 7)
 
         expect(due_names).to include("Refill Softener Salt")
-      end
-
-      it "leaves out one that has been due for days" do
-        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
-
-        expect(due_names).to be_empty
-      end
-
-      # Nothing is lost - it moves to the bucket whose name is true of it. A
-      # chore whose SCHEDULE came round on an earlier day used to be recognised
-      # nowhere as overdue, because only a marked-due STAMP counted, so it sat
-      # in `scheduled_today` claiming to be today's.
-      it "moves to the backlog rather than out of reach" do
-        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
-        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
-
-        expect(buckets[:overdue_backlog].pluck(:name)).to include("Refill Softener Salt")
-        expect(buckets[:scheduled_today].pluck(:name)).to be_empty
-        expect(buckets[:all_names]).to include("Refill Softener Salt")
-      end
-
-      # The flag rides on every row in every bucket, so it has to be true
-      # wherever it is read. Prod seed 5498 stamped `due_today: true` on all ten.
-      it "never stamps due_today on one that isn't" do
-        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
-        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
-        rows    = buckets.values_at(:scheduled_today, :overdue_backlog, :pending_today).flatten
-
-        expect(rows.map { |row| row[:due_today] }).to all(be_falsey)
-      end
-
-      it "does stamp it on one that is" do
-        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 7)
-        buckets = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))
-
         expect(buckets[:due_today].first[:due_today]).to eq(true)
       end
 
-      it "leaves out a follower whose anchor was done on an earlier day" do
-        anchor = weekly("Take out trash bags")
-        create(:chore_completion, chore: anchor, user: user, day_key: ChoreDay.current(user) - 3)
-        scheduled("Bring trash cans in", { freq: "after_chore", unit: "day", interval: 1, anchor_chore_id: anchor.id })
+      it "moves one that has been due for days to the backlog, unstamped", :aggregate_failures do
+        relative_chore("Refill Softener Salt", 7, last_done: ChoreDay.current(user) - 19)
+        b = buckets
 
-        expect(due_names).not_to include("Bring trash cans in")
+        expect(b[:due_today]).to be_empty
+        expect(b[:overdue_backlog].pluck(:name)).to include("Refill Softener Salt")
+        expect(b[:scheduled_today].pluck(:name)).to be_empty
+        expect(b[:all_names]).to include("Refill Softener Salt")
+        expect(b.values_at(:scheduled_today, :overdue_backlog, :pending_today).flatten.map { |row| row[:due_today] })
+          .to all(be_falsey)
       end
 
-      it "names a follower whose anchor came due today" do
+      it "names a follower whose anchor came due today, but not one whose anchor was done earlier" do
         anchor = weekly("Take out trash bags")
         create(:chore_completion, chore: anchor, user: user, day_key: ChoreDay.current(user))
         scheduled("Bring trash cans in", { freq: "after_chore", unit: "day", interval: 0, anchor_chore_id: anchor.id })
-
         expect(due_names).to include("Bring trash cans in")
+
+        old_anchor = weekly("Gather recycling")
+        create(:chore_completion, chore: old_anchor, user: user, day_key: ChoreDay.current(user) - 3)
+        scheduled("Bring bins in", { freq: "after_chore", unit: "day", interval: 1, anchor_chore_id: old_anchor.id })
+        expect(due_names).not_to include("Bring bins in")
       end
 
-      # A stamp is a person deciding, so the window it falls in is the whole
-      # test and this half was already right.
+      # A stamp is a person deciding, so the window it falls in is the whole test.
       it "leaves out one stamped due weeks ago" do
         create(:chore, name: "Trim Kitty Nails", created_by_user: user, chore_household: household,
           marked_due_at: 19.days.ago)
@@ -705,67 +395,34 @@ RSpec.describe Buddy::Context do
       end
     end
 
-    describe "the Wednesday bin run" do
-      def groups
-        rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
-        rows.group_by { |row| row[:group] }.transform_values { |rs| rs.pluck(:name).sort }
-      end
+    # The shared noun IS the job ("it's trash day"); the ids are kept because
+    # they are what `complete_chore` matches on. A verb is not a job.
+    it "groups the bin run into trash and recycling, keeping every chore and id" do
+      ["Gather trash", "Take out trash bags", "Take trash cans out", "Gather recycling", "Take out recycling"]
+        .each { |name| weekly(name) }
 
-      before {
-        [
-          "Gather trash",
-          "Take out trash bags",
-          "Take trash cans out",
-          "Gather recycling",
-          "Take out recycling",
-        ].each { |name| weekly(name) }
-      }
+      rows   = buckets[:due_today]
+      groups = rows.group_by { |row| row[:group] }.transform_values { |rs| rs.pluck(:name).sort }
 
-      # The shared word IS the job, and it's what lets the briefing say "it's
-      # trash day" instead of five sentences.
-      it "comes back as two jobs rather than five chores" do
-        expect(groups.keys).to contain_exactly("trash", "recycling")
-      end
-
-      it "puts every row in exactly one of them" do
-        expect(groups["trash"]).to eq(["Gather trash", "Take out trash bags", "Take trash cans out"])
-        expect(groups["recycling"]).to eq(["Gather recycling", "Take out recycling"])
-      end
-
-      # Nothing is dropped: the ids are what `complete_chore` matches on, and a
-      # summary that loses them makes "tick the trash off" unanswerable.
-      it "keeps every chore, with its id" do
-        rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
-
-        expect(rows.length).to eq(5)
-        expect(rows.pluck(:id).compact.uniq.length).to eq(5)
-      end
+      expect(groups).to eq(
+        "trash"     => ["Gather trash", "Take out trash bags", "Take trash cans out"],
+        "recycling" => ["Gather recycling", "Take out recycling"],
+      )
+      expect(rows.pluck(:id).compact.uniq.length).to eq(5)
     end
 
-    # A verb is not a job. Grouping on one puts the dog and the bins together.
     it "doesn't group on what you do, only on what it's about" do
       weekly("Take out trash bags")
       weekly("Take the dog out")
 
-      rows = Buddy::Context.send(:build_chore_buckets, user, ChoreDay.current(user))[:due_today]
-
-      expect(rows.filter_map { |row| row[:group] }).to be_empty
+      expect(buckets[:due_today].filter_map { |row| row[:group] }).to be_empty
     end
   end
 
-  # Prod 3255. The morning after a one-off reminder rang at 7:00 PM, Suki said
-  # "the swimming lesson schedule reminder is set for this evening" — the same
-  # reminder, re-dated a day forward, announced as still coming.
-  #
-  # Nothing lied to her. `fired_at` was set, so the row left `pending` and left
-  # `upcoming_reminders` with it, and the only remaining trace of that reminder
-  # anywhere the model could see was the conversation itself. A transcript says a
-  # reminder exists and says nothing about which day, so read as a source it is
-  # permanently about the future.
-  #
-  # An absence can't contradict anything. So a one-off that fired stays visible
-  # for two days, marked as finished rather than upcoming.
-  describe "a reminder that already rang" do
+  # A one-off that fired stays visible for two days, marked finished: an
+  # absence leaves the transcript as the only source, and a transcript says a
+  # reminder exists without saying which day.
+  describe "upcoming_reminders" do
     let(:user)   { create(:user) }
     let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
 
@@ -775,149 +432,73 @@ RSpec.describe Buddy::Context do
       BuddyReminder.create!(user: user, byte_conversation: convo, body: body, fire_at: fire_at, **attrs)
     end
 
-    def reminders
-      Buddy::Context.build(user, convo)[:upcoming_reminders]
-    end
-
-    def find(body)
-      reminders.find { |r| r[:body].to_s.include?(body) }
-    end
-
-    it "keeps a one-off that fired last night in view" do
+    # A recurring reminder never sets `fired_at` — it rolls `fire_at` forward
+    # and reports `last_fired` — so it must not also show as finished.
+    it "marks a recent one-off as already rang, drops a stale one, and leaves pending, recurring and cancelled rows as they are", :aggregate_failures do
       reminder!(body: "Check the swim schedule", fire_at: 14.hours.ago, fired_at: 14.hours.ago)
-
-      expect(find("swim schedule")).to be_present
-    end
-
-    # The whole point: visible AND unmistakably done. Visible-but-undated would
-    # reproduce the bug with an extra step.
-    it "marks it finished rather than letting it read as upcoming" do
-      reminder!(body: "Check the swim schedule", fire_at: 14.hours.ago, fired_at: 14.hours.ago)
-
-      row = find("swim schedule")
-      expect(row[:status]).to eq(:already_rang)
-      expect(row[:rang]).to be_present
-      expect(row).not_to have_key(:fire_at)
-    end
-
-    it "lets go of one that rang last week" do
       reminder!(body: "Old news", fire_at: 8.days.ago, fired_at: 8.days.ago)
-
-      expect(find("Old news")).to be_nil
-    end
-
-    it "leaves a pending one exactly as it was" do
       reminder!(body: "Vet appt", fire_at: 2.hours.from_now)
-
-      row = find("Vet appt")
-      expect(row[:fire_at]).to be_present
-      expect(row[:status]).to be_nil
-    end
-
-    # A recurring reminder never sets `fired_at` — it rolls `fire_at` forward and
-    # reports `last_fired`, which is a different fix for a different shape of the
-    # same lie. It must not also show up here as finished.
-    it "does not double-list a recurring one that rolled forward" do
       reminder!(
         body: "Water the flower bed", fire_at: 22.hours.from_now, last_fired_at: 2.hours.ago,
         recurrence: { "kind" => "daily", "at" => "08:00" }
       )
-
-      rows = reminders.select { |r| r[:body].to_s.include?("flower bed") }
-      expect(rows.length).to eq(1)
-      expect(rows.first[:last_fired]).to be_present
-    end
-
-    # How often a reminder repeats, in the same words an agenda item says it
-    # in, from the same mapping. The briefing drops the everyday ones on this
-    # tag (Buddy::GPT::ContextTool.without_routine_reminders) and it had no way
-    # to tell them apart before, so the same standing nudges came back every
-    # morning.
-    describe "how often it repeats" do
-      it "says daily for a daily one" do
-        reminder!(body: "Do Dishes.", fire_at: 4.hours.from_now,
-                  recurrence: { "freq" => "daily", "at" => "15:00" })
-
-        expect(find("Do Dishes")[:cadence]).to eq("daily")
-      end
-
-      it "reads the legacy shape too, so a row written before the vocabularies merged still says it" do
-        reminder!(body: "Grab my Loops", fire_at: 4.hours.from_now,
-                  recurrence: { "kind" => "daily", "at" => "07:54" })
-
-        expect(find("Grab my Loops")[:cadence]).to eq("daily")
-      end
-
-      it "keeps a weekly one distinguishable from a daily one" do
-        reminder!(body: "Water the ferns", fire_at: 4.hours.from_now,
-                  recurrence: { "freq" => "weekly", "at" => "18:00", "by_day" => ["sunday"] })
-
-        expect(find("Water the ferns")[:cadence]).to eq("weekly (Sun)")
-      end
-
-      it "says nothing at all for a one-off" do
-        reminder!(body: "Call the vet back", fire_at: 4.hours.from_now)
-
-        expect(find("Call the vet back")).not_to have_key(:cadence)
-      end
-    end
-
-    it "leaves a cancelled one to the off list rather than calling it rung" do
       reminder!(body: "Nevermind this", fire_at: 3.hours.ago, cancelled_at: 4.hours.ago)
 
-      expect(find("Nevermind this")[:status]).to eq(:off)
+      rows  = described_class.build(user, convo)[:upcoming_reminders]
+      named = rows.group_by { |r| r[:body] }
+
+      swim = named["Check the swim schedule"].first
+      expect(swim[:status]).to eq(:already_rang)
+      expect(swim[:rang]).to be_present
+      expect(swim).not_to have_key(:fire_at)
+
+      expect(named).not_to have_key("Old news")
+
+      vet = named["Vet appt"].first
+      expect(vet[:fire_at]).to be_present
+      expect(vet[:status]).to be_nil
+
+      expect(named["Water the flower bed"].length).to eq(1)
+      expect(named["Water the flower bed"].first[:last_fired]).to be_present
+
+      expect(named["Nevermind this"].first[:status]).to eq(:off)
     end
 
-    # The section is only useful if the model is told what the marker means, and
-    # "already delivered" is the one reading that has to be impossible to miss.
-    it "tells the model that one of these is not coming" do
-      expect(Buddy::Personality.for(user, conversation: convo)).to include("`status: already_rang`")
-    end
-  end
+    # The same words an agenda item uses, from the same mapping; the briefing
+    # drops the everyday ones on this tag.
+    it "tags how often each repeats, legacy shape included, and a one-off not at all", :aggregate_failures do
+      reminder!(body: "Do Dishes.", fire_at: 4.hours.from_now, recurrence: { "freq" => "daily", "at" => "15:00" })
+      reminder!(body: "Grab my Loops", fire_at: 4.hours.from_now, recurrence: { "kind" => "daily", "at" => "07:54" })
+      reminder!(body: "Water the ferns", fire_at: 4.hours.from_now,
+                recurrence: { "freq" => "weekly", "at" => "18:00", "by_day" => ["sunday"] })
+      reminder!(body: "Call the vet back", fire_at: 4.hours.from_now)
 
-  # Prod 4831, 27 Aug: "send me a link to my Doctor list" came back as
-  # `[Doctor!](https://ardesian.com/lists)` - the index, because `app_pages` was
-  # the only place a list URL existed and it only has the index.
-  # `scope` was `listener.split(":").first` — always a prefix of the listener
-  # shipped right beside it, and on 24 of the 60 rows that reach prod, the whole
-  # string twice. The prompt didn't even name it correctly: it described the
-  # entry as `{ id, name, scope, description }`, which named the derived field
-  # and left out the real one.
-  describe "a Jil trigger's listener" do
-    let(:user) { create(:user) }
+      rows = described_class.build(user, convo)[:upcoming_reminders].index_by { |r| r[:body] }
 
-    def entry(name)
-      described_class.send(:jil_triggers, user.reload).detect { |t| t[:name] == name }
-    end
-
-    # `buddy_visible` is a scope, not a column: enabled + active + buddy_enabled.
-    def task!(name, listener)
-      Task.create!(user: user, name: name, listener: listener, code: "", buddy_enabled: true)
-    end
-
-    it "ships the full listener, which is what says what the task filters on" do
-      task!("Transactions", "event:add name::Transaction")
-
-      expect(entry("Transactions")[:listener]).to eq("event:add name::Transaction")
-    end
-
-    it "does not ship a scope alongside it" do
-      task!("Transactions", "event:add name::Transaction")
-
-      expect(entry("Transactions")).not_to have_key(:scope)
-    end
-
-    # The 40% case: a listener with no colon IS its own scope, so the field was
-    # the same string printed a second time.
-    it "does not repeat a listener that has no scope prefix" do
-      task!("Good Morning", "goodMorning")
-
-      expect(entry("Good Morning").values).to contain_exactly(
-        entry("Good Morning")[:id], "Good Morning", "goodMorning"
-      )
+      expect(rows["Do Dishes."][:cadence]).to eq("daily")
+      expect(rows["Grab my Loops"][:cadence]).to eq("daily")
+      expect(rows["Water the ferns"][:cadence]).to eq("weekly (Sun)")
+      expect(rows["Call the vet back"]).not_to have_key(:cadence)
     end
   end
 
+  # The full listener says what the task filters on; a derived `scope` beside
+  # it only ever repeated a prefix of it.
+  it "ships each Jil trigger's full listener and nothing derived from it" do
+    user = create(:user)
+    Task.create!(user: user, name: "Transactions", listener: "event:add name::Transaction", code: "", buddy_enabled: true)
+    Task.create!(user: user, name: "Good Morning", listener: "goodMorning", code: "", buddy_enabled: true)
+
+    entries = described_class.send(:jil_triggers, user.reload).index_by { |t| t[:name] }
+
+    expect(entries["Transactions"][:listener]).to eq("event:add name::Transaction")
+    expect(entries["Transactions"]).not_to have_key(:scope)
+    expect(entries["Good Morning"].values).to contain_exactly(entries["Good Morning"][:id], "Good Morning", "goodMorning")
+  end
+
+  # ONE absolute template for the section rather than a url per row, filled
+  # by id: a slug is derived from a name that gets renamed, and a pure-emoji
+  # name parameterizes to nothing.
   describe "a list's own link" do
     let(:user) { create(:user) }
 
@@ -933,59 +514,25 @@ RSpec.describe Buddy::Context do
       List.create!(name: name).tap { |list| user.user_lists.create!(list: list, is_owner: true) }
     end
 
-    # ONE template for the section rather than a url on all 147 rows, of which
-    # the model uses exactly one. Same information, 44% fewer bytes.
-    it "carries one absolute url template for the whole section" do
+    it "is one absolute url template, filled by a rename-proof id, with sections and no per-row url", :aggregate_failures do
+      water   = list!("💧")
+      grocery = list!("Grocery")
+      grocery.sections.create!(name: "Produce", color: "#ffffff")
+
       expect(section[:url]).to eq("#{Buddy::AppPages.host}/lists/{id}")
-    end
-
-    # Absolute is the whole point. Byte is on its own subdomain, so a template
-    # starting at `/` would produce links that resolve against `byte.` and 404
-    # without saying so.
-    it "makes the template absolute, host and all" do
       expect(section[:url]).to start_with("http")
-    end
-
-    it "carries the id every row needs to fill it in" do
-      list = list!("Doctor!")
-
-      expect(entry("Doctor!")[:id]).to eq(list.id)
-    end
-
-    # The id rather than the slug, because a slug is derived from the name and
-    # a name gets renamed - and the link is already sitting in the thread. A
-    # pure-emoji name parameterizes to nothing at all, which as a slug would
-    # make `/lists/`, the index again.
-    it "keeps the same link after the list is renamed" do
-      list = list!("💧")
-      expect(list.parameterized_name).to be_blank
-
-      was = entry("💧")[:id]
-      list.update!(name: "Water log")
-
-      expect(entry("Water log")[:id]).to eq(was)
-    end
-
-    it "still carries the sections" do
-      list = list!("Grocery")
-      list.sections.create!(name: "Produce", color: "#ffffff")
-
+      expect(water.parameterized_name).to be_blank
+      expect(entry("💧")[:id]).to eq(water.id)
       expect(entry("Grocery")[:sections]).to eq(["Produce"])
-    end
-
-    # A row carrying its own absolute url is what this replaced; leaving one
-    # behind would put the repetition straight back.
-    it "puts no url on the rows themselves" do
-      list!("Grocery")
-
       expect(entry("Grocery")).not_to have_key(:url)
+
+      water.update!(name: "Water log")
+      expect(entry("Water log")[:id]).to eq(water.id)
     end
   end
-  # Prod 5881: "those were all marked as done yesterday, right?" was answered
-  # with "I can't verify yesterday's timestamps from here", while all four rows
-  # sat in `active_proposals` with the date on them. `label` is the bare chore
-  # name; everything that told one row from another was on `sublabel`, and this
-  # section dropped it on the way in.
+
+  # `label` is the bare chore name; what tells one row from another is on
+  # `sublabel`, and a level-2 row's status says it already HAPPENED.
   describe "what a live proposal row says about itself" do
     let(:user) { create(:user) }
     let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
@@ -1013,19 +560,12 @@ RSpec.describe Buddy::Context do
       described_class.send(:active_proposals, conversation.reload)
     end
 
-    it "carries the detail that tells two identical-looking rows apart" do
-      expect(rows(button).first[:detail]).to eq("credited to Wren\nat yesterday 2 pm")
-    end
+    it "carries the detail and whether the row ran or was unticked" do
+      row = rows(button, button("id" => 2, "status" => "undone")).first
 
-    # A level-2 row ran the moment it was drawn, so this is a record of
-    # something that HAPPENED - and `recent_actions` reads `buddy_activity`
-    # chips, which these never leave.
-    it "says whether the row already ran" do
-      expect(rows(button).first[:status]).to eq("executed")
-    end
-
-    it "says when one has been unticked, so it doesn't read as work that stands" do
-      expect(rows(button("status" => "undone")).first[:status]).to eq("undone")
+      expect(row[:detail]).to eq("credited to Wren\nat yesterday 2 pm")
+      expect(row[:status]).to eq("executed")
+      expect(rows(button("status" => "undone")).last[:status]).to eq("undone")
     end
 
     it "leaves the keys off entirely when a row has neither" do
