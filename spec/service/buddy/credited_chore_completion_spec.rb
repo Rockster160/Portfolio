@@ -5,6 +5,10 @@ require "rails_helper"
 # who actually pressed it, because that is what keeps the recorder's own
 # automations firing (see ChoreCompletion#trigger_target_users).
 RSpec.describe "Buddy credited chore completion" do
+  # The chore day turns over at 4am local, so a run before then reads
+  # "yesterday" as two days back.
+  around { |example| travel_to(Time.utc(2026, 9, 16, 18, 0)) { example.run } }
+
   let(:recorder) { create(:user, username: "rowan") }
   let(:housemate) { create(:user, username: "wren") }
   let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: recorder) }

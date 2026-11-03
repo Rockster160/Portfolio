@@ -3679,6 +3679,10 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     context "when the forecast goes under it as a table" do
+      # The briefing's day starts at 4am local; before then the first row is
+      # still yesterday's and isn't labelled Today.
+      around { |example| travel_to(Time.utc(2026, 9, 16, 18, 0)) { example.run } }
+
       # Their today, which is not the server's after their evening.
       let(:today) { Time.current.in_time_zone(user.timezone).to_date }
       let(:forecast) {

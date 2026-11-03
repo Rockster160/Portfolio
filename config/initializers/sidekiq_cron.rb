@@ -185,6 +185,11 @@ if Rails.env.production?
       class: "ErrorReportSweepWorker",
       cron:  daily_4am,
     },
+    {
+      name:  "BuddyActivitySweep",
+      class: "BuddyActivitySweepWorker",
+      cron:  daily_4am,
+    },
   ]
 elsif Rails.env.development?
   cron_jobs += [

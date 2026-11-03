@@ -212,9 +212,11 @@ RSpec.describe AnchorFeeder do
       chore = chore!("Shower", { "freq" => "daily" })
       anchor = key!("chore:shower")
 
-      travel_to(Time.current.in_time_zone(user.timezone).change(hour: 10, min: 0)) { described_class.call(user) }
+      today = travel_to(Time.current.in_time_zone(user.timezone).change(hour: 10, min: 0)) {
+        described_class.call(user)
+        ChoreDay.current(user)
+      }
 
-      today = ChoreDay.current(user)
       expect(anchor.occurrences.pluck(:identifier)).to include("#{chore.id}:#{today.iso8601}")
     end
 

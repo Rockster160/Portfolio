@@ -1,0 +1,158 @@
+// The search-everything box: an overlay any page can open, and the same box
+// inline on /search. Colours are its own so it reads the same over the light
+// pages and over Byte; dark pages get the dark set.
+.global-search-overlay {
+  --gs-bg: #fff;
+  --gs-text: #{$grey-dark};
+  --gs-muted: #{$grey-blue};
+  --gs-border: rgba(0, 0, 0, 0.12);
+  --gs-active: rgba(1, 96, 255, 0.1);
+
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: calc(10vh + env(safe-area-inset-top, 0px)) 16px 16px;
+  background: rgba(0, 0, 0, 0.45);
+
+  &[hidden] { display: none; }
+}
+
+.dark-mode .global-search-overlay,
+.ctr-byte .global-search-overlay {
+  --gs-bg: #1f2430;
+  --gs-text: #e6e9ef;
+  --gs-muted: #98a2b3;
+  --gs-border: rgba(255, 255, 255, 0.12);
+  --gs-active: rgba(255, 255, 255, 0.08);
+
+  // Dark scrollbars on the results.
+  color-scheme: dark;
+}
+
+.global-search-open body { overflow: hidden; }
+
+.global-search-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: var(--gs-bg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.global-search {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--gs-text, #{$grey-dark});
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.global-search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--gs-border, rgba(0, 0, 0, 0.12));
+  color: var(--gs-muted, #{$grey-blue});
+
+  .global-search & input[type="search"] {
+    flex: 1;
+    min-width: 0;
+    height: 52px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    color: var(--gs-text, #{$grey-dark});
+    // 16px keeps iOS from zooming the page when the field takes focus.
+    font-size: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+
+    &::placeholder { color: var(--gs-muted, #{$grey-blue}); }
+    // The browser's own clear × draws in its own colours, not the panel's.
+    &::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+  }
+}
+
+.global-search-results {
+  overflow-y: auto;
+  padding: 6px 0;
+  -webkit-overflow-scrolling: touch;
+
+  &[hidden] { display: none; }
+}
+
+.global-search-label {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gs-muted, #{$grey-blue});
+}
+
+.global-search-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: inherit;
+  text-decoration: none;
+
+  &:hover,
+  &.is-active {
+    background: var(--gs-active, rgba(1, 96, 255, 0.1));
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .fa {
+    width: 18px;
+    text-align: center;
+    color: var(--gs-muted, #{$grey-blue});
+  }
+}
+
+.global-search-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.global-search-title,
+.global-search-subtitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.global-search-subtitle {
+  font-size: 12px;
+  color: var(--gs-muted, #{$grey-blue});
+}
+
+.global-search-empty {
+  padding: 14px 16px;
+  color: var(--gs-muted, #{$grey-blue});
+}
+
+.global-search-page {
+  padding-top: 24px;
+
+  .global-search {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 10px;
+    background: #fff;
+  }
+}

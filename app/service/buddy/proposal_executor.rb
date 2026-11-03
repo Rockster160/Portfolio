@@ -66,6 +66,9 @@ module Buddy
             outcomes << Buddy::Tools.dispatch(tool, symbolize_payload(btn["payload"]), ctx)
           }
 
+          # Each run is its own row on the activity page; the button names them
+          # so undoing from either place settles both.
+          btn["activity_ids"] = outcomes.filter_map { |o| o[:activity_id] }
           if outcomes.all? { |o| o[:ok] }
             btn["status"] = "executed"
             btn["result"] = outcomes.first[:data]
@@ -211,6 +214,7 @@ module Buddy
         # words are worth keeping ("unmarked Dishes" says which of three), and
         # the row is where the person just tapped.
         btn["undo_note"] = "Undone - #{summary}" if summary.present?
+        BuddyActivity.mark_undone!(btn["activity_ids"], note: summary)
 
         action.buttons = buttons
         action.save!

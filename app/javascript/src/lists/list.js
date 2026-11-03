@@ -880,9 +880,12 @@ $(document).ready(function () {
         var evtContainer = $(evt.target).closest(".list-item-container");
         const isHandle = $(evt.target).closest(".list-item-handle").length > 0;
         if (!isHandle && evtContainer) {
+          // A touch fires mousedown too, so a timer from the first press
+          // would otherwise outlive the release.
+          clearTimeout(heldListItemTimer);
           heldListItem = evtContainer;
           heldListItemTimer = setTimeout(function () {
-            if (evtContainer.hasClass("ui-sortable-helper")) {
+            if (!heldListItem || evtContainer.hasClass("ui-sortable-helper")) {
               return;
             }
             var $itemName = heldListItem.find(".item-name");

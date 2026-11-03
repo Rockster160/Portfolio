@@ -1203,6 +1203,7 @@ module Buddy
         count = (base["count"] || 1).to_i
 
         outcomes = Array.new(count) { Buddy::Tools.dispatch(tool, payload, ctx) }
+        base = base.merge("activity_ids" => outcomes.filter_map { |o| o[:activity_id] })
 
         if outcomes.all? { |o| o[:ok] }
           data    = outcomes.first[:data].is_a?(Hash) ? outcomes.first[:data] : {}

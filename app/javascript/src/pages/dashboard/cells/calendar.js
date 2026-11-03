@@ -51,10 +51,10 @@ import { dash_colors } from "../vars";
     const date = new Date();
 
     // const mdtTime = "M-" + formatTime(date, { timeZone: "America/Denver" })
-    const azTime = "A-" + formatTime(date, { timeZone: "US/Arizona" });
+    const azTime = "A-" + formatTime(date, { timeZone: "America/Phoenix" });
     const utcTime =
       "UTC-" + formatTime(date, { timeZone: "UTC", hour12: false });
-    const iowaTime = "I-" + formatTime(date, { timeZone: "CST" });
+    const iowaTime = "I-" + formatTime(date, { timeZone: "America/Chicago" });
 
     return Text.justify(azTime, utcTime, iowaTime);
   }

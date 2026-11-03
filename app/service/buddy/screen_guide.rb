@@ -44,7 +44,14 @@ module Buddy
             hook:  "data-byte-actions-toggle",
             label: "The ⚡ lightning bolt",
             does:  "Opens the actions menu: their saved routines, then the built-in actions. Picking one that has its own options replaces the " \
-                   "list with those, and tapping outside closes it.",
+                   "list with those, and tapping outside closes it. Its last row, What Buddy did, opens a page of everything " \
+                   "Buddy has changed, newest first, with an Undo on each one that can be walked back.",
+          },
+          {
+            hook:  "data-global-search-open",
+            label: "The magnifying glass",
+            does:  "Searches everything at once - lists and their items, chores, pages, timers, emails, contacts, " \
+                   "inventory boxes - and opens whichever result they pick.",
           },
           {
             hook:  "data-byte-reload",

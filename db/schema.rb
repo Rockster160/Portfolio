@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_03_050028) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_03_065524) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -510,6 +510,24 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_050028) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "buddy_activities", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id"
+    t.text "tool_name", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.boolean "ok", default: true, null: false
+    t.text "error_message"
+    t.text "receipt"
+    t.jsonb "reverts", default: [], null: false
+    t.datetime "undone_at"
+    t.text "undo_note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_buddy_activities_on_byte_conversation_id"
+    t.index ["user_id", "created_at"], name: "index_buddy_activities_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_buddy_activities_on_user_id"
   end
 
   create_table "buddy_alerts", force: :cascade do |t|
@@ -2148,6 +2166,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_050028) do
   add_foreign_key "board_task_buttons", "tasks"
   add_foreign_key "board_task_buttons", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "buddy_activities", "byte_conversations", on_delete: :nullify
+  add_foreign_key "buddy_activities", "users"
   add_foreign_key "buddy_alerts", "byte_conversations"
   add_foreign_key "buddy_alerts", "byte_messages"
   add_foreign_key "buddy_alerts", "users"

@@ -1,0 +1,213 @@
+<%= meta_title "Automation Health", include_name: false %>
+<%= meta_description "Jil tasks that are failing, gone quiet, or running hot, and triggers nothing hears." %>
+
+<%
+  health = @health
+  scope_param = @view_scope == :all ? { scope: :all } : {}
+  ago = ->(time) { time ? "#{time_ago_in_words(time)} ago" : "never" }
+  every = ->(seconds) { seconds ? "every #{distance_of_time_in_words(0, seconds)}" : nil }
+  owner = ->(record_user) {
+    (@view_scope == :all && record_user) ? "@#{record_user.username}" : nil
+  }
+  silent_reasons = {
+    cron:          "behind its schedule",
+    unschedulable: "schedule resolves to no next run",
+    cadence:       "quiet well past its usual gap",
+    never:         "has never run",
+  }
+  sections = [
+    [:failing, "Failing", health.failing],
+    [:silent, "Silent", health.silent],
+    [:noisy, "Noisy", health.noisy],
+    [:orphans, "Orphan triggers", health.orphans],
+  ]
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small><%= link_to "System", system_path %> / Automation Health</small>
+  </div>
+
+  <div class="hl-bar">
+    <% sections.each do |key, label, items| %>
+      <a href="#hl-<%= key %>" class="hl-chip<%= " hl-hot" if items.any? %>"><%= label %> <strong><%= items.size %></strong></a>
+    <% end %>
+    <span class="hl-sep"></span>
+    <%= link_to "Execution Dashboard", dashboard_jil_executions_path(**scope_param), class: "hl-chip" %>
+    <% if @admin %>
+      <%= link_to "Mine", jil_health_path, class: "hl-chip#{" on" if @view_scope == :mine}" %>
+      <%= link_to "All users", jil_health_path(scope: :all), class: "hl-chip#{" on" if @view_scope == :all}" %>
+    <% end %>
+  </div>
+
+  <% if health.problem_count.zero? %>
+    <p class="hl-empty">Every enabled task is running as usual, and every recent trigger has a listener.</p>
+  <% end %>
+
+  <div class="hl-section" id="hl-failing">
+    <div class="hl-title">Failing <small>errored in the last <%= distance_of_time_in_words(0, Jil::Health::FAILING_WINDOW) %></small></div>
+    <% if health.failing.none? %>
+      <p class="hl-empty">No failed runs.</p>
+    <% end %>
+    <% health.failing.each do |item| %>
+      <div class="hl-row hl-failing<%= " hl-recovered" if item.recovered %>">
+        <div class="hl-ago">
+          last failed <%= ago.call(item.last_failed_at) %>
+          <% if item.recovered %>
+            <span class="hl-badge hl-badge-ok">succeeded since</span>
+          <% end %>
+          <% if (who = owner.call(item.task.user)) %>
+            <span class="hl-who"><%= who %></span>
+          <% end %>
+        </div>
+        <div class="hl-head">
+          <span class="hl-count"><%= item.failed_count %>×</span>
+          <%= link_to item.task.name.presence || "Task ##{item.task.id}", jil_task_path(item.task), class: "hl-task" %>
+          <span class="hl-listener"><%= item.task.listener.presence || item.task.cron %></span>
+        </div>
+        <% if item.error.present? %>
+          <div class="hl-message"><%= item.error.to_s.truncate(400) %></div>
+        <% end %>
+        <div class="hl-foot">
+          <%= link_to "failed runs", jil_task_executions_path(item.task, status: :failed), class: "hl-open" %>
+          <%= link_to "dashboard", dashboard_jil_task_executions_path(item.task, **scope_param), class: "hl-open" %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="hl-section" id="hl-silent">
+    <div class="hl-title">Silent <small>enabled, and not running as often as it should</small></div>
+    <% if health.silent.none? %>
+      <p class="hl-empty">Nothing has gone quiet.</p>
+    <% end %>
+    <% health.silent.each do |item| %>
+      <div class="hl-row hl-silent">
+        <div class="hl-ago">
+          overdue since <%= ago.call(item.at) %>
+          <span class="hl-badge"><%= silent_reasons[item.reason] %></span>
+          <% if (who = owner.call(item.task.user)) %>
+            <span class="hl-who"><%= who %></span>
+          <% end %>
+        </div>
+        <div class="hl-head">
+          <%= link_to item.task.name.presence || "Task ##{item.task.id}", jil_task_path(item.task), class: "hl-task" %>
+          <span class="hl-listener"><%= item.task.cron.presence || item.task.listener %></span>
+          <span class="hl-when">
+            last ran <%= ago.call(item.last_run_at) %>
+            <% if (cadence = every.call(item.expected_every)) %>
+              &middot; expected <%= cadence %>
+            <% end %>
+          </span>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="hl-section" id="hl-noisy">
+    <div class="hl-title">Noisy <small>last 24 hours against the <%= Jil::Health::BASELINE_DAYS %> days before</small></div>
+    <% if health.noisy.none? %>
+      <p class="hl-empty">Nothing is running hot.</p>
+    <% end %>
+    <% health.noisy.each do |item| %>
+      <div class="hl-row hl-noisy">
+        <div class="hl-ago">
+          last ran <%= ago.call(item.last_run_at) %>
+          <% if (who = owner.call(item.task.user)) %>
+            <span class="hl-who"><%= who %></span>
+          <% end %>
+        </div>
+        <div class="hl-head">
+          <span class="hl-count"><%= number_with_delimiter(item.recent_count) %></span>
+          <%= link_to item.task.name.presence || "Task ##{item.task.id}", jil_task_path(item.task), class: "hl-task" %>
+          <span class="hl-listener"><%= item.task.listener.presence || item.task.cron %></span>
+          <span class="hl-when">usually <%= item.daily_average %>/day</span>
+        </div>
+        <div class="hl-foot">
+          <%= link_to "dashboard", dashboard_jil_task_executions_path(item.task, window: "24h", **scope_param), class: "hl-open" %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="hl-section" id="hl-orphans">
+    <div class="hl-title">Orphan triggers <small>fired in the last <%= distance_of_time_in_words(0, Jil::Health::ORPHAN_WINDOW) %> with no enabled task or watch listening</small></div>
+    <% if health.orphans.none? %>
+      <p class="hl-empty">Every recent trigger has a listener.</p>
+    <% end %>
+    <% health.orphans.each do |item| %>
+      <div class="hl-row hl-orphan">
+        <div class="hl-ago">
+          last seen <%= ago.call(item.last_seen_at) %>
+          <% if (who = owner.call(item.user)) %>
+            <span class="hl-who"><%= who %></span>
+          <% end %>
+        </div>
+        <div class="hl-head">
+          <span class="hl-task"><%= item.scope %></span>
+        </div>
+      </div>
+    <% end %>
+    <p class="hl-note">
+      Read from the trigger shapes the bus samples, so a scope fired with an empty payload,
+      or one of <%= Buddy::TriggerShapes::IGNORED.to_a.join(", ") %>, never shows here.
+      Some scopes are consumed by the app itself rather than a task.
+    </p>
+  </div>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page { max-width: 1100px; width: 95%; margin: 0 auto; padding: 20px; }
+    .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .system-page .lists-title a { color: #8B949E; text-decoration: none; }
+
+    .hl-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+    .hl-chip {
+      font-size: 12px; color: #8B949E; background-color: #161B22; text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 3px 10px;
+    }
+    .hl-chip:hover { border-color: #5DADE2; color: #C9D1D9; }
+    .hl-chip.on { background-color: #5DADE2; border-color: #5DADE2; color: #0D1117; font-weight: bold; }
+    .hl-chip.hl-hot { border-color: rgba(236, 112, 99, 0.5); color: #C9D1D9; }
+    .hl-chip strong { margin-left: 4px; }
+    .hl-sep { width: 1px; height: 16px; background-color: rgba(255, 255, 255, 0.12); }
+
+    .hl-section { margin-bottom: 28px; }
+    .hl-title { font-size: 18px; font-weight: bold; color: #E2E8F0; margin-bottom: 10px; }
+    .hl-title small { font-weight: normal; color: #888; font-size: 13px; margin-left: 6px; }
+    .hl-empty, .hl-note { color: #8B949E; font-size: 13px; }
+
+    .hl-row {
+      background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+    }
+    .hl-row.hl-failing { border-color: rgba(236, 112, 99, 0.45); }
+    .hl-row.hl-recovered { border-color: rgba(88, 214, 141, 0.35); }
+    .hl-row.hl-silent { border-color: rgba(245, 176, 65, 0.35); }
+    .hl-row.hl-noisy { border-color: rgba(93, 173, 226, 0.4); }
+
+    .hl-ago { font-size: 12px; color: #C9D1D9; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .hl-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .hl-count { font-size: 15px; font-weight: bold; color: #EC7063; min-width: 42px; }
+    .hl-noisy .hl-count { color: #5DADE2; }
+    .hl-task { font-size: 14px; font-weight: bold; color: #C9D1D9; text-decoration: none; }
+    a.hl-task:hover { color: #5DADE2; }
+    .hl-listener { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #F5B041; }
+    .hl-when { font-size: 12px; color: #8B949E; margin-left: auto; }
+    .hl-who { color: #8B949E; }
+
+    .hl-message {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+      color: #8B949E; margin: 8px 0; white-space: pre-wrap; word-break: break-word;
+    }
+    .hl-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+    .hl-open { color: #5DADE2; text-decoration: none; }
+
+    .hl-badge {
+      padding: 1px 8px; border-radius: 10px; font-size: 11px;
+      background-color: rgba(245, 176, 65, 0.15); color: #F5B041;
+    }
+    .hl-badge.hl-badge-ok { background-color: rgba(88, 214, 141, 0.15); color: #58D68D; }
+  </style>
+<% end %>

@@ -552,7 +552,16 @@ module Buddy
 
     # Runs a tool's executor once. Multi-run (count > 1) is the caller's job
     # so partial-failure state stays visible at the row level.
+    #
+    # Every call that changes something is recorded as a BuddyActivity, and
+    # the outcome carries its id so a checklist row can name the calls it made.
     def dispatch(tool, payload, ctx)
+      outcome = run_executor(tool, payload, ctx)
+      activity = BuddyActivity.record!(tool, payload, ctx, outcome)
+      activity ? outcome.merge(activity_id: activity.id) : outcome
+    end
+
+    def run_executor(tool, payload, ctx)
       exec = tool[:execute]
       if exec.respond_to?(:call)
         { ok: true, data: exec.call(payload, ctx) }

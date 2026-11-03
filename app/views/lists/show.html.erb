@@ -34,7 +34,9 @@
     <div class="list-description"><%= auto_link @list.description %></div>
     <% if @list.collaborators.any? %>
       <div class="collaborators pull-left text-left">
-        <p>Owned by: <%= @list.owner == current_user ? "You" : @list.owner.username %></p>
+        <% if (owner = @list.owner) %>
+          <p>Owned by: <%= owner == current_user ? "You" : owner.username %></p>
+        <% end %>
         <p>
           Collaborators:
           <% last_idx = @list.collaborators.length-1 %>

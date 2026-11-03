@@ -592,6 +592,23 @@ html.html-ctr-byte.html-act-board_index body {
       background: rgba(255, 255, 255, 0.06);
     }
   }
+
+  // Opens the search-everything overlay. Same footprint as its neighbours.
+  .byte-search-toggle {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-muted);
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--bs-text);
+    }
+  }
 }
 
 // -------- Actions menu -----------------------------------------------------
@@ -639,8 +656,9 @@ html.html-ctr-byte.html-act-board_index body {
 
   // Full-width rows rather than a chip grid. Every label here is a phrase in
   // the person's own words (a routine name, "What now?"), and a grid either
-  // truncates them or sizes itself to the longest one.
-  button {
+  // truncates them or sizes itself to the longest one. A row that goes to
+  // another page is a link wearing the same shape.
+  button, .byte-actions-link {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -654,6 +672,8 @@ html.html-ctr-byte.html-act-board_index body {
     font-size: 13.5px !important;
     font-weight: 600 !important;
     text-align: left;
+    text-decoration: none;
+    box-sizing: border-box;
     cursor: pointer;
 
     &:hover {

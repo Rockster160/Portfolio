@@ -417,6 +417,7 @@ module Buddy
       result["undone"] = true
       btn["result"] = result
       action.update!(buttons: buttons)
+      BuddyActivity.mark_undone!(btn["activity_ids"], note: summary)
       { summary: summary, reverts: inverses }
     end
   end

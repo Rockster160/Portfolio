@@ -40,5 +40,6 @@
   <%= render partial: "layouts/guest_banner" if @show_guest_banner %>
   <%= yield %>
   <%= yield :after_body %>
+  <%= render "layouts/global_search" if current_user.present? && !current_user.guest? %>
 </body>
 </html>

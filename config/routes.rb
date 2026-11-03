@@ -133,6 +133,9 @@ Rails.application.routes.draw do
   # without claiming it cleared - see the controller for why that matters.
   get    "/buddy/alerts"             => "buddy/alerts#index",   as: :buddy_alerts
   post   "/buddy/alerts/:id/dismiss" => "buddy/alerts#dismiss", as: :buddy_alert_dismiss
+  # What Buddy changed, with an undo on each call that can be walked back.
+  get    "/buddy/activity"          => "buddy/activities#index", as: :buddy_activities
+  post   "/buddy/activity/:id/undo" => "buddy/activities#undo",  as: :buddy_activity_undo
   get    "/buddy/timers"            => "buddy/timers#index",   as: :buddy_timers
   post   "/buddy/timers/:id/pause"  => "buddy/timers#pause",   as: :buddy_timer_pause
   post   "/buddy/timers/:id/resume" => "buddy/timers#resume",  as: :buddy_timer_resume
@@ -631,6 +634,7 @@ Rails.application.routes.draw do
   namespace :jil do
     get :/, action: :index, controller: :tasks
     get "t/:id" => "tasks#trigger"
+    get :health, to: "health#show"
     resources :executions, only: [:index, :show] do
       post :replay, on: :member
       get :dashboard, on: :collection
@@ -682,6 +686,8 @@ Rails.application.routes.draw do
     resources :bowling_games, path: "/"
   end
 
+  # One search box across every area: the page, and the JSON its dropdown reads.
+  get "/search" => "search#show", as: :search
   resources :contacts, except: :show do
     resources :addresses, except: :show
     collection do

@@ -1,0 +1,143 @@
+<%= meta_title "Buddy Activity", include_name: false %>
+<%= meta_description "Everything Buddy changed, newest first." %>
+
+<%
+  chip = ->(key, value) {
+    picked = params[key].to_s == value.to_s
+    [picked, buddy_activities_path(request.query_parameters.except(:page).merge(key => (picked ? nil : value)).compact)]
+  }
+  stamp = ->(time) { time.in_time_zone(current_user.timezone).strftime("%-I:%M %p") }
+  day_of = ->(time) { time.in_time_zone(current_user.timezone).to_date }
+  # The arguments the call ran with, as one readable line. Nested values are
+  # the tool's own plumbing and only crowd it.
+  args_line = ->(payload) {
+    payload.to_h.filter_map { |key, value|
+      next if value.blank? || value.is_a?(Hash) || value.is_a?(Array)
+
+      "#{key.to_s.tr("_", " ")}: #{value.to_s.truncate(60)}"
+    }.join(" · ")
+  }
+  last_day = nil
+%>
+
+<div class="act-page">
+  <div class="act-title">
+    <% if current_user.me? %>
+      <small><%= link_to "System", system_path %> / Buddy activity</small>
+    <% else %>
+      <small>Buddy activity</small>
+    <% end %>
+  </div>
+
+  <div class="act-filters">
+    <% picked, path = chip.call(:undoable, 1) %>
+    <%= link_to "can undo", path, class: "act-chip#{" on" if picked}" %>
+    <% picked, path = chip.call(:failed, 1) %>
+    <%= link_to "failed", path, class: "act-chip#{" on" if picked}" %>
+    <% if @conversations.many? %>
+      <span class="act-sep"></span>
+      <% @conversations.each do |convo| %>
+        <% picked, path = chip.call(:conversation_id, convo.id) %>
+        <%= link_to (convo.name.presence || convo.buddy_name), path, class: "act-chip#{" on" if picked}" %>
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if @activities.none? %>
+    <p class="act-empty">Nothing here yet.</p>
+  <% end %>
+
+  <% @activities.each do |activity| %>
+    <% day = day_of.call(activity.created_at) %>
+    <% if day != last_day %>
+      <% last_day = day %>
+      <div class="act-day">
+        <%= day == Date.current ? "Today" : (day == Date.yesterday ? "Yesterday" : day.strftime("%A, %b %-d")) %>
+      </div>
+    <% end %>
+
+    <div class="act-row<%= " act-failed" unless activity.ok? %><%= " act-undone" if activity.undone_at %>">
+      <div class="act-head">
+        <span class="act-time" title="<%= time_ago_in_words(activity.created_at) %> ago"><%= stamp.call(activity.created_at) %></span>
+        <span class="act-tool"><%= activity.tool_name.tr("_", " ") %></span>
+        <% if activity.byte_conversation %>
+          <span class="act-thread"><%= activity.byte_conversation.name.presence || activity.byte_conversation.buddy_name %></span>
+        <% end %>
+        <% if !activity.ok? %>
+          <span class="act-badge act-badge-failed">failed</span>
+        <% elsif activity.undone_at %>
+          <span class="act-badge">undone <%= time_ago_in_words(activity.undone_at) %> ago</span>
+        <% end %>
+        <% if activity.undoable? %>
+          <%= button_to "Undo", buddy_activity_undo_path(activity), form_class: "act-undo-form", class: "act-undo" %>
+        <% end %>
+      </div>
+
+      <% if activity.ok? && activity.receipt.present? %>
+        <div class="act-receipt"><%= activity.receipt %></div>
+      <% elsif activity.error_message.present? %>
+        <div class="act-error"><%= activity.error_message %></div>
+      <% end %>
+      <% if activity.undo_note.present? %>
+        <div class="act-note"><%= activity.undo_note %></div>
+      <% end %>
+      <% line = args_line.call(activity.payload) %>
+      <% if line.present? %>
+        <div class="act-args"><%= line %></div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <%= paginate @activities, params: request.query_parameters %>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .act-page { max-width: 900px; width: 100%; margin: 0 auto; padding: 20px 16px; box-sizing: border-box; }
+    .act-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .act-title a { color: #8B949E; text-decoration: none; }
+
+    .act-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+    .act-sep { width: 1px; height: 16px; background-color: rgba(255, 255, 255, 0.12); }
+    .act-chip {
+      font-size: 12px; color: #8B949E; background-color: #161B22; text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 3px 10px;
+    }
+    .act-chip:hover { border-color: #5DADE2; color: #C9D1D9; }
+    .act-chip.on { background-color: #5DADE2; border-color: #5DADE2; color: #0D1117; font-weight: bold; }
+    .act-empty { color: #8B949E; }
+
+    .act-day { font-size: 13px; font-weight: bold; color: #8B949E; margin: 18px 0 8px; }
+    .act-row {
+      background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px; padding: 10px 14px; margin-bottom: 8px;
+    }
+    .act-row.act-failed { border-color: rgba(236, 112, 99, 0.4); }
+    .act-row.act-undone { opacity: 0.55; }
+
+    .act-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .act-time { font-size: 12px; color: #8B949E; min-width: 64px; }
+    .act-tool { font-size: 14px; font-weight: bold; color: #C9D1D9; }
+    .act-thread { font-size: 12px; color: #8B949E; }
+    .act-badge {
+      padding: 1px 8px; border-radius: 10px; font-size: 11px;
+      background-color: rgba(255, 255, 255, 0.06); color: #8B949E;
+    }
+    .act-badge-failed { background-color: rgba(236, 112, 99, 0.15); color: #EC7063; }
+    .act-undo-form { margin: 0 0 0 auto; }
+    .act-undo {
+      font-size: 12px; color: #F5B041; background: none; cursor: pointer;
+      border: 1px solid rgba(245, 176, 65, 0.5); border-radius: 12px; padding: 2px 12px;
+    }
+    .act-undo:hover { background-color: rgba(245, 176, 65, 0.12); }
+
+    .act-receipt { font-size: 13px; color: #C9D1D9; margin-top: 6px; }
+    .act-error, .act-args {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+      margin-top: 6px; white-space: pre-wrap; word-break: break-word;
+    }
+    .act-error { color: #EC7063; }
+    .act-args { color: #8B949E; }
+    .act-note { font-size: 12px; color: #F5B041; margin-top: 4px; }
+  </style>
+<% end %>
