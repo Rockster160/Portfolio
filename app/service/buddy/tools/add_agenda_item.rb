@@ -36,7 +36,9 @@ Buddy::Tools.register(
     no location.
 
     `duration`: EVENTS only - set it to the activity's actual length, don't
-    leave the 30m default on something clearly longer. If the household's own
+    leave the 30m default on something clearly longer. A movie, a show, a
+    concert or a game runs two to three hours; a meal out is about 90 minutes.
+    Leaving `duration` out IS choosing 30 minutes. If the household's own
     words, your memory, or the person tells you how long a thing runs, use
     that. It's ignored on a task; tasks are a single moment.
 

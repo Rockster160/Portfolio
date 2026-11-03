@@ -184,13 +184,17 @@ RSpec.describe "BuddyMemory lifecycle" do
     end
 
     describe BuddyMemoryPruneWorker do
-      it "deletes expired memories but keeps durable ones" do
+      it "deletes expired memories with their notes but keeps durable ones", :aggregate_failures do
         expired = BuddyMemory.create!(user: user, content: "gone", expires_at: 1.minute.ago)
+        noted   = BuddyMemory.create!(user: user, content: "also gone", expires_at: 1.minute.ago)
+        noted.notes.create!(body: "an update")
         durable = BuddyMemory.create!(user: user, content: "coffee = oat milk", expires_at: nil)
 
         described_class.new.perform
 
         expect(BuddyMemory.exists?(expired.id)).to be(false)
+        expect(BuddyMemory.exists?(noted.id)).to be(false)
+        expect(BuddyMemoryNote.where(buddy_memory_id: noted.id)).to be_empty
         expect(BuddyMemory.exists?(durable.id)).to be(true)
       end
     end

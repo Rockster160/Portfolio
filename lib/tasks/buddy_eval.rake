@@ -1092,6 +1092,16 @@ BUDDY_EDGE_PROBES = [
     tool: :create_chore,
     note: "said it couldn't file that as a chore from here, and called nothing",
   },
+  # Leaving `duration` off is the 30-minute default, so the probe asks for an
+  # hour or more rather than forbidding 30.
+  {
+    case:  "prod 9871",
+    say:   "Add Troy: Avenger's Doomsday to Ours on Dec 22 at 6pm at the District",
+    tool:  :add_agenda_item,
+    args:  { add_agenda_item: { duration: /\A(?:[6-9]\d|[1-9]\d{2,})\z/ } },
+    needs: :ours_calendar,
+    note:  "a movie went on as 6 to 6:30pm and was stretched by hand to 8:30",
+  },
   # A chore that already exists, said with a day: the next due date moves and
   # the schedule stays.
   {

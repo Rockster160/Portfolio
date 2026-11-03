@@ -8,7 +8,10 @@ class BuddyMemoryPruneWorker
   sidekiq_options queue: :default, retry: 1
 
   def perform
-    deleted = BuddyMemory.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current).delete_all
+    # destroy, not delete: a memory's notes hold a foreign key to it, and one
+    # noted memory would roll the whole statement back.
+    expired = BuddyMemory.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current)
+    deleted = expired.destroy_all.size
     Rails.logger.info("[BuddyMemoryPrune] pruned #{deleted} expired memories") if deleted.positive?
   end
 end
