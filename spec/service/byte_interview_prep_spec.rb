@@ -158,6 +158,68 @@ RSpec.describe ByteInterviewPrep do
     end
   end
 
+  # THE MINUTE BETWEEN THE COUNTDOWN AND THE BRIEF. Nothing is pushed when the
+  # session starts, so without a chip that minute is indistinguishable from the
+  # trigger never having fired.
+  describe "the chip" do
+    before { user.byte_conversations.create!(name: "Byte", mode: :buddy) }
+
+    it "goes up naming the company when the prompt is posted" do
+      described_class.run!(user, application: job, item: item)
+      chip = BackgroundProcess.live_find(user, "interview-prep:#{item.id}")
+
+      expect(chip).to be_present
+      expect(chip).to be_running
+      expect(chip.name).to eq("Prepping Bluestaq")
+      expect(chip.links.first["url"]).to eq("/interviews/#{job.id}")
+    end
+
+    it "comes down when the brief lands" do
+      described_class.run!(user, application: job, item: item)
+      prompt = described_class.conversation(user).byte_messages.order(:id).last
+      reply = described_class.conversation(user).byte_messages.create!(
+        user:         user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         "# Hiring manager call with Bluestaq\nKIND: manager\n\n## The company\nThey build.\n",
+        delivered_at: Time.current,
+        metadata:     { "kind" => "claude", "in_reply_to" => prompt.id },
+      )
+
+      expect { described_class.submit!(reply) }.to change {
+        BackgroundProcess.live_find(user, "interview-prep:#{item.id}").present?
+      }.from(true).to(false)
+    end
+
+    # Two interviews with one company on one day is a real shape, and the
+    # morning's brief landing must not take the afternoon's chip down.
+    it "keys per booking, not per company" do
+      later = create(
+        :agenda_item,
+        agenda:   agenda,
+        kind:     :event,
+        name:     "Interview: Bluestaq",
+        start_at: item.start_at + 4.hours,
+        end_at:   item.start_at + 5.hours,
+        notes:    item.notes,
+      )
+      described_class.run!(user, application: job, item: item)
+      described_class.run!(user, application: job, item: later)
+
+      expect(BackgroundProcess.live_for(user).map(&:key)).to contain_exactly(
+        "interview-prep:#{item.id}", "interview-prep:#{later.id}"
+      )
+    end
+
+    # `kick!` can be handed an application and nothing else, and keying that on
+    # the company would collide with the case above.
+    it "keys on the application when there is no booking behind it" do
+      described_class.run!(user, application: job)
+
+      expect(BackgroundProcess.live_find(user, "interview-prep:app:#{job.id}")).to be_running
+    end
+  end
+
   describe ".dispatch" do
     # Both machines run the schedule against the same database, both answer
     # "no" to already-prepped, and ByteLocal reaches the SAME Mac from either.

@@ -169,6 +169,7 @@ Metrics/ModuleLength:
   Exclude:
     - "app/models/concerns/application_recordable.rb"
     - "app/service/buddy/faces.rb" # the per-pet face emotion tables (HINTS + INDEX)
+    - "app/service/byte_interview_prep/brief.rb" # the pre-interview prompt; it is all prose
 
 Metrics/PerceivedComplexity:
   Enabled: false

@@ -114,6 +114,35 @@ module Transcripts
         was a fact he has not got, say that instead of inventing the fact.
       TEXT
 
+      # HOW A NOTE REACHES HIM.
+      #
+      # A note stated as a principle goes past him; the same note tied to
+      # something he has built lands and gets acted on. Nothing has to be
+      # fetched for it - the transcript is full of his own work in his own
+      # words, and `context` carries what the job was.
+      #
+      # Held apart from INSTEAD because the two are different jobs: that one
+      # governs the replacement sentence, this one governs the note explaining
+      # why the first sentence cost him.
+      ANCHOR = <<~TEXT.freeze
+        TIE A NOTE TO SOMETHING HE HAS ACTUALLY DONE.
+
+        He takes a note in by comparison, not by principle. "Quantify your
+        impact" is a rule and it goes straight past him. The same note tied to
+        a thing he can picture - the story he told two turns earlier with the
+        number in it, the system he described well to somebody else, the piece
+        of his own work the answer was about - is one he will act on.
+
+        The material is in front of you: his own work as this transcript has
+        him describing it, and an answer elsewhere in the call that did land.
+        One clause is enough, and it goes INSIDE the note rather than in a
+        sentence of its own.
+
+        Where there is honestly nothing to tie it to, say the note plainly. An
+        invented comparison is worse than a bare note, and a stretched one is
+        what makes a whole debrief read as something nobody wrote.
+      TEXT
+
       OUTPUT = <<~TEXT.freeze
         Reply with a single JSON object, and nothing else:
 
@@ -192,6 +221,7 @@ module Transcripts
           context(transcript),
           LOOK_FOR,
           INSTEAD,
+          ANCHOR,
           aiming(transcript),
           OUTPUT,
           "THE CONVERSATION",

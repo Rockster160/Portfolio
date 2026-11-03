@@ -25,10 +25,18 @@
 # and what it fires on are his to change without a deploy. What it reaches is
 # here, because a local Claude session is not something Jil can express.
 #
-# Nothing is said to him when the session starts. The prompt is `hidden` and
+# Nothing is SAID to him when the session starts. The prompt is `hidden` and
 # the thread is archived, so the first he hears of it is the finished brief -
 # an hour before an interview, a buzz saying "started researching" is a buzz
 # that costs attention and carries nothing.
+#
+# A chip is not a buzz, which is why there is one. It sits on the strip over
+# Buddy while the session runs and goes when the brief lands, so the minute
+# between the countdown firing and the report arriving reads as work going on
+# rather than as nothing having happened. Going stale is the other half of it:
+# a session that dies without ever answering leaves a chip saying so after
+# fifteen minutes, and that is the only thing separating a run still thinking
+# from one that is never coming back.
 #
 # READ-ONLY, enforced by the machine and not by the prompt: the conversation
 # sits in `permission_mode: "read"` and the Mac's PreToolUse hook answers every
@@ -182,6 +190,7 @@ module ByteInterviewPrep
         "interview_at"       => item&.start_at&.iso8601,
       },
     )
+    chip_up!(user, application, item)
     :sent
   end
 
@@ -244,6 +253,7 @@ module ByteInterviewPrep
     return false if prep.nil?
 
     announce!(prep)
+    chip_off!(message.user, application, meta["agenda_item_id"])
     true
   end
 
@@ -306,6 +316,52 @@ module ByteInterviewPrep
 
     "#{prep.job_application.company} #{when_said}. " \
       "Here's the prep - #{prep.kind_label || "the brief"}."
+  end
+
+  # ==========================================================================
+  # The chip
+  # ==========================================================================
+
+  # KEYED PER BOOKING, the way `already_prepped?` is. Two interviews with one
+  # company on one day are two sessions, and a shared key would have the
+  # morning's brief landing take the afternoon's chip down - leaving a session
+  # that is still researching with nothing on the strip saying so.
+  #
+  # A booking with no row behind it still gets a key of its own: `kick!` can be
+  # handed an application and nothing else, and keying that on the company
+  # would collide with the very case above.
+  def chip_key(application, item_id)
+    return "interview-prep:#{item_id}" if item_id.present?
+
+    "interview-prep:app:#{application.id}"
+  end
+
+  # The company is the whole chip, because the name is all that gets drawn -
+  # the detail is a hover title and the strip's own screen is a phone, which has
+  # no hover. The role goes in it anyway for the desktop, where it costs
+  # nothing.
+  #
+  # Not truncated here: the model owns the chip's length, and a second limit in
+  # the caller only ever disagrees with it.
+  def chip_up!(user, application, item)
+    ::BackgroundProcess.note(
+      user:   user,
+      key:    chip_key(application, item&.id),
+      name:   "Prepping #{application.company}",
+      detail: [application.company, application.role.presence].compact.join(" - "),
+      # The application, not the brief: there is no brief yet, and the page
+      # that already holds the timeline and the recruiter's name is the one
+      # worth landing on while the research is still happening.
+      links:  [{ label: "📋", url: "/interviews/#{application.id}" }],
+      source: :rails,
+    )
+  end
+
+  # CLEARED, never settled as finished. A finished chip draws its name and
+  # waits to be dismissed by hand, and the outcome it cannot say is already
+  # said where it can be read - the push carries the link to the brief.
+  def chip_off!(user, application, item_id)
+    ::BackgroundProcess.clear(user: user, key: chip_key(application, item_id))
   end
 
   # The prompt this is answering, when it is answering one at all. A reply
