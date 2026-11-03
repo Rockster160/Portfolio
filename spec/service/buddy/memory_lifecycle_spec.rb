@@ -143,6 +143,26 @@ RSpec.describe "BuddyMemory lifecycle" do
         expect(memory).to be_check_in_plannable
       end
 
+      it "never asks before the thing it is about has arrived" do
+        Buddy::SideEffects.apply_remember(user, "Rocco has something coming up", nil, 2, relevant_days: 10)
+        memory = BuddyMemory.last
+
+        expect(memory.relevant_at).to be_within(1.minute).of(10.days.from_now)
+        expect(memory.check_in_at).to be >= memory.relevant_at
+      end
+
+      it "arms the row a re-mention lands on when it asks to be come back to" do
+        remember("Rocco is waiting on a decision")
+        memory = BuddyMemory.last
+        expect(memory.check_in_at).to be_nil
+
+        remember("Rocco is waiting on a decision", check_in_days: 3)
+
+        expect(BuddyMemory.count).to eq(1)
+        expect(memory.reload.check_in_at).to be_present
+        expect(memory).to be_check_in_plannable
+      end
+
       it "queues the job that asks it" do
         Sidekiq::Testing.fake! do
           BuddyCheckInWorker.clear

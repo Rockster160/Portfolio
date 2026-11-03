@@ -720,6 +720,17 @@ RSpec.describe SystemController, type: :controller do
         expect(followup).to be_persisted
       end
 
+      it "queues the job for a check-in time set by hand" do
+        Sidekiq::Testing.fake! {
+          BuddyCheckInWorker.clear
+          at = 3.days.from_now.change(sec: 0)
+
+          patch(:update_memory, params: { id: followup.id, check_in_at: at.iso8601 })
+
+          expect(BuddyCheckInWorker.jobs.map { |job| [job["args"], job["at"].to_i] }).to eq([[[followup.id], at.to_i]])
+        }
+      end
+
       it "refuses an edit the model itself would refuse" do
         patch(:update_memory, params: { id: followup.id, content: "" })
 

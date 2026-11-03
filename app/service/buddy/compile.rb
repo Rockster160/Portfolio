@@ -270,6 +270,19 @@ module Buddy
       whatever you asked for - so an event's distance only ever needs putting
       there once.
 
+      WORK OUT WHEN IT ACTUALLY HAPPENS. Every "in a few days" or "next week"
+      in the conversation counts from the moment it was said, not from now -
+      check each message's time before you count. Something that comes round
+      on a regular rhythm has a next time that follows from the rhythm, so a
+      distance you put down has to be to the occurrence the question is
+      about. Then land the check-in where a question about THIS thing would be
+      welcome: ahead of it when getting ready is the hard part, after it when
+      the question is how it went, during it when it lasts a while. A date that
+      only makes sense for a different kind of thing is the wrong date.
+
+      `expires_days` follows from the same reasoning: when what the row says
+      stops being true. A check-in never outlives it.
+
       Most memories have no check-in. An unprompted question about something
       they mentioned in passing is worse than silence.
 
@@ -574,7 +587,9 @@ module Buddy
     # else. It could not have known the row was armed for December, so pulling
     # it in was never a move it was in a position to make.
     def pending(user, now: Time.current)
-      rows = BuddyMemory.where(user: user).kind_followup.live.where.not(check_in_at: nil)
+      # Every armed row, whichever kind: a fact held inline can be armed too,
+      # and one this pass can't see is one it can never move, answer or close.
+      rows = BuddyMemory.where(user: user).check_in_armed.where.not(check_in_at: nil)
       rows = rows.order(:check_in_at).limit(20).to_a
       return "(none)" if rows.empty?
 

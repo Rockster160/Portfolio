@@ -160,6 +160,14 @@ RSpec.describe Buddy::CheckIns do
       expect(memory.waiting_label(seeded_utc)).to eq("3 days")
     end
 
+    it "hands the model the day it was noted and today's, so it can count from the right one" do
+      memory = followup("the dinner", created_at: created_utc)
+
+      seed = described_class.send(:seed, memory, seeded_utc)
+
+      expect(seed).to include("on Monday 31 August", "Today is Tuesday 1 September")
+    end
+
     it "reads the same from the seed the model is handed" do
       memory = followup("the dinner", created_at: created_utc)
 
@@ -206,7 +214,7 @@ RSpec.describe Buddy::CheckIns do
     end
 
     it "closes one that expired instead of asking about it" do
-      memory = followup("period is about 6 days away", check_in_at: 1.hour.ago, expires_at: 1.day.ago)
+      memory = followup("only true for a while", check_in_at: 1.hour.ago, expires_at: 1.day.ago)
 
       expect(described_class.due(user)).to be_empty
       expect(described_class.fire!(memory)).to eq(:closed)

@@ -265,16 +265,24 @@ module Buddy
       :fired
     end
 
+    # Both dates, because the note is read on a day that is not the one it was
+    # written: any distance in it counts from when it was noted, and where the
+    # thing stands now has to be worked out from that rather than read off it.
     def seed(memory, now)
+      zone   = ActiveSupport::TimeZone[memory.user.timezone.presence || "America/Denver"] || Time.zone
+      noted  = memory.created_at.in_time_zone(zone).strftime("%A %-d %B")
+      today  = now.in_time_zone(zone).strftime("%A %-d %B")
       thread = memory.notes.any? ? "\n\nWhat you've got on it:\n#{memory.transcript(now)}" : ""
       <<~TXT
-        Something you noted #{memory.waiting_label(now)} to come back to:
+        Something you noted #{memory.waiting_label(now)} to come back to, on #{noted}. Today is #{today}.
 
         #{memory.content}#{thread}
 
+        Before you ask anything, work out where this stands TODAY. Any distance or relative time in the note counts from #{noted}, not from today. Something that comes round on a regular rhythm has moved on by however many times it has come round since. Ask only about where it actually is now - never repeat the note's own timing back as if it were still true.
+
         Check in on it, in your own words, the way a friend would who had been thinking about them. One thing, asked once. Don't announce that you scheduled this, don't explain that you kept a note, and don't stack it with anything else you could be asking about.
 
-        If it reads as heavy, be gentle and leave them room to say nothing. If it's a lighter one, keep it light. If you no longer have anything useful to ask - it plainly resolved itself in the conversation since - say nothing at all rather than manufacturing a question.
+        If it reads as heavy, be gentle and leave them room to say nothing. If it's a lighter one, keep it light. If you no longer have anything useful to ask - it plainly resolved itself in the conversation since, it has passed, or what it describes is no longer true - say nothing at all rather than manufacturing a question.
       TXT
     end
   end

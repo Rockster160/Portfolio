@@ -370,6 +370,9 @@ class SystemController < ApplicationController
 
     return render(json: { error: memory.errors.full_messages.to_sentence }, status: :unprocessable_entity) unless memory.save
 
+    # A time set by hand is asked at that time, so it needs its job like any other.
+    BuddyCheckInWorker.perform_at(memory.check_in_at, memory.id) if memory.saved_change_to_check_in_at? && memory.check_in_at
+
     render(json: changed)
   end
 

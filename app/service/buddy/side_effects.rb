@@ -67,7 +67,8 @@ module Buddy
       case name.to_sym
       when :sort_stash then Buddy::Stash.apply_sort(user, args, conversation: conversation)
       when :add_note   then apply_note(conversation, args[:fact])
-      when :remember   then apply_remember(user, args[:fact], args[:expires_in], args[:check_in_days])
+      when :remember
+        apply_remember(user, args[:fact], args[:expires_in], args[:check_in_days], relevant_days: args[:relevant_days])
       when :forget     then apply_forget(user, args[:match])
       else false
       end
@@ -102,12 +103,18 @@ module Buddy
           "would ask a friend about again. Not conversational trivia, not this turn's mood, not " \
           "counts. One fact per call. Silent.",
           {
-            fact:          { type: :string, required: true, description: "A statement future-you can act on" },
+            fact:          {
+              type:        :string,
+              required:    true,
+              description: "A statement future-you can act on. #{Buddy::Compile::Toolbox::MEMORY_CONTENT_DATES}",
+            },
             expires_in:    {
               type:        :string,
               required:    false,
               description: "Set for a fact that's only true for a while, so it self-clears: " \
-                           "\"today\", \"tomorrow\", or \"N days/weeks/months\". Null means it never expires",
+                           "\"today\", \"tomorrow\", or \"N days/weeks/months\". Null means it never expires. " \
+                           "Work it out from the thing itself - when what it describes is over, not when the " \
+                           "conversation is",
             },
             check_in_days: {
               type:        :integer,
@@ -116,7 +123,16 @@ module Buddy
                            "holding it. For news you would ask a friend about later - something " \
                            "hard, something they are dreading or waiting on. THE HEAVIER " \
                            "IT IS THE SOONER: 1 or 2 for the big ones, never the date the thing " \
-                           "happens. Omit it for an ordinary fact, which is most of them",
+                           "happens. Count it from what the thing IS: when it actually happens " \
+                           "next, and the point where a question would be welcome rather than " \
+                           "stale. Omit it for an ordinary fact, which is most of them",
+            },
+            relevant_days: {
+              type:        :integer,
+              required:    false,
+              description: "Days from now until the thing this is about actually arrives, when that " \
+                           "is ahead. Count from what they said, and for something that comes round " \
+                           "on a regular rhythm, from that rhythm. A check-in never lands before it",
             },
           },
         ),
@@ -177,11 +193,12 @@ module Buddy
     # claims. A reinforced near-duplicate counts: the person asked for it to be
     # remembered and it is remembered, and answering that with a retraction is
     # the wrong fact twice over.
-    def apply_remember(user, fact, expires_in=nil, check_in_days=nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
+    def apply_remember(user, fact, expires_in=nil, check_in_days=nil, relevant_days: nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
       fact = fact.to_s.strip
       return false if fact.empty?
 
       ttl = parse_duration(expires_in, user) || implied_ttl(fact, user)
+      relevant_at = relevant_days.to_i.days.from_now if relevant_days.present? && relevant_days.to_i.positive?
 
       existing = find_similar_memory(user, fact)
       if existing
@@ -192,7 +209,14 @@ module Buddy
         # us holding the useful one, not the stub plus a bumped counter.
         attrs[:content]    = fact.first(500) if elaborates?(fact, existing.content)
         attrs[:expires_at] = ttl if ttl
+        attrs[:relevant_at] = relevant_at if relevant_at
         existing.update_columns(attrs.merge(updated_at: Time.current)) if attrs.any?
+        # A re-mention asking to be come back to is the same ask as the first
+        # one, so it arms the row it landed on rather than being dropped.
+        if existing.check_in_at.nil? && check_in_days.present?
+          existing.update_columns(severity: [existing.severity, check_in_severity(check_in_days)].max)
+          arm_check_in(existing, check_in_days)
+        end
         return true
       end
 
@@ -213,6 +237,7 @@ module Buddy
         kind:         :preference,
         content:      fact.first(BuddyMemory::MAX_CONTENT),
         expires_at:   ttl,
+        relevant_at:  relevant_at,
         severity:     check_in_severity(check_in_days),
         last_used_at: Time.current,
       )

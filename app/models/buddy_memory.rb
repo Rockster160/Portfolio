@@ -354,8 +354,8 @@ class BuddyMemory < ApplicationRecord
   # the floor is 25, so nothing acquires a check-in by losing this clause -
   # something has to have been given weight on purpose.
   #
-  # An expired row is a fact that has stopped being true ("about 6 days away"
-  # said seven weeks ago), so asking about it reads it out as if it still were.
+  # An expired row is a fact that has stopped being true, so asking about it
+  # reads it out as if it still were.
   def check_in_plannable?
     (status_active? || status_deferred?) && severity >= CHECK_IN_FLOOR && (expires_at.nil? || expires_at.future?)
   end

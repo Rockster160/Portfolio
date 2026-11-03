@@ -737,6 +737,19 @@ RSpec.describe Buddy::Compile do
       expect(brief).to include("sev 86")
     end
 
+    it "shows a held fact that was armed in the conversation too" do
+      held = user.buddy_memories.create!(
+        kind: :preference, content: "Held inline, and asked about.", summary: "Held and armed",
+        severity: 40, check_in_at: 3.days.from_now
+      )
+      flare
+      fake = stub_quiet
+
+      described_class.run!(convo)
+
+      expect(fake.calls.first.input.first[:content]).to include("##{held.id}", "Held and armed")
+    end
+
     it "says so plainly when one is due tomorrow" do
       mood_check.update!(check_in_at: user.timezone { 1.day.from_now.change(hour: 18) })
       flare
