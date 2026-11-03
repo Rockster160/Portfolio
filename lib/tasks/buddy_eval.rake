@@ -1085,6 +1085,13 @@ BUDDY_EDGE_PROBES = [
     note:       "the notes were promised and never written - the tool had nowhere to put them; " \
                 "\"Household\" became a group when it meant who could see it",
   },
+  {
+    case: "prod 9873",
+    say:  "Add a chore for fixing each of the clocks:\nBig Main\nMain Bathroom\nTwin Bathroom\nTwin Room\n" \
+          "Yoga Room\nLanding\nMaster Bathroom\nMaster Bedroom",
+    tool: :create_chore,
+    note: "said it couldn't file that as a chore from here, and called nothing",
+  },
   # A chore that already exists, said with a day: the next due date moves and
   # the schedule stays.
   {

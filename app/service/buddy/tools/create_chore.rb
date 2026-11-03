@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :create_chore,
-  summary:     "Create a NEW repeating or one-off chore. Marking one done is complete_chore; " \
-               "changing one is edit_chore.",
+  summary:     "Create a NEW repeating or one-off chore - or several: a list of names is one call " \
+               "per name. Marking one done is complete_chore; changing one is edit_chore.",
   description: <<~TXT,
     Create a NEW chore in the user's household. Use when the user wants a task
     they haven't been tracking yet to become a repeating (or one-off) chore.
@@ -9,6 +9,10 @@ Buddy::Tools.register(
     `complete_chore`. And when a chore for it ALREADY exists - "we need to trim
     Fae's claws tomorrow" with a chore for it on the list - that's
     `edit_chore` with `due`, not a second chore.
+
+    A list - "a chore for each of these", names on their own lines - is one
+    call per name, each with its own `name` ("Fix Landing clock"), sharing
+    whatever details they gave for the lot.
 
     Optional details, only pass the ones the user actually gives:
       schedule - free-form recurrence: "every Sunday", "weekdays", "daily",
