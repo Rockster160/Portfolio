@@ -79,7 +79,22 @@ function fakeEl() {
   };
   return el;
 }
-globalThis.document = { createElement: () => fakeEl() };
+globalThis.document = { createElement: () => fakeEl(), visibilityState: "visible" };
+
+// The claim server (see ring_claim.js): the first claim of a sounding wins.
+const claimed = new Set();
+globalThis.fetch = async (_url, opts) => {
+  const b = JSON.parse(opts.body);
+  const id = `${b.owner_id}:${b.key}:${b.at}:${b.slot}`;
+  const play = !claimed.has(id);
+  claimed.add(id);
+  return { ok: true, json: async () => ({ play }) };
+};
+const store = {};
+globalThis.window = {
+  localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } },
+};
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const { initBoardRings } = await import(
   "data:text/javascript;base64," + Buffer.from(built.outputFiles[0].text).toString("base64")
@@ -99,6 +114,7 @@ send([
   { key: "a", last: now - 600, next: now - 5, sound: "nap" },
   { key: "b", last: now - 600, next: now - 5 },
 ]);
+await settle();
 out.overdue_played = [...globalThis.__played];
 
 // A hush starts: the others grey (but not one with its own colour, nor the
@@ -110,6 +126,7 @@ send([
   { key: "hush", last: now, next: now + 600, hush: true },
   { key: "own", last: now, next: now + 300, color: "#800000" },
 ]);
+await settle();
 out.hushed = {
   a: ring("a").classList.has("quieted"),
   hush: ring("hush").classList.has("quieted"),

@@ -63,6 +63,8 @@ Rails.application.routes.draw do
   get "/whisper", to: redirect(subdomain: "whisper", path: "/")
   post "/whisper/log_vomit" => "whisper#log_vomit"
 
+  post "/ring_claims" => "ring_claims#create", as: :ring_claims
+
   get "/fae", to: redirect(subdomain: "fae", path: "/")
 
   get "/byte", to: redirect(subdomain: "byte", path: "/")

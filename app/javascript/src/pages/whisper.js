@@ -1,5 +1,6 @@
 import { beeps } from "./dashboard/vars";
 import { Monitor } from "./dashboard/cells/monitor";
+import { soundOnce } from "./byte/buddy/ring_claim";
 import { Time } from "./dashboard/cells/_time";
 import {
   checkWhisperNotificationStatus,
@@ -23,7 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
 
   let timers = [];
-  let timerAlarms = {}; // Per-timer alarm intervals
+  let feedOwnerId; // Whose feed the timers are, for claiming their sounds
   let wasQuietActive = false;
 
   const CIRCUMFERENCE = 2 * Math.PI * 45;
@@ -563,8 +564,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function updateAllDurations() {
-    const overdueKeys = new Set();
     const quietActive = isQuietModeActive();
+
+    const overdue = [];
 
     timers.forEach((timerData) => {
       const remaining =
@@ -572,28 +574,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           ? updateClockDisplay(timerData)
           : updateDurationRing(timerData);
       if (remaining !== undefined && remaining <= 0) {
-        overdueKeys.add(timerData.key);
+        overdue.push(timerData);
       }
     });
 
-    // Manage per-timer alarms (suppressed during quiet mode)
-    overdueKeys.forEach((key) => {
+    // An overdue timer sounds when it runs out and every five minutes after,
+    // once across every screen showing it (suppressed during quiet mode).
+    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
+    overdue.forEach((timerData) => {
+      const key = timerData.key;
       if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
-      if (!timerAlarms[key]) {
-        playAlertForKey(key);
-        timerAlarms[key] = setInterval(
-          () => playAlertForKey(key),
-          Time.minutes(5),
-        );
-      }
-    });
 
-    // Clear alarms for timers no longer overdue, or all alarms during quiet mode
-    Object.keys(timerAlarms).forEach((key) => {
-      if (!overdueKeys.has(key) || quietActive) {
-        clearInterval(timerAlarms[key]);
-        delete timerAlarms[key];
-      }
+      soundOnce(
+        { ownerId: feedOwnerId, key, next: timerData.next, nowSec },
+        () => playAlertForKey(key),
+      );
     });
 
     // Grey out non-quiet rings during quiet mode
@@ -630,6 +625,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     received: function (data) {
       const monitorData = data?.data;
       if (!monitorData) return;
+      if (data.owner_id !== undefined) feedOwnerId = data.owner_id;
 
       if (monitorData.status !== undefined) {
         updateStatus(monitorData.status);

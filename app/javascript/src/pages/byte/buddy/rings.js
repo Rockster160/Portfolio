@@ -20,6 +20,7 @@
 import { Monitor } from "../../dashboard/cells/monitor";
 import { Time } from "../../dashboard/cells/_time";
 import { playBoardSound } from "./sound";
+import { soundOnce } from "./ring_claim";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./board_scope";
 
 const CHANNEL = "board-rings";
@@ -47,8 +48,6 @@ export function initBoardRings({ container, app }) {
   const boardOwner = boardOwnerId(app);
   let timers = [];
   let wasHushed = false;
-  // The repeating sound for each overdue ring, by key.
-  const ringAlarms = {};
   // Whether the feed's most recent groups overlap what this board watches AND it
   // belongs to this board's owner.
   let channelMatches = false;
@@ -157,21 +156,19 @@ export function initBoardRings({ container, app }) {
   }
 
   // A ring that runs out plays its own sound, then again every five minutes
-  // until it's reset. A hush holds them all.
+  // until it's reset - once across every screen showing it (see ring_claim.js).
+  // A hush holds them all.
   function soundOverdue(overdue, hushed) {
+    if (hushed) return;
+
+    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
     overdue.forEach((timerData) => {
-      if (!timerData.sound || hushed || ringAlarms[timerData.key]) return;
+      if (!timerData.sound) return;
 
-      playBoardSound(timerData.sound);
-      ringAlarms[timerData.key] = setInterval(() => playBoardSound(timerData.sound), Time.minutes(5));
-    });
-
-    const sounding = new Set(overdue.filter((t) => t.sound).map((t) => t.key));
-    Object.keys(ringAlarms).forEach((key) => {
-      if (sounding.has(key) && !hushed) return;
-
-      clearInterval(ringAlarms[key]);
-      delete ringAlarms[key];
+      soundOnce(
+        { ownerId: lastOwnerId, key: timerData.key, next: timerData.next, nowSec },
+        () => playBoardSound(timerData.sound),
+      );
     });
   }
 
