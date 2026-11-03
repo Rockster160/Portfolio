@@ -248,7 +248,9 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   def triggerNow(scope, data)
-    ::Jil.trigger(@jil.user, scope, data, auth: :trigger, auth_id: @jil.task&.id).map(&:serialize_with_execution)
+    ::Jil.trigger(
+      @jil.user, scope, @jil.cast(data, :Hash), auth: :trigger, auth_id: @jil.task&.id
+    ).map(&:serialize_with_execution)
   end
 
   OFFSET_UNIT_SECONDS = {

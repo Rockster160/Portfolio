@@ -60,5 +60,6 @@ module Jil::RefreshCoalescer
     run.call
   rescue StandardError => e
     Rails.logger.error("[Jil::RefreshCoalescer] flush failed: #{e.class}: #{e.message}")
+    ::Jil::Errors.report(e)
   end
 end

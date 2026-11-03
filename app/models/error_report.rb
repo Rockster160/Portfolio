@@ -82,7 +82,7 @@ class ErrorReport < ApplicationRecord
   #   rescue   any other rescue that pinged Slack
   #   browser  an uncaught error or rejected promise on a page
   LAYERS = %i[backend frontend].freeze
-  TAGS = %i[request job buddy rescue browser].freeze
+  TAGS = %i[request job buddy rescue browser task].freeze
 
   # Rows older than this are swept (ErrorReportSweepWorker). Long enough to
   # answer "has this happened before", short enough that a loop - or a page

@@ -43,6 +43,8 @@ class Jil::Executor
   IMMEDIATE_MONITOR_CHANNELS = %w[whisper-durations board-rings].freeze
 
   def self.immediate_monitor?(data)
+    return false unless data.is_a?(::Hash)
+
     channel = data[:channel] || data["channel"] || data[:id] || data["id"]
     IMMEDIATE_MONITOR_CHANNELS.include?(channel.to_s)
   end
@@ -125,6 +127,7 @@ class Jil::Executor
       rescue StandardError => e
         if Rails.env.production?
           Rails.logger.error("[Jil::Executor.trigger] Task##{task.id} #{e.class}: #{e.message}")
+          ::Jil::Errors.report(e, task: task, user: user)
         else
           load("/Users/zoro/.pryrc")
           source_puts "[#{e.class}] #{e.message}".red
@@ -233,6 +236,7 @@ class Jil::Executor
           @ctx[:error] = "[#{@ctx[:line]}] [#{e.class}] #{e.message}"
           @ctx[:error_line] = e.backtrace.find { |l| l.include?("/app/") }
           state = :failed
+          ::Jil::Errors.report(e, task: @execution.task, user: @user, execution: @execution, line: @ctx[:line])
         ensure
           @ctx[:state] = :complete
           @ctx[:time_complete] = Time.current
@@ -281,10 +285,14 @@ class Jil::Executor
       end
     )
     obj = klass.new(self, current_ctx || @ctx)
+    value = obj.base_execute(line)
+    # An exit or return somewhere inside this line ended the run, and what the
+    # line handed back is that signal rather than anything its cast describes.
+    value = cast(value, line.cast, current_ctx) if @ctx[:state] == :running
 
     {
       class: line.cast,
-      value: cast(obj.base_execute(line), line.cast, current_ctx),
+      value: value,
     }.tap { |line_val|
       if line.shown?
         @ctx[:output] << "[#{line.varname}][#{line_val[:class]}]#{::Jil::Methods::String.new(self, @ctx).cast(line_val[:value]).gsub(
