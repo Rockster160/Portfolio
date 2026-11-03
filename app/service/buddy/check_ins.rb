@@ -56,11 +56,20 @@ module Buddy
     # Move `at` onto the next band boundary at or after it, in the person's own
     # zone. Which band depends on how soon it is: something for later today
     # belongs in the evening, something a week out can take the common slot.
+    #
+    # Placing a time it already placed answers the same time. A band that has
+    # gone by rolls to the next day, and that day takes ITS band from the start
+    # of it: carrying tonight's night band over to tomorrow would put the
+    # check-in at a time that tomorrow's own placement then rolls another day.
     def place(at, user:, now: Time.current)
       zone   = ActiveSupport::TimeZone[user.timezone.presence || "America/Denver"] || Time.zone
       target = at.in_time_zone(zone)
-      band   = band_for(target, now.in_time_zone(zone))
-      slide(target, band, zone)
+      local  = now.in_time_zone(zone)
+      placed = slide(target, band_for(target, local), zone)
+      return placed if placed.to_date == target.to_date
+
+      day = placed.beginning_of_day
+      slide(day, band_for(day, local), zone)
     end
 
     # Which band suits something landing at `target`.

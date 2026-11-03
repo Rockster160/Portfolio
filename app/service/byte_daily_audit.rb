@@ -188,9 +188,12 @@ module ByteDailyAudit
   # The window's failures, grouped, most repeated first. Rendered into the
   # prompt rather than left for the session to go and find, so the errors are in
   # the report on the run where they happened whatever else the session decides
-  # to spend its reads on.
+  # to spend its reads on. An ignored failure has been looked at and set aside,
+  # so it is left out.
   def errors_block(user, span)
-    rows = ErrorReport.digest(span)
+    rows = ErrorReport.digest(span, scope: ErrorReport.where(created_at: span).where.not(
+      fingerprint: ErrorStatus.ignored.select(:fingerprint),
+    ))
     return "Nothing was reported in this window." if rows.empty?
 
     rows.map { |row|

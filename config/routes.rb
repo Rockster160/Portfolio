@@ -64,6 +64,7 @@ Rails.application.routes.draw do
   post "/whisper/log_vomit" => "whisper#log_vomit"
 
   post "/ring_claims" => "ring_claims#create", as: :ring_claims
+  post "/client_errors" => "client_errors#create", as: :client_errors
 
   get "/fae", to: redirect(subdomain: "fae", path: "/")
 
@@ -740,6 +741,7 @@ Rails.application.routes.draw do
     # What an alert links to, so a Slack line ends at the whole row rather than
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error
+    patch "/system/errors/:id/status" => "system#update_error_status", as: :system_error_status
     # Every companion's expressions and the mood values that pick each one,
     # drawn entirely from Buddy::Faces + Buddy::Themes so it is never out of
     # step with what the pets can actually do.

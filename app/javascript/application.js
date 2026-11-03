@@ -23,6 +23,7 @@
 //= link favicon/browserconfig.xml.erb
 //= link_tree ../builds
 
+import "./error_reporter.js"
 import Rails from "@rails/ujs"
 Rails.start()
 import "./preimports.js"

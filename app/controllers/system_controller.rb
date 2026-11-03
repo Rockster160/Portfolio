@@ -7,6 +7,7 @@ class SystemController < ApplicationController
   # A window of 1 means "last 24 hours, hour by hour"; the rest are rolling day windows.
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
+  ERROR_STATUSES = %i[open resolved ignored].freeze
   TRANSACTION_PAGE = 100
   MEMORY_PAGE = 200
   # A `timestamp` term in the search, with its comparison operator. Longest
@@ -407,9 +408,11 @@ class SystemController < ApplicationController
   # the occurrences one tap away.
   #
   # Grouped is the default because the question is almost never "what happened
-  # at 3:04" - it is "what is going wrong, how often, and since when". The
-  # filters are the three ways that question narrows: a section, a person, and
-  # whether anything ever announced it.
+  # at 3:04" - it is "what is going wrong, how often, and since when". Newest
+  # first, so what is happening now is at the top. The filters are the ways that
+  # question narrows: what has been decided about it, a section, a person, and
+  # whether anything ever announced it. Ignored failures are listed with the
+  # rest; ignoring one only keeps it quiet.
   def errors
     @hours = params[:hours].to_i
     @hours = ErrorReport::DEFAULT_WINDOW unless ErrorReport::WINDOWS.include?(@hours)
@@ -422,9 +425,11 @@ class SystemController < ApplicationController
     scope = scope.for_user(params[:user_id]) if params[:user_id].present?
     scope = scope.never_announced if params[:unannounced].present?
     scope = scope.like(params[:fingerprint]) if params[:fingerprint].present?
+    scope = scope.with_status(params[:status]) if ERROR_STATUSES.include?(params[:status]&.to_sym)
 
     @total = scope.count
-    @groups = ErrorReport.digest(@span, limit: ErrorReport::PAGE, scope: scope)
+    @groups = ErrorReport.digest(@span, limit: ErrorReport::PAGE, scope: scope, by: :recent)
+    @statuses = ErrorStatus.for(@groups.pluck(:fingerprint))
     @users = User.where(id: @groups.filter_map { |row| row[:user_id] }).index_by(&:id)
     # One occurrence of each, so a group opens straight onto the newest row.
     @sections = ErrorReport.where(created_at: @span).distinct.pluck(:section).sort
@@ -437,6 +442,18 @@ class SystemController < ApplicationController
     # So a held-back repeat reads as held back rather than as something nobody
     # was ever told about.
     @announced_at = siblings.where.not(channel: nil).maximum(:created_at)
+    @status = ErrorStatus.find_by(fingerprint: @error.fingerprint)
+  end
+
+  # Of the failure, not the occurrence: every row sharing the fingerprint, and
+  # every one still to come. Back to wherever it was pressed from.
+  def update_error_status
+    error = ErrorReport.find(params[:id])
+    status = params[:status]&.to_sym
+    return head(:unprocessable_entity) unless ERROR_STATUSES.include?(status)
+
+    ErrorStatus.set!(error.fingerprint, status, user: current_user)
+    redirect_back(fallback_location: system_error_path(id: error.id))
   end
 
   def connections

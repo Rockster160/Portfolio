@@ -170,9 +170,10 @@ RSpec.describe "Chore board presses" do
       expect(result["task_press"]["syncPending"]).to eq("false")
     end
 
-    # A task is the pet doing something, so it puts on its working face.
+    # A task is the pet doing something, so it puts on its working face: the
+    # faces in order of preference, for whichever pet is showing to pick from.
     it "flashes the pet's working face" do
-      expect(result["task_press"]["flashed"]).to contain_exactly(satisfy { |face| %w[nerd focused].include?(face) })
+      expect(result["task_press"]["flashed"]).to eq([%w[nerd focused]])
     end
   end
 

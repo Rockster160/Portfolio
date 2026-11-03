@@ -4,6 +4,7 @@
 <%
   stamp = ->(time) { time.in_time_zone(current_user.timezone).strftime("%b %-d, %Y at %-I:%M:%S %p") }
 %>
+<%= render "system/error_status_actions_style" %>
 
 <div class="system-page">
   <div class="lists-title">
@@ -20,7 +21,17 @@
       <% if @error.error_class.present? %>
         <span class="err-class"><%= @error.error_class %></span>
       <% end %>
-      <span class="err-when"><%= stamp.call(@error.created_at) %></span>
+      <span class="err-when"><%= stamp.call(@error.created_at) %> (<%= time_ago_in_words(@error.created_at) %> ago)</span>
+    </div>
+
+    <div class="err-facts">
+      <% if @status %>
+        <span class="err-badge err-badge-<%= @status.status %>"><%= @status.status %></span>
+        <span><%= time_ago_in_words(@status.updated_at) %> ago</span>
+      <% else %>
+        <span>open</span>
+      <% end %>
+      <%= render "system/error_status_actions", error_id: @error.id, decided: @status %>
     </div>
 
     <div class="err-facts">

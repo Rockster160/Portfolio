@@ -1,0 +1,14 @@
+<%= content_for :head do %>
+  <style>
+    .err-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+    .err-action-form { display: inline; margin: 0; }
+    .err-action {
+      font-size: 11px; color: #8B949E; background-color: transparent; cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 1px 9px;
+    }
+    .err-action:hover { color: #C9D1D9; border-color: #5DADE2; }
+    .err-action-resolved:hover { border-color: #58D68D; color: #58D68D; }
+    .err-badge.err-badge-resolved { background-color: rgba(88, 214, 141, 0.15); color: #58D68D; }
+    .err-badge.err-badge-ignored { background-color: rgba(255, 255, 255, 0.08); color: #8B949E; }
+  </style>
+<% end %>

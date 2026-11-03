@@ -24,14 +24,16 @@ esac
 
 PROD_QUERY_FLAGS="-A -t" bash .claude/prod-query.sh "
   SELECT count(*) || 'x  ' ||
-         to_char(min(created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') || ' to ' ||
-         to_char(max(created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') ||
+         to_char(min(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') || ' to ' ||
+         to_char(max(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') ||
          '  [' || min(section) || '] ' ||
          coalesce(min(error_class) || ': ', '') ||
          replace(substr(coalesce(min(message), ''), 1, 160), E'\n', ' ') ||
-         '  (row ' || max(id) || ')' ||
-         CASE WHEN count(channel) = 0 THEN '  NEVER ANNOUNCED' ELSE '' END
+         '  (row ' || max(error_reports.id) || ')' ||
+         CASE WHEN count(channel) = 0 THEN '  NEVER ANNOUNCED' ELSE '' END ||
+         coalesce('  ' || upper(CASE min(s.status) WHEN 0 THEN 'resolved' WHEN 1 THEN 'ignored' END), '')
   FROM error_reports
-  WHERE created_at > now() - interval '${HOURS} hours'
+  LEFT JOIN error_statuses s USING (fingerprint)
+  WHERE error_reports.created_at > now() - interval '${HOURS} hours'
   GROUP BY fingerprint
-  ORDER BY count(*) DESC, max(created_at) DESC;"
+  ORDER BY count(*) DESC, max(error_reports.created_at) DESC;"

@@ -6,6 +6,9 @@ module ExceptionNotifier
     def call(exception, options={})
       exception_name = "#{exception.class.to_s =~ /^[aeiou]/i ? "An" : "A"} `#{exception.class}`"
 
+      section = nil
+      summary = nil
+      user = nil
       if options[:env].nil?
         text = "#{exception_name} occurred in background\n"
       else
@@ -20,6 +23,11 @@ module ExceptionNotifier
         end
         text += " from `#{env["REQUEST_METHOD"]} <#{env["REQUEST_URI"]}>`"
         text += " was processed by `#{kontroller.controller_name}##{kontroller.action_name}`" if kontroller
+        # Recorded by the action and the path rather than by the full text,
+        # which carries the params and would make every request its own failure.
+        section = kontroller ? "#{kontroller.controller_name}##{kontroller.action_name}" : "rack"
+        summary = "#{env["REQUEST_METHOD"]} #{request&.path || env["PATH_INFO"]}"
+        user = data[:current_user]
         params = data[:params] || request&.params
         if params
           params = params.permit!.to_h if params.is_a?(::ActionController::Parameters)
@@ -46,7 +54,17 @@ module ExceptionNotifier
       attchs = [color: "danger", text: exception_message, mrkdwn_in: %w[text fields]]
 
       environ = Rails.env.production? ? "*[PROD]*" : "_[#{Rails.env.upcase}]_"
-      ::SlackNotifier.notify(text, channel: "#portfolio", username: "Portfolio-Bot#{environ}", icon_emoji: ":blackmage::", attachments: attchs)
+      ::SlackNotifier.notify(
+        text,
+        channel:     "#portfolio",
+        username:    "Portfolio-Bot#{environ}",
+        icon_emoji:  ":blackmage::",
+        attachments: attchs,
+        exception:   exception,
+        section:     section,
+        summary:     summary,
+        user:        user,
+      )
     end
 
     def focused_trace(trace, before: 10, after: 5)

@@ -15,6 +15,7 @@
     local.to_date == Date.current ? local.strftime("%-I:%M %p") : local.strftime("%b %-d, %-I:%M %p")
   }
 %>
+<%= render "system/error_status_actions_style" %>
 
 <div class="system-page">
   <div class="lists-title">
@@ -32,6 +33,10 @@
   </div>
 
   <div class="err-filters">
+    <% %i[open resolved ignored].each do |status| %>
+      <% picked, path = chip.call(:status, status) %>
+      <%= link_to status, path, class: "err-chip err-status-#{status}#{" on" if picked}" %>
+    <% end %>
     <% picked, path = chip.call(:unannounced, 1) %>
     <%= link_to "never announced", path, class: "err-chip#{" on" if picked}" %>
     <% @sections.first(24).each do |section| %>
@@ -49,9 +54,16 @@
 
   <%# One row per distinct failure, not per occurrence: a loop that ran four %>
   <%# hundred times is one thing going wrong, and reading it as four hundred %>
-  <%# lines buries everything else that happened that day. %>
+  <%# lines buries everything else that happened that day. Newest first. %>
   <% @groups.each do |group| %>
-    <div class="err-row<%= " quiet" unless group[:announced] %>">
+    <% decided = @statuses[group[:fingerprint]] %>
+    <div class="err-row<%= " quiet" unless group[:announced] %><%= " err-#{decided.status}" if decided %>">
+      <div class="err-ago">
+        <%= time_ago_in_words(group[:last_at]) %> ago
+        <% if decided %>
+          <span class="err-badge err-badge-<%= decided.status %>"><%= decided.status %></span>
+        <% end %>
+      </div>
       <div class="err-head">
         <span class="err-count"><%= group[:count] %>×</span>
         <%= link_to group[:section], system_errors_path(hours: @hours, fingerprint: group[:fingerprint]),
@@ -88,6 +100,7 @@
         <% else %>
           <span class="err-badge">never announced</span>
         <% end %>
+        <%= render "system/error_status_actions", error_id: group[:sample_id], decided: decided %>
       </div>
     </div>
   <% end %>
@@ -119,6 +132,9 @@
       border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
     }
     .err-row.quiet { border-color: rgba(245, 176, 65, 0.35); }
+    .err-row.err-ignored { opacity: 0.55; }
+    .err-row.err-resolved { border-color: rgba(88, 214, 141, 0.35); }
+    .err-ago { font-size: 12px; color: #C9D1D9; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
 
     .err-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
     .err-count { font-size: 15px; font-weight: bold; color: #EC7063; min-width: 42px; }

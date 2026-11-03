@@ -1,0 +1,10 @@
+<%# What can be decided about a failure from here: resolved speaks up the next %>
+<%# time it happens, ignored stays quiet for good, reopen takes either back. %>
+<span class="err-actions">
+  <% current = decided&.status&.to_sym || :open %>
+  <% { resolved: "resolve", ignored: "ignore", open: "reopen" }.each do |status, label| %>
+    <% next if status == current %>
+    <%= button_to label, system_error_status_path(id: error_id, status: status),
+          method: :patch, form_class: "err-action-form", class: "err-action err-action-#{status}" %>
+  <% end %>
+</span>

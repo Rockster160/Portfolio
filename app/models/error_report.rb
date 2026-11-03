@@ -78,6 +78,11 @@ class ErrorReport < ApplicationRecord
   # occurrence that was suppressed as a repeat. `channel` is per occurrence, so
   # the question has to be asked of the whole fingerprint.
   scope :never_announced, -> { where.not(fingerprint: unscoped.where.not(channel: nil).select(:fingerprint)) }
+  # By what has been decided about it: :open is everything with no decision.
+  scope :with_status, ->(status) {
+    decided = ErrorStatus.select(:fingerprint)
+    status.to_sym == :open ? where.not(fingerprint: decided) : where(fingerprint: decided.where(status: status))
+  }
   scope :for_section, ->(section) { where(section: section) }
   scope :for_class, ->(klass) { where(error_class: klass) }
   scope :like, ->(fingerprint) { where(fingerprint: fingerprint) }
@@ -91,15 +96,27 @@ class ErrorReport < ApplicationRecord
   # `channel` means "this occurrence was announced somewhere". Both funnels
   # leave it alone here and stamp it with #announced! once the alert is actually
   # away, because whether one goes out is decided from the row's own history.
-  def self.record!(section:, exception: nil, message: nil, user: nil, extra: {}, channel: nil)
-    klass = exception&.class&.name
-    text  = [message.presence, exception&.message.presence].compact.join("\n")
+  #
+  # `error_class:` and `backtrace:` are for a failure that arrives as text
+  # rather than as a Ruby exception - one the browser reported.
+  def self.record!(
+    section:,
+    exception: nil,
+    message: nil,
+    user: nil,
+    extra: {},
+    channel: nil,
+    error_class: nil,
+    backtrace: nil)
+    klass = error_class.presence || exception&.class&.name
+    text  = [message.presence, exception&.message.presence].compact.uniq.join("\n")
+    trace = backtrace.presence || Array(exception&.backtrace).first(BACKTRACE_FRAMES).join("\n")
 
     create!(
       section:     section.to_s.presence || "unknown",
       error_class: klass,
       message:     text.truncate(MESSAGE_LIMIT).presence,
-      backtrace:   Array(exception&.backtrace).first(BACKTRACE_FRAMES).join("\n").presence,
+      backtrace:   trace.presence,
       fingerprint: fingerprint_for(section, klass, text),
       channel:     channel.presence,
       user_id:     user&.id,
@@ -142,7 +159,15 @@ class ErrorReport < ApplicationRecord
   #   :new      - nothing like it on file, or nothing like it ever announced
   #   :back     - it had stopped for a while and has started again
   #   :ongoing  - it never stopped, and it has been long enough to say so again
+  #   :returned - it was marked resolved and has happened since, which opens it
+  #               again; the occurrences after this one are ordinary repeats
+  #
+  # An ignored failure is never announced, however it is going.
   def announcement
+    decided = ErrorStatus.find_by(fingerprint: fingerprint)
+    return nil if decided&.ignored?
+    return returned!(decided) if decided&.resolved? && decided.updated_at < created_at
+
     siblings = self.class.like(fingerprint).where.not(id: id)
     previous = siblings.maximum(:created_at)
     return { reason: :new } if previous.nil?
@@ -163,6 +188,13 @@ class ErrorReport < ApplicationRecord
       # - the count is how they all reach him at once.
       count:       siblings.where(created_at: announced_at..).count + 1,
     }
+  end
+
+  # Back after being marked resolved: it is open again, and the alert says
+  # how long the fix held.
+  def returned!(resolution)
+    resolution.destroy!
+    { reason: :returned, held_for: created_at - resolution.updated_at }
   end
 
   # Stamped once the alert is away, which is what makes `channel` the answer to
@@ -186,6 +218,8 @@ class ErrorReport < ApplicationRecord
     when :ongoing
       running = in_words(announcement[:running_for])
       "_still going - #{announcement[:count]} of these in the #{running} since the last alert_"
+    when :returned
+      "_back #{in_words(announcement[:held_for])} after being marked resolved_"
     end
   end
 
@@ -207,19 +241,22 @@ class ErrorReport < ApplicationRecord
     Digest::SHA256.hexdigest([section, error_class, stable.truncate(300)].join("|"))[0, 16]
   end
 
-  # One entry per distinct failure in the span, the most repeated first, each
-  # carrying a real row to read the detail off. Grouped in SQL: a window with a
+  # One entry per distinct failure in the span, the most repeated first (or,
+  # with `by: :recent`, the one that happened last first), each carrying a real
+  # row to read the detail off. Grouped in SQL: a window with a
   # loop in it can hold thousands of rows, and none of them is worth loading to
   # count the others.
   #
   # `scope:` is for a caller that has already narrowed it - the page's filters -
   # and it replaces the window rather than adding to it, so the span it is
   # passed has to be the same one.
-  def self.digest(span, limit: DIGEST_LIMIT, scope: nil)
+  def self.digest(span, limit: DIGEST_LIMIT, scope: nil, by: :count)
     grouped = (scope || where(created_at: span)).group(:fingerprint).pluck(
       Arel.sql("COUNT(*), MIN(created_at), MAX(created_at), MAX(id), COUNT(channel)"),
     )
-    top     = grouped.sort_by { |count, _first, last, _id, _sent| [-count, -last.to_i] }.first(limit)
+    top     = grouped.sort_by { |count, _first, last, _id, _sent|
+      by == :recent ? [-last.to_f, -count] : [-count, -last.to_f]
+    }.first(limit)
     samples = where(id: top.pluck(3)).index_by(&:id)
 
     top.filter_map { |count, first_at, last_at, id, announced|

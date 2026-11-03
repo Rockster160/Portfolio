@@ -39,6 +39,18 @@ RSpec.describe Buddy::CheckIns do
       expect(described_class.place(target, user: user)).to be >= target
     end
 
+    # Late in the evening, a target later tonight is past tonight's last band
+    # and rolls to tomorrow - where a re-plan has to find it already placed,
+    # not roll it another day.
+    it "answers the same time when asked to place a time it already placed" do
+      zone  = ActiveSupport::TimeZone[user.timezone]
+      now   = zone.local(2026, 8, 20, 21, 15, 0)
+      first = described_class.place(zone.local(2026, 8, 20, 23, 30, 0), user: user, now: now)
+
+      expect(first).to eq(zone.local(2026, 8, 21, 18, 0, 0))
+      expect(described_class.place(first, user: user, now: now + 1.minute)).to eq(first)
+    end
+
     it "rolls past a band that has already gone by rather than going backwards" do
       zone   = ActiveSupport::TimeZone[user.timezone]
       late   = zone.local(2026, 8, 20, 23, 30, 0)

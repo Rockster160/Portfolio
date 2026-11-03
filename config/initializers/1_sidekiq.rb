@@ -21,6 +21,10 @@ Sidekiq.configure_server { |config|
   }
 
   SidekiqUniqueJobs::Server.configure(config)
+
+  # A job that raises is retried and logged by Sidekiq and seen by nobody, so it
+  # goes into the error log too, alongside its retries.
+  config.error_handlers << ->(exception, context) { SidekiqErrors.report(exception, context) }
 }
 Sidekiq.configure_client { |config|
   config.redis = config_opts

@@ -4204,10 +4204,12 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     context "when the forecast goes under it as a table" do
+      # Their today, which is not the server's after their evening.
+      let(:today) { Time.current.in_time_zone(user.timezone).to_date }
       let(:forecast) {
         [
           {
-            "date"    => Date.current.iso8601,
+            "date"    => today.iso8601,
             "high"    => 65,
             "low"     => 41,
             "rain"    => 60,
@@ -4215,7 +4217,7 @@ RSpec.describe Buddy::GPT::Turn do
             "notable" => "rain",
             "alpine"  => "1-3pm",
           },
-          { "date" => Date.current.tomorrow.iso8601, "high" => 58, "low" => 40, "rain" => 0, "sky" => "Clear" },
+          { "date" => today.tomorrow.iso8601, "high" => 58, "low" => 40, "rain" => 0, "sky" => "Clear" },
         ]
       }
 

@@ -99,6 +99,53 @@ RSpec.describe ErrorReport do
 
       expect(occurrence(message: "something else").announcement).to include(reason: :new)
     end
+
+    # Known and set aside: still written down, never said out loud again.
+    it "stays quiet for an ignored failure, however it is going" do
+      first = occurrence(at: 3.hours.ago, announced: true)
+      ErrorStatus.set!(first.fingerprint, :ignored, user: user)
+
+      expect(occurrence.announcement).to be_nil
+      expect(ErrorStatus.find_by(fingerprint: first.fingerprint)).to be_ignored
+    end
+
+    # Believed fixed, so happening again is news - once. It is open again after
+    # that, and the next is an ordinary repeat.
+    it "speaks when a resolved failure comes back, and opens it again" do
+      first = occurrence(at: 1.hour.ago, announced: true)
+      travel_to(50.minutes.ago) { ErrorStatus.set!(first.fingerprint, :resolved, user: user) }
+
+      back = occurrence
+      said = back.announcement
+      back.announced!("#portfolio")
+
+      expect(said).to include(reason: :returned)
+      expect(described_class.repeat_note(said)).to include("after being marked resolved")
+      expect(ErrorStatus.find_by(fingerprint: first.fingerprint)).to be_nil
+      expect(occurrence.announcement).to be_nil
+    end
+
+    it "doesn't count an occurrence from before it was resolved as coming back" do
+      earlier = occurrence(at: 10.minutes.ago)
+      ErrorStatus.set!(earlier.fingerprint, :resolved, user: user)
+
+      expect(earlier.announcement).not_to include(reason: :returned)
+      expect(ErrorStatus.find_by(fingerprint: earlier.fingerprint)).to be_resolved
+    end
+  end
+
+  describe ".with_status" do
+    it "narrows to what has been decided, and open is everything undecided" do
+      open_one = described_class.record!(section: "a", exception: boom("a"))
+      ignored  = described_class.record!(section: "b", exception: boom("b"))
+      resolved = described_class.record!(section: "c", exception: boom("c"))
+      ErrorStatus.set!(ignored.fingerprint, :ignored, user: user)
+      ErrorStatus.set!(resolved.fingerprint, :resolved, user: user)
+
+      expect(described_class.with_status(:open)).to contain_exactly(open_one)
+      expect(described_class.with_status(:ignored)).to contain_exactly(ignored)
+      expect(described_class.with_status(:resolved)).to contain_exactly(resolved)
+    end
   end
 
   describe ".never_announced" do
@@ -146,6 +193,13 @@ RSpec.describe ErrorReport do
       expect(entry[:section]).to eq("sync")
       expect(entry[:first_at]).to be_within(1.second).of(first.created_at)
       expect(entry[:last_at]).to be_within(1.second).of(30.minutes.ago)
+    end
+
+    it "puts the one that happened last first, when asked to" do
+      travel_to(1.hour.ago) { 3.times { described_class.record!(section: "sync", exception: boom("no item 1")) } }
+      described_class.record!(section: "turn", exception: boom("one off"))
+
+      expect(described_class.digest(span, by: :recent).pluck(:section)).to eq(%w[turn sync])
     end
 
     it "puts the heaviest first" do

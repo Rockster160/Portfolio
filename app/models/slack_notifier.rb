@@ -16,6 +16,11 @@ module SlackNotifier
   #
   # `user:` is the other half of it. A failure is worth very little without
   # saying who it happened for, so every caller with a user in hand passes one.
+  #
+  # `section:` and `summary:` are for a caller that reports on behalf of
+  # something else - a failed request, a failed job - whose own file and line
+  # would group every failure it ever reports as one. They say where it really
+  # happened and what to group it by, in place of the ping's full text.
   def notify(
     message,
     channel: "#portfolio",
@@ -23,6 +28,9 @@ module SlackNotifier
     icon_emoji: ":blackmage:",
     attachments: [],
     user: nil,
+    section: nil,
+    summary: nil,
+    extra: {},
     exception: $ERROR_INFO)
     return deliver(message, channel, username, icon_emoji, attachments) if exception.nil?
 
@@ -31,7 +39,7 @@ module SlackNotifier
     # whether this one is worth announcing at all. `record!` answers nil rather
     # than raising, so a row that can't be written costs the link and never the
     # alert.
-    row = record_failure(message, exception, user)
+    row = record_failure(summary || message, exception, user, section || caller_section, extra)
     # With no row there is no history to judge by, so it goes out. A failure
     # that couldn't be written down must not also go unsaid.
     repeat = (row ? row.announcement : { reason: :new })
@@ -56,12 +64,13 @@ module SlackNotifier
     channel
   end
 
-  def err(exception, message="Error: ", channel: "#portfolio", username: "Portfolio-Bot", icon_emoji: ":blackmage:", attachments: [], user: nil)
+  def err(exception, message="Error: ", channel: "#portfolio", username: "Portfolio-Bot", icon_emoji: ":blackmage:", attachments: [], user: nil, section: nil)
     SlackNotifier.notify(
       "#{message}\n*#{exception}*\n#{exception.message}\n" \
       "```#{format_exception(exception)}```",
       exception: exception,
       user:      user,
+      section:   section,
     )
   end
 
@@ -75,14 +84,12 @@ module SlackNotifier
     [ErrorReport.who(user), row&.slack_ref].compact.join(" · ").prepend("— ")
   end
 
-  def record_failure(message, exception, user)
-    ErrorReport.record!(
-      section: caller_section, exception: exception, message: message, user: user,
-    )
+  def record_failure(message, exception, user, section, extra)
+    ErrorReport.record!(section: section, exception: exception, message: message, user: user, extra: extra)
   end
 
   def format_exception(exception)
-    focused = exception.backtrace.select { |l| l.include?("/app/") }
+    focused = Array(exception.backtrace).select { |l| l.include?("/app/") }
     focused.map { |line| line[/releases\/\d+(.*)/, 1] || line }.join("\n")
   end
 

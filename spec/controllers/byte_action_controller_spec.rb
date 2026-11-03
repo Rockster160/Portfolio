@@ -117,6 +117,8 @@ RSpec.describe ByteController, type: :controller do
         Prompt.create!(user: user, answer_type: :single, question: "How many calories?", options: [
           { "type" => "text", "default" => "shake", "question" => "Notes" },
           { "type" => "text", "default" => "",      "question" => "Calories" },
+          # A single pick can't go in empty, where a text field can.
+          { "type" => "select", "choices" => %w[Breakfast Lunch], "question" => "Meal" },
         ])
       }
 
@@ -137,22 +139,22 @@ RSpec.describe ByteController, type: :controller do
         action = form_action("Calories" => "240")
 
         post :respond_action, params: {
-          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "180" },
+          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "180", "Meal" => "Lunch" },
         }
 
         expect(response).to be_successful
-        expect(prompt.reload.response).to eq("Notes" => "shake", "Calories" => "180")
+        expect(prompt.reload.response).to eq("Notes" => "shake", "Calories" => "180", "Meal" => "Lunch")
       end
 
       it "answers a half-filled form with 422 and the reasons, keeping it live" do
         action = form_action
 
         post :respond_action, params: {
-          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "" },
+          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "", "Meal" => "" },
         }
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(JSON.parse(response.body)["errors"].join).to include("Calories needs a value")
+        expect(JSON.parse(response.body)["errors"].join).to include("Meal needs a value")
         expect(action.reload).to be_pending
       end
 
