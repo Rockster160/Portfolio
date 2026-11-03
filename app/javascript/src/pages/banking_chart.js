@@ -170,6 +170,19 @@ $(document).ready(function() {
             filter: function(ctx) { return !!ctx.parsed.y },
             callbacks: {
               label: function(ctx) { return ctx.dataset.label + ": " + fmtMoney(ctx.parsed.y) },
+              // Summed from the bucket's data rather than the tooltip items, so
+              // the totals don't depend on what the filter above lets through.
+              // The balance line has its own stack and is in neither.
+              footer: function(items) {
+                if (!items.length) { return [] }
+                const index = items[0].dataIndex
+                const sums = { in: 0, out: 0 }
+                items[0].chart.data.datasets.forEach(function(ds) {
+                  if (ds.stack !== "in" && ds.stack !== "out") { return }
+                  sums[ds.stack] += Number(ds.data[index]) || 0
+                })
+                return ["Total in: " + fmtMoney(sums.in), "Total out: " + fmtMoney(sums.out)]
+              },
             },
           },
         },
