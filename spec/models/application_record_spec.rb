@@ -214,6 +214,39 @@ RSpec.describe ApplicationRecord do
       it "still treats the word as a field when an operator follows it" do
         expect(described_class.query("notes:nothing")).to contain_exactly(other)
       end
+
+      describe "the same words in any order (`:&`)" do
+        let!(:burrito) { described_class.create!(user: user, name: "Food", notes: "Chicken Burrito") }
+
+        it "ignores word order, case, punctuation and spacing" do
+          ["burrito chicken", "Burrito, chicken!", "  chicken   BURRITO "].each do |words|
+            expect(described_class.query("notes:&\"#{words}\"")).to contain_exactly(burrito), words
+          end
+        end
+
+        it "still needs every word, and no others" do
+          expect(described_class.query("notes:&\"chicken burrito bowl\"")).to be_empty
+          expect(described_class.query("notes:&burrito")).to be_empty
+        end
+
+        it "negates with `!:&`" do
+          expect(described_class.query("notes!:&\"burrito chicken\"")).not_to include(burrito)
+          expect(described_class.query("notes!:&\"burrito chicken\"")).to include(other)
+        end
+
+        it "works inside jsonb" do
+          burrito.update!(data: { meal: "Rice and Beans" })
+          expect(described_class.query("data:meal:&\"beans and rice\"")).to contain_exactly(burrito)
+        end
+      end
+
+      it "ignores spacing on both sides of an exact search" do
+        spaced = described_class.create!(user: user, name: "Drink", notes: "Coke Zero")
+        spaced.update_column(:notes, "  Coke   Zero ") # rubocop:disable Rails/SkipsModelValidations
+        expect(described_class.query("notes::\"coke zero\"")).to contain_exactly(spaced)
+        expect(described_class.query("notes::\" coke  zero\"")).to contain_exactly(spaced)
+        expect(described_class.query("notes:\"coke zero\"")).to contain_exactly(spaced)
+      end
     end
 
     describe BankTransaction do

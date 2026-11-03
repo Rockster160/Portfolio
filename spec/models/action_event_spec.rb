@@ -19,6 +19,11 @@ RSpec.describe ActionEvent do
   describe "the model" do
     let(:user) { User.me }
 
+    it "saves the name and notes squished" do
+      event = user.action_events.create!(name: " Food ", notes: "  Chicken   Burrito ")
+      expect(event.reload).to have_attributes(name: "Food", notes: "Chicken Burrito")
+    end
+
     describe "data source key search" do
       let!(:phone_only) do
         user.action_events.create!(name: "arrived", notes: "SpecTown", data: {

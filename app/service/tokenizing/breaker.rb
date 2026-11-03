@@ -17,6 +17,7 @@ class Tokenizing::Breaker
   DELIMITERS = {
     contains:     ":",
     exact:        "::",
+    words:        ":&",
     not:          ["!", "-"],
     not_contains: ":!",
     not_exact:    "::!",

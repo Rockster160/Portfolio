@@ -1,4 +1,9 @@
 RSpec.describe ApplicationRecord, type: :model do
+  # Exact searches squish the column, so stray spacing in a row still matches.
+  def sq(expr)
+    "btrim(regexp_replace(#{expr}, '[[:space:]]+', ' ', 'g'))"
+  end
+
   def query(str)
     sql = ActionEvent.query(str).to_sql
     sql[/\ASELECT "action_events"\.\* FROM "action_events" WHERE \((.*?)\)\z/, 1].gsub("action_events.", "")
@@ -93,12 +98,12 @@ RSpec.describe ApplicationRecord, type: :model do
     it "returns records matching the query with nested OR and NOT conditions" do
       expect(query("name::(zish OR \"z*\") -zip")).to eq(query("name::(zish OR \"z*\") NOT zip"))
       sql = query("name::(zish OR \"z*\") NOT zip")
-      expect(sql).to eq("((((name ILIKE 'zish') OR (name ILIKE 'z*')) AND (NOT (\"name\"::TEXT ILIKE '%zip%' OR \"notes\"::TEXT ILIKE '%zip%'))))")
+      expect(sql).to eq("((((#{sq("name")} ILIKE 'zish') OR (#{sq("name")} ILIKE 'z*')) AND (NOT (\"name\"::TEXT ILIKE '%zip%' OR \"notes\"::TEXT ILIKE '%zip%'))))")
     end
 
     it "returns based on a complex multi-query" do
       sql = query("timestamp>'2024-11-12T00:00:00-07:00' AND (name::(food OR drink OR treat OR snack OR soda) OR name::(workout OR Z OR Zish))")
-      expect(sql).to eq("(((timestamp > '2024-11-12 07:00:00') AND (((name ILIKE 'food') OR (name ILIKE 'drink') OR (name ILIKE 'treat') OR (name ILIKE 'snack') OR (name ILIKE 'soda')) OR ((name ILIKE 'workout') OR (name ILIKE 'Z') OR (name ILIKE 'Zish')))))")
+      expect(sql).to eq("(((timestamp > '2024-11-12 07:00:00') AND (((#{sq("name")} ILIKE 'food') OR (#{sq("name")} ILIKE 'drink') OR (#{sq("name")} ILIKE 'treat') OR (#{sq("name")} ILIKE 'snack') OR (#{sq("name")} ILIKE 'soda')) OR ((#{sq("name")} ILIKE 'workout') OR (#{sq("name")} ILIKE 'Z') OR (#{sq("name")} ILIKE 'Zish')))))")
     end
 
     it "returns records matching id with colon or double-colon operator" do
@@ -121,7 +126,7 @@ RSpec.describe ApplicationRecord, type: :model do
   describe "generic jsonb key search" do
     it "matches a key exactly" do
       sql = query("data:transfer::true")
-      expect(sql).to eq("((data->>'transfer' ILIKE 'true'))")
+      expect(sql).to eq("((#{sq("data->>'transfer'")} ILIKE 'true'))")
     end
 
     it "matches a key by substring" do
@@ -131,12 +136,12 @@ RSpec.describe ApplicationRecord, type: :model do
 
     it "treats a missing key as not-equal so sparse jsonb stays included" do
       sql = query("data:transfer!::true")
-      expect(sql).to eq("((data->>'transfer' IS NULL OR data->>'transfer' NOT ILIKE 'true'))")
+      expect(sql).to eq("((data->>'transfer' IS NULL OR NOT (#{sq("data->>'transfer'")} ILIKE 'true')))")
     end
 
     it "treats a missing key as not-containing" do
       sql = query("data:merchant!:VENMO")
-      expect(sql).to eq("((data->>'merchant' IS NULL OR data->>'merchant' NOT ILIKE '%VENMO%'))")
+      expect(sql).to eq("((data->>'merchant' IS NULL OR NOT (data->>'merchant' ILIKE '%VENMO%')))")
     end
 
     it "guards the numeric cast on comparisons" do
@@ -149,13 +154,13 @@ RSpec.describe ApplicationRecord, type: :model do
     it "combines with a regular column term" do
       sql = query("name::Transaction data:transfer!::true")
       expect(sql).to eq(
-        "(((name ILIKE 'Transaction') AND (data->>'transfer' IS NULL OR data->>'transfer' NOT ILIKE 'true')))",
+        "(((#{sq("name")} ILIKE 'Transaction') AND (data->>'transfer' IS NULL OR NOT (#{sq("data->>'transfer'")} ILIKE 'true'))))",
       )
     end
 
     it "composes with OR across keys" do
       sql = query("data:transfer::true OR data:merchant::VENMO")
-      expect(sql).to eq("(((data->>'transfer' ILIKE 'true') OR (data->>'merchant' ILIKE 'VENMO')))")
+      expect(sql).to eq("(((#{sq("data->>'transfer'")} ILIKE 'true') OR (#{sq("data->>'merchant'")} ILIKE 'VENMO')))")
     end
   end
 

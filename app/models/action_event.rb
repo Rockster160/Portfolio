@@ -18,6 +18,10 @@ class ActionEvent < ApplicationRecord
 
   validates :name, presence: true
 
+  # Stored squished so a stray double space or trailing space can't make one
+  # food two different foods to an exact search.
+  normalizes :name, :notes, with: ->(text) { text.squish }
+
   before_save { self.timestamp ||= ::Time.current }
   after_create_commit :feed_pet
 

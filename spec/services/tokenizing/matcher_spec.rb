@@ -36,6 +36,21 @@ RSpec.describe Tokenizing::Matcher do
       end
     end
 
+    context "with the same words in any order (`:&`)" do
+      let(:q) { 'event:notes:&"burrito chicken"' }
+
+      it "ignores word order, case, punctuation and spacing" do
+        expect(matches?(q, { event: { notes: "Chicken,  Burrito" } })).to be(true)
+        expect(matches?(q, { event: { notes: "Chicken Burrito Bowl" } })).to be(false)
+      end
+    end
+
+    context "with stray spacing" do
+      it "still matches exactly" do
+        expect(matches?('event:notes::"coke zero"', { event: { notes: " Coke  Zero " } })).to be(true)
+      end
+    end
+
     context "with ANY(...)" do
       it "matches if any sub-value matches" do
         data = { event: { name: "hardworkout", notes: "Beat Saber" } }

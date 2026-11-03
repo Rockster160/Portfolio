@@ -78,17 +78,19 @@ class Tokenizing::Matcher
     if val.match?(/^\s*\/.*?\/[img]*\s*$/)
       delim_match?(val, :regex, drop)
     else
-      drop.to_s.downcase.include?(unwrap(val).to_s.downcase)
+      drop.to_s.squish.downcase.include?(unwrap(val).to_s.squish.downcase)
     end
   end
 
   def delim_match?(val, delim, drop)
-    lower_val = unwrap(val).to_s.downcase
-    lower_drop = drop.to_s.downcase
+    # Spacing never counts: a stray double space on either side still matches.
+    lower_val = unwrap(val).to_s.squish.downcase
+    lower_drop = drop.to_s.squish.downcase
     case delim
     when :contains then contain_or_regex?(drop, val)
     when :not_contains then !contain_or_regex?(drop, val)
     when :exact then lower_val == lower_drop
+    when :words then ::Tokenizing::Words.call(unwrap(val)) == ::Tokenizing::Words.call(drop)
     when :not, :not_exact then lower_val != lower_drop
     when :regex
       rx = val.to_s[/^\s*\/(.*?)\/[img]*\s*$/, 1] || val.to_s

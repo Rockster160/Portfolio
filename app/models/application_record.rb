@@ -162,7 +162,7 @@ class ApplicationRecord < ActiveRecord::Base
     end
     column = "#{table_name}.#{column}" if column.is_a?(Symbol)
 
-    text_operators = %i[: :: !: !::] # ~ !~
+    text_operators = %i[: :: !: !:: :& !:&] # ~ !~
     numeric_operators = %i[= != < > <= >=]
     # json_operators = %i[=> ->]
     # Eventually this should detect that it's a json column and use the jsonb operators
@@ -182,12 +182,10 @@ class ApplicationRecord < ActiveRecord::Base
         # fail closed below, so "everything" came back as zero rows.
         search_scope.send(scope_method, *value).stripped_sql.presence || "TRUE"
       elsif column_data.type.in?(%i[string text])
-        case operator
-        when *%i[:] then raw_sql("#{column} ILIKE ?", "%#{value}%")
-        when *%i[:: =] then raw_sql("#{column} ILIKE ?", value)
-        when *%i[!:] then raw_sql("#{column} NOT ILIKE ?", "%#{value}%")
-        when *%i[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
-        end
+        sql, bound = text_match_sql(column, operator, value)
+        next if sql.nil?
+
+        raw_sql(negative_operator?(operator) ? "NOT (#{sql})" : sql, bound)
       elsif column_data.type.in?(%i[datetime date])
         date_node_sql(column, operator, value)
       elsif column_data.type.in?(%i[integer float decimal])
@@ -245,6 +243,41 @@ class ApplicationRecord < ActiveRecord::Base
     note_search_problem("#{term} matched nothing it could be read as")
   end
 
+  # A text comparison as `[sql, value]`, where `sql` holds `expr` once and the
+  # value is its one bind. Negated operators get the positive comparison - the
+  # caller wraps it. Spacing never counts on either side: the value is squished
+  # here and the column in SQL. A contains-search only squishes the column when
+  # the value has a space in it, the one case where the column's spacing can
+  # change the answer, so it isn't paid for on every search of a long body.
+  def self.text_match_sql(expr, operator, value)
+    value = value.to_s.squish
+    case operator
+    when :":", :"!:"
+      column = value.include?(" ") ? squished_sql(expr) : expr
+      ["#{column} ILIKE ?", "%#{value}%"]
+    when :"::", :"=", :"!::", :"!="
+      ["#{squished_sql(expr)} ILIKE ?", value]
+    when :":&", :"!:&"
+      ["#{words_sql(expr)} = ?", Tokenizing::Words.call(value)]
+    end
+  end
+
+  def self.negative_operator?(operator)
+    operator.to_s.start_with?("!")
+  end
+
+  def self.squished_sql(expr)
+    "btrim(regexp_replace(#{expr}, '[[:space:]]+', ' ', 'g'))"
+  end
+
+  # Tokenizing::Words in SQL: lowercased, punctuation dropped, words sorted
+  # bytewise (COLLATE "C") so the order matches Ruby's `sort`.
+  def self.words_sql(expr)
+    stripped = "lower(regexp_replace(#{expr}, '[^[:alnum:][:space:]]+', '', 'g'))"
+    words = "regexp_split_to_table(#{squished_sql(stripped)}, ' ')"
+    "array_to_string(ARRAY(SELECT w FROM #{words} AS w WHERE w <> '' ORDER BY w COLLATE \"C\"), ' ')"
+  end
+
   JSON_NUMERIC_RX = '^-?[0-9]+(\.[0-9]+)?$'.freeze
 
   # Generic jsonb key search. List a jsonb column in `search_terms` and every
@@ -268,11 +301,12 @@ class ApplicationRecord < ActiveRecord::Base
     Array.wrap(node.conditions).filter_map { |value|
       next if value.is_a?(Tokenizing::Node)
 
-      case node.operator&.to_sym
-      when :":" then raw_sql("#{path} ILIKE ?", key, "%#{value}%")
-      when :"::", :"=" then raw_sql("#{path} ILIKE ?", key, value)
-      when :"!:" then raw_sql("(#{path} IS NULL OR #{path} NOT ILIKE ?)", key, key, "%#{value}%")
-      when :"!::", :"!=" then raw_sql("(#{path} IS NULL OR #{path} NOT ILIKE ?)", key, key, value)
+      operator = node.operator&.to_sym
+      sql, bound = text_match_sql(path, operator, value)
+      next raw_sql(sql, key, bound) if sql && !negative_operator?(operator)
+      next raw_sql("(#{path} IS NULL OR NOT (#{sql}))", key, key, bound) if sql
+
+      case operator
       when :<, :>, :<=, :>=
         # The shape check is bound, not inlined — a `?` inside a SQL literal
         # would be miscounted as a bind placeholder.
