@@ -323,10 +323,16 @@ module Buddy
       # SILENT_TURN_STATE_RX for why that stands the passive half down.
       def self.silent_turn_claim?(body, asked: false)
         return false if body.blank?
-        # An honest refusal and an honest question both survive, for the same
-        # reasons they survive everywhere else in here.
+        # An honest refusal survives, but only in the sentence it is made in.
+        # "I can't add the chore from here. I've filed that gap." is a refusal
+        # followed by a filing nobody made, and excusing the whole body for the
+        # first half let the second one out on a turn that wrote nothing.
+        return true if body.split(/(?<=[.!?])\s+|\n+/).any? { |sentence|
+          sentence.match?(SILENT_TURN_CLAIM_RX) && !sentence.match?(DENIAL_RX)
+        }
+        # The passive half keeps the whole body's refusal: "I can't move it,
+        # it's set for Friday" is an honest answer in either order.
         return false if body.match?(DENIAL_RX)
-        return true if body.match?(SILENT_TURN_CLAIM_RX)
 
         !asked && body.match?(SILENT_TURN_STATE_RX)
       end

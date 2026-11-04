@@ -107,6 +107,24 @@ RSpec.describe Buddy::Emphasis do
     end
   end
 
+  # 7 spans over 5 sentences, every one a title: under the old floor of eight,
+  # so nothing was measured at all.
+  describe "a short briefing that bolds every title it names" do
+    let(:body) {
+      briefing([
+        "Good morning!",
+        "Big day, with **Interview: Acme** at 10am and **Interview: Globex** at 3pm!",
+        "And there's just the one job today, **go get mail**.",
+        "Tomorrow has **Standup** at 9:30am, **Gym** at 1pm, and **Game night** at 6pm.",
+        "Then on Thursday, **Craft day** is at 1pm!",
+      ])
+    }
+
+    it "takes all of it off" do
+      expect(described_class.thin(body)).to eq(body.delete("*"))
+    end
+  end
+
   # Three sentences, five spans, two of them temperatures.
   describe "a short briefing bolding every fact in it" do
     let(:body) {

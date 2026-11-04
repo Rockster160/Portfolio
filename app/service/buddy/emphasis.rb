@@ -38,12 +38,15 @@ module Buddy
     # span's opener.
     SPAN_RX = /\*\*(?=\S)((?:[^*\n]|\*[^*\n]+\*)+?)\*\*/
 
-    # Below this, emphasis is scarce enough that none of it is taken off
-    # wholesale. It also keeps a short briefing from losing every span over
-    # two or three, where the ratio alone would. Figures still come off a short
-    # one that is over the line - a time in bold beside every name is the same
-    # overrun at any length.
-    FLOOR = 8
+    # Names left standing after the figures come off, below which none of them
+    # is taken off wholesale. It keeps a short briefing from losing two or
+    # three, where the ratio alone would. Counted AFTER the figures because the
+    # overrun that is only names is the same one: five and seven bolded titles
+    # over as many sentences, one per event, went straight through a floor of
+    # eight that was counting a total no figure had ever been part of. Figures
+    # still come off a short one that is over the line - a time in bold beside
+    # every name is the same overrun at any length.
+    FLOOR = 4
 
     # Sentences each span needs behind it before emphasis counts as scarce.
     SENTENCES_PER_SPAN = 2
@@ -82,10 +85,8 @@ module Buddy
       # Figures first. If that is enough to bring it back under, the names keep
       # their emphasis and the briefing reads the way the rule always wanted.
       text  = text.gsub(SPAN_RX) { |span| figure?(::Regexp.last_match(1)) ? ::Regexp.last_match(1) : span }
-      return text if found.length < FLOOR
-
       found = spans(text)
-      return text if scarce?(found, text)
+      return text if found.length < FLOOR || scarce?(found, text)
 
       # Still every sentence over. Which four of thirty-seven were the ones
       # that mattered is not answerable from here, and picking by position

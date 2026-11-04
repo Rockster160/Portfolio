@@ -1921,6 +1921,9 @@ RSpec.describe Buddy::GPT::Turn do
           "Yep, I'm watching for the next deploy to finish.",
           "Sure thing, I'll let you know when it lands.",
           "Logged that for you. Anything else on your mind?",
+          # A refusal in one sentence is no cover for a filing claimed in the
+          # next.
+          "I can’t add the clock-fixing chore from this turn right now. I’ve filed that gap.",
         ].each do |faked|
           run([{ text: faked }])
 
@@ -1936,6 +1939,8 @@ RSpec.describe Buddy::GPT::Turn do
       it "leaves honest limits, questions, offers and statements about the world alone" do
         [
           "I couldn't get that one added, sorry.",
+          "I can't add that chore - I haven't filed anything for it yet.",
+          "I can't reach the TV. It isn't wired up, and they're not set up to be.",
           "I don't have a way to put that on a schedule.",
           "I started to look and there's nothing there yet.",
           "I made sure to check - nothing on it.",

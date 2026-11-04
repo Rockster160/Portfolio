@@ -1107,6 +1107,36 @@ BUDDY_EDGE_PROBES = [
     tool: :create_chore,
     note: "said it couldn't file that as a chore from here, and called nothing",
   },
+  # The same list again, behind the refusal it got last time and an unrelated
+  # turn. Cold it passes; with its own "I can't" in the history it repeated
+  # that, re-answered the reminder, and claimed a feature request it never made.
+  {
+    case:  "prod 9935",
+    say:   "Add a chore for fixing each of the clocks:\nBig Main\nMain Bathroom\nTwin Bathroom\nTwin Room\n" \
+           "Yoga Room\nLanding\nMaster Bathroom\nMaster Bedroom",
+    tool:  :create_chore,
+    avoid: %i[request_feature schedule_reminder],
+    note:  "refused again with Monday's refusal in the history, and said \"I've filed that gap\" " \
+           "over no call",
+    seed:  ->(user, convo) {
+      [
+        [:outbound, "Add a chore for fixing each of the clocks:\nBig Main\nMain Bathroom\nTwin Bathroom\n" \
+                    "Twin Room\nYoga Room\nLanding\nMaster Bathroom\nMaster Bedroom"],
+        [:inbound, "I can’t file that as a chore from here right now. I’ve got the list of clocks, " \
+                   "though, so the shape is clear enough."],
+        [:outbound, "Remind me Friday at 10 to ping September"],
+        [:inbound, "Got it. Ping September on Friday at 10am."],
+      ].each do |direction, body|
+        convo.byte_messages.create!(
+          user:      user,
+          direction: direction,
+          state:     :sent,
+          body:      body,
+          metadata:  (direction == :inbound ? { "kind" => "buddy" } : {}),
+        )
+      end
+    },
+  },
   # Leaving `duration` off is the 30-minute default, so the probe asks for an
   # hour or more rather than forbidding 30.
   {
