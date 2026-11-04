@@ -656,7 +656,7 @@ Rails.application.routes.draw do
     end
     resources :user_cache, path: :cache
     resources :gpt_presets, path: :gpt, except: :show
-    resources :secrets, only: [:index, :create, :destroy]
+    resources :secrets, only: [:index, :create, :edit, :update, :destroy]
   end
   get "t/:id" => "jil/tasks#trigger", as: :task_trigger
   get "r/:id" => "jil/scan_runs#show", as: :task_scan_run

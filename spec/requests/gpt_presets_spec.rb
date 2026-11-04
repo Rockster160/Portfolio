@@ -56,6 +56,32 @@ RSpec.describe "GPT presets and secrets", type: :request do
     expect(user.secrets.count).to eq(0)
   end
 
+  it "renames a secret and rolls its value only when a new one is given" do
+    secret = user.secrets.create!(name: "OpenAI", value: "sk-secret-abcd1234")
+
+    get edit_jil_secret_path(secret)
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include("OpenAI", "…1234")
+    expect(response.body).not_to include("sk-secret")
+
+    patch jil_secret_path(secret), params: { name: "OpenAI Work", value: " " }
+    expect(secret.reload.name).to eq("OpenAI Work")
+    expect(secret.value).to eq("sk-secret-abcd1234")
+
+    patch jil_secret_path(secret), params: { name: "OpenAI Work", value: " sk-secret-wxyz9876 " }
+    expect(secret.reload.value).to eq("sk-secret-wxyz9876")
+  end
+
+  it "refuses to rename a secret onto another one's name" do
+    user.secrets.create!(name: "OpenAI", value: "x")
+    secret = user.secrets.create!(name: "Slack", value: "y")
+
+    patch jil_secret_path(secret), params: { name: "openai", value: "" }
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(secret.reload.name).to eq("Slack")
+  end
+
   it "keeps password managers off the secret form" do
     get jil_secrets_path
 
@@ -77,7 +103,11 @@ RSpec.describe "GPT presets and secrets", type: :request do
     get edit_jil_gpt_preset_path(preset)
     expect(response).to have_http_status(:redirect)
 
+    get edit_jil_secret_path(secret)
+    expect(response).to have_http_status(:redirect)
+
+    patch jil_secret_path(secret), params: { name: "Mine", value: "y" }
     delete jil_secret_path(secret)
-    expect(secret.reload).to be_persisted
+    expect(secret.reload.name).to eq("Theirs")
   end
 end

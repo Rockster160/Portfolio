@@ -37,7 +37,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       let arrival = reported + Time.minutes(trip.minutes_to_arrival)
       let eta = Time.asData(arrival)
       let left = Math.max(0, Math.round((arrival - Date.now()) / Time.minutes(1)))
-      suffix = " " + Text.grey("(" + left + "m/ETA:" + eta.hour + ":" + eta.minute + ")")
+      suffix = " " + Text.grey("(" + left + "[ico ti ti-fa-clock_o]/ETA:" + eta.hour + ":" + eta.minute + ")")
     }
     return "→ " + label + suffix
   }
