@@ -202,12 +202,17 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   # only job here is to render wide enough to hold "1h 32m" and to be findable
   # by the script that shows what it read back. A `number` input cannot: it
   # silently drops everything that is not a bare integer.
-  def duration(text, default)
+  #
+  # `live` is a duration still running - the time since something started. The
+  # form already out for it runs the prompt's load step again each minute while
+  # it waits, so a load that works the value out keeps it current.
+  def duration(text, default, live=nil)
     {
       type:     :duration,
       question: text,
       default:  format_duration(default),
-    }
+      live:     @jil.cast(live, :Boolean) || nil,
+    }.compact
   end
 
   def textarea(text, default)

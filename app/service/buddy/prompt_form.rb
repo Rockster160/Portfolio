@@ -37,6 +37,18 @@ module Buddy
       new(prompt).hydrate!(user)
     end
 
+    # Reads the prompt as it stands, with no load step, for as long as the block
+    # runs. A load is what changes a prompt, and a changed prompt is what pushes
+    # its form out again - so the push builds inside this, or every load
+    # listener that rewrites a question would set off the next push forever.
+    def self.without_load
+      was = ::Thread.current[:buddy_prompt_form_without_load]
+      ::Thread.current[:buddy_prompt_form_without_load] = true
+      yield
+    ensure
+      ::Thread.current[:buddy_prompt_form_without_load] = was
+    end
+
     def initialize(prompt)
       @prompt = prompt
     end
@@ -48,6 +60,8 @@ module Buddy
     # partial view of the prompt is worth more than none, and the unfilled
     # fields still route through the ask-don't-guess path.
     def hydrate!(user)
+      return self if ::Thread.current[:buddy_prompt_form_without_load]
+
       data = ::Tokenizing::TriggerData.parse(@prompt.params || {}, as: user)
       ::Jil.trigger(user, :prompt, @prompt.with_jil_attrs(state: :load, data: data))
       @prompt.reload
@@ -59,6 +73,11 @@ module Buddy
 
     def title
       @prompt.question.to_s
+    end
+
+    # A duration still running, which the form waiting on it keeps current.
+    def live?
+      visible.any? { |option| type_of(option) == :duration && option[:live] }
     end
 
     # A prompt whose `options` isn't a question array (320 rows in dev carry a

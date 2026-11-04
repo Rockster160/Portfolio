@@ -31,6 +31,11 @@ module Buddy
     # for a Claude hook blocking on a decision, and made checkboxes silently 409.
     TTL = 3.days
 
+    # A form whose spec `ticks:` runs its refresh step this often while it
+    # waits, and never for longer than TICK_FOR after it was posted.
+    TICK_EVERY = 1.minute
+    TICK_FOR   = 1.day
+
     # Build the form and post it. Returns the ByteAction, or nil when the tool
     # can't produce one (its `fields` proc is also its resolver — a prompt that
     # has since been answered raises there rather than posting an empty form).
@@ -80,6 +85,7 @@ module Buddy
       # An earlier form for the same thing is a question they no longer need to
       # answer — re-asking a prompt with better values shouldn't leave two of it.
       Buddy::Supersede.replace!(action: action, keys: [merge_key])
+      schedule_tick!(action)
       action
     rescue StandardError => e
       Buddy::Errors.report(section: "form_action.post", exception: e, user: user)
@@ -215,11 +221,15 @@ module Buddy
     # Rebuild a pending form from the tool, as it would be posted now. A form
     # whose spec carries `refresh:` runs that first - a prompt's load step, which
     # is what fills in choices that are only known at the moment it's opened.
-    # Values already typed live in the browser's draft and survive the repaint.
+    # The fields are then read with no second load, since that one just ran.
+    #
+    # `load: false` is a push: something else already changed what the form is
+    # built from, so it is only read again. The browser decides what a push may
+    # touch - never a value the person changed themselves.
     #
     # Returns the message, or nil when the form is no longer pending or the
     # tool can't build it any more.
-    def refresh!(action)
+    def refresh!(action, load: true)
       return nil unless action&.pending?
 
       tool = Buddy::Tools[action.tool_input.to_h["tool_name"].to_s.to_sym]
@@ -231,8 +241,9 @@ module Buddy
 
       payload = action.tool_input.to_h["payload"].to_h.symbolize_keys
       ctx     = Buddy::ToolContext.new(action.user, conversation: action.byte_conversation)
-      spec[:refresh]&.call(payload, ctx)
-      fields = Buddy::FormFields.normalize(spec[:fields].call(payload, ctx)).map { |f| f.transform_keys(&:to_s) }
+      spec[:refresh]&.call(payload, ctx) if load
+      built  = Buddy::PromptForm.without_load { spec[:fields].call(payload, ctx) }
+      fields = Buddy::FormFields.normalize(built).map { |f| f.transform_keys(&:to_s) }
       named  = spec[:title]
       title  = (named.respond_to?(:call) ? named.call(payload, ctx) : named).to_s.presence
 
@@ -247,6 +258,53 @@ module Buddy
       # not an error worth announcing.
       Rails.logger.warn("[Buddy::FormAction] refresh failed: #{e.class}: #{e.message}")
       nil
+    end
+
+    # Whether this form should still be ticking: waiting, posted under a day
+    # ago, and its tool still saying it wants to.
+    def ticking?(action)
+      return false unless action&.tool_name == TOOL_NAME && action.created_at > TICK_FOR.ago
+      return false unless ByteAction.active.exists?(id: action.id)
+
+      spec = Buddy::Tools[action.tool_input.to_h["tool_name"].to_s.to_sym]&.dig(:form)
+      return false unless spec&.dig(:ticks) && spec[:refresh]
+
+      payload = action.tool_input.to_h["payload"].to_h.symbolize_keys
+      spec[:ticks].call(payload, Buddy::ToolContext.new(action.user, conversation: action.byte_conversation)) == true
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::FormAction] ticking? failed: #{e.class}: #{e.message}")
+      false
+    end
+
+    # The next tick, only when there should be one. It is the only way a tick
+    # gets scheduled, so nothing runs for a form that has nothing live on it.
+    def schedule_tick!(action)
+      BuddyFormTickWorker.perform_in(TICK_EVERY, action.id) if ticking?(action)
+    end
+
+    # The refresh step on its own. What it changes reaches the form as a push,
+    # so there is nothing to repaint here.
+    def tick!(action)
+      spec    = Buddy::Tools[action.tool_input.to_h["tool_name"].to_s.to_sym]&.dig(:form)
+      payload = action.tool_input.to_h["payload"].to_h.symbolize_keys
+      spec[:refresh].call(payload, Buddy::ToolContext.new(action.user, conversation: action.byte_conversation))
+    end
+
+    # The tick waiting on a form that has stopped waiting - answered, skipped,
+    # replaced, dismissed, expired or deleted.
+    def stop_tick!(action_id)
+      ::Sidekiq::ScheduledSet.new.each do |job|
+        job.delete if job.klass == BuddyFormTickWorker.name && Array(job.args).first == action_id
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::FormAction] stop_tick! failed for #{action_id}: #{e.class}: #{e.message}")
+    end
+
+    # Every form still waiting on this prompt, rebuilt from it as it is now.
+    def push_prompt!(prompt)
+      scope = prompt.user.byte_actions.active.where(tool_name: TOOL_NAME)
+      scope = scope.where("tool_input @> ?", { tool_name: :answer_prompt, payload: { id: prompt.id } }.to_json)
+      scope.find_each { |action| refresh!(action, load: false) }
     end
 
     class << self

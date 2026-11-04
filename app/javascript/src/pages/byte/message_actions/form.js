@@ -11,8 +11,19 @@
 //      on every visibilitychange -> visible. Backgrounding the PWA mid-edit
 //      would otherwise wipe a half-filled form. Every edit is mirrored into
 //      DRAFTS, and a rebuild re-seeds from there.
-//   2. A rebuild while someone is typing moves the caret. So a repaint is
-//      skipped outright whenever focus is inside this container.
+//   2. A rebuild while someone is typing moves the caret. So while focus is
+//      in a box being typed in, nothing is rebuilt: values change in place,
+//      and the box with focus takes its own the moment focus leaves it.
+//
+// A repaint is also how the server PUSHES to a form already on screen - a
+// guess that took a while, a duration still running. A push may only change a
+// value the person hasn't: each form remembers what it last showed, and a box
+// still holding that is the server's to update, however many times it was
+// focused or typed in and put back. Labels and small print are the server's
+// alone and always land. A push that changes the form's SHAPE - fields or
+// their options added, removed or reordered - is not applied at all; the
+// refresh button says so, and pressing it rebuilds the whole form from the
+// server, edits included.
 //
 // Field types mirror shared/_dynamic_form_fields, since the app's own Prompt
 // pages are the first thing this renders.
@@ -28,11 +39,32 @@ import {
 // be worse than none.
 const DRAFTS = new Map();
 
-// requestIds with a refresh in flight, so a repaint that lands mid-request
-// keeps the arrows turning. And the ones already refreshed on being shown,
-// since a history refetch repaints every message and each would ask again.
-const REFRESHING = new Set();
+// requestId -> what the refresh in flight is for, so a repaint that lands
+// mid-request keeps the arrows turning and is painted the way that refresh
+// asked: OPENED (shown for the first time - take the new shape, keep edits) or
+// REPLACE (the button - take everything). Anything else is a push. And the
+// ones already refreshed on being shown, since a history refetch repaints
+// every message and each would ask again.
+const REFRESHING = new Map();
 const SHOWN = new Set();
+const OPENED = "opened";
+const REPLACE = "replace";
+
+// requestId -> { fields, shape, shown: { key: normalized value }, stale }:
+// the form as it was last painted. `shown` is what each box held when the
+// server last set it, and is what "changed by the person" is measured from.
+const PAINTED = new Map();
+
+// requestId -> every container drawing it (the thread, the kiosk), so a
+// refresh's answer can be painted even if its broadcast never arrives.
+const MOUNTS = new Map();
+
+// container -> the repaint held back while someone types in it, for the one
+// kind that can't be done in place: an opening refresh changing the shape.
+const HELD = new WeakMap();
+
+// Rows already waiting for focus to leave them.
+const LANDING = new WeakSet();
 
 const REFRESH_ICON = `
   <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -88,13 +120,7 @@ export function renderForm(container, message) {
   if (!form || !Array.isArray(form.fields)) return false;
 
   const requestId = meta.action_request_id;
-  // Never rebuild under someone's cursor. Whatever triggered this repaint has
-  // nothing in it worth more than the value being typed. Only a control that
-  // takes typing or dragging counts: the refresh button keeps focus after a
-  // tap, and the repaint it asked for is the one it is waiting on.
-  if (container.contains(document.activeElement) && isEditing(document.activeElement)) {
-    return true;
-  }
+  const mode = REFRESHING.get(requestId);
 
   const submitted = form.status === "submitted";
   // A corrected version of this form landed further down the thread, so this
@@ -110,11 +136,34 @@ export function renderForm(container, message) {
     Number.isFinite(expiresAt) &&
     Date.now() > expiresAt;
   const locked = submitted || superseded || expired;
+
+  // Never rebuild under someone's cursor. Only a control that takes typing or
+  // dragging counts: the refresh button keeps focus after a tap, and the
+  // repaint it asked for is the one it is waiting on.
+  const active = document.activeElement;
+  if (!locked && mode !== REPLACE && PAINTED.has(requestId) && container.contains(active) && isEditing(active)) {
+    if (mode === OPENED && shapeOf(form.fields) !== PAINTED.get(requestId).shape) {
+      holdUntilBlur(container, message);
+    } else {
+      updateInPlace(container, requestId, form.fields, draftFor(requestId), mode, active);
+    }
+    return true;
+  }
+  HELD.delete(container);
+  if (requestId) mountsFor(requestId).add(container);
+
   // A settled form shows what was actually recorded, never a local draft. The
   // answer may have been given somewhere else entirely — the prompt's own page
   // — in which case a half-typed guess sitting here is pure fiction.
-  if (locked) DRAFTS.delete(requestId);
+  if (locked) {
+    DRAFTS.delete(requestId);
+    PAINTED.delete(requestId);
+  }
+  if (mode === REPLACE) DRAFTS.delete(requestId);
   const draft = locked ? {} : draftFor(requestId);
+  const painted = locked
+    ? { fields: form.fields, stale: false }
+    : settle(requestId, form.fields, draft, mode);
 
   container.innerHTML = "";
   container.className = "byte-msg-form";
@@ -128,16 +177,16 @@ export function renderForm(container, message) {
 
   // A form that fills itself in when it's opened. What it was posted with
   // shows straight away and is rebuilt behind it, so nothing waits on this.
-  const refreshable = !locked && form.refresh && requestId;
+  const refreshable = !locked && requestId && (form.refresh || painted.stale);
   if (refreshable) {
-    container.appendChild(refreshButton(requestId));
-    if (!SHOWN.has(requestId)) {
+    container.appendChild(refreshButton(requestId, painted.stale));
+    if (form.refresh && !SHOWN.has(requestId)) {
       SHOWN.add(requestId);
-      setTimeout(() => refreshForm(requestId), 0);
+      setTimeout(() => refreshForm(requestId, OPENED), 0);
     }
   }
 
-  form.fields.forEach((field) => {
+  painted.fields.forEach((field) => {
     if (field.type === "hidden") return;
     const row = buildRow(field, { draft, locked });
     if (row) container.appendChild(row);
@@ -179,20 +228,271 @@ export function renderForm(container, message) {
   return true;
 }
 
-function refreshButton(requestId) {
+// What a painted form becomes when this version of it arrives. Fields keep
+// the shape already on screen unless this repaint may change it, and take the
+// server's value wherever the person hasn't changed theirs.
+//
+// `focusedKey` is the box being typed in. Unless it has been changed, it keeps
+// what it shows for now and its new value waits in `waiting` for focus to
+// leave it.
+function settle(requestId, incoming, draft, mode, focusedKey = null) {
+  const before = PAINTED.get(requestId);
+  const shape = shapeOf(incoming);
+  const reshape = !before || mode === OPENED || mode === REPLACE || shape === before.shape;
+  const base = reshape ? incoming : before.fields;
+  const fresh = new Map(incoming.map((field) => [field.key, field]));
+
+  const shown = {};
+  const waiting = {};
+  const fields = base.map((baseField) => {
+    let field = baseField;
+    const server = fresh.has(field.key) ? fresh.get(field.key).value : field.value;
+    // Words only - a label or its small print - so it lands whatever the
+    // shape is doing.
+    const words = fresh.get(field.key);
+    if (words) field = { ...field, label: words.label, hint: words.hint };
+    const edited =
+      Object.prototype.hasOwnProperty.call(draft, field.key) &&
+      (!before || normalized(field, draft[field.key]) !== before.shown[field.key]);
+
+    if (edited) {
+      shown[field.key] = before?.shown[field.key] ?? normalized(field, server);
+      return { ...field, value: draft[field.key] };
+    }
+    if (before && field.key === focusedKey) {
+      shown[field.key] = before.shown[field.key];
+      waiting[field.key] = server;
+      const onScreen = before.fields.find((f) => f.key === field.key);
+      return { ...field, value: onScreen ? onScreen.value : server };
+    }
+    delete draft[field.key];
+    shown[field.key] = normalized(field, server);
+    return { ...field, value: server };
+  });
+
+  const state = { fields, shape: reshape ? shape : before.shape, shown, waiting, stale: !reshape };
+  PAINTED.set(requestId, state);
+  return state;
+}
+
+// Everything about a form except its values and its words: which fields, in
+// what order, what kind of control each is, and its options in their order.
+function shapeOf(fields) {
+  return JSON.stringify(
+    fields.map((f) => [f.key, f.type, !!f.required, f.choices ?? null, f.min ?? null, f.max ?? null, f.step ?? null]),
+  );
+}
+
+// A value as the box holding it would read it back, so a field the server
+// sent as nothing and the person never moved compares equal however it is
+// spelled - null, "", an unticked box, a slider resting on its floor, a
+// required select sitting on its first choice.
+function normalized(field, value) {
+  const blank = value == null || value === "";
+  switch (field.type) {
+    case "checkbox":
+      return String(value) === "true" ? "true" : "false";
+    case "choices":
+      return (Array.isArray(value) ? value : String(value ?? "").split(","))
+        .map((v) => String(v).trim())
+        .filter(Boolean)
+        .sort()
+        .join(",");
+    case "scale":
+      return blank ? String(field.min ?? 0) : String(value);
+    case "select":
+      return blank && field.required ? String(field.choices?.[0] ?? "") : blank ? "" : String(value);
+    default:
+      return blank ? "" : String(value);
+  }
+}
+
+// A push landing while someone is typing in the form. Every other box that
+// still holds what the server last gave it takes the new value now; the one
+// with focus takes it when focus leaves, if it is still unchanged by then.
+function updateInPlace(container, requestId, incoming, draft, mode, active) {
+  const rows = Array.from(container.querySelectorAll(".byte-msg-form-row"));
+  const focusedRow = rows.find((row) => row.contains(active));
+  const focusedKey = focusedRow?.dataset.key ?? null;
+  const painted = settle(requestId, incoming, draft, mode, focusedKey);
+
+  painted.fields.forEach((field) => {
+    const row = rows.find((r) => r.dataset.key === field.key);
+    if (!row) return;
+    paintLabel(row, field);
+    paintServerHint(row, field);
+    if (row === focusedRow) return;
+    if (normalized(field, readRow(row)) !== normalized(field, field.value)) writeRow(row, field);
+  });
+
+  const button = container.querySelector(".byte-msg-form-refresh");
+  if (button) paintStale(button, painted.stale);
+  else if (painted.stale) container.insertBefore(refreshButton(requestId, true), container.firstChild);
+
+  if (focusedRow && Object.prototype.hasOwnProperty.call(painted.waiting, focusedKey)) {
+    landOnBlur(focusedRow, requestId, focusedKey);
+  }
+}
+
+function landOnBlur(row, requestId, key) {
+  if (LANDING.has(row)) return;
+  LANDING.add(row);
+
+  const land = () => {
+    setTimeout(() => {
+      // Still inside the row - one checkbox of several to the next.
+      if (row.contains(document.activeElement)) return;
+      row.removeEventListener("focusout", land);
+      LANDING.delete(row);
+
+      const state = PAINTED.get(requestId);
+      if (!state || !Object.prototype.hasOwnProperty.call(state.waiting, key)) return;
+      const server = state.waiting[key];
+      delete state.waiting[key];
+      const field = state.fields.find((f) => f.key === key);
+      // They typed something after all, which the draft already holds.
+      if (!field || normalized(field, readRow(row)) !== state.shown[key]) return;
+
+      field.value = server;
+      writeRow(row, field);
+      state.shown[key] = normalized(field, server);
+      delete draftFor(requestId)[key];
+    }, 0);
+  };
+  row.addEventListener("focusout", land);
+}
+
+// One box set to `field.value`, the way buildControl would have drawn it.
+function writeRow(row, field) {
+  const value = field.value;
+  const blank = value == null || value === "";
+  const type = row.dataset.type;
+
+  if (type === "choices") {
+    const picked = new Set(
+      (Array.isArray(value) ? value : String(value ?? "").split(","))
+        .map((v) => String(v).trim())
+        .filter(Boolean),
+    );
+    row.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.checked = picked.has(cb.value);
+    });
+  } else if (type === "chips") {
+    row.querySelectorAll('input[type="radio"]').forEach((radio) => {
+      radio.checked = !blank && String(value) === radio.value;
+    });
+  } else if (type === "checkbox") {
+    const cb = row.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = String(value) === "true";
+  } else if (type === "scale") {
+    const range = row.querySelector("input");
+    if (range) range.value = blank ? range.min : String(value);
+    const out = row.querySelector(".byte-msg-form-scale-value");
+    if (out && range) out.textContent = range.value;
+  } else if (type === "select") {
+    const sel = row.querySelector("select");
+    if (sel && !blank) sel.value = String(value);
+    else if (sel && field.required) sel.selectedIndex = 0;
+    else if (sel) sel.value = "";
+  } else {
+    const box = row.querySelector("input, textarea");
+    if (box) box.value = blank ? "" : String(value);
+  }
+  row.byteRepaint?.();
+}
+
+function paintLabel(row, field) {
+  const label = row.querySelector(".byte-msg-form-label");
+  if (label) fillLabel(label, field);
+}
+
+// "Sleepy | Alert" names the two ends of a scale, which the page draws on
+// either side of the slider rather than as one label.
+function fillLabel(label, field) {
+  const ends = scaleEnds(field);
+  label.innerHTML = "";
+  label.classList.toggle("byte-msg-form-ends", !!ends);
+  if (ends) {
+    ends.forEach((end) => {
+      const span = document.createElement("span");
+      span.textContent = end;
+      label.appendChild(span);
+    });
+  } else {
+    label.textContent = field.label || field.key;
+  }
+}
+
+// The small print the server sends with a field.
+function paintServerHint(row, field) {
+  let hint = row.querySelector(".byte-msg-form-hint-server");
+  if (!hint && !field.hint) return;
+  if (!hint) {
+    hint = document.createElement("span");
+    hint.className = "byte-msg-form-hint byte-msg-form-hint-server";
+    row.appendChild(hint);
+  }
+  hint.textContent = field.hint || "";
+  hint.hidden = !field.hint;
+}
+
+function mountsFor(requestId) {
+  if (!MOUNTS.has(requestId)) MOUNTS.set(requestId, new Set());
+  return MOUNTS.get(requestId);
+}
+
+// The latest repaint wins; it lands once focus has left the whole form, not
+// when it moves from one of its boxes to the next.
+function holdUntilBlur(container, message) {
+  const waiting = HELD.has(container);
+  HELD.set(container, message);
+  if (waiting) return;
+
+  const retry = () => {
+    setTimeout(() => {
+      if (!HELD.has(container)) {
+        container.removeEventListener("focusout", retry);
+        return;
+      }
+      if (container.contains(document.activeElement)) return;
+      container.removeEventListener("focusout", retry);
+      const held = HELD.get(container);
+      HELD.delete(container);
+      renderForm(container, held);
+    }, 0);
+  };
+  container.addEventListener("focusout", retry);
+}
+
+function refreshButton(requestId, stale) {
   const bar = document.createElement("div");
   bar.className = "byte-msg-form-top";
   const button = document.createElement("button");
   button.type = "button";
   button.className = "byte-msg-form-refresh";
   button.dataset.refreshFor = requestId;
-  button.title = "Refresh";
-  button.setAttribute("aria-label", "Refresh");
   button.innerHTML = REFRESH_ICON;
+  paintStale(button, stale);
   paintRefreshing(button, REFRESHING.has(requestId));
-  button.addEventListener("click", () => refreshForm(requestId));
+  button.addEventListener("click", () => refreshForm(requestId, REPLACE));
   bar.appendChild(button);
   return bar;
+}
+
+function paintStale(button, stale) {
+  const title = stale ? "This form changed - refresh to see it" : "Refresh";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.classList.toggle("is-stale", stale);
+  const mark = button.querySelector(".byte-msg-form-refresh-mark");
+  if (stale && !mark) {
+    const badge = document.createElement("span");
+    badge.className = "byte-msg-form-refresh-mark";
+    badge.textContent = "!";
+    button.appendChild(badge);
+  } else if (!stale && mark) {
+    mark.remove();
+  }
 }
 
 function paintRefreshing(button, on) {
@@ -201,17 +501,26 @@ function paintRefreshing(button, on) {
 }
 
 // The server rebuilds the form and broadcasts it, which repaints this message
-// the same way any update does. The button can be a different node by the
-// time the answer comes back, so it is found again rather than held.
-async function refreshForm(requestId) {
+// the same way any update does - painted as `mode` asked, since it is in
+// REFRESHING until the answer is back. The answer carries the message too and
+// is painted from directly, so a broadcast lost on a dropped socket doesn't
+// leave the press doing nothing. The button can be a different node by then,
+// so it is found again rather than held.
+async function refreshForm(requestId, mode) {
   if (REFRESHING.has(requestId)) return;
 
   const buttons = () =>
     document.querySelectorAll(`[data-refresh-for="${CSS.escape(requestId)}"]`);
-  REFRESHING.add(requestId);
+  REFRESHING.set(requestId, mode);
   buttons().forEach((b) => paintRefreshing(b, true));
   try {
-    await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/refresh`, "POST");
+    const json = await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/refresh`, "POST");
+    if (json?.message) {
+      mountsFor(requestId).forEach((mount) => {
+        if (mount.isConnected === false) mountsFor(requestId).delete(mount);
+        else renderForm(mount, json.message);
+      });
+    }
   } catch (e) {
     console.warn("[byte] form refresh failed", e);
   } finally {
@@ -242,27 +551,12 @@ function buildRow(field, { draft, locked }) {
   row.dataset.key = field.key;
   row.dataset.type = field.type;
 
-  // "Sleepy | Alert" names the two ends of a scale, which the page draws on
-  // either side of the slider rather than as one label.
-  const ends = scaleEnds(field);
   const label = document.createElement("span");
   label.className = "byte-msg-form-label";
-  if (ends) {
-    label.classList.add("byte-msg-form-ends");
-    ends.forEach((end) => {
-      const span = document.createElement("span");
-      span.textContent = end;
-      label.appendChild(span);
-    });
-  } else {
-    label.textContent = field.label || field.key;
-  }
+  fillLabel(label, field);
   row.appendChild(label);
 
-  const seeded = Object.prototype.hasOwnProperty.call(draft, field.key)
-    ? draft[field.key]
-    : field.value;
-  const control = buildControl(field, seeded, locked);
+  const control = buildControl(field, field.value, locked);
   if (!control) return null;
   row.appendChild(control);
 
@@ -278,7 +572,7 @@ function buildRow(field, { draft, locked }) {
   // small print the server sent along with it.
   if (field.hint) {
     const hint = document.createElement("span");
-    hint.className = "byte-msg-form-hint";
+    hint.className = "byte-msg-form-hint byte-msg-form-hint-server";
     hint.textContent = field.hint;
     row.appendChild(hint);
   }
@@ -299,6 +593,7 @@ function buildRow(field, { draft, locked }) {
       hint.dataset.unreadable = "false";
     };
     row.addEventListener("input", paint);
+    row.byteRepaint = paint;
     paint();
   }
 
@@ -510,6 +805,7 @@ async function submitForm(container, requestId, button, errorEl, spec) {
     // The server broadcast re-renders this as a read-only summary, so there is
     // nothing to do here but stop holding the draft.
     DRAFTS.delete(requestId);
+    PAINTED.delete(requestId);
   } catch (e) {
     // Everything they typed is still on screen and still in the draft, so the
     // only job left is saying what was wrong.

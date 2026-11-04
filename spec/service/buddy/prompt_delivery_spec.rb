@@ -118,6 +118,42 @@ RSpec.describe Buddy::PromptDelivery do
 
       expect(Buddy::FormAction.refresh!(action)).to be_nil
     end
+
+    it "runs the load step once, not again while reading the fields back" do
+      action
+      loads = 0
+      allow(Jil).to receive(:trigger).with(user, :prompt, anything, any_args) { |_, _, data| loads += 1 if data[:state] == :load }
+
+      Buddy::FormAction.refresh!(action)
+
+      expect(loads).to eq(1)
+    end
+  end
+
+  # A task changing the prompt after the form went out - a guess that took a
+  # while - reaches the form on screen, and doesn't run the load step to do it.
+  describe "a prompt changing while its form is out" do
+    let!(:action) { described_class.post!(user, prompt) }
+
+    it "repaints the form from the prompt as it is now", :aggregate_failures do
+      allow(Jil).to receive(:trigger).and_call_original
+      prompt.update!(options: prompt.options + [{ type: :text, question: "Notes", default: "Left early" }])
+
+      fields = action.byte_message.reload.metadata.dig("form", "fields")
+      expect(fields.find { |f| f["key"] == "Notes" }).to include("value" => "Left early")
+      expect(action.reload.buttons.pluck("key")).to include("Notes")
+      expect(Jil).not_to have_received(:trigger).with(user, :prompt, anything, any_args)
+      expect(MonitorChannel).to have_received(:broadcast_to).with(
+        user,
+        hash_including(data: hash_including(kind: :message)),
+      ).at_least(:once)
+    end
+
+    it "leaves it alone once the prompt is answered" do
+      prompt.update!(response: { "Who did it?" => "Eve" }, options: [])
+
+      expect(action.byte_message.reload.metadata.dig("form", "fields").pluck("key")).to include("Who did it?")
+    end
   end
 
   # Submitting in the thread has to be worth as much as submitting in the app:

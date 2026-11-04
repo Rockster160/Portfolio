@@ -22,6 +22,11 @@ class Prompt < ApplicationRecord
   # The count only moves correctly if every ending broadcasts, not just the
   # arrival — answering and deleting both take one off the dashboard title.
   after_commit :broadcast_pending_count
+  # A task filling a question in after the form was posted - a guess that takes
+  # a while, a duration still running - reaches the form already on screen.
+  after_update_commit :push_to_buddy_forms, if: -> {
+    response.nil? && (saved_change_to_options? || saved_change_to_question?)
+  }
 
   scope :unanswered, -> { where(response: nil) }
 
@@ -40,6 +45,10 @@ class Prompt < ApplicationRecord
 
   def settle_buddy_forms
     ::Buddy::PromptDelivery.discard!(user, id)
+  end
+
+  def push_to_buddy_forms
+    ::Buddy::FormAction.push_prompt!(self)
   end
 
   def broadcast_pending_count

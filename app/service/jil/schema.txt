@@ -455,7 +455,7 @@
   .deliver::Boolean // Asks it again in the Buddy thread, replacing the form already there. False once answered.
 *[PromptQuestion]
   #text(String:"Question Text" BR "Default" String)
-  #duration(String:"Question Text" BR "Default" String)
+  #duration(String:"Question Text" BR "Default" String BR Boolean?(false):"Live") // Live: a duration still running. Its form re-runs the prompt's load step every minute while it waits, for up to a day.
   #textarea(String:"Question Text" BR "Default" String)
   #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #checkbox(String:"Question Text" BR "Default" Boolean)

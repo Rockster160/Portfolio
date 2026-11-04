@@ -29,6 +29,12 @@ class ByteAction < ApplicationRecord
 
   scope :active, -> { where(state: :pending).where("expires_at IS NULL OR expires_at > ?", Time.current) }
 
+  # A form that stops waiting, however it stops, takes its tick with it.
+  after_update_commit -> { Buddy::FormAction.stop_tick!(id) }, if: -> {
+    tool_name == Buddy::FormAction::TOOL_NAME && saved_change_to_state? && !pending?
+  }
+  after_destroy_commit -> { Buddy::FormAction.stop_tick!(id) }, if: -> { tool_name == Buddy::FormAction::TOOL_NAME }
+
   # Overall default expiry for a pending action. Long enough for a user
   # to walk back to their phone from another room; short enough that a
   # forgotten action doesn't wedge a Claude turn forever.

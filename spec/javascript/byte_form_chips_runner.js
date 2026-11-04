@@ -13,6 +13,10 @@ class El {
     this.listeners = {};
     this.styleProps = {};
     this.style = { setProperty: (k, v) => { this.styleProps[k] = v; } };
+    this.classList = {
+      add: (name) => { this.className = `${this.className} ${name}`.trim(); },
+      toggle: () => {},
+    };
     this.className = "";
     this.textContent = "";
     this.checked = false;

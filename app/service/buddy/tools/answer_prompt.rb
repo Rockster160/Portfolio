@@ -59,6 +59,12 @@ Buddy::Tools.register(
       prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])
       Buddy::PromptDelivery.load!(ctx.user, prompt) if prompt
     },
+    # A live duration counts up while the form waits; each tick is the refresh
+    # step again, and the push from the prompt changing is what shows it.
+    ticks:       ->(payload, ctx) {
+      prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])
+      prompt.present? && Buddy::PromptForm.new(prompt).live?
+    },
     submit:      "Send it",
     # A field they emptied is sent empty, not refilled with what it opened on.
     keep_blanks: true,
