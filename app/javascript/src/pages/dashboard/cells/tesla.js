@@ -30,12 +30,14 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     }
     if (!label) { return "" }
     let suffix = ""
-    if (trip.miles_to_arrival != null && trip.minutes_to_arrival != null) {
+    if (trip.minutes_to_arrival != null) {
       // The countdown is as old as the report that carried it, so the arrival
-      // is anchored there rather than at now.
+      // is anchored there and the minutes left are counted from now.
       let reported = trip.countdown_ts ? Time.at(trip.countdown_ts).getTime() : Date.now()
-      let eta = Time.asData(reported + Time.minutes(trip.minutes_to_arrival))
-      suffix = " " + Text.grey("(" + Math.round(trip.miles_to_arrival) + "mi/ETA:" + eta.hour + ":" + eta.minute + ")")
+      let arrival = reported + Time.minutes(trip.minutes_to_arrival)
+      let eta = Time.asData(arrival)
+      let left = Math.max(0, Math.round((arrival - Date.now()) / Time.minutes(1)))
+      suffix = " " + Text.grey("(" + left + "m/ETA:" + eta.hour + ":" + eta.minute + ")")
     }
     return "→ " + label + suffix
   }
