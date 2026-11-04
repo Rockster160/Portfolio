@@ -109,11 +109,45 @@ class Jil::Methods::Global < Jil::Methods::Base
     evalarg(else_block) if else_block
   end
 
+  # The exception is held on the executor for the length of the CATCH, so
+  # reportError can send the real one - class, backtrace and the line that
+  # raised - rather than the message string `error` carries. A try nested in
+  # the catch puts the outer one back when it is done.
   def logic_try(try_block, catch_block)
     evalarg(try_block)
   rescue StandardError => e
     set_value(:error, e.message, type: :String)
-    evalarg(catch_block)
+    outer, @jil.caught = @jil.caught, { exception: e, line: @jil.ctx[:line] }
+    begin
+      evalarg(catch_block)
+    ensure
+      @jil.caught = outer
+    end
+  end
+
+  # Inside a CATCH: the error that was caught, onto the errors page, and the
+  # run carries on. Anywhere else: `note` itself is the error. Either way it
+  # does not stop anything - raising is what stops a run.
+  def reportError(note=nil) # rubocop:disable Naming/PredicateMethod
+    note = note.to_s.strip.presence
+    if @jil.caught
+      exception, line = @jil.caught.values_at(:exception, :line)
+    else
+      raise ::Jil::ExecutionError, "reportError needs a message outside a try's CATCH" if note.nil?
+
+      exception, line, note = ::Jil::ExecutionError.new(note), @jil.ctx[:line], nil
+    end
+
+    ::Jil::Errors.report(
+      exception,
+      task:      @jil.execution&.task || @jil.task,
+      user:      @jil.user,
+      execution: @jil.execution,
+      line:      line,
+      note:      note,
+      reported:  true,
+    )
+    true
   end
 
   def splatParams(line)

@@ -24,6 +24,7 @@
   #if("IF" content "DO" content "ELSE" content)::Any
   #case("CASE" Any content(Keyword [Keyword.When Keyword.Else]))::Any
   #try("TRY" content "CATCH" content)::Any
+  #reportError(Text?)::Boolean // Puts an error on the errors page and keeps the run going. In a try's CATCH it sends the caught error - add text to say what was being attempted. Anywhere else the text is the error.
   #ternary(Boolean|Any " ? " Any " : " Any)::Any # Useful for setting vars
   #ref(Any)::Any // Variable reference, returns the variable itself, does NOT evaluate it.
   #get(String)::Any // Variable reference

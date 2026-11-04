@@ -1,5 +1,5 @@
 class Jil::Executor
-  attr_accessor :user, :ctx, :lines, :input_data, :task, :execution, :broadcast_task
+  attr_accessor :user, :ctx, :lines, :input_data, :task, :execution, :broadcast_task, :caught
 
   # def self.async_trigger(user, trigger, trigger_data={}, at: nil)
   #   ::User.ids(user).each do |user_id|

@@ -72,6 +72,11 @@ async function apiCall(url, method, body) {
   return json;
 }
 
+function isEditing(el) {
+  if (el.matches("textarea, select")) return true;
+  return el.matches("input") && !["checkbox", "radio", "button", "submit"].includes(el.type);
+}
+
 function draftFor(requestId) {
   if (!DRAFTS.has(requestId)) DRAFTS.set(requestId, {});
   return DRAFTS.get(requestId);
@@ -84,8 +89,12 @@ export function renderForm(container, message) {
 
   const requestId = meta.action_request_id;
   // Never rebuild under someone's cursor. Whatever triggered this repaint has
-  // nothing in it worth more than the value being typed.
-  if (container.contains(document.activeElement)) return true;
+  // nothing in it worth more than the value being typed. Only a control that
+  // takes typing or dragging counts: the refresh button keeps focus after a
+  // tap, and the repaint it asked for is the one it is waiting on.
+  if (container.contains(document.activeElement) && isEditing(document.activeElement)) {
+    return true;
+  }
 
   const submitted = form.status === "submitted";
   // A corrected version of this form landed further down the thread, so this
@@ -256,6 +265,14 @@ function buildRow(field, { draft, locked }) {
   const control = buildControl(field, seeded, locked);
   if (!control) return null;
   row.appendChild(control);
+
+  // A lone checkbox is a small target, and its label is the obvious thing to
+  // tap. Only this one: on any other row a tap on the label would fight the
+  // input for it.
+  if (field.type === "checkbox" && !locked) {
+    label.classList.add("byte-msg-form-label-toggle");
+    label.addEventListener("click", () => control.querySelector("input")?.click());
+  }
 
   // A duration writes its own readback and keeps rewriting it, beneath any
   // small print the server sent along with it.

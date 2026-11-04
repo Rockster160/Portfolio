@@ -53,7 +53,7 @@ class MealBuilder < ApplicationRecord
   # One more thing to pick. A name already on it, in any case, is left as it
   # is rather than listed twice. Returns whether it is on the builder now.
   def add_item!(category:, name:, cal:)
-    name = name.to_s.squish
+    name, cal = single_serving(name.to_s.squish, cal)
     return false if name.blank?
     return true if items.any? { |item| item[:name].to_s.casecmp?(name) }
 
@@ -74,7 +74,21 @@ class MealBuilder < ApplicationRecord
     }.join("\n")
   end
 
+  # One thing logged several at once - "Sausage Roll x5", "2x Taco" - with the
+  # calories for all of them. An item here is one serving, so the count comes
+  # off the name and out of the calories. A plate listing its parts ("Egg x3,
+  # Toast x2") is one meal however many of each went on it, and stays whole.
+  MULTIPLIER_RX = /\A(?:(?<lead>\d+)\s*[x×]\s+(?<name>.+)|(?<name>.+?)\s*[x×]\s*(?<trail>\d+))\z/i
+
   private
+
+  def single_serving(name, cal)
+    match = name.match(MULTIPLIER_RX) unless name.match?(/[,+&]| and /i)
+    count = (match && (match[:lead] || match[:trail])).to_i
+    return [name, cal] if count < 2
+
+    [match[:name].squish, (cal.to_f / count).round]
+  end
 
   # An emoji, not a Tabler class name or an uploaded icon - the builder draws
   # all three, but a guess made from the name alone is best as the glyph.

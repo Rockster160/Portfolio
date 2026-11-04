@@ -8113,6 +8113,11 @@ $board-cell-max: 200px;
     opacity: 0.65;
   }
 
+  .byte-msg-form-label-toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+
   .byte-msg-form-hint {
     font-size: 11px;
     opacity: 0.5;
