@@ -28,13 +28,14 @@ Buddy::Tools.register(
 
     `summary` is one line saying what the note SAYS, and it exists so `note`
     never has to be shortened. It is what the card shows them; `note` is what
-    gets kept. Nothing stores it.
+    gets kept. Nothing stores it. It speaks to them: what they did is "you",
+    never he, she or their name.
   TXT
   args:        {
     company:          { type: :string, required: true, description: "The company, as they'd say it" },
     role:             { type: :string, required: false, description: "The job title, if the mail names one" },
     note:             { type: :string, required: false, description: "What happened, in the mail's own words" },
-    summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
+    summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only, addressed to them - what they did is \"you\"" },
     tag:              {
       type:        :enum,
       required:    false,

@@ -22,27 +22,27 @@ module Buddy
         "`follow_up_at` - it is the appointment, and it is what puts it on their " \
         "calendar. Check WHICH ZONE it is written in before you pass it: a calendar " \
         "invite states its own, and an organiser on the other side of the country " \
-        "writes theirs rather than his. Convert it. Pass " \
+        "writes theirs rather than your person's. Convert it. Pass " \
         "`duration_minutes` too when the mail says how long (\"about 20 minutes\", " \
         "an invite reading 2:00-2:20); without one it books an hour. If the booking is " \
         "being CALLED OFF rather than made, the beat is `cancelled` and it takes no " \
         "time at all - see the tag list. If it is TRYING to arrange one and names NO " \
-        "time - a link to pick a slot, a list of windows, a request for his - the beat " \
-        "is `availability`, which is the one waiting on HIM. A mail CONFIRMING times " \
-        "ALREADY GIVEN is the opposite of that and is NOT that beat: thanking him for " \
-        "his availability, listing the windows he picked back at him, or promising a " \
-        "final time later all say he has done his part and the next move is theirs. " \
+        "time - a link to pick a slot, a list of windows, a request for theirs - the beat " \
+        "is `availability`, which is the one waiting on YOUR PERSON. A mail CONFIRMING times " \
+        "ALREADY GIVEN is the opposite of that and is NOT that beat: thanking them for " \
+        "their availability, listing the windows they picked back at them, or promising a " \
+        "final time later all say they have done their part and the next move is the company's. " \
         "Those are `note`. But a reply that PICKS one of those windows is not an " \
         "echo of them - it is the booking, and it is `scheduled` with that time in " \
         "`follow_up_at`. An echo hands the windows back whole and names no hour to " \
         "be anywhere; a pick names one and drops the rest, and the next thing that " \
-        "has to happen is him being somewhere at it. " \
+        "has to happen is your person being somewhere at it. " \
         "Reading the echoed windows as an ask is the specific " \
-        "mistake - `availability` is one of the four beats printed at the TOP of his " \
-        "board as waiting on him, so wearing it puts a job he has finished back in " \
-        "front of him and leaves it there until something else arrives. " \
+        "mistake - `availability` is one of the four beats printed at the TOP of their " \
+        "board as waiting on them, so wearing it puts a job they have finished back in " \
+        "front of them and leaves it there until something else arrives. " \
         "**Never `interview`.** " \
-        "That tag means he was IN the conversation, and no mail is that; it also books " \
+        "That tag means your person was IN the conversation, and no mail is that; it also books " \
         "nothing, so using it for an invitation loses the appointment entirely. " \
         "\"Interview with <company>\" in a subject line is an invitation, not an " \
         "interview."

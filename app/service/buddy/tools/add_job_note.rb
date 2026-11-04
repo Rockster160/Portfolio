@@ -100,10 +100,10 @@ Buddy::Tools.register(
     cancellation is the smaller one. No date belongs on it - the date that
     mattered was on the booking it cancels.
 
-    **Them coming to him first is `reached_out`.** A recruiter's cold message
-    about a role, a hiring manager asking if he's open to a chat - on a job he
-    never applied to, it is the opening beat, the way `applied` is when he
-    went to them. Their reply to something already going is `heard_back`.
+    **The company coming to your person first is `reached_out`.** A recruiter's
+    cold message about a role, a hiring manager asking if they're open to a
+    chat - on a job they never applied to, it is the opening beat, the way
+    `applied` is when they went to the company. Their reply to something already going is `heard_back`.
 
     **A reminder is `reminder`, never the tag of what it is reminding about.**
     DocuSign re-sending the onboarding packet, a screening vendor saying the
@@ -183,22 +183,28 @@ Buddy::Tools.register(
 
     **It is KEPT, and it is what the timeline reads.** Every beat holds the
     whole message, so the application's page shows this line and keeps the
-    message itself behind an arrow - which makes this the sentence he sees when
-    he looks back at the row in three weeks. Write it as a fact about the
+    message itself behind an arrow - which makes this the sentence they see
+    when they look back at the row in three weeks. Write it as a fact about the
     application - what was booked or decided, when, and with whom, as the
     message states them - not as a note that mail arrived.
+
+    **It is read by your person, so it speaks TO them.** What they did is
+    "you": "You confirmed tomorrow's 1pm interview", "Clarissa asked whether
+    you got the invite". Never he, she or their name - the line is also sent
+    to them as the notification, and in the third person it reads as being
+    about somebody else.
   TXT
   args:        {
     company:          { type: :string, required: true, description: "Which application - fuzzy, the company name" },
     role:             { type: :string, required: false, description: "Which job there, when the company has more than one on the board" },
     note:             { type: :string, required: false, description: "What happened, in their words. Required unless a tag says it" },
-    summary:          { type: :string, required: false, description: "One line of what `note` says, for the card only. Never stored" },
+    summary:          { type: :string, required: false, description: "One line of what `note` says, addressed to them - what they did is \"you\"" },
     tag:              {
       type:        :enum,
       required:    false,
       default:     :note,
       values:      JobNote.tags.keys.map(&:to_sym),
-      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again; a recruiter approaching them first is `reached_out`; a machine re-sending something already on the board is `reminder`, never the tag of what it reminds about. offer/rejected/withdrew/ignored also settle the application. NEVER pick `ignored` off a mail - it is him deciding he does not want the thing, which no message says; an approach he has not answered is `reached_out`",
+      description: "The kind of beat, and `note` whenever it is none of them. An application RECEIPT is `acknowledged` - other ATS mail is not; an ask for times is `availability`, not `scheduled`; a booking called off is `cancelled`, never `scheduled` again; a recruiter approaching them first is `reached_out`; a machine re-sending something already on the board is `reminder`, never the tag of what it reminds about. offer/rejected/withdrew/ignored also settle the application. NEVER pick `ignored` off a mail - it is your person deciding they do not want the thing, which no message says; an approach they have not answered is `reached_out`",
     },
     email_id:         { type: :integer, required: false, description: "The email this came from, from recent_mail" },
     occurred_at:      { type: :iso_time, required: false, description: "When it happened, if no email_id carries the date" },

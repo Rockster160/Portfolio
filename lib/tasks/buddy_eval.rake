@@ -657,6 +657,17 @@ BUDDY_EDGE_PROBES = [
     needs: :halloway_application,
     note:  "the words are the record; the summary belongs on the card, not in it",
   },
+  {
+    case:       "prod 9953",
+    say:        "I replied to Halloway Systems: \"Invite received and I will be there " \
+                "tomorrow!\" - log that on their timeline",
+    tool:       :add_job_note,
+    avoid:      %i[stash_idea log_event],
+    args:       { add_job_note: { summary: /\byou\b/i } },
+    never_args: { add_job_note: { summary: /\b(?:he|he'll|he's|him|his|she|her|rocco)\b/i } },
+    needs:      :halloway_application,
+    note:       "the summary is read by them and went out in the third person",
+  },
   # --- them coming to him first ----------------------------------------------
   {
     case:  "prod, Ichi 22 Oct",
