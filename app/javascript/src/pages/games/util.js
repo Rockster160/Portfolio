@@ -21,6 +21,12 @@ export function clock(startedAt) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// A datetime-local input's value: the phone's own wall clock, no zone.
+export function localInputValue(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function ago(iso) {
   const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   if (secs < 5) return "now";

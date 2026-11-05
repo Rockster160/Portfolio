@@ -15,6 +15,7 @@ class Games::SyncController < ApplicationController
       apply_play_attrs!(play, creating)
       play.save!
       play.ensure_action_event! if creating
+      play.action_event&.update!(timestamp: play.started_at) if !creating && play.saved_change_to_started_at?
       upsert_rolls!(play)
       upsert_scores!(play)
       apply_voids!(play)
@@ -44,6 +45,7 @@ class Games::SyncController < ApplicationController
     end
     play.current_player_index = data[:current_player_index] if data[:current_player_index].present?
     play.dice_mode = data[:dice_mode] if !creating && data[:dice_mode].present?
+    play.started_at = moved_start(data[:started_at]) || play.started_at unless creating
     play.players = data[:players].map(&:deep_stringify_keys) if data[:players].present?
     play.settings = play.settings.merge(data[:settings].deep_stringify_keys) if data[:settings].present?
   end
@@ -96,6 +98,13 @@ class Games::SyncController < ApplicationController
     ).to_h.deep_symbolize_keys
   rescue ActionController::ParameterMissing
     {}
+  end
+
+  # A start moved mid-game - "we actually started twenty minutes ago". A time
+  # still ahead of now is a slip of the picker, and leaves the start alone.
+  def moved_start(str)
+    time = parse_iso(str)
+    time if time && time <= 1.minute.from_now
   end
 
   def parse_iso(str)

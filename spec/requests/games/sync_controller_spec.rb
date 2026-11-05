@@ -36,6 +36,28 @@ RSpec.describe "Games::Sync" do
       expect(play.dice_mode).to eq("virtual")
       expect(play.current_player_index).to eq(1)
     end
+
+    it "moves the start, and the Game event's time with it", :aggregate_failures do
+      uuid = SecureRandom.uuid
+      sync!(uuid, play: { name: "Catan", players: [{ name: "Rocco" }], started_at: 5.minutes.ago.iso8601 })
+      earlier = 40.minutes.ago.change(usec: 0)
+
+      sync!(uuid, play: { started_at: earlier.iso8601 })
+
+      play = user.game_plays.find_by!(client_uuid: uuid)
+      expect(play.started_at).to eq(earlier)
+      expect(play.action_event.reload.timestamp).to eq(earlier)
+    end
+
+    it "leaves the start alone when the time sent is still to come" do
+      uuid = SecureRandom.uuid
+      sync!(uuid, play: { name: "Catan", players: [{ name: "Rocco" }] })
+      started = user.game_plays.find_by!(client_uuid: uuid).started_at
+
+      sync!(uuid, play: { started_at: 2.hours.from_now.iso8601 })
+
+      expect(user.game_plays.find_by!(client_uuid: uuid).started_at).to eq(started)
+    end
   end
 
   describe "replaying a batch" do

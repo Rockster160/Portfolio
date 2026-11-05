@@ -139,6 +139,14 @@ export function makeActions({ store }) {
     scheduleFlush();
   }
 
+  // The clock reads from started_at, so moving it is the whole edit.
+  function setStartedAt(iso) {
+    store.patchActivePlay({ started_at: iso });
+    pushPlayPatch({ started_at: iso });
+    save();
+    scheduleFlush();
+  }
+
   function addScore({ playerName, delta }) {
     const play = store.activePlay;
     const score = { client_uuid: uuid(), player_name: playerName, delta, entered_at: new Date().toISOString() };
@@ -207,6 +215,6 @@ export function makeActions({ store }) {
 
   return {
     recordRoll, advanceTurn, setTurn, addScore, undoLast, setPlayers, editRoll, deleteRoll,
-    updateSettings, setDiceMode, flushNow,
+    updateSettings, setDiceMode, setStartedAt, flushNow,
   };
 }

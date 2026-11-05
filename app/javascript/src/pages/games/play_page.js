@@ -13,7 +13,7 @@ import { textColorFor } from "./colors";
 import { openSheet, closeSheet } from "./sheet";
 import { keypadHtml, wireKeypad } from "./keypad";
 import { mountPlayerEditor } from "./player_editor";
-import { esc, clock, ago, buzz } from "./util";
+import { esc, clock, ago, buzz, localInputValue } from "./util";
 
 const ONE_OFF_DICE = ["d4", "d6", "d8", "d10", "d12", "d20", "2d6", "d100"];
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -506,6 +506,10 @@ function boot() {
           </div>
         ` : ""}
         <div class="games-sheet-section games-rows">
+          <button type="button" class="games-row" data-started>
+            <span class="games-row-label">Started</span>
+            <span class="games-row-hint">${esc(startedLabel())} ›</span>
+          </button>
           <button type="button" class="games-row" data-players>
             <span class="games-row-label">Players</span>
             <span class="games-row-hint">${players().length} · reorder, add, colours ›</span>
@@ -530,6 +534,7 @@ function boot() {
             render();
           });
         });
+        panel.querySelector("[data-started]").addEventListener("click", openStartedSheet);
         panel.querySelector("[data-players]").addEventListener("click", openPlayersSheet);
         panel.querySelector("[data-end]").addEventListener("click", async (e) => {
           e.currentTarget.disabled = true;
@@ -540,6 +545,42 @@ function boot() {
           if (!window.confirm("Abandon this game? It stays in your log, without final scores.")) return;
           await actions.flushNow();
           postAndGo(abandonUrl);
+        });
+      },
+    });
+  }
+
+  function startedLabel() {
+    const at = play().started_at ? new Date(play().started_at) : null;
+    if (!at) return "-";
+    const time = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (at.toDateString() === new Date().toDateString()) return time;
+    return `${at.toLocaleDateString([], { weekday: "short" })} ${time}`;
+  }
+
+  // "We actually started twenty minutes ago" - the clock, and the duration
+  // the game is logged with, both count from here.
+  function openStartedSheet() {
+    const at = play().started_at ? new Date(play().started_at) : new Date();
+    openSheet({
+      title: "Started at",
+      body: `
+        <div class="games-sheet-section">
+          <input type="datetime-local" data-started-input value="${localInputValue(at)}" max="${localInputValue(new Date())}">
+        </div>
+        <div class="games-sheet-actions">
+          <button type="button" class="games-btn games-btn-primary games-btn-block" data-save>Save</button>
+        </div>
+      `,
+      onClose: render,
+      onMount(panel) {
+        panel.querySelector("[data-save]").addEventListener("click", () => {
+          const picked = new Date(panel.querySelector("[data-started-input]").value);
+          if (Number.isNaN(picked.getTime())) { toast("Pick a time"); return; }
+          if (picked > new Date()) { toast("That's still to come"); return; }
+          actions.setStartedAt(picked.toISOString());
+          closeSheet();
+          toast(`Started at ${startedLabel()}`);
         });
       },
     });
