@@ -20,7 +20,7 @@
 <% manifest = board ? byte_board_manifest_path(board, key: board.signed_id(purpose: :board_manifest)) : (kiosk ? chrome[:kiosk_manifest] : chrome[:manifest]) %>
 <link rel="manifest" href="<%= manifest %>">
 <meta name="theme-color" content="<%= chrome[:color] %>">
-<meta name="apple-mobile-web-app-title" content="<%= board ? board.display_name : (kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name]) %>">
+<meta name="apple-mobile-web-app-title" content="<%= board ? board.buddy_name : (kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name]) %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

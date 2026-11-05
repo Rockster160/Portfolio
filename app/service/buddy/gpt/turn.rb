@@ -1343,10 +1343,16 @@ module Buddy
         # method — the proposal path too — so one check covers both, and a call
         # marked failed is excluded from `proposals` by the same line that drops
         # one which couldn't resolve.
-        if deferred_command? && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !scheduled_for?(tool)
+        #
+        # A wait in the reply arms it too. The words alone miss a shorthand
+        # taught a turn earlier ("sleep timer 30" meaning the TV off in half an
+        # hour), and a `then_continue` wait is the model saying itself that the
+        # rest of the request is for later.
+        later = deferred_command? || @queued
+        if later && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !scheduled_for?(tool)
           Rails.logger.warn(
             "[Buddy::GPT::Turn] held back #{name} on message=#{@inbound.id} " \
-            "user=#{@user.id}: the request named a time",
+            "user=#{@user.id}: the request is for later",
           )
           @failed << call[:call_id]
           return JSON.generate(self.class.held_for_later(name))

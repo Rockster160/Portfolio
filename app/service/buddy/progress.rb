@@ -63,6 +63,7 @@ module Buddy
       search_agenda:         "Searching your calendar",
       print_history:         "Looking up what you've printed",
       chore_progress:        "Pulling up how the week went",
+      chore_history:         "Looking up who did it",
       check_weather:         "Checking the weather",
       list_reminders:        "Gathering your reminders",
       read_prompt:           "Opening that up",

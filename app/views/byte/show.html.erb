@@ -6,7 +6,8 @@
     falls back to the owner's default purely for stable branding. %>
 <% buddy_page_theme = @conversation.buddy? ? @conversation.buddy_theme : ByteConversation.default_theme_for(current_user) %>
 <% buddy_page_chrome = Buddy::Themes.for(buddy_page_theme) %>
-<%= meta_title buddy_page_chrome[:name], include_name: false %>
+<%# A board's tab and home-screen name is the board's own, not its pet's. %>
+<%= meta_title (@board ? @conversation.display_name : buddy_page_chrome[:name]), include_name: false %>
 <%= meta_description "Direct chat channel to your automations." %>
 <%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme, kiosk: @kiosk, board: (@conversation if @board) } %>
 <%= content_for(:meta) do %>

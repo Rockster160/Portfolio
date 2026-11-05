@@ -2035,8 +2035,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     app.dataset.buddyTheme = defaultBuddyTheme;
     app.dataset.buddyName = chrome.name;
-    document.title = chrome.name;
+    document.title = pageTitle(chrome.name);
     paintThemeChrome(defaultBuddyTheme, chrome.name);
+  }
+
+  // A board's tab is titled after the board, whichever pet it wears.
+  function pageTitle(petName) {
+    if (app?.dataset.board !== "true") return petName;
+    return document.querySelector("[data-byte-convo-name]")?.textContent.trim() || petName;
   }
 
   // Paint the whole surface + hero for a Buddy conversation's theme. Both the
@@ -2053,7 +2059,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // of the theme table for a new companion to fall out of date with.
     if (app && convo.buddy_name) {
       app.dataset.buddyName = convo.buddy_name;
-      document.title = convo.buddy_name;
+      document.title = pageTitle(convo.buddy_name);
       updateSleepChip();
     }
     if (convo.buddy_theme) {

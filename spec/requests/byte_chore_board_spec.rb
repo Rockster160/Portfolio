@@ -860,14 +860,14 @@ RSpec.describe "Byte chore board", type: :request do
 
   # A board installs under its own pet and reopens to itself.
   describe "GET /board/:id/manifest.webmanifest" do
-    it "names the board, carries its pet's icon, and starts at this board" do
+    it "installs under its pet's name and icon, and starts at this board" do
       thread.update!(name: "Desk", buddy_theme: "bloom")
 
       get "/board/#{thread.id}/manifest.webmanifest", params: { key: thread.signed_id(purpose: :board_manifest) }
 
       expect(response).to have_http_status(:ok)
       manifest = JSON.parse(response.body)
-      expect(manifest["name"]).to eq("Desk")
+      expect(manifest["name"]).to eq(Buddy::Themes.name_for("bloom"))
       expect(manifest["start_url"]).to eq("/board/#{thread.id}?source=pwa")
       expect(manifest["icons"].first["src"]).to eq("/bloom_favicon/web-app-manifest-192x192.png")
     end
@@ -885,6 +885,16 @@ RSpec.describe "Byte chore board", type: :request do
 
       get "/board/#{thread.id}/manifest.webmanifest"
       expect(response).to have_http_status(:not_found)
+    end
+
+    it "titles the tab after the board, and names the install after its pet", :aggregate_failures do
+      thread.update!(name: "Desk", buddy_theme: "bloom")
+
+      get "/board/#{thread.id}"
+
+      pet = Buddy::Themes.name_for("bloom")
+      expect(response.body).to include("<title>Desk</title>")
+      expect(response.body).to include(%(<meta name="apple-mobile-web-app-title" content="#{pet}">))
     end
   end
 

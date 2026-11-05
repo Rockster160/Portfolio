@@ -34,9 +34,14 @@ module Buddy
       row = existing(chore, user, at: at)
       return nil if row.nil?
 
+      # Who marked it and when, so the reply can say so. A row somebody else
+      # logged on their behalf otherwise reads as a refusal for no reason.
+      at_time = row.completed_at.in_time_zone(user.timezone)
+      by      = row.recorded_by_user && " (#{row.recorded_by_user.first_name} marked it for them)"
       raise "#{chore.name} is already marked done for #{user.first_name} on " \
-            "#{::ChoreDay.current(user, at: row.completed_at).strftime("%b %-d")} - " \
-            "to change that one use edit_chore_completion, and to take it off " \
+            "#{::ChoreDay.current(user, at: row.completed_at).strftime("%b %-d")} at " \
+            "#{::Buddy::Clock.at(at_time, zone: user.timezone)}#{by} - tell them that. " \
+            "To change that one use edit_chore_completion, and to take it off " \
             "use undo_chore_completion"
     end
   end

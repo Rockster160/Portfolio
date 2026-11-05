@@ -95,7 +95,7 @@ Buddy::Tools.register(
   TXT
   feature:     :agenda,
   args:        {
-    title:        { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
+    title:        { type: :string,       required: true,  description: "What it is and who it's with (the activity, WITHOUT the place)" },
     at:           { type: :iso_time,     required: false, description: "Local wall-clock START, 24-hour. Something happening today goes AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
     leave_at:     { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local, INSTEAD of `at`. The start is worked back from the drive and the arrive-early minutes. Needs a `location` to drive to. Never pass this together with `at`" },
     duration:     { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },

@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :edit_chore,
-  summary:     "Change an existing chore - rename, schedule, assignee, next due date (\"we need to " \
-               "do X tomorrow\"), urgency, groups, notes, archive.",
+  summary:     "Change an existing chore - rename, schedule, assignee, mark it due or set its next " \
+               "due date (\"mark X as due\", \"we need to do X tomorrow\"), urgency, groups, " \
+               "notes, archive.",
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
     when it's next due, change how urgent it is, or archive/unarchive a chore
@@ -18,7 +19,8 @@ Buddy::Tools.register(
     Sunday", "weekdays"). `due` is a ONE-OFF date for the next time only, and
     it leaves the recurrence alone: "the trash goes out Tuesday this week",
     "bump the vet thing to Friday", "this one's due tomorrow", "we need to trim
-    Fae's claws tomorrow". An existing chore said with a day
+    Fae's claws tomorrow". "Mark X as due" with no day is `due: "today"`, the
+    same as the Mark Due button. An existing chore said with a day
     is this, never a new chore and never a schedule change. Pass "today",
     "tomorrow" or a weekday as the WORD - after midnight "tomorrow" is the day
     they wake up into, and the word is counted that way - a YYYY-MM-DD for a

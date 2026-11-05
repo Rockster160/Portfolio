@@ -109,7 +109,7 @@ RSpec.describe "Buddy credited chore completion" do
       run({ chore: "Recycling", credit_to: "wren" })
 
       expect { run({ chore: "Recycling", credit_to: "wren" }) }
-        .to raise_error(/already marked done/)
+        .to raise_error(/already marked done .* \(#{recorder.first_name} marked it for them\)/)
       expect(chore.chore_completions.count).to eq(1)
     end
 

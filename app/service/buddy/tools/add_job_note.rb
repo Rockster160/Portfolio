@@ -140,6 +140,13 @@ Buddy::Tools.register(
     with that email's date, its sender, and a link straight back to it. Leave
     it off for something they told you about out loud.
 
+    A mail that's already on the board is one beat, so passing its `email_id`
+    again REVISES that note where it sits, at the mail's own time, and it
+    never becomes the latest beat. When they say where things stand NOW ("flag
+    it as still waiting on me", "they're still waiting on my paperwork"), file
+    a new beat with no `email_id`; that one is the latest, and it's what the
+    board reads whose move it is from.
+
     `occurred_at` is WHEN it happened, and it matters for the same reason
     `email_id` does. Mail that came in on Friday and got mentioned on Monday
     belongs on Friday, and the timeline is read in that order. `email_id`

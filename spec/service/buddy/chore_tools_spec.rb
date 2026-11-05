@@ -400,6 +400,41 @@ RSpec.describe "Buddy chore tools" do
       end
     end
 
+    describe "chore_history tool" do
+      let(:partner) { create(:user) }
+      let(:chore) { household.chores.create!(created_by_user: user, name: "Feed Whisper") }
+
+      before { ChoreHouseholdMembership.create!(chore_household: household, user: partner) }
+
+      def history(payload)
+        tool = Buddy::Tools[:chore_history]
+        confirm = tool[:confirm].call(payload, Buddy::ToolContext.new(user))
+        tool[:execute].call(payload.merge(confirm[:resolved]), Buddy::ToolContext.new(user))
+      end
+
+      it "credits each completion across the household and counts them per person", :aggregate_failures do
+        today = user.perceived_today
+        complete(chore, today)
+        ChoreCompletion.create!(user: partner, chore: chore, completed_at: 1.day.ago, day_key: today - 1)
+        ChoreCompletion.create!(user: partner, chore: chore, completed_at: 2.days.ago, day_key: today - 2)
+        ChoreCompletion.create!(user: partner, chore: chore, completed_at: 20.days.ago, day_key: today - 20)
+
+        result = history({ chore: "whisper", days: 5 })
+
+        expect(result[:total]).to eq(3)
+        expect(result[:counts]).to eq(user.first_name => 1, partner.first_name => 2)
+        expect(result[:done].length).to eq(3)
+      end
+
+      it "leaves out a skipped occurrence" do
+        ChoreCompletion.create!(
+          user: user, chore: chore, completed_at: 1.hour.ago, day_key: user.perceived_today, occurrence_skipped: true,
+        )
+
+        expect(history({ chore: "whisper" })[:total]).to eq(0)
+      end
+    end
+
     describe "chore_progress tool" do
       it "hands the per-day summary back in the same turn, with no chip" do
         water = daily("Water")

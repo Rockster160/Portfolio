@@ -217,6 +217,11 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[add_job_note stash_idea log_event],
   },
   chore_progress:         "did I get all my dailies done yesterday?",
+  chore_history:          {
+    say:   "who's taken the recycling out this week?",
+    needs: :recycling_completion,
+    avoid: %i[chore_progress search_events],
+  },
   withdraw_pebbles:       "took 20 pebbles for the arcade",
   # "this morning" is a claim about the clock, and asked at half past midnight
   # it's a claim about a morning that hasn't happened. The tool is what's being
@@ -593,6 +598,16 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[add_job_application],
     needs: :halloway_application,
     note:  "a second row would split the company's timeline",
+  },
+  {
+    case:       "prod 10018",
+    say:        "Flag Halloway as still waiting on me to get back to them",
+    tool:       :add_job_note,
+    never_args: { add_job_note: { email_id: /./ } },
+    avoid:      %i[add_job_application stash_idea],
+    needs:      :halloway_application,
+    note:       "passed the id of mail already on the board, which rewrote that old note in " \
+                "place; the latest beat still said it was their move, twice, after \"done\"",
   },
   # --- a game's chore is not everything done in the game -------------------
   {
@@ -1170,6 +1185,41 @@ BUDDY_EDGE_PROBES = [
            "\"there should be a chore for that\"",
   },
   {
+    case:  "prod 10012",
+    say:   "Add go over House with Mom to Ours tomorrow at 2",
+    tool:  :add_agenda_item,
+    args:  { add_agenda_item: { title: /mom/i } },
+    needs: :ours_calendar,
+    note:  "the item went on as just \"Go Over House\"; the title had the place stripped and " \
+           "the person with it",
+  },
+  {
+    case:  "prod 10059",
+    say:   "Mark the recycling as due",
+    tool:  :edit_chore,
+    args:  { edit_chore: { due: /\Atoday\z/i } },
+    avoid: %i[create_chore complete_chore],
+    needs: :recycling_chore,
+    note:  "said it had no way to mark a chore due, with edit_chore's `due` sitting on the index",
+  },
+  {
+    case:  "prod 10062",
+    say:   "Can you chart out who's taken the recycling out over the last 10 days?",
+    tool:  :chore_history,
+    args:  { chore_history: { days: /\A10\z/ } },
+    avoid: %i[search_events chore_progress],
+    needs: :recycling_completion,
+    note:  "counted 4 feeds out of context and said the rows don't say who; there were 20, all credited",
+  },
+  {
+    case:  "prod 10066",
+    say:   "Who took out the recycling in the last 5 days?",
+    tool:  :chore_history,
+    avoid: %i[search_events chore_progress get_context],
+    needs: :recycling_completion,
+    note:  "nine calls, nothing found, and the reply retracted as a claim with no receipt",
+  },
+  {
     case: "prod 9062",
     say:  "Remind me to respond to Reserv tomorrow",
     tool: :schedule_reminder,
@@ -1241,15 +1291,39 @@ BUDDY_EDGE_PROBES = [
     tool:  :schedule_function,
     avoid: %i[schedule_reminder],
     args:  { schedule_function: { name: /\bTV\z/i } },
-    or:    {
-      tool:  :set_timer,
-      with:  %i[run_jil_task],
-      order: %i[set_timer run_jil_task],
-      args:  { set_timer: { then_continue: true }, run_jil_task: { name: /\bTV\z/i } },
-    },
     needs: :tv_fn,
     note:  "it set a reminder that read \"Turn off the TV\" and replied as if the " \
            "TV would go off; nothing ever turned it off",
+  },
+  {
+    case: "prod 10035",
+    say:  "If I ever say sleep timer followed by a number, it means I want you to turn off " \
+          "the tv in that many minutes.",
+    tool: :define_term,
+    or:   { tool: :remember },
+    note: "answered \"I'll treat sleep timer as a TV-off timer from now on\" with no call, " \
+          "so the shorthand lived only in the scrollback",
+  },
+  {
+    case:  "prod 10037",
+    steps: [
+      {
+        say:  "If I ever say sleep timer followed by a number, it means I want you to turn " \
+              "off the tv in that many minutes.",
+        tool: :define_term,
+        or:   { tool: :remember },
+        run:  true,
+      },
+      {
+        say:   "Sleep timer 30",
+        tool:  :schedule_function,
+        avoid: %i[call_jil_function run_jil_task],
+        args:  { schedule_function: { name: /\bTV\z/i } },
+      },
+    ],
+    needs: :tv_fn,
+    note:  "turned the TV off on the spot beside an empty 30 minute wait; the retry \"in 30 " \
+           "minutes\" set another empty wait and the TV never went off",
   },
   {
     case:  "prod 3562",

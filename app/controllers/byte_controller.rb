@@ -126,7 +126,9 @@ class ByteController < ApplicationController
 
     theme = convo.buddy_theme.to_s
     chrome = Buddy::Themes.for(theme)
-    label = convo.display_name
+    # Installed under the pet it wears, the way every Byte app is; the board's
+    # own name stays the tab title and the description.
+    label = convo.buddy_name
     path = byte_board_thread_path(convo)
 
     render json: {
@@ -143,7 +145,7 @@ class ByteController < ApplicationController
       display:          :standalone,
       orientation:      :any,
       theme_color:      chrome[:color],
-      description:      "Board: #{label}",
+      description:      "Board: #{convo.display_name}",
     }, content_type: "application/manifest+json"
   end
 

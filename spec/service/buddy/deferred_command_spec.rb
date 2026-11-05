@@ -182,6 +182,19 @@ RSpec.describe "Buddy commands that named a time" do
         }
       end
 
+      # The time came from a shorthand taught earlier, so the words name none,
+      # and the wait beside it is the only sign the request is for later.
+      it "holds it back beside a wait when the words name no time" do
+        [
+          [{ tool_calls: [play_call, wait_call] }],
+          [{ tool_calls: [wait_call, play_call] }],
+          [{ tool_calls: [wait_call] }, { tool_calls: [play_call] }],
+        ].each { |rounds|
+          client = run(rounds + [{ text: "Thirty minutes." }], text: "Sleep timer 30")
+          expect(ran?(client)).to be(false), rounds.inspect
+        }
+      end
+
       # A wait DOES defer a write: that reaches ProposalBuilder, which queues the
       # write behind it.
       it "still lets a wait cover something that can actually be queued" do
