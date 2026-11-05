@@ -14,6 +14,7 @@
 #  buddy_topic_at      :datetime
 #  last_message_at     :datetime
 #  last_read_at        :datetime
+#  machine             :integer          default("mini"), not null
 #  metadata            :jsonb            not null
 #  mode                :integer          default("claude"), not null
 #  name                :string
@@ -65,16 +66,31 @@ class ByteConversation < ApplicationRecord
     scope.not_hidden
   end
 
-  # `cursor` runs `cursor-agent` on the Mac the way `claude` runs `claude -p`:
-  # same handoff, same streaming, its own session id in metadata. Purely
-  # additive — nothing branches on the full set, and default_display_name falls
-  # through for anything it doesn't recognise.
-  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3, cursor: 4 }
+  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3 }
 
-  # Modes that run on the Mac and therefore have a working directory. Buddy
-  # runs entirely in Rails and Jarvis has no filesystem, so a cwd on either is a
+  # Modes that run on a Mac and therefore have a working directory. Buddy runs
+  # entirely in Rails and Jarvis has no filesystem, so a cwd on either is a
   # value nothing would ever read.
-  MAC_MODES = %w[claude bash cursor].freeze
+  MAC_MODES = %w[claude bash].freeze
+
+  # Which Mac a thread's turns run on. Decided per THREAD, never per message: a
+  # thread's `!` commands and its Claude turns share one cwd and one session, so
+  # both have to land on the same machine.
+  #
+  # The Mini is always on, so Claude work lives there and survives the laptop
+  # being shut. A shell thread exists to reach the laptop itself, so it goes
+  # there and fails loudly when the laptop is asleep (BuddyDeliverWorker).
+  enum :machine, { mini: 0, laptop: 1 }, prefix: :on
+
+  def self.machine_for(mode)
+    mode.to_s == "bash" ? :laptop : :mini
+  end
+
+  # A mode change carries the machine with it unless the same save names one,
+  # which is how `/machine` moves a thread without changing what it is.
+  before_save {
+    self.machine = self.class.machine_for(mode) if will_save_change_to_mode? && !machine_changed?
+  }
 
   def mac?
     MAC_MODES.include?(mode.to_s)
@@ -509,6 +525,7 @@ class ByteConversation < ApplicationRecord
       id:               id,
       name:             display_name,
       mode:             mode,
+      machine:          machine,
       archived:         archived,
       unread_count:     unread_count,
       last_message_at:  last_message_at&.iso8601(3),

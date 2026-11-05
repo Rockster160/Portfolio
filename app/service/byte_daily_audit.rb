@@ -246,7 +246,7 @@ module ByteDailyAudit
     return :already_ran if !force && already_ran?(user, convo, now: now)
 
     # Fresh session, and it has to land before the prompt does.
-    ByteLocal.reset_claude_session(conversation_id: convo.id)
+    ByteLocal.reset_claude_session(conversation_id: convo.id, machine: convo.machine)
     convo.update!(metadata: convo.metadata.to_h.merge("claude_session_id" => nil, "claude_session_name" => nil))
 
     ByteMessageIntake.call(

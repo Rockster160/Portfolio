@@ -508,13 +508,13 @@ RSpec.describe ByteController, type: :controller do
       it "persists the outbound message and returns wire JSON, echoing the client's local_id" do
         expect {
           post :create_message, params: { body: "hello there", local_id: "abc-123" }
-        }.to change { rocco.byte_messages.count }.by(1)
+        }.to change { rocco.byte_messages.outbound.count }.by(1)
 
         expect(response).to have_http_status(:created)
         payload = JSON.parse(response.body)
         expect(payload).to include("body" => "hello there", "direction" => "outbound")
         expect(payload["metadata"]).to include("local_id" => "abc-123")
-        expect(rocco.byte_messages.last.metadata["local_id"]).to eq("abc-123")
+        expect(rocco.byte_messages.outbound.last.metadata["local_id"]).to eq("abc-123")
       end
 
       it "rejects empty bodies" do

@@ -59,7 +59,7 @@ RSpec.describe Jil::Methods::Mac do
     # A raise here would abort the whole task; an unreachable Mac shouldn't take
     # the rest of an automation with it, but it must never read as success.
     it "reports a sleeping Mac as a failure rather than raising" do
-      allow(ByteLocal).to receive(:run_command).and_raise("couldn't reach the Mac - it may be asleep")
+      allow(ByteLocal).to receive(:run_command).and_raise("couldn't reach the laptop - it may be asleep")
 
       ctx = run(owner, <<~'JIL')
         out = Mac.run("dark_monitors")::Hash
@@ -67,7 +67,7 @@ RSpec.describe Jil::Methods::Mac do
         why = out.get("error")::String
       JIL
       expect(value(ctx, :ok)).to be(false)
-      expect(value(ctx, :why)).to eq("couldn't reach the Mac - it may be asleep")
+      expect(value(ctx, :why)).to eq("couldn't reach the laptop - it may be asleep")
     end
 
     it "refuses anyone but the owner without touching the Mac" do

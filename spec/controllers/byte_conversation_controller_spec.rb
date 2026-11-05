@@ -135,7 +135,7 @@ RSpec.describe ByteController, type: :controller do
 
       expect {
         post :create_message, params: { body: "hi there", conversation_id: convo.id }
-      }.to change { convo.byte_messages.count }.by(1)
+      }.to change { convo.byte_messages.outbound.count }.by(1)
 
       payload = JSON.parse(response.body)
       expect(payload["conversation_id"]).to eq(convo.id)

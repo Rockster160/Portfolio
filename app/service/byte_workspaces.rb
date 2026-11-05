@@ -1,8 +1,10 @@
 # The directories a Claude or shell conversation can start in.
 #
-# Rails runs on a server and the code lives on the Mac, so Rails cannot look at
-# the filesystem it's offering to pick from. The Mac reports its list instead
-# (POST /webhooks/byte/workspaces, on boot and hourly) and this caches it.
+# Rails runs on a server and the code lives on the Macs, so Rails cannot look at
+# the filesystem it's offering to pick from. Each Mac reports its list instead
+# (POST /webhooks/byte/workspaces, on boot and hourly) and this caches it, one
+# list per machine, because a thread can only start in a directory that exists
+# on the Mac it runs on.
 #
 # Cached rather than fetched live for the reason the picker exists at all: the
 # Mac sleeps. A new conversation started from a phone at midnight still needs to
@@ -13,7 +15,6 @@
 module ByteWorkspaces
   module_function
 
-  KEY   = :byte_workspaces
   LIMIT = 300
 
   # Where a conversation starts when nobody said. Matches the Mac's own
@@ -21,15 +22,19 @@ module ByteWorkspaces
   # the shell opened somewhere else.
   DEFAULT = "~/code/Portfolio".freeze
 
-  def all
-    stored = DataStorage[KEY]
+  def key(machine)
+    :"byte_workspaces_#{machine}"
+  end
+
+  def all(machine)
+    stored = DataStorage[key(machine)]
     return [] unless stored.is_a?(Hash)
 
     Array(stored["paths"] || stored[:paths])
   end
 
-  def reported_at
-    stored = DataStorage[KEY]
+  def reported_at(machine)
+    stored = DataStorage[key(machine)]
     return nil unless stored.is_a?(Hash)
 
     Time.zone.parse((stored["reported_at"] || stored[:reported_at]).to_s)
@@ -37,9 +42,9 @@ module ByteWorkspaces
     nil
   end
 
-  def replace!(paths)
+  def replace!(paths, machine:)
     cleaned = Array(paths).map { |p| tidy(p) }.compact_blank.uniq.sort_by(&:downcase).first(LIMIT)
-    DataStorage[KEY] = { "paths" => cleaned, "reported_at" => Time.current.iso8601 }
+    DataStorage[key(machine)] = { "paths" => cleaned, "reported_at" => Time.current.iso8601 }
     cleaned
   end
 
@@ -48,11 +53,12 @@ module ByteWorkspaces
   # path. Typing "ocs" should offer `~/code/ocs-backend` before
   # `~/code/ocs-backend--rn-feature-appraisal-denied-email-spec`, and a plain
   # alphabetical sort puts the worktree first every time.
-  def search(query, limit: 20)
+  def search(query, machine:, limit: 20)
+    paths  = all(machine)
     needle = query.to_s.strip.downcase
-    return all.first(limit) if needle.empty?
+    return paths.first(limit) if needle.empty?
 
-    all.select { |p| p.downcase.include?(needle) }
+    paths.select { |p| p.downcase.include?(needle) }
       .sort_by { |p| [rank(p, needle), p.length, p.downcase] }
       .first(limit)
   end
@@ -67,7 +73,7 @@ module ByteWorkspaces
   end
 
   # `~` is kept rather than expanded: the server's home directory is not the
-  # Mac's, and a path expanded here would be wrong there.
+  # Mac's, and the two Macs' home directories aren't each other's either.
   def tidy(path)
     text = path.to_s.strip
     return nil if text.empty?

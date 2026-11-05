@@ -545,14 +545,18 @@ class WebhooksController < ApplicationController
     render json: convo.as_wire
   end
 
-  # The Mac telling us which directories exist, so the new-conversation picker
+  # A Mac telling us which directories exist, so the new-conversation picker
   # has something to offer. Pushed on boot and hourly rather than pulled,
   # because the whole point of caching it is that the answer has to be there
   # when the Mac isn't.
+  #
+  # Each Mac names itself (BYTE_HOST in its launchd job). One that doesn't is
+  # the laptop, which is the only one that reported before there were two.
   def byte_workspaces
     return head :unauthorized unless byte_authorized?
 
-    paths = ByteWorkspaces.replace!(params[:paths])
+    machine = params[:machine].to_s.presence_in(ByteConversation.machines.keys) || :laptop
+    paths   = ByteWorkspaces.replace!(params[:paths], machine: machine)
     render json: { ok: true, count: paths.length }
   end
 

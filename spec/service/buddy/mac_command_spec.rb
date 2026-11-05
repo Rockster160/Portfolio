@@ -66,7 +66,7 @@ RSpec.describe "Buddy mac_command" do
       stub_const("ByteLocal::COMMAND_TIMEOUT_SECONDS", 0.05)
 
       started = Time.current
-      expect { ByteLocal.run_command(:dark_monitors) }.to raise_error(/couldn't reach the Mac/)
+      expect { ByteLocal.run_command(:dark_monitors) }.to raise_error(/couldn't reach the laptop/)
       expect(Time.current - started).to be < 1
     end
 
@@ -82,7 +82,7 @@ RSpec.describe "Buddy mac_command" do
       result = Buddy::Tools.dispatch(tool, { command: :dark_monitors }, ctx)
 
       expect(result[:ok]).to be(false)
-      expect(result[:error]).to include("couldn't reach the Mac")
+      expect(result[:error]).to include("couldn't reach the laptop")
     end
 
     it "puts what the Mac said on the receipt when it said anything" do

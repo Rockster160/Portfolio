@@ -7,7 +7,8 @@
 # traffic.
 #
 # Two destinations, and the split matters: :buddy runs the model turn IN RAILS
-# (Buddy::GPT::Turn), while claude / bash still hand off to the Mac over HTTP.
+# (Buddy::GPT::Turn), while claude / bash still hand off over HTTP to whichever
+# Mac the thread runs on (ByteConversation#machine).
 class BuddyDeliverWorker
   include Sidekiq::Worker
 
@@ -15,6 +16,9 @@ class BuddyDeliverWorker
   # the other spawns a Claude Code process — so a retry would double-send.
   # Failure is already surfaced through the message's :failed state.
   sidekiq_options queue: :default, retry: false
+
+  # The Mac didn't take the turn, as opposed to something breaking in here.
+  HandoffFailed = Class.new(StandardError)
 
   def perform(message_id)
     message = ByteMessage.find_by(id: message_id)
@@ -41,7 +45,7 @@ class BuddyDeliverWorker
   # not being there at all.
   def deliver_plain(message, conversation)
     response = ByteLocal.deliver(message, conversation: conversation)
-    raise("the Mac didn't take it (#{response&.code || "no answer"})") unless response.is_a?(Net::HTTPSuccess)
+    raise(HandoffFailed, handoff_failure(conversation, response)) unless response.is_a?(Net::HTTPSuccess)
 
     message.update!(state: :sent)
     broadcast(message.reload)
@@ -49,7 +53,48 @@ class BuddyDeliverWorker
     Rails.logger.warn("[Byte] deliver worker crashed: #{e.class}: #{e.message}")
     message.update!(state: :failed) rescue nil
     broadcast(message.reload) rescue nil
+    say_it_failed(message, e.message) if e.is_a?(HandoffFailed)
     report_failed_handoff(message, e)
+  end
+
+  # `deliver` answers nil when the Mac never picked up at all, which for the
+  # laptop is almost always because the lid is shut.
+  def handoff_failure(conversation, response)
+    machine = ByteLocal.name_of(conversation&.machine || :mini)
+    return "Couldn't reach #{machine} - it's asleep or offline, so this didn't run." if response.nil?
+
+    "#{machine.upcase_first} didn't take that (#{response.code}), so it didn't run."
+  end
+
+  # A red state on the bubble is easy to miss on a phone, and a shell command
+  # sent to a sleeping laptop looks exactly like one that's still running. So
+  # the failure is said in the thread, as a reply, and pushed like any other.
+  #
+  # Not for a hidden prompt: nobody is looking at that thread for it, and the
+  # error report below is how those surface.
+  def say_it_failed(message, text)
+    return if hidden?(message)
+
+    note = message.byte_conversation.byte_messages.create!(
+      user:         message.user,
+      direction:    :inbound,
+      state:        :delivered,
+      body:         text,
+      metadata:     {
+        kind:        :system,
+        source:      :handoff,
+        in_reply_to: message.id,
+      },
+      delivered_at: Time.current,
+    )
+    broadcast(note)
+    ByteNotifier.notify(message.user, note)
+  rescue => e
+    Rails.logger.warn("[Byte] couldn't post the handoff failure: #{e.class}: #{e.message}")
+  end
+
+  def hidden?(message)
+    message.metadata.is_a?(Hash) && message.metadata["hidden"].present?
   end
 
   # The `:failed` state was supposed to be the whole signal — see the note on
@@ -70,7 +115,7 @@ class BuddyDeliverWorker
       extra:     {
         message_id:      message.id,
         conversation_id: message.byte_conversation_id,
-        hidden:          message.metadata.is_a?(Hash) && message.metadata["hidden"].present?,
+        hidden:          hidden?(message),
       },
     )
   end

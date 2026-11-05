@@ -840,14 +840,18 @@ class ByteController < ApplicationController
     }
   end
 
-  # Directories a claude/bash/cursor thread could start in, for the picker on
-  # the new-conversation modal. Reported by the Mac and cached (see
-  # ByteWorkspaces), so this answers while the Mac is asleep.
+  # Directories a claude/bash thread could start in, for the picker on the
+  # new-conversation modal. Reported by each Mac and cached (see
+  # ByteWorkspaces), so this answers while the Mac is asleep. The list is the
+  # one from the Mac the chosen mode runs on, since the other one's repos
+  # aren't there.
   def workspaces
+    machine = ByteConversation.machine_for(params[:mode])
+    limit   = (params[:limit] || 20).to_i.clamp(1, 100)
     render json: {
-      paths:       ByteWorkspaces.search(params[:q], limit: (params[:limit] || 20).to_i.clamp(1, 100)),
+      paths:       ByteWorkspaces.search(params[:q], machine: machine, limit: limit),
       default:     ByteWorkspaces::DEFAULT,
-      reported_at: ByteWorkspaces.reported_at&.iso8601,
+      reported_at: ByteWorkspaces.reported_at(machine)&.iso8601,
     }
   end
 
@@ -950,7 +954,7 @@ class ByteController < ApplicationController
     convo = resolve_conversation
     return head(:not_found) if convo.nil?
 
-    result = ByteLocal.list_claude_sessions(conversation_id: convo.id)
+    result = ByteLocal.list_claude_sessions(conversation_id: convo.id, machine: convo.machine)
     render json: { sessions: result || [] }
   end
 
@@ -1058,8 +1062,9 @@ class ByteController < ApplicationController
     # a pooled connection for the whole timeout. Handing the thread plain data
     # means it never checks one out at all.
     decision_payload = ByteLocal.action_decision_payload(action)
+    machine          = action.byte_conversation.machine
     Thread.new {
-      ByteLocal.notify_action_decision(decision_payload)
+      ByteLocal.notify_action_decision(decision_payload, machine: machine)
     }
 
     # For Jarvis-mode clarifications, the tap ALSO fires the chosen
@@ -1716,7 +1721,7 @@ class ByteController < ApplicationController
   # Mac seeds from this on the first turn and owns it from then on, because
   # `!cd` has to keep working and a stale value here must never yank a session
   # out from under someone mid-conversation.
-  CWD_MODES = %w[claude bash cursor].freeze
+  CWD_MODES = %w[claude bash].freeze
 
   def starting_cwd(mode)
     return {} unless CWD_MODES.include?(mode.to_s)
@@ -1878,13 +1883,47 @@ class ByteController < ApplicationController
     conversation.update!(metadata: conversation.metadata.to_h.merge("cwd" => path))
     broadcast_convo_change(conversation, :updated)
 
-    reached = ByteLocal.set_cwd(conversation_id: conversation.id, cwd: path)
-    known   = ByteWorkspaces.all.include?(path)
+    reached = ByteLocal.set_cwd(
+      conversation_id: conversation.id,
+      cwd:             path,
+      machine:         conversation.machine,
+    )
+    known   = ByteWorkspaces.all(conversation.machine).include?(path)
+    machine = ByteLocal.name_of(conversation.machine)
     [
       "Working directory set to `#{path}`.",
-      ("The Mac didn't answer, so this takes effect when it next wakes." unless reached),
-      ("Note: that isn't one of the directories the Mac has reported." unless known),
+      ("#{machine.upcase_first} didn't answer, so this takes effect when it next wakes." unless reached),
+      ("Note: that isn't one of the directories #{machine} has reported." unless known),
     ].compact.join(" ")
+  end
+
+  # `/machine laptop` - run this thread's turns on the other Mac. A mode change
+  # already picks the usual one; this is for the exception, like a Claude
+  # thread adopting a session that was started in a terminal on the laptop.
+  #
+  # The Claude session id is kept in each Mac's own state file, so the move
+  # starts a fresh session on the new machine rather than carrying one over.
+  def move_machine(conversation, arg)
+    current = conversation.machine.to_sym
+    usage   = "usage: `/machine mini|laptop` - this thread runs on #{ByteLocal.name_of(current)}."
+    return usage if arg.empty?
+
+    target = arg.downcase.to_sym
+    return usage unless ByteConversation.machines.key?(target.to_s)
+    return "Already on #{ByteLocal.name_of(target)}." if target == current
+    return "#{conversation.mode.capitalize} threads don't run on a Mac." unless conversation.mac?
+
+    ByteLocal.reset_claude_session(conversation_id: conversation.id, machine: target)
+    metadata = conversation.metadata.to_h.merge("claude_session_id" => nil, "claude_session_name" => nil)
+    conversation.update!(machine: target, metadata: metadata)
+    broadcast_convo_change(conversation, :updated)
+    "Moved to #{ByteLocal.name_of(target)}. The next turn starts a fresh Claude session there."
+  end
+
+  def machine_note(conversation)
+    return "" unless conversation.mac? && conversation.saved_change_to_machine?
+
+    " It runs on #{ByteLocal.name_of(conversation.machine)}."
   end
 
   def current_cwd(conversation)
@@ -1920,11 +1959,15 @@ class ByteController < ApplicationController
       return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?
 
       new_mode = normalized_mode(arg)
-      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy|cursor`") if arg.empty?
+      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
 
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
-      ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+      ack(conversation, "Mode set to **#{new_mode}** for this conversation.#{machine_note(conversation)}")
+    when "machine"
+      return ack(conversation, "Buddy threads don't run on a Mac.") if buddy_only?
+
+      ack(conversation, move_machine(conversation, arg))
     when "j", "jarvis"
       # Not ours to answer: ByteMessageIntake routes the words to Jarvis, the
       # same way it does for the Mac CLI, which never comes through here. Only

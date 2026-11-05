@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_05_061402) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_05_220047) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -774,6 +774,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_05_061402) do
     t.datetime "buddy_compiled_at"
     t.text "buddy_topic"
     t.datetime "buddy_topic_at"
+    t.integer "machine", default: 0, null: false
     t.index ["buddy_compile_after"], name: "index_byte_conversations_on_buddy_compile_after", where: "(buddy_compile_after IS NOT NULL)"
     t.index ["user_id", "archived", "last_message_at"], name: "index_byte_conversations_on_user_bucket_activity"
     t.index ["user_id"], name: "index_byte_conversations_on_one_primary_per_user", unique: true, where: "(primary_at IS NOT NULL)"

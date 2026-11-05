@@ -173,7 +173,7 @@ module ByteInterviewPrep
     # races the prompt it is meant to precede. It matters more here than it does
     # for the standup brief: the thread is reused for every interview, and a
     # resumed session arrives already believing it knows which company this is.
-    ByteLocal.reset_claude_session(conversation_id: convo.id)
+    ByteLocal.reset_claude_session(conversation_id: convo.id, machine: convo.machine)
     convo.update!(
       metadata: convo.metadata.to_h.merge("claude_session_id" => nil, "claude_session_name" => nil),
     )

@@ -36,7 +36,7 @@ function convoLabel(convo) {
 
 // Modes that run on the owner's Mac and therefore have a working directory.
 // Mirrors ByteConversation::MAC_MODES.
-const MAC_MODES = ["claude", "bash", "cursor"];
+const MAC_MODES = ["claude", "bash"];
 
 // The pet table the server rendered onto `.byte-app` (ByteHelper#buddy_themes_json).
 // Read here as well as in index.js — same single attribute, so there's still one
@@ -208,7 +208,10 @@ export class ConversationManager {
     document.querySelector("[data-byte-new-cancel]")?.addEventListener("click", () => this.newModal?.close());
     this.newForm?.addEventListener("submit", (e) => this.handleCreateSubmit(e));
     document.querySelector("[data-byte-new-mode]")
-      ?.addEventListener("change", () => this.syncNewBuddyRow());
+      ?.addEventListener("change", () => {
+        this.syncNewBuddyRow();
+        this.loadWorkspaces();
+      });
 
     document.querySelector("[data-byte-menu-close]")?.addEventListener("click", () => this.menuModal?.close());
     this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
@@ -615,16 +618,20 @@ export class ConversationManager {
   // reported, so this resolves whether or not the Mac is awake. Failure is
   // silent on purpose: the field is free text, and an empty datalist costs
   // nothing but typing the path out.
+  //
+  // Claude and shell threads run on different Macs, each with its own repos,
+  // so the list is fetched for the chosen mode and again when it changes.
   async loadWorkspaces() {
     const list = document.querySelector("[data-byte-workspace-list]");
-    if (!list || list.dataset.loaded === "1") return;
+    const mode = document.querySelector("[data-byte-new-mode]")?.value || "claude";
+    if (!list || !MAC_MODES.includes(mode) || list.dataset.loaded === mode) return;
 
     try {
-      const data = await apiCall("/byte/workspaces?limit=100", "GET");
+      const data = await apiCall(`/byte/workspaces?limit=100&mode=${encodeURIComponent(mode)}`, "GET");
       list.innerHTML = (data?.paths || [])
         .map((p) => `<option value="${escapeAttr(p)}"></option>`)
         .join("");
-      list.dataset.loaded = "1";
+      list.dataset.loaded = mode;
     } catch (e) {}
   }
 

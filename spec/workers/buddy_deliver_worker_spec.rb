@@ -64,6 +64,29 @@ RSpec.describe BuddyDeliverWorker do
       )
     end
 
+    # A shell command to a sleeping laptop otherwise looks like one still running.
+    it "says so in the thread, naming the Mac, and pushes it" do
+      message = build_message(:bash)
+      allow(ByteLocal).to receive(:deliver).and_return(nil)
+      allow(ByteNotifier).to receive(:notify)
+
+      described_class.new.perform(message.id)
+
+      note = message.byte_conversation.byte_messages.order(:id).last
+      expect(note).not_to eq(message)
+      expect(note.body).to include("Couldn't reach the laptop")
+      expect(note.metadata).to include("in_reply_to" => message.id, "kind" => "system")
+      expect(ByteNotifier).to have_received(:notify).with(message.user, note)
+    end
+
+    it "says nothing in the thread for a hidden prompt" do
+      message = build_message(:claude)
+      message.update!(metadata: { "hidden" => true })
+      allow(ByteLocal).to receive(:deliver).and_return(nil)
+
+      expect { described_class.new.perform(message.id) }.not_to change(ByteMessage, :count)
+    end
+
     it "reports a refusal as well as an unreachable Mac" do
       message  = build_message(:claude)
       refusal  = instance_double(Net::HTTPServerError, code: "500")

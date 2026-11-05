@@ -8,15 +8,42 @@ require "uri"
 # in one place so we can swap transports (worker, queue, tunnel) without
 # touching the controller.
 #
+# Two Macs run the same Byte server: the Mini, which is always on and carries
+# the Claude threads, and the laptop, which carries shell threads and the
+# desk-side things (Mac commands, terminal-pet, Mail.app). A conversation's
+# `machine` says which one its calls go to (see ByteConversation).
+#
 # Config via env:
-#   BYTE_LOCAL_URL     — base URL of the Mac server (default localhost:8788)
-#   BYTE_LOCAL_SECRET  — shared secret; sent as X-Byte-Secret header
+#   BYTE_LOCAL_URL     — base URL of the Mini's server
+#   BYTE_LAPTOP_URL    — base URL of the laptop's server
+#   BYTE_LOCAL_SECRET  — shared secret; sent as X-Byte-Secret header to both
 module ByteLocal
   module_function
 
   DEFAULT_URL = "http://localhost:8788".freeze
-  DEFAULT_PORT = 8788
   TIMEOUT_SECONDS = 5
+
+  # Both Macs sit behind the house's one public IP, so the router tells them
+  # apart by port: each external port forwards to that Mac's 8788.
+  PORTS = {
+    mini:   8788,
+    laptop: 8789,
+  }.freeze
+
+  URL_ENV = {
+    mini:   "BYTE_LOCAL_URL",
+    laptop: "BYTE_LAPTOP_URL",
+  }.freeze
+
+  NAMES = {
+    mini:   "the Mac Mini",
+    laptop: "the laptop",
+  }.freeze
+
+  # How a Mac is named to a person, as in "couldn't reach the laptop".
+  def name_of(machine)
+    NAMES.fetch(machine.to_sym)
+  end
 
   # Named things the Mac can do, and what to tell Buddy each one is for.
   #
@@ -45,18 +72,19 @@ module ByteLocal
   # costs the person exactly as much as a missing one.
   COMMAND_TIMEOUT_SECONDS = 5
 
-  # Resolution order:
-  # 1. `BYTE_LOCAL_URL` — explicit override for staging / tunnels
-  # 2. `DataStorage[:local_ip]` — auto-detected Mac public IP, refreshed by
-  #    the `webhooks/local_ping` job (same source Tesla uses; requires port
-  #    #{DEFAULT_PORT} forwarded on the router to the Mac's LAN IP)
+  # Resolution order, per machine:
+  # 1. its URL_ENV variable — explicit override for staging / tunnels
+  # 2. `DataStorage[:local_ip]` — the house's public IP, refreshed by the
+  #    `webhooks/local_ping` job (same source Tesla uses), on that machine's
+  #    PORTS entry, which the router forwards to the Mac's LAN IP
   # 3. `localhost:8788` — dev fallback (Rails and the Mac server share a host)
-  def base_url
-    env_val = clean_url(ENV["BYTE_LOCAL_URL"])
+  def base_url(machine=:mini)
+    machine = machine.to_sym
+    env_val = clean_url(ENV[URL_ENV.fetch(machine)])
     return env_val if env_val.present?
 
     ip = ::DataStorage[:local_ip]
-    return "http://#{ip}:#{DEFAULT_PORT}" if ip.present?
+    return "http://#{ip}:#{PORTS.fetch(machine)}" if ip.present?
 
     DEFAULT_URL
   end
@@ -92,7 +120,7 @@ module ByteLocal
   # to `claude -p`; it now runs entirely in Rails (Buddy::GPT::Turn) and never
   # reaches the Mac. Do not reintroduce Buddy-specific payload here.
   def deliver(message, conversation: nil)
-    uri = URI.join(base_url, "/byte/incoming")
+    uri = URI.join(base_url(conversation&.machine || :mini), "/byte/incoming")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
 
     payload = {
@@ -127,10 +155,12 @@ module ByteLocal
   # caller is a Buddy tool: a raise becomes "couldn't do that one" on the
   # activity chip, while a nil would read as success and let Buddy tell someone
   # their monitors are off when the Mac never answered.
+  #
+  # Always the laptop: these act on the desk the person is sitting at.
   def run_command(name)
     raise "#{name} isn't a Mac command I have" unless MAC_COMMANDS.key?(name.to_s.to_sym)
 
-    uri = URI.join(base_url, "/byte/command")
+    uri = URI.join(base_url(:laptop), "/byte/command")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ name: name })
 
@@ -149,7 +179,7 @@ module ByteLocal
     body.symbolize_keys
   rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout, SystemCallError, SocketError, IOError => e
     Rails.logger.warn("[Byte] run_command #{name} failed: #{e.class}: #{e.message}")
-    raise "couldn't reach the Mac - it may be asleep"
+    raise "couldn't reach the laptop - it may be asleep"
   end
 
   # Hang a Gmail label on one message, found by its Message-ID, so mail the
@@ -169,13 +199,15 @@ module ByteLocal
   # "labelled", "absent" or "nolabel" - or `{ ok: false, error: }`. Never
   # raises: the Ardesian side has already happened by the time this runs, and a
   # sleeping Mac must not undo it or retry forever.
+  #
+  # Always the laptop, which is where Mail.app is signed in.
   MAIL_TIMEOUT_SECONDS = 25
 
   def label_mail(message_id:)
     id = message_id.to_s.strip
     return { ok: false, error: "no message id" } if id.empty?
 
-    uri = URI.join(base_url, "/byte/label_mail")
+    uri = URI.join(base_url(:laptop), "/byte/label_mail")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ message_id: id })
 
@@ -192,7 +224,7 @@ module ByteLocal
     { ok: false, error: body["error"].presence || "the Mac said no (#{res.code})" }
   rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout, SystemCallError, SocketError, IOError => e
     Rails.logger.warn("[Byte] label_mail failed: #{e.class}: #{e.message}")
-    { ok: false, error: "couldn't reach the Mac - it may be asleep" }
+    { ok: false, error: "couldn't reach the laptop - it may be asleep" }
   end
 
   # Tell terminal-pet, on the Mac, that something happened: `pet(:feed, 10)`
@@ -202,9 +234,10 @@ module ByteLocal
   #
   # Returns the Mac's answer, `{ ok:, sent:, reply: }`, or `{ ok: false, error: }`.
   # Never raises: the pet is a toy watching the real thing, and a sleeping Mac
-  # must not fail the event it was told about.
+  # must not fail the event it was told about. Always the laptop, whose
+  # terminal the pet lives in.
   def pet(verb, *words)
-    uri = URI.join(base_url, "/byte/pet")
+    uri = URI.join(base_url(:laptop), "/byte/pet")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ verb: verb, words: words.flatten.map(&:to_s) })
 
@@ -222,14 +255,15 @@ module ByteLocal
   rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout,
          SystemCallError, SocketError, IOError => e
     Rails.logger.warn("[Byte] pet #{verb} failed: #{e.class}: #{e.message}")
-    { ok: false, error: "couldn't reach the Mac - it may be asleep" }
+    { ok: false, error: "couldn't reach the laptop - it may be asleep" }
   end
 
   # Ask the Mac to enumerate the Claude Code sessions on disk for a given
   # conversation's cwd. Returns the parsed JSON array, or nil if the Mac
   # is unreachable.
-  def list_claude_sessions(conversation_id:)
-    uri = URI.join(base_url, "/byte/claude_sessions?conversation_id=#{conversation_id.to_i}")
+  def list_claude_sessions(conversation_id:, machine:)
+    path = "/byte/claude_sessions?conversation_id=#{conversation_id.to_i}"
+    uri  = URI.join(base_url(machine), path)
     req = Net::HTTP::Get.new(uri, "X-Byte-Secret" => secret)
 
     res = Net::HTTP.start(uri.hostname, uri.port,
@@ -251,8 +285,8 @@ module ByteLocal
   # `/cd`. Returns false rather than raising when the Mac is asleep; the value
   # is on the conversation record either way and the Mac seeds from it on the
   # next turn.
-  def set_cwd(conversation_id:, cwd:)
-    uri = URI.join(base_url, "/byte/set_cwd")
+  def set_cwd(conversation_id:, cwd:, machine:)
+    uri = URI.join(base_url(machine), "/byte/set_cwd")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ conversation_id: conversation_id.to_i, cwd: cwd.to_s })
 
@@ -281,8 +315,8 @@ module ByteLocal
   # Returns false rather than raising when the Mac is asleep. The caller's next
   # move is to wait for the Mac either way, and a stale session is a worse turn,
   # not a broken one.
-  def reset_claude_session(conversation_id:)
-    uri = URI.join(base_url, "/byte/reset_session")
+  def reset_claude_session(conversation_id:, machine:)
+    uri = URI.join(base_url(machine), "/byte/reset_session")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({ conversation_id: conversation_id.to_i })
 
@@ -299,8 +333,8 @@ module ByteLocal
   # Is the Mac actually up right now? Used before scheduling work onto it, so a
   # sleeping machine becomes "try again later" rather than a failed message
   # sitting in a thread.
-  def awake?
-    uri = URI.join(base_url, "/health")
+  def awake?(machine=:mini)
+    uri = URI.join(base_url(machine), "/health")
     res = Net::HTTP.start(uri.hostname, uri.port,
       use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
     ) { |http| http.request(Net::HTTP::Get.new(uri)) }
@@ -339,8 +373,8 @@ module ByteLocal
   # Touching ActiveRecord here would check out a pooled connection and hold it
   # for the full length of the HTTP call — and this call exists precisely for
   # the case where the Mac is unreachable and it hangs to the timeout.
-  def notify_action_decision(payload)
-    uri = URI.join(base_url, "/byte/action_decision")
+  def notify_action_decision(payload, machine:)
+    uri = URI.join(base_url(machine), "/byte/action_decision")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate(payload)
 
@@ -366,21 +400,25 @@ module ByteLocal
   # report, and appends a best-guess diagnosis based on the first failing
   # check. Returns the structured result so it's also programmable.
   #
-  #   ByteLocal.ping
+  #   ByteLocal.ping            # both Macs
+  #   ByteLocal.ping(:laptop)
   # =========================================================================
 
-  def ping
-    checks = [
-      check_secret,
-      check_env_url,
-      check_local_ip,
-      check_base_url,
-      check_tcp,
-      check_health,
-    ]
-    diagnosis = diagnose(checks)
-    print_report(checks, diagnosis)
-    { checks: checks, diagnosis: diagnosis }
+  def ping(machine=nil)
+    machines = machine ? [machine.to_sym] : PORTS.keys
+    machines.to_h { |each_machine|
+      checks = [
+        check_secret,
+        check_env_url(each_machine),
+        check_local_ip,
+        check_base_url(each_machine),
+        check_tcp(each_machine),
+        check_health(each_machine),
+      ]
+      diagnosis = diagnose(checks, each_machine)
+      print_report(checks, diagnosis, each_machine)
+      [each_machine, { checks: checks, diagnosis: diagnosis }]
+    }
   end
 
   # ---------- individual checks ----------
@@ -394,14 +432,15 @@ module ByteLocal
     end
   end
 
-  def check_env_url
-    v = ENV["BYTE_LOCAL_URL"]
+  def check_env_url(machine)
+    name = "#{URL_ENV.fetch(machine)} (env override)"
+    v = ENV[URL_ENV.fetch(machine)]
     if v.nil? || v.empty?
-      { name: "BYTE_LOCAL_URL (env override)", status: :pass, value: "unset (auto-detect)" }
+      { name: name, status: :pass, value: "unset (auto-detect)" }
     elsif v.include?("localhost") || v.include?("127.0.0.1")
-      { name: "BYTE_LOCAL_URL (env override)", status: :warn, value: v, note: "points at loopback; in prod this reaches the web server, not the Mac" }
+      { name: name, status: :warn, value: v, note: "points at loopback; in prod this reaches the web server, not the Mac" }
     else
-      { name: "BYTE_LOCAL_URL (env override)", status: :pass, value: v }
+      { name: name, status: :pass, value: v }
     end
   end
 
@@ -416,14 +455,14 @@ module ByteLocal
     end
   end
 
-  def check_base_url
-    { name: "Resolved base_url", status: :pass, value: base_url }
+  def check_base_url(machine)
+    { name: "Resolved base_url", status: :pass, value: base_url(machine) }
   rescue => e
     { name: "Resolved base_url", status: :fail, note: "#{e.class}: #{e.message}" }
   end
 
-  def check_tcp
-    uri = URI.parse(base_url)
+  def check_tcp(machine)
+    uri = URI.parse(base_url(machine))
     started = Time.current
     Socket.tcp(uri.hostname, uri.port, connect_timeout: TIMEOUT_SECONDS) { }
     { name: "TCP #{uri.hostname}:#{uri.port}", status: :pass, value: "#{((Time.current - started) * 1000).round}ms" }
@@ -431,8 +470,8 @@ module ByteLocal
     { name: "TCP #{uri.hostname}:#{uri.port}", status: :fail, note: "#{e.class}: #{e.message}" }
   end
 
-  def check_health
-    uri = URI.join(base_url, "/health")
+  def check_health(machine)
+    uri = URI.join(base_url(machine), "/health")
     res = Net::HTTP.start(uri.hostname, uri.port,
       use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
     ) { |h| h.request(Net::HTTP::Get.new(uri)) }
@@ -454,7 +493,9 @@ module ByteLocal
   # Look for the first failing check and translate the specific failure into
   # a targeted next-action hint. Falls through to a generic hint if nothing
   # specific matches.
-  def diagnose(checks)
+  def diagnose(checks, machine)
+    env_name = URL_ENV.fetch(machine)
+    port     = PORTS.fetch(machine)
     fail_or_warn = checks.detect { |c| c[:status] == :fail } ||
                    checks.detect { |c| c[:status] == :warn }
     return "All checks passed — connectivity is healthy." if fail_or_warn.nil?
@@ -463,18 +504,18 @@ module ByteLocal
     case fail_or_warn[:name]
     when "BYTE_LOCAL_SECRET"
       "Set BYTE_LOCAL_SECRET in the Rails env to match the value the Mac server reads. Both processes must share it."
-    when "BYTE_LOCAL_URL (env override)"
-      "Remove BYTE_LOCAL_URL from the env so DataStorage[:local_ip] is used. In prod, localhost is the web server, not the Mac."
+    when "#{env_name} (env override)"
+      "Remove #{env_name} from the env so DataStorage[:local_ip] is used. In prod, localhost is the web server, not the Mac."
     when "DataStorage[:local_ip]"
       "Confirm the local_ping worker on the Mac is running and hitting POST /webhooks/local_ping with an authenticated session for User.me."
     else
       case note
       when /ECONNREFUSED/
-        "TCP-level rejection: server isn't listening on that port. Confirm `ruby ~/code/Byte/server.rb` is running on the Mac and bound to 0.0.0.0 (check `lsof -iTCP:#{DEFAULT_PORT} -sTCP:LISTEN`)."
+        "TCP-level rejection: server isn't listening on that port. Confirm `ruby ~/code/Byte/server.rb` is running on #{name_of(machine)} and bound to 0.0.0.0 (check `lsof -iTCP:8788 -sTCP:LISTEN`)."
       when /OpenTimeout|ETIMEDOUT|EHOSTUNREACH/
-        "Route blocked between prod and the Mac. Verify: (a) router forward for #{DEFAULT_PORT} → LAN IP:#{DEFAULT_PORT}, (b) router source-IP ACL matches prod's egress IP, (c) macOS Application Firewall isn't blocking the ruby process."
+        "Route blocked between prod and #{name_of(machine)}. Verify: (a) router forward for #{port} → its LAN IP:8788, (b) router source-IP ACL matches prod's egress IP, (c) macOS Application Firewall isn't blocking the ruby process, (d) it isn't asleep."
       when /getaddrinfo|SocketError/
-        "Hostname resolution failed. If BYTE_LOCAL_URL is set to a hostname, confirm DNS resolves it from the prod host."
+        "Hostname resolution failed. If #{env_name} is set to a hostname, confirm DNS resolves it from the prod host."
       when /401|unauthorized/i
         "Server up, secret mismatch. BYTE_LOCAL_SECRET on Rails must match what the Mac server reads."
       else
@@ -485,9 +526,9 @@ module ByteLocal
 
   # ---------- output ----------
 
-  def print_report(checks, diagnosis)
+  def print_report(checks, diagnosis, machine)
     puts
-    puts "== Byte connectivity check =="
+    puts "== Byte connectivity check: #{name_of(machine)} =="
     checks.each { |c|
       marker = case c[:status]
       when :pass then "\e[32m✓\e[0m"

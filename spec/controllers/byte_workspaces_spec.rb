@@ -1,21 +1,32 @@
 require "rails_helper"
 
-# Picking where a Claude/cursor/bash thread starts.
+# Picking where a Claude/bash thread starts.
 RSpec.describe "Byte starting directory" do
   let(:rocco) { User.me }
 
   before do
     allow(ByteLocal).to receive_messages(deliver: nil, set_cwd: true)
     allow(MonitorChannel).to receive(:broadcast_to)
-    DataStorage.where(name: ByteWorkspaces::KEY.to_s).delete_all
+    DataStorage.where(name: ByteConversation.machines.keys.map { |m| ByteWorkspaces.key(m).to_s }).delete_all
   end
 
   describe ByteWorkspaces do
     it "keeps the reported list, stamped, without blanks, duplicates or trailing slashes" do
-      described_class.replace!(["~/code/Portfolio", "~/code/ocs-backend", "~/code/Portfolio/", "", nil, "  "])
+      described_class.replace!(
+        ["~/code/Portfolio", "~/code/ocs-backend", "~/code/Portfolio/", "", nil, "  "],
+        machine: :mini,
+      )
 
-      expect(described_class.all).to eq(["~/code/ocs-backend", "~/code/Portfolio"])
-      expect(described_class.reported_at).to be_within(5.seconds).of(Time.current)
+      expect(described_class.all(:mini)).to eq(["~/code/ocs-backend", "~/code/Portfolio"])
+      expect(described_class.reported_at(:mini)).to be_within(5.seconds).of(Time.current)
+    end
+
+    it "keeps each Mac's list apart" do
+      described_class.replace!(["~/code/Portfolio"], machine: :mini)
+      described_class.replace!(["~/code/jobhunt"], machine: :laptop)
+
+      expect(described_class.search("", machine: :mini)).to eq(["~/code/Portfolio"])
+      expect(described_class.search("", machine: :laptop)).to eq(["~/code/jobhunt"])
     end
 
     # Typing "ocs" should offer the repo before twenty worktrees cut from it.
@@ -26,9 +37,9 @@ RSpec.describe "Byte starting directory" do
         "~/code/ocs",
         "~/code/ocs-backend",
         "~/code/my-ocs-notes",
-      ])
+      ], machine: :mini)
 
-      expect(described_class.search("ocs")).to eq([
+      expect(described_class.search("ocs", machine: :mini)).to eq([
         "~/code/ocs",
         "~/code/ocs-backend",
         "~/code/ocs-backend--rn-feature-recon",
@@ -37,10 +48,10 @@ RSpec.describe "Byte starting directory" do
     end
 
     it "searches case-insensitively, returning the whole list for an empty query" do
-      described_class.replace!(["~/code/Portfolio", "~/code/b"])
+      described_class.replace!(["~/code/Portfolio", "~/code/b"], machine: :mini)
 
-      expect(described_class.search("portf")).to eq(["~/code/Portfolio"])
-      expect(described_class.search("")).to eq(["~/code/b", "~/code/Portfolio"])
+      expect(described_class.search("portf", machine: :mini)).to eq(["~/code/Portfolio"])
+      expect(described_class.search("", machine: :mini)).to eq(["~/code/b", "~/code/Portfolio"])
     end
 
     # A repo cloned since the last report is real. Refusing anything unknown
@@ -55,14 +66,15 @@ RSpec.describe "Byte starting directory" do
   end
 
   describe WebhooksController, type: :controller do
-    it "takes the Mac's report" do
-      request.headers["X-Byte-Secret"] = ENV.fetch("BYTE_LOCAL_SECRET", "")
+    it "files each Mac's report under that Mac, and an unnamed one under the laptop" do
       allow(controller).to receive(:byte_authorized?).and_return(true)
 
-      post :byte_workspaces, params: { paths: ["~/code/Portfolio", "~/code/Byte"] }
-
+      post :byte_workspaces, params: { paths: ["~/code/Portfolio", "~/code/Byte"], machine: "mini" }
       expect(response).to be_successful
-      expect(ByteWorkspaces.all).to contain_exactly("~/code/Byte", "~/code/Portfolio")
+      post :byte_workspaces, params: { paths: ["~/code/jobhunt"] }
+
+      expect(ByteWorkspaces.all(:mini)).to contain_exactly("~/code/Byte", "~/code/Portfolio")
+      expect(ByteWorkspaces.all(:laptop)).to eq(["~/code/jobhunt"])
     end
 
     it "refuses without the shared secret" do
@@ -79,9 +91,9 @@ RSpec.describe "Byte starting directory" do
       # The whole reason the list is cached rather than fetched: this modal is
       # opened from a phone, and the Mac is usually asleep.
       it "answers from the cache, with no call to the Mac, and hands back the default" do
-        ByteWorkspaces.replace!(["~/code/Portfolio", "~/code/ocs-backend"])
+        ByteWorkspaces.replace!(["~/code/Portfolio", "~/code/ocs-backend"], machine: :mini)
 
-        get :workspaces, params: { q: "ocs" }
+        get :workspaces, params: { q: "ocs", mode: "claude" }
 
         expect(response.parsed_body["paths"]).to eq(["~/code/ocs-backend"])
         expect(response.parsed_body["default"]).to eq(ByteWorkspaces::DEFAULT)
@@ -95,7 +107,7 @@ RSpec.describe "Byte starting directory" do
       it "stores the starting directory only on a Mac-mode thread, and only a plausible one" do
         [
           ["claude", "~/code/ocs-backend", "~/code/ocs-backend"],
-          ["cursor", "~/code/ocs-backend", "~/code/ocs-backend"],
+          ["bash", "~/code/ocs-backend", "~/code/ocs-backend"],
           ["buddy", "~/code/ocs-backend", nil],
           ["claude", "../../etc", nil],
         ].each do |mode, cwd, stored|
@@ -123,11 +135,15 @@ RSpec.describe "Byte starting directory" do
       end
 
       it "moves the directory and tells the Mac" do
-        ByteWorkspaces.replace!(["~/code/ocs-backend"])
+        ByteWorkspaces.replace!(["~/code/ocs-backend"], machine: :mini)
 
         cd("~/code/ocs-backend")
         expect(convo.reload.cwd).to eq("~/code/ocs-backend")
-        expect(ByteLocal).to have_received(:set_cwd).with(conversation_id: convo.id, cwd: "~/code/ocs-backend")
+        expect(ByteLocal).to have_received(:set_cwd).with(
+          conversation_id: convo.id,
+          cwd:             "~/code/ocs-backend",
+          machine:         "mini",
+        )
       end
 
       # The record is the durable half. A directory chosen while the Mac is
@@ -135,7 +151,7 @@ RSpec.describe "Byte starting directory" do
       # still taken.
       it "still records it when the Mac doesn't answer, or has never reported it" do
         allow(ByteLocal).to receive(:set_cwd).and_return(false)
-        ByteWorkspaces.replace!(["~/code/Portfolio"])
+        ByteWorkspaces.replace!(["~/code/Portfolio"], machine: :mini)
 
         cd("~/code/brand-new")
         expect(convo.reload.cwd).to eq("~/code/brand-new")
@@ -158,13 +174,56 @@ RSpec.describe "Byte starting directory" do
       end
     end
 
-    it "switches to cursor mode with /mode, which counts as a Mac mode" do
-      convo = rocco.byte_conversations.create!(mode: :claude, last_message_at: Time.current)
+    describe "which Mac a thread runs on" do
+      it "puts a shell thread on the laptop and moves it with its mode" do
+        convo = rocco.byte_conversations.create!(mode: :bash, last_message_at: Time.current)
+        expect(convo).to be_on_laptop
 
-      post :create_message, params: { conversation_id: convo.id, body: "/mode cursor" }
+        post :create_message, params: { conversation_id: convo.id, body: "/mode claude" }
 
-      expect(convo.reload.mode).to eq("cursor")
-      expect(convo).to be_mac
+        expect(convo.reload).to be_on_mini
+        expect(convo.byte_messages.order(:id).last.body).to include("the Mac Mini")
+      end
+
+      # A Claude thread can adopt a session started in a laptop terminal, which
+      # only the laptop has on disk.
+      it "moves a thread with /machine and drops the session it can't carry" do
+        convo = rocco.byte_conversations.create!(
+          mode:            :claude,
+          last_message_at: Time.current,
+          metadata:        { "claude_session_id" => "abc" },
+        )
+        allow(ByteLocal).to receive(:reset_claude_session).and_return(false)
+
+        post :create_message, params: { conversation_id: convo.id, body: "/machine laptop" }
+
+        convo.reload
+        expect(convo).to be_on_laptop
+        expect(convo.claude?).to be(true)
+        expect(convo.metadata["claude_session_id"]).to be_nil
+        expect(ByteLocal).to have_received(:reset_claude_session).with(
+          conversation_id: convo.id,
+          machine:         :laptop,
+        )
+      end
+
+      it "refuses a Mac it doesn't know" do
+        convo = rocco.byte_conversations.create!(mode: :claude, last_message_at: Time.current)
+
+        post :create_message, params: { conversation_id: convo.id, body: "/machine desktop" }
+
+        expect(convo.reload).to be_on_mini
+        expect(convo.byte_messages.order(:id).last.body).to include("usage")
+      end
+
+      it "offers only the directories of the Mac the chosen mode runs on" do
+        ByteWorkspaces.replace!(["~/code/Portfolio"], machine: :mini)
+        ByteWorkspaces.replace!(["~/code/jobhunt"], machine: :laptop)
+
+        get :workspaces, params: { mode: "bash" }
+
+        expect(response.parsed_body["paths"]).to eq(["~/code/jobhunt"])
+      end
     end
   end
 end

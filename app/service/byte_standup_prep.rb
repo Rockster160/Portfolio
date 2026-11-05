@@ -233,7 +233,7 @@ module ByteStandupPrep
     # Fresh session, and it has to land before the prompt does — /byte/incoming
     # answers 202 and runs the turn on a thread, so a reset sent as a message
     # races the prompt it's meant to precede.
-    ByteLocal.reset_claude_session(conversation_id: convo.id)
+    ByteLocal.reset_claude_session(conversation_id: convo.id, machine: convo.machine)
     convo.update!(metadata: convo.metadata.to_h.merge("claude_session_id" => nil, "claude_session_name" => nil))
 
     # Read once, and the ids ride along so the clear afterwards can be about

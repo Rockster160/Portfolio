@@ -23,10 +23,10 @@
 // for the Rails-owned ones, ByteMessageIntake#locked_out? for the Mac handoff),
 // so this list is presentation, never the gate.
 
-// Commands the Mac's meta handler owns. Only claude, bash and cursor threads
+// Commands the Mac's meta handler owns. Only claude and bash threads
 // reach it — jarvis dispatches to ByteJarvisWorker and buddy never leaves Rails
 // — so offering these anywhere else is offering a no-op.
-const MAC_MODES = ["claude", "bash", "cursor"];
+const MAC_MODES = ["claude", "bash"];
 
 const COMMANDS = [
   // Claude sessions
@@ -57,7 +57,8 @@ const COMMANDS = [
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
-  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|cursor|bash|jarvis|buddy>" },
+  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|bash|jarvis|buddy>" },
+  { name: "machine",  owner: true, modes: MAC_MODES, description: "Run this thread on the other Mac", args: "<mini|laptop>" },
   { name: "fork",     description: "Fork this conversation into a new one" },
 
   // Shell / utility
