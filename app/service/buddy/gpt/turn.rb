@@ -1048,6 +1048,8 @@ module Buddy
         input    += [{ role: :developer, content: dated }] if dated
         screen    = self.class.screen_directive(@inbound.body)
         input    += [{ role: :developer, content: screen }] if screen
+        going     = self.class.bare_go_directive(@inbound.body)
+        input    += [{ role: :developer, content: going }] if going
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
         end
@@ -1265,6 +1267,19 @@ module Buddy
       def self.screen_directive(body)
         text = body.to_s
         SCREEN_DIRECTIVE if text.match?(SCREEN_QUESTION_RX) && text.match?(SCREEN_THING_RX)
+      end
+
+      # "Take me" or "let's go" with nowhere named. The place it means is often
+      # one a function works out for itself, and only that function's
+      # description says so - which a question back never reads.
+      BARE_GO_RX = /\A\s*(?:ok(?:ay)?,?\s+)?(?:take\s+me(?:\s+to)?|let'?s\s+go|let\s+us\s+go)\s*[.!]*\s*\z/i
+
+      BARE_GO_DIRECTIVE = <<~TXT.freeze
+        They named no place. Read `jil_functions` before answering: one whose description says what it does with the place left blank is the call, with that argument left out. Ask where only when none does.
+      TXT
+
+      def self.bare_go_directive(body)
+        BARE_GO_DIRECTIVE if body.to_s.match?(BARE_GO_RX)
       end
 
       NEXT_DAY_RX = /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
@@ -3955,9 +3970,6 @@ module Buddy
       # (see Turn#clocked), and how short a verbless order is (Turn#short_order?).
       JIL_RUNNERS = %i[run_jil_task call_jil_function trigger_jil_task].freeze
       SHORT_ORDER_WORDS = 6
-      # A list add sooner than this keeps its countdown chip, so there's
-      # something to watch. Later than this it's an appointment, not a wait.
-      LIST_CLOCK_AFTER = 1.hour
 
       SCHEDULING_TOOLS = %i[
         schedule_reminder schedule_trigger schedule_function alarm set_timer remind_when move_reminder
@@ -4234,15 +4246,13 @@ module Buddy
       end
 
       # The Jil runners go on as `schedule_function`, the scheduler built for
-      # them. A list add further off than LIST_CLOCK_AFTER goes on as
-      # `schedule_list_items`, which waits on the clock with nothing counting
-      # down in the window for hours. Anything else waits behind a countdown
-      # made for it, one per moment, each starting where the last one ends.
+      # them, and a list add goes on as `schedule_list_items`, which waits on
+      # the clock with no countdown in the window. Anything else waits behind
+      # a countdown made for it, one per moment, each starting where the last
+      # one ends.
       def clocked(timed)
         jil, rest = timed.partition { |e| JIL_RUNNERS.include?(e[:call][:name].to_sym) }
-        adds, rest = rest.partition { |e|
-          e[:call][:name].to_sym == :add_list_item && e[:at] > Time.current + LIST_CLOCK_AFTER
-        }
+        adds, rest = rest.partition { |e| e[:call][:name].to_sym == :add_list_item }
         out = jil.map { |e| as_scheduled_function(e) } + adds.map { |e| as_scheduled_list_add(e) }
 
         far, near = rest.partition { |e| e[:at] > Time.current + Buddy::DeferredTime::MAX_AHEAD }

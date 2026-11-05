@@ -1953,22 +1953,29 @@ BUDDY_EDGE_PROBES = [
   },
 
   # --- an end time, not a duration the model works out itself ---------------
-  {
-    case: "prod 6859-6861, 24 Sep",
-    say:  "quiet until 12:30",
-    tool: :run_jil_task,
-    needs: :quiet_until_fn,
-    # The clock time as they said it. The function resolves it in Ruby now, so a
-    # minute count here is the model doing arithmetic it has no reason to do -
-    # and the one it did was anchored on the previous message in the thread
-    # rather than on the clock.
-    args:       { run_jil_task: { or_until: /12:?30/ } },
-    never_args: { run_jil_task: { quiet_for: /\d/ } },
-    note: "set quiet until 12:53 off `quiet_for: 124`, which is 124 minutes from " \
-          "10:26am - the time the message BEFORE it landed. 101 was the right " \
-          "figure and `time_preamble` had 10:49 at the top of the prompt the " \
-          "whole time. 23 minutes of extra silence, uncorrected",
-  },
+  # A half hour a few hours out, so it's still ahead whenever the run happens
+  # and can only mean today.
+  (
+    lambda {
+      ends = Time.now.in_time_zone("America/Denver").advance(hours: 3).change(min: 30)
+      {
+        case:       "prod 6859-6861, 24 Sep",
+        say:        "quiet until #{ends.strftime("%-l:%M")}",
+        tool:       :run_jil_task,
+        needs:      :quiet_until_fn,
+        # The clock time, as said or on a 24-hour clock. The function resolves
+        # it itself, so a minute count here is the model doing arithmetic it
+        # has no reason to do - and the one it did was anchored on the previous
+        # message in the thread rather than on the clock.
+        args:       { run_jil_task: { or_until: /(?<!\d)(?:#{ends.strftime("%-l")}|#{ends.strftime("%H")}):?30/ } },
+        never_args: { run_jil_task: { quiet_for: /\d/ } },
+        note:       "set quiet until 12:53 off `quiet_for: 124`, which is 124 minutes from " \
+                    "10:26am - the time the message BEFORE it landed. 101 was the right " \
+                    "figure and `time_preamble` had 10:49 at the top of the prompt the " \
+                    "whole time. 23 minutes of extra silence, uncorrected",
+      }
+    }
+  ).call,
   # A clock time a couple of hours out, so the time asked for is still ahead
   # whenever the run happens.
   (
@@ -1981,7 +1988,7 @@ BUDDY_EDGE_PROBES = [
         tool:  :run_jil_task,
         needs: :quiet_until_fn,
         once:  true,
-        args:  { run_jil_task: { or_until: /#{ends.strftime("%-l")}:?#{ends.strftime("%M")}/ } },
+        args:  { run_jil_task: { or_until: /(?<!\d)(?:#{ends.strftime("%-l")}|#{ends.strftime("%H")}):?#{ends.strftime("%M")}/ } },
         note:  "the first turn called nothing and said \"Quiet mode can stay on until 2:15 PM\"; " \
                "the retry sent `quiet_for: 147, minutes: 147`, the spare key landed in the " \
                "until slot, and quiet ended at 1:47",
@@ -2810,18 +2817,18 @@ BUDDY_EDGE_PROBES = [
   {
     case:       "take me, nowhere named",
     say:        "Take me",
-    tool:       :call_jil_function,
-    args:       { call_jil_function: { name: /navigate/i } },
-    never_args: { call_jil_function: { destination: /\S/ } },
+    tool:       :run_jil_task,
+    args:       { run_jil_task: { name: /navigate/i } },
+    never_args: { run_jil_task: { destination: /\S/ } },
     needs:      :navigate_next_fn,
     note:       "asked where to instead of letting Tesla Navigate pick the next event",
   },
   {
     case:       "let's go, nowhere named",
     say:        "Let's go",
-    tool:       :call_jil_function,
-    args:       { call_jil_function: { name: /navigate/i } },
-    never_args: { call_jil_function: { destination: /\S/ } },
+    tool:       :run_jil_task,
+    args:       { run_jil_task: { name: /navigate/i } },
+    never_args: { run_jil_task: { destination: /\S/ } },
     needs:      :navigate_next_fn,
     note:       "a bare go is the next place on the day, which the function works out",
   },
@@ -3628,6 +3635,8 @@ namespace :buddy do
     input  += [{ role: :developer, content: dated }] if dated
     screen  = Buddy::GPT::Turn.screen_directive(text)
     input  += [{ role: :developer, content: screen }] if screen
+    going   = Buddy::GPT::Turn.bare_go_directive(text)
+    input  += [{ role: :developer, content: going }] if going
     started = Time.current
     reply   = String.new(encoding: "UTF-8")
     calls   = []

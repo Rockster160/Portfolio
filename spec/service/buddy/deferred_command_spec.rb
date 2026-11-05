@@ -268,20 +268,22 @@ RSpec.describe "Buddy commands that named a time" do
         expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(30.minutes.from_now)
       end
 
-      # A list add has a scheduler of its own, so a far-off one waits on that
-      # rather than on a countdown chip sitting in the window for hours.
-      it "puts a far-off list add on the list scheduler" do
-        create(:list, user: user, name: "Groceries")
-        add = {
-          name:      :add_list_item,
-          call_id:   "a1",
-          arguments: { "list" => "Groceries", "item" => "Batteries", "run_in_minutes" => 188 },
-        }
-        run([{ tool_calls: [add] }, { text: "Later on." }], text: "Add batteries to the groceries list in 188 minutes")
+      # A list add has a scheduler of its own, so it waits on that rather than
+      # on a countdown chip in the window, however soon it is.
+      [10, 188].each do |minutes|
+        it "puts a list add #{minutes} minutes off on the list scheduler" do
+          create(:list, user: user, name: "Groceries")
+          add = {
+            name:      :add_list_item,
+            call_id:   "a1",
+            arguments: { "list" => "Groceries", "item" => "Batteries", "run_in_minutes" => minutes },
+          }
+          run([{ tool_calls: [add] }, { text: "Later on." }], text: "Add batteries to the groceries list in #{minutes} minutes")
 
-        expect(markers.map(&:first)).to eq([:schedule_list_items])
-        expect(markers.first.last).to include("list" => "Groceries", "items" => "Batteries")
-        expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(188.minutes.from_now)
+          expect(markers.map(&:first)).to eq([:schedule_list_items])
+          expect(markers.first.last).to include("list" => "Groceries", "items" => "Batteries")
+          expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(minutes.minutes.from_now)
+        end
       end
 
       # Both halves carry the time, and a wait for that same moment rides along.
@@ -522,11 +524,13 @@ RSpec.describe "Buddy commands that named a time" do
 
       expect(items).to be_empty
       expect(output_for(client, "c1")["status"]).to eq("queued")
-      # The plain countdown is gone, and the one wait holding the item is ours.
-      expect(user.timers.count).to eq(1)
-      gate = ByteAction.find_by(user_id: user.id, tool_name: Buddy::ProposalBuilder::TIMER_GATE)
+      # It waits on the list scheduler, with no countdown in the window.
+      expect(user.timers.count).to eq(0)
+      reminder = BuddyReminder.pending.find_by!(user_id: user.id)
+      expect(reminder.fire_at).to be_within(1.minute).of(2.minutes.from_now)
 
-      Buddy::ProposalBuilder.resume_after!(Timer.find(gate.tool_input["timer_id"]))
+      reminder.update!(fire_at: 1.minute.ago)
+      Buddy::ReminderFirer.fire!(reminder.reload)
 
       expect(items.pluck(:name)).to eq(["something"])
     end

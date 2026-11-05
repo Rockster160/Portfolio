@@ -4594,4 +4594,18 @@ RSpec.describe Buddy::GPT::Turn do
       }
     end
   end
+
+  describe ".bare_go_directive" do
+    it "sends a go with nowhere named to the functions" do
+      ["Take me", "Let's go", "lets go!", "Okay, take me to"].each { |text|
+        expect(described_class.bare_go_directive(text)).to be_present, text
+      }
+    end
+
+    it "leaves a go with a place alone" do
+      ["Take me to Costco", "let's go to the park", "take me home"].each { |text|
+        expect(described_class.bare_go_directive(text)).to be_nil, text
+      }
+    end
+  end
 end
