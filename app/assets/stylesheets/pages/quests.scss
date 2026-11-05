@@ -1,0 +1,94 @@
+// Quest board — rides on the chores page's classes (.chores-page,
+// .chore-circle, .chores-modal, .pill-group …) for the look and the ring
+// animation. Only what the quest board adds lives here.
+
+.quests-page {
+  .quests-board {
+    min-height: 120px;
+  }
+  .quests-empty {
+    text-align: center;
+    color: var(--chores-muted);
+    margin: 40px 0;
+  }
+
+  // Edit mode: every circle reads as editable, the way Chores does it.
+  &.edit-mode .chore-circle .circle-inner {
+    border-color: var(--chores-accent);
+    box-shadow: 0 0 0 1px var(--chores-accent), 0 0 12px #2563eb55;
+  }
+  &.edit-mode .chore-circle {
+    cursor: grab;
+  }
+  .chore-circle.sortable-ghost {
+    opacity: 0.35;
+  }
+
+  // A finished quest tapped again shakes instead of counting past its target.
+  .chore-circle.quests-bump .circle-inner {
+    animation: quests-bump 0.3s ease;
+  }
+
+  .chores-toolbar .btn.active {
+    background: var(--chores-accent);
+  }
+
+  .chore-form .quests-num {
+    width: 80px;
+  }
+  .chore-form .quests-narrow,
+  .chore-form .quests-row select,
+  .chore-form .repeat-detail select {
+    width: auto;
+  }
+  .chore-form input[type="date"],
+  .chore-form input[type="time"] {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+    color-scheme: dark;
+  }
+
+  .quests-rows {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .quests-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 8px;
+    border-radius: 8px;
+    background: #0F1B33;
+  }
+  .quests-row input[type="text"] {
+    flex: 1 1 140px;
+    width: auto;
+  }
+  .quests-row-remove {
+    margin-left: auto !important;
+    width: 26px;
+    height: 26px;
+    padding: 0 !important;
+    border-radius: 999px;
+    background: #1F2A44 !important;
+    font-size: 16px !important;
+    line-height: 1;
+  }
+  .quests-add-row {
+    border: 1px dashed #334155 !important;
+    color: var(--chores-muted) !important;
+    font-size: 13px !important;
+    border-radius: 999px;
+  }
+}
+
+@keyframes quests-bump {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}

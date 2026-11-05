@@ -239,6 +239,15 @@ Rails.application.routes.draw do
 
   resource :money_buckets, path: "/bucket"
 
+  # Quest board: a game's daily objectives as chore-style circles. The board
+  # lives on the phone; /quests/state keeps a copy, and hooks are the only
+  # per-tap calls (an ActionEvent or a Jil trigger, and their undo).
+  get    "/quests"           => "quests#show",    as: :quests
+  get    "/quests/state"     => "quests#state",   as: :quests_state
+  put    "/quests/state"     => "quests#save"
+  post   "/quests/hooks"     => "quests#hook",    as: :quests_hooks
+  delete "/quests/hooks/:id" => "quests#unhook",  as: :quests_hook
+
   # Chores / Pebbles gamification.
   #   /chores         — list-builder style grid (all chores, search, tap to complete)
   #   /chores/today   — checkbox/circle style (today's scheduled chores + carryovers)

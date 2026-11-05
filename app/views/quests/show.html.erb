@@ -1,0 +1,259 @@
+<% content_for :title, "Quests" %>
+<% content_for :head do %>
+  <script src="/chores_sortable.js" defer></script>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<% end %>
+
+<%# Wears the chores page's classes so the circles, rings, toolbar and modals
+   look and feel the same as Chores · Today. Everything inside is drawn by
+   pages/quests/index.js from the board in localStorage. %>
+<div class="chores-page quests-page" data-quests-root>
+  <div class="chores-header">
+    <div class="chores-header-left">
+      <span class="conn-dot" data-conn-dot title="Online"></span>
+      <span class="pending-badge hidden" data-pending-hooks>0 pending</span>
+    </div>
+    <div class="chores-header-center">
+      <div class="balance-pill" data-quests-day>—</div>
+    </div>
+    <div class="quests-header-right"></div>
+  </div>
+
+  <div class="chores-toolbar">
+    <button class="btn ghost icon-only" data-multiplier-toggle title="Multi-mode — next tap asks how many">×N</button>
+    <button class="btn ghost icon-only" data-edit-mode-toggle title="Edit mode — tap a quest to edit; drag to reorder">
+      <i class="fa fa-pencil" aria-hidden="true"></i>
+    </button>
+    <button class="btn ghost icon-only" data-settings-open title="Board settings">
+      <i class="fa fa-cog" aria-hidden="true"></i>
+    </button>
+    <div class="toolbar-actions">
+      <button class="btn icon-only" data-add-quest title="Add quest">+</button>
+    </div>
+  </div>
+
+  <div class="quests-board" data-quests-board></div>
+  <p class="quests-empty hidden" data-quests-empty>
+    Nothing on the board right now. Tap <strong>+</strong> to add a quest.
+  </p>
+
+  <template data-template="quest-circle">
+    <div class="chore-circle">
+      <div class="circle-inner">
+        <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="48" pathLength="100" data-ring-progress></circle>
+        </svg>
+        <div class="icon" data-icon></div>
+        <div class="count-slot" data-count-slot></div>
+      </div>
+      <div class="title"></div>
+    </div>
+  </template>
+
+  <%# ---------- Quick add: one line, Enter, next line ---------- %>
+  <div class="chores-modal-backdrop hidden" data-quick-modal>
+    <div class="chores-modal confirm-modal">
+      <div class="modal-head">
+        <h3>Add Quest</h3>
+        <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+      </div>
+      <form class="chore-form basic" data-quick-form autocomplete="off" novalidate data-form-type="other">
+        <input type="text" data-quick-name placeholder="Wish on 20 stars" required
+               autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        <span class="field-hint">A number in the name is how many times it's done. Enter adds it and clears for the next one.</span>
+        <div class="form-actions">
+          <button type="button" class="ghost" data-quick-advanced>Advanced…</button>
+          <button type="submit" class="primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <%# ---------- Full editor ---------- %>
+  <div class="chores-modal-backdrop hidden" data-edit-modal>
+    <div class="chores-modal chore-edit-modal">
+      <div class="modal-head">
+        <h3 data-edit-title>Edit Quest</h3>
+        <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+      </div>
+      <form class="chore-form basic" data-edit-form autocomplete="off" novalidate data-form-type="other">
+        <div class="form-section identity-row">
+          <%= render "shared/icon_stack", name: "quest_icon", value: nil, label: "Quest icon" %>
+          <div class="identity-names">
+            <label class="field-label">Name</label>
+            <input type="text" data-field="name" placeholder="Collect {n} stars" required
+                   autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"
+                   data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+            <span class="field-hint"><code>{n}</code> in the name shows how many it needs.</span>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="field-label">How many</label>
+          <div class="pill-group" data-pills="target_mode">
+            <button type="button" class="pill" data-value="fixed">Times</button>
+            <button type="button" class="pill" data-value="ref">From another quest</button>
+            <button type="button" class="pill" data-value="none">No limit</button>
+          </div>
+          <div class="repeat-detail" data-show-for="target_mode:fixed">
+            <input type="number" min="1" data-field="target_value" class="quests-num">
+            <span class="field-hint">times</span>
+          </div>
+          <div class="repeat-detail" data-show-for="target_mode:ref">
+            <select data-field="target_item" data-item-select></select>
+            <select data-field="target_when" class="quests-narrow">
+              <option value="yesterday">yesterday</option>
+              <option value="today">today</option>
+            </select>
+            <span class="field-hint">×</span>
+            <input type="number" step="any" data-field="target_scale" class="quests-num" placeholder="1">
+          </div>
+          <span class="field-hint" data-show-for="target_mode:ref">Off the board while that works out to 0.</span>
+          <span class="field-hint" data-show-for="target_mode:none">A running count — health, points, a tally.</span>
+        </div>
+
+        <div class="form-section">
+          <label class="field-label">Resets</label>
+          <div class="pill-group" data-pills="reset">
+            <button type="button" class="pill" data-value="daily">Daily</button>
+            <button type="button" class="pill" data-value="weekly">Weekly</button>
+            <button type="button" class="pill" data-value="never">Never</button>
+          </div>
+          <span class="field-hint" data-show-for="reset:never">Keeps its count until you reset it here.</span>
+        </div>
+
+        <details class="form-advanced" data-advanced>
+          <summary class="form-advanced-summary">Schedule, conditions &amp; hooks</summary>
+
+          <div class="form-section">
+            <label class="field-label">Section</label>
+            <input type="text" data-field="section" list="quests-sections" placeholder="(none)"
+                   autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+            <datalist id="quests-sections" data-section-list></datalist>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Each tap counts</label>
+            <input type="number" min="1" data-field="step" class="quests-num" placeholder="1">
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Days</label>
+            <div class="pill-group" data-chips="days">
+              <% %w[S M T W T F S].each_with_index do |label, i| %>
+                <button type="button" class="pill chip-day" data-value="<%= i %>"><%= label %></button>
+              <% end %>
+            </div>
+            <span class="field-hint">None picked = every day.</span>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Months</label>
+            <div class="pill-group" data-chips="months">
+              <% Date::ABBR_MONTHNAMES.compact.each_with_index do |label, i| %>
+                <button type="button" class="pill chip-day" data-value="<%= i + 1 %>"><%= label %></button>
+              <% end %>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Dates</label>
+            <div class="repeat-detail">
+              <input type="date" data-field="startDate">
+              <span class="field-hint">to</span>
+              <input type="date" data-field="endDate">
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Time of day</label>
+            <div class="repeat-detail">
+              <input type="time" data-field="from">
+              <span class="field-hint">to</span>
+              <input type="time" data-field="to">
+            </div>
+            <span class="field-hint">Leave one open to run to the day's reset.</span>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Only when</label>
+            <div class="quests-rows" data-rows="conditions"></div>
+            <button type="button" class="quests-add-row" data-add-row="conditions">+ Condition</button>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Adds to other quests</label>
+            <div class="quests-rows" data-rows="effects"></div>
+            <button type="button" class="quests-add-row" data-add-row="effects">+ Add to a quest</button>
+          </div>
+
+          <div class="form-section">
+            <label class="field-label">Hooks</label>
+            <div class="quests-rows" data-rows="hooks"></div>
+            <button type="button" class="quests-add-row" data-add-row="hooks">+ Hook</button>
+            <span class="field-hint">A trigger gets <code>quest</code>, <code>count</code>, <code>target</code>, <code>action</code> (tap / complete / undo).</span>
+          </div>
+        </details>
+
+        <div class="form-actions">
+          <button type="button" class="danger" data-edit-delete>Delete</button>
+          <button type="button" class="ghost" data-edit-reset>Reset count</button>
+          <button type="button" class="ghost" data-action="cancel">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <%# ---------- ×N: how many at once ---------- %>
+  <div class="chores-modal-backdrop hidden" data-multi-modal>
+    <div class="chores-modal confirm-modal">
+      <div class="modal-head">
+        <h3 data-multi-title>How many?</h3>
+        <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+      </div>
+      <form class="chore-form basic" data-multi-form autocomplete="off" novalidate>
+        <div class="pill-group" data-multi-quicks>
+          <% [2, 3, 5, 10].each do |n| %>
+            <button type="button" class="pill" data-value="<%= n %>"><%= n %></button>
+          <% end %>
+        </div>
+        <input type="number" min="1" data-multi-count inputmode="numeric" placeholder="Count">
+        <div class="form-actions">
+          <button type="button" class="ghost" data-action="cancel">Cancel</button>
+          <button type="submit" class="primary">Done</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <%# ---------- Board settings ---------- %>
+  <div class="chores-modal-backdrop hidden" data-settings-modal>
+    <div class="chores-modal confirm-modal">
+      <div class="modal-head">
+        <h3>Board</h3>
+        <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+      </div>
+      <form class="chore-form basic" data-settings-form autocomplete="off" novalidate>
+        <div class="form-section">
+          <label class="field-label">New day starts at</label>
+          <select data-settings-reset-hour>
+            <% 24.times do |h| %>
+              <option value="<%= h %>"><%= Time.zone.parse("#{h}:00").strftime("%-l %p") %></option>
+            <% end %>
+          </select>
+          <span class="field-hint">Taps before this still count toward the day before.</span>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="ghost" data-action="cancel">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="chores-flash" data-quests-flash></div>
+<%= render "shared/icon_cropper" %>

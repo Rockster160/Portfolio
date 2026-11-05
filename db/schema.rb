@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_05_004105) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_05_061402) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1702,6 +1702,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_05_004105) do
     t.index ["user_id"], name: "index_prompts_on_user_id"
   end
 
+  create_table "quest_boards", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.jsonb "data", default: {}, null: false
+    t.integer "rev", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_quest_boards_on_user_id", unique: true
+  end
+
   create_table "recipe_favorites", id: :serial, force: :cascade do |t|
     t.integer "recipe_id"
     t.integer "favorited_by_id"
@@ -2265,6 +2274,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_05_004105) do
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "quest_boards", "users"
   add_foreign_key "recording_skips", "users"
   add_foreign_key "scheduled_triggers", "agenda_items", column: "source_item_id", on_delete: :cascade
   add_foreign_key "scheduled_triggers", "anchor_occurrences", on_delete: :cascade
