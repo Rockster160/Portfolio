@@ -330,6 +330,24 @@ module ByteLocal
     false
   end
 
+  # Ask a Mac to bring the Mini's copies of Byte, Portfolio and Claude's memory
+  # up to date (see ~/code/Byte/sync.rb). It answers before it starts, so true
+  # means only that the machine was there to ask.
+  def sync(machine)
+    uri = URI.join(base_url(machine), "/byte/sync")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({})
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    res.is_a?(Net::HTTPSuccess)
+  rescue => e
+    Rails.logger.warn("[Byte] sync on #{machine} failed: #{e.class}: #{e.message}")
+    false
+  end
+
   # Is the Mac actually up right now? Used before scheduling work onto it, so a
   # sleeping machine becomes "try again later" rather than a failed message
   # sitting in a thread.

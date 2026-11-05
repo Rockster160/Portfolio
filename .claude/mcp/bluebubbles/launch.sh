@@ -4,5 +4,5 @@
 # sources ~/.zshenv itself.
 set -e
 [ -f "$HOME/.zshenv" ] && . "$HOME/.zshenv"
-exec /Users/zoro/.local/bin/uv run --quiet --script \
+exec "$HOME/.local/bin/uv" run --quiet --script \
   "$(dirname "$0")/server.py"

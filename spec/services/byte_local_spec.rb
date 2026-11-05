@@ -39,6 +39,14 @@ RSpec.describe ByteLocal do
     expect(laptop).to have_been_requested.once
   end
 
+  it "reports whether a Mac was there to take a sync" do
+    stub_request(:post, "http://#{ip}:8789/byte/sync").to_return(status: 202, body: "{}")
+    stub_request(:post, "http://#{ip}:8788/byte/sync").to_timeout
+
+    expect(described_class.sync(:laptop)).to be(true)
+    expect(described_class.sync(:mini)).to be(false)
+  end
+
   it "always sends the desk-side calls to the laptop" do
     pet  = stub_request(:post, "http://#{ip}:8789/byte/pet").to_return(status: 200, body: "{}")
     mail = stub_request(:post, "http://#{ip}:8789/byte/label_mail").to_return(status: 200, body: "{}")

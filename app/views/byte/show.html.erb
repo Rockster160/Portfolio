@@ -612,6 +612,14 @@
         <span class="byte-drawer-link-count" data-byte-reminders-count></span>
         <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
       </button>
+      <%# Boards are threads of their own, kept out of the list above, so %>
+      <%# their index is the way in. %>
+      <a class="byte-drawer-link" href="<%= byte_board_path %>">
+        <span class="byte-drawer-link-icon" aria-hidden="true">🧹</span>
+        <span class="byte-drawer-link-name">Chore boards</span>
+        <span class="byte-drawer-link-count"></span>
+        <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
+      </a>
       <button type="button" class="byte-drawer-link" data-byte-open-settings>
         <span class="byte-drawer-link-icon" aria-hidden="true">⚙️</span>
         <span class="byte-drawer-link-name">Settings</span>
@@ -676,6 +684,13 @@
                  placeholder="<%= ByteWorkspaces::DEFAULT %>" data-byte-new-cwd autocomplete="off">
           <datalist id="byte-workspaces" data-byte-workspace-list></datalist>
         </label>
+
+        <%# The Mac lists sessions by a conversation's directory, so adopting %>
+        <%# creates the thread first and then opens the picker on it. %>
+        <label class="byte-modal-label byte-modal-check" data-byte-new-adopt-row>
+          <input type="checkbox" name="adopt" value="1" data-byte-new-adopt>
+          Adopt an existing Claude session
+        </label>
       <% else %>
         <input type="hidden" name="mode" value="buddy" data-byte-new-mode>
       <% end %>
@@ -698,7 +713,7 @@
     </form>
   </dialog>
 
-  <%# Per-conversation menu (rename/archive/adopt Claude session). %>
+  <%# Per-conversation menu (rename/primary/pet/archive). %>
   <dialog class="byte-modal" data-byte-convo-menu>
     <div class="byte-modal-form basic">
       <h3 class="byte-modal-title" data-byte-menu-title>Conversation</h3>
@@ -707,13 +722,9 @@
         <%# Buddy threads only, and hidden on the one that already holds it —
             there is no unset, so on the primary thread this row would be a
             button that does nothing. %>
-        <button type="button" class="byte-menu-btn" data-byte-menu-primary>Make primary</button>
-        <%# The way IN to a thread's chore board. The board is addressed by %>
-        <%# conversation, so without a row here the only way to reach one is %>
-        <%# to know its id - which nobody does. Buddy threads only, like the %>
-        <%# row above it. %>
-        <button type="button" class="byte-menu-btn" data-byte-menu-board>Open chore board</button>
-        <button type="button" class="byte-menu-btn" data-byte-menu-adopt>Adopt Claude session…</button>
+        <button type="button" class="byte-menu-btn" data-byte-menu-primary hidden>Make primary</button>
+        <%# Buddy threads only: a shell has no pet to swap. %>
+        <button type="button" class="byte-menu-btn" data-byte-menu-buddy hidden>Change Buddy…</button>
         <button type="button" class="byte-menu-btn byte-menu-btn-danger" data-byte-menu-archive>Archive</button>
       </div>
       <div class="byte-modal-actions">
@@ -1042,17 +1053,34 @@
     </div>
   </dialog>
 
-  <%# Adopt-session picker. Populated from the Mac's /byte/claude_sessions. %>
-  <dialog class="byte-modal byte-modal-wide" data-byte-adopt-modal>
+  <%# Which pet a Buddy thread wears. Same PATCH the wall picker uses. %>
+  <dialog class="byte-modal" data-byte-buddy-modal>
     <div class="byte-modal-form basic">
-      <h3 class="byte-modal-title">Adopt Claude session</h3>
-      <p class="byte-modal-hint" data-byte-adopt-hint>Loading…</p>
-      <ul class="byte-adopt-list" data-byte-adopt-list></ul>
+      <h3 class="byte-modal-title">Change Buddy</h3>
+      <div class="byte-menu-list">
+        <% Buddy::Themes.keys.each do |theme| %>
+          <button type="button" class="byte-menu-btn" data-byte-buddy-pick="<%= theme %>"><%= Buddy::Themes.name_for(theme) %></button>
+        <% end %>
+      </div>
       <div class="byte-modal-actions">
-        <button type="button" class="byte-modal-btn" data-byte-adopt-close>Close</button>
+        <button type="button" class="byte-modal-btn" data-byte-buddy-close>Close</button>
       </div>
     </div>
   </dialog>
+
+  <% if current_user.me? %>
+    <%# Adopt-session picker. Populated from the Mac's /byte/claude_sessions. %>
+    <dialog class="byte-modal byte-modal-wide" data-byte-adopt-modal>
+      <div class="byte-modal-form basic">
+        <h3 class="byte-modal-title">Adopt Claude session</h3>
+        <p class="byte-modal-hint" data-byte-adopt-hint>Loading…</p>
+        <ul class="byte-adopt-list" data-byte-adopt-list></ul>
+        <div class="byte-modal-actions">
+          <button type="button" class="byte-modal-btn" data-byte-adopt-close>Close</button>
+        </div>
+      </div>
+    </dialog>
+  <% end %>
 
 <script id="byte-bootstrap" type="application/json">
   <%= raw JSON.generate(

@@ -539,6 +539,10 @@ module Buddy
       # for permission to do the thing already asked for, and the "Yes" under it
       # worked first time - which is what start_over? now does instead, before
       # any of this is reached.
+      # What to say when nothing ran and a call was refused on the way: the
+      # refusal's own reason, so the failure has a cause attached.
+      REFUSED_BODY = "That didn't go through, so nothing happened. What stopped it: %s.".freeze
+
       UNDONE_BODY = "That didn't go through - nothing actually ran on my end. Give me another " \
                     "angle on it and I'll keep at it.".freeze
 
@@ -1048,7 +1052,7 @@ module Buddy
         input    += [{ role: :developer, content: dated }] if dated
         screen    = self.class.screen_directive(@inbound.body)
         input    += [{ role: :developer, content: screen }] if screen
-        going     = self.class.bare_go_directive(@inbound.body)
+        going     = self.class.go_directive(@inbound.body)
         input    += [{ role: :developer, content: going }] if going
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
@@ -1278,8 +1282,19 @@ module Buddy
         They named no place. Read `jil_functions` before answering: one whose description says what it does with the place left blank is the call, with that argument left out. Ask where only when none does.
       TXT
 
-      def self.bare_go_directive(body)
-        BARE_GO_DIRECTIVE if body.to_s.match?(BARE_GO_RX)
+      # "Take me to Costco" names the place, and the trip is still the call.
+      # Looking the place up answers where it is, which they didn't ask.
+      GO_TO_RX = /\A\s*(?:ok(?:ay)?,?\s+)?(?:take\s+me|navigate(?:\s+me)?|(?:get\s+)?directions)\s+to\s+\S/i
+
+      GO_TO_DIRECTIVE = <<~TXT.freeze
+        They want to be taken there. Read `jil_functions`: one that sends them somewhere takes the place as they said it, so call it with that. Looking the place up first is not the trip.
+      TXT
+
+      def self.go_directive(body)
+        text = body.to_s
+        return BARE_GO_DIRECTIVE if text.match?(BARE_GO_RX)
+
+        GO_TO_DIRECTIVE if text.match?(GO_TO_RX)
       end
 
       NEXT_DAY_RX = /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
@@ -1474,7 +1489,12 @@ module Buddy
           @asked_choice = true
           result = result.except(:asked_choice)
         end
-        @failed << call[:call_id] if result[:status].to_s == "failed"
+        if result[:status].to_s == "failed"
+          @failed << call[:call_id]
+          # Kept across a second attempt, for a reply that ends up having to
+          # say nothing ran (see refused_body).
+          @refused = result[:error].presence || @refused
+        end
         # "Do this now and that at 11" is a real sentence. Once the model has
         # actually put something on the clock this turn, it has understood the
         # time, and an immediate call after that is a second request rather than
@@ -4625,9 +4645,19 @@ module Buddy
         return pending_retraction(result) if pending
         return EMPTY_WAIT_BODY if kind == :empty_wait
         return NO_CALL_BODY if kind == :call
+        return refused_body if @refused
         return UNDONE_BODY if kind == :commanded
 
         SILENT_BODY
+      end
+
+      # Nothing ran because a call was turned away, and the reason it was is
+      # the one useful thing left to say: a stock "nothing ran" leaves them
+      # guessing between a typo, a broken device and Buddy misreading them.
+      def refused_body
+        # The first sentence: anything after it is advice to the model.
+        reason = @refused.to_s.squish.split(/(?<=[.!?])\s/).first.to_s
+        format(REFUSED_BODY, reason.sub(/[.!]+\z/, ""))
       end
 
       # A retraction on a turn BUDDY started still has to say what it is about.

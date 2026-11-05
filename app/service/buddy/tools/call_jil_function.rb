@@ -136,7 +136,8 @@ Buddy::Tools.register(
     # rather than a silent side effect.
     if ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
       unless Buddy::Tools::JIL_READS_RX.match?("#{match.name} #{match.description}")
-        raise "#{match.name} changes something rather than reporting - can't answer a question with it"
+        raise "#{match.name} changes something rather than reporting - can't answer a question with it. " \
+              "If they asked for it to happen, call it again without expect_result"
       end
     end
 

@@ -825,6 +825,26 @@ RSpec.describe Buddy::GPT::Turn do
     # among them, no byte_actions row, and agenda_items 1019 with an updated_at
     # identical to its created_at. A move is the one shape this had no arm for,
     # and it is the shape edit_agenda_item's own receipt uses.
+    # A call was turned away, so the reason it was is what the retraction says
+    # rather than a bare "nothing ran".
+    it "says what stopped it when a call was refused", :aggregate_failures do
+      refusal = "Tesla Navigate changes something rather than reporting - can't answer a question " \
+                "with it. If they asked for it to happen, call it again without expect_result"
+      allow(described_class).to receive(:resolve_call).and_return([described_class.resolve_failure(refusal), nil])
+      navigate = { name: :run_jil_task, arguments: { "name" => "Tesla Navigate", "destination" => "Lucky One's" } }
+
+      run(
+        [{ tool_calls: [navigate] }, { text: "Done! Navigation's started." }, { text: "Done! Navigation's started." }],
+        text: "Take me to Lucky One's",
+      )
+
+      expect(reply.metadata["retracted_claim"]).to be(true)
+      expect(reply.body).to eq(
+        "That didn't go through, so nothing happened. What stopped it: Tesla Navigate changes " \
+        "something rather than reporting - can't answer a question with it.",
+      )
+    end
+
     it "retracts a move that never happened" do
       run([{ text: "Ohhh, I found the one dinner item and moved it onto the right calendar!" }])
 
@@ -4595,16 +4615,22 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
-  describe ".bare_go_directive" do
+  describe ".go_directive" do
     it "sends a go with nowhere named to the functions" do
       ["Take me", "Let's go", "lets go!", "Okay, take me to"].each { |text|
-        expect(described_class.bare_go_directive(text)).to be_present, text
+        expect(described_class.go_directive(text)).to be_present, text
       }
     end
 
-    it "leaves a go with a place alone" do
-      ["Take me to Costco", "let's go to the park", "take me home"].each { |text|
-        expect(described_class.bare_go_directive(text)).to be_nil, text
+    it "sends a go with a place named to the call that goes there" do
+      ["Take me to Lucky One's", "navigate to Costco", "directions to the park"].each { |text|
+        expect(described_class.go_directive(text)).to eq(described_class::GO_TO_DIRECTIVE), text
+      }
+    end
+
+    it "leaves anything else alone" do
+      ["let's go to the park later?", "take me home", "how far is Costco"].each { |text|
+        expect(described_class.go_directive(text)).to be_nil, text
       }
     end
   end

@@ -2832,6 +2832,17 @@ BUDDY_EDGE_PROBES = [
     needs:      :navigate_next_fn,
     note:       "a bare go is the next place on the day, which the function works out",
   },
+  {
+    case:       "prod 10121",
+    say:        "Take me to Lucky One's",
+    tool:       :run_jil_task,
+    avoid:      :contact_address,
+    args:       { run_jil_task: { name: /navigate/i, destination: /lucky/i } },
+    never_args: { run_jil_task: { expect_result: /true/ } },
+    needs:      :navigate_fn,
+    note:       "seven rounds and nothing ran, so the reply was swapped for \"This one hasn't " \
+                "actually happened\" with no word of what went wrong",
+  },
   # A watch whose text fills itself in off the trigger. The `{{ location }}`
   # in it was read as a step reference nothing had collected, and the watch
   # was dropped before it was set.
@@ -3635,7 +3646,7 @@ namespace :buddy do
     input  += [{ role: :developer, content: dated }] if dated
     screen  = Buddy::GPT::Turn.screen_directive(text)
     input  += [{ role: :developer, content: screen }] if screen
-    going   = Buddy::GPT::Turn.bare_go_directive(text)
+    going   = Buddy::GPT::Turn.go_directive(text)
     input  += [{ role: :developer, content: going }] if going
     started = Time.current
     reply   = String.new(encoding: "UTF-8")

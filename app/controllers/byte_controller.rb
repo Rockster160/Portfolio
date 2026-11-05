@@ -949,6 +949,7 @@ class ByteController < ApplicationController
   # Powers the "adopt existing session" picker so the user can wire a Byte
   # conversation to an already-running session by name.
   def claude_sessions
+    return head(:not_found) unless current_user.me?
     return head(:not_found) unless ByteLocal.respond_to?(:list_claude_sessions)
 
     convo = resolve_conversation

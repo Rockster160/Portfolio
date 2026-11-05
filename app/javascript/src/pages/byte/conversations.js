@@ -200,6 +200,7 @@ export class ConversationManager {
     this.adoptModal = document.querySelector("[data-byte-adopt-modal]");
     this.adoptList  = document.querySelector("[data-byte-adopt-list]");
     this.adoptHint  = document.querySelector("[data-byte-adopt-hint]");
+    this.buddyModal = document.querySelector("[data-byte-buddy-modal]");
 
     document.querySelector("[data-byte-drawer-toggle]")?.addEventListener("click", () => this.openDrawer());
     document.querySelector("[data-byte-drawer-close]")?.addEventListener("click",  () => this.closeDrawer());
@@ -217,10 +218,13 @@ export class ConversationManager {
     this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
     document.querySelector("[data-byte-menu-rename]")?.addEventListener("click", () => this.handleRename());
     document.querySelector("[data-byte-menu-primary]")?.addEventListener("click", () => this.handleMakePrimary());
-    document.querySelector("[data-byte-menu-board]")?.addEventListener("click", () => this.handleOpenBoard());
+    document.querySelector("[data-byte-menu-buddy]")?.addEventListener("click", () => this.handleBuddyOpen());
     document.querySelector("[data-byte-menu-archive]")?.addEventListener("click", () => this.handleArchive());
-    document.querySelector("[data-byte-menu-adopt]")?.addEventListener("click", () => this.handleAdoptOpen());
     document.querySelector("[data-byte-adopt-close]")?.addEventListener("click", () => this.adoptModal?.close());
+    document.querySelector("[data-byte-buddy-close]")?.addEventListener("click", () => this.buddyModal?.close());
+    document.querySelectorAll("[data-byte-buddy-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => this.handleBuddyPick(btn.dataset.byteBuddyPick));
+    });
   }
 
   currentConversation() {
@@ -612,6 +616,9 @@ export class ConversationManager {
 
     const cwdRow = document.querySelector("[data-byte-new-cwd-row]");
     if (cwdRow) cwdRow.hidden = !MAC_MODES.includes(mode);
+
+    const adoptRow = document.querySelector("[data-byte-new-adopt-row]");
+    if (adoptRow) adoptRow.hidden = mode !== "claude";
   }
 
   // The directory list comes from the server's cache of what the Mac last
@@ -642,10 +649,12 @@ export class ConversationManager {
     const mode = (fd.get("mode") || "buddy").toString();
     const buddyTheme = (fd.get("buddy_theme") || "").toString();
     const cwd = (fd.get("cwd") || "").toString().trim();
+    const adopt = mode === "claude" && fd.get("adopt") === "1";
     try {
-      await this.createConversation({ name, mode, buddyTheme, cwd });
+      const created = await this.createConversation({ name, mode, buddyTheme, cwd });
       this.newModal?.close();
-      this.closeDrawer();
+      if (adopt && created) this.handleAdoptOpen(created.id);
+      else this.closeDrawer();
     } catch (err) {
       alert(`Couldn't create conversation: ${err.message}`);
     }
@@ -654,25 +663,15 @@ export class ConversationManager {
   openMenu(convo) {
     this.menuTargetId = convo.id;
     if (this.menuTitle) this.menuTitle.textContent = convoLabel(convo);
-    // Adopt only makes sense for Claude-mode conversations.
-    const adoptBtn = document.querySelector("[data-byte-menu-adopt]");
-    if (adoptBtn) adoptBtn.style.display = convo.mode === "claude" ? "" : "none";
     // Buddy threads only — nothing self-initiated is ever sent to a claude or
     // bash thread. Hidden on the one that already holds it rather than shown
     // disabled: there is no unset, so the row would be a button that does
     // nothing, and a dead control reads as something being broken.
     const primaryBtn = document.querySelector("[data-byte-menu-primary]");
-    if (primaryBtn) {
-      const offer = convo.mode === "buddy" && convo.id !== this.primaryId;
-      primaryBtn.style.display = offer ? "" : "none";
-    }
-    // Buddy threads only, for the same reason: a claude or bash thread has no
-    // pet to put at the top of a board. Offered on every one of them even
-    // before a group has been picked - the board's own control is where you
-    // pick one, and hiding the way in until it is set would mean there was no
-    // way to get to the thing that sets it.
-    const boardBtn = document.querySelector("[data-byte-menu-board]");
-    if (boardBtn) boardBtn.style.display = convo.mode === "buddy" ? "" : "none";
+    if (primaryBtn) primaryBtn.hidden = convo.mode !== "buddy" || convo.id === this.primaryId;
+
+    const buddyBtn = document.querySelector("[data-byte-menu-buddy]");
+    if (buddyBtn) buddyBtn.hidden = convo.mode !== "buddy";
     if (typeof this.menuModal.showModal === "function") this.menuModal.showModal();
     else this.menuModal.setAttribute("open", "");
   }
@@ -693,20 +692,30 @@ export class ConversationManager {
     this.prefillComposer("/rename ", { focus: true });
   }
 
-  // Go to this thread's chore board.
-  //
-  // A real navigation rather than a mode this page switches into: the board is
-  // its own URL so that it can be installed to a home screen and cached as its
-  // own shell, and so that the tablet on the wall and the phone in your pocket
-  // can be pointed at the same one. Switching in place would leave the address
-  // bar on the chat and there would be nothing to bookmark.
-  handleOpenBoard() {
-    if (this.menuTargetId == null) return;
-
-    const id = this.menuTargetId;
+  // The pet list is server-rendered; this only marks the one already worn so
+  // the choice reads as a change from something.
+  handleBuddyOpen() {
+    const target = this.conversations.find((c) => c.id === this.menuTargetId);
+    if (!target || !this.buddyModal) return;
     this.menuModal?.close();
-    this.closeDrawer();
-    window.location.assign(`/board/${id}`);
+    this.buddyModal.querySelectorAll("[data-byte-buddy-pick]").forEach((btn) => {
+      btn.setAttribute("aria-current", String(btn.dataset.byteBuddyPick === target.buddy_theme));
+    });
+    if (typeof this.buddyModal.showModal === "function") this.buddyModal.showModal();
+    else this.buddyModal.setAttribute("open", "");
+  }
+
+  // The PATCH broadcasts the updated thread back, and that broadcast is what
+  // repaints the pet when this is the thread on screen.
+  async handleBuddyPick(theme) {
+    const id = this.menuTargetId;
+    this.buddyModal?.close();
+    if (id == null || !theme) return;
+    try {
+      await this.updateConversation(id, { buddy_theme: theme });
+    } catch (err) {
+      alert(`Couldn't change Buddy: ${err.message || err}`);
+    }
   }
 
   // Move everything self-initiated here — the morning briefing, a reminder
@@ -749,10 +758,8 @@ export class ConversationManager {
   // Adopt opens a compact chooser modal (read-only from Mac's session
   // dir). Tapping a row prefills the composer with `/adopt <name>` so the
   // command shows up in the thread as a real bubble — no silent mutation.
-  async handleAdoptOpen() {
-    this.menuModal?.close();
+  async handleAdoptOpen(targetId) {
     if (!this.adoptModal || !this.claudeSessionsUrl) return;
-    const targetId = this.menuTargetId;
     if (this.adoptList) this.adoptList.innerHTML = "";
     if (this.adoptHint) this.adoptHint.textContent = "Loading sessions from your Mac…";
     if (typeof this.adoptModal.showModal === "function") this.adoptModal.showModal();

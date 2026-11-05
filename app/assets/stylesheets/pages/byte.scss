@@ -3118,6 +3118,7 @@ html.html-ctr-byte.html-act-board_index body {
 .ctr-byte .byte-app .byte-drawer-link,
 .byte-drawer .byte-drawer-link {
   display: flex;
+  text-decoration: none;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -3359,6 +3360,19 @@ dialog.byte-modal {
   color: var(--bs-muted);
 }
 
+// A checkbox reads beside its words, not stacked over them like a field.
+.byte-modal-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+
+  input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+  }
+}
+
 // The board's settings popup uses the same fields, so they read as fields.
 .ctr-byte .byte-modal .byte-modal-input,
 .ctr-byte .byte-modal select.byte-modal-input,
@@ -3507,6 +3521,16 @@ dialog.byte-modal {
   }
   &:focus:not(:focus-visible) {
     outline: none !important;
+  }
+
+  // The display above is !important, so an inline `display: none` loses to
+  // it and `hidden` needs its own rule to take a row away.
+  &[hidden] {
+    display: none !important;
+  }
+
+  &[aria-current="true"] {
+    border-color: var(--bs-accent, #3FA0FF) !important;
   }
 
   &.byte-menu-btn-danger {

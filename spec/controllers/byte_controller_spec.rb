@@ -34,6 +34,11 @@ RSpec.describe ByteController, type: :controller do
         # Claude / Bash / Jarvis hand off to the owner's Mac, so only the owner is offered them.
         expect(body).to include('value="claude"', 'value="bash"', 'value="jarvis"', 'name="buddy_theme"')
         Buddy::Themes.keys.each { |theme| expect(body).to include(%(value="#{theme}")) }
+
+        # Adopting is a way to START a Claude thread, and boards are reached from the drawer.
+        expect(body).to include("data-byte-new-adopt", "data-byte-adopt-modal", %(href="/board"))
+        expect(body).to include("data-byte-menu-buddy", "data-byte-buddy-modal")
+        expect(body).not_to include("data-byte-menu-adopt", "data-byte-menu-board")
       end
 
       # A page visit is shown Byte's About page; anything else is a bare 403.
@@ -58,6 +63,8 @@ RSpec.describe ByteController, type: :controller do
         expect(response.body).to include("<span data-buddy-name-slot>Moss</span>")
         expect(response.body).not_to include('value="bash"', 'value="jarvis"')
         expect(response.body).to include('name="mode" value="buddy"')
+        expect(response.body).not_to include("data-byte-new-adopt", "data-byte-adopt-modal")
+        expect(response.body).to include("data-byte-menu-buddy")
       end
 
       # #show opens the most recently active thread, and wears that thread's
@@ -393,6 +400,23 @@ RSpec.describe ByteController, type: :controller do
         ByteConversation.pin_primary!(second)
         get :list_conversations
         expect(response.parsed_body["primary_id"]).to eq(second.id)
+      end
+    end
+
+    describe "GET #claude_sessions" do
+      it "lists the owner's sessions and nobody else's" do
+        convo = rocco.byte_conversations.create!(mode: :claude)
+        allow(ByteLocal).to receive(:list_claude_sessions).and_return([{ id: "abc" }])
+
+        sign_in rocco
+        get :claude_sessions, params: { conversation_id: convo.id }
+        expect(JSON.parse(response.body)["sessions"]).to eq([{ "id" => "abc" }])
+
+        chelsea = create(:user, id: 58_128)
+        theirs = chelsea.byte_conversations.create!(mode: :buddy)
+        sign_in chelsea
+        get :claude_sessions, params: { conversation_id: theirs.id }
+        expect(response).to have_http_status(:not_found)
       end
     end
 

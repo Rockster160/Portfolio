@@ -20,7 +20,9 @@ RSpec.configure do |config|
   config.include ActiveSupport::Testing::TimeHelpers
   config.include GlobalHelper
 
-  load("/Users/zoro/.pryrc")
+  # Whoever's home it is: the suite also runs on the Mac Mini, under coco.
+  pryrc = File.expand_path("~/.pryrc")
+  load(pryrc) if File.exist?(pryrc)
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.
