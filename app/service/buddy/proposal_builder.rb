@@ -315,6 +315,17 @@ module Buddy
       timer_gate(timer).present?
     end
 
+    # Is the first thing this wait releases something only they can move on - a
+    # checklist to tick or a form to fill? Everything else runs by itself and
+    # posts its own chip, so the end of the wait has nothing to tell them.
+    def waiting_on_them?(timer)
+      action = timer_gate(timer)
+      return false if action.nil?
+
+      input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
+      %w[rows forms].include?(rehydrate_steps(input["deferred"]).first&.dig("kind").to_s)
+    end
+
     # Release what the wait was holding. Called by Buddy::Timers the moment the
     # countdown fires. The queue is claimed under a lock, so a re-delivered fire
     # job can't run the follow-up twice.

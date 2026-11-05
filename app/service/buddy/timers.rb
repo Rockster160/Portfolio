@@ -457,22 +457,20 @@ module Buddy
 
       # A WAIT is Buddy holding the middle of a sequence the person asked for
       # ("start the printer, wait a minute, then preheat it"), not a countdown
-      # they're watching. Say what's happening rather than that time is up — the
-      # step it was holding lands directly underneath.
+      # they're watching. When what it releases runs by itself, its chips are the
+      # whole record and the wait says nothing. When it releases a checklist or
+      # a form, nothing happens until they tap, so that one says so and pushes.
       label   = timer.name.to_s.strip
       waiting = !alarm && Buddy::ProposalBuilder.waiting_on?(timer)
-      Buddy::CompanionDelivery.deliver_plain(
-        user:         timer.user,
-        conversation: conversation,
-        text:         alarm ? Buddy::Alarms.fired_text(timer) : fired_text(label, waiting: waiting),
-        metadata:     { "kind" => "buddy", "source" => alarm ? "alarm" : "timer", "timer_id" => timer.id },
-        push_title:   alarm ? Buddy::Alarms.fired_title(timer) : fired_title(label, waiting: waiting),
-        # A wait announces a mechanism, not something to act on. What it was
-        # holding lands directly underneath and pushes on its own account, so a
-        # buzz here is one notification for the delay and a second for the thing
-        # the delay was for.
-        push:         !waiting,
-      )
+      if !waiting || Buddy::ProposalBuilder.waiting_on_them?(timer)
+        Buddy::CompanionDelivery.deliver_plain(
+          user:         timer.user,
+          conversation: conversation,
+          text:         alarm ? Buddy::Alarms.fired_text(timer) : fired_text(label, waiting: waiting),
+          metadata:     { "kind" => "buddy", "source" => alarm ? "alarm" : "timer", "timer_id" => timer.id },
+          push_title:   alarm ? Buddy::Alarms.fired_title(timer) : fired_title(label, waiting: waiting),
+        )
+      end
       return unless waiting
 
       # There is nothing left to acknowledge, so the chip goes on its own rather
@@ -486,14 +484,14 @@ module Buddy
 
     def fired_text(label, waiting:)
       named = (" on #{label}" if label.present?)
-      return "⏲ That's the wait#{named} - picking it back up." if waiting
+      return "⏲ That's the wait#{named} - your next step is ready." if waiting
       return "⏲ Time's up - your #{label} timer's done!" if label.present?
 
       "⏲ Time's up - your timer's done!"
     end
 
     def fired_title(label, waiting:)
-      return "Picking it back up" if waiting
+      return "Your next step is ready" if waiting
 
       label.present? ? "#{label} timer" : "Timer's up"
     end

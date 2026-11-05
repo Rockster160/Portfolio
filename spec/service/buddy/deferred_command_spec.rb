@@ -135,7 +135,7 @@ RSpec.describe "Buddy commands that named a time" do
       it "puts it on the clock for the time they said instead of running it", :aggregate_failures do
         client = run(
           [{ tool_calls: [play_call] }, { text: "I'll play the nap sound at 11." }],
-          text: "Play Whisper Nap sound at 11.",
+          text: "Play Whisper Nap sound at 11am.",
         )
 
         expect(ran?(client)).to be(false)
@@ -570,7 +570,7 @@ RSpec.describe "Buddy commands that named a time" do
       )
       allow(Jil::Executor).to receive(:call)
 
-      client = ask("Play the nap sound at 11", [
+      client = ask("Play the nap sound at 11am", [
         { name: :call_jil_function, call_id: "c1", arguments: { "name" => task.name, "args" => {} } },
       ])
 

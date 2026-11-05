@@ -202,9 +202,13 @@ RSpec.describe "Buddy action queue" do
     # without this a one-minute wait would fire during the example.
     around { |ex| Sidekiq::Testing.fake! { ex.run } }
 
+    def wait_lines
+      convo.byte_messages.where("metadata->>'source' = ?", "timer")
+    end
+
     # The wait's chip is marked a wait (so the client doesn't ring it), and it
-    # takes itself off screen once the held step has run, without a push of
-    # its own for picking the sequence back up.
+    # takes itself off screen once the held step has run. What ran posts its
+    # own record, so the wait itself says nothing and pushes nothing.
     it "holds everything after the wait until the countdown fires, then clears the chip quietly", :aggregate_failures do
       client = turn!("start the printer, wait a minute, then tell Chelsea", [
         tell_call("c1", "Printer's on."),
@@ -226,12 +230,15 @@ RSpec.describe "Buddy action queue" do
       expect(timer_gates.first.reload).to be_decided
       expect(timer.reload.archived_at).to be_present
       expect(Buddy::Timers.live_for(user)).to be_empty
+      expect(wait_lines).to be_empty
       expect(WebPushNotifications).not_to have_received(:send_to_byte).with(
-        hash_including(title: a_string_matching(/picking it back up/i)),
+        hash_including(title: "Your next step is ready"),
       )
     end
 
-    it "posts a checklist held behind a wait only once the wait is over" do
+    # A checklist does nothing until it's tapped, so this is the one wait that
+    # tells them it's over.
+    it "posts a checklist held behind a wait only once the wait is over, and says so", :aggregate_failures do
       turn!("wait a minute then add laundry", [wait_call("c1", 60), gate_call("c2", "Laundry")])
 
       expect(checklists).to be_empty
@@ -240,6 +247,10 @@ RSpec.describe "Buddy action queue" do
 
       expect(checklists.count).to eq(1)
       expect(checklists.first.buttons.pluck("label")).to eq(["Laundry"])
+      expect(wait_lines.pluck(:body)).to eq(["⏲ That's the wait - your next step is ready."])
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(
+        hash_including(title: "Your next step is ready"),
+      )
     end
 
     it "runs the follow-up once even if the fire job is delivered twice" do
