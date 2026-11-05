@@ -3,6 +3,7 @@
 # Table name: job_transcripts
 #
 #  id                 :bigint           not null, primary key
+#  cleaned_at         :datetime
 #  debrief            :jsonb            not null
 #  debriefed_at       :datetime
 #  occurred_at        :datetime
@@ -147,6 +148,24 @@ class JobTranscript < ApplicationRecord
     debriefing.present?
   end
 
+  # The fourth, which runs beside the third: the conversation written out
+  # without the noise of speech, so it can be read rather than decoded.
+  def cleaning
+    @cleaning ||= BackgroundProcess.live_find(owner, Transcripts::Clean.key_for(self))
+  end
+
+  def cleaning?
+    cleaning.present?
+  end
+
+  # Is there a readable version to offer? The stamp rather than the turns,
+  # because a conversation that genuinely needed almost nothing doing to it is
+  # still one this pass has been over - and the page falls back to the spoken
+  # words turn by turn wherever there is no cleaned one.
+  def cleaned?
+    cleaned_at.present?
+  end
+
   def debriefed?
     debriefed_at.present? && debrief["read"].present?
   end
@@ -174,6 +193,36 @@ class JobTranscript < ApplicationRecord
   # different facts about a recording.
   def mended
     turns.count { |turn| turn["heard"].present? }
+  end
+
+  # How many turns read differently once the noise is out. The same fact as
+  # `mended` and said the same way: that a recording has been cleaned at all,
+  # and whether it needed much doing to it, are two different things a reader
+  # wants to know.
+  def cleaned
+    turns.count { |turn| turn.key?("clean") }
+  end
+
+  # ONE PLACE DECIDES WHICH WORDS A TURN SHOWS.
+  #
+  # A cleaned turn is held beside the spoken one rather than over it, so
+  # everything that renders a conversation - the page, the JSON the local job
+  # hunter reads, a quote in a debrief note - has to choose. Done turn by turn
+  # here rather than by swapping the whole list, because the choice is not
+  # uniform: a conversation is cleaned in windows, a window the model never
+  # answered for has no cleaned version, and the honest thing to show there is
+  # what was said.
+  #
+  # A cleaned turn of "" is a turn that was nothing but noise. It is empty on
+  # purpose and the readable version leaves it out, which is why this answers
+  # with nil rather than falling back - a fallback would put "Ooh. Um..." back
+  # into the one version that exists to not have it.
+  def words_of(turn, clean: false)
+    return turn["text"].to_s unless clean
+    return turn["text"].to_s unless turn.key?("clean")
+
+    said = turn["clean"].to_s
+    said.strip.empty? ? nil : said
   end
 
   # The labels a turn can be moved to. The same list, plus whatever a turn has

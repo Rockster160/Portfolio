@@ -4,7 +4,7 @@
 class JobTranscriptsController < ApplicationController
   before_action :authorize_user
   before_action :load_job
-  before_action :load_transcript, only: [:show, :update, :destroy, :tidy, :debrief]
+  before_action :load_transcript, only: [:show, :update, :destroy, :tidy, :debrief, :clean]
 
   # The page, or the conversation as data.
   #
@@ -15,7 +15,23 @@ class JobTranscriptsController < ApplicationController
   # correct it. It used to work that out again from its own copy of the file,
   # so the same recording was labelled twice by two different passes and the
   # corrected one had to be exported and re-dropped to get back here.
+  #
+  # Both versions of every turn ride along in the JSON rather than one chosen
+  # here, because the two callers want different ones: an answer going into the
+  # bank is the readable version, and a quote about how the answer was
+  # delivered is the spoken one.
+  # WHICH VERSION THE PAGE IS READING, in the URL rather than in a cookie or a
+  # column. It is a way of looking at the recording and not a fact about it, so
+  # it belongs where it can be linked, shared with himself, and left behind by
+  # closing the tab.
+  #
+  # The spoken one is the default, because this page is the one place the turns
+  # get corrected: a speaker moved, a misheard word read against what the
+  # recorder wrote. Both of those are work on the words that were said, and
+  # they are what somebody opening a transcript came to do. Reading it is the
+  # other reason to be here and it is one click away.
   def show
+    @clean = @transcript.cleaned? && params[:read].to_s == "clean"
     respond_to do |format|
       format.html
       format.json { render json: conversation(@transcript) }
@@ -93,6 +109,22 @@ class JobTranscriptsController < ApplicationController
       alert: "That could not be started just now."
   end
 
+  # The readable version, written again.
+  #
+  # It runs by itself once the words have been mended, and the press is for
+  # after he has corrected something: a cleaning made off a mishearing reads
+  # as a sentence he meant, and one made before the speakers were split can
+  # have taken his false start out of her question.
+  def clean
+    TranscriptCleanWorker.perform_async(@transcript.id, true)
+    redirect_to interview_transcript_path(@job, @transcript),
+      notice: "Cleaning it up. The page will say when it is done."
+  rescue StandardError => e
+    Rails.logger.warn("transcript clean enqueue failed: #{e.class}: #{e.message}")
+    redirect_to interview_transcript_path(@job, @transcript),
+      alert: "That could not be started just now."
+  end
+
   def destroy
     @transcript.destroy!
     redirect_to interview_path(@job), notice: "Transcript removed."
@@ -116,15 +148,25 @@ class JobTranscriptsController < ApplicationController
     }
   end
 
+  # `clean` is absent on a turn that has none, rather than a copy of `text`.
+  # The caller can then tell a turn the cleaning left alone from one it was
+  # never run over, which is the difference between "he said it cleanly" and
+  # "nobody has looked". An empty `clean` is present and empty on purpose: it
+  # says the turn was nothing but noise.
+  #
+  # Only that key is conditional. `at` and `to` are nil on a pasted transcript
+  # with no clock in it, and dropping them would change the shape of every
+  # payload the local reader already handles.
   def spoken(transcript, turn)
     label = turn["speaker"].to_s
-    {
+    said = {
       who:     side_of(transcript, label),
       speaker: transcript.name_for(label),
       at:      turn["at"],
       to:      turn["to"],
       text:    turn["text"],
     }
+    turn.key?("clean") ? said.merge(clean: turn["clean"]) : said
   end
 
   def side_of(transcript, label)

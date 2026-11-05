@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_03_182456) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_05_004105) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1479,6 +1479,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_182456) do
     t.datetime "debriefed_at"
     t.bigint "user_id"
     t.jsonb "source", default: {}, null: false
+    t.datetime "cleaned_at"
     t.index ["job_application_id"], name: "index_job_transcripts_on_job_application_id"
     t.index ["job_note_id"], name: "index_job_transcripts_on_job_note_id"
     t.index ["user_id"], name: "index_job_transcripts_on_user_id"

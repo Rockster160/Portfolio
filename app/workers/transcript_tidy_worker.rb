@@ -12,8 +12,11 @@
 # `Tidy.call` refuses a transcript it has already been over unless it is asked
 # twice, so the words are gone over once by itself and after that on request.
 #
-# Hands on to the read of how the conversation went, which is third for the
-# same reason this one is second: it judges the words this pass leaves behind.
+# Hands on to the read of how the conversation went, and to the readable
+# version, both of which are after this one for the same reason this one is
+# after the split: they work off the words this pass leaves behind. They run
+# beside each other rather than in a line, because neither reads the other's
+# output - one judges how he talked and the other takes the noise out of it.
 class TranscriptTidyWorker
   include Sidekiq::Worker, TranscriptPass
 
@@ -29,6 +32,7 @@ class TranscriptTidyWorker
       report(transcript, Transcripts::Tidy.call(transcript, again: again, &progress))
     }
     queue_debrief(transcript, again)
+    queue_clean(transcript, again)
   end
 
   private
@@ -43,6 +47,16 @@ class TranscriptTidyWorker
     TranscriptDebriefWorker.perform_async(transcript.id, again)
   rescue StandardError => e
     Rails.logger.warn("transcript debrief enqueue failed: #{e.class}: #{e.message}")
+  end
+
+  # The readable version, off the words as they have just been left. `again`
+  # carries through for the same reason it does to the debrief: a second pass
+  # over the words changed the text a cleaning would be made of, so the one
+  # already written is worth replacing.
+  def queue_clean(transcript, again)
+    TranscriptCleanWorker.perform_async(transcript.id, again)
+  rescue StandardError => e
+    Rails.logger.warn("transcript clean enqueue failed: #{e.class}: #{e.message}")
   end
 
   def report(transcript, result)

@@ -1704,6 +1704,30 @@
     cursor: help;
   }
 
+  // The same mark on a turn being read in the cleaned version, where what the
+  // tooltip holds is what he actually said. The same mark on purpose: in both
+  // reads it means the one thing worth knowing about a line, which is that
+  // these are not the words on the recording and the ones that are can be had
+  // by hovering it.
+  .tt-said.cleaned {
+    border-bottom: 1px dotted var(--iv-line);
+    cursor: help;
+  }
+
+  // Reading the cleaned version is reading, not correcting. The type goes up a
+  // point and the turns get more room between them, because the one reason to
+  // be on this version is to read half an hour of it end to end. The gap moves
+  // on the list rather than a margin on each turn, so the spacing stays one
+  // number in one place.
+  .transcript-turns.cleaned-read {
+    gap: 14px;
+
+    .tt-said {
+      font-size: 15px;
+      line-height: 1.6;
+    }
+  }
+
   // One save for the whole page, and it has to be reachable from anywhere in
   // half an hour of talking — a button at the bottom of 126 turns is a button
   // nobody presses.

@@ -41,6 +41,20 @@
           <% if transcript_mended(@transcript) %>
             <span><%= transcript_mended(@transcript) %></span>
           <% end %>
+          <% if transcript_cleaned(@transcript) %>
+            <span><%= transcript_cleaned(@transcript) %></span>
+          <% end %>
+          <%# THE SWITCH BETWEEN THE TWO VERSIONS, where the counts about them
+             are. One link rather than a pair, because there are two states and
+             it is always in the other one - and it names the version it goes
+             TO, which is the thing being chosen. %>
+          <% if @transcript.cleaned? %>
+            <%= link_to(
+                  @clean ? "Read it as said" : "Read it cleaned up",
+                  interview_transcript_path(@job, @transcript,
+                    read: (@clean ? nil : :clean)),
+                ) %>
+          <% end %>
           <%# Going over the words again costs the same calls to be told the
              same thing, so it is pressed rather than repeated - and it is
              worth pressing once the speakers have been corrected by hand,
@@ -53,6 +67,11 @@
              know which half of the conversation is his is no reading at all. %>
           <%= link_to((@transcript.debriefed? ? "Read it again" : "How did I do"),
                 debrief_interview_transcript_path(@job, @transcript), method: :post) %>
+          <%# Writing the readable version again, which is worth pressing after
+             the words or the speakers have been corrected by hand - a cleaning
+             made off a mishearing reads as a sentence he meant to say. %>
+          <%= link_to((@transcript.cleaned? ? "Clean it up again" : "Clean it up"),
+                clean_interview_transcript_path(@job, @transcript), method: :post) %>
           <%= link_to "Delete", interview_transcript_path(@job, @transcript),
                 method: :delete, class: "danger-link",
                 data: { confirm: "Delete this transcript? The file goes with it." } %>
@@ -64,7 +83,8 @@
            between them is the whole question of whether to wait or to start
            correcting it by hand. It reloads itself because what ends the wait
            is a worker finishing, which this page has no other way to hear. %>
-        <% if @transcript.reading? || @transcript.tidying? || @transcript.debriefing? %>
+        <% if @transcript.reading? || @transcript.tidying? ||
+              @transcript.debriefing? || @transcript.cleaning? %>
           <% content_for :head do %>
             <meta http-equiv="refresh" content="8">
           <% end %>
@@ -96,6 +116,17 @@
           <p class="transcript-reading">
             <strong>Reading it back.</strong>
             <%= transcript_debriefing(@transcript) %>
+            This page refreshes itself.
+          </p>
+        <% end %>
+
+        <%# The readable version being written. It runs beside the reading
+           rather than after it, so both lines can be up at once and each says
+           which one it is. %>
+        <% if @transcript.cleaning? %>
+          <p class="transcript-reading">
+            <strong>Cleaning it up.</strong>
+            <%= transcript_cleaning(@transcript) %>
             This page refreshes itself.
           </p>
         <% end %>
@@ -249,8 +280,16 @@
             </ul>
           </details>
 
-          <ol class="transcript-turns">
+          <%# READ CLEANED, A TURN OF PURE NOISE IS NOT THERE AT ALL.
+             "Ooh. Um..." is a turn in the recording and it is nothing in a
+             version meant to be read, so the cleaning writes it as empty and
+             the row goes. It keeps its number - the ids below count the
+             conversation, not the rows on the page - because a debrief note
+             pointing at turn 19 has to land on turn 19 in either version. %>
+          <ol class="transcript-turns <%= "cleaned-read" if @clean %>">
             <% @transcript.turns.each_with_index do |turn, index| %>
+              <% said = @transcript.words_of(turn, clean: @clean) %>
+              <% next if said.nil? %>
               <li class="tt-turn <%= transcript_side(@transcript, turn) %>" data-turn
                   id="t<%= index + 1 %>">
                 <div class="tt-head">
@@ -272,14 +311,21 @@
                         ),
                         class: "tt-move", title: "Move this turn onto somebody else" %>
                 </div>
-                <%# A turn whose words were put right keeps what the recorder
-                   wrote, because a fix made from context is sometimes the
-                   wrong fix and the only way to see that is to read what it
-                   replaced. %>
-                <%= tag.p turn["text"],
-                      class: ["tt-said", ("mended" if turn["heard"].present?)],
+                <%# WHAT THE WORDS REPLACED IS ALWAYS ONE HOVER AWAY, and
+                   which version that is depends on which one is on screen.
+                   Read as said, it is what the recorder wrote, because a fix
+                   made from context is sometimes the wrong fix. Read cleaned,
+                   it is what he actually said, because the cleaning is the one
+                   pass that changes the words and a sentence it improved is
+                   only visible beside the one it came from. %>
+                <%= tag.p said,
+                      class: [
+                        "tt-said",
+                        ("mended" if !@clean && turn["heard"].present?),
+                        ("cleaned" if @clean && turn["clean"].present?),
+                      ],
                       data: { turn_text: true },
-                      title: heard_title(turn) %>
+                      title: (@clean ? said_title(turn, clean: @clean) : heard_title(turn)) %>
               </li>
             <% end %>
           </ol>

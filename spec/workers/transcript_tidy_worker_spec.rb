@@ -18,9 +18,13 @@ RSpec.describe TranscriptTidyWorker do
     BackgroundProcess.live_find(user, Transcripts::Tidy.key_for(transcript))
   end
 
-  # The read of how it went runs straight after this one, and a queue is inline
-  # here - left alone it would be a model call on every example in this file.
-  before { allow(TranscriptDebriefWorker).to receive(:perform_async) }
+  # The read of how it went and the readable version both run off this one, and
+  # a queue is inline here - left alone either would be a model call on every
+  # example in this file.
+  before do
+    allow(TranscriptDebriefWorker).to receive(:perform_async)
+    allow(TranscriptCleanWorker).to receive(:perform_async)
+  end
 
   it "raises its own chip and moves it as the calls land" do
     seen = []
@@ -59,6 +63,27 @@ RSpec.describe TranscriptTidyWorker do
 
     expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id, false)
     expect(TranscriptDebriefWorker).to have_received(:perform_async).with(transcript.id, true)
+  end
+
+  # The readable version hangs off the same words, beside the reading rather
+  # than behind it: neither wants the other's output, and a failure in one must
+  # not cost the other.
+  it "hands the recording on to the cleaning as well" do
+    allow(Transcripts::Tidy).to receive(:call)
+      .and_return(Transcripts::Tidy::Result.new(ok: true, mended: 1, turns: 1))
+
+    described_class.new.perform(transcript.id, true)
+
+    expect(TranscriptCleanWorker).to have_received(:perform_async).with(transcript.id, true)
+  end
+
+  it "still cleans when the read of how it went could not be queued" do
+    allow(Transcripts::Tidy).to receive(:call)
+      .and_return(Transcripts::Tidy::Result.new(ok: true, mended: 0, turns: 0))
+    allow(TranscriptDebriefWorker).to receive(:perform_async).and_raise(StandardError)
+
+    expect { described_class.new.perform(transcript.id) }.not_to raise_error
+    expect(TranscriptCleanWorker).to have_received(:perform_async)
   end
 
   it "does nothing at all for a transcript that has since been deleted" do

@@ -69,6 +69,32 @@ module JobTranscriptsHelper
     pass_said("Reading how the conversation went", transcript.debriefing)
   end
 
+  def transcript_cleaning(transcript)
+    pass_said("Taking the noise out of it", transcript.cleaning)
+  end
+
+  # What the cleaning did, once it has been over a recording. Said as a count
+  # for the same reason the mended one is: that it has been cleaned at all and
+  # how much of it needed cleaning are two different facts.
+  def transcript_cleaned(transcript)
+    return nil if transcript.cleaned_at.nil?
+
+    cleaned = transcript.cleaned
+    return "nothing to clean up" if cleaned.zero?
+
+    "#{pluralize(cleaned, "turn")} cleaned up"
+  end
+
+  # What was actually said, on a turn being read in the cleaned version. The
+  # reverse of `heard_title`, and there for the same reason: the cleaning is
+  # the one pass that changes the words, so the words it replaced have to stay
+  # within reach of the eye that is reading them.
+  def said_title(turn, clean:)
+    return nil if !clean || turn["clean"].blank?
+
+    "As he said it: #{turn["text"]}"
+  end
+
   # The line a note in the debrief is about, quoted. Cut short on purpose: the
   # note is the point and the whole turn is on the page below, linked - a note
   # carrying four hundred words of what he said is the answer printed twice.
