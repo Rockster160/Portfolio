@@ -1,6 +1,7 @@
 Buddy::Tools.register(
   name:        :save_routine,
-  summary:     "Save a named sequence of tool calls so one phrase runs all of it later.",
+  summary:     "\"When I say X, do Y\": saves Y under X, so saying X runs it from now on - one call or a " \
+               "sequence, and X can carry a number (\"sleep timer 30\" turns the TV off in 30).",
   description: <<~TXT,
     Save a named sequence of your own tool calls so one phrase runs all of it
     later. "When I say prep my printer, turn it on, wait a minute, then preheat
@@ -47,6 +48,17 @@ Buddy::Tools.register(
     add an asking step when something after it genuinely needs the answer; a
     routine that stops to ask a question nothing uses is just slower.
 
+    ## Steps that are handed a value each time
+
+    "When I say sleep timer and a number, turn the TV off in that many minutes"
+    is a routine that is GIVEN something every time it runs. Name it in
+    `inputs` and use it in a step the same way, as `{{minutes}}`:
+      inputs: "minutes"
+      [{"tool_name":"set_timer","payload":{"minutes":"{{minutes}}","then_continue":true}},
+       {"tool_name":"run_jil_task","payload":{"name":<the TV task>,<its off argument>}}]
+    Saying "sleep timer 30" then runs it with 30. The name is the words they say
+    around the value, without the value.
+
     Saving over an existing name REPLACES its steps, and that is how a routine
     gets FIXED. When they tell you a routine you just saved is wrong - "it's
     supposed to complete the chore three times", "there shouldn't be an event in
@@ -78,6 +90,12 @@ Buddy::Tools.register(
     description:  { type: :string,  required: false, description: "One short line on what it does" },
     steps:        { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order" },
     capture_last: { type: :integer, required: false, description: "Save the last N things you just did, instead of `steps`" },
+    inputs:       {
+      type:        :string,
+      required:    false,
+      description: "Names of the values it's handed each time it runs, comma-separated (\"minutes\"), used " \
+                   "in steps as {{minutes}}. Null when it takes none",
+    },
   },
   level:       1,
   routinable:  false,
@@ -100,8 +118,9 @@ Buddy::Tools.register(
       end
     )
 
-    steps = Buddy::Routines.sanitize(rows, ctx)
-    { summary: "Save **#{title}**?", resolved: { routine_name: title, steps: steps } }
+    inputs = Buddy::Routines.input_names(payload[:inputs])
+    steps  = Buddy::Routines.sanitize(rows, ctx, inputs: inputs)
+    { summary: "Save **#{title}**?", resolved: { routine_name: title, steps: steps, input_names: inputs } }
   },
   label:       ->(payload, _ctx) {
     lines = Array(payload[:steps]).map { |s| BuddyRoutine.step_phrase(s) }
@@ -111,12 +130,16 @@ Buddy::Tools.register(
     name    = payload[:routine_name].to_s
     steps   = Array(payload[:steps])
     routine = ctx.user.buddy_routines.where("LOWER(name) = ?", name.downcase).first
+    routine ||= ctx.user.buddy_routines.new
 
-    if routine
-      routine.update!(name: name, steps: steps, description: payload[:description].presence || routine.description)
-    else
-      routine = ctx.user.buddy_routines.create!(name: name, steps: steps, description: payload[:description])
-    end
+    # Inputs alongside the steps, so the steps are checked against them. Saving
+    # replaces both, the same way it always replaced the steps.
+    routine.update!(
+      name:        name,
+      steps:       steps,
+      description: payload[:description].presence || routine.description,
+      metadata:    routine.metadata.to_h.merge("inputs" => Array(payload[:input_names])),
+    )
 
     { routine_id: routine.id, routine_name: routine.name, step_count: steps.length, summary: routine.summary }
   },

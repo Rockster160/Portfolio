@@ -48,7 +48,7 @@ Buddy::Tools.register(
   args:        {
     name: { type: :string,  required: true, description: "Routine name, fuzzy" },
     step: { type: :integer, required: true, description: "Which step to change, 1-based, in the order `routines` lists them" },
-    set:  { type: :string,  required: true, description: "JSON object of arguments to change on that step, {\"<arg>\":\"<new value>\"}" },
+    set:  { type: :string,  required: true, template: true, description: "JSON object of arguments to change on that step, {\"<arg>\":\"<new value>\"}" },
   },
   # Same level as save_routine: a correction they just asked for out loud, on a
   # record that is only ever read when they run it. Waiting on a tap would leave
@@ -82,7 +82,7 @@ Buddy::Tools.register(
     # The same gate a fresh save goes through, over the whole sequence rather
     # than the one step: check_var_flow! is a property of the routine, not of
     # any step in it, and an edit can break it.
-    checked = Buddy::Routines.sanitize(steps, ctx)
+    checked = Buddy::Routines.sanitize(steps, ctx, inputs: routine.inputs)
 
     # AN EDIT THAT CHANGES NOTHING IS NOT A FIX, and saying it was is worse
     # than saying nothing: they stop looking at the routine, which was never

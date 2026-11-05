@@ -70,10 +70,14 @@ module Buddy
     # hours later, and the same braces as a step reference. Inside these a
     # token is only a step's when an earlier step captured that name; anything
     # else is left in place for the template.
+    #
+    # `steps` is always one of them. An argument by that name IS a sequence -
+    # the routine being saved, the plan a watch will run - and a `{{minutes}}`
+    # in it belongs to that sequence's own runs, not to the turn saving it.
     def template_args(tool)
-      return [] unless tool.is_a?(Hash) && tool[:args].is_a?(Hash)
+      return [:steps] unless tool.is_a?(Hash) && tool[:args].is_a?(Hash)
 
-      tool[:args].select { |_, spec| spec.is_a?(Hash) && spec[:template] }.keys.map(&:to_sym)
+      [:steps, *tool[:args].select { |_, spec| spec.is_a?(Hash) && spec[:template] }.keys.map(&:to_sym)].uniq
     end
 
     # Every `{{name}}` anywhere in a payload, in no particular order. Template

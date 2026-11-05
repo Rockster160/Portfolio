@@ -22,8 +22,16 @@ RSpec.describe "Buddy commands that named a time" do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+      allow(Buddy::ProposalBuilder).to receive(:create) { |markers:, **|
+        @markers = markers
+        { action: nil, auto_ran: true }
+      }
       convo.update_columns(buddy_theme: "byte", buddy_expression: "happy")
+    end
+
+    # What reached ProposalBuilder, in order: [tool, payload] pairs.
+    def markers
+      Array(@markers).map { |m| [m[:tool_name].to_sym, m[:payload].transform_keys(&:to_s)] }
     end
 
     def user_says(text)
@@ -47,8 +55,9 @@ RSpec.describe "Buddy commands that named a time" do
       rows.map { |i| JSON.parse(i[:output]) }
     end
 
+    # A call held for later is told so, in place of running.
     def held(client)
-      outputs(client).select { |o| o["error"].to_s.include?("they said when") }
+      outputs(client).select { |o| %w[queued held covered].include?(o["status"]) }
     end
 
     def ran?(client)
@@ -120,35 +129,35 @@ RSpec.describe "Buddy commands that named a time" do
 
     describe "the gate" do
       # `call_jil_function` is `answers: true` + `acts: true`, so it runs INSIDE
-      # resolve_call rather than going through ProposalBuilder — which is why the
-      # check sits in tool_output, ahead of it. Reported as `failed`, which is
-      # what arms the retraction of a reply that says it happened anyway.
-      it "holds the function back, reports it failed, and retracts a reply claiming it ran", :aggregate_failures do
+      # resolve_call rather than going through ProposalBuilder - which is why the
+      # check sits in tool_output, ahead of it. Held there, it reaches
+      # ProposalBuilder at the end of the turn on the scheduler built for it.
+      it "puts it on the clock for the time they said instead of running it", :aggregate_failures do
         client = run(
-          [{ tool_calls: [play_call] }, { text: "Playing the nap sound on Whisper." }],
+          [{ tool_calls: [play_call] }, { text: "I'll play the nap sound at 11." }],
           text: "Play Whisper Nap sound at 11.",
         )
 
         expect(ran?(client)).to be(false)
-        expect(held(client).first["status"]).to eq("failed")
-        expect(held(client).first["note"]).to include("schedule_trigger", "schedule_reminder", "alarm")
-
-        reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-        expect(reply.metadata["retracted_claim"]).to be(true)
+        expect(held(client).first["status"]).to eq("queued")
+        expect(markers.map(&:first)).to eq([:schedule_function])
+        expect(markers.first.last).to include("name" => "Whisper Sound", "sound" => "nap")
+        expect(Time.zone.parse(markers.first.last["at"]).hour).to eq(11)
       end
 
       # There is no round budget to run out of here, because the gate isn't a nudge.
-      it "still holds it back when a later round makes the same call" do
+      it "holds a repeat of the same call as the one thing" do
         client = run(
           [
             { tool_calls: [play_call] },
             { tool_calls: [play_call(call_id: "c2")] },
-            { text: "Playing it now." },
+            { text: "At 11." },
           ],
           text: "Play Whisper Nap sound at 11.",
         )
 
         expect(held(client).length).to eq(2)
+        expect(markers.map(&:first)).to eq([:schedule_function])
       end
 
       # "Do this now and that at 11" is a real sentence: once something is
@@ -165,33 +174,115 @@ RSpec.describe "Buddy commands that named a time" do
         }
       end
 
-      # A wait can hold a step that goes through ProposalBuilder. It cannot hold
-      # one that has already run by the time a proposal queue exists, and
-      # `call_jil_function` settles inside resolve_call.
-      it "is not stood down by a wait, in either order, in an earlier round, or as a bare countdown" do
-        bare = wait_call(id: "t2").merge(arguments: { "seconds" => 120 })
+      # The model scheduling the thing AND doing it is the thing done twice.
+      it "doesn't run it beside a schedule for the same function" do
+        scheduled = {
+          name:      :schedule_function,
+          call_id:   "s1",
+          arguments: { "name" => "Whisper Sound", "sound" => "nap", "at" => 2.minutes.from_now.iso8601 },
+        }
 
+        [[scheduled, play_call], [play_call, scheduled]].each { |calls|
+          client = run([{ tool_calls: calls }, { text: "In two minutes." }], text: "Play the whisper wake sound in 2 minutes")
+
+          expect(held(client).pluck("status")).to eq(["covered"]), calls.pluck(:name).inspect
+          expect(markers.map(&:first)).to eq([:schedule_function])
+        }
+      end
+
+      # Whichever order they come in, and whichever round, the function ends up
+      # BEHIND the wait - never run now beside it.
+      it "queues it behind a wait, in either order or a later round" do
         [
           [{ tool_calls: [play_call, wait_call] }],
           [{ tool_calls: [wait_call, play_call] }],
           [{ tool_calls: [wait_call] }, { tool_calls: [play_call] }],
-          [{ tool_calls: [play_call, bare] }],
         ].each { |rounds|
           client = run(rounds + [{ text: "Two minutes." }], text: "Play the whisper wake sound in 2 minutes")
+
           expect(ran?(client)).to be(false), rounds.inspect
+          expect(markers.map(&:first)).to eq(%i[set_timer call_jil_function]), rounds.inspect
         }
+      end
+
+      # A plain countdown beside it was the model's way of saying "later". The
+      # function goes on the clock, and the countdown doesn't ring over it.
+      it "clocks it beside a bare countdown, and drops the countdown" do
+        bare = wait_call(id: "t2").merge(arguments: { "seconds" => 120 })
+        client = run([{ tool_calls: [play_call, bare] }, { text: "Two minutes." }], text: "Play the whisper wake sound in 2 minutes")
+
+        expect(ran?(client)).to be(false)
+        expect(markers.map(&:first)).to eq([:schedule_function])
       end
 
       # The time came from a shorthand taught earlier, so the words name none,
       # and the wait beside it is the only sign the request is for later.
-      it "holds it back beside a wait when the words name no time" do
+      it "queues it behind a wait when the words name no time" do
         [
           [{ tool_calls: [play_call, wait_call] }],
           [{ tool_calls: [wait_call, play_call] }],
           [{ tool_calls: [wait_call] }, { tool_calls: [play_call] }],
         ].each { |rounds|
           client = run(rounds + [{ text: "Thirty minutes." }], text: "Sleep timer 30")
+
           expect(ran?(client)).to be(false), rounds.inspect
+          expect(markers.map(&:first)).to eq(%i[set_timer call_jil_function]), rounds.inspect
+        }
+      end
+
+      # A wait on its own, labelled for the thing and holding nothing: the thing
+      # is asked for once more, before the wait has started, and rides it.
+      it "asks for the missing call when a wait holds nothing, and queues it behind the wait", :aggregate_failures do
+        client = run(
+          [
+            { tool_calls: [wait_call] },
+            { text: "Set, the TV goes off in two minutes." },
+            { tool_calls: [play_call(call_id: "c2")] },
+            { text: "In two minutes." },
+          ],
+          text: "Turn off the tv in 2 minutes",
+        )
+
+        nudges = client.calls.flat_map(&:input).select { |i| i[:role] == :developer }.pluck(:content)
+        expect(nudges).to include(Buddy::GPT::Turn::EMPTY_WAIT_NUDGE)
+        expect(ran?(client)).to be(false)
+        expect(markers.map(&:first)).to eq(%i[set_timer call_jil_function])
+      end
+
+      # A wait with something actually behind it is left to do its job.
+      it "doesn't nudge a wait that holds something" do
+        client = run([{ tool_calls: [wait_call, play_call] }, { text: "Two minutes." }], text: "Turn off the tv in 2 minutes")
+
+        nudges = client.calls.flat_map(&:input).select { |i| i[:role] == :developer }.pluck(:content)
+        expect(nudges).not_to include(Buddy::GPT::Turn::EMPTY_WAIT_NUDGE)
+      end
+
+      # One call, with the time on it: nothing to put in the wrong order.
+      it "puts a call carrying its own run_in_minutes on the clock" do
+        timed = play_call.merge(arguments: play_call[:arguments].merge("run_in_minutes" => 30))
+        client = run([{ tool_calls: [timed] }, { text: "In half an hour." }], text: "Sleep timer 30")
+
+        expect(ran?(client)).to be(false)
+        expect(markers.map(&:first)).to eq([:schedule_function])
+        expect(markers.first.last).not_to have_key("run_in_minutes")
+        expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(30.minutes.from_now)
+      end
+
+      # A time it couldn't read is still a time: held, never run.
+      it "never runs a call whose run_at it couldn't read" do
+        timed = play_call.merge(arguments: play_call[:arguments].merge("run_at" => "whenever"))
+        client = run([{ tool_calls: [timed] }, { text: "Later." }], text: "Play the nap sound later")
+
+        expect(ran?(client)).to be(false)
+        expect(markers).to be_empty
+      end
+
+      it "reads a verbless order and a spelled-out delay" do
+        ["TV off in 30", "Play the whisper wake sound in thirty minutes"].each { |text|
+          client = run([{ tool_calls: [play_call] }, { text: "Will do." }], text: text)
+
+          expect(ran?(client)).to be(false), text
+          expect(markers.map(&:first)).to eq([:schedule_function]), text
         }
       end
 
@@ -399,11 +490,18 @@ RSpec.describe "Buddy commands that named a time" do
     # A bare timer defers nothing and looks exactly like an ordinary countdown,
     # so ProposalBuilder can't see this shape and the gate is the only thing
     # between the item and the list.
-    it "holds back a write with a time on it that was answered with a bare countdown" do
+    it "holds back a write with a time on it that was answered with a bare countdown, and adds it when the time comes", :aggregate_failures do
       client = ask("Add \"something\" to my todo list in 2 minutes", [add_item, timer(120)])
 
       expect(items).to be_empty
-      expect(output_for(client, "c1")["status"]).to eq("failed")
+      expect(output_for(client, "c1")["status"]).to eq("queued")
+      # The plain countdown is gone, and the one wait holding the item is ours.
+      expect(user.timers.count).to eq(1)
+      gate = ByteAction.find_by(user_id: user.id, tool_name: Buddy::ProposalBuilder::TIMER_GATE)
+
+      Buddy::ProposalBuilder.resume_after!(Timer.find(gate.tool_input["timer_id"]))
+
+      expect(items.pluck(:name)).to eq(["something"])
     end
 
     # The other half of the same sentence, and it must still work: no time named
@@ -443,6 +541,28 @@ RSpec.describe "Buddy commands that named a time" do
       expect(items.pluck(:name)).to eq(["milk"])
     end
 
+    # The whole path, nothing stubbed but the task itself: the function sent
+    # BEFORE its wait does not run, and runs exactly once when the wait is up.
+    it "runs a function sent ahead of its wait when the wait is up, and not before" do
+      task = Task.create!(
+        user: user, name: "HASS TV", listener: "function(\"State\")",
+        code: "", enabled: true, buddy_enabled: true
+      )
+      allow(Jil::Executor).to receive(:call)
+
+      ask("Sleep timer 30", [
+        { name: :call_jil_function, call_id: "c1", arguments: { "name" => task.name, "args" => { "state" => "off" } } },
+        timer(1800, then_continue: true),
+      ])
+
+      expect(Jil::Executor).not_to have_received(:call)
+      gate = ByteAction.find_by(user_id: user.id, tool_name: Buddy::ProposalBuilder::TIMER_GATE)
+
+      Buddy::ProposalBuilder.resume_after!(Timer.find(gate.tool_input["timer_id"]))
+
+      expect(Jil::Executor).to have_received(:call).once
+    end
+
     it "still holds back a device command that named a time" do
       task = Task.create!(
         user: user, name: "Nap Sound", listener: "function(\"Nap\")",
@@ -455,7 +575,10 @@ RSpec.describe "Buddy commands that named a time" do
       ])
 
       expect(Jil::Executor).not_to have_received(:call)
-      expect(output_for(client, "c1")["status"]).to eq("failed")
+      expect(output_for(client, "c1")["status"]).to eq("queued")
+      reminder = BuddyReminder.where(user: user).last
+      expect(reminder.action).to include("tool" => "run_jil_task", "payload" => include("name" => "Nap Sound"))
+      expect(reminder.fire_at.in_time_zone(user.timezone).hour).to eq(11)
     end
   end
 

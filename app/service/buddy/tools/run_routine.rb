@@ -23,9 +23,19 @@ Buddy::Tools.register(
     they asked for a thing to happen, and your filing is not an answer. Do the
     thing. If it's clearly something they'll ask for again, offering to save it
     AFTERWARDS is fine.
+
+    A routine listed as TAKING something is handed it here: "sleep timer 30"
+    is the routine **sleep timer** with `inputs: "30"`. Pass the values in the
+    order the list names them, or as `name=value` pairs.
   TXT
   args:        {
-    name: { type: :string, required: true, description: "Routine name, from the list in your prompt" },
+    name:   { type: :string, required: true, description: "Routine name, from the list in your prompt" },
+    inputs: {
+      type:        :string,
+      required:    false,
+      description: "The values a routine that takes some is given this time - \"30\", or \"minutes=30\". " \
+                   "Null for a routine that takes none",
+    },
   },
   # Never actually reached: Turn#build_proposals swaps this call for the steps
   # it names before ProposalBuilder ever sees it, and each of those carries its
@@ -43,6 +53,10 @@ Buddy::Tools.register(
     # model hears about it before it writes a line taking credit, rather than
     # the person finding out weeks later that a button stopped doing anything.
     Buddy::Routines.check_runnable!(routine, ctx)
+
+    given   = Buddy::Routines.given_inputs(routine, payload[:inputs])
+    missing = Buddy::Routines.missing_inputs(routine, given)
+    raise "#{routine.name} needs #{missing.to_sentence} - ask them, then pass it in `inputs`" if missing.any?
 
     routine.touch_run!
     {

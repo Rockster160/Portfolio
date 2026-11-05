@@ -77,33 +77,27 @@ module Buddy
       remove_inventory_item
     ].freeze
 
+    # When one of those tools is for LATER: the delay or the clock time rides
+    # on the call itself. Every IMMEDIATE_ACTION_TOOLS schema carries them, and
+    # Buddy::GPT::Turn takes them off before anything resolves - the tool never
+    # sees them, and a pass-through tool would otherwise hand them to a Jil
+    # function as arguments.
+    #
+    # One call instead of two is the point. Putting a thing off used to take a
+    # wait or a schedule AND the action, in the right order, and the order was
+    # the part that kept going wrong.
+    RUN_IN_ARG  = :run_in_minutes
+    RUN_AT_ARG  = :run_at
+    TIMING_ARGS = [RUN_IN_ARG, RUN_AT_ARG].freeze
+
     # The one lesson none of their own descriptions can carry on its own,
     # because every example in one is immediate and most never mention time at
-    # all. It lived only on `call_jil_function`, so `add_list_item` had never
-    # been told, and "Add something to my todo list in 2 minutes" put the item
-    # on the list on the spot.
-    IMMEDIATE_NOTE = "This happens the MOMENT you call it. A time in the request says WHEN to " \
-                     "act and is never part of what to do. For anything later, put it on the " \
-                     "clock FIRST and call this one after it: set_timer with then_continue: true " \
-                     "for a delay, or a schedule_* tool when they named a clock time. Never do it " \
-                     "now as a consolation, and never say it's scheduled when it isn't.".freeze
-
-    # The variant for a tool that settles INSIDE the turn (`answers`). The note
-    # above offers a wait, and for these there is no such thing: they run in
-    # `resolve_call`, which is before any proposal queue exists for a wait to
-    # hold them in. So a `set_timer` in the same reply is set AFTER the sound
-    # has already played, and it holds an empty queue.
-    #
-    # "Play the whisper wake sound in 2 minutes" fires the sound immediately,
-    # sets the two-minute wait a second later, and leaves the timer holding `{}`
-    # for a queue. The model is doing what both descriptions told it to.
-    UNWAITABLE_NOTE = "This happens the MOMENT you call it, and a wait CANNOT hold it - it will " \
-                      "already have run by the time the wait is set. A time in the request says " \
-                      "WHEN to act and is never part of what to do. For anything later it goes on " \
-                      "a real schedule instead: schedule_function is this exact call with a time " \
-                      "on it, schedule_trigger for a Jil listener scope, schedule_reminder or " \
-                      "alarm when it has to reach them. Never do it now as a consolation, and " \
-                      "never say it's scheduled when it isn't.".freeze
+    # all.
+    IMMEDIATE_NOTE = "This happens the MOMENT you call it, unless you give it `run_in_minutes` or " \
+                     "`run_at` - then it waits and happens on its own at that time. A time in the " \
+                     "request says WHEN to act and is never part of what to do: \"turn the TV off in " \
+                     "30\" is this call with run_in_minutes: 30, and \"at 11pm\" is run_at. Never do " \
+                     "it now as a consolation, and never say it's set up when it isn't.".freeze
 
     # Buddy USED to carry its spoken words on the tool call, to save the second
     # round trip. That's gone: the model now stays quiet on the call, we resolve
@@ -494,6 +488,7 @@ module Buddy
       # since that proc exists precisely to render a collapsed "5x Drink
       # Water" row — the other tools have no repeat semantics.
       properties[COUNT_ARG] = count_property if tool[:merge_label]
+      timing_properties.each { |key, prop| properties[key] = prop } if IMMEDIATE_ACTION_TOOLS.include?(tool[:name])
       # Pass-through tools (call_jil_function) carry args that vary per target
       # task, so they take one freeform object instead of a fixed schema.
       # A freeform object can't satisfy strict mode, hence `strict: false`.
@@ -515,13 +510,12 @@ module Buddy
 
     # Appended rather than written into each tool's own prose, so a tool added
     # to IMMEDIATE_ACTION_TOOLS is told about time by the act of being listed
-    # there. `call_jil_function` says it in its own words too — it can name
-    # `schedule_function` specifically, which the shared line can't.
+    # there, the same way it gains `run_in_minutes` / `run_at`.
     def described(tool)
       text = tool[:description].strip.gsub(/\s+/, " ")
       return text unless IMMEDIATE_ACTION_TOOLS.include?(tool[:name])
 
-      "#{text} #{answers?(tool) ? UNWAITABLE_NOTE : IMMEDIATE_NOTE}"
+      "#{text} #{IMMEDIATE_NOTE}"
     end
 
     # Inverse of the passthrough schema: fold the nested `args` object back
@@ -535,6 +529,8 @@ module Buddy
       # undeclared key, so a stray one would be handed to a Jil function as an
       # argument.
       args.delete(REPLY_ARG)
+      # Read by Buddy::GPT::Turn before this, and never the tool's business.
+      TIMING_ARGS.each { |key| args.delete(key) }
       return args unless tool[:passthrough_args]
 
       nested = args.delete(:args)
@@ -699,6 +695,21 @@ module Buddy
         ].compact.join(". ")
         prop[:description] = desc if desc.present?
         prop
+      end
+
+      def timing_properties
+        {
+          RUN_IN_ARG => {
+            type:        [:integer, :null],
+            description: "Only when they said to do it after a delay (\"in 30\", \"in an hour\"): the " \
+                         "minutes from now. Null to do it now",
+          },
+          RUN_AT_ARG => {
+            type:        [:string, :null],
+            description: "Only when they named a clock time (\"at 11pm\"): when to do it. " \
+                         "#{TYPE_HINTS[:iso_time]}. Null to do it now",
+          },
+        }
       end
 
       def count_property

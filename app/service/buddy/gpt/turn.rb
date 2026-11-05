@@ -1042,6 +1042,8 @@ module Buddy
       def attempt_turn(previous: nil)
         input     = History.build(@conversation, upto: @inbound, briefing: today_briefing?)
         input    += [{ role: :developer, content: routine_directive }] if routine_directive
+        teaching  = self.class.teaching_directive(@inbound.body)
+        input    += [{ role: :developer, content: teaching }] if teaching
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
         end
@@ -1075,7 +1077,7 @@ module Buddy
         # Whether anything got put on the clock this turn. See tool_output.
         @scheduled     = false
         # ...and separately, whether a wait was opened for the rest to queue
-        # behind. Not the same thing, and see scheduled_for? for why.
+        # behind. Not the same thing, and see later_for for why.
         @queued        = false
         # A reminder or watch holding the rest of this reply, and what it's
         # holding. See held?.
@@ -1083,6 +1085,13 @@ module Buddy
         @hold_before   = Set.new
         @held          = []
         @held_ids      = Set.new
+        # Calls held because they're for later, and where each one sits in the
+        # order the model asked for things. See with_later_calls.
+        @later         = []
+        @later_ids     = Set.new
+        @order         = {}
+        @round_wait    = nil
+        @earlier_wait  = nil
         nudged         = false
 
         loop do
@@ -1116,7 +1125,7 @@ module Buddy
             # honest but useless - the person asked for a thing and got a shrug.
             # It is far likelier the model skipped the call than that it meant
             # the claim, so it gets exactly one corrective round to make it.
-            nudge = nudge_for(proposals, spoken, nudged, rounds)
+            nudge = (EMPTY_WAIT_NUDGE if empty_wait?(proposals, nudged, rounds)) || nudge_for(proposals, spoken, nudged, rounds)
             break if nudge.nil?
 
             nudged = true
@@ -1153,6 +1162,7 @@ module Buddy
           @scheduled ||= acting.any? { |c| self.class.puts_on_clock?(c[:name], c[:arguments]) }
           @queued    ||= acting.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
           note_holder(acting)
+          note_round_wait(acting)
 
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
@@ -1164,7 +1174,10 @@ module Buddy
           # count as a proposal would trip the all-discarded fallback and replace
           # a perfectly good "I couldn't find that one, which did you mean?".
           proposals.concat(
-            acting.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) && @held_ids.exclude?(c[:call_id]) },
+            acting.select { |c|
+              proposal?(c[:name]) && @failed.exclude?(c[:call_id]) &&
+                @held_ids.exclude?(c[:call_id]) && @later_ids.exclude?(c[:call_id])
+            },
           )
 
           # A round that only opened tools gave the person nothing, so it
@@ -1186,7 +1199,7 @@ module Buddy
           input += items
         end
 
-        { ok: true, text: spoken.to_s, proposals: forced_routine(proposals) }
+        { ok: true, text: spoken.to_s, proposals: forced_routine(with_later_calls(proposals)) }
       end
 
       # ---- a message that IS a routine's name ---------------------------------
@@ -1197,17 +1210,50 @@ module Buddy
       def outright_routine
         return @outright_routine if defined?(@outright_routine)
 
-        @outright_routine = Buddy::Routines.named_outright(@user, @inbound.body)
+        routine = Buddy::Routines.named_outright(@user, @inbound.body)
+        # A routine that takes values, said without them ("sleep timer"), can't
+        # run as it stands - that one is the model's to ask about.
+        given = routine && Buddy::Routines.given_inputs(routine, outright_inputs)
+        routine = nil if routine && Buddy::Routines.missing_inputs(routine, given).any?
+        @outright_routine = routine
+      end
+
+      # "30" off "sleep timer 30".
+      def outright_inputs
+        Buddy::Routines.values_named(@inbound.body)
       end
 
       ROUTINE_DIRECTIVE = <<~TXT.freeze
-        What they just said IS the name of their saved routine **%<name>s**, on its own. Call `run_routine` with that exact name and let the whole sequence run, then say your piece over it. Doing the steps by hand instead drops the ones you don't think of, and answering conversationally without running it drops all of them.
+        What they just said IS the name of their saved routine **%<name>s**, on its own. Call `run_routine` with that exact name%<inputs>s and let the whole sequence run, then say your piece over it. Doing the steps by hand instead drops the ones you don't think of, and answering conversationally without running it drops all of them.
       TXT
+
+      # "If I ever say sleep timer and a number, turn the TV off in that many
+      # minutes" is a shortcut being set up: from now on, saying those words
+      # should DO something. Kept as a fact about them, it was read back as a
+      # plain kitchen timer the next time they said it. Read off the request,
+      # the same way ROUTINE_DIRECTIVE is, rather than left to the reading.
+      TEACHING_RX = /
+        \b(?:if|when|whenever|anytime|any\s+time)\s+i\s+(?:ever\s+)?say\b
+        .{1,60}?
+        # What follows has to be an instruction: a meaning, or a thing to do.
+        # "When I say goodbye to her, I cry" is a sentence about them.
+        (?:\bit\s+means\b|\bthat\s+means\b|\bmeans\b|\bi\s+(?:want|mean)\s+(?:you\b|to\b)|
+           \b(?:please\s+)?(?:turn|run|start|play|set|dim|lock|open|close|add)\b)
+      /xi
+
+      TEACHING_DIRECTIVE = <<~TXT.freeze
+        They're setting up a shortcut: from now on, saying those words should DO something. Save it with `save_routine`, named after the words they'll say, with the steps it runs. When the phrase carries a value ("followed by a number", "and how many minutes"), name it in `inputs` and use it in the steps as `{{name}}`, so "sleep timer 30" hands the routine 30. Then tell them what to say to use it.
+      TXT
+
+      def self.teaching_directive(body)
+        TEACHING_DIRECTIVE if body.to_s.match?(TEACHING_RX)
+      end
 
       def routine_directive
         return nil if outright_routine.nil?
 
-        format(ROUTINE_DIRECTIVE, name: outright_routine.name)
+        inputs = outright_routine.inputs.any? ? " and `inputs: #{outright_inputs.to_json}`" : ""
+        format(ROUTINE_DIRECTIVE, name: outright_routine.name, inputs: inputs)
       end
 
       # A routine named outright RUNS, whatever the turn decided to do instead.
@@ -1242,7 +1288,7 @@ module Buddy
         outright_routine.touch_run!
         [{
           name:      Buddy::Routines::RUNNER,
-          arguments: { name: outright_routine.name },
+          arguments: { name: outright_routine.name, inputs: outright_inputs }.compact,
           call_id:   "forced-routine-#{outright_routine.id}",
         }]
       rescue StandardError => e
@@ -1278,13 +1324,16 @@ module Buddy
       # tool stages a user item and we splice it in behind the output it belongs
       # to. Empty for every other call.
       def call_items(call)
+        # What the model sent, timing and all - tool_output takes the timing off
+        # the call itself, and the model has to read back the call it made.
+        sent   = call[:arguments]
         output = tool_output(call)
         [
           {
             type:      :function_call,
             call_id:   call[:call_id],
             name:      call[:name].to_s,
-            arguments: JSON.generate(call[:arguments]),
+            arguments: JSON.generate(sent),
           },
           {
             type:    :function_call_output,
@@ -1317,6 +1366,7 @@ module Buddy
 
       def tool_output(call)
         name = call[:name].to_sym
+        timing = take_timing!(call)
         # Before the progress line: opening a tool does nothing they'd see.
         return JSON.generate(Buddy::ToolIndex.open(name, loaded: loaded_tools)) if @opening&.include?(call[:call_id])
         # Before the progress line and before anything runs: a held call is a
@@ -1340,22 +1390,15 @@ module Buddy
         # THE gate, and it has to be HERE: an acting answering tool runs inside
         # `resolve_call` (see its `answers?` branch), so anywhere downstream is
         # after the sound has already played. Every call passes through this
-        # method — the proposal path too — so one check covers both, and a call
-        # marked failed is excluded from `proposals` by the same line that drops
-        # one which couldn't resolve.
+        # method - the proposal path too - so one check covers both.
         #
-        # A wait in the reply arms it too. The words alone miss a shorthand
-        # taught a turn earlier ("sleep timer 30" meaning the TV off in half an
-        # hour), and a `then_continue` wait is the model saying itself that the
-        # rest of the request is for later.
-        later = deferred_command? || @queued
-        if later && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !scheduled_for?(tool)
-          Rails.logger.warn(
-            "[Buddy::GPT::Turn] held back #{name} on message=#{@inbound.id} " \
-            "user=#{@user.id}: the request is for later",
-          )
-          @failed << call[:call_id]
-          return JSON.generate(self.class.held_for_later(name))
+        # A call that is for later never runs here. It is held, and the end of
+        # the turn puts it where it belongs (see with_later_calls), so the order
+        # the model sent its calls in stops mattering.
+        if Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name)
+          later = later_for(call, timing)
+          return covered_output(later) if later&.dig(:covered)
+          return hold_for_later(call, tool, later) if later
         end
 
         result, signature, opens = self.class.resolve_call(
@@ -1458,6 +1501,22 @@ module Buddy
         - If it genuinely isn't doable, say so plainly and say what you'd need.
 
         Do not repeat the claim.
+      TXT
+
+      # A wait that holds nothing. "Turn the TV off in 30" came back as one
+      # `set_timer` labelled "TV off" with `then_continue`, and no TV call at all:
+      # the countdown ran out over an empty queue and the TV stayed on. Asked
+      # before anything has started, so the call it was missing can still be
+      # made and ride the wait.
+      EMPTY_WAIT_NUDGE = <<~TXT.freeze
+        STOP. Your set_timer has then_continue: true, but nothing in this reply is
+        queued behind it. On its own a wait only counts down - the thing they
+        asked for never happens, whatever the label says.
+
+        Make the call for the thing itself now, in this reply - the device, the
+        Jil task, the sound, the list add they asked for. It queues behind the
+        wait you already set and happens when the wait is up. Nothing else needs
+        calling.
       TXT
 
       # The strongest evidence there is that a call was meant: the model wrote
@@ -2761,6 +2820,17 @@ module Buddy
       # the one retry we allow, and the reply either claims an action, points at
       # output that isn't there, waves off news nobody has heard yet, or opened a
       # briefing cold. Returns the nudge to send, or nil.
+      # Every proposal is a `then_continue` wait and nothing is held to ride
+      # one. Anything else in the reply is what the wait was for, and
+      # ProposalBuilder puts it behind the wait.
+      def empty_wait?(proposals, nudged, rounds)
+        return false if nudged || @acted || @later.any?
+        return false if rounds >= MAX_ROUNDS || Time.current > @deadline
+
+        waits = proposals.select { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
+        waits.any? && waits.length == proposals.length
+      end
+
       def nudge_for(proposals, spoken, nudged, rounds)
         return nil if nudged || proposals.any?
         return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
@@ -3836,6 +3906,15 @@ module Buddy
 
       # The tools that mean LATER. One of these landing in the same turn says the
       # model understood the time, and nothing here should get in its way.
+      # What a call put on the clock for later is told, in place of its result.
+      LATER_AT_NOTE = "Queued, not done yet: it happens on its own at that time. Say it as something that will " \
+                      "happen then, never as done. Don't also set a timer or a schedule for it - that would do it twice.".freeze
+
+      # The tools a held call is put on the clock with when it's one of these
+      # (see Turn#clocked), and how short a verbless order is (Turn#short_order?).
+      JIL_RUNNERS = %i[run_jil_task call_jil_function trigger_jil_task].freeze
+      SHORT_ORDER_WORDS = 6
+
       SCHEDULING_TOOLS = %i[
         schedule_reminder schedule_trigger schedule_function alarm set_timer remind_when move_reminder
       ].freeze
@@ -3874,29 +3953,286 @@ module Buddy
         name.to_sym == :set_timer && defers?(name, arguments)
       end
 
-      # Is this tool covered by what's already been scheduled this turn?
-      #
-      # A real scheduler covers everything. A WAIT covers only what can actually
-      # be queued behind it, and that is the distinction this turns on.
-      #
-      # "Play the whisper wake sound in 2 minutes" came back as
-      # `call_jil_function` plus `set_timer(then_continue: true)` in one round.
-      # The round-level read saw the wait, took the time as understood, and
-      # stood the gate down — so Whisper Sound fired at 21:04:35 and the wait it
-      # was supposedly riding was created at 21:04:36, with an empty queue
-      # behind it. The sound played in the room two minutes early, which is the
-      # whole failure this gate exists for.
-      #
-      # A wait genuinely does defer an `add_list_item`: that reaches
-      # ProposalBuilder, `hoist_dangling_wait` rotates the wait to the front and
-      # the write queues behind it. A tool marked `answers` never gets there —
-      # it runs inside `resolve_call`, before any proposal exists — so for those
-      # a wait defers nothing at all and must not vouch for one.
-      def scheduled_for?(tool)
-        return true if @scheduled
-        return false if Buddy::Tools.answers?(tool)
+      # ---- a call that is for later ------------------------------------------
 
-        @queued
+      # Whether a do-it-now call is really for later, and if so what it waits
+      # on. nil runs it now.
+      #
+      # This is decided from the whole turn rather than from the order the model
+      # happened to send its calls in, because that order is the thing that kept
+      # going wrong. "Turn the TV off in 30" came back as the TV call and then a
+      # 30 minute wait - so the TV went off at once and the wait rang over
+      # nothing - and as the wait first and the TV call a round later, and as
+      # the call on its own beside a time in the words. Each of those is caught
+      # here, ahead of anything running:
+      #
+      # - the call carries its own `run_in_minutes` / `run_at`
+      # - what they said IS a saved routine, which runs instead
+      # - a `then_continue` wait sits ahead of it, in this round or an earlier
+      #   one, or after it with nothing else behind - the model reading the
+      #   delay as a second thing to do rather than as when to do the first
+      # - the words name a time, and nothing else this turn put it on the clock
+      def later_for(call, timing)
+        return { at: nil, unreadable: true } if timing == :unreadable
+        return { at: timing } if timing
+        return { at: nil, routine: true } if outright_routine && call[:name].to_sym != Buddy::Routines::RUNNER
+        if (wait = riding_wait(call))
+          return { at: nil, wait: wait }
+        end
+        # A wait in this same round that this call isn't riding: the model put
+        # it ahead of the wait, which is it saying this half is for now ("add
+        # milk now, then in a minute add eggs").
+        return nil if @round_wait&.dig(:ids)&.include?(call[:call_id])
+        if (scheduler = clocked_by(call))
+          return { covered: scheduler }
+        end
+        # "Do this now and that at 11" - something else in the reply is on the
+        # clock, and this one is the half that's for now.
+        return nil if @scheduled
+        return nil unless deferred_command?
+
+        { at: Buddy::DeferredTime.at(@inbound.body, user: @user) }
+      end
+
+      # Where each call sits in the order the model asked for things, and the
+      # wait in this round if there is one. A wait from an EARLIER round holds
+      # everything that comes after it.
+      def note_round_wait(acting)
+        @earlier_wait ||= @round_wait
+        acting.each { |c| @order[c[:call_id]] ||= @order.size }
+        @clocked_names ||= Set.new
+        acting.each { |c|
+          next unless self.class.puts_on_clock?(c[:name], c[:arguments])
+
+          target = clock_target(c)
+          @clocked_names << [target, c[:name].to_s] if target
+        }
+
+        idx = acting.index { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
+        @round_wait = idx && {
+          call_id:  acting[idx][:call_id],
+          index:    idx,
+          ids:      acting.pluck(:call_id),
+          # Nothing after it for it to hold, so what it was meant to hold is
+          # what came before it. Buddy::ProposalBuilder#hoist_dangling_wait
+          # reads the same shape for the calls that reach it.
+          dangling: acting[(idx + 1)..].none? { |c| actionable?(c) },
+        }
+      end
+
+      def riding_wait(call)
+        return @earlier_wait if @earlier_wait
+
+        wait = @round_wait
+        return nil if wait.nil? || wait[:call_id] == call[:call_id]
+
+        pos = wait[:ids].index(call[:call_id])
+        return nil if pos.nil?
+
+        pos > wait[:index] || wait[:dangling] ? wait : nil
+      end
+
+      def actionable?(call)
+        name = call[:name].to_sym
+        return false if read_tools.key?(name) || Buddy::SideEffects.handles?(name)
+        return false if @opening&.include?(call[:call_id])
+
+        tool = Buddy::Tools[name]
+        tool.present? && (!Buddy::Tools.answers?(tool) || Buddy::Tools.acts?(tool))
+      end
+
+      # The scheduler in this turn that already puts THIS call on the clock -
+      # `schedule_function` for the same task beside the task itself is the
+      # model doing it twice, and only the scheduled one is wanted.
+      def clocked_by(call)
+        target = clock_target(call)
+        return nil if target.nil?
+
+        Array(@clocked_names).find { |name, _| name == target }&.last
+      end
+
+      def clock_target(call)
+        args = (call[:arguments] || {}).transform_keys(&:to_s)
+        (args["name"].presence || args["scope"]).to_s.downcase.squish.presence
+      end
+
+      # `run_in_minutes` / `run_at`, taken off the call. :unreadable when one was
+      # given and can't be turned into a time to come - which is held, never
+      # run: a call that said "later" and couldn't say when is still for later.
+      def take_timing!(call)
+        args = call[:arguments]
+        return nil unless args.is_a?(Hash)
+
+        keys = Buddy::Tools::TIMING_ARGS.flat_map { |k| [k, k.to_s] }
+        given = args.select { |k, v| keys.include?(k) && v.present? }.transform_keys(&:to_sym)
+        call[:arguments] = args.except(*keys) if args.keys.intersect?(keys)
+        return nil if given.empty?
+
+        minutes = given[Buddy::Tools::RUN_IN_ARG]
+        return Time.current + minutes.to_f.minutes if minutes.to_f.positive?
+
+        at = (Buddy::ToolContext.new(@user).resolve_time(given[Buddy::Tools::RUN_AT_ARG]) rescue nil)
+        at.present? && at > Time.current ? at : :unreadable
+      end
+
+      # Hold it: checked the way a routine step is, so a name that matches
+      # nothing is said now rather than when the wait runs out, and nothing
+      # about it happens yet.
+      def hold_for_later(call, tool, later)
+        args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
+        payload, errors = Buddy::Tools.validate_payload(tool, args, zone: Buddy::Day.zone(@user))
+        raise errors.join("; ") if errors.any?
+
+        tool[:confirm].call(payload, Buddy::ToolContext.new(@user, conversation: @conversation))
+
+        entry = later.slice(:at, :wait, :routine).merge(call: call)
+        # Asked for again a round later, after reading that it's queued - still
+        # one thing to do, not two.
+        again = @later.find { |e| e[:call][:name].to_s == call[:name].to_s && e[:call][:arguments] == call[:arguments] }
+        if again && (again[:at] || again[:wait] || entry[:at].nil?)
+          @later_ids << call[:call_id]
+          return JSON.generate(later_note(again, later))
+        end
+        # The same call made again with a time on it replaces the one that had
+        # none - that's the model answering the note below.
+        if entry[:at]
+          @later.reject! { |e|
+            e[:at].nil? && e[:wait].nil? && e[:call][:name].to_s == call[:name].to_s &&
+              clock_target(e[:call]) == clock_target(call)
+          }
+        end
+        @later << entry
+        @later_ids << call[:call_id]
+        Rails.logger.info(
+          "[Buddy::GPT::Turn] holding #{call[:name]} for later on message=#{@inbound.id} " \
+          "user=#{@user.id}: #{later.except(:wait).compact.inspect}",
+        )
+        JSON.generate(later_note(entry, later))
+      rescue StandardError => e
+        @failed << call[:call_id]
+        JSON.generate(
+          status: "failed",
+          error:  e.message,
+          note:   "Not done, and not held for later either - this call can't run as written.",
+        )
+      end
+
+      def later_note(entry, later)
+        if entry[:routine]
+          { status: "held", note: "Not done by hand. What they said is their saved routine, and the routine runs instead." }
+        elsif entry[:wait]
+          { status: "queued", note: "Queued behind the wait in this reply: it happens on its own when that wait is up. " \
+                                    "Say it as something that will happen then, never as done." }
+        elsif entry[:at]
+          { status: "queued", runs_at: Buddy::Clock.day_at(entry[:at], zone: @user.timezone), note: LATER_AT_NOTE }
+        else
+          reason = later[:unreadable] ? "The run_in_minutes / run_at on it couldn't be read as a time to come." : "They want it later, but not at a time that can be pinned down."
+          { status: "held", note: "Held, NOT done. #{reason} Make this same call again with `run_in_minutes` or " \
+                                  "`run_at`, or set_timer with then_continue: true for the delay. Never do it now." }
+        end
+      end
+
+      def covered_output(later)
+        JSON.generate(
+          status: "covered",
+          note:   "Not run now: #{later[:covered]} in this reply already puts this on the clock. Nothing more to call for it.",
+        )
+      end
+
+      # Every held call, put where it belongs among the turn's proposals.
+      #
+      # Riding a wait: placed right behind that wait, and Buddy::ProposalBuilder
+      # queues it there - the same path a wait has always held an add_list_item
+      # on, so it runs when the wait is up whichever order it was asked in.
+      # With a time and no wait: put on the clock here (see clocked). With
+      # neither: there is nothing honest to do with it, and it's marked failed so
+      # a reply saying it's set up gets taken down.
+      def with_later_calls(proposals)
+        return proposals if @later.empty?
+
+        routine, later = @later.partition { |e| e[:routine] }
+        later = later.reject { |e| clocked_by(e[:call]) }
+        # Held because what they said is a saved routine. When that routine
+        # can't run after all, these are what they asked for and they go ahead.
+        proposals += routine.pluck(:call) unless routine_runs?
+        waits = proposals.select { |c| self.class.queues_rest?(c[:name], c[:arguments]) }.to_h { |c| [c[:call_id], c] }
+        anchor = waits.values.first
+
+        riding, loose = later.partition { |e|
+          wait_id = e[:wait] && waits.key?(e[:wait][:call_id]) ? e[:wait][:call_id] : anchor&.dig(:call_id)
+          e[:wait_id] = wait_id
+          wait_id.present?
+        }
+        timed, lost = loose.partition { |e| e[:at] }
+        lost.each { |e| @failed << e[:call][:call_id] }
+
+        placed = proposals + riding.pluck(:call)
+        rank   = riding.to_h { |e| [e[:call][:call_id], [@order[e[:call][:call_id]].to_f, @order[e[:wait_id]].to_f + 0.5].max] }
+        placed = placed.each_with_index.sort_by { |c, i| [rank.fetch(c[:call_id]) { @order.fetch(c[:call_id], Float::INFINITY).to_f }, i] }.map(&:first)
+        timed.any? ? without_stray_countdown(placed, timed) + clocked(timed) : placed
+      end
+
+      def routine_runs?
+        return true if @asked_routine
+
+        Buddy::Routines.check_runnable!(outright_routine, Buddy::ToolContext.new(@user, conversation: @conversation))
+        true
+      rescue StandardError
+        false
+      end
+
+      # The Jil runners go on as `schedule_function`, the scheduler built for
+      # them. Anything else waits behind a countdown made for it, one per
+      # moment, each starting where the last one ends.
+      def clocked(timed)
+        jil, rest = timed.partition { |e| JIL_RUNNERS.include?(e[:call][:name].to_sym) }
+        out = jil.map { |e| as_scheduled_function(e) }
+
+        far, near = rest.partition { |e| e[:at] > Time.current + Buddy::DeferredTime::MAX_AHEAD }
+        far.each { |e| @failed << e[:call][:call_id] }
+
+        from = Time.current
+        near.sort_by { |e| e[:at] }.chunk_while { |a, b| (b[:at] - a[:at]).abs < 30 }.each_with_index { |group, i|
+          seconds = (group.first[:at] - from).round
+          out << {
+            name:      :set_timer,
+            call_id:   "later-wait-#{i}",
+            arguments: { "seconds" => [seconds, 1].max, Buddy::Tools::WAIT_ARG.to_s => true },
+          }
+          out.concat(group.map { |e| e[:call] })
+          from = group.first[:at]
+        }
+        out
+      end
+
+      def as_scheduled_function(entry)
+        call = entry[:call]
+        args = (call[:arguments] || {}).transform_keys(&:to_s).except("expect_result")
+        at   = entry[:at].in_time_zone(@user.timezone).strftime("%Y-%m-%dT%H:%M:%S")
+        { name: :schedule_function, call_id: "later-#{call[:call_id]}", arguments: args.merge("at" => at) }
+      end
+
+      # A plain countdown beside a call that's now on the clock for the same
+      # moment. That timer was the model's way of saying "later", and left in
+      # it rings like a kitchen timer at the hour the thing happens anyway.
+      def without_stray_countdown(proposals, timed)
+        proposals.reject { |c|
+          next false unless c[:name].to_sym == :set_timer
+          next false if self.class.queues_rest?(c[:name], c[:arguments])
+
+          ends = countdown_end(c[:arguments])
+          ends && timed.any? { |e| (e[:at] - ends).abs <= 90 }
+        }
+      end
+
+      def countdown_end(arguments)
+        args = (arguments || {}).transform_keys(&:to_s)
+        return Time.current + args["seconds"].to_i if args["seconds"].to_i.positive?
+        return Time.current + args["minutes"].to_i.minutes if args["minutes"].to_i.positive?
+
+        Buddy::ToolContext.new(@user).resolve_time(args["ends_at"]) if args["ends_at"].present?
+      rescue StandardError
+        nil
       end
 
       # "When I get home, turn on the porch light, add milk and tell Chelsea."
@@ -3985,26 +4321,6 @@ module Buddy
         proposals.map { |c| c.equal?(holder) ? c.merge(arguments: args) : c }
       end
 
-      # Told the way every other refusal is told, because it IS one: the call did
-      # not happen. `failed` is load-bearing rather than cosmetic — it drops the
-      # call from `proposals`, and it arms `retract_false_claim!` so a reply that
-      # says the sound is playing gets taken down instead of being believed.
-      def self.held_for_later(name)
-        {
-          status: "failed",
-          error:  "#{name} does it NOW, and they said when",
-          note:   "This did NOT run, on purpose. A time in the request says when to act; " \
-                  "it is never part of what to do. Put it on the clock instead: " \
-                  "`schedule_function` is this exact call with a time on it, `schedule_trigger` " \
-                  "for a Jil listener scope, `schedule_reminder` with `text: \"run <name>\"` for " \
-                  "a saved routine, `alarm` when it has to interrupt them, `set_timer` for a " \
-                  "countdown. When it should happen when something HAPPENS, or with other things " \
-                  "at that time, call `remind_when` / `schedule_reminder` with `then_run_rest: true` " \
-                  "and then make this call again after it. Never do it now as a consolation, and " \
-                  "never say it's scheduled when it isn't.",
-        }
-      end
-
       # Did they order something done AND say when? Both halves required: "at
       # 11" on its own is conversation, and "play the nap sound" on its own is
       # exactly what these tools are for.
@@ -4012,9 +4328,16 @@ module Buddy
         return false if self_initiated?
 
         body = @inbound.body.to_s
-        return false unless body.match?(COMMAND_REQUEST_RX) || body.match?(WRITE_REQUEST_RX)
+        return false unless body.match?(COMMAND_REQUEST_RX) || body.match?(WRITE_REQUEST_RX) || short_order?(body)
 
-        body.match?(DEFERRED_COMMAND_RX)
+        body.match?(DEFERRED_COMMAND_RX) || Buddy::DeferredTime.at(body, user: @user).present?
+      end
+
+      # "TV off in 30" is an order with no verb in it, and too short to be
+      # anything else. A longer verbless sentence with a time in it ("my show
+      # starts in 20, put the TV on") is as likely to be about now.
+      def short_order?(body)
+        body.split.length <= SHORT_ORDER_WORDS
       end
 
       # A reply that DECLINES is honest and must survive. "I can't reach the TV

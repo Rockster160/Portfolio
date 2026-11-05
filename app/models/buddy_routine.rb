@@ -63,6 +63,13 @@ class BuddyRoutine < ApplicationRecord
     position.present?
   end
 
+  # Values the routine is GIVEN each time it runs - "sleep timer 30" hands it
+  # minutes = 30 - which a step reaches as `{{minutes}}`, the same way it
+  # reaches an answer an earlier step collected.
+  def inputs
+    Array(metadata.to_h["inputs"]).map(&:to_s)
+  end
+
   validates :name, presence: true, length: { maximum: 80 }
   validates :description, length: { maximum: 300 }
   validate  :steps_are_runnable
@@ -210,7 +217,7 @@ class BuddyRoutine < ApplicationRecord
     # Repeated here rather than left to Buddy::Routines.sanitize, because a
     # dangling `{{name}}` is a routine that stops halfway through and this is
     # the last gate before it's stored - whichever path it arrived by.
-    Buddy::Routines.check_var_flow!(rows) if errors.empty?
+    Buddy::Routines.check_var_flow!(rows, inputs: inputs) if errors.empty?
   rescue StandardError => e
     errors.add(:steps, e.message)
   end
@@ -226,7 +233,7 @@ class BuddyRoutine < ApplicationRecord
     end
 
     payload = (raw["payload"] || {}).transform_keys(&:to_sym)
-    _, problems = Buddy::Tools.validate_payload(tool, payload)
+    _, problems = Buddy::Routines.validate_step_payload(tool, payload)
     errors.add(:steps, "step #{position} (#{tool[:name]}): #{problems.join("; ")}") if problems.any?
   end
 end

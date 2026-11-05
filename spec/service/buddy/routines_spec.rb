@@ -319,6 +319,125 @@ RSpec.describe "Buddy routines" do
     end
   end
 
+  # ---- handed a value each time ----------------------------------------------
+
+  # "Sleep timer 30": the routine **sleep timer**, given 30 minutes. Said that
+  # way it runs without the model having to choose anything, and the TV call
+  # waits behind the countdown whatever else the turn does.
+  describe "a routine that's handed a value" do
+    around { |ex| Sidekiq::Testing.fake! { ex.run } }
+
+    let!(:tv) {
+      Task.create!(
+        user: user, name: "HASS TV", buddy_enabled: true, enabled: true, code: "",
+        listener: 'function("State" TAB String)::String'
+      )
+    }
+    let(:steps) {
+      [
+        BuddyRoutine.step(:set_timer, { minutes: "{{minutes}}", then_continue: true }),
+        BuddyRoutine.step(:run_jil_task, { name: "HASS TV", state: "off" }),
+      ]
+    }
+    let(:sleep_timer) { routine!("Sleep timer", steps, metadata: { "inputs" => ["minutes"] }) }
+
+    before { allow(Jil::Executor).to receive(:call) }
+
+    it "saves the input with it, and keeps the placeholder in the step" do
+      turn!("when I say sleep timer and a number, turn the TV off in that many minutes", [{
+        name:      :save_routine,
+        call_id:   "s1",
+        arguments: { "name" => "Sleep timer", "inputs" => "minutes", "steps" => JSON.generate(steps) },
+      }])
+
+      routine = user.buddy_routines.find_by!(name: "Sleep timer")
+      expect(routine.inputs).to eq(["minutes"])
+      expect(routine.steps.first["payload"]["minutes"]).to eq("{{minutes}}")
+    end
+
+    # The model reads the argument off the listener, capital and all.
+    it "takes an argument spelled the way the task's signature spells it" do
+      tv.update!(listener: 'function("Action" TAB ["on" "off"]("on"))::String')
+      ctx = Buddy::ToolContext.new(user)
+
+      expect {
+        Buddy::Routines.sanitize([{ "tool_name" => "run_jil_task", "payload" => { "name" => "HASS TV", "Action" => "off" } }], ctx)
+      }.not_to raise_error
+    end
+
+    it "refuses a placeholder that isn't one of its inputs" do
+      expect {
+        routine!("Sleep timer", steps, metadata: { "inputs" => ["mins"] })
+      }.to raise_error(ActiveRecord::RecordInvalid, /\{\{minutes\}\}/)
+    end
+
+    it "runs when it's said with the value, and the TV goes off only when the time is up", :aggregate_failures do
+      sleep_timer
+
+      ["Sleep timer 30", "sleep timer thirty"].each { |said|
+        Timer.where(user_id: user.id).delete_all
+        says!(said, "Thirty minutes, then the TV's off.")
+
+        timer = timers.last
+        expect(timer.duration_ms).to eq(30.minutes.in_milliseconds), said
+        expect(Jil::Executor).not_to have_received(:call)
+      }
+
+      Buddy::Timers.on_fired(timers.last)
+
+      expect(Jil::Executor).to have_received(:call).once
+    end
+
+    # The model reaching for the TV itself is the routine being done by hand,
+    # and the by-hand TV call is the one that goes off on the spot.
+    it "holds a by-hand TV call and runs the routine instead" do
+      sleep_timer
+
+      turn!("Sleep timer 30", [{ name: :call_jil_function, call_id: "c1", arguments: { "name" => "HASS TV", "args" => { "state" => "off" } } }])
+
+      expect(Jil::Executor).not_to have_received(:call)
+      expect(timers.last.duration_ms).to eq(30.minutes.in_milliseconds)
+    end
+
+    it "is the model's to ask about when it's said without the value" do
+      sleep_timer
+
+      says!("sleep timer", "How many minutes?")
+
+      expect(timers).to be_empty
+    end
+
+    it "tells the model what's missing when it's run without one" do
+      sleep_timer
+
+      client = turn!("sleep timer please", [run_call("Sleep timer")])
+      outputs = client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }
+
+      expect(JSON.parse(outputs.first[:output]).to_s).to include("needs minutes")
+      expect(Jil::Executor).not_to have_received(:call)
+    end
+
+    it "tells the model a shortcut being set up is a routine to save, and leaves other sentences alone" do
+      [
+        "If I ever say sleep timer followed by a number, it means I want you to turn off the tv in that many minutes.",
+        "When I say good night, turn off the lights and lock up",
+        "whenever I say movie time I want you to dim the lights",
+      ].each { |said| expect(Buddy::GPT::Turn.teaching_directive(said)).to be_present, said }
+
+      [
+        "When I say goodbye to her, I cry",
+        "if I say it out loud it sounds weird",
+        "turn the tv off in 30",
+      ].each { |said| expect(Buddy::GPT::Turn.teaching_directive(said)).to be_nil, said }
+    end
+
+    it "lists what it takes in the prompt" do
+      sleep_timer
+
+      expect(Buddy::Personality.send(:routines_block, user)).to include("**Sleep timer** (takes minutes)")
+    end
+  end
+
   # ---- saving ---------------------------------------------------------------
 
   describe "saving one they described" do

@@ -105,7 +105,24 @@ module Buddy
 
       rows = user.buddy_routines.enabled.ordered.to_a
       exact = rows.find { |r| words(r.name).sort == asked.sort }
-      exact || rows.find { |r| whole_name?(asked, words(r.name)) } || shortened_name(rows, asked)
+      exact || rows.find { |r| whole_name?(asked, words(r.name)) } || shortened_name(rows, asked) ||
+        with_values(rows, asked)
+    end
+
+    # "Sleep timer 30" is the routine **sleep timer**, handed 30. A routine
+    # that takes inputs is its name plus one value per input, and nothing else -
+    # the same test as above, with the values set aside first.
+    def with_values(rows, asked)
+      values, rest = asked.partition { |word| spoken_number(word) }
+      return nil if values.empty?
+
+      rows.find { |r| r.inputs.length == values.length && whole_name?(rest, words(r.name)) }
+    end
+
+    # The values a message named a routine with, in order - "30" off "sleep
+    # timer 30" - as `run_routine` takes them.
+    def values_named(text)
+      (words(text) - NAME_FILLER).filter_map { |word| spoken_number(word) }.join(" ").presence
     end
 
     # The one routine this is an abbreviation of, or nil when it is nobody's or
@@ -148,7 +165,7 @@ module Buddy
       routine = find(user, payload[:name])
       return [] if routine.nil?
 
-      routine.markers
+      markers_for(routine, payload[:inputs])
     end
 
     def runner?(tool)
@@ -204,13 +221,71 @@ module Buddy
       rows
     end
 
-    def sanitize(rows, ctx)
+    def sanitize(rows, ctx, inputs: [])
       list = Array(rows)
       raise "a routine needs at least one step" if list.empty?
 
       steps = list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1, ctx) }
-      check_var_flow!(steps)
+      check_var_flow!(steps, inputs: inputs)
       steps
+    end
+
+    # The names a routine is GIVEN each time it runs, from what save_routine
+    # was handed: "minutes" or "minutes, room". Same rule as a `var`, because
+    # a step reaches one the same way, as `{{minutes}}`.
+    def input_names(value)
+      names = Array(value.is_a?(Array) ? value : value.to_s.split(/[\s,]+/)).map { |n| n.to_s.strip }.compact_blank.uniq
+      bad = names.grep_v(Buddy::StepVars::NAME)
+      raise "#{bad.first.inspect} isn't a usable input name - letters, numbers and underscores" if bad.any?
+
+      names
+    end
+
+    # What a run was given, against the names the routine takes. "30" fills the
+    # first one; "minutes=30, room=den" names them; a JSON object works too. A
+    # spoken number ("thirty") becomes the digits a step's argument wants.
+    def given_inputs(routine, raw)
+      names = routine.inputs
+      return {} if names.empty? || raw.blank?
+
+      values = (
+        if raw.is_a?(Hash)
+          raw.transform_keys(&:to_s)
+        elsif (parsed = (JSON.parse(raw.to_s) rescue nil)).is_a?(Hash)
+          parsed.transform_keys(&:to_s)
+        elsif (pairs = raw.to_s.scan(/([a-z0-9_]+)\s*[=:]\s*([^,;]+)/i)).any?
+          pairs.to_h.transform_values(&:strip)
+        else
+          names.zip(raw.to_s.split(/\s*[,;]\s*|\s+/).compact_blank).to_h.compact
+        end
+      )
+      values.slice(*names).transform_values { |v| spoken_number(v.to_s) || v }
+    end
+
+    def missing_inputs(routine, values)
+      routine.inputs - values.keys
+    end
+
+    # The routine's steps with what this run was given filled in.
+    def markers_for(routine, raw)
+      values = given_inputs(routine, raw)
+      return routine.markers if values.empty?
+
+      routine.markers.map { |m|
+        filled, = Buddy::StepVars.fill(m[:payload], values, Buddy::Tools[m[:tool_name]])
+        m.merge(payload: filled)
+      }
+    end
+
+    # Words a person says a value with. Articles are left out: "a" is a number
+    # to DeferredTime, and here it would turn "the sleep timer" into a value.
+    VALUE_WORDS = (Buddy::DeferredTime::WORD_NUMBERS.keys - %w[a an couple a\ couple a\ couple\ of]).freeze
+
+    def spoken_number(word)
+      key = word.to_s.downcase.strip
+      return key if key.match?(/\A\d+(?:\.\d+)?\z/)
+
+      Buddy::DeferredTime::WORD_NUMBERS[key]&.to_s if VALUE_WORDS.include?(key)
     end
 
     # Every `{{name}}` has to be captured by a step BEFORE the one using it.
@@ -223,8 +298,8 @@ module Buddy
     #
     # Order matters and is the whole point: a routine that references its own
     # later answer parses perfectly and can never run.
-    def check_var_flow!(steps)
-      available = []
+    def check_var_flow!(steps, inputs: [])
+      available = Array(inputs).map(&:to_s)
       steps.each_with_index { |step, i|
         tool    = Buddy::Tools[step["tool_name"]]
         payload = (step["payload"] || {}).transform_keys(&:to_sym)
@@ -252,11 +327,22 @@ module Buddy
       raise "step #{position}: #{name} can't be saved in a routine" unless Buddy::Tools.routinable?(tool)
 
       given = Buddy::Tools.normalize_function_arguments(tool, step_args(row, tool_key).transform_keys(&:to_sym))
-      payload, errors = Buddy::Tools.validate_payload(tool, given)
+      payload, errors = validate_step_payload(tool, given)
       raise "step #{position} (#{name}): #{errors.join("; ")}" if errors.any?
 
       resolves!(tool, payload, name, position, ctx)
       BuddyRoutine.step(name, payload)
+    end
+
+    # validate_payload, minus the arguments that are a `{{name}}`. Those can't be
+    # checked until a run fills them in - "{{minutes}}" is not an integer, and
+    # a required one standing in for a value is not missing - so they ride
+    # through untouched and are checked when they hold something.
+    def validate_step_payload(tool, given)
+      tokened, plain = (given || {}).partition { |_, v| Buddy::StepVars.tokens_in(v).any? }.map(&:to_h)
+      payload, errors = Buddy::Tools.validate_payload(tool, plain)
+      errors = errors.reject { |e| tokened.keys.any? { |k| e.to_s.include?(k.to_s) } }
+      [payload.merge(tokened), errors]
     end
 
     # The same question sanitize asks at SAVE time, asked again at RUN time.

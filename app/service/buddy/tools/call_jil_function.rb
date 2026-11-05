@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:             :call_jil_function,
   summary:          "Run one of the automations in `jil_functions` with arguments, right now - " \
-                    "lights with a color, the car, the printer, cameras. At a later time is " \
-                    "schedule_function.",
+                    "lights with a color, the car, the printer, cameras. For later, the same call " \
+                    "with run_in_minutes or run_at.",
   # Reached through run_jil_task; still runs the steps and calls that name it.
   internal:         true,
   description:      <<~TXT,
@@ -40,10 +40,9 @@ Buddy::Tools.register(
     thing to do now that mentions 11. A time in the request is an instruction
     about when to act; it is never part of what to do.
 
-    `schedule_function` is this same call with a time on it — same `name`, same
-    arguments, plus `at` or `repeat`. Reach for that one. A call made here with
-    a time in the request is refused rather than run, so saying it's set up when
-    nothing was scheduled is a lie about a physical thing.
+    For later, make this same call with `run_in_minutes` (a delay) or `run_at`
+    (a clock time) and it happens on its own then. Something that REPEATS is
+    `schedule_function` with `repeat`.
 
     Two hard limits:
 

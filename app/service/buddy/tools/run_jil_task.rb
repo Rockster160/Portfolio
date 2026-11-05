@@ -13,9 +13,9 @@
 # store their names.
 Buddy::Tools.register(
   name:             :run_jil_task,
-  summary:          "Run one of their automations by name, right now - lights, the car, the printer, " \
-                    "cameras, scenes, fans. A name or description below that says what they asked is the " \
-                    "call, even when the request sounds like cancelling a reminder.",
+  summary:          "Run one of their automations by name - lights, the car, the TV, the printer, " \
+                    "scenes, fans - now, or later with run_in_minutes / run_at. A name below that says " \
+                    "what they asked is the call, even if it sounds like cancelling a reminder.",
   roster:           ->(user) { Buddy::Tools.jil_function_names(user) + Buddy::Tools.jil_trigger_names(user) },
   description:      <<~TXT,
     Run a Jil automation by name. Everything in the `jil_functions` and
@@ -92,10 +92,12 @@ Buddy::Tools.register(
 
     ## Not now
 
-    This happens the moment you call it, so it is the wrong tool the second
-    they say WHEN. "Play the nap sound at 11" is `schedule_function`, the same
-    name and arguments plus a time. On a condition rather than a clock ("once I
-    leave") it is `remind_when` with `run`. A raw SCOPE they hand you
+    This happens the moment you call it unless you say when. "Play the nap
+    sound at 11" is this call with `run_at`, and "turn the TV off in 30" is
+    this call with `run_in_minutes: 30` - one call, and it happens on its own
+    then. Something that REPEATS is `schedule_function` with `repeat`. On a
+    condition rather than a clock ("once I leave") it is `remind_when` with
+    `run`. A raw SCOPE they hand you
     (`some:jil:listener`) rather than a task's name is `schedule_trigger`.
 
     The lists only contain tasks the person allowed you to run, and may include
@@ -140,6 +142,11 @@ Buddy::Tools.register(
 
       slots = ::Jil::FunctionSignature.slots(row.function_args_str)
       named = slots.filter_map { |slot| slot[:key] }
+      # The signature's own spelling of a name is the same argument: "Action"
+      # off a listener that reads `"Action" TAB ...` is `action`.
+      fn_args = fn_args.transform_keys { |key|
+        (named.find { |n| n.casecmp?(key.to_s.parameterize(separator: "_")) } || key).to_sym
+      }
       stray = fn_args.keys.map(&:to_s) - named
       if stray.any? && named.length == slots.length
         takes = named.any? ? "takes #{named.map { |key| "`#{key}`" }.join(", ")}" : "takes no arguments"

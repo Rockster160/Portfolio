@@ -302,7 +302,7 @@ BUDDY_TOOL_PROBES = {
   # HASS Fan, and "the fan" between two of them is a question rather than a
   # call - which is its own probe, below, and a pass when it's asked.
   run_jil_task:           { say: "turn the great room fan to low", needs: :fan_fn },
-  schedule_function:      { say: "play the Whisper nap sound at 11 tonight", avoid: %i[run_jil_task], needs: :light_fn },
+  schedule_function:      { say: "play the Whisper nap sound every night at 11", avoid: %i[run_jil_task schedule_reminder], needs: :light_fn },
   # A SCOPE, which is what this tool takes, and no `needs:` at all — a trigger
   # is an announcement, so it does not matter whether anything is listening.
   # Asked with a NAME it correctly reached for schedule_function instead.
@@ -1255,29 +1255,28 @@ BUDDY_EDGE_PROBES = [
   },
   # --- a thing put off, which is the one that keeps coming back -------------
   {
-    case:  "prod 3897",
-    say:   "add oat milk to my grocery list in 2 minutes",
-    tool:  :set_timer,
-    with:  %i[add_list_item],
-    order: %i[set_timer add_list_item],
-    args:  { set_timer: { then_continue: true } },
-    note:  "the item went on the list on the spot; the time was read as noise",
+    case: "prod 3897",
+    say:  "add oat milk to my grocery list in 2 minutes",
+    tool: :add_list_item,
+    args: { add_list_item: { run_in_minutes: /\A2\z/ } },
+    or:   { tool: :set_timer, with: %i[add_list_item], args: { set_timer: { then_continue: true } } },
+    note: "the item went on the list on the spot; the time was read as noise",
   },
   {
     case:  "the same shape, taking something away",
     say:   "take the oat milk off my grocery list in five minutes",
-    tool:  :set_timer,
-    with:  %i[remove_list_item],
-    order: %i[set_timer remove_list_item],
-    args:  { set_timer: { then_continue: true } },
+    tool:  :remove_list_item,
+    args:  { remove_list_item: { run_in_minutes: /\A5\z/ } },
+    or:    { tool: :set_timer, with: %i[remove_list_item], args: { set_timer: { then_continue: true } } },
     needs: :oat_milk_listed,
     note:  "doing it now is the opposite of what was asked",
   },
   {
     case:  "prod 4081, 6603",
     say:   "play the Whisper nap sound in 2 minutes",
-    tool:  :schedule_function,
-    avoid: %i[run_jil_task set_timer],
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { run_in_minutes: /\A2\z/ } },
+    or:    { tool: :schedule_function, avoid: %i[run_jil_task set_timer] },
     needs: :whisper_sound_fn,
     note:  "twice, in both directions. First the sound played in the room two " \
            "minutes early - a wait can't hold a tool that runs inside the turn. " \
@@ -1288,21 +1287,28 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 8481",
     say:   "Turn the tv off in an hour",
-    tool:  :schedule_function,
+    tool:  :run_jil_task,
     avoid: %i[schedule_reminder],
-    args:  { schedule_function: { name: /\bTV\z/i } },
+    args:  { run_jil_task: { name: /\bTV\z/i, run_in_minutes: /\A60\z/ } },
+    # The TV call rides a wait in the same reply whichever order the two come
+    # in (see Turn#with_later_calls), so the pair is as right as the one call.
+    or:    [
+      { tool: :schedule_function, args: { schedule_function: { name: /\bTV\z/i } } },
+      { tool: :set_timer, with: %i[run_jil_task], args: { set_timer: { then_continue: true }, run_jil_task: { name: /\bTV\z/i } } },
+    ],
     needs: :tv_fn,
     note:  "it set a reminder that read \"Turn off the TV\" and replied as if the " \
            "TV would go off; nothing ever turned it off",
   },
   {
-    case: "prod 10035",
-    say:  "If I ever say sleep timer followed by a number, it means I want you to turn off " \
-          "the tv in that many minutes.",
-    tool: :define_term,
-    or:   { tool: :remember },
-    note: "answered \"I'll treat sleep timer as a TV-off timer from now on\" with no call, " \
-          "so the shorthand lived only in the scrollback",
+    case:  "prod 10035",
+    say:   "If I ever say sleep timer followed by a number, it means I want you to turn off " \
+           "the tv in that many minutes.",
+    tool:  :save_routine,
+    args:  { save_routine: { inputs: /minutes/i, steps: /\{\{\s*minutes\s*\}\}/ } },
+    needs: :tv_fn,
+    note:  "answered \"I'll treat sleep timer as a TV-off timer from now on\" with no call, " \
+           "so the shorthand lived only in the scrollback",
   },
   {
     case:  "prod 10037",
@@ -1310,15 +1316,15 @@ BUDDY_EDGE_PROBES = [
       {
         say:  "If I ever say sleep timer followed by a number, it means I want you to turn " \
               "off the tv in that many minutes.",
-        tool: :define_term,
-        or:   { tool: :remember },
+        tool: :save_routine,
+        args: { save_routine: { inputs: /minutes/i } },
         run:  true,
       },
       {
         say:   "Sleep timer 30",
-        tool:  :schedule_function,
-        avoid: %i[call_jil_function run_jil_task],
-        args:  { schedule_function: { name: /\bTV\z/i } },
+        tool:  :run_routine,
+        args:  { run_routine: { inputs: /30/ } },
+        avoid: %i[call_jil_function run_jil_task set_timer],
       },
     ],
     needs: :tv_fn,
@@ -1326,10 +1332,24 @@ BUDDY_EDGE_PROBES = [
            "minutes\" set another empty wait and the TV never went off",
   },
   {
+    case:  "prod 10043",
+    say:   "Turn off the tv in 30 minutes.",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /\bTV\z/i, run_in_minutes: /\A30\z/ } },
+    or:    [
+      { tool: :schedule_function, args: { schedule_function: { name: /\bTV\z/i } } },
+      { tool: :set_timer, with: %i[run_jil_task], args: { set_timer: { then_continue: true }, run_jil_task: { name: /\bTV\z/i } } },
+    ],
+    avoid: %i[schedule_reminder],
+    needs: :tv_fn,
+    note:  "set a 30 minute wait with nothing behind it; the wait rang and the TV stayed on",
+  },
+  {
     case:  "prod 3562",
     say:   "play the nap sound at 11 tonight",
-    tool:  :schedule_function,
-    avoid: %i[run_jil_task],
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { run_at: /T23:00/ } },
+    or:    { tool: :schedule_function, avoid: %i[run_jil_task] },
     needs: :whisper_sound_fn,
     note:  "it went off sixteen minutes early next to a sleeping dog",
   },
@@ -3521,6 +3541,9 @@ namespace :buddy do
     bubble  = persist_reply(convo, user, inbound)
 
     input   = [{ role: :user, content: text }]
+    # The request-read directive Turn adds, so a probe sees what production does.
+    teaching = Buddy::GPT::Turn.teaching_directive(text)
+    input  += [{ role: :developer, content: teaching }] if teaching
     started = Time.current
     reply   = String.new(encoding: "UTF-8")
     calls   = []
@@ -3556,6 +3579,15 @@ namespace :buddy do
       calls.concat(result[:tool_calls] - opening)
 
       if result[:tool_calls].empty?
+        # Mirrors Turn#empty_wait?: a reply whose only calls are waits holding
+        # nothing gets one round to make the call they were for.
+        acting = calls.reject { |c| readers.key?(c[:name].to_sym) }
+        if !nudged && acting.any? && acting.all? { |c| Buddy::GPT::Turn.queues_rest?(c[:name], c[:arguments]) }
+          nudged = true
+          input += [{ role: :developer, content: Buddy::GPT::Turn::EMPTY_WAIT_NUDGE }]
+          next
+        end
+
         # Mirrors Turn: a reply claiming an action nothing backs up buys exactly
         # one corrective round to go make the call it skipped.
         break if nudged || calls.any?
@@ -3691,6 +3723,13 @@ namespace :buddy do
 
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+    # A call carrying its own time is held for then in production, and told
+    # so - answered here as having run, the model says "done" over it.
+    timing = (call[:arguments] || {}).transform_keys(&:to_sym).slice(*Buddy::Tools::TIMING_ARGS).compact_blank
+    if timing.any? && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name)
+      return JSON.generate(status: "queued", note: Buddy::GPT::Turn::LATER_AT_NOTE)
+    end
 
     # An ANSWERING tool runs inside resolve_call - that's what makes it an
     # answer - and the handful that also `act` really do the thing: print_again
@@ -3986,11 +4025,17 @@ namespace :buddy do
 
   # The probe as its `or:` reads it when that is the path the turn took, so the
   # verdict below is scored against the way it actually got it right.
+  #
+  # `or:` takes one alternative or a list of them: several ways of getting
+  # the same thing done can all be right.
   def either(probe, calls, user)
     return probe if probe[:or].nil?
 
-    other = probe.except(:or).merge(probe[:or])
-    clean?(other, calls, user) ? other : probe
+    alternatives(probe).find { |other| clean?(other, calls, user) } || probe
+  end
+
+  def alternatives(probe)
+    Array.wrap(probe[:or]).map { |alt| probe.except(:or).merge(alt) }
   end
 
   def clean?(probe, calls, user)
@@ -4012,7 +4057,7 @@ namespace :buddy do
       ("carrying #{probe[:args].values.map(&:to_json).join(", ")}" if probe[:args].present?),
       ("never carrying #{probe[:never_args].values.map(&:to_json).join(", ")}" if probe[:never_args].present?),
       ("and never #{Array(probe[:avoid]).join(", ")}" if probe[:avoid].present?),
-      ("or else #{wanted_phrase(probe.except(:or).merge(probe[:or]))}" if probe[:or]),
+      ("or else #{alternatives(probe).map { |alt| wanted_phrase(alt) }.join(", or else ")}" if probe[:or]),
     ].compact.join(", ")
   end
 
@@ -4119,9 +4164,12 @@ namespace :buddy do
         # Read as the tool reads them: a pass-through tool's `args` object is
         # folded flat before it ever sees them.
         registered = Buddy::Tools[tool]
+        sent = (call[:arguments] || {}).transform_keys(&:to_s)
         args = call[:arguments] || {}
         args = Buddy::Tools.normalize_function_arguments(registered, args) if registered
-        args = args.transform_keys(&:to_s)
+        # The timing comes off before a tool sees its arguments, and whether
+        # it was there is exactly what a later-on probe asks.
+        args = args.transform_keys(&:to_s).merge(sent.slice(*Buddy::Tools::TIMING_ARGS.map(&:to_s)))
         wanted.filter_map { |arg, want|
           got = args[arg.to_s]
           hit = want.is_a?(Regexp) ? want.match?(got.to_s) : got.to_s == want.to_s

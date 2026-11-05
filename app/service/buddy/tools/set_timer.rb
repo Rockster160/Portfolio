@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :set_timer,
-  summary:     "Start a countdown (\"5 minute timer\"), or a wait the rest of the request queues " \
-               "behind (then_continue).",
+  summary:     "Start a countdown (\"5 minute timer\"), or a wait the other calls in this reply " \
+               "queue behind (then_continue). A wait does nothing itself.",
   always:      true,
   description: <<~TXT,
     Start a countdown timer that shows in your window and alarms when it's up.
@@ -36,12 +36,9 @@ Buddy::Tools.register(
       one action. Calling the action on its own does it immediately, which is
       the opposite of what they asked for.
 
-    A wait holds a step that hasn't happened yet. Some tools say in their own
-    description that a wait CANNOT hold them - they act the instant they are
-    called, before the wait is even set - and a delay on one of those goes on a
-    real schedule instead: schedule_function, schedule_trigger,
-    schedule_reminder or alarm. Sounds, devices and Jil functions are the ones
-    to look twice at.
+    A wait holds a step that hasn't happened yet. The tools that act the
+    instant they're called also take their own `run_in_minutes` / `run_at`,
+    which is the simpler way to put just one of them off.
 
     The test is whether they named something to happen AFTER a delay. If they
     did, the timer carries `then_continue: true`. A bare "set a timer for 10" -
