@@ -124,6 +124,16 @@ RSpec.describe "Buddy chore tools" do
       expect(completions.where(note: [nil, ""]).count).to eq(3)
     end
 
+    it "reads a time of \"now\" as no time at all" do
+      run([
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "8oz Water", "at" => "now" } }] },
+        { text: "Logged." },
+      ])
+
+      expect(chore.chore_completions.count).to eq(1)
+      expect(chore.chore_completions.first.completed_at).to be_within(1.minute).of(Time.current)
+    end
+
     it "still count-merges identical (same-note) repeats in one round" do
       captured = nil
       allow(Buddy::ProposalBuilder).to receive(:create) { |args|

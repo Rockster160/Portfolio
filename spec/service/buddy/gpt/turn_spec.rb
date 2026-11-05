@@ -4561,4 +4561,37 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("That's the dishes done.")
     end
   end
+
+  describe ".next_day_directive" do
+    def directive(text, on:)
+      travel_to(Time.find_zone(user.timezone).local(*on, 12)) { described_class.next_day_directive(text, user: user) }
+    end
+
+    it "skips a day still ahead this week, and takes the coming one once it's in the next" do
+      # A Thursday.
+      expect(directive("hang out next Saturday at 6:30", on: [2026, 11, 5])).to include("2026-11-14")
+      # A Friday: Monday is already next week.
+      expect(directive("dentist next Monday", on: [2026, 11, 6])).to include("2026-11-09")
+    end
+
+    it "says nothing without a next weekday in it" do
+      expect(directive("dinner on Saturday", on: [2026, 11, 5])).to be_nil
+    end
+  end
+
+  describe ".screen_directive" do
+    it "points a question about a piece of the app at the screen" do
+      [
+        "It looks like you have a lot of notifications how do I go through those so they stop alerting me",
+        "the little number next to your picture has nine but there's only seven what's up with that?",
+        "something can stay on your shelf - where does that show?",
+      ].each { |text| expect(described_class.screen_directive(text)).to be_present, text }
+    end
+
+    it "leaves questions about anything else alone" do
+      ["how do I make soup", "where is the dentist", "how do I see my agenda?"].each { |text|
+        expect(described_class.screen_directive(text)).to be_nil, text
+      }
+    end
+  end
 end

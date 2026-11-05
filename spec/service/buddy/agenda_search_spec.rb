@@ -52,6 +52,14 @@ RSpec.describe Buddy::AgendaSearch do
         .to contain_exactly(behind, ahead)
     end
 
+    it "falls back to the telling words when the phrase as said matches nothing" do
+      pilaf = item!("Kevin's meal & pilaf", at: 3.days.from_now)
+      item!("Zoom meet with Bri", at: 2.days.from_now)
+
+      expect(described_class.call(user: user, query: "pilaf dinner")[:items]).to contain_exactly(pilaf)
+      expect(described_class.call(user: user, query: "the dinner")[:items]).to be_empty
+    end
+
     it "finds nothing when there is nothing, which is the answer that was missing" do
       item!("Zoom meet with Bri", at: 2.days.from_now)
 

@@ -1,8 +1,8 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
-  summary:     "A message at a clock time, after a delay, or when an agenda item or chore comes " \
-               "DUE (unless done) - before events, for them or a partner (\"remind me at 12:50\", " \
-               "\"10 days before birthdays\", \"remind Chelsea tomorrow\"). alarm rings.",
+  summary:     "A message at a clock time, after a delay, before an event or birthday, or when a " \
+               "chore comes DUE - and only if a device or where they are holds (\"at 11 if the " \
+               "garage is open and I'm out\"). For them or a partner. alarm rings.",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
@@ -222,7 +222,7 @@ Buddy::Tools.register(
     A chore has no clock time - it comes due for the whole DAY - so the hour is
     the offset, counted from 4am when the chore day turns over:
     `chore:<name>+<hours>h`. An offset is therefore almost always wanted; a
-    bare `chore:<name>` is 4am and is nearly never what they meant.
+    bare `chore:<name>`, like `+0h`, is 4am and is nearly never what they meant.
 
     THE HOUR IS THEIRS AND IT IS A JUDGEMENT, not a default to be carried over
     from the arithmetic above. The offset has to land late enough that not
@@ -477,6 +477,15 @@ Buddy::Tools.register(
     # occurrence isn't there, which is a mistake rather than a wait.
     anchor = payload[:anchor].to_s.strip.presence
     if anchor
+      # A chore is due for the whole day, so no offset is the moment the day
+      # turns over: a nudge at 4am about something nobody has had the chance
+      # to do yet.
+      parsed = ::AnchorExpression.parse(anchor)
+      if parsed && parsed[:key].start_with?("chore:") && parsed[:offset_seconds].to_i <= 0
+        raise "#{anchor} fires at 4am, when the chore day turns over - add the hour it would be news " \
+              "that it isn't done, as +<hours>h counted from 4am"
+      end
+
       fire_at = ::Anchor.subscribe!(anchor, user: ctx.user)
       pinned  = ::AnchorExpression.parse(anchor)&.dig(:identifier).present?
       raise "nothing matches #{anchor}" if fire_at.nil? && pinned

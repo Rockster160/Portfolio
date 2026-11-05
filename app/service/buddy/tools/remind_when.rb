@@ -263,9 +263,11 @@ Buddy::Tools.register(
     `then_run_rest: true` on this call, then make the three calls exactly as
     you would to do them now, in the same reply - `run_jil_task`,
     `add_list_item`, `message_partner`. They are held, not run, and become
-    what this watch runs, in that order, when the condition hits. `text` is
-    the line posted above them. That is the whole of it: no routine to save,
-    no JSON to write. Call this one FIRST, or in the same reply as the rest -
+    what this watch runs, in that order, when the condition hits. Every thing
+    they listed is a call of its own, a wait between two of them included
+    (`set_timer` with `then_continue: true`): `text` is the line posted above
+    them, and a step that is only written into `text` is said, never done.
+    That is the whole of it: no routine to save, no JSON to write. Call this one FIRST, or in the same reply as the rest -
     anything you already ran in an earlier reply has already happened.
 
     ## Only sometimes
@@ -297,7 +299,7 @@ Buddy::Tools.register(
     detected - just that you'll let them know.
   TXT
   args:         {
-    text:          { type: :string,  required: true,  template: true, description: "What to remind them of" },
+    text:          { type: :string,  required: true,  template: true, description: "What to remind them of. When it runs things, the short line posted above them - it does none of them itself" },
     trigger:       { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:        { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
     except:        { type: :string,  required: false, description: "arrive/depart/chore/event: the one place, chore or event it must NOT fire for (\"home\" for \"anywhere but home\"). Usually with no target." },
@@ -316,7 +318,7 @@ Buddy::Tools.register(
     expires:       { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
     only_if:       { type: :string,  required: false, description: "JSON array of conditions that must ALL hold when it trips - device state, a time window, where they are. See \"Only sometimes\"." },
     only_if_any:   { type: :boolean, required: false, description: "Go ahead when ANY of `only_if` holds instead of all of them." },
-    then_run_rest: { type: :boolean, required: false, description: "The calls you make after this one in this reply are what it RUNS when the condition hits, instead of happening now." },
+    then_run_rest: { type: :boolean, required: false, description: "The calls you make after this one in this reply are what it RUNS when the condition hits, instead of happening now - one call for each thing they listed." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
   # into a feature: a chore watch would tell someone without chores when the

@@ -39,7 +39,7 @@ Buddy::Tools.register(
       chore_id:       rows.first.chore_id,
       chore_name:     rows.first.chore.name,
     }
-    if payload[:at].present?
+    if payload[:at].present? && !Buddy::TimeParser.means_now?(payload[:at])
       parsed = Buddy::TimeParser.parse_past(payload[:at], user: ctx.user)
       raise "couldn't parse time #{payload[:at].inspect}" if parsed.nil?
 

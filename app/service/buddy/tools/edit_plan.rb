@@ -2,7 +2,7 @@ Buddy::Tools.register(
   name:        :edit_plan,
   summary:     "Change or cancel a plan already set up - the reminders, watches and stop rules one " \
                "request made - as one thing: push it all back an hour, change what it waits for or " \
-               "runs, add a condition, cancel the lot.",
+               "runs, add a condition, cancel the lot (\"forget the whole garage plan\").",
   description: <<~TXT,
     Change a plan that's already running, whole. One request often becomes
     several rows - a watch that runs things, a reminder later that night, the

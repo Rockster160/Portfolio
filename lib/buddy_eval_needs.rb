@@ -134,6 +134,7 @@ module BuddyEvalNeeds
     celsius_today:        { label: "a Celsius logged today",       check: ->(u) { event_today(u, /celsius/i) } },
     sandwich_today:       { label: "a sandwich logged today",      check: ->(u) { event_today(u, /sandwich/i) } },
     oat_milk_listed:      { label: "oat milk on a list",           check: ->(u) { list_item(u, /oat milk/i) } },
+    before_bed_list:      { label: "a Before Bed list",            check: ->(u) { u.lists.reload.any? { |l| l.name.to_s.match?(/before bed/i) } } },
     grocery_list:         { label: "a grocery list",               check: ->(u) { u.lists.reload.any? { |l| l.name.to_s.match?(/grocer/i) } } },
     grocery_section:      { label: "a section on the grocery list", check: ->(u) { u.lists.reload.select { |l| l.name.to_s.match?(/grocer/i) }.any? { |l| l.sections.any? { |s| s.name.to_s.match?(/costco/i) } } } },
     greenhouse_idea:      { label: "a stashed greenhouse idea",    check: ->(u) { stash(u, /greenhouse/i) } },
@@ -169,14 +170,32 @@ module BuddyEvalNeeds
     pending_prompt:       { label: "a pending prompt",             check: ->(u) { u.prompts.unanswered.exists? } },
     whisper_sound_fn:     { label: "the Whisper Sound function",   check: ->(u) { jil(u, /whisper sound/i) } },
     quiet_fn:             { label: "the Whisper Quiet For function", check: ->(u) { jil(u, /whisper quiet/i) } },
+    # A copy from before it took an end time has nowhere to put "until 12:30".
+    quiet_until_fn:       { label: "the Whisper Quiet For function with an end time", check: ->(u) { jil(u, /"or until"/i) } },
     skip_nap_fn:          { label: "the Whisper Skip Nap function", check: ->(u) { jil(u, /skip nap/i) } },
     scene_fn:             { label: "the HASS Scene function", check: ->(u) { jil(u, /hass scene/i) } },
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
     navigate_fn:          { label: "a car navigate function",      check: ->(u) { jil(u, /navigate/i) } },
+    # Says so in its description, which is the only place the model can learn
+    # that a blank destination picks the next place on the day.
+    navigate_next_fn:     {
+      label: "a car navigate function that picks the next place itself",
+      check: ->(u) { Task.where(user: u, buddy_enabled: true, enabled: true).any? { |t| t.name.to_s.match?(/navigate/i) && t.description.to_s.match?(/blank/i) } },
+    },
     thermostat_reading:   { label: "a thermostat reading beside the function that sets it", check: ->(u) { jil(u, /thermostat/i) && Buddy::DeviceStates.for_user(u).any? { |r| r[:device].match?(/thermostat/i) && r[:state].to_s.include?("°") } } },
     blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
+    # A copy of the task from before the six singles were added can only move a
+    # pair, so the single it's asked for isn't there to pick.
+    single_blinds_fn:     {
+      label: "the blinds function with single blinds",
+      check: ->(u) {
+        Task.where(user: u, buddy_enabled: true, enabled: true).any? { |t|
+          t.listener.to_s.match?(/\A\s*function\(\s*"Action"/) && t.listener.to_s.include?("great_bottom_right")
+        }
+      },
+    },
     car_fn:               { label: "the car function",             check: ->(u) { jil(u, /tesla/i) } },
     tv_fn:                { label: "the TV function",              check: ->(u) { jil(u, /\btv\b/i) } },
     # BOTH, because the probe is about choosing between them. With only one

@@ -75,7 +75,7 @@ Buddy::Tools.register(
     chore = chore.completion_leaf_for(credit || ctx.user)
     resolved = { chore_id: chore.id }
     resolved[:credit_user_id] = credit.id if credit && credit.id != ctx.user.id
-    if payload[:at].present?
+    if payload[:at].present? && !Buddy::TimeParser.means_now?(payload[:at])
       parsed = Buddy::TimeParser.parse_past(payload[:at], user: ctx.user)
       raise "couldn't parse time #{payload[:at].inspect}" if parsed.nil?
 

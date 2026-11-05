@@ -118,6 +118,16 @@ RSpec.describe "Holding the rest of a reply behind a watch" do
     expect(outputs(client)["t1"]).to include("status" => "failed")
   end
 
+  # The watch was also given one task of its own to run. That task is the
+  # first thing it does, so it leads the steps rather than refusing them.
+  it "makes a watch's own run its first step" do
+    client = run([watch_call(run: "Whisper Quiet"), task_call("Porch Light On", id: "t1")])
+
+    expect(outputs(client)["t1"]).to include("status" => "held")
+    watch = BuddyWatch.where(user: user).last
+    expect(watch.run_steps.map { |s| s.dig("payload", "name") }).to eq(["Whisper Quiet", "Porch Light On"])
+  end
+
   it "lets lookups through - the model needs those now" do
     client = run([watch_call, { name: :get_context, call_id: "g1", arguments: { "sections" => ["chores_all"] } }])
 

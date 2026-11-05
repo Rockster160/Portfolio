@@ -1044,6 +1044,10 @@ module Buddy
         input    += [{ role: :developer, content: routine_directive }] if routine_directive
         teaching  = self.class.teaching_directive(@inbound.body)
         input    += [{ role: :developer, content: teaching }] if teaching
+        dated     = self.class.next_day_directive(@inbound.body, user: @user)
+        input    += [{ role: :developer, content: dated }] if dated
+        screen    = self.class.screen_directive(@inbound.body)
+        input    += [{ role: :developer, content: screen }] if screen
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
         end
@@ -1244,6 +1248,43 @@ module Buddy
       TEACHING_DIRECTIVE = <<~TXT.freeze
         They're setting up a shortcut: from now on, saying those words should DO something. Save it with `save_routine`, named after the words they'll say, with the steps it runs. When the phrase carries a value ("followed by a number", "and how many minutes"), name it in `inputs` and use it in the steps as `{{name}}`, so "sleep timer 30" hands the routine 30. Then tell them what to say to use it.
       TXT
+
+      # A question about the app itself: how, where or why, about a piece of
+      # what's on their screen. Answered from memory it describes a screen
+      # that isn't theirs.
+      SCREEN_QUESTION_RX = /\b(?:how\s+(?:do|can|would)\s+i|where\s+(?:do|does|can|is|did|would)|what(?:'s|\s+is|s)\s+up\s+with|why\s+(?:does|is|do))\b/i
+      SCREEN_THING_RX = /
+        \b(?:notifications?|alerting|badge|little\s+number|number\s+next\s+to|shelf|bell|button|
+          icon|on\s+(?:the|my|this)\s+screen|menu|show(?:s)?\s+up|does\s+(?:that|it)\s+show)\b
+      /xi
+
+      SCREEN_DIRECTIVE = <<~TXT.freeze
+        They're asking about the app in front of them. Call `describe_screen` first and answer from what it says is actually on their screen - the controls they have, and what lives with you rather than on a page.
+      TXT
+
+      def self.screen_directive(body)
+        text = body.to_s
+        SCREEN_DIRECTIVE if text.match?(SCREEN_QUESTION_RX) && text.match?(SCREEN_THING_RX)
+      end
+
+      NEXT_DAY_RX = /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
+
+      # "Next Saturday", said while this week's Saturday is still ahead, skips
+      # it. Worked out here rather than left to the model, which keeps landing
+      # on the nearer one.
+      def self.next_day_directive(body, user:)
+        days = body.to_s.scan(NEXT_DAY_RX).flatten.map(&:downcase).uniq
+        return nil if days.empty?
+
+        today = Time.current.in_time_zone(user&.timezone.presence || Time.zone.name).to_date
+        lines = days.map { |day|
+          coming = today + ((Date::DAYNAMES.index(day.capitalize) - today.wday) % 7)
+          coming += 7 if coming == today
+          meant  = coming.cweek == today.cweek ? coming + 7 : coming
+          "\"next #{day.capitalize}\" is #{meant.strftime("%A %b %-d")} (#{meant.iso8601})."
+        }
+        "Dates they named: #{lines.join(" ")} Use that date, and say it in the reply."
+      end
 
       def self.teaching_directive(body)
         TEACHING_DIRECTIVE if body.to_s.match?(TEACHING_RX)
@@ -3914,6 +3955,9 @@ module Buddy
       # (see Turn#clocked), and how short a verbless order is (Turn#short_order?).
       JIL_RUNNERS = %i[run_jil_task call_jil_function trigger_jil_task].freeze
       SHORT_ORDER_WORDS = 6
+      # A list add sooner than this keeps its countdown chip, so there's
+      # something to watch. Later than this it's an appointment, not a wait.
+      LIST_CLOCK_AFTER = 1.hour
 
       SCHEDULING_TOOLS = %i[
         schedule_reminder schedule_trigger schedule_function alarm set_timer remind_when move_reminder
@@ -3974,7 +4018,7 @@ module Buddy
       # - the words name a time, and nothing else this turn put it on the clock
       def later_for(call, timing)
         return { at: nil, unreadable: true } if timing == :unreadable
-        return { at: timing } if timing
+        return { at: timing, own: true } if timing
         return { at: nil, routine: true } if outright_routine && call[:name].to_sym != Buddy::Routines::RUNNER
         if (wait = riding_wait(call))
           return { at: nil, wait: wait }
@@ -4085,7 +4129,7 @@ module Buddy
 
         tool[:confirm].call(payload, Buddy::ToolContext.new(@user, conversation: @conversation))
 
-        entry = later.slice(:at, :wait, :routine).merge(call: call)
+        entry = later.slice(:at, :own, :wait, :routine).merge(call: call)
         # Asked for again a round later, after reading that it's queued - still
         # one thing to do, not two.
         again = @later.find { |e| e[:call][:name].to_s == call[:name].to_s && e[:call][:arguments] == call[:arguments] }
@@ -4158,8 +4202,16 @@ module Buddy
         waits = proposals.select { |c| self.class.queues_rest?(c[:name], c[:arguments]) }.to_h { |c| [c[:call_id], c] }
         anchor = waits.values.first
 
+        # A call carrying its own time goes on the clock for that time rather
+        # than behind whichever wait happens to be in the reply.
         riding, loose = later.partition { |e|
-          wait_id = e[:wait] && waits.key?(e[:wait][:call_id]) ? e[:wait][:call_id] : anchor&.dig(:call_id)
+          wait_id = (
+            if e[:wait] && waits.key?(e[:wait][:call_id])
+              e[:wait][:call_id]
+            elsif !e[:own]
+              anchor&.dig(:call_id)
+            end
+          )
           e[:wait_id] = wait_id
           wait_id.present?
         }
@@ -4169,7 +4221,7 @@ module Buddy
         placed = proposals + riding.pluck(:call)
         rank   = riding.to_h { |e| [e[:call][:call_id], [@order[e[:call][:call_id]].to_f, @order[e[:wait_id]].to_f + 0.5].max] }
         placed = placed.each_with_index.sort_by { |c, i| [rank.fetch(c[:call_id]) { @order.fetch(c[:call_id], Float::INFINITY).to_f }, i] }.map(&:first)
-        timed.any? ? without_stray_countdown(placed, timed) + clocked(timed) : placed
+        timed.any? ? without_stray_countdown(placed, timed, riding) + clocked(timed) : placed
       end
 
       def routine_runs?
@@ -4182,11 +4234,16 @@ module Buddy
       end
 
       # The Jil runners go on as `schedule_function`, the scheduler built for
-      # them. Anything else waits behind a countdown made for it, one per
-      # moment, each starting where the last one ends.
+      # them. A list add further off than LIST_CLOCK_AFTER goes on as
+      # `schedule_list_items`, which waits on the clock with nothing counting
+      # down in the window for hours. Anything else waits behind a countdown
+      # made for it, one per moment, each starting where the last one ends.
       def clocked(timed)
         jil, rest = timed.partition { |e| JIL_RUNNERS.include?(e[:call][:name].to_sym) }
-        out = jil.map { |e| as_scheduled_function(e) }
+        adds, rest = rest.partition { |e|
+          e[:call][:name].to_sym == :add_list_item && e[:at] > Time.current + LIST_CLOCK_AFTER
+        }
+        out = jil.map { |e| as_scheduled_function(e) } + adds.map { |e| as_scheduled_list_add(e) }
 
         far, near = rest.partition { |e| e[:at] > Time.current + Buddy::DeferredTime::MAX_AHEAD }
         far.each { |e| @failed << e[:call][:call_id] }
@@ -4212,17 +4269,33 @@ module Buddy
         { name: :schedule_function, call_id: "later-#{call[:call_id]}", arguments: args.merge("at" => at) }
       end
 
-      # A plain countdown beside a call that's now on the clock for the same
-      # moment. That timer was the model's way of saying "later", and left in
-      # it rings like a kitchen timer at the hour the thing happens anyway.
-      def without_stray_countdown(proposals, timed)
-        proposals.reject { |c|
+      def as_scheduled_list_add(entry)
+        call = entry[:call]
+        args = (call[:arguments] || {}).transform_keys(&:to_s)
+        at   = entry[:at].in_time_zone(@user.timezone).strftime("%Y-%m-%dT%H:%M:%S")
+        {
+          name:      :schedule_list_items,
+          call_id:   "later-#{call[:call_id]}",
+          arguments: args.slice("list", "section").merge("items" => args["item"].to_s, "at" => at),
+        }
+      end
+
+      # A countdown beside a call that's now on the clock for the same moment.
+      # That timer was the model's way of saying "later", and left in it rings
+      # like a kitchen timer at the hour the thing happens anyway - or, as a
+      # wait with nothing behind it, sits in the window for hours holding
+      # nothing.
+      def without_stray_countdown(proposals, timed, riding)
+        held = riding.pluck(:wait_id).to_set
+        proposals.each_with_index.reject { |c, i|
           next false unless c[:name].to_sym == :set_timer
-          next false if self.class.queues_rest?(c[:name], c[:arguments])
+
+          holding = held.include?(c[:call_id]) || proposals[(i + 1)..].any?
+          next false if holding && self.class.queues_rest?(c[:name], c[:arguments])
 
           ends = countdown_end(c[:arguments])
           ends && timed.any? { |e| (e[:at] - ends).abs <= 90 }
-        }
+        }.map(&:first)
       end
 
       def countdown_end(arguments)
@@ -4281,13 +4354,22 @@ module Buddy
       # Checked the way a routine step is, so a name that matches nothing
       # comes back now rather than when the garage opens.
       def hold_call(call)
-        # A holder that also tells someone, or runs one task of its own, can't
+        # A holder that also tells someone, or starts a timer of its own, can't
         # take steps as well - and finding out after the reply is too late to
         # say so. Its message belongs in the steps, as a `message_partner`.
-        clash = %w[notify run timer].find { |key| (@holder[:arguments] || {}).transform_keys(&:to_s)[key].present? }
+        holder_args = (@holder[:arguments] || {}).transform_keys(&:to_s)
+        clash = %w[notify timer].find { |key| holder_args[key].present? }
         raise "#{@holder[:name]} has `#{clash}` set, so it can't run steps too - drop it and make that a step" if clash
 
-        ctx  = Buddy::ToolContext.new(@user, conversation: @conversation)
+        ctx = Buddy::ToolContext.new(@user, conversation: @conversation)
+        # The one task it runs of its own is the first thing it does, so it
+        # becomes the first step rather than a reason to refuse the rest.
+        if holder_args["run"].present? && !@run_folded
+          payload = { "name" => holder_args["run"], "args" => holder_args["run_args"].presence || {} }
+          @held << Buddy::Routines.sanitize_step({ "tool_name" => "run_jil_task", "payload" => payload }, 1, ctx)
+          @run_folded = true
+        end
+
         row  = { "tool_name" => call[:name].to_s, "payload" => (call[:arguments] || {}) }
         step = Buddy::Routines.sanitize_step(row, @held.length + 1, ctx)
         @held << step
@@ -4317,7 +4399,8 @@ module Buddy
 
         args  = (holder[:arguments] || {}).transform_keys(&:to_s)
         given = args["steps"].present? ? Buddy::Routines.parse_rows(args["steps"]) : []
-        args  = args.except(Buddy::Tools::HOLD_ARG.to_s).merge("steps" => JSON.generate(given + @held))
+        args  = args.except(Buddy::Tools::HOLD_ARG.to_s, *(%w[run run_args] if @run_folded))
+        args  = args.merge("steps" => JSON.generate(given + @held))
         proposals.map { |c| c.equal?(holder) ? c.merge(arguments: args) : c }
       end
 

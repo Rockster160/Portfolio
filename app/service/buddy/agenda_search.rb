@@ -24,12 +24,29 @@ module Buddy
     # one with the other is worse than saying nothing.
     DIRECTIONS = %i[upcoming past any].freeze
 
+    # Words that say what KIND of thing it is rather than which one. "The pilaf
+    # dinner" is a series called "Kevin's meal & pilaf".
+    LOOSE_SKIP = %w[the a an my our dinner lunch breakfast event thing meeting appointment].freeze
+
+    # The phrase as they said it first. When that finds nothing, any of its
+    # telling words - so a name said differently from how it was saved still
+    # turns up, rather than coming back as not on the calendar at all.
     def call(user:, query:, direction: :upcoming, days: DEFAULT_DAYS, limit: LIMIT)
+      phrase = query.to_s.strip.downcase
+      found  = lookup(user, [phrase].compact_blank, direction, days, limit)
+      return found if found[:items].any?
+
+      words = phrase.scan(/[[:alnum:]']+/).reject { |w| w.length < 3 || LOOSE_SKIP.include?(w) }
+      return found if words.empty? || words == [phrase]
+
+      lookup(user, words, direction, days, limit)
+    end
+
+    def lookup(user, terms, direction, days, limit)
       sources = Buddy::Context.agenda_source_map(user)
       return { items: [], total: 0, sources: {} } if sources.empty?
 
-      scope = AgendaItem.where(agenda_id: sources.keys).where.not(status: :cancelled)
-      scope = scope.where("LOWER(name) LIKE ?", "%#{query.to_s.strip.downcase}%") if query.present?
+      scope = named(AgendaItem.where(agenda_id: sources.keys).where.not(status: :cancelled), terms)
       scope = scope.where(start_at: window(direction, days))
 
       # Nearest to now first, whichever way we're facing: the answer to "when's
@@ -38,7 +55,7 @@ module Buddy
       order = direction.to_sym == :past ? { start_at: :desc } : { start_at: :asc }
       items = scope.includes(:agenda, :agenda_schedule).order(order).limit(limit).to_a
 
-      phantoms = unmaterialized(user, sources, query, direction, days, limit)
+      phantoms = unmaterialized(user, sources, terms, direction, days, limit)
       if phantoms.any?
         items = (items + phantoms).sort_by(&:start_at)
         items = items.reverse if direction.to_sym == :past
@@ -62,14 +79,22 @@ module Buddy
     # everything downstream reads them like any other row. They carry no `id` -
     # see `row` and ToolContext#resolve_agenda_item, both of which key off the
     # schedule for a series.
-    def unmaterialized(user, sources, query, direction, days, limit)
+    # Any of the terms, anywhere in the name. None at all is everything.
+    def named(scope, terms)
+      return scope if terms.empty?
+
+      clause = Array.new(terms.length, "LOWER(name) LIKE ?").join(" OR ")
+      scope.where(clause, *terms.map { |t| "%#{AgendaItem.sanitize_sql_like(t)}%" })
+    end
+
+    def unmaterialized(user, sources, terms, direction, days, limit)
       window = window(direction, days)
       zone   = ActiveSupport::TimeZone[user.timezone] || Time.zone
       from   = window.first.in_time_zone(zone).to_date
       to     = window.last.in_time_zone(zone).to_date
 
       schedules = AgendaSchedule.where(agenda_id: sources.keys).active_between(from, to)
-      schedules = schedules.where("LOWER(name) LIKE ?", "%#{query.to_s.strip.downcase}%") if query.present?
+      schedules = named(schedules, terms)
       schedules = schedules.includes(:agenda, :agenda_items).limit(limit).to_a
       return [] if schedules.empty?
 

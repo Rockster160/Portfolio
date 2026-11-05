@@ -372,6 +372,12 @@ class BuddyEvalWorld
     reuse(list.sections.detect { |section| section.name.match?(/costco/i) }) {
       Section.create!(list: list, name: "Costco")
     }
+
+    # Somewhere for "add those to Before Bed every night at 9" to land.
+    unless user.lists.reload.any? { |l| l.name.match?(/before bed/i) }
+      bed = track(List.create!(name: "Before Bed"))
+      track(UserList.create!(user: user, list: bed, is_owner: true))
+    end
   end
 
   # Anchored to THEIR morning rather than "four hours ago". A run at 9pm put

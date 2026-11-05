@@ -31,7 +31,8 @@ Buddy::Tools.register(
                     <question> | yes/no
                     <question> | date
                     <question> | pick: <choice>, <choice>, ...
-                  A Notes box is always added at the end.
+                  A Notes box is always added at the end by itself,
+                  so `questions` is only the ones they named.
       repeat    - when it comes round: daily:HH:MM, weekdays:HH:MM,
                   weekly:<days>:HH:MM, monthly:<day of month>:HH:MM or
                   every:<n>-<unit>:HH:MM. Several times a day is one spec per

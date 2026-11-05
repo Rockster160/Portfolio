@@ -268,6 +268,33 @@ RSpec.describe "Buddy commands that named a time" do
         expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(30.minutes.from_now)
       end
 
+      # A list add has a scheduler of its own, so a far-off one waits on that
+      # rather than on a countdown chip sitting in the window for hours.
+      it "puts a far-off list add on the list scheduler" do
+        create(:list, user: user, name: "Groceries")
+        add = {
+          name:      :add_list_item,
+          call_id:   "a1",
+          arguments: { "list" => "Groceries", "item" => "Batteries", "run_in_minutes" => 188 },
+        }
+        run([{ tool_calls: [add] }, { text: "Later on." }], text: "Add batteries to the groceries list in 188 minutes")
+
+        expect(markers.map(&:first)).to eq([:schedule_list_items])
+        expect(markers.first.last).to include("list" => "Groceries", "items" => "Batteries")
+        expect(Time.find_zone(user.timezone).parse(markers.first.last["at"])).to be_within(1.minute).of(188.minutes.from_now)
+      end
+
+      # Both halves carry the time, and a wait for that same moment rides along.
+      # The calls go on the scheduler; the wait would only sit in the window
+      # for hours holding nothing, so it goes.
+      it "drops a wait that only restates the time the calls already carry" do
+        wait  = { name: :set_timer, call_id: "t1", arguments: { "seconds" => 36_000, "then_continue" => true } }
+        timed = play_call(call_id: "c2").merge(arguments: play_call[:arguments].merge("run_in_minutes" => 600))
+        run([{ tool_calls: [wait, timed] }, { text: "Tonight." }], text: "play the Whisper nap sound in 10 hours")
+
+        expect(markers.map(&:first)).to eq([:schedule_function])
+      end
+
       # A time it couldn't read is still a time: held, never run.
       it "never runs a call whose run_at it couldn't read" do
         timed = play_call.merge(arguments: play_call[:arguments].merge("run_at" => "whenever"))

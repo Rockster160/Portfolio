@@ -210,6 +210,13 @@ RSpec.describe "Buddy conditional reminders" do
       tool[:execute].call({ text: "Charge the village car" }.merge(payload).merge(resolved), ctx)
     end
 
+    # Due all day, so no offset is the day turning over at 4am.
+    it "sends back a chore anchor with no hour on it" do
+      %w[chore:charge_villager_car chore:charge_villager_car+0h].each { |anchor|
+        expect { confirm(anchor: anchor) }.to raise_error(/4am/), anchor
+      }
+    end
+
     describe "the condition" do
       let(:checked) {
         {

@@ -1,7 +1,8 @@
 Buddy::Tools.register(
   name:        :link_records,
-  summary:     "Pair two things so one follows the other automatically (\"logging coffee ticks off " \
-               "the coffee chore\").",
+  summary:     "\"From now on, whenever I log X, tick off my Y chore\": pairs two records so the " \
+               "second follows the first by itself, every time (\"logging coffee ticks off the " \
+               "coffee chore\").",
   description: <<~TXT,
     Wire two things together so one following the other stops being manual. Use
     it when they describe a pairing: "logging coffee should tick off the coffee

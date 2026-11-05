@@ -20,7 +20,7 @@ module Buddy
       return nil if input.blank?
 
       str = input.to_s.strip.downcase
-      return nil if str.in?(%w[now just_now just-now])
+      return nil if means_now?(str)
 
       zone = user_zone(user)
       Time.use_zone(zone) {
@@ -29,6 +29,12 @@ module Buddy
           parse_time_of_day(str) ||
           parse_clock(str)
       }
+    end
+
+    # "now", "just now", "right now": no time at all, so whatever reads the
+    # time uses the current one, the same as when none was given.
+    def means_now?(input)
+      input.to_s.strip.downcase.tr("_-", "  ").squish.in?(["now", "just now", "right now"])
     end
 
     def friendly(value, user: nil)
