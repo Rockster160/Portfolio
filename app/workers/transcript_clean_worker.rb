@@ -31,6 +31,11 @@ class TranscriptCleanWorker
     watched(transcript, key: Transcripts::Clean.key_for(transcript), name: NAME) { |progress|
       report(transcript, Transcripts::Clean.call(transcript, again: again, &progress))
     }
+    # The recording is ready to read when every pass has been over it, and
+    # the two that run beside each other have no way of knowing which of them
+    # is last. So both ask, and the claim inside `Announce` is what makes it
+    # one message.
+    Transcripts::Announce.call(transcript.reload)
   end
 
   private

@@ -229,7 +229,13 @@
         <%# show and hide it without a reload. %>
         <button type="button" data-buddy-action="affirmation" data-byte-affirmation-row
                 <%= "hidden" unless current_user.byte_affirmation? %>>Affirmation</button>
-        <%= link_to "What Buddy did", buddy_activities_path, class: "byte-actions-link" %>
+        <%# Out of the app, like every other link Byte draws. Byte is an %>
+        <%# installed PWA, so following one in place leaves the activity log %>
+        <%# sitting where the conversation was, with no back button and no way %>
+        <%# home - the board links below stay in place because those pages are %>
+        <%# Byte's own. %>
+        <%= link_to "What Buddy did", buddy_activities_path, class: "byte-actions-link",
+              target: :_blank, rel: "noopener" %>
       </div>
 
       <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>

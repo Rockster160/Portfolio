@@ -42,6 +42,23 @@ RSpec.describe TranscriptDebriefWorker do
     expect(Transcripts::Debrief).to have_received(:call).with(transcript, again: true)
   end
 
+  # The two passes that run beside each other both ask whether the recording is
+  # finished, because neither can tell which of them is last.
+  it "tells him it can be read when it was the last pass over it" do
+    user.byte_conversations.create!(name: "Byte", mode: :buddy)
+    transcript.update!(tidied_at: Time.current, cleaned_at: Time.current)
+    allow(Transcripts::Debrief).to receive(:call) { |held, **_moved|
+      held.update!(debriefed_at: Time.current, debrief: { "read" => "It went well." })
+      Transcripts::Debrief::Result.new(ok: true, notes: 1)
+    }
+
+    described_class.new.perform(transcript.id)
+    said = ByteConversation.for_self_initiated(user).byte_messages.order(:id).last
+
+    expect(said.metadata["source"]).to eq("transcript_ready")
+    expect(said.body).to include(transcript.reading_url)
+  end
+
   it "does nothing at all for a transcript that has since been deleted" do
     id = transcript.id
     transcript.destroy!

@@ -3,6 +3,7 @@
 # Table name: job_transcripts
 #
 #  id                 :bigint           not null, primary key
+#  announced_at       :datetime
 #  cleaned_at         :datetime
 #  debrief            :jsonb            not null
 #  debriefed_at       :datetime
@@ -201,6 +202,26 @@ class JobTranscript < ApplicationRecord
   # wants to know.
   def cleaned
     turns.count { |turn| turn.key?("clean") }
+  end
+
+  # How much the read of how it went actually found, counted the way the pass
+  # that wrote it counts: the moments, the costs, the things never said and the
+  # things to do next. A debrief that read the conversation and had nothing to
+  # say about it is a different fact from one with eleven notes in it.
+  def noted
+    return 0 if debrief["read"].blank?
+
+    [:strongest, :cost, :missed, :next].sum { |key| debrief[key.to_s].to_a.size }
+  end
+
+  # Where it is read, absolute, because this is what goes into a message and a
+  # push rather than onto a page. An unfiled recording has no page of its own,
+  # so it lands on the interview index - which is where it would be filed from.
+  def reading_url(**params)
+    helpers = Rails.application.routes.url_helpers
+    return helpers.interviews_url unless filed?
+
+    helpers.interview_transcript_url(job_application_id, id, **params)
   end
 
   # ONE PLACE DECIDES WHICH WORDS A TURN SHOWS.

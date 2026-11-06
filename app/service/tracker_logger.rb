@@ -30,6 +30,10 @@ module TrackerLogger
     return false if request.env["REQUEST_PATH"] == "/webhooks/local_ping"
     return false if request.env["REQUEST_PATH"] == "/webhooks/proxy_heartbeat"
     return false if request.env["REQUEST_PATH"] == "/webhooks/report"
+    # GitHub sends every event on the repo, a burst of large payloads per push,
+    # and the Mini reports its Claude sessions every two minutes while any run.
+    return false if request.env["REQUEST_PATH"] == "/webhooks/github"
+    return false if request.env["REQUEST_PATH"] == "/webhooks/byte/claude_sessions"
     return false if request.env["REQUEST_PATH"] == "/printer_control"
 
     true
