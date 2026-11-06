@@ -1,4 +1,4 @@
-<% content_for :title, "Quests" %>
+<% content_for :title, @board.name %>
 <% content_for :head do %>
   <script src="/chores_sortable.js" defer></script>
 <% end %>
@@ -9,7 +9,7 @@
 <%# Wears the chores page's classes so the circles, rings, toolbar and modals
    look and feel the same as Chores · Today. Everything inside is drawn by
    pages/quests/index.js from the board in localStorage. %>
-<div class="chores-page quests-page" data-quests-root>
+<div class="chores-page quests-page" data-quests-root data-board-id="<%= @board.id %>">
   <div class="chores-header">
     <div class="chores-header-left">
       <span class="conn-dot" data-conn-dot title="Online"></span>
@@ -18,7 +18,9 @@
     <div class="chores-header-center">
       <div class="balance-pill" data-quests-day>—</div>
     </div>
-    <div class="quests-header-right"></div>
+    <nav class="chores-nav">
+      <a href="<%= quests_path %>" title="All boards" data-quests-name><%= @board.name %></a>
+    </nav>
   </div>
 
   <div class="chores-toolbar">
@@ -98,9 +100,16 @@
             <button type="button" class="pill" data-value="ref">From another quest</button>
             <button type="button" class="pill" data-value="none">No limit</button>
           </div>
-          <div class="repeat-detail" data-show-for="target_mode:fixed">
-            <input type="number" min="1" data-field="target_value" class="quests-num">
-            <span class="field-hint">times</span>
+          <div data-show-for="target_mode:fixed">
+            <div class="repeat-detail">
+              <input type="number" min="1" data-field="target_value" class="quests-num">
+              <span class="field-hint">times</span>
+              <div class="pill-group" data-pills="direction">
+                <button type="button" class="pill" data-value="up">Count up</button>
+                <button type="button" class="pill" data-value="down">Count down</button>
+              </div>
+            </div>
+            <span class="field-hint" data-show-for="direction:down">Shows what's left — starts full, each tap takes one off.</span>
           </div>
           <div class="repeat-detail" data-show-for="target_mode:ref">
             <select data-field="target_item" data-item-select></select>
@@ -239,6 +248,12 @@
       </div>
       <form class="chore-form basic" data-settings-form autocomplete="off" novalidate>
         <div class="form-section">
+          <label class="field-label">Name</label>
+          <input type="text" data-settings-name required
+                 autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+        </div>
+        <div class="form-section">
           <label class="field-label">New day starts at</label>
           <select data-settings-reset-hour>
             <% 24.times do |h| %>
@@ -248,6 +263,7 @@
           <span class="field-hint">Taps before this still count toward the day before.</span>
         </div>
         <div class="form-actions">
+          <button type="button" class="danger" data-settings-delete>Delete board</button>
           <button type="button" class="ghost" data-action="cancel">Cancel</button>
           <button type="submit" class="primary">Save</button>
         </div>

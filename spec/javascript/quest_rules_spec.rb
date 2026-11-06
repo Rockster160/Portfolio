@@ -105,4 +105,10 @@ RSpec.describe "the quest board rules (JS-side)" do
   it "prunes old days and taps but keeps a count that never resets" do
     expect(cases[:prune]).to eq(periods: ["all"], log: 0)
   end
+
+  it "shows a count-down quest as what's left, stopping at empty" do
+    expect(cases[:down_new]).to eq(100)
+    expect(cases[:down_after_rock]).to eq(92)
+    expect(cases[:down_empty]).to eq(shown: 0, done: true)
+  end
 end

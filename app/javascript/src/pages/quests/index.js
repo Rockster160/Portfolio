@@ -1,4 +1,4 @@
-// Quest board entry. Boots on /quests (data-quests-root) and no-ops on every
+// Quest board entry. Boots on /quests/:id (data-quests-root) and no-ops on every
 // other page — this module is bundled into application.js.
 //
 // Tap a circle to count it, hold to undo the last thing done to it, ×N to
@@ -40,7 +40,11 @@ function bootQuests(root) {
     flashTimer = setTimeout(() => flashEl.classList.remove("show"), 2200);
   }
 
-  const store = createStore({ onChange: () => render(), onError: msg => flash(msg, "error") });
+  const store = createStore({
+    boardId:  root.dataset.boardId,
+    onChange: () => render(),
+    onError:  msg => flash(msg, "error"),
+  });
   const board = () => store.board;
   const today = () => QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board()));
 
@@ -52,13 +56,15 @@ function bootQuests(root) {
     return node;
   }
 
-  function patchRing(node, count, target) {
+  function patchRing(node, item, count, target) {
     const ring = node.querySelector("[data-ring-progress]");
     if (!ring) return;
     if (target != null && target > 1) {
       // Multi-tap: the ring fills tap by tap and continues smoothly into
       // full, instead of the single-tap keyframe that draws it from empty.
-      const pct = Math.min(1, count / target);
+      // A count-down quest's ring is what's left, draining toward empty.
+      const done = Math.min(1, count / target);
+      const pct = QuestRules.countsDown(item, target) ? 1 - done : done;
       ring.style.strokeDasharray = "100";
       ring.style.strokeDashoffset = String(100 - (pct * 100));
       ring.style.opacity = pct > 0 ? "1" : "0";
@@ -84,7 +90,7 @@ function bootQuests(root) {
     node.classList.toggle("no-animate", done && (firstPaint || wasDone || (target || 0) > 1));
     node.classList.toggle("pending", !visible);
     node.title = visible ? "" : "Not on the board right now";
-    patchRing(node, count, target);
+    patchRing(node, item, count, target);
 
     const icon = node.querySelector("[data-icon]");
     if (firstPaint || icon.dataset.value !== (item.icon || "")) paintIcon(icon, item.icon || "");
@@ -94,9 +100,10 @@ function bootQuests(root) {
     if (titleEl.textContent !== name) titleEl.textContent = name;
 
     const slot = node.querySelector("[data-count-slot]");
+    const shown = QuestRules.shownCount(item, count, target);
     const text = (
       target == null ? String(count)
-        : target > 1 ? `${count}/${target}`
+        : target > 1 ? `${shown}/${target}`
           : ""
     );
     let badge = slot.querySelector(".count-badge");
@@ -439,21 +446,56 @@ function bootQuests(root) {
     submitMulti(parseInt(multiCount.value, 10) || 0);
   });
 
-  // Board settings.
+  // Board settings. The reset hour lives in the board blob; the name is the
+  // server's, since it's what the board list shows.
   const settingsModal = root.querySelector("[data-settings-modal]");
   const resetHourSelect = settingsModal.querySelector("[data-settings-reset-hour]");
+  const nameInput = settingsModal.querySelector("[data-settings-name]");
+  const nameEl = root.querySelector("[data-quests-name]");
+  const boardPath = `/quests/${root.dataset.boardId}`;
   const closeSettings = () => settingsModal.classList.add("hidden");
   wireDismiss(settingsModal, closeSettings);
   root.querySelector("[data-settings-open]").addEventListener("click", () => {
     resetHourSelect.value = String(QuestRules.resetHourOf(board()));
+    nameInput.value = nameEl.textContent.trim();
     settingsModal.classList.remove("hidden");
   });
   settingsModal.querySelector("[data-settings-form]").addEventListener("submit", e => {
     e.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
     board().settings = { ...(board().settings || {}), resetHour: parseInt(resetHourSelect.value, 10) };
     store.commit();
     closeSettings();
+    if (name !== nameEl.textContent.trim()) rename(name);
   });
+
+  async function rename(name) {
+    const res = await boardRequest("PATCH", { name });
+    if (!res?.ok) { flash("Couldn't rename the board", "error"); return; }
+    nameEl.textContent = name;
+    document.title = name;
+  }
+
+  settingsModal.querySelector("[data-settings-delete]").addEventListener("click", async () => {
+    if (!window.confirm(`Delete "${nameEl.textContent.trim()}" and every quest on it?`)) return;
+    const res = await boardRequest("DELETE");
+    if (!res?.ok) { flash("Couldn't delete the board", "error"); return; }
+    window.location.href = "/quests";
+  });
+
+  function boardRequest(method, body) {
+    return fetch(boardPath, {
+      method,
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        Accept:         "application/json",
+        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }).catch(() => null);
+  }
 
   // ------------------------------------------------------------ liveness
 

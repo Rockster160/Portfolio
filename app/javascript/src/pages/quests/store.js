@@ -1,5 +1,5 @@
 // Quest board persistence. The board lives in localStorage and every change
-// lands there first; the server copy (/quests/state) is pushed a moment later
+// lands there first; the server copy (/quests/:id/state) is pushed a moment later
 // and pulled on boot and whenever the page comes back into view, so a second
 // device or a cleared phone picks up where the last one left off. Whichever
 // copy was changed most recently wins.
@@ -10,8 +10,6 @@
 
 import QuestRules from "./rules";
 
-const BOARD_KEY = "quests:board:v1";
-const OUTBOX_KEY = "quests:outbox:v1";
 const PUSH_DELAY_MS = 1500;
 const RETRY_MS = 15000;
 
@@ -47,7 +45,12 @@ async function request(path, method, body) {
   return { status: res.status, ok: res.ok, json };
 }
 
-export function createStore({ onChange, onError }) {
+// Each board keeps its own copy and its own outbox: a sent hook is settled
+// against the log entry that fired it, which lives on one board.
+export function createStore({ boardId, onChange, onError }) {
+  const BOARD_KEY = `quests:board:v1:${boardId}`;
+  const OUTBOX_KEY = `quests:outbox:v1:${boardId}`;
+  const STATE_PATH = `/quests/${boardId}/state`;
   let board = { ...emptyBoard(), ...readJSON(BOARD_KEY, {}) };
   // A send the last page load never heard back from is just queued again.
   const outbox = readJSON(OUTBOX_KEY, []).map(({ inFlight, ...op }) => op);
@@ -85,14 +88,14 @@ export function createStore({ onChange, onError }) {
   async function push() {
     if (!navigator.onLine) return;
     try {
-      const res = await request("/quests/state", "PUT", { data: board });
+      const res = await request(STATE_PATH, "PUT", { data: board });
       if (res.status === 409 && (res.json.data?.updatedAt || 0) > board.updatedAt) adopt(res.json.data);
     } catch (_e) { /* offline; the next change or wake pushes again */ }
   }
 
   async function pull() {
     try {
-      const res = await request("/quests/state", "GET");
+      const res = await request(STATE_PATH, "GET");
       if (!res.ok) return;
       const remote = res.json.data || {};
       if ((remote.updatedAt || 0) > (board.updatedAt || 0)) adopt(remote);

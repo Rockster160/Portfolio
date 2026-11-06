@@ -102,13 +102,25 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
         op, value,
       ];
     },
+    // Reads "takes 8 off Shovel" when the quest it moves counts down — the
+    // amount is the same either way, it's which way that quest shows it.
     effects(fx) {
+      const verb = el("span", { class: "field-hint" });
+      const preposition = el("span", { class: "field-hint" });
+      const item = select("item", itemOptions(), fx.item);
+      const syncVerb = () => {
+        const down = !!QuestRules.findItem(getBoard(), item.value)?.countDown;
+        verb.textContent = down ? "takes" : "adds";
+        preposition.textContent = down ? "off" : "to";
+      };
+      item.addEventListener("change", syncVerb);
+      syncVerb();
       return [
         select("on", [["tap", "Each tap"], ["complete", "On complete"]], fx.on || "tap"),
-        el("span", { class: "field-hint", text: "adds" }),
+        verb,
         el("input", { type: "number", "data-k": "amount", class: "quests-num", value: fx.amount ?? 1 }),
-        el("span", { class: "field-hint", text: "to" }),
-        select("item", itemOptions(), fx.item),
+        preposition,
+        item,
       ];
     },
     hooks(h) {
@@ -167,6 +179,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     field("step").value = item.step && item.step !== 1 ? item.step : "";
     ["startDate", "endDate", "from", "to"].forEach(k => { field(k).value = s[k] || ""; });
     setPills("target_mode", t.mode || "fixed");
+    setPills("direction", item.countDown ? "down" : "up");
     setPills("reset", item.reset || "daily");
     setChips("days", s.days || []);
     setChips("months", s.months || []);
@@ -209,6 +222,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     }
     return {
       ...editing,
+      countDown: mode === "fixed" && getPills("direction") === "down",
       icon:     iconStack.__iconValue().trim(),
       name:     field("name").value.trim(),
       section:  field("section").value.trim(),

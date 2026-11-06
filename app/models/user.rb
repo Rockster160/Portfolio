@@ -90,7 +90,7 @@ class User < ApplicationRecord
   has_many :shared_tasks, dependent: :destroy
   has_many :accessible_shared_tasks, through: :shared_tasks, source: :task
   has_one :money_bucket
-  has_one :quest_board, dependent: :destroy
+  has_many :quest_boards, dependent: :destroy
   has_one :avatar, dependent: :destroy
   def avatar = super || build_avatar
   # has_one :user_dashboard, dependent: :destroy

@@ -1,0 +1,24 @@
+<% content_for :title, "Quests" %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<% end %>
+
+<div class="chores-page quests-page quests-index">
+  <h2 class="quests-index-title">Quest boards</h2>
+
+  <div class="quests-boards">
+    <% @boards.each do |board| %>
+      <a class="quests-board-row" href="<%= quest_board_path(board) %>">
+        <span class="quests-board-name"><%= board.name %></span>
+        <span class="quests-board-meta"><%= pluralize(Array(board.data["items"]).size, "quest") %></span>
+      </a>
+    <% end %>
+  </div>
+
+  <%= form_with url: quests_path, method: :post, class: "chore-form basic form-actions quests-new-board", local: true do %>
+    <input type="text" name="name" placeholder="New board — e.g. Animal Crossing" required
+           autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+           data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+    <button type="submit" class="primary">Add</button>
+  <% end %>
+</div>

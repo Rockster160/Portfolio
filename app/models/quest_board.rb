@@ -8,6 +8,7 @@
 #  rev        :integer          default(0), not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  name       :string           not null
 #
 class QuestBoard < ApplicationRecord
   belongs_to :user
@@ -17,11 +18,8 @@ class QuestBoard < ApplicationRecord
   # board.
   MAX_BYTES = 512.kilobytes
 
+  validates :name, presence: true
   validate :data_fits
-
-  def self.for(user)
-    find_or_create_by!(user: user)
-  end
 
   private
 

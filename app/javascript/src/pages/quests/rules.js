@@ -151,6 +151,17 @@ function isVisible(board, item, now) {
   return target === null || target > 0;
 }
 
+// A count-down quest shows what's LEFT of its target, so a shovel reads 100
+// when it's new and wears down with every hit. Underneath it counts up like
+// any other quest, so done, effects, undo and reset all work unchanged.
+function countsDown(item, target) {
+  return !!item?.countDown && target != null;
+}
+
+function shownCount(item, count, target) {
+  return countsDown(item, target) ? Math.max(0, target - count) : count;
+}
+
 function displayName(item, target) {
   return String(item?.name || "").replace(/\{n\}/g, target == null ? "" : String(target)).trim();
 }
@@ -302,7 +313,7 @@ function newItem(attrs = {}) {
 const QuestRules = {
   dayKey, addDays, gameDate, periodKey, resetHourOf, findItem, countOf,
   resolveTarget, isDone, scheduleMatches, conditionPasses, isVisible,
-  displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem,
+  countsDown, shownCount, displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = QuestRules;

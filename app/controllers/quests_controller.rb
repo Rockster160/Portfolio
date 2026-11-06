@@ -1,34 +1,55 @@
-# The quest board: a game's daily objectives, tapped off like chores on the
-# Today view. The phone keeps the whole board in localStorage and every tap is
-# local; this controller only holds a copy of that blob and runs the hooks an
-# item can fire.
+# Quest boards: a game's daily objectives, tapped off like chores on the
+# Today view, one board per game. The phone keeps each board in localStorage
+# and every tap is local; this controller holds a copy of that blob, names and
+# lists the boards, and runs the hooks an item can fire.
 class QuestsController < ApplicationController
   before_action :authorize_user
+  before_action :set_board, only: [:show, :update, :destroy, :state, :save]
+
+  def index
+    @boards = current_user.quest_boards.order(:created_at)
+  end
 
   def show; end
 
+  def create
+    board = current_user.quest_boards.create(name: params[:name].to_s.strip)
+    return redirect_to(quests_path) unless board.persisted?
+
+    redirect_to quest_board_path(board)
+  end
+
+  def update
+    return head(:unprocessable_entity) unless @board.update(name: params[:name].to_s.strip)
+
+    render json: { name: @board.name }
+  end
+
+  def destroy
+    @board.destroy
+    render json: { ok: true }
+  end
+
   def state
-    board = QuestBoard.for(current_user)
-    render json: { data: board.data, rev: board.rev }
+    render json: { data: @board.data, rev: @board.rev }
   end
 
   # Last write wins, by the time the phone stamped on its own copy. A device
   # holding an older board than the stored one is handed the stored one back
   # rather than allowed to roll it back.
   def save
-    board = QuestBoard.for(current_user)
     incoming = request.request_parameters["data"]
     return head(:unprocessable_entity) unless incoming.is_a?(Hash)
 
-    if stamp(incoming) < stamp(board.data)
-      return render(json: { data: board.data, rev: board.rev }, status: :conflict)
+    if stamp(incoming) < stamp(@board.data)
+      return render(json: { data: @board.data, rev: @board.rev }, status: :conflict)
     end
 
-    board.data = incoming
-    board.rev += 1
-    return head(:unprocessable_entity) unless board.save
+    @board.data = incoming
+    @board.rev += 1
+    return head(:unprocessable_entity) unless @board.save
 
-    render json: { rev: board.rev }
+    render json: { rev: @board.rev }
   end
 
   # kind :event creates an ActionEvent (with every listener it would wake from
@@ -72,6 +93,10 @@ class QuestsController < ApplicationController
   end
 
   private
+
+  def set_board
+    @board = current_user.quest_boards.find(params[:id])
+  end
 
   def stamp(data)
     data.is_a?(Hash) ? data["updatedAt"].to_i : 0

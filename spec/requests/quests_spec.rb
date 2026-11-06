@@ -11,28 +11,72 @@ RSpec.describe "Quest board", type: :request do
 
   before { sign_in }
 
-  it "serves the board page" do
-    get "/quests"
-    expect(response).to have_http_status(:ok)
-    expect(response.body).to include("data-quests-root", "data-icon-stack")
+  describe "boards" do
+    it "lists boards and makes a new one" do
+      user.quest_boards.create!(name: "Stardew")
+
+      get "/quests"
+      expect(response.body).to include("Stardew")
+
+      expect { post "/quests", params: { name: "Animal Crossing" } }.to change { user.quest_boards.count }.by(1)
+      board = user.quest_boards.find_by!(name: "Animal Crossing")
+      expect(response).to redirect_to("/quests/#{board.id}")
+    end
+
+    it "serves a board page" do
+      board = user.quest_boards.create!(name: "Animal Crossing")
+
+      get "/quests/#{board.id}"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("data-board-id=\"#{board.id}\"", "Animal Crossing", "data-icon-stack")
+    end
+
+    it "renames and deletes a board" do
+      board = user.quest_boards.create!(name: "Quests")
+
+      patch "/quests/#{board.id}", params: { name: "Animal Crossing" }, as: :json
+      expect(board.reload.name).to eq("Animal Crossing")
+
+      expect { delete "/quests/#{board.id}", as: :json }.to change { user.quest_boards.count }.by(-1)
+    end
+
+    it "keeps another user's board out of reach" do
+      other = User.create!(username: "questother", password: password, password_confirmation: password)
+      board = other.quest_boards.create!(name: "Theirs")
+
+      put "/quests/#{board.id}/state", params: { data: { "updatedAt" => 1, "items" => [] } }, as: :json
+      expect(response).not_to have_http_status(:ok)
+      expect(board.reload.rev).to eq(0)
+    end
   end
 
   describe "the stored board" do
+    let(:board) { user.quest_boards.create!(name: "Animal Crossing") }
+    let(:path) { "/quests/#{board.id}/state" }
+
     it "starts empty and keeps what the phone saves" do
-      get "/quests/state"
+      get path
       expect(response.parsed_body).to eq("data" => {}, "rev" => 0)
 
-      board = { "updatedAt" => 100, "items" => [{ "id" => "q1", "name" => "Wish on {n} stars" }], "log" => [] }
-      put "/quests/state", params: { data: board }, as: :json
+      data = { "updatedAt" => 100, "items" => [{ "id" => "q1", "name" => "Wish on {n} stars" }], "log" => [] }
+      put path, params: { data: data }, as: :json
       expect(response.parsed_body).to eq("rev" => 1)
 
-      get "/quests/state"
-      expect(response.parsed_body).to eq("data" => board, "rev" => 1)
+      get path
+      expect(response.parsed_body).to eq("data" => data, "rev" => 1)
+    end
+
+    it "keeps each board's copy to itself" do
+      other = user.quest_boards.create!(name: "Stardew")
+      put path, params: { data: { "updatedAt" => 100, "items" => [{ "id" => "q1" }] } }, as: :json
+
+      get "/quests/#{other.id}/state"
+      expect(response.parsed_body["data"]).to eq({})
     end
 
     it "hands back the newer board instead of letting an older copy roll it back" do
-      put "/quests/state", params: { data: { "updatedAt" => 200, "items" => [] } }, as: :json
-      put "/quests/state", params: { data: { "updatedAt" => 150, "items" => [{ "id" => "old" }] } }, as: :json
+      put path, params: { data: { "updatedAt" => 200, "items" => [] } }, as: :json
+      put path, params: { data: { "updatedAt" => 150, "items" => [{ "id" => "old" }] } }, as: :json
 
       expect(response).to have_http_status(:conflict)
       expect(response.parsed_body["data"]).to eq("updatedAt" => 200, "items" => [])

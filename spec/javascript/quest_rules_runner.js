@@ -166,4 +166,20 @@ cases.game_day_after_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 4, 0), 4));
   cases.prune = { periods: Object.keys(b.counts), log: b.log.length };
 }
 
+// A count-down shovel starts full; a rock's 8 hits take 8 off, and it stops
+// at empty rather than going below.
+{
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [] };
+  const shovel = Q.newItem({ id: "down", target: { mode: "fixed", value: 100 }, reset: "never", countDown: true });
+  const rock = Q.newItem({ id: "stone", effects: [{ on: "tap", kind: "add", item: "down", amount: 8 }] });
+  b.items.push(shovel, rock);
+  const day = Q.gameDate(NOV4, 4);
+  const shown = () => Q.shownCount(shovel, Q.countOf(b, shovel, day), Q.resolveTarget(b, shovel, day));
+  cases.down_new = shown();
+  Q.tap(b, rock, NOV4);
+  cases.down_after_rock = shown();
+  Q.tap(b, shovel, NOV4, 200);
+  cases.down_empty = { shown: shown(), done: Q.isDone(b, shovel, day) };
+}
+
 process.stdout.write(JSON.stringify({ cases }));

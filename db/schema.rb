@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_05_220047) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_06_010141) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1709,7 +1709,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_05_220047) do
     t.integer "rev", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_quest_boards_on_user_id", unique: true
+    t.string "name", null: false
+    t.index ["user_id"], name: "index_quest_boards_on_user_id"
   end
 
   create_table "recipe_favorites", id: :serial, force: :cascade do |t|
