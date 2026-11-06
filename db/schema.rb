@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_06_185910) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_06_194422) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1185,6 +1185,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_185910) do
     t.index ["user_id", "task_id", "status", "started_at"], name: "index_executions_on_compaction_candidates", order: { started_at: :desc }, where: "(payload_id IS NOT NULL)"
   end
 
+  create_table "feature_builds", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id"
+    t.bigint "byte_message_id"
+    t.string "title", null: false
+    t.text "request", null: false
+    t.integer "status", default: 0, null: false
+    t.string "branch"
+    t.string "session_id"
+    t.string "rc_url"
+    t.integer "pr_number"
+    t.string "pr_url"
+    t.text "error"
+    t.jsonb "feedback", default: [], null: false
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
+    t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
+    t.index ["pr_number"], name: "index_feature_builds_on_pr_number"
+    t.index ["user_id"], name: "index_feature_builds_on_user_id"
+  end
+
   create_table "feature_requests", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "byte_conversation_id"
@@ -2243,6 +2266,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_185910) do
   add_foreign_key "contact_tags", "tags"
   add_foreign_key "device_login_tokens", "users"
   add_foreign_key "emails", "users"
+  add_foreign_key "feature_builds", "byte_conversations", on_delete: :nullify
+  add_foreign_key "feature_builds", "byte_messages", on_delete: :nullify
+  add_foreign_key "feature_builds", "users"
   add_foreign_key "feature_requests", "byte_conversations"
   add_foreign_key "feature_requests", "byte_messages"
   add_foreign_key "feature_requests", "users"

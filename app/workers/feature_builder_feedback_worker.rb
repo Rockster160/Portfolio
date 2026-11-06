@@ -1,28 +1,28 @@
-# Hands what was said on a Feature Builder's PR to its session, once the
+# Hands what was said on a `/feature` build's PR to its session, once the
 # feedback has gone quiet (FeatureBuilder::GATHER_FOR). Each comment queues one
 # of these; whichever runs after the last comment sends the lot, and the rest
 # find nothing waiting.
-#
-# The prompt is hidden: the thread already shows each comment as it came in.
 class FeatureBuilderFeedbackWorker
   include Sidekiq::Worker
 
-  # A retry would type the same feedback into the session twice.
+  # A retry would type the same feedback into the session twice. A Mini that
+  # didn't answer is tried again on a schedule instead, with the feedback
+  # still held on the build.
   sidekiq_options queue: :default, retry: false
 
-  def perform(conversation_id)
-    conversation = ByteConversation.builder.find_by(id: conversation_id)
-    return if conversation.nil?
+  RETRY_IN = 5.minutes
 
-    # Two of these can wake together; only one may take the waiting comments.
-    prompt = conversation.with_lock { FeatureBuilder.gather!(conversation) }
+  def perform(build_id)
+    build = FeatureBuild.find_by(id: build_id)
+    return if build.nil? || build.status_finished?
+
+    prompt = FeatureBuilder.gather(build)
     return if prompt.nil?
 
-    ByteMessageIntake.call(
-      user:         conversation.user,
-      conversation: conversation,
-      body:         prompt,
-      metadata:     { "pr_feedback_prompt" => true, "hidden" => true },
-    )
+    sent = build.feedback.length
+    return self.class.perform_in(RETRY_IN, build.id) unless ByteLocal.builder(:message, build_id: build.id, text: prompt)
+
+    # Anything that arrived while this was sending stays for the next one.
+    build.with_lock { build.update!(feedback: build.feedback.drop(sent)) }
   end
 end

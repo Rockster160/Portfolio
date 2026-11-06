@@ -66,10 +66,7 @@ class ByteConversation < ApplicationRecord
     scope.not_hidden
   end
 
-  # `builder` is a Feature Builder thread: one interactive Claude session on
-  # the Mini, in its own worktree and branch, that asks, writes the ticket,
-  # builds and opens a ByteSlime PR (see ~/code/Byte/builder.rb).
-  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3, builder: 4 }
+  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3 }
 
   # Modes that run on a Mac and therefore have a working directory. Buddy runs
   # entirely in Rails and Jarvis has no filesystem, so a cwd on either is a
@@ -580,10 +577,9 @@ class ByteConversation < ApplicationRecord
 
   def default_display_name
     case mode.to_sym
-    when :bash    then "Terminal"
-    when :jarvis  then "Jarvis"
-    when :builder then "Feature Builder"
-    when :buddy   then buddy_name
+    when :bash   then "Terminal"
+    when :jarvis then "Jarvis"
+    when :buddy  then buddy_name
     else "Byte"
     end
   end

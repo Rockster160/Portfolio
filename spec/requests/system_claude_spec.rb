@@ -2,17 +2,16 @@ require "rails_helper"
 
 RSpec.describe "Claude on the Mini page", type: :request do
   let(:user) { User.me }
-  let!(:builder) {
-    user.byte_conversations.create!(
-      name:     "Dark mode",
-      mode:     :builder,
-      metadata: {
-        "builder" => {
-          "branch" => "feature-builder/1-dark-mode",
-          "rc_url" => "https://claude.ai/code/session_abc",
-          "pr_url" => "https://github.com/Rockster160/Portfolio/pull/42",
-        },
-      },
+  let!(:build) {
+    FeatureBuild.create!(
+      user:      user,
+      title:     "Dark mode",
+      request:   "dark mode",
+      status:    :running,
+      branch:    "feature-builder/1-dark-mode",
+      rc_url:    "https://claude.ai/code/session_abc",
+      pr_number: 42,
+      pr_url:    "https://github.com/Rockster160/Portfolio/pull/42",
     )
   }
 
@@ -23,16 +22,16 @@ RSpec.describe "Claude on the Mini page", type: :request do
 
   before { sign_in }
 
-  it "lists what's running and every builder with its links" do
+  it "lists what's running and every build with its links" do
     FeatureBuilder.report_sessions!(machine: :mini, sessions: [
-      { "conversation_id" => builder.id, "kind" => "builder", "working" => false },
+      { "build_id" => build.id, "kind" => "builder", "working" => false },
     ])
 
     get system_claude_path
 
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("Dark mode", "waiting on you", "feature-builder/1-dark-mode")
-    expect(response.body).to include("https://claude.ai/code/session_abc", "/pull/42")
+    expect(response.body).to include("https://claude.ai/code/session_abc", "PR #42")
   end
 
   it "says so when nothing is running" do
@@ -41,14 +40,15 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Nothing is running on Portfolio on the Mini.")
   end
 
-  it "asks the Mini to close a builder's session" do
+  it "asks the Mini to close a build's session" do
     stop = stub_request(:post, %r{/byte/builder\z}).with(
-      body: hash_including("action" => "stop", "conversation_id" => builder.id),
+      body: hash_including("action" => "stop", "build_id" => build.id),
     ).to_return(status: 200, body: "{}")
 
-    post system_claude_stop_path(conversation_id: builder.id)
+    post system_claude_stop_path(id: build.id)
 
     expect(stop).to have_been_requested
+    expect(build.reload).to be_status_stopped
     expect(response).to redirect_to(system_claude_path)
   end
 end

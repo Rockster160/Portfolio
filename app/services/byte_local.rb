@@ -348,13 +348,16 @@ module ByteLocal
     false
   end
 
-  # Tell the Mini something about a Feature Builder thread: `:stop` closes its
-  # session and keeps the work, `:finish` is its PR merged or closed (`merged:`
-  # says which) and removes the worktree too. Builders only run on the Mini.
-  def builder(action, conversation_id:, **fields)
+  # Tell the Mini something about a `/feature` build (~/code/Byte/builder.rb):
+  #   :start    cut its worktree and open its session (title:, request:, ...)
+  #   :message  type `text:` into its session, resuming it if it was closed
+  #   :stop     close the session and keep the work
+  #   :finish   its PR was merged or closed (`merged:`); the worktree goes too
+  # Builders only run on the Mini.
+  def builder(action, build_id:, **fields)
     uri = URI.join(base_url(:mini), "/byte/builder")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
-    req.body = JSON.generate(fields.merge(action: action, conversation_id: conversation_id.to_i))
+    req.body = JSON.generate(fields.merge(action: action, build_id: build_id.to_i))
 
     res = Net::HTTP.start(uri.hostname, uri.port,
       use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,

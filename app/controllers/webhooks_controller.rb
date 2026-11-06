@@ -573,6 +573,18 @@ class WebhooksController < ApplicationController
     render json: { ok: true, count: listed.length }
   end
 
+  # The Mini on a `/feature` build: up and running with its link, its PR, or
+  # why it couldn't start (~/code/Byte/builder.rb).
+  def byte_update_build
+    return head :unauthorized unless byte_authorized?
+
+    build = FeatureBuild.find_by(id: params[:id])
+    return head :not_found if build.nil?
+
+    FeatureBuilder.update_from_mini!(build, params.permit(*FeatureBuilder::MINI_FIELDS).to_h)
+    render json: { ok: true, status: build.status }
+  end
+
   # GitHub, for the Feature Builder's PRs: comments and reviews go back to the
   # session that wrote the PR, and a merge or close ends it. Signed with the
   # secret in FeatureBuilder::SECRET_KEY, and nothing is read before that checks.

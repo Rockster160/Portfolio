@@ -1,12 +1,15 @@
-# The Rails half of a Feature Builder thread. The session itself runs on the
-# Mini (~/code/Byte/builder.rb); this side carries what happens on GitHub back
-# to it, and keeps the chip and the system page that say which Claude sessions
-# are working on Portfolio there.
+# The Rails half of `/feature`. Typed in a Buddy thread, it starts a Feature
+# Builder on the Mini (~/code/Byte/builder.rb): a Claude session in its own
+# worktree and branch, reached from the Claude app, that asks, builds and opens
+# a ByteSlime PR. The thread gets one system message, rewritten as the build
+# starts and given the session's link, and then the PR once it's open. Nothing
+# else is said there.
+#
+# This side also carries GitHub's comments back to the session, and keeps the
+# chip and the system page that say which Claude sessions are working on
+# Portfolio on the Mini.
 module FeatureBuilder
   module_function
-
-  # A builder's branch names its thread: `feature-builder/<conversation id>-<slug>`.
-  BRANCH = %r{\Afeature-builder/(\d+)-}
 
   # Only the owner's words on a PR are instructions. ByteSlime's own replies
   # come back through the same webhook and must not start another turn.
@@ -26,17 +29,63 @@ module FeatureBuilder
 
   CHIP_KEY = :"mini:claude"
 
-  INTRO = <<~TEXT.squish.freeze
-    Tell me what you want built. I'll read the code, ask what I need to know,
-    and write it up as a ticket. Once you say go I'll build it and open a PR as
-    ByteSlime. I run in Claude on the Mac Mini, and the link to talk to me from
-    the Claude app shows up here as soon as I start.
-  TEXT
+  USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
-  def intro!(conversation)
-    return unless conversation.builder?
+  # ---- starting one ----
 
-    say(conversation, INTRO, notify: false)
+  # `/feature add ...` (or just `/feature ...`). Returns the system message it
+  # posted, which the slash command hands back as its answer.
+  def start!(user:, conversation:, text:)
+    request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
+    return say(conversation, USAGE) if request.empty?
+
+    build = FeatureBuild.create!(
+      user:              user,
+      byte_conversation: conversation,
+      title:             FeatureBuild.title_for(request),
+      request:           request,
+    )
+    message = say(conversation, build.status_line, feature_build_id: build.id)
+    build.update!(byte_message: message)
+    FeatureBuildStartWorker.perform_async(build.id)
+    message
+  end
+
+  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error].freeze
+
+  # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
+  # The thread hears about two things only: the session's link, folded into
+  # the message it already has, and the PR, once.
+  def update_from_mini!(build, attributes)
+    attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
+    announce = attributes["pr_url"].present? && build.pr_url.blank?
+    build.update!(attributes)
+    repaint!(build)
+    announce_pr!(build) if announce
+    build
+  end
+
+  # Rewrites the build's one message in place, the way an alert's bubble is.
+  def repaint!(build)
+    message = build.byte_message
+    return if message.nil? || message.body == build.status_line
+
+    message.update!(body: build.status_line)
+    broadcast(message, update: true)
+  end
+
+  def announce_pr!(build)
+    target = build.byte_conversation
+    target = ByteConversation.for_self_initiated(build.user) if target.nil? || target.archived?
+    return if target.nil?
+
+    ::Buddy::CompanionDelivery.deliver_plain(
+      user:         build.user,
+      conversation: target,
+      text:         "**#{build.title}** is ready for review: [PR ##{build.pr_number}](#{build.pr_url})",
+      metadata:     { "kind" => "system", "source" => "feature_builder", "feature_build_id" => build.id },
+      push_title:   "PR ready: #{build.title}",
+    )
   end
 
   # ---- GitHub ----
@@ -63,15 +112,15 @@ module FeatureBuilder
   def pull_request!(payload)
     return :ignored unless payload["action"] == "closed"
 
-    conversation = conversation_for(payload["pull_request"])
-    return :unknown if conversation.nil?
+    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    return :unknown if build.nil?
+    return :ignored if build.status_finished?
 
     merged = payload.dig("pull_request", "merged") == true
-    return :finished if ByteLocal.builder(:finish, conversation_id: conversation.id, merged: merged)
+    return :mini_unreachable unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
 
-    word = merged ? "merged" : "closed"
-    say(conversation, "The PR was #{word}, but the Mini didn't answer, so its session is still open.")
-    :mini_unreachable
+    build.update!(status: :finished, finished_at: Time.current)
+    :finished
   end
 
   def review!(payload)
@@ -84,7 +133,8 @@ module FeatureBuilder
     return :ignored if body.empty? && review["state"] != "changes_requested"
 
     heading = review["state"] == "changes_requested" ? "Changes requested" : "Review"
-    feedback!(payload["pull_request"], "#{heading}: #{body.presence || "see the comments"}", review["html_url"])
+    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    feedback!(build, "#{heading}: #{body.presence || "see the comments"}")
   end
 
   def line_comment!(payload)
@@ -93,7 +143,7 @@ module FeatureBuilder
 
     where = [comment["path"], comment["line"] || comment["original_line"]].compact.join(":")
     text  = "On `#{where}` (comment #{comment["id"]}): #{comment["body"].to_s.strip}"
-    feedback!(payload["pull_request"], text, comment["html_url"])
+    feedback!(FeatureBuild.for_pull_request(payload["pull_request"]), text)
   end
 
   def pr_comment!(payload)
@@ -102,66 +152,40 @@ module FeatureBuilder
     # An issue comment is on a PR when the issue carries a `pull_request` key.
     return :ignored unless payload["issue"].to_h.key?("pull_request")
 
-    conversation = by_pr_number(payload.dig("issue", "number"))
-    return :unknown if conversation.nil?
-
-    feedback_for!(conversation, "Comment: #{comment["body"].to_s.strip}", comment["html_url"])
+    build = FeatureBuild.for_pr_number(payload.dig("issue", "number"))
+    feedback!(build, "Comment: #{comment["body"].to_s.strip}")
   end
 
   def owner?(user)
     user.to_h["login"].to_s.casecmp?(REVIEWER)
   end
 
-  def feedback!(pull_request, text, url)
-    conversation = conversation_for(pull_request)
-    return :unknown if conversation.nil?
+  # Held on the build until it's gone quiet (FeatureBuilderFeedbackWorker).
+  def feedback!(build, text)
+    return :unknown if build.nil?
+    return :ignored if build.status_finished?
 
-    feedback_for!(conversation, text, url)
-  end
-
-  # Shown in the thread as it arrives; handed to the session once it's gone
-  # quiet (FeatureBuilderFeedbackWorker).
-  def feedback_for!(conversation, text, url)
-    say(conversation, "**PR feedback**: #{text}#{" ([on GitHub](#{url}))" if url.present?}", {
-      pr_feedback: true,
-      pr_text:     text,
-    })
-    FeatureBuilderFeedbackWorker.perform_in(GATHER_FOR, conversation.id)
+    build.with_lock {
+      build.update!(feedback: build.feedback + [{ "text" => text, "at" => Time.current.iso8601 }])
+    }
+    FeatureBuilderFeedbackWorker.perform_in(GATHER_FOR, build.id)
     :queued
   end
 
-  def conversation_for(pull_request)
-    id = pull_request.to_h.dig("head", "ref").to_s[BRANCH, 1]
-    conversation = ByteConversation.find_by(id: id) if id
-    conversation = nil unless conversation&.builder?
-    conversation || by_pr_number(pull_request.to_h["number"])
-  end
-
-  def by_pr_number(number)
-    return nil if number.blank?
-
-    ByteConversation.builder.find_by("metadata->'builder'->>'pr_number' = ?", number.to_s)
-  end
-
-  # Everything said on the PR since the last hand-off, as one prompt. Returns
-  # nil when something newer is still inside its quiet window: the job queued
-  # for that one sends the lot.
-  def gather!(conversation)
-    waiting = conversation.byte_messages.where("metadata->>'pr_feedback' = 'true'")
-    waiting = waiting.where("metadata->>'pr_sent' IS NULL").order(:id).to_a
+  # Everything said on the PR since the last hand-off, as one prompt. Nil when
+  # there's nothing, or when something newer is still inside its quiet window:
+  # the job queued for that one sends the lot. The caller clears `feedback`
+  # once the Mini has it.
+  def gather(build)
+    waiting = build.feedback
     return nil if waiting.empty?
-    return nil if waiting.last.created_at > (GATHER_FOR - 2.seconds).ago
+    return nil if Time.zone.parse(waiting.last["at"].to_s) > (GATHER_FOR - 2.seconds).ago
 
-    waiting.each { |message|
-      message.update!(metadata: message.metadata.merge("pr_sent" => true))
-    }
-    lines = waiting.map { |message| "- #{message.metadata["pr_text"]}" }
+    lines = waiting.map { |item| "- #{item["text"]}" }
     "PR feedback from #{REVIEWER}:\n\n#{lines.join("\n")}"
   end
 
-  # `notify: false` for something said to a person who is looking at the
-  # thread already, like the intro on one they just opened.
-  def say(conversation, text, metadata={}, notify: true)
+  def say(conversation, text, metadata={})
     message = conversation.byte_messages.create!(
       user:         conversation.user,
       direction:    :inbound,
@@ -170,14 +194,16 @@ module FeatureBuilder
       metadata:     { kind: :system, source: :feature_builder }.merge(metadata),
       delivered_at: Time.current,
     )
-    conversation.touch_activity
-    MonitorChannel.broadcast_to(conversation.user, {
+    broadcast(message)
+    message
+  end
+
+  def broadcast(message, update: false)
+    MonitorChannel.broadcast_to(message.user, {
       id:      :byte,
       channel: :byte,
-      data:    { kind: :message, message: message.as_wire },
+      data:    { kind: :message, message: message.as_wire, update: update }.compact_blank,
     })
-    ByteNotifier.notify(conversation.user, message) if notify
-    message
   end
 
   # ---- the Mini's Claude sessions ----
@@ -186,14 +212,14 @@ module FeatureBuilder
     :"claude_sessions_#{machine}"
   end
 
+  SESSION_FIELDS = %w[conversation_id build_id kind working started_at].freeze
+
   def report_sessions!(machine:, sessions:)
-    listed = Array(sessions).map { |session| session.to_h.slice(*SESSION_FIELDS) }
+    listed = Array(sessions).map { |session| session.to_h.stringify_keys.slice(*SESSION_FIELDS) }
     DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601, sessions: listed }
     refresh_chip!(User.me) if machine.to_s == "mini"
     listed
   end
-
-  SESSION_FIELDS = %w[conversation_id kind working started_at branch rc_url pr_url].freeze
 
   # What the Mini last said is running, or nothing once that report is stale.
   def sessions(machine: :mini)
@@ -226,7 +252,7 @@ module FeatureBuilder
 
   def refresh_chip!(user)
     working = sessions.select { |session| session["working"] }
-    conversations = ByteConversation.where(id: working.pluck("conversation_id")).index_by(&:id)
+    conversations = ByteConversation.where(id: working.pluck("conversation_id").compact).index_by(&:id)
     name = chip_name(working.map { |session| kind_of(session, conversations) })
     return BackgroundProcess.clear(user: user, key: CHIP_KEY) if name.nil?
 

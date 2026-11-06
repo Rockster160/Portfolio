@@ -1,31 +1,35 @@
 require "rails_helper"
 
 RSpec.describe FeatureBuilderFeedbackWorker do
-  let(:user)    { User.me }
-  let(:builder) { user.byte_conversations.create!(mode: :builder, last_message_at: Time.current) }
+  let(:user)  { User.me }
+  let(:build) { FeatureBuild.create!(user: user, title: "Dark mode", request: "dark mode") }
 
   before { allow(described_class).to receive(:perform_in) }
 
-  def prompts
-    builder.byte_messages.where("metadata->>'pr_feedback_prompt' = 'true'")
+  def comment(text)
+    travel_to(1.minute.ago) { FeatureBuilder.feedback!(build, text) }
   end
 
-  it "sends the gathered feedback to the session as one hidden message" do
-    travel_to(1.minute.ago) {
-      FeatureBuilder.feedback_for!(builder, "Rename the method", nil)
-      FeatureBuilder.feedback_for!(builder, "Add a spec", nil)
-    }
+  it "types the gathered feedback into the session as one message" do
+    sent = stub_request(:post, %r{/byte/builder\z}).with(
+      body: hash_including("action" => "message", "build_id" => build.id),
+    ).to_return(status: 200, body: "{}")
+    comment("Rename the method")
+    comment("Add a spec")
 
-    described_class.new.perform(builder.id)
+    described_class.new.perform(build.id)
 
-    expect(prompts.count).to eq(1)
-    expect(prompts.first.body).to include("Rename the method", "Add a spec")
-    expect(prompts.first.metadata["hidden"]).to be(true)
+    expect(sent.with { |request| request.body.include?("Rename the method") && request.body.include?("Add a spec") })
+      .to have_been_requested.once
+    expect(build.reload.feedback).to be_empty
   end
 
-  it "sends nothing when there's nothing new" do
-    described_class.new.perform(builder.id)
+  it "keeps the feedback and tries again later when the Mini doesn't answer" do
+    comment("Rename the method")
 
-    expect(prompts).to be_empty
+    described_class.new.perform(build.id)
+
+    expect(build.reload.feedback.length).to eq(1)
+    expect(described_class).to have_received(:perform_in).with(described_class::RETRY_IN, build.id)
   end
 end

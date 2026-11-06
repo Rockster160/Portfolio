@@ -49,10 +49,9 @@ const COMMANDS = [
   { name: "reset",    modes: ["buddy"], description: "Fresh start here — stop sending everything above as history" },
   { name: "compact",  modes: ["buddy"], alias: true, description: "Alias for /reset" },
 
-  // Feature Builder. Anything else after a "/" there is typed into its Claude
-  // session as it is, so Claude Code's own commands (`/compact`) work too.
-  { name: "stop",     modes: ["builder"], description: "Close this builder's session; the work is kept" },
-  { name: "link",     modes: ["builder"], description: "Post the link to open it in the Claude app" },
+  // Claude on the Mini builds it and opens a PR; the session's link and then
+  // the PR come back to this thread.
+  { name: "feature",  owner: true, modes: ["buddy"], description: "Have Claude build a feature and open a PR", args: "add <what to build>" },
 
   // Jarvis. Everywhere, because the house doesn't care which thread you're
   // standing in — the bare-dot shortcut for the same thing is Buddy-only.
@@ -62,7 +61,7 @@ const COMMANDS = [
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
-  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|bash|jarvis|buddy|builder>" },
+  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|bash|jarvis|buddy>" },
   { name: "machine",  owner: true, modes: MAC_MODES, description: "Run this thread on the other Mac", args: "<mini|laptop>" },
   { name: "fork",     description: "Fork this conversation into a new one" },
 

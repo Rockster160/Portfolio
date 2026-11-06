@@ -405,24 +405,25 @@ class SystemController < ApplicationController
   end
 
   # Claude on the Mac Mini: what is working on Portfolio there right now, as
-  # the Mini last reported it, and every Feature Builder thread with its links.
+  # the Mini last reported it, and every `/feature` build with its links.
   def claude
     @sessions = FeatureBuilder.sessions
-    @builders = current_user.byte_conversations.builder.order(created_at: :desc).limit(30).to_a
-    ids = @sessions.pluck("conversation_id").map(&:to_i)
-    @conversations = ByteConversation.where(id: ids).index_by(&:id).merge(@builders.index_by(&:id))
-    @live = @sessions.index_by { |session| session["conversation_id"].to_i }
+    @builds = FeatureBuild.where(user: current_user).newest.limit(30).to_a
+    ids = @sessions.pluck("conversation_id").compact.map(&:to_i)
+    @conversations = ByteConversation.where(id: ids).index_by(&:id)
+    @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
   end
 
-  # Closes a builder's session on the Mini. Its worktree, branch and Claude
-  # session are kept, so a message in its thread picks it back up.
+  # Closes a build's session on the Mini. Its worktree, branch and Claude
+  # session are kept, and PR feedback resumes it.
   def stop_claude
-    conversation = current_user.byte_conversations.builder.find(params[:conversation_id])
+    build = FeatureBuild.where(user: current_user).find(params[:id])
     notice = (
-      if ByteLocal.builder(:stop, conversation_id: conversation.id)
-        "Stopped #{conversation.display_name}."
+      if ByteLocal.builder(:stop, build_id: build.id)
+        build.update!(status: :stopped)
+        "Stopped #{build.title}."
       else
-        "The Mini didn't answer, so #{conversation.display_name} is still running."
+        "The Mini didn't answer, so #{build.title} is still running."
       end
     )
     redirect_to system_claude_path, notice: notice

@@ -873,7 +873,6 @@ class ByteController < ApplicationController
     # No-ops on every other mode and on any thread that already has a message
     # in it - see Buddy::Intro.
     Buddy::Intro.start!(convo)
-    FeatureBuilder.intro!(convo)
     render json: convo.as_wire, status: :created
   end
 
@@ -1913,9 +1912,6 @@ class ByteController < ApplicationController
     target = arg.downcase.to_sym
     return usage unless ByteConversation.machines.key?(target.to_s)
     return "Already on #{ByteLocal.name_of(target)}." if target == current
-    if conversation.builder?
-      return "A Feature Builder stays on the Mac Mini, where its session and worktree are."
-    end
     return "#{conversation.mode.capitalize} threads don't run on a Mac." unless conversation.mac?
 
     ByteLocal.reset_claude_session(conversation_id: conversation.id, machine: target)
@@ -1964,7 +1960,7 @@ class ByteController < ApplicationController
       return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?
 
       new_mode = normalized_mode(arg)
-      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy|builder`") if arg.empty?
+      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
 
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
@@ -1981,14 +1977,17 @@ class ByteController < ApplicationController
       return ack(conversation, "usage: `/j COMMAND`") if arg.empty?
 
       nil
+    when "feature"
+      # Claude on the Mini builds it and opens a PR (FeatureBuilder). It runs
+      # in the owner's checkout, so it's the owner's.
+      return ack(conversation, "Feature builds are the owner's.") if buddy_only?
+
+      FeatureBuilder.start!(user: current_user, conversation: conversation, text: arg)
     when "today"
       send_today_briefing(conversation)
     when "buddy"
       switch_buddy_theme(conversation, arg)
     when "compact", "forget", "reset"
-      # A builder's are Claude Code's own, typed into its session.
-      return nil if conversation.builder?
-
       compact_conversation(conversation)
     when "fork", "continue"
       # Spin up a brand-new conversation with the same mode + same cwd.

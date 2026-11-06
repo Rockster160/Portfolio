@@ -4,7 +4,7 @@ RSpec.describe "Feature Builder webhooks", type: :request do
   let(:user) { User.me }
 
   describe "POST /webhooks/github" do
-    let(:body) { JSON.generate({ "action" => "opened", "pull_request" => {} }) }
+    let(:body) { JSON.generate({ "action" => "labeled", "pull_request" => {} }) }
 
     before { DataStorage[FeatureBuilder::SECRET_KEY] = "shh" }
 
@@ -37,6 +37,34 @@ RSpec.describe "Feature Builder webhooks", type: :request do
       deliver(body, signature: signed(body, "guess"))
 
       expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe "PATCH /webhooks/byte/builds/:id" do
+    let(:build) { FeatureBuild.create!(user: user, title: "Dark mode", request: "dark mode") }
+
+    before {
+      allow(ByteLocal).to receive(:valid_secret?).and_return(false)
+      allow(ByteLocal).to receive(:valid_secret?).with("shh").and_return(true)
+    }
+
+    it "takes the Mini's word on how a build is going" do
+      patch "/webhooks/byte/builds/#{build.id}",
+        params:  { status: "running", rc_url: "https://claude.ai/code/session_abc", user_id: 99 },
+        as:      :json,
+        headers: { "X-Byte-Secret" => "shh" }
+
+      expect(response).to have_http_status(:ok)
+      expect(build.reload).to be_status_running
+      expect(build.rc_url).to eq("https://claude.ai/code/session_abc")
+      expect(build.user).to eq(user)
+    end
+
+    it "is turned away without the Mac's secret" do
+      patch "/webhooks/byte/builds/#{build.id}", params: { status: "failed" }, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(build.reload).to be_status_starting
     end
   end
 

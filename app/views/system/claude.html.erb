@@ -1,14 +1,19 @@
 <%= meta_title "Claude on the Mini", include_name: false %>
-<%= meta_description "Claude sessions working on Portfolio on the Mac Mini, and every Feature Builder." %>
+<%= meta_description "Claude sessions working on Portfolio on the Mac Mini, and every /feature build." %>
 
 <%
   zone = current_user.timezone
-  stamp = ->(iso) {
-    time = Time.zone.parse(iso.to_s) if iso.present?
-    time ? time.in_time_zone(zone).strftime("%b %-d, %-I:%M %p") : "—"
-  }
+  stamp = ->(time) { time ? time.in_time_zone(zone).strftime("%b %-d, %-I:%M %p") : "—" }
+  parse = ->(iso) { Time.zone.parse(iso.to_s) if iso.present? }
   thread_url = ->(conversation) { byte_root_url(subdomain: :byte, conversation_id: conversation.id) }
-  kind_label = { audit: "Daily audit", builder: "Feature Builder", claude: "Claude thread" }
+  builds_by_id = @builds.index_by(&:id)
+  kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread" }
+  build_state = ->(build) {
+    live = @live[build.id]
+    if live then live["working"] ? "working" : "waiting on you"
+    else build.status.humanize.downcase
+    end
+  }
 %>
 
 <div class="system-page">
@@ -22,71 +27,66 @@
   <% end %>
 
   <% @sessions.each do |session| %>
-    <% conversation = @conversations[session["conversation_id"].to_i] %>
-    <% kind = FeatureBuilder.kind_of(session, @conversations) %>
+    <%
+      kind = FeatureBuilder.kind_of(session, @conversations)
+      build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
+      conversation = @conversations[session["conversation_id"].to_i]
+    %>
     <div class="cs-row <%= session["working"] ? "cs-working" : "cs-waiting" %>">
       <div class="cs-head">
         <div class="cs-title">
           <%= kind_label.fetch(kind) %>
-          <% if conversation %>
+          <% if build %>
+            · <%= build.title %>
+          <% elsif conversation %>
             · <%= link_to conversation.display_name, thread_url.call(conversation) %>
           <% end %>
         </div>
         <div class="cs-meta">
           <span class="cs-badge"><%= session["working"] ? "working" : "waiting on you" %></span>
-          since <%= stamp.call(session["started_at"]) %>
+          since <%= stamp.call(parse.call(session["started_at"])) %>
         </div>
       </div>
-      <div class="cs-links">
-        <% if session["rc_url"].present? %>
-          <%= link_to "Open in Claude", session["rc_url"], class: "cs-link", target: :_blank, rel: :noopener %>
-        <% end %>
-        <% if session["pr_url"].present? %>
-          <%= link_to "Pull request", session["pr_url"], class: "cs-link", target: :_blank, rel: :noopener %>
-        <% end %>
-        <% if kind == :builder && conversation %>
-          <%= button_to "Stop", system_claude_stop_path(conversation_id: conversation.id),
-                class: "cs-stop", form_class: "cs-stop-form",
-                data: { confirm: "Close this builder's session? Its work is kept, and a message in its thread picks it back up." } %>
-        <% end %>
-      </div>
+      <% if build&.rc_url.present? %>
+        <div class="cs-links">
+          <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+        </div>
+      <% end %>
     </div>
   <% end %>
 
-  <h3 class="cs-heading">Feature Builders</h3>
-  <% if @builders.none? %>
-    <p class="cs-empty">No Feature Builder threads yet. Start one from Byte's new conversation menu.</p>
+  <h3 class="cs-heading">Feature builds</h3>
+  <% if @builds.none? %>
+    <p class="cs-empty">No builds yet. Start one in any thread with <code>/feature add ...</code>.</p>
   <% end %>
 
-  <% @builders.each do |conversation| %>
-    <%
-      info = conversation.metadata.to_h["builder"].to_h
-      live = @live[conversation.id]
-      status = (
-        if info["finished_at"].present? then "finished"
-        elsif live.nil? then (info["branch"].present? ? "stopped" : "not started")
-        elsif live["working"] then "working"
-        else "waiting on you"
-        end
-      )
-    %>
-    <div class="cs-row cs-builder-<%= status.parameterize %>">
+  <% @builds.each do |build| %>
+    <% state = build_state.call(build) %>
+    <div class="cs-row cs-build-<%= state.parameterize %>">
       <div class="cs-head">
-        <div class="cs-title"><%= link_to conversation.display_name, thread_url.call(conversation) %></div>
+        <div class="cs-title"><%= build.title %></div>
         <div class="cs-meta">
-          <span class="cs-badge"><%= status %></span>
-          <%= stamp.call(conversation.created_at.iso8601) %>
+          <span class="cs-badge"><%= state %></span>
+          <%= stamp.call(build.created_at) %>
         </div>
       </div>
-      <% if info["branch"].present? %>
-        <div class="cs-branch"><code><%= info["branch"] %></code></div>
+      <% if build.branch.present? %>
+        <div class="cs-branch"><code><%= build.branch %></code></div>
+      <% end %>
+      <% if build.status_failed? %>
+        <div class="cs-branch"><%= build.error %></div>
       <% end %>
       <div class="cs-links">
-        <% if info["rc_url"].present? && info["finished_at"].blank? %>
-          <%= link_to "Open in Claude", info["rc_url"], class: "cs-link", target: :_blank, rel: :noopener %>
+        <% if build.rc_url.present? && !build.status_finished? %>
+          <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
         <% end %>
-        <% if info["pr_url"].present? %>
-          <%= link_to "Pull request", info["pr_url"], class: "cs-link", target: :_blank, rel: :noopener %>
+        <% if build.pr_url.present? %>
+          <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
+        <% end %>
+        <% if build.status_running? %>
+          <%= button_to "Stop", system_claude_stop_path(id: build.id),
+                class: "cs-stop", form_class: "cs-stop-form",
+                data: { confirm: "Close this build's session? Its work is kept, and PR feedback picks it back up." } %>
         <% end %>
       </div>
     </div>
@@ -106,9 +106,10 @@
       background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
     }
-    .cs-row.cs-working, .cs-row.cs-builder-working { border-color: rgba(88, 214, 141, 0.45); }
-    .cs-row.cs-waiting, .cs-row.cs-builder-waiting-on-you { border-color: rgba(245, 176, 65, 0.45); }
-    .cs-row.cs-builder-finished { opacity: 0.55; }
+    .cs-row.cs-working, .cs-row.cs-build-working { border-color: rgba(88, 214, 141, 0.45); }
+    .cs-row.cs-waiting, .cs-row.cs-build-waiting-on-you { border-color: rgba(245, 176, 65, 0.45); }
+    .cs-row.cs-build-failed { border-color: rgba(236, 112, 99, 0.45); }
+    .cs-row.cs-build-finished { opacity: 0.55; }
 
     .cs-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
     .cs-title { font-size: 15px; font-weight: bold; color: #C9D1D9; }
