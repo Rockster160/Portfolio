@@ -427,10 +427,21 @@ class SystemController < ApplicationController
   # Opens the standing questions session on the Mini in the Claude app,
   # starting it first when it isn't running.
   def claude_questions
-    url = ByteLocal.questions_session
-    return redirect_to(url, allow_other_host: true) if url
+    result = ByteLocal.questions_session
+    return redirect_to(result[:url], allow_other_host: true) if result[:url]
 
-    redirect_to system_claude_path, notice: "The Mini didn't hand back a Claude session. Try again in a minute."
+    notice = (
+      case result[:failure]
+      when :unreachable
+        "The Mini didn't answer. Is it awake and is Byte running?"
+      when :outdated
+        "Byte on the Mini is running older code that doesn't know this button. Restart it."
+      else
+        reason = result[:error].presence || "it didn't say why"
+        "Claude didn't come up on the Mini: #{reason}"
+      end
+    )
+    redirect_to system_claude_path, notice: notice
   end
 
   # Closes a build's session on the Mini. Its worktree, branch and Claude
