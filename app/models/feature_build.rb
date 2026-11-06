@@ -52,8 +52,9 @@ class FeatureBuild < ApplicationRecord
   scope :newest,     -> { order(created_at: :desc) }
   scope :unfinished, -> { where(status: [:starting, :running, :stopped]) }
 
-  # A builder's branch names its build: `feature-builder/<id>-<slug>`.
-  BRANCH = %r{\Afeature-builder/(\d+)-}
+  # A builder's branch names its build: `byte/<id>-<slug>`, or
+  # `feature-builder/<id>-<slug>` for the builds that started before it.
+  BRANCH = %r{\A(?:byte|feature-builder)/(\d+)-}
 
   # The build a PR belongs to, by its branch, or by its number for the events
   # that don't carry the branch (a comment on the PR's conversation).

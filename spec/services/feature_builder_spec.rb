@@ -8,7 +8,7 @@ RSpec.describe FeatureBuilder do
     message = described_class.start!(user: user, conversation: thread, text: "add dark mode")
     FeatureBuild.find(message.metadata["feature_build_id"])
   }
-  let(:branch) { "feature-builder/#{build.id}-dark-mode" }
+  let(:branch) { "byte/#{build.id}-dark-mode" }
 
   before { allow(FeatureBuilderFeedbackWorker).to receive(:perform_in) }
 
@@ -166,7 +166,7 @@ RSpec.describe FeatureBuilder do
     it "marks the request shipped when the build's PR is merged, and not when it's closed" do
       merged = described_class.start_from_request!(feature_request, user: user)
       stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
-      merged_pr = { "number" => 42, "head" => { "ref" => "feature-builder/#{merged.id}-x" }, "merged" => true }
+      merged_pr = { "number" => 42, "head" => { "ref" => "byte/#{merged.id}-x" }, "merged" => true }
 
       closed_request = FeatureRequest.create!(user: user, title: "Other thing", body: "Something else")
       closed = described_class.start_from_request!(closed_request, user: user)

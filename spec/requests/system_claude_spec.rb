@@ -8,7 +8,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
       title:     "Dark mode",
       request:   "dark mode",
       status:    :running,
-      branch:    "feature-builder/1-dark-mode",
+      branch:    "byte/1-dark-mode",
       rc_url:    "https://claude.ai/code/session_abc",
       pr_number: 42,
       pr_url:    "https://github.com/Rockster160/Portfolio/pull/42",
@@ -30,7 +30,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
     get system_claude_path
 
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Dark mode", "waiting on you", "feature-builder/1-dark-mode")
+    expect(response.body).to include("Dark mode", "waiting on you", "byte/1-dark-mode")
     expect(response.body).to include("https://claude.ai/code/session_abc", "PR #42")
   end
 
