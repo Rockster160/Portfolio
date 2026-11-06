@@ -2,8 +2,12 @@
 # Builder on the Mini (~/code/Byte/builder.rb): a Claude session in its own
 # worktree and branch, reached from the Claude app, that asks, builds and opens
 # a ByteSlime PR. The thread gets one system message, rewritten as the build
-# starts and given the session's link, and then the PR once it's open. Nothing
-# else is said there.
+# starts and given the session's link, then one when its plan is ready and one
+# when its PR is open. Nothing else is said there.
+#
+# A build can also be started from a row on /system/feature_requests, and then
+# speaks in the owner's primary Buddy thread and moves the request along with
+# it: planned when it starts, shipped when its PR is merged.
 #
 # This side also carries GitHub's comments back to the session, and keeps the
 # chip and the system page that say which Claude sessions are working on
@@ -29,6 +33,9 @@ module FeatureBuilder
 
   CHIP_KEY = :"mini:claude"
 
+  # Raised while any build has a plan or a PR waiting on its owner.
+  NEEDS_YOU_KEY = :"mini:needs_you"
+
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
   # ---- starting one ----
@@ -39,29 +46,62 @@ module FeatureBuilder
     request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
     return say(conversation, USAGE) if request.empty?
 
+    launch!(user: user, conversation: conversation, request: request).byte_message
+  end
+
+  # The Build button on a feature request. Returns the build, or nil when the
+  # request isn't one that can be built (FeatureRequest#buildable?).
+  def start_from_request!(feature_request, user:, notes: nil)
+    return nil unless feature_request.buildable?
+
+    request = [
+      feature_request.title,
+      feature_request.body,
+      notes.to_s.strip.presence&.then { |text| "Notes: #{text}" },
+    ].compact.join("\n\n")
+
+    feature_request.update!(status: :planned)
+    launch!(
+      user:            user,
+      conversation:    ByteConversation.for_self_initiated(user),
+      request:         request,
+      feature_request: feature_request,
+    )
+  end
+
+  def launch!(user:, conversation:, request:, feature_request: nil)
     build = FeatureBuild.create!(
       user:              user,
       byte_conversation: conversation,
+      feature_request:   feature_request,
       title:             FeatureBuild.title_for(request),
       request:           request,
     )
-    message = say(conversation, build.status_line, feature_build_id: build.id)
-    build.update!(byte_message: message)
+    if conversation
+      message = say(conversation, build.status_line, feature_build_id: build.id)
+      build.update!(byte_message: message)
+    end
     FeatureBuildStartWorker.perform_async(build.id)
-    message
+    build
   end
 
-  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error].freeze
+  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error planned_at].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
-  # The thread hears about two things only: the session's link, folded into
-  # the message it already has, and the PR, once.
+  # The thread hears about three things only: the session's link, folded into
+  # the message it already has, the plan the first time it's posted, and the
+  # PR, once.
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
-    announce = attributes["pr_url"].present? && build.pr_url.blank?
+    # A ticket posted again after a change is the same plan, already announced.
+    attributes.delete("planned_at") if build.planned_at.present?
+    announce_plan = attributes["planned_at"].present?
+    announce_pr = attributes["pr_url"].present? && build.pr_url.blank?
     build.update!(attributes)
     repaint!(build)
-    announce_pr!(build) if announce
+    announce_plan!(build) if announce_plan
+    announce_pr!(build) if announce_pr
+    refresh_needs_you!(build.user)
     build
   end
 
@@ -74,7 +114,17 @@ module FeatureBuilder
     broadcast(message, update: true)
   end
 
+  def announce_plan!(build)
+    link = build.rc_url.present? ? " [Open it in Claude](#{build.rc_url})" : ""
+    announce!(build, "**#{build.title}** has a plan ready for you.#{link}", "Plan ready: #{build.title}")
+  end
+
   def announce_pr!(build)
+    text = "**#{build.title}** is ready for review: [PR ##{build.pr_number}](#{build.pr_url})"
+    announce!(build, text, "PR ready: #{build.title}")
+  end
+
+  def announce!(build, text, push_title)
     target = build.byte_conversation
     target = ByteConversation.for_self_initiated(build.user) if target.nil? || target.archived?
     return if target.nil?
@@ -82,9 +132,9 @@ module FeatureBuilder
     ::Buddy::CompanionDelivery.deliver_plain(
       user:         build.user,
       conversation: target,
-      text:         "**#{build.title}** is ready for review: [PR ##{build.pr_number}](#{build.pr_url})",
+      text:         text,
       metadata:     { "kind" => "system", "source" => "feature_builder", "feature_build_id" => build.id },
-      push_title:   "PR ready: #{build.title}",
+      push_title:   push_title,
     )
   end
 
@@ -120,6 +170,8 @@ module FeatureBuilder
     return :mini_unreachable unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
 
     build.update!(status: :finished, finished_at: Time.current)
+    build.feature_request&.update!(status: :shipped) if merged
+    refresh_needs_you!(build.user)
     :finished
   end
 
@@ -217,7 +269,10 @@ module FeatureBuilder
   def report_sessions!(machine:, sessions:)
     listed = Array(sessions).map { |session| session.to_h.stringify_keys.slice(*SESSION_FIELDS) }
     DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601, sessions: listed }
-    refresh_chip!(User.me) if machine.to_s == "mini"
+    if machine.to_s == "mini"
+      refresh_chip!(User.me)
+      refresh_needs_you!(User.me)
+    end
     listed
   end
 
@@ -232,6 +287,7 @@ module FeatureBuilder
 
   def kind_of(session, conversations)
     return :builder if session["kind"].to_s == "builder"
+    return :questions if session["kind"].to_s == "questions"
 
     conversations[session["conversation_id"].to_i]&.name == ByteDailyAudit::NAME ? :audit : :claude
   end
@@ -242,7 +298,12 @@ module FeatureBuilder
     return nil if kinds.empty?
 
     if kinds.one?
-      { audit: "Auditing…", builder: "Building…", claude: "Claude working…" }.fetch(kinds.first)
+      {
+        audit:     "Auditing…",
+        builder:   "Building…",
+        claude:    "Claude working…",
+        questions: "Claude answering…",
+      }.fetch(kinds.first)
     elsif kinds.all?(:builder)
       "#{kinds.length}x Builders running"
     else
@@ -261,6 +322,52 @@ module FeatureBuilder
       key:    CHIP_KEY,
       name:   name,
       state:  :running,
+      source: :mac,
+      url:    Rails.application.routes.url_helpers.system_claude_url,
+    )
+  end
+
+  # ---- waiting on the owner ----
+
+  # Builds with a plan posted and no PR yet, whose session isn't working (it
+  # is once it's told to go), and builds whose PR is open.
+  def pending(user)
+    working = sessions.select { |session| session["working"] }.filter_map { |session|
+      session["build_id"]&.to_i
+    }
+    live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).newest.to_a
+    {
+      plans: live.select { |build| build.pr_url.blank? && build.planned_at && working.exclude?(build.id) },
+      prs:   live.select { |build| build.pr_url.present? },
+    }
+  end
+
+  def pending_count(user)
+    pending(user).values.sum(&:length)
+  end
+
+  # Where a build has got to, in the words the pages show it in. `live` is the
+  # Mini's report for it, when it's listed.
+  def stage(build, live)
+    return build.status.humanize.downcase if build.status_failed? || build.status_finished?
+    return "working" if live&.dig("working")
+    return "PR open" if build.pr_url.present?
+    return "plan ready" if build.planned_at
+
+    live ? "waiting on you" : build.status.humanize.downcase
+  end
+
+  def refresh_needs_you!(user)
+    return if user.nil?
+
+    count = pending_count(user)
+    return BackgroundProcess.clear(user: user, key: NEEDS_YOU_KEY) if count.zero?
+
+    BackgroundProcess.note(
+      user:   user,
+      key:    NEEDS_YOU_KEY,
+      name:   count == 1 ? "1 build needs you" : "#{count} builds need you",
+      state:  :waiting,
       source: :mac,
       url:    Rails.application.routes.url_helpers.system_claude_url,
     )

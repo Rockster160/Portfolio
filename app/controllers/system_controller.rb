@@ -385,10 +385,11 @@ class SystemController < ApplicationController
   # What the companions were asked for and couldn't do. Open ones first, since
   # they're the only ones with anything to decide.
   def feature_requests
-    @requests = FeatureRequest.includes(:user, :byte_conversation).order(
+    @requests = FeatureRequest.includes(:user, :byte_conversation, :feature_builds).order(
       Arel.sql("CASE status WHEN 0 THEN 0 WHEN 1 THEN 1 ELSE 2 END, created_at DESC"),
     )
     @counts = FeatureRequest.group(:status).count
+    @live = FeatureBuilder.sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
 
     # Read is read. Landing on the page is what clears the blip, so it can't
     # sit there counting things already looked at.
@@ -404,6 +405,14 @@ class SystemController < ApplicationController
     render json: { id: request.id, status: request.status, open: FeatureRequest.status_open.count }
   end
 
+  # Hands a request to a Feature Builder, with whatever notes were added to it.
+  def build_feature_request
+    feature_request = FeatureRequest.find(params[:id])
+    build = FeatureBuilder.start_from_request!(feature_request, user: current_user, notes: params[:notes])
+    notice = build ? "Starting a Feature Builder for #{build.title}." : "That one can't be built right now."
+    redirect_to system_feature_requests_path(anchor: "fr-#{feature_request.id}"), notice: notice
+  end
+
   # Claude on the Mac Mini: what is working on Portfolio there right now, as
   # the Mini last reported it, and every `/feature` build with its links.
   def claude
@@ -412,6 +421,16 @@ class SystemController < ApplicationController
     ids = @sessions.pluck("conversation_id").compact.map(&:to_i)
     @conversations = ByteConversation.where(id: ids).index_by(&:id)
     @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
+    @pending = FeatureBuilder.pending(current_user)
+  end
+
+  # Opens the standing questions session on the Mini in the Claude app,
+  # starting it first when it isn't running.
+  def claude_questions
+    url = ByteLocal.questions_session
+    return redirect_to(url, allow_other_host: true) if url
+
+    redirect_to system_claude_path, notice: "The Mini didn't hand back a Claude session. Try again in a minute."
   end
 
   # Closes a build's session on the Mini. Its worktree, branch and Claude

@@ -7,6 +7,7 @@
 #  error                :text
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
+#  planned_at           :datetime
 #  pr_number            :integer
 #  pr_url               :string
 #  rc_url               :string
@@ -17,6 +18,7 @@
 #  updated_at           :datetime         not null
 #  byte_conversation_id :bigint
 #  byte_message_id      :bigint
+#  feature_request_id   :bigint
 #  session_id           :string
 #  user_id              :bigint           not null
 #
@@ -33,12 +35,16 @@ class FeatureBuild < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation, optional: true
   belongs_to :byte_message, optional: true
+  # Set when it was started from a row on /system/feature_requests.
+  belongs_to :feature_request, optional: true
 
   # starting   asked for; the Mini hasn't said it's up yet
   # running    the session is open (working or waiting on an answer)
   # stopped    the session was closed from the system page; the work is kept
   # finished   its PR was merged or closed, and the worktree is gone
   # failed     the Mini couldn't start it (`error` says why)
+  #
+  # `planned_at` is when the session first posted its ticket (`builder-pr plan`).
   enum :status, { starting: 0, running: 1, stopped: 2, finished: 3, failed: 4 }, prefix: :status
 
   validates :title, :request, presence: true

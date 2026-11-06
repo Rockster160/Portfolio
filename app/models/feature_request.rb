@@ -31,6 +31,7 @@ class FeatureRequest < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation, optional: true
   belongs_to :byte_message,      optional: true
+  has_many :feature_builds, dependent: :nullify
 
   # open     - written down, nothing decided
   # planned  - going to happen
@@ -105,6 +106,21 @@ class FeatureRequest < ApplicationRecord
   # can't be resolved, which is the eval harness rather than anything real.
   def self.owner
     ::User.me
+  end
+
+  # The build this request was last handed to, if any.
+  def latest_build
+    feature_builds.max_by(&:created_at)
+  end
+
+  # Only something still wanted gets a builder, and only one at a time: a
+  # build that failed to start, or whose PR was closed unmerged, leaves the
+  # request free to try again.
+  def buildable?
+    return false unless status_open? || status_planned?
+
+    build = latest_build
+    build.nil? || build.status_failed? || build.status_finished?
   end
 
   def notify_owner?
