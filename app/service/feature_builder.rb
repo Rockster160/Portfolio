@@ -115,8 +115,8 @@ module FeatureBuilder
   end
 
   def announce_plan!(build)
-    link = build.rc_url.present? ? " [Open it in Claude](#{build.rc_url})" : ""
-    announce!(build, "**#{build.title}** has a plan ready for you.#{link}", "Plan ready: #{build.title}")
+    text = "**#{build.title}** has a plan ready for you. #{build.link_markdown}"
+    announce!(build, text, "Plan ready: #{build.title}")
   end
 
   def announce_pr!(build)

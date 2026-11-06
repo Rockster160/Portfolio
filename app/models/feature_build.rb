@@ -66,15 +66,21 @@ class FeatureBuild < ApplicationRecord
     number.present? ? find_by(pr_number: number) : nil
   end
 
-  # What the thread's system message says at each point.
+  # What the thread's system message says at each point. Every one carries a
+  # link: the session once there is one, and the builds page until then.
   def status_line
     case status.to_sym
-    when :starting then "Starting a Feature Builder on the Mini for **#{title}**…"
-    when :failed   then "Couldn't start the Feature Builder for **#{title}**: #{error}"
-    else
-      link = rc_url.present? ? " [Open it in Claude](#{rc_url})" : ""
-      "Building **#{title}** on the Mini.#{link}"
+    when :starting then "Starting a Feature Builder on the Mini for **#{title}**… #{link_markdown}"
+    when :failed   then "Couldn't start the Feature Builder for **#{title}**: #{error} #{link_markdown}"
+    else "Building **#{title}** on the Mini. #{link_markdown}"
     end
+  end
+
+  # The most useful place to go for this build from a message about it.
+  def link_markdown
+    return "[Open it in Claude](#{rc_url})" if rc_url.present?
+
+    "[See it on the Mini page](#{Rails.application.routes.url_helpers.system_claude_url})"
   end
 
   # The phrase a person typed, cut to something that reads as a name in the

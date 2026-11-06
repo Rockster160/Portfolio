@@ -49,6 +49,21 @@ RSpec.describe FeatureBuilder do
 
       expect(thread.byte_messages.last.body).to include("Couldn't start", "git fetch failed")
     end
+
+    it "links the Mini page until the session has a link of its own" do
+      expect(build.byte_message.body).to include("Starting a Feature Builder", "/system/claude)")
+
+      described_class.update_from_mini!(build, { "status" => "failed", "error" => "git fetch failed" })
+      expect(thread.byte_messages.last.body).to include("/system/claude)")
+    end
+
+    it "links the Mini page from a plan that came before the session's link" do
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+
+      expect(thread.byte_messages.last.body).to include("has a plan ready", "/system/claude)")
+    end
   end
 
   describe "a plan ready for the owner" do
