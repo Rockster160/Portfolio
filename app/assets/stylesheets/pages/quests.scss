@@ -29,6 +29,15 @@
     animation: quests-bump 0.3s ease;
   }
 
+  // A count that just changed: a gold aura around the circle and a pop on its
+  // number.
+  .chore-circle.quests-glow .circle-inner {
+    animation: quests-glow 0.9s ease-out;
+  }
+  .chore-circle.quests-glow .count-badge {
+    animation: quests-pop 0.4s ease-out;
+  }
+
   // The board list at /quests.
   &.quests-index {
     max-width: 560px;
@@ -126,6 +135,17 @@
     font-size: 13px !important;
     border-radius: 999px;
   }
+}
+
+@keyframes quests-glow {
+  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+  20% { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.75), 0 0 24px 8px rgba(250, 204, 21, 0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0), 0 0 0 0 rgba(250, 204, 21, 0); }
+}
+
+@keyframes quests-pop {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.35); }
 }
 
 @keyframes quests-bump {

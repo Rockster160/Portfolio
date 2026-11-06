@@ -82,6 +82,11 @@ function bootQuests(root) {
     const count = QuestRules.countOf(b, item, date);
     const done = target != null && count >= target;
     const wasDone = node.classList.contains("done");
+    // Glows whenever the count moves, whatever moved it — this circle's own
+    // tap, another quest's effect, an undo, or a board pulled from another
+    // device — so a change is easy to spot. Not on the first paint.
+    if (!firstPaint && node.dataset.count !== String(count)) replay(node, "quests-glow");
+    node.dataset.count = String(count);
 
     node.classList.toggle("done", done);
     node.classList.toggle("partial", !done && target != null && target > 1);
@@ -115,6 +120,17 @@ function bootQuests(root) {
     }
     if (badge.textContent !== text) badge.textContent = text;
   }
+
+  // Restarts a one-shot animation class, even one still running.
+  function replay(node, className) {
+    node.classList.remove(className);
+    void node.offsetWidth;
+    node.classList.add(className);
+  }
+  boardEl.addEventListener("animationend", e => {
+    const node = e.target.closest("[data-quest-id]");
+    if (e.animationName === "quests-glow") node?.classList.remove("quests-glow");
+  });
 
   function paintIcon(icon, value) {
     icon.dataset.value = value;
@@ -219,9 +235,7 @@ function bootQuests(root) {
     const entry = QuestRules.tap(board(), item, new Date(), times);
     if (!entry) {
       const node = cards.get(item.id);
-      node?.classList.remove("quests-bump");
-      void node?.offsetWidth;
-      node?.classList.add("quests-bump");
+      if (node) replay(node, "quests-bump");
       return;
     }
     navigator.vibrate?.(10);
