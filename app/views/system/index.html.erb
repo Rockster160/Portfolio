@@ -36,9 +36,9 @@
     {
       title: "Claude on the Mini",
       path:  system_claude_path,
-      desc:  "Claude sessions working on Portfolio on the Mac Mini, and every /feature build",
+      desc:  "Claude sessions on the Mac Mini, every /feature build, and the plans and PRs waiting on you",
       icon:  :terminal,
-      blip:  FeatureBuilder.sessions.count { |session| session["working"] },
+      blip:  FeatureBuilder.pending_count(current_user),
     },
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },

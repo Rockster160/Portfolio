@@ -7,19 +7,42 @@
   parse = ->(iso) { Time.zone.parse(iso.to_s) if iso.present? }
   thread_url = ->(conversation) { byte_root_url(subdomain: :byte, conversation_id: conversation.id) }
   builds_by_id = @builds.index_by(&:id)
-  kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread" }
-  build_state = ->(build) {
-    live = @live[build.id]
-    if live then live["working"] ? "working" : "waiting on you"
-    else build.status.humanize.downcase
-    end
-  }
+  kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread", questions: "Questions" }
+  build_state = ->(build) { FeatureBuilder.stage(build, @live[build.id]) }
+  waiting = @pending[:plans].map { |build| [build, "plan ready"] } + @pending[:prs].map { |build| [build, "PR open"] }
 %>
 
 <div class="system-page">
   <div class="lists-title">
     <small><%= link_to "System", system_path %> / Claude on the Mini</small>
   </div>
+
+  <div class="cs-ask">
+    <%= button_to "Ask Claude", system_claude_questions_path,
+          class: "cs-ask-btn", form_class: "cs-ask-form",
+          data: { disable_with: "Opening Claude…" } %>
+    <span class="cs-ask-note">One Claude session on the Mini for questions. It opens the running one, or starts it.</span>
+  </div>
+
+  <% if waiting.any? %>
+    <h3 class="cs-heading">Waiting on you</h3>
+    <% waiting.each do |build, reason| %>
+      <div class="cs-row cs-waiting">
+        <div class="cs-head">
+          <div class="cs-title"><%= build.title %></div>
+          <div class="cs-meta"><span class="cs-badge"><%= reason %></span></div>
+        </div>
+        <div class="cs-links">
+          <% if build.rc_url.present? %>
+            <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% end %>
+          <% if build.pr_url.present? %>
+            <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
 
   <h3 class="cs-heading">Running now</h3>
   <% if @sessions.none? %>
@@ -108,6 +131,7 @@
     }
     .cs-row.cs-working, .cs-row.cs-build-working { border-color: rgba(88, 214, 141, 0.45); }
     .cs-row.cs-waiting, .cs-row.cs-build-waiting-on-you { border-color: rgba(245, 176, 65, 0.45); }
+    .cs-row.cs-build-plan-ready, .cs-row.cs-build-pr-open { border-color: rgba(245, 176, 65, 0.45); }
     .cs-row.cs-build-failed { border-color: rgba(236, 112, 99, 0.45); }
     .cs-row.cs-build-finished { opacity: 0.55; }
 
@@ -129,5 +153,14 @@
     }
     .cs-stop { color: #EC7063; border-color: rgba(236, 112, 99, 0.4); }
     .cs-stop-form { display: inline; margin: 0; }
+
+    .cs-ask { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .cs-ask-form { margin: 0; }
+    .cs-ask-btn {
+      padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer;
+      background-color: #5DADE2; border: 1px solid #5DADE2; color: #0D1117;
+    }
+    .cs-ask-btn:disabled { opacity: 0.6; cursor: wait; }
+    .cs-ask-note { font-size: 12px; color: #8B949E; }
   </style>
 <% end %>

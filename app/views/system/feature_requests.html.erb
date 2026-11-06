@@ -17,7 +17,7 @@
   <% end %>
 
   <% @requests.each do |request| %>
-    <div class="fr-row fr-status-<%= request.status %>" data-fr-row data-fr-id="<%= request.id %>">
+    <div class="fr-row fr-status-<%= request.status %>" id="fr-<%= request.id %>" data-fr-row data-fr-id="<%= request.id %>">
       <div class="fr-head">
         <div class="fr-title"><%= request.id %> <%= request.title %></div>
         <div class="fr-meta">
@@ -41,7 +41,37 @@
             data-fr-set="<%= status %>"
           ><%= status %></button>
         <% end %>
+        <% if request.buildable? %>
+          <button type="button" class="fr-btn fr-btn-build" data-fr-build-toggle>Build</button>
+        <% end %>
       </div>
+
+      <% build = request.latest_build %>
+      <% if build && !request.buildable? %>
+        <div class="fr-build">
+          <span class="fr-build-label">Feature Builder</span>
+          <span class="fr-badge"><%= FeatureBuilder.stage(build, @live[build.id]) %></span>
+          <% if build.rc_url.present? && !build.status_finished? %>
+            <%= link_to "Open in Claude", build.rc_url, class: "fr-link", target: :_blank, rel: :noopener %>
+          <% end %>
+          <% if build.pr_url.present? %>
+            <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "fr-link", target: :_blank, rel: :noopener %>
+          <% end %>
+        </div>
+      <% end %>
+
+      <% if request.buildable? %>
+        <%= form_with url: system_feature_request_build_path(request), method: :post, local: true,
+              class: "fr-build-form", data: { fr_build_form: true } do |form| %>
+          <div class="fr-build-request"><strong><%= request.title %></strong><%= simple_format(request.body) %></div>
+          <%= form.text_area :notes, rows: 3, class: "fr-notes",
+                placeholder: "Notes for the builder (optional)" %>
+          <div class="fr-actions">
+            <%= form.submit "Start build", class: "fr-btn fr-btn-start", data: { disable_with: "Starting…" } %>
+            <button type="button" class="fr-btn" data-fr-build-toggle>Cancel</button>
+          </div>
+        <% end %>
+      <% end %>
     </div>
   <% end %>
 </div>
@@ -89,6 +119,32 @@
     .fr-btn:hover { border-color: #5DADE2; }
     .fr-btn.current { background-color: #5DADE2; border-color: #5DADE2; color: #0D1117; font-weight: bold; }
     .fr-btn:disabled { opacity: 0.5; cursor: wait; }
+    .fr-btn-build { margin-left: auto; border-color: rgba(88, 214, 141, 0.5); color: #58D68D; }
+    .fr-btn-start { background-color: #58D68D; border-color: #58D68D; color: #0D1117; font-weight: bold; }
+
+    .fr-build {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px;
+      font-size: 12px; color: #8B949E;
+    }
+    .fr-build .fr-badge { margin-left: 0; }
+    .fr-link {
+      font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.12); background-color: #21262D; color: #C9D1D9;
+    }
+
+    .fr-build-form { display: none; margin-top: 14px; }
+    .fr-row.fr-building .fr-build-form { display: block; }
+    .fr-build-request {
+      font-size: 13px; color: #8B949E; background-color: #0D1117; border-radius: 6px;
+      padding: 10px 12px; margin-bottom: 8px; white-space: pre-wrap;
+    }
+    .fr-build-request strong { color: #C9D1D9; display: block; margin-bottom: 4px; }
+    .fr-build-request p { margin: 0 0 6px; }
+    .fr-notes {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; font-size: 14px;
+      background-color: #0D1117; border: 1px solid rgba(255, 255, 255, 0.12); color: #C9D1D9;
+      margin-bottom: 8px; font-family: inherit;
+    }
   </style>
 <% end %>
 
@@ -98,6 +154,13 @@
       const token = document.querySelector('meta[name="csrf-token"]');
 
       document.querySelectorAll("[data-fr-row]").forEach(function (row) {
+        row.querySelectorAll("[data-fr-build-toggle]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const open = row.classList.toggle("fr-building");
+            if (open) row.querySelector(".fr-notes")?.focus();
+          });
+        });
+
         row.querySelectorAll("[data-fr-set]").forEach(function (btn) {
           btn.addEventListener("click", async function () {
             const status = btn.dataset.frSet;

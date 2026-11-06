@@ -369,6 +369,32 @@ module ByteLocal
     false
   end
 
+  # Starting a Claude pane waits for it to print its Remote Control link
+  # (Builder::READY_TIMEOUT on the Mini), so this one answers slowly.
+  QUESTIONS_TIMEOUT_SECONDS = 75
+
+  # The one standing Claude session on the Mini for questions: found if it's
+  # open, resumed or started if not. Returns its Remote Control link, or nil.
+  def questions_session
+    uri = URI.join(base_url(:mini), "/byte/builder")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate(action: :questions)
+
+    res = Net::HTTP.start(
+      uri.hostname,
+      uri.port,
+      use_ssl:      uri.scheme == "https",
+      open_timeout: TIMEOUT_SECONDS,
+      read_timeout: QUESTIONS_TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+    return nil unless res.is_a?(Net::HTTPSuccess)
+
+    JSON.parse(res.body.to_s)["rc_url"].presence
+  rescue StandardError => e
+    Rails.logger.warn("[Byte] questions session failed: #{e.class}: #{e.message}")
+    nil
+  end
+
   # Is the Mac actually up right now? Used before scheduling work onto it, so a
   # sleeping machine becomes "try again later" rather than a failed message
   # sitting in a thread.

@@ -49,6 +49,158 @@ RSpec.describe FeatureBuilder do
 
       expect(thread.byte_messages.last.body).to include("Couldn't start", "git fetch failed")
     end
+
+    it "links the Mini page until the session has a link of its own" do
+      expect(build.byte_message.body).to include("Starting a Feature Builder", "/system/claude)")
+
+      described_class.update_from_mini!(build, { "status" => "failed", "error" => "git fetch failed" })
+      expect(thread.byte_messages.last.body).to include("/system/claude)")
+    end
+
+    it "links the Mini page from a plan that came before the session's link" do
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+
+      expect(thread.byte_messages.last.body).to include("has a plan ready", "/system/claude)")
+    end
+  end
+
+  describe "a plan ready for the owner" do
+    it "is said once in the thread, with the session's link, however often it's posted" do
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+      build.update!(rc_url: "https://claude.ai/code/session_abc")
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+      first = build.reload.planned_at
+      travel(5.minutes) { described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 }) }
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
+      expect(build.reload.planned_at).to eq(first)
+      expect(thread.byte_messages.last.body).to include(
+        "**dark mode** has a plan ready for you.",
+        "[Open it in Claude](https://claude.ai/code/session_abc)",
+      )
+    end
+  end
+
+  describe ".start_from_request!" do
+    let(:primary) { user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current) }
+    let(:feature_request) {
+      FeatureRequest.create!(user: user, title: "Repeating timers", body: "Every 30 minutes, a 10 minute break.")
+    }
+
+    before do
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+      allow(ByteConversation).to receive(:for_self_initiated).with(user).and_return(primary)
+    end
+
+    it "hands the title, body and notes to a build that speaks in the primary thread" do
+      build = described_class.start_from_request!(feature_request, user: user, notes: "Keep it in Jil")
+
+      expect(build.request).to eq("Repeating timers\n\nEvery 30 minutes, a 10 minute break.\n\nNotes: Keep it in Jil")
+      expect(build.title).to eq("Repeating timers")
+      expect(build.feature_request).to eq(feature_request)
+      expect(build.byte_conversation).to eq(primary)
+      expect(primary.byte_messages.last.body).to include("Starting a Feature Builder", "Repeating timers")
+      expect(feature_request.reload).to be_status_planned
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+    end
+
+    it "leaves the notes out when there aren't any" do
+      build = described_class.start_from_request!(feature_request, user: user, notes: "  ")
+
+      expect(build.request).not_to include("Notes:")
+    end
+
+    it "doesn't start a second build while one is going, but does after one failed" do
+      first = described_class.start_from_request!(feature_request, user: user)
+
+      expect(described_class.start_from_request!(feature_request.reload, user: user)).to be_nil
+
+      first.update!(status: :failed)
+      expect(described_class.start_from_request!(feature_request.reload, user: user)).to be_present
+    end
+
+    it "doesn't build something shipped or declined" do
+      feature_request.update!(status: :declined)
+
+      expect(described_class.start_from_request!(feature_request, user: user)).to be_nil
+    end
+
+    it "marks the request shipped when the build's PR is merged, and not when it's closed" do
+      merged = described_class.start_from_request!(feature_request, user: user)
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+      merged_pr = { "number" => 42, "head" => { "ref" => "feature-builder/#{merged.id}-x" }, "merged" => true }
+
+      closed_request = FeatureRequest.create!(user: user, title: "Other thing", body: "Something else")
+      closed = described_class.start_from_request!(closed_request, user: user)
+      closed_pr = { "number" => 43, "head" => { "ref" => "feature-builder/#{closed.id}-y" }, "merged" => false }
+
+      described_class.github!(:pull_request, { "action" => "closed", "pull_request" => merged_pr })
+      described_class.github!(:pull_request, { "action" => "closed", "pull_request" => closed_pr })
+
+      expect(feature_request.reload).to be_status_shipped
+      expect(closed_request.reload).to be_status_planned
+      expect(closed_request).to be_buildable
+    end
+  end
+
+  describe "builds waiting on the owner" do
+    def chip
+      BackgroundProcess.live_find(user, described_class::NEEDS_YOU_KEY)
+    end
+
+    def make(**attributes)
+      FeatureBuild.create!(user: user, title: "Thing", request: "thing", status: :running, **attributes)
+    end
+
+    it "counts plans nobody has said go to, and PRs still open" do
+      plan    = make(planned_at: 1.hour.ago)
+      going   = make(planned_at: 1.hour.ago)
+      pr      = make(planned_at: 1.hour.ago, pr_url: "https://github.com/x/pull/1", pr_number: 1)
+      make
+      make(planned_at: 1.hour.ago, pr_url: "https://github.com/x/pull/2", status: :finished)
+
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => going.id, "kind" => "builder", "working" => true },
+      ])
+
+      pending = described_class.pending(user)
+      expect(pending[:plans]).to eq([plan])
+      expect(pending[:prs]).to eq([pr])
+      expect(chip.name).to eq("2 builds need you")
+      expect(chip).to be_waiting
+      expect(chip.links.first["url"]).to end_with("/system/claude")
+    end
+
+    it "is raised when a plan comes in and cleared when the last PR closes" do
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain)
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+      expect(chip.name).to eq("1 build needs you")
+
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+      described_class.github!(:pull_request, { "action" => "closed", "pull_request" => pull_request })
+
+      expect(chip).to be_nil
+    end
+  end
+
+  describe ".stage" do
+    let(:build) { FeatureBuild.new(title: "Thing", request: "thing", status: :running) }
+
+    it "says where a build has got to" do
+      expect(described_class.stage(build, nil)).to eq("running")
+      expect(described_class.stage(build, { "working" => false })).to eq("waiting on you")
+      build.planned_at = Time.current
+      expect(described_class.stage(build, { "working" => false })).to eq("plan ready")
+      expect(described_class.stage(build, { "working" => true })).to eq("working")
+      build.pr_url = "https://github.com/x/pull/1"
+      expect(described_class.stage(build, nil)).to eq("PR open")
+      build.status = :finished
+      expect(described_class.stage(build, nil)).to eq("finished")
+    end
   end
 
   describe ".valid_signature?" do
@@ -216,6 +368,12 @@ RSpec.describe FeatureBuilder do
         { "conversation_id" => audit.id, "kind" => "turn", "working" => true },
       )
       expect(chip.name).to eq("2x Claude running")
+    end
+
+    it "names the questions session" do
+      report({ "kind" => "questions", "working" => true })
+
+      expect(chip.name).to eq("Claude answering…")
     end
 
     it "leaves a build that's waiting on an answer off the chip" do
