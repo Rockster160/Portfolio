@@ -19,7 +19,9 @@ module SimpleFin
     # to walk the range in chunks rather than asking for everything at once.
     MAX_RANGE_DAYS = 90
     OPEN_TIMEOUT = 5
-    READ_TIMEOUT = 30
+    # The Bridge can take well past half a minute to answer /accounts, and a run
+    # that gives up sooner just retries into the same wait.
+    READ_TIMEOUT = 120
     # v2 is what `errlist` and `connections` belong to; without it the Bridge
     # answers in the pre-2.0 shape that reports errors as bare strings.
     API_VERSION = 2

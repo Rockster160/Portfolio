@@ -46,8 +46,22 @@ RSpec.describe SlackNotifier do
       expect(ErrorReport.last.section).to match(/\Aslack_notifier_spec:\d+\z/)
     end
 
+    it "records a development failure without posting it" do
+      allow(Rails.env).to receive(:development?).and_return(true)
+      allow(SlackWorker).to receive(:perform_async)
+
+      begin
+        raise "boom"
+      rescue StandardError
+        described_class.notify("Task Whisper Hungry Check failed")
+      end
+
+      expect(SlackWorker).not_to have_received(:perform_async)
+      expect(ErrorReport.last.channel).to be_nil
+    end
+
     it "still pings the channel it was going to ping" do
-      allow(Rails.env).to receive(:test?).and_return(false)
+      allow(Rails.env).to receive(:production?).and_return(true)
       allow(SlackWorker).to receive(:perform_async)
 
       begin
@@ -64,7 +78,7 @@ RSpec.describe SlackNotifier do
 
   describe "what the alert says" do
     it "ends at a link to the row" do
-      allow(Rails.env).to receive(:test?).and_return(false)
+      allow(Rails.env).to receive(:production?).and_return(true)
       allow(SlackWorker).to receive(:perform_async)
 
       begin
@@ -81,7 +95,7 @@ RSpec.describe SlackNotifier do
     # The alert is the part somebody is waiting on, so it is never downstream
     # of a write succeeding - and it still has to say who.
     it "still announces, with the name on it, when the row can't be written" do
-      allow(Rails.env).to receive(:test?).and_return(false)
+      allow(Rails.env).to receive(:production?).and_return(true)
       allow(SlackWorker).to receive(:perform_async)
       allow(ErrorReport).to receive(:create!).and_raise(ActiveRecord::StatementInvalid, "gone")
       user = create(:user)
@@ -102,7 +116,7 @@ RSpec.describe SlackNotifier do
   # repeats are held back - and the row is still written for every one of them.
   describe "a failure that keeps happening" do
     before do
-      allow(Rails.env).to receive(:test?).and_return(false)
+      allow(Rails.env).to receive(:production?).and_return(true)
       allow(SlackWorker).to receive(:perform_async)
     end
 

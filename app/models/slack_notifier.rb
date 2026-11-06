@@ -55,9 +55,11 @@ module SlackNotifier
 
   # Where it actually goes. Answers the channel it was handed to, or nil when
   # nothing left the process - which is what stops a row being stamped as
-  # announced in an environment that announces nothing.
+  # announced in an environment that announces nothing. Only production
+  # announces: a laptop running the same schedules shares the channel, and its
+  # failures read there as production's.
   def deliver(message, channel, username, icon_emoji, attachments)
-    if Rails.env.test?
+    unless Rails.env.production?
       puts("\e[31mSlack: #{message}\e[0m")
       return nil
     end
