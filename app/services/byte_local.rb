@@ -374,7 +374,12 @@ module ByteLocal
   QUESTIONS_TIMEOUT_SECONDS = 75
 
   # The one standing Claude session on the Mini for questions: found if it's
-  # open, resumed or started if not. Returns its Remote Control link, or nil.
+  # open, resumed or started if not. Returns `{ url: }` with its Remote
+  # Control link, or `{ failure:, error: }` saying why there isn't one:
+  #   :unreachable  the Mini didn't answer at all
+  #   :outdated     its Byte server answered as if it had never heard of the
+  #                 action, which is code older than this one still running
+  #   :not_ready    it tried, and Claude didn't come up (`error` says why)
   def questions_session
     uri = URI.join(base_url(:mini), "/byte/builder")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
@@ -387,12 +392,17 @@ module ByteLocal
       open_timeout: TIMEOUT_SECONDS,
       read_timeout: QUESTIONS_TIMEOUT_SECONDS,
     ) { |http| http.request(req) }
-    return nil unless res.is_a?(Net::HTTPSuccess)
+    body = (JSON.parse(res.body.to_s) rescue {})
+    body = {} unless body.is_a?(Hash)
 
-    JSON.parse(res.body.to_s)["rc_url"].presence
+    url = body["rc_url"].presence if res.is_a?(Net::HTTPSuccess)
+    return { url: url } if url
+    return { failure: :outdated } if res.is_a?(Net::HTTPNotFound)
+
+    { failure: :not_ready, error: body["error"].presence }
   rescue StandardError => e
     Rails.logger.warn("[Byte] questions session failed: #{e.class}: #{e.message}")
-    nil
+    { failure: :unreachable }
   end
 
   # Is the Mac actually up right now? Used before scheduling work onto it, so a

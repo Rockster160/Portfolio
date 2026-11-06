@@ -78,13 +78,37 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response).to redirect_to("https://claude.ai/code/session_q")
   end
 
-  it "says so when the Mini can't open the questions session" do
-    stub_request(:post, %r{/byte/builder\z}).to_return(status: 502, body: { ok: false }.to_json)
+  describe "when the questions session can't be opened" do
+    it "passes on why Claude didn't come up" do
+      stub_request(:post, %r{/byte/builder\z}).to_return(
+        status: 502,
+        body:   { ok: false, error: "Claude exited before it was ready" }.to_json,
+      )
 
-    post system_claude_questions_path
+      post system_claude_questions_path
 
-    expect(response).to redirect_to(system_claude_path)
-    expect(flash[:notice]).to include("didn't hand back a Claude session")
+      expect(response).to redirect_to(system_claude_path)
+      expect(flash[:notice]).to eq("Claude didn't come up on the Mini: Claude exited before it was ready")
+    end
+
+    it "says Byte needs a restart when it doesn't know the action" do
+      stub_request(:post, %r{/byte/builder\z}).to_return(
+        status: 404,
+        body:   { ok: false, error: "no build 0 here" }.to_json,
+      )
+
+      post system_claude_questions_path
+
+      expect(flash[:notice]).to include("older code", "Restart it")
+    end
+
+    it "says the Mini didn't answer when it can't be reached" do
+      stub_request(:post, %r{/byte/builder\z}).to_raise(Errno::ECONNREFUSED)
+
+      post system_claude_questions_path
+
+      expect(flash[:notice]).to include("The Mini didn't answer")
+    end
   end
 
   it "asks the Mini to close a build's session" do
