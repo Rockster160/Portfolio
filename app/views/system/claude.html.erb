@@ -9,7 +9,11 @@
   builds_by_id = @builds.index_by(&:id)
   kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread", questions: "Questions" }
   build_state = ->(build) { FeatureBuilder.stage(build, @live[build.id]) }
-  waiting = @pending[:plans].map { |build| [build, "plan ready"] } + @pending[:prs].map { |build| [build, "PR open"] }
+  waiting = [
+    *@pending[:questions].map { |build| [build, "waiting on you"] },
+    *@pending[:plans].map { |build| [build, "plan ready"] },
+    *@pending[:prs].map { |build| [build, "PR open"] },
+  ]
 %>
 
 <div class="system-page">

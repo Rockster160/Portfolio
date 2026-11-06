@@ -40,6 +40,18 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Nothing is running on Portfolio on the Mini.")
   end
 
+  it "lists a build waiting on an answer" do
+    FeatureBuild.create!(user: user, title: "Bigger icons", request: "bigger icons", status: :running).tap { |asking|
+      FeatureBuilder.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => asking.id, "kind" => "builder", "working" => false },
+      ])
+    }
+
+    get system_claude_path
+
+    expect(response.body).to include("Waiting on you", "Bigger icons")
+  end
+
   it "lists the plans and PRs waiting on the owner" do
     FeatureBuild.create!(
       user:       user,

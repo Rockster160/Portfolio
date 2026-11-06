@@ -2,8 +2,9 @@
 # Builder on the Mini (~/code/Byte/builder.rb): a Claude session in its own
 # worktree and branch, reached from the Claude app, that asks, builds and opens
 # a ByteSlime PR. The thread gets one system message, rewritten as the build
-# starts and given the session's link, then one when its plan is ready and one
-# when its PR is open. Nothing else is said there.
+# starts and given the session's link, then one when its plan is ready, one
+# when its PR is open, and one each time it stops to wait on its owner some
+# other way (a question). Nothing else is said there.
 #
 # A build can also be started from a row on /system/feature_requests, and then
 # speaks in the owner's primary Buddy thread and moves the request along with
@@ -85,14 +86,17 @@ module FeatureBuilder
     build
   end
 
-  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error planned_at].freeze
+  # `waiting_at` isn't kept: it's the Mini saying a turn just ended with
+  # nothing announced in it, so the session is waiting on an answer.
+  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error planned_at waiting_at].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
-  # The thread hears about three things only: the session's link, folded into
-  # the message it already has, the plan the first time it's posted, and the
-  # PR, once.
+  # The thread hears about four things only: the session's link, folded into
+  # the message it already has, the plan the first time it's posted, the PR,
+  # once, and each turn that ends waiting on the owner without either.
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
+    waiting = attributes.delete("waiting_at").present?
     # A ticket posted again after a change is the same plan, already announced.
     attributes.delete("planned_at") if build.planned_at.present?
     announce_plan = attributes["planned_at"].present?
@@ -101,6 +105,7 @@ module FeatureBuilder
     repaint!(build)
     announce_plan!(build) if announce_plan
     announce_pr!(build) if announce_pr
+    announce_waiting!(build) if waiting && !announce_plan && !announce_pr
     refresh_needs_you!(build.user)
     build
   end
@@ -122,6 +127,13 @@ module FeatureBuilder
   def announce_pr!(build)
     text = "**#{build.title}** is ready for review: [PR ##{build.pr_number}](#{build.pr_url})"
     announce!(build, text, "PR ready: #{build.title}")
+  end
+
+  def announce_waiting!(build)
+    return if build.status_finished? || build.status_failed?
+
+    text = "**#{build.title}** is waiting on you. #{build.link_markdown}"
+    announce!(build, text, "Waiting on you: #{build.title}")
   end
 
   def announce!(build, text, push_title)
@@ -330,15 +342,18 @@ module FeatureBuilder
   # ---- waiting on the owner ----
 
   # Builds with a plan posted and no PR yet, whose session isn't working (it
-  # is once it's told to go), and builds whose PR is open.
+  # is once it's told to go), builds whose PR is open, and builds with neither
+  # whose open session is waiting on an answer.
   def pending(user)
-    working = sessions.select { |session| session["working"] }.filter_map { |session|
-      session["build_id"]&.to_i
-    }
+    listed = sessions.select { |session| session["build_id"] }
+    working = listed.select { |session| session["working"] }.map { |session| session["build_id"].to_i }
+    idle = listed.reject { |session| session["working"] }.map { |session| session["build_id"].to_i }
     live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).newest.to_a
+    unplanned = live.select { |build| build.pr_url.blank? && build.planned_at.nil? }
     {
-      plans: live.select { |build| build.pr_url.blank? && build.planned_at && working.exclude?(build.id) },
-      prs:   live.select { |build| build.pr_url.present? },
+      plans:     live.select { |build| build.pr_url.blank? && build.planned_at && working.exclude?(build.id) },
+      prs:       live.select { |build| build.pr_url.present? },
+      questions: unplanned.select { |build| idle.include?(build.id) },
     }
   end
 

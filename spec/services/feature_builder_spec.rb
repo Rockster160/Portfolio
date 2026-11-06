@@ -84,6 +84,41 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "a turn that ends waiting on the owner" do
+    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+
+    it "pings the thread with the session's link each time" do
+      build.update!(rc_url: "https://claude.ai/code/session_abc")
+
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).twice.with(
+        hash_including(push_title: "Waiting on you: dark mode"),
+      )
+      expect(thread.byte_messages.last.body).to include(
+        "**dark mode** is waiting on you.",
+        "[Open it in Claude](https://claude.ai/code/session_abc)",
+      )
+    end
+
+    it "says nothing more when the same report brought its plan" do
+      now = Time.current.iso8601
+      described_class.update_from_mini!(build, { "planned_at" => now, "waiting_at" => now })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
+      expect(thread.byte_messages.last.body).to include("has a plan ready")
+    end
+
+    it "says nothing for a build that's over" do
+      build.update!(status: :finished)
+
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
+
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_plain)
+    end
+  end
+
   describe ".start_from_request!" do
     let(:primary) { user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current) }
     let(:feature_request) {
@@ -172,6 +207,20 @@ RSpec.describe FeatureBuilder do
       expect(chip.name).to eq("2 builds need you")
       expect(chip).to be_waiting
       expect(chip.links.first["url"]).to end_with("/system/claude")
+    end
+
+    it "counts a build with no plan yet whose session is waiting on an answer" do
+      asking  = make
+      working = make
+      make
+
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => asking.id, "kind" => "builder", "working" => false },
+        { "build_id" => working.id, "kind" => "builder", "working" => true },
+      ])
+
+      expect(described_class.pending(user)[:questions]).to eq([asking])
+      expect(chip.name).to eq("1 build needs you")
     end
 
     it "is raised when a plan comes in and cleared when the last PR closes" do
