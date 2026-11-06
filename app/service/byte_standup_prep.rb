@@ -50,7 +50,13 @@ module ByteStandupPrep
   # time with `git worktree list` — NOT by globbing `ocs-backend--*`, which on
   # this machine returns ten directories of which three are live worktrees and
   # seven are leftovers that no longer have a `.git` at all.
-  CWD = "/Users/zoro/code/ocs-backend".freeze
+  #
+  # `~` so it means the same repo on whichever Mac runs it.
+  CWD = "~/code/ocs-backend".freeze
+
+  # The laptop: the work repo is only there, and `gh` there is signed in as
+  # the account whose PRs this reports.
+  MACHINE = :laptop
 
   # Where the list lives. By name rather than by id so it survives the list
   # being rebuilt, and `by_name_for_user` is the same lookup `List.find` does
@@ -64,6 +70,7 @@ module ByteStandupPrep
     user.byte_conversations.create!(
       name:            NAME,
       mode:            :claude,
+      machine:         MACHINE,
       archived:        true,
       last_message_at: Time.current,
       metadata:        base_metadata,
@@ -83,6 +90,7 @@ module ByteStandupPrep
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
     convo.update!(mode: :claude) unless convo.claude?
+    convo.update!(machine: MACHINE) unless convo.machine == MACHINE.to_s
     convo.update!(archived: true) unless convo.archived?
     convo.update!(metadata: wanted) if convo.metadata.to_h != wanted
     convo

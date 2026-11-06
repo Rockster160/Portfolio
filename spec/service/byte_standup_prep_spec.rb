@@ -50,6 +50,15 @@ RSpec.describe ByteStandupPrep do
       expect(convo.metadata["cwd"]).to eq(described_class::CWD)
     end
 
+    # The work repo and the `gh` login it reports from are only on the laptop.
+    it "runs on the laptop, and goes back there if it was moved" do
+      convo = described_class.conversation(user)
+      expect(convo).to be_on_laptop
+
+      convo.update!(machine: :mini)
+      expect(described_class.conversation(user)).to be_on_laptop
+    end
+
     # The entire read-only guarantee is this one value. `ask` would not do it:
     # that mode is as wide as whatever has ever been tapped "always allow", and
     # ocs-backend's own settings allow `git checkout` and `git stash`.

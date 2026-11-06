@@ -16,6 +16,10 @@ RSpec.describe "Ring sound claims" do
     expect(result["repeat"]).to eq(["wake@300"])
   end
 
+  it "plays a ring marked once when it runs out and never at the repeats" do
+    expect(result["once"]).to eq(["nap@0"])
+  end
+
   it "never claims from a hidden page" do
     expect(result["hidden"]).to eq("played" => [], "claims" => 0)
   end

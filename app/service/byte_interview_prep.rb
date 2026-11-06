@@ -53,8 +53,12 @@ module ByteInterviewPrep
 
   # Where the session sits. The job hunt's own directory: always on the
   # internal disk, and `profile/profile.yml` is the maintained statement of
-  # what he does, what he wants, and what he is asking for.
-  CWD = "/Users/zoro/code/jobhunt".freeze
+  # what he does, what he wants, and what he is asking for. `~` so it means
+  # the same directory on whichever Mac runs it.
+  CWD = "~/code/jobhunt".freeze
+
+  # The laptop, where the job hunt is kept and worked on.
+  MACHINE = :laptop
 
   # The resume repo, which is where the resume, the accomplishments and the
   # behavioral answers he has already written actually live. It is on an
@@ -75,6 +79,7 @@ module ByteInterviewPrep
     user.byte_conversations.create!(
       name:            NAME,
       mode:            :claude,
+      machine:         MACHINE,
       archived:        true,
       last_message_at: Time.current,
       metadata:        base_metadata,
@@ -89,6 +94,7 @@ module ByteInterviewPrep
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
     convo.update!(mode: :claude) unless convo.claude?
+    convo.update!(machine: MACHINE) unless convo.machine == MACHINE.to_s
     convo.update!(archived: true) unless convo.archived?
     convo.update!(metadata: wanted) if convo.metadata.to_h != wanted
     convo

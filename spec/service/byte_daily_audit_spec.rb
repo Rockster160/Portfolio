@@ -173,6 +173,15 @@ RSpec.describe ByteDailyAudit do
         expect(convo.metadata["cwd"]).to eq(described_class::CWD)
       end
 
+      # It has to run with the laptop shut.
+      it "runs on the Mini, and goes back there if it was moved" do
+        convo = described_class.conversation(user)
+        expect(convo).to be_on_mini
+
+        convo.update!(machine: :laptop)
+        expect(described_class.conversation(user)).to be_on_mini
+      end
+
       # The whole read-only guarantee rests on this one value, and it's togglable
       # from the pwd bar - an audit left in "auto" overnight can rewrite the app.
       # "ask" is not the safe answer either: it consults `permissions.allow` and

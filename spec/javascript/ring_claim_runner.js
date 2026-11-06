@@ -74,6 +74,20 @@ ring(phone, now, now + 301);
 await settle();
 out.repeat = [...played];
 
+// A ring marked once sounds when it runs out and stays quiet at the repeat.
+played = [];
+const single = (nowSec) =>
+  reloaded.soundOnce(
+    { ownerId: 1, key: "nap", next: now, nowSec, once: true },
+    () => played.push(`nap@${nowSec - now}`),
+  );
+single(now);
+await settle();
+single(now + 300);
+single(now + 600);
+await settle();
+out.once = [...played];
+
 // A hidden page never claims.
 played = [];
 const before = claims;

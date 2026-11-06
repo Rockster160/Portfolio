@@ -27,7 +27,11 @@ module ByteDailyAudit
   module_function
 
   NAME = "Daily Audit".freeze
-  CWD  = "/Users/zoro/code/Portfolio".freeze
+  # `~` so it means the same repo on whichever Mac runs it.
+  CWD  = "~/code/Portfolio".freeze
+
+  # The Mini, which is always on: the audit has to run with the laptop shut.
+  MACHINE = :mini
 
   # One thread, a fresh Claude session each day. The thread is what makes the
   # reports scrollable side by side; the session reset is what stops a month of
@@ -47,6 +51,7 @@ module ByteDailyAudit
     user.byte_conversations.create!(
       name:            NAME,
       mode:            :claude,
+      machine:         MACHINE,
       last_message_at: Time.current,
       metadata:        base_metadata,
     )
@@ -61,6 +66,7 @@ module ByteDailyAudit
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
     convo.update!(mode: :claude) unless convo.claude?
+    convo.update!(machine: MACHINE) unless convo.machine == MACHINE.to_s
     convo.update!(metadata: wanted) if convo.metadata.to_h != wanted
     convo
   end

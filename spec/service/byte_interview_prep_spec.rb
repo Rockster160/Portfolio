@@ -81,6 +81,10 @@ RSpec.describe ByteInterviewPrep do
       expect(convo.metadata["cwd"]).to eq(described_class::CWD)
     end
 
+    it "runs on the laptop, where the job hunt is kept" do
+      expect(described_class.conversation(user)).to be_on_laptop
+    end
+
     # The whole read-only guarantee is this one value: `ask` is as wide as
     # whatever has ever been tapped "always allow".
     it "sits in read mode, which no allow rule can widen" do

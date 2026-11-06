@@ -7,7 +7,7 @@
 //
 // A sounding is the feed's owner, the ring's key, the moment it ran out, and
 // which repeat it is: 0 the moment it runs out, then one more every five
-// minutes while it stays overdue.
+// minutes while it stays overdue. A ring marked `once` only ever has slot 0.
 //
 // A hidden page never claims - it would win the sound and nobody would hear it.
 // If the server can't be reached, the claim is retried; after FALLBACK_MS of
@@ -56,11 +56,12 @@ function claim({ ownerId, key, next, slot }) {
 
 // Called every tick for each overdue ring. Plays `play` at most once per
 // sounding across every screen.
-export function soundOnce({ ownerId, key, next, nowSec }, play, nowMs = Date.now()) {
+export function soundOnce({ ownerId, key, next, nowSec, once }, play, nowMs = Date.now()) {
   if (next === undefined || next === null) return;
 
   const slot = soundingSlot(next, nowSec);
   if (slot < 0) return;
+  if (once && slot > 0) return;
 
   const id = `${ownerId ?? ""}:${key}:${next}:${slot}`;
   if (settled.has(id) || inflight.has(id)) return;

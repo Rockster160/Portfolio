@@ -1,6 +1,6 @@
 // Status rings on the board: countdowns a Jil task keeps up to date, each a
 // ring that fills as its time runs. Server-authoritative: a task broadcasts
-// { timers: [{ key, label, last, next, sound?, hush?, color? }], groups } on the
+// { timers: [{ key, label, last, next, sound?, once?, hush?, color? }], groups } on the
 // "board-rings" channel and this is pure presentation off that stream.
 //
 // Geometry is r=45 in a 100 viewBox. The readout is whole minutes, then :Ns in
@@ -8,6 +8,7 @@
 // so nothing here knows what any ring is for:
 //   sound - the tune it plays when it runs out (see buddy/sound.js), and again
 //           every five minutes while it stays overdue. None means it's silent.
+//   once  - the sound plays when it runs out and never repeats.
 //   hush  - while it is counting, the board is hushed: every other ring greys
 //           and their sounds are held. When it ends the feed is asked again.
 //   color - its own colour, kept through a hush and never pulsing when overdue.
@@ -166,7 +167,13 @@ export function initBoardRings({ container, app }) {
       if (!timerData.sound) return;
 
       soundOnce(
-        { ownerId: lastOwnerId, key: timerData.key, next: timerData.next, nowSec },
+        {
+          ownerId: lastOwnerId,
+          key: timerData.key,
+          next: timerData.next,
+          once: timerData.once,
+          nowSec,
+        },
         () => playBoardSound(timerData.sound),
       );
     });

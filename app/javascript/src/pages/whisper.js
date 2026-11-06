@@ -578,15 +578,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // An overdue timer sounds when it runs out and every five minutes after,
-    // once across every screen showing it (suppressed during quiet mode).
+    // An overdue timer sounds when it runs out and every five minutes after
+    // (only the first, for a timer marked `once`), once across every screen
+    // showing it (suppressed during quiet mode).
     const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
     overdue.forEach((timerData) => {
       const key = timerData.key;
       if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
 
       soundOnce(
-        { ownerId: feedOwnerId, key, next: timerData.next, nowSec },
+        { ownerId: feedOwnerId, key, next: timerData.next, once: timerData.once, nowSec },
         () => playAlertForKey(key),
       );
     });
