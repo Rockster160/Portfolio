@@ -184,6 +184,10 @@ module BuddyEvalNeeds
       label: "a car navigate function that picks the next place itself",
       check: ->(u) { Task.where(user: u, buddy_enabled: true, enabled: true).any? { |t| t.name.to_s.match?(/navigate/i) && t.description.to_s.match?(/blank/i) } },
     },
+    thermostat_change_fn: {
+      label: "a thermostat function that moves the target by some degrees",
+      check: ->(u) { jil(u, /"Change" TAB Numeric/) && jil(u, /thermostat/i) },
+    },
     thermostat_reading:   { label: "a thermostat reading beside the function that sets it", check: ->(u) { jil(u, /thermostat/i) && Buddy::DeviceStates.for_user(u).any? { |r| r[:device].match?(/thermostat/i) && r[:state].to_s.include?("°") } } },
     blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
     # A copy of the task from before the six singles were added can only move a

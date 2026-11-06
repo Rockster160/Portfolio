@@ -400,6 +400,7 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/sms" => "webhooks#sms"
+  post "webhooks/github" => "webhooks#github"
   post "webhooks/speak" => "webhooks#speak"
   post  "webhooks/byte"                  => "webhooks#byte_create"
   # Above the `:id` patch/post pair so "say" can't be read as a message id.
@@ -410,6 +411,7 @@ Rails.application.routes.draw do
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"
   post  "webhooks/byte/workspaces"       => "webhooks#byte_workspaces"
+  post  "webhooks/byte/claude_sessions"  => "webhooks#byte_claude_sessions"
   get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
   get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 
@@ -761,6 +763,8 @@ Rails.application.routes.draw do
     get "/system/feature_requests" => "system#feature_requests", as: :system_feature_requests
     patch "/system/feature_requests/:id" => "system#update_feature_request", as: :system_feature_request
     get "/system/errors" => "system#errors", as: :system_errors
+    get "/system/claude" => "system#claude", as: :system_claude
+    post "/system/claude/:conversation_id/stop" => "system#stop_claude", as: :system_claude_stop
     # What an alert links to, so a Slack line ends at the whole row rather than
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error

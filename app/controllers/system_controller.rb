@@ -404,6 +404,30 @@ class SystemController < ApplicationController
     render json: { id: request.id, status: request.status, open: FeatureRequest.status_open.count }
   end
 
+  # Claude on the Mac Mini: what is working on Portfolio there right now, as
+  # the Mini last reported it, and every Feature Builder thread with its links.
+  def claude
+    @sessions = FeatureBuilder.sessions
+    @builders = current_user.byte_conversations.builder.order(created_at: :desc).limit(30).to_a
+    ids = @sessions.pluck("conversation_id").map(&:to_i)
+    @conversations = ByteConversation.where(id: ids).index_by(&:id).merge(@builders.index_by(&:id))
+    @live = @sessions.index_by { |session| session["conversation_id"].to_i }
+  end
+
+  # Closes a builder's session on the Mini. Its worktree, branch and Claude
+  # session are kept, so a message in its thread picks it back up.
+  def stop_claude
+    conversation = current_user.byte_conversations.builder.find(params[:conversation_id])
+    notice = (
+      if ByteLocal.builder(:stop, conversation_id: conversation.id)
+        "Stopped #{conversation.display_name}."
+      else
+        "The Mini didn't answer, so #{conversation.display_name} is still running."
+      end
+    )
+    redirect_to system_claude_path, notice: notice
+  end
+
   # Every failure the app reported, grouped so a loop reads as one line, with
   # the occurrences one tap away.
   #

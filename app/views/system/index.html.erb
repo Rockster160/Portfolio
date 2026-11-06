@@ -33,6 +33,13 @@
       icon:  :"exclamation-triangle",
       blip:  todays_errors,
     },
+    {
+      title: "Claude on the Mini",
+      path:  system_claude_path,
+      desc:  "Claude sessions working on Portfolio on the Mac Mini, and every Feature Builder",
+      icon:  :terminal,
+      blip:  FeatureBuilder.sessions.count { |session| session["working"] },
+    },
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },
     { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", svg: "buddy/byte/silhouette" },

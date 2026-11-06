@@ -1,6 +1,8 @@
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :post_params, except: [:report]
+  # A GitHub payload is the whole PR, every time. Logged it would bury
+  # everything else that request wrote.
+  before_action :post_params, except: [:report, :github]
   before_action :none_unless_user, only: [:jil, :command]
   before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local, :sms]
   skip_before_action :pretty_logit, only: [:report] # Lots of data here
@@ -558,6 +560,30 @@ class WebhooksController < ApplicationController
     machine = params[:machine].to_s.presence_in(ByteConversation.machines.keys) || :laptop
     paths   = ByteWorkspaces.replace!(params[:paths], machine: machine)
     render json: { ok: true, count: paths.length }
+  end
+
+  # The Mini saying which Claude sessions are working on Portfolio, whenever
+  # that changes and every two minutes while any are (~/code/Byte/claude_census.rb).
+  def byte_claude_sessions
+    return head :unauthorized unless byte_authorized?
+
+    machine = params[:machine].to_s.presence_in(ByteConversation.machines.keys) || :mini
+    sessions = params.permit(sessions: FeatureBuilder::SESSION_FIELDS)[:sessions].to_a.map(&:to_h)
+    listed = FeatureBuilder.report_sessions!(machine: machine, sessions: sessions)
+    render json: { ok: true, count: listed.length }
+  end
+
+  # GitHub, for the Feature Builder's PRs: comments and reviews go back to the
+  # session that wrote the PR, and a merge or close ends it. Signed with the
+  # secret in FeatureBuilder::SECRET_KEY, and nothing is read before that checks.
+  def github
+    body      = request.raw_post
+    signature = request.headers["X-Hub-Signature-256"]
+    return head :unauthorized unless FeatureBuilder.valid_signature?(body, signature)
+
+    event   = request.headers["X-GitHub-Event"].to_s
+    outcome = event == "ping" ? :pong : FeatureBuilder.github!(event, JSON.parse(body))
+    render json: { ok: true, outcome: outcome }
   end
 
   # Read-only agenda lookup for Buddy. Accepts either a symbolic `range`

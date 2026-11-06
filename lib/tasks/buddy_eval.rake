@@ -2730,6 +2730,15 @@ BUDDY_EDGE_PROBES = [
            "mode to the house, and answered \"Set the main thermostat to cool.\"",
   },
   {
+    case:       "thermostat up a couple",
+    say:        "turn the thermostat up a couple of degrees",
+    tool:       :run_jil_task,
+    needs:      :thermostat_change_fn,
+    args:       { run_jil_task: { name: /thermostat/i, change: /\A\+?2(?:\.0)?\z/ } },
+    never_args: { run_jil_task: { mode: /\A(?:heat|cool|off|heat_cool)\z/i } },
+    note:       "a move rather than a number: the target is wherever it's set now, plus two",
+  },
+  {
     case:  "prod 8299",
     say:   "Tell Chelsea I'm on the way home the next time I depart a non-home location.",
     tool:  :remind_when,

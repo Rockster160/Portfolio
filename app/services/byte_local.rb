@@ -348,6 +348,24 @@ module ByteLocal
     false
   end
 
+  # Tell the Mini something about a Feature Builder thread: `:stop` closes its
+  # session and keeps the work, `:finish` is its PR merged or closed (`merged:`
+  # says which) and removes the worktree too. Builders only run on the Mini.
+  def builder(action, conversation_id:, **fields)
+    uri = URI.join(base_url(:mini), "/byte/builder")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate(fields.merge(action: action, conversation_id: conversation_id.to_i))
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    res.is_a?(Net::HTTPSuccess)
+  rescue => e
+    Rails.logger.warn("[Byte] builder #{action} failed: #{e.class}: #{e.message}")
+    false
+  end
+
   # Is the Mac actually up right now? Used before scheduling work onto it, so a
   # sleeping machine becomes "try again later" rather than a failed message
   # sitting in a thread.
