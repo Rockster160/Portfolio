@@ -613,8 +613,8 @@
         <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
       </button>
       <%# Boards are threads of their own, kept out of the list above, so %>
-      <%# their index is the way in. %>
-      <a class="byte-drawer-link" href="<%= byte_board_path %>">
+      <%# their index is the way in. A tab of its own, so the chat stays open. %>
+      <a class="byte-drawer-link" href="<%= byte_board_path %>" target="_blank" rel="noopener">
         <span class="byte-drawer-link-icon" aria-hidden="true">🧹</span>
         <span class="byte-drawer-link-name">Chore boards</span>
         <span class="byte-drawer-link-count"></span>

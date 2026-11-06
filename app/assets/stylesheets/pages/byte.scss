@@ -3067,8 +3067,11 @@ html.html-ctr-byte.html-act-board_index body {
   }
 }
 
-.ctr-byte .byte-app .byte-drawer-close,
-.byte-drawer .byte-drawer-close {
+// Every drawer control is written `.ctr-byte .byte-drawer .x`: the drawer is a
+// sibling of .byte-app, and the button reset at the top of this sheet reaches it
+// as `.ctr-byte .byte-drawer button`, which outranks a bare `.byte-drawer .x`
+// and flattens it to unpadded inherited text.
+.ctr-byte .byte-drawer .byte-drawer-close {
   width: 32px;
   height: 32px;
   color: var(--bs-muted);
@@ -3087,7 +3090,7 @@ html.html-ctr-byte.html-act-board_index body {
 // footer added up to more than the drawer, this button was the thing that gave
 // — it collapsed to a few pixels and its label spilled out over the first
 // conversation row. It's a fixed-size control, so it never shrinks.
-.byte-drawer .byte-new-convo {
+.ctr-byte .byte-drawer .byte-new-convo {
   flex-shrink: 0;
   margin: 12px 16px;
   padding: 10px 12px;
@@ -3115,8 +3118,7 @@ html.html-ctr-byte.html-act-board_index body {
   border-top: 1px solid var(--bs-border);
 }
 
-.ctr-byte .byte-app .byte-drawer-link,
-.byte-drawer .byte-drawer-link {
+.ctr-byte .byte-drawer .byte-drawer-link {
   display: flex;
   text-decoration: none;
   align-items: center;
@@ -3184,8 +3186,7 @@ html.html-ctr-byte.html-act-board_index body {
   }
 }
 
-.ctr-byte .byte-app .byte-convo-pick,
-.byte-drawer .byte-convo-pick {
+.ctr-byte .byte-drawer .byte-convo-pick {
   flex: 1;
   min-width: 0;
   display: grid;
@@ -3265,8 +3266,7 @@ html.html-ctr-byte.html-act-board_index body {
   }
 }
 
-.ctr-byte .byte-app .byte-convo-menu-btn,
-.byte-drawer .byte-convo-menu-btn {
+.ctr-byte .byte-drawer .byte-convo-menu-btn {
   width: 32px;
   height: 32px;
   color: var(--bs-muted);
