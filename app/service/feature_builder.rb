@@ -369,7 +369,7 @@ module FeatureBuilder
       name:   count == 1 ? "1 build needs you" : "#{count} builds need you",
       state:  :waiting,
       source: :mac,
-      url:    Rails.application.routes.url_helpers.system_claude_url,
+      links:  [{ label: "Claude on the Mini", url: Rails.application.routes.url_helpers.system_claude_url }],
     )
   end
 end
