@@ -17,7 +17,6 @@ RSpec.describe "request_feature" do
   before do
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(WebPushNotifications).to receive(:update_count)
   end
 
   def ask!(user, convo, title, body)

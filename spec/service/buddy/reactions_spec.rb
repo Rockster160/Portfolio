@@ -19,7 +19,6 @@ RSpec.describe Buddy::Reactions do
   before do
     allow(MonitorChannel).to receive(:broadcast_to) { |user, payload| broadcasts << [user, payload] }
     allow(WebPushNotifications).to receive(:send_to_byte) { |args| pushes << args }
-    allow(::WebPushNotifications).to receive(:update_count)
     ChoreHouseholdMembership.create!(chore_household: household, user: recipient, role: :member)
     sender.update!(chore_household_id: household.id)
     recipient.update!(chore_household_id: household.id)

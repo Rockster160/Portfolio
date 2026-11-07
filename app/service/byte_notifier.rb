@@ -74,30 +74,6 @@ module ByteNotifier
     message.byte_conversation&.archived?
   end
 
-  # Reading a thread clears the badge on every OTHER device.
-  #
-  # `mark_read!` broadcasts over the socket, which reaches screens that are
-  # running. A phone in a pocket is not running, so its home-screen badge kept
-  # the number for a message already read on the desk — and the only thing that
-  # can paint an icon for a closed app is a push. Silent: no title, no body, so
-  # `byte_worker.js` sets the badge and shows nothing.
-  #
-  # Which is exactly why it goes through `push_badge` rather than straight out.
-  # A read happens constantly, and a silent push is a `userVisibleOnly` promise
-  # broken — do it on every read and iOS revokes the subscription, which it did,
-  # repeatedly, from the day this was written. Only the fall to zero is worth
-  # spending a push on; anything above zero rides along on `notify` above, which
-  # shows a notification and carries the same count.
-  #
-  # Sent to every subscription including the reader's own. On the device doing
-  # the reading the app is in the foreground, and the worker leaves the badge
-  # alone there because the open page owns it (see `paintAppBadge`).
-  def notify_read(user)
-    return if user.blank?
-
-    WebPushNotifications.push_badge(user, ByteConversation.unread_total_for(user), channel: :byte)
-  end
-
   # The wall tablet never pushes, and no exception in `always_notify?` gets to
   # override it. It's a screen that is always on and always in one room: it
   # renders everything live over the socket, so a push adds nothing THERE, and

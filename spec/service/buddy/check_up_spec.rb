@@ -14,7 +14,6 @@ RSpec.describe Buddy::CheckUp do
   before do
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(WebPushNotifications).to receive(:update_count)
     allow(Buddy::Features).to receive(:enabled?).and_call_original
     allow(Buddy::Features).to receive(:enabled?).with(user, :prompts).and_return(true)
     allow(Jil).to receive(:trigger)

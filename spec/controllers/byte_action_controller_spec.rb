@@ -139,7 +139,6 @@ RSpec.describe ByteController, type: :controller do
       before {
         allow(MonitorChannel).to receive(:broadcast_to)
         allow(::Jil).to receive(:trigger).and_return(true)
-        allow(::WebPushNotifications).to receive(:update_count)
       }
 
       def form_action(answers = {})
@@ -193,7 +192,6 @@ RSpec.describe ByteController, type: :controller do
       before do
         allow(MonitorChannel).to receive(:broadcast_to)
         allow(WebPushNotifications).to receive(:send_to_byte)
-        allow(WebPushNotifications).to receive(:update_count)
       end
 
       def card!

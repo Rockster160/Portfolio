@@ -13,7 +13,6 @@ RSpec.describe "Buddy sleeping through a GPT outage" do
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(SlackNotifier).to receive(:notify)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(WebPushNotifications).to receive(:update_count)
     Buddy::Outage.clear!
     # The fake queue is shared across the whole run, so "did this dispatch?"
     # only means anything against an empty one.

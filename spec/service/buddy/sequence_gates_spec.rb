@@ -215,7 +215,6 @@ RSpec.describe "Buddy sequence gates" do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(::WebPushNotifications).to receive(:update_count)
       allow(::Jil).to receive(:trigger).and_return(true)
       allow(Buddy::Compactor).to receive(:should_compact?).and_return(false)
       allow(Buddy::GPT::Turn).to receive(:run!).and_return(true)

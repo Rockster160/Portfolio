@@ -890,11 +890,11 @@ class ByteController < ApplicationController
     return head(:not_found) if convo.nil?
 
     convo.mark_read!
+    # The socket reaches only screens that are running. A closed app keeps its
+    # badge until it is opened or the next notification carries a new count:
+    # a push that only clears it shows nothing, and iOS revokes a subscription
+    # for those (see WebPushNotifications.send_to).
     broadcast_convo_read(convo)
-    # The socket reaches screens that are running; the push reaches the phone
-    # that isn't, which is the one still wearing the badge. See
-    # ByteNotifier.notify_read.
-    ByteNotifier.notify_read(current_user)
     render json: {
       id:           convo.id,
       unread_count: 0,

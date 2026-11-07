@@ -16,7 +16,6 @@ RSpec.describe "Buddy action queue" do
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(::WebPushNotifications).to receive(:update_count)
     allow(AgendaTravelChainSyncWorker).to receive(:perform_async)
     allow(Buddy::CompanionRelay).to receive(:deliver!)
     allow(::Jil).to receive(:trigger).and_return(true)

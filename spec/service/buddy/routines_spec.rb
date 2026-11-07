@@ -16,7 +16,6 @@ RSpec.describe "Buddy routines" do
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(::WebPushNotifications).to receive(:update_count)
     allow(Buddy::CompanionRelay).to receive(:deliver!)
     allow(::Jil).to receive(:trigger).and_return(true)
     ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)

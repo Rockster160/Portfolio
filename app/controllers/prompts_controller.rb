@@ -1,7 +1,6 @@
 class PromptsController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :set_prompt, except: :index
-  after_action :repush_notifications
 
   def index
     @prompts = current_user.prompts.unanswered.order(created_at: :desc)
@@ -37,12 +36,6 @@ class PromptsController < ApplicationController
   end
 
   private
-
-  def repush_notifications
-    return unless user_signed_in?
-
-    ::WebPushNotifications.update_count(current_user)
-  end
 
   def set_prompt
     @prompt = current_user.prompts.find_by(id: params[:id])

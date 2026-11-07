@@ -9,7 +9,6 @@ RSpec.describe Buddy::FormAction do
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(::Jil).to receive(:trigger).and_return(true)
-    allow(::WebPushNotifications).to receive(:update_count)
   }
 
   # "How many calories was cafe protein shake?" — Notes arrives filled, Calories
