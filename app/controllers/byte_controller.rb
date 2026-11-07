@@ -1,6 +1,6 @@
 class ByteController < ApplicationController
-  before_action :authorize_user, except: [:csrf, :board_manifest]
-  before_action :authorize_owner, except: [:csrf, :board_manifest]
+  before_action :authorize_user, except: [:csrf, :manifest, :board_manifest]
+  before_action :authorize_owner, except: [:csrf, :manifest, :board_manifest]
 
   # The presence heartbeat is pure telemetry (a 30s "looking at Byte" cache key),
   # fired on a 15s interval from a long-lived PWA. CSRF is skipped for a
@@ -106,6 +106,18 @@ class ByteController < ApplicationController
       @board_list_options = convo.user.lists.order(:name).pluck(:id, :name)
     end
     render :show
+  end
+
+  # GET /:theme.webmanifest and /:theme_kiosk.webmanifest — a pet's install
+  # manifests, built from its companion class. Served without a session for
+  # the same reason as #board_manifest: a browser fetches a manifest with no
+  # cookies. Nothing in one is private.
+  def manifest
+    theme = params[:manifest].delete_suffix("_kiosk")
+    return head(:not_found) unless Buddy::Companion.all.key?(theme.to_sym)
+
+    render json: Buddy::Manifest.for(theme, kiosk: params[:manifest].end_with?("_kiosk")),
+      content_type: "application/manifest+json"
   end
 
   # GET /board/:conversation_id/manifest.webmanifest — a board's OWN install

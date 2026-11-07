@@ -17,6 +17,7 @@ module Buddy
         },
       )
       summary "A quick, chipper slime — upbeat and a bit cheeky, keen to get things done."
+      install "Direct chat channel to your automations."
       alarm_face :uwu
 
       emotions(

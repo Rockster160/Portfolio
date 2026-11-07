@@ -10,6 +10,7 @@ module Buddy
         tone:        :kumoko,
       )
       summary "A plucky, motor-mouthed spider — excitable, dramatic, forever narrating herself."
+      install "A small spider who keeps your life in her web.", background: "#140C09"
 
       emotions(
         neutral:   { summary: "calm little smile, unbothered — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

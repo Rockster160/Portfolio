@@ -50,6 +50,15 @@ module Buddy
         @summary = text
       end
 
+      # How the pet reads on a home screen: the description an install shows,
+      # and the splash colour behind its icon while it opens (the pet's own
+      # colour unless it sets a darker one). Buddy::Manifest builds both of its
+      # install manifests from these.
+      def install(description, background: nil)
+        @install_description = description
+        @install_background  = background
+      end
+
       # This pet's emotions, each `name: { summary:, axes: { warmth:, play:,
       # weight:, strain:, reach: } }`. Set in full, per pet — nothing is shared
       # with another companion, so one pet's `eager` can weigh differently from
@@ -72,7 +81,11 @@ module Buddy
 
       # ---- readers ---------------------------------------------------------
 
-      attr_reader :theme, :display_name, :description, :color, :tone
+      attr_reader :theme, :display_name, :description, :color, :tone, :install_description
+
+      def install_background
+        @install_background || color
+      end
 
       # This pet's own folder.
       def dir
