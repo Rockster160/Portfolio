@@ -119,7 +119,6 @@ Buddy::Tools.register(
 
     prompt.update!(response: payload[:response])
     ::Jil.trigger(ctx.user, :prompt, prompt.with_jil_attrs(status: :complete))
-    ::WebPushNotifications.update_count(ctx.user)
     { prompt_id: prompt.id }
   },
   receipt:     ->(_result, _ctx) { "Answered it ✓" },

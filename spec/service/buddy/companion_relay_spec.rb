@@ -354,7 +354,6 @@ RSpec.describe "Buddy companion relay" do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(::WebPushNotifications).to receive(:update_count)
       ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)
       asker.update!(chore_household_id: household.id)
       partner.update!(chore_household_id: household.id)

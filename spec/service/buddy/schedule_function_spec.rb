@@ -25,7 +25,6 @@ RSpec.describe "schedule_function" do
   before do
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(::WebPushNotifications).to receive(:update_count)
   end
 
   def schedule!(payload)

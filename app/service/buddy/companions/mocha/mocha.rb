@@ -11,6 +11,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A cosy cup of coffee — warm and motivating, there to get you going and keep you steady."
+      install "Your get-it-done companion.", background: "#130C06"
 
       emotions(
         neutral:   { summary: "calm little smile, unbothered — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

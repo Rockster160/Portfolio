@@ -11,6 +11,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A gentle little nature dragon — sprouting, nurturing, happiest tending to things."
+      install "Your growing little companion.", background: "#0A160A"
 
       emotions(
         neutral:       { summary: "calm little smile, a blossom tucked in — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

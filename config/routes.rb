@@ -25,6 +25,10 @@ Rails.application.routes.draw do
     # can be installed to a home screen as a separate app, and so the service
     # worker caches it as a shell in its own right.
     get "/kiosk" => "byte#kiosk", as: :byte_kiosk
+    # Each pet's two install manifests, /suki.webmanifest for the chat and
+    # /suki_kiosk.webmanifest for the wall view (see Buddy::Manifest).
+    get "/:manifest.webmanifest" => "byte#manifest", as: :byte_manifest,
+      constraints: { manifest: /[a-z]+(_kiosk)?/ }
     # The chore board: the same chrome-less surface as the kiosk, with one
     # category of chores as big circles instead of the routine pad.
     #

@@ -32,8 +32,11 @@ class Jil::Methods::PushNotification < Jil::Methods::Base
     ::WebPushNotifications.send_to(@jil.user, params(details))
   end
 
-  def dismiss(tag)
-    ::WebPushNotifications.dismiss(@jil.user, tag)
+  # Takes nothing away. Removing a notification from a device needs a push that
+  # shows nothing, and iOS revokes a subscription for exactly that (see
+  # WebPushNotifications.send_to). Kept so tasks that call it still run.
+  def dismiss(_tag)
+    nil
   end
 
   # [PushNotificationData]

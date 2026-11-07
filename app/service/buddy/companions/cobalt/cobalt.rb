@@ -11,6 +11,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A spirited blue dragon — confident and playful, with a little flame to show off."
+      install "Your fiery little companion.", background: "#080E2A"
 
       emotions(
         neutral:       { summary: "big round eyes, calm little smile — unbothered, the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

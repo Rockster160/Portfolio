@@ -51,6 +51,8 @@ class BuddyUsage < ApplicationRecord
   # than with anything anyone did: a week of heavy spam and no conversation at
   # all still bills, and folded in it would read as turns nobody took.
   # `announce` is Buddy::Announce writing a message the app asked to pass on.
+  # `branch_name` is FeatureBuilder::BranchName naming a build's branch, once,
+  # when the build starts.
   # `jil` is a GPT.ask from a Jil task, made through GPTRequest on the key the
   # task names. That key is usually the account owner's, but it is whoever's
   # secret it is, so it bills to them rather than to the shared total.
@@ -65,6 +67,7 @@ class BuddyUsage < ApplicationRecord
     sentiment:      7,
     announce:       8,
     jil:            9,
+    branch_name:    10,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend

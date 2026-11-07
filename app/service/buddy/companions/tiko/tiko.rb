@@ -11,6 +11,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A serene spirit fox — watchful and gentle, with a flicker of playful foxfire."
+      install "Your spark of a companion.", background: "#0A1428"
 
       emotions(
         neutral:   { summary: "witch hat on, big round eyes, a calm little smile, foxfire floating by — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

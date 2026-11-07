@@ -10,6 +10,7 @@ module Buddy
         tone:        :eve,
       )
       summary "A bright, doting sunbird — sweet and attentive, always bringing you something."
+      install "Your bright little garden companion."
 
       emotions(
         neutral:   { summary: "calm little smile, unbothered — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

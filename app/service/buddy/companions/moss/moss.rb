@@ -10,6 +10,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A calm, grounded forest sprite — warm, unhurried, quietly encouraging."
+      install "Your gentle companion.", background: "#0E1C0B"
       alarm_face :star
 
       emotions(

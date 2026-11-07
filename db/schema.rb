@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_06_215942) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_07_001454) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -2128,6 +2128,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_215942) do
     t.datetime "registered_at", precision: nil
     t.string "channel", default: "jarvis", null: false
     t.string "device_id"
+    t.integer "endpoint_changes", default: 0, null: false
+    t.datetime "retired_at"
     t.index ["user_id", "channel", "device_id"], name: "idx_on_user_id_channel_device_id_73f8745e23"
     t.index ["user_id", "channel"], name: "index_user_push_subscriptions_on_user_id_and_channel"
   end

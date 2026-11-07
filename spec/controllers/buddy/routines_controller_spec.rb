@@ -133,7 +133,6 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
       before {
         allow(MonitorChannel).to receive(:broadcast_to)
         allow(WebPushNotifications).to receive(:send_to_byte)
-        allow(::WebPushNotifications).to receive(:update_count)
         ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)
         user.update!(chore_household_id: household.id)
         partner.update!(chore_household_id: household.id)

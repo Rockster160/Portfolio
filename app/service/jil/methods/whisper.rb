@@ -29,7 +29,9 @@ class Jil::Methods::Whisper < Jil::Methods::Base
     ::WebPushNotifications.send_to_whisper(payload)
   end
 
-  def dismiss(tag)
-    ::WebPushNotifications.dismiss_whisper(tag)
+  # Takes nothing away: see Jil::Methods::PushNotification#dismiss. Kept so
+  # tasks that call it still run.
+  def dismiss(_tag)
+    nil
   end
 end

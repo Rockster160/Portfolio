@@ -208,7 +208,6 @@ RSpec.describe "Buddy alarms" do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(::WebPushNotifications).to receive(:update_count)
       allow(BuddyDeliverWorker).to receive(:perform_async)
       convo.update_columns(buddy_theme: "byte")
     end

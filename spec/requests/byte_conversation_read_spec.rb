@@ -39,47 +39,17 @@ RSpec.describe "Byte conversation read", type: :request do
     expect(response).to have_http_status(:not_found)
   end
 
-  # The socket only reaches screens that are RUNNING. A phone in a pocket gets
-  # nothing, so its home-screen badge kept the number for a message already read
-  # at the desk — the complaint that came back after the broadcast above was
-  # already working. Only a push can paint the icon of a closed app.
-  describe "the badge on a device that isn't running" do
-    let!(:phone) {
-      UserPushSubscription.create!(
-        user: user, channel: :byte, endpoint: "https://push/phone",
-        p256dh: "k", auth: "a", registered_at: Time.current
-      )
-    }
+  # A push that only clears the badge shows nothing, and iOS revokes a
+  # subscription for those — so a read reaches closed devices not at all.
+  it "sends no push to a device that isn't running" do
+    UserPushSubscription.create!(
+      user: user, channel: :byte, endpoint: "https://push/phone",
+      p256dh: "k", auth: "a", registered_at: Time.current
+    )
+    allow(WebPush).to receive(:payload_send)
 
-    def pushed
-      sent = []
-      allow(WebPush).to receive(:payload_send) { |args| sent << JSON.parse(args[:message]) }
-      post byte_read_conversation_path(id: conversation.id)
-      sent
-    end
+    post byte_read_conversation_path(id: conversation.id)
 
-    # The device has to be wearing a number for there to be one to take off. A
-    # push is only spent on the EDGE — see web_push_notifications_badge_spec.rb: every one of
-    # these shows nothing, and a worker that shows nothing has its subscription
-    # revoked by WebKit, which is what was quietly killing them.
-    before { WebPushNotifications.record_badge(user, 1, channel: :byte) }
-
-    # A banner every time another device is opened would be worse than the
-    # stale badge, so the push is silent.
-    it "pushes the new count, silently, so the badge can clear", :aggregate_failures do
-      sent = pushed.first
-
-      expect(sent&.dig("data", "count")).to eq(0)
-      expect(sent["title"]).to be_blank
-      expect(sent["body"]).to be_blank
-    end
-
-    # The read that follows has nothing left to say, and saying it anyway is
-    # what cost the subscription.
-    it "spends nothing on a badge that is already clear" do
-      post byte_read_conversation_path(id: conversation.id)
-
-      expect(pushed).to be_empty
-    end
+    expect(WebPush).not_to have_received(:payload_send)
   end
 end
