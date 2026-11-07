@@ -2,17 +2,19 @@
 #
 # Table name: user_push_subscriptions
 #
-#  id            :integer          not null, primary key
-#  auth          :string
-#  channel       :string           default("jarvis"), not null
-#  device_id     :string
-#  endpoint      :string
-#  p256dh        :string
-#  registered_at :datetime
-#  sub_auth      :string
-#  created_at    :datetime         not null
-#  updated_at    :datetime         not null
-#  user_id       :integer
+#  id               :integer          not null, primary key
+#  auth             :string
+#  channel          :string           default("jarvis"), not null
+#  device_id        :string
+#  endpoint         :string
+#  endpoint_changes :integer          default(0), not null
+#  p256dh           :string
+#  registered_at    :datetime
+#  retired_at       :datetime
+#  sub_auth         :string
+#  created_at       :datetime         not null
+#  updated_at       :datetime         not null
+#  user_id          :integer
 #
 
 # deprecated: sub_auth
