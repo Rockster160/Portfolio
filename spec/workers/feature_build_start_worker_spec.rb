@@ -9,9 +9,15 @@ RSpec.describe FeatureBuildStartWorker do
     FeatureBuild.find(message.metadata["feature_build_id"])
   }
 
-  it "asks the Mini to start the build" do
+  it "asks the Mini to start the build, with the words to name its branch" do
+    allow(FeatureBuilder::BranchName).to receive(:for).and_return("dark-mode")
     start = stub_request(:post, %r{/byte/builder\z}).with(
-      body: hash_including("action" => "start", "build_id" => build.id, "request" => "dark mode"),
+      body: hash_including(
+        "action"      => "start",
+        "build_id"    => build.id,
+        "request"     => "dark mode",
+        "branch_name" => "dark-mode",
+      ),
     ).to_return(status: 200, body: "{}")
 
     described_class.new.perform(build.id)
@@ -21,6 +27,7 @@ RSpec.describe FeatureBuildStartWorker do
   end
 
   it "says so in its message when the Mini doesn't answer" do
+    allow(FeatureBuilder::BranchName).to receive(:for).and_return("dark-mode")
     described_class.new.perform(build.id)
 
     expect(build.reload).to be_status_failed
