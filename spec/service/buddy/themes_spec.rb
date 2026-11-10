@@ -15,21 +15,29 @@ RSpec.describe Buddy::Themes do
     }
   end
 
-  # Two manifests per pet, differing only in `start_url`, because that's what
-  # decides whether the home-screen icon opens the chat or the wall tablet. A
-  # missing file is an install that silently falls back to the chat.
-  it "ships both manifests for every pet, pointed at the right page" do
+  # Two manifests per pet, differing in `start_url`, because that's what
+  # decides whether the home-screen icon opens the chat or the wall tablet.
+  it "builds both manifests for every pet, pointed at the right page", :aggregate_failures do
     described_class.all.each_key { |theme|
       chrome = described_class.for(theme)
-      chat   = JSON.parse(Rails.public_path.join(chrome[:manifest].delete_prefix("/")).read)
-      kiosk  = JSON.parse(Rails.public_path.join(chrome[:kiosk_manifest].delete_prefix("/")).read)
+      chat   = Buddy::Manifest.for(theme)
+      kiosk  = Buddy::Manifest.for(theme, kiosk: true)
 
-      expect(chat["start_url"]).to eq("/?source=pwa")
-      expect(kiosk["start_url"]).to eq("/kiosk")
-      expect(kiosk["name"]).to eq("#{chrome[:name]} Kiosk")
-      # Distinct ids, or the browser treats the second install as the first one
-      # again and never adds a second icon.
-      expect(kiosk["id"]).not_to eq(chat["id"])
+      expect(chat[:start_url]).to eq("/?source=pwa")
+      expect(kiosk[:start_url]).to eq("/kiosk")
+      expect(chat[:name]).to eq(chrome[:name])
+      expect(kiosk[:name]).to eq("#{chrome[:name]} Kiosk")
+      expect([chat[:description], kiosk[:description]]).to all(be_present)
+      expect(chat[:theme_color]).to eq(chrome[:color])
+      expect(chat[:background_color]).to match(/\A#[0-9A-F]{6}\z/i)
+      # The id is what an installed icon is recognised by: it has to stay the
+      # pet's key, and the two have to differ or the browser treats the second
+      # install as the first one again and never adds a second icon.
+      expect(chat[:id]).to eq(theme.to_s)
+      expect(kiosk[:id]).to eq("#{theme}-kiosk")
+      chat[:icons].each { |icon|
+        expect(Rails.public_path.join(icon[:src].delete_prefix("/"))).to exist, "#{theme}: #{icon[:src]}"
+      }
     }
   end
 

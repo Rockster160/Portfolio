@@ -90,6 +90,17 @@ RSpec.describe "Push subscription registration", type: :request do
       expect(byte_subs.sole.endpoint).to eq("#{phone}-REISSUED")
     end
 
+    # How often a device loses its address is what says whether pushes are
+    # costing it its subscription.
+    it "counts each new address, and not a return to the same one" do
+      subscribe(phone, device_id: phone_id)
+      subscribe(phone, device_id: phone_id)
+      subscribe("#{phone}-REISSUED", device_id: phone_id)
+      subscribe("#{phone}-AGAIN", device_id: phone_id)
+
+      expect(byte_subs.sole.endpoint_changes).to eq(2)
+    end
+
     it "still tells two devices apart" do
       subscribe(phone, device_id: phone_id)
       subscribe(desktop, device_id: "device-123456")

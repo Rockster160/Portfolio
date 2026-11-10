@@ -25,7 +25,6 @@ Buddy::Tools.register(
     prompt = ctx.user.prompts.unanswered.find(payload[:id])
     prompt.destroy
     ::Jil.trigger(ctx.user, :prompt, prompt.with_jil_attrs(status: :skip))
-    ::WebPushNotifications.update_count(ctx.user)
     { prompt_id: payload[:id] }
   },
   receipt:     ->(_result, _ctx) { "Skipped it ✓" },

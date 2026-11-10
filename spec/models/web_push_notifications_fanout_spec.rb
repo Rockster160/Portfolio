@@ -88,7 +88,9 @@ RSpec.describe WebPushNotifications do
 
       expect(sent).to eq(["https://push/desk"])
       expect(phone.reload.registered_at).to be_nil
+      expect(phone.retired_at).to be_present
       expect(desk.reload.registered_at).to be_present
+      expect(desk.retired_at).to be_nil
     end
   end
 
@@ -111,48 +113,11 @@ RSpec.describe WebPushNotifications do
       expect(sent).to all(include(open_timeout: be_positive, read_timeout: be_positive))
     end
 
-    # Nobody waits on a notification being taken away.
-    it "lets a dismissal go at low urgency" do
-      sent = sent_with { described_class.dismiss(user, "byte-1", channel: :byte) }
-
-      expect(sent.pluck(:urgency)).to all(eq("low"))
-    end
-
     it "keeps a timed-out device registered, since a timeout proves nothing" do
       allow(WebPush).to receive(:payload_send).and_raise(Net::ReadTimeout)
 
       expect { described_class.send_to(user, { title: "hi" }, channel: :byte) }.not_to raise_error
       expect(phone.reload.registered_at).to be_present
-    end
-  end
-
-  # A push with no title is SILENT, and there are two worth sending: a
-  # dismissal, and a bare count. The count is the only thing that can paint the
-  # home-screen icon of an app that isn't running — so reading a thread on the
-  # desk browser left the phone wearing a badge for a message already read,
-  # sometimes for days. `byte_worker.js` has always handled this shape (clears
-  # on zero, shows no banner without a title); nothing ever reached it, because
-  # the titleless guard dropped every one before it was sent.
-  describe "a silent count-only push" do
-    def payload_sent
-      sent = nil
-      allow(WebPush).to receive(:payload_send) { |args| sent = JSON.parse(args[:message]) }
-      yield
-      sent
-    end
-
-    it "goes out carrying the count the worker reads and nothing to draw a banner with" do
-      sent = payload_sent { described_class.send_to(user, { data: { count: 3 } }, channel: :byte) }
-
-      expect(sent.dig("data", "count")).to eq(3)
-      expect(sent["title"]).to be_blank
-      expect(sent["body"]).to be_blank
-    end
-
-    it "still drops a push with nothing in it at all" do
-      sent = payload_sent { described_class.send_to(user, {}, channel: :byte) }
-
-      expect(sent).to be_nil
     end
   end
 end

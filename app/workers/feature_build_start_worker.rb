@@ -15,6 +15,7 @@ class FeatureBuildStartWorker
       :start,
       build_id:        build.id,
       title:           build.title,
+      branch_name:     FeatureBuilder::BranchName.for(build),
       request:         build.request,
       user_id:         build.user_id,
       conversation_id: build.byte_conversation_id,

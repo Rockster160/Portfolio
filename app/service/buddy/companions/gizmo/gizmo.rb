@@ -11,6 +11,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A goofy treasure-chest mimic — silly and greedy for fun, showing off its hoard."
+      install "Your treasure of a companion.", background: "#1A1105"
 
       emotions(
         neutral:    { summary: "calm little grin, lid half-open — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

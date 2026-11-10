@@ -12,7 +12,6 @@ RSpec.describe Buddy::TimerCycle do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(WebPushNotifications).to receive(:update_count)
       convo.update_columns(buddy_theme: "byte")
     end
 
@@ -317,7 +316,6 @@ RSpec.describe Buddy::TimerCycle do
     before do
       allow(MonitorChannel).to receive(:broadcast_to)
       allow(WebPushNotifications).to receive(:send_to_byte)
-      allow(WebPushNotifications).to receive(:update_count)
     end
 
     def run!(args)

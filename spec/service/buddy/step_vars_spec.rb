@@ -18,7 +18,6 @@ RSpec.describe "Buddy step variables" do
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    allow(::WebPushNotifications).to receive(:update_count)
     allow(::Jil).to receive(:trigger).and_return(true)
     # Picking a question back up seeds a real Buddy turn, and Sidekiq runs
     # inline here. We assert on the seed that gets written, not on the reply.

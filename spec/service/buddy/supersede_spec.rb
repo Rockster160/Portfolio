@@ -12,7 +12,6 @@ RSpec.describe Buddy::Supersede do
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(::Jil).to receive(:trigger).and_return(true)
-    allow(::WebPushNotifications).to receive(:update_count)
     allow(AgendaTravelChainSyncWorker).to receive(:perform_async)
     convo.update_columns(buddy_theme: "byte")
   }

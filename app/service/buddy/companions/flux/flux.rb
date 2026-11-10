@@ -10,6 +10,7 @@ module Buddy
         tone:        :chelsea,
       )
       summary "A curious deep-sea octopus — inky, clever, and easygoing under pressure."
+      install "Your bright little companion.", background: "#081428"
 
       emotions(
         neutral:       { summary: "calm little smile, eyes open — the resting default for flat, nothing-happening moments", axes: { warmth: 0.50, play: 0.25, weight: 0.25, strain: 0.15, reach: 0.32 } },

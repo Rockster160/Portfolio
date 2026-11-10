@@ -25,6 +25,10 @@ Rails.application.routes.draw do
     # can be installed to a home screen as a separate app, and so the service
     # worker caches it as a shell in its own right.
     get "/kiosk" => "byte#kiosk", as: :byte_kiosk
+    # Each pet's two install manifests, /suki.webmanifest for the chat and
+    # /suki_kiosk.webmanifest for the wall view (see Buddy::Manifest).
+    get "/:manifest.webmanifest" => "byte#manifest", as: :byte_manifest,
+      constraints: { manifest: /[a-z]+(_kiosk)?/ }
     # The chore board: the same chrome-less surface as the kiosk, with one
     # category of chores as big circles instead of the routine pad.
     #
@@ -764,9 +768,11 @@ Rails.application.routes.draw do
     delete "/system/memories/:id" => "system#destroy_memory", as: :system_memory_destroy
     get "/system/feature_requests" => "system#feature_requests", as: :system_feature_requests
     patch "/system/feature_requests/:id" => "system#update_feature_request", as: :system_feature_request
+    post "/system/feature_requests/:id/build" => "system#build_feature_request", as: :system_feature_request_build
     get "/system/errors" => "system#errors", as: :system_errors
     get "/system/claude" => "system#claude", as: :system_claude
     post "/system/claude/:id/stop" => "system#stop_claude", as: :system_claude_stop
+    post "/system/claude/questions" => "system#claude_questions", as: :system_claude_questions
     # What an alert links to, so a Slack line ends at the whole row rather than
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_06_194422) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_07_001454) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1202,8 +1202,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_194422) do
     t.datetime "finished_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "feature_request_id"
+    t.datetime "planned_at"
     t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
+    t.index ["feature_request_id"], name: "index_feature_builds_on_feature_request_id"
     t.index ["pr_number"], name: "index_feature_builds_on_pr_number"
     t.index ["user_id"], name: "index_feature_builds_on_user_id"
   end
@@ -2125,6 +2128,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_194422) do
     t.datetime "registered_at", precision: nil
     t.string "channel", default: "jarvis", null: false
     t.string "device_id"
+    t.integer "endpoint_changes", default: 0, null: false
+    t.datetime "retired_at"
     t.index ["user_id", "channel", "device_id"], name: "idx_on_user_id_channel_device_id_73f8745e23"
     t.index ["user_id", "channel"], name: "index_user_push_subscriptions_on_user_id_and_channel"
   end
@@ -2268,6 +2273,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_06_194422) do
   add_foreign_key "emails", "users"
   add_foreign_key "feature_builds", "byte_conversations", on_delete: :nullify
   add_foreign_key "feature_builds", "byte_messages", on_delete: :nullify
+  add_foreign_key "feature_builds", "feature_requests", on_delete: :nullify
   add_foreign_key "feature_builds", "users"
   add_foreign_key "feature_requests", "byte_conversations"
   add_foreign_key "feature_requests", "byte_messages"

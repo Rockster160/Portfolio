@@ -71,7 +71,6 @@ RSpec.describe "Buddy prompt tools" do
 
   before {
     allow(::Jil).to receive(:trigger).and_return(true)
-    allow(::WebPushNotifications).to receive(:update_count)
   }
 
   describe Buddy::PromptForm do

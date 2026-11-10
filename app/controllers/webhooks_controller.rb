@@ -942,6 +942,9 @@ class WebhooksController < ApplicationController
     push_sub = (device_id.present? ? scope.find_by(device_id: device_id) : nil)
     push_sub ||= scope.find_by(endpoint: endpoint)
     push_sub ||= current_user.push_subs.new(channel: channel)
+    # The same install arriving with a different address means the old one was
+    # revoked. Counted, so how often that happens to each device can be read.
+    push_sub.endpoint_changes += 1 if push_sub.persisted? && push_sub.endpoint != endpoint
     push_sub.assign_attributes({
       endpoint:      endpoint,
       device_id:     device_id || push_sub.device_id,
