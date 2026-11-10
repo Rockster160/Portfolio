@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_07_001454) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_10_190521) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1487,6 +1487,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_07_001454) do
     t.string "summary"
     t.integer "did_well"
     t.integer "liked_them"
+    t.text "clean_body"
+    t.datetime "cleaned_at"
     t.index ["agenda_item_id"], name: "index_job_notes_on_agenda_item_id"
     t.index ["job_application_id", "occurred_at"], name: "index_job_notes_on_job_application_id_and_occurred_at"
     t.index ["job_application_id"], name: "index_job_notes_on_job_application_id"

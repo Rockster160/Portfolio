@@ -33,6 +33,11 @@ Buddy::Tools.register(
     it went - wait for the answer and say what actually came back. Many report
     real outcomes, including "that was already the case, so I did nothing".
 
+    **One call is one run.** A call earlier in the thread did what it did then,
+    and its receipt is about that run. Asked again - "that one too", "the next
+    one as well", "now the 1 am one" - is a new call, even straight after the
+    last one ran.
+
     The task does its own checking, so don't look first. Finding no timer,
     reminder or schedule for the thing they named is not an answer: a task
     keeps its own state, and running it is how you find out whether there was

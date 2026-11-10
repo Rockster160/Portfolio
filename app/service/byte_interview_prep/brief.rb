@@ -109,7 +109,11 @@ module ByteInterviewPrep
           note.tag_label,
           ("with #{note.spoke_to}" if note.spoke_to.present?),
         ].compact.join(" - ")
-        body = note.body.to_s.strip
+        # The readable version where there is one. A beat he typed during a
+        # call is shorthand, and the brief is being written off what was SAID
+        # rather than off how he wrote it down - which is the opposite of the
+        # debrief's reason for reading the spoken words.
+        body = note.reading.to_s.strip
 
         # Under its own line rather than run onto it. A beat carries the whole
         # mail now, and a mail on the same line as its date is a wall.

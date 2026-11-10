@@ -504,7 +504,10 @@ Rails.application.routes.draw do
     post :merge, on: :member
     # The steps of this one's process, ticked or rewritten.
     patch :rubric, on: :member
-    resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
+    resources :notes, controller: :job_notes, only: [:create, :update, :destroy] do
+      # Another go at the readable version, the same way a recording has one.
+      post :clean, on: :member
+    end
     resources :transcripts, controller: :job_transcripts, except: [:index, :new, :edit] do
       # Another pass over the words, another reading of how it went, and
       # another go at the readable version. Member routes because each is a

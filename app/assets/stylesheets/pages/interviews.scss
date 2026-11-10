@@ -1148,12 +1148,22 @@
     // one beat - the message, a recording, the edit form - and three different
     // weights of control reads as three different kinds of thing.
     .note-full > summary,
+    .note-raw > summary,
     .note-transcript > summary,
     .note-edit > summary {
       padding: 2px 0;
       color: var(--iv-muted);
       font-size: 12px;
       font-weight: normal;
+    }
+
+    // What he typed, inside the version written up from it. Indented and ruled
+    // like the turns of a recording are, because it is the same relationship:
+    // the source of the thing being read, kept where it can be checked.
+    .note-raw {
+      margin-top: 8px;
+      border-left: 2px solid var(--iv-line);
+      padding-left: 10px;
     }
 
     .note-transcript > summary {

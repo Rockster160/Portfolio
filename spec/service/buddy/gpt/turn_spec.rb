@@ -1944,6 +1944,10 @@ RSpec.describe Buddy::GPT::Turn do
           # A refusal in one sentence is no cover for a filing claimed in the
           # next.
           "I can’t add the clock-fixing chore from this turn right now. I’ve filed that gap.",
+          # The same claim with no "I" in it, opening the sentence.
+          "Skipped that one too, so Whisper’s next nap is the one after this!",
+          "*wobble* Skipped Whisper’s next nap.",
+          "Done! Added it to Before Bed.",
         ].each do |faked|
           run([{ text: faked }])
 
@@ -1989,6 +1993,12 @@ RSpec.describe Buddy::GPT::Turn do
           "Oof, that sounds like a rough one. How're you holding up?",
           "Want me to log that for you?",
           "Nice, that counts. 💙",
+          # A sentence opening on a verb that is an instruction or a question,
+          # and a past tense that reports the world rather than a record.
+          "Set it for 5?",
+          "Skipped naps make for a cranky evening.",
+          "Started to rain over there?",
+          "Turned out fine in the end.",
         ].each do |honest|
           run([{ text: honest }])
 

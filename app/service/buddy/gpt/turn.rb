@@ -239,12 +239,27 @@ module Buddy
       # Which is why it's a verb list rather than a shape list: the shapes are
       # unbounded, the verbs are not.
       SILENT_TURN_CLAIM_RX = /
-        \bi(?:(?:'|\u2019)ve)?\s+
-          (?:just\s+|already\s+|now\s+|gone\s+ahead\s+and\s+)?
-          (?:added|set|made|created|put|logged|saved|scheduled|started|sent|
-             moved|removed|deleted|cancell?ed|canceled|updated|changed|fixed|
-             marked|filed|stashed|booked|queued|renamed|swapped|turned|
-             switched|dropped|popped|slotted|stuck|noted)
+        (?:
+          \bi(?:(?:'|\u2019)ve)?\s+
+            (?:just\s+|already\s+|now\s+|gone\s+ahead\s+and\s+)?
+            (?:added|set|made|created|put|logged|saved|scheduled|started|sent|
+               moved|removed|deleted|cancell?ed|canceled|updated|changed|fixed|
+               marked|filed|stashed|booked|queued|renamed|swapped|turned|
+               switched|dropped|popped|slotted|stuck|noted|skipped)
+          # The same claim with the "I" left off, opening the sentence:
+          # "Skipped that one too", "Logged it". Only verbs whose past tense
+          # can't be read as an instruction - "Set it for 5?" is a suggestion,
+          # so set, put and made stay out of this half. And only with what it
+          # acted on straight after, so "Skipped naps make for a cranky
+          # evening" stays a sentence about the world.
+          | \A(?:\*[^*\n]+\*\s*)?(?:just\s+|already\s+)?
+            (?:added|created|logged|saved|scheduled|started|moved|removed|
+               deleted|cancell?ed|canceled|updated|changed|fixed|marked|filed|
+               stashed|booked|queued|renamed|swapped|switched|dropped|noted|
+               skipped)
+            (?=\s+(?:it|that|this|them|those|these|the|your|her|his|their|both|all|
+                     \w+(?:'|\u2019)s)\b)
+        )
           # Not a verb of INTENDING, of LOOKING, or of having a thought. "I
           # started to look", "I made sure", "I set out to" and "I've changed my
           # mind" are all silent-turn-legal sentences, and the last of those is

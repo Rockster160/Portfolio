@@ -8,6 +8,22 @@
     <%= f.text_area :body, rows: 3, placeholder: "Applied through their careers page. Job looks like mostly Rails." %>
   </div>
 
+  <%# THE READABLE VERSION, HIS TO CHANGE. Only on a beat that already has one:
+     the two forms that create a note have nothing to show here, and a second
+     empty box above the tag would read as a field he was meant to fill in.
+     Above the tag rather than in the extras because editing it is the point of
+     it being a column - the model writes a draft and the person who was in the
+     room settles it. %>
+  <% if f.object.persisted? && f.object.cleaned? %>
+    <div class="form-field">
+      <%= f.label :clean_body, "Written up" %>
+      <%= f.text_area :clean_body, rows: 8 %>
+      <span class="field-hint">
+        Yours to fix. What you typed is kept either way, under "As I wrote it".
+      </span>
+    </div>
+  <% end %>
+
   <div class="split-fields">
     <div class="form-field">
       <%= f.label :tag, "Type" %>

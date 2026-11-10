@@ -356,14 +356,17 @@ RSpec.describe FeatureBuilder do
       expect(build.reload).to be_status_finished
     end
 
-    it "keeps the build open when the Mini can't be told" do
+    it "keeps the build open and asks the Mini again later when it can't be told" do
+      allow(FeatureBuildFinishWorker).to receive(:perform_in)
+
       outcome = described_class.github!(:pull_request, {
         "action"       => "closed",
-        "pull_request" => pull_request,
+        "pull_request" => pull_request(merged: true),
       })
 
       expect(outcome).to eq(:mini_unreachable)
       expect(build.reload).not_to be_status_finished
+      expect(FeatureBuildFinishWorker).to have_received(:perform_in).with(anything, build.id, true)
     end
   end
 

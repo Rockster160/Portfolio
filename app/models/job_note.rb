@@ -4,6 +4,8 @@
 #
 #  id                 :bigint           not null, primary key
 #  body               :text
+#  clean_body         :text
+#  cleaned_at         :datetime
 #  did_well           :integer
 #  duration_minutes   :integer
 #  follow_up_at       :datetime
@@ -335,6 +337,7 @@ class JobNote < ApplicationRecord
   # underneath a chip reading APPLIED.
   validates :body, presence: true, if: :note?
   validates :body, length: { maximum: MAX_BODY }
+  validates :clean_body, length: { maximum: MAX_BODY }
   validates :occurred_at, presence: true
   validates :source, :spoke_to, length: { maximum: 120 }
   validates :summary, length: { maximum: MAX_SUMMARY }
@@ -443,6 +446,14 @@ class JobNote < ApplicationRecord
   after_commit :sync_waiting_alert
   after_commit :settle_application
   after_commit :refresh_fitness, on: :create
+  # ON CREATE ONLY, and never again by itself. A second pass overwrites a
+  # version he has edited, and the whole point of the readable one being a
+  # column rather than a render is that his edits to it stick - so re-cleaning
+  # is a press and not a consequence of saving the beat.
+  #
+  # `clean_body` already set means it arrived with one: a beat filed by a
+  # script that wrote both halves is not waiting to be read by anything.
+  after_commit :clean_up, on: :create, if: -> { cleanable? && clean_body.blank? }
 
   def tag_label
     TAG_LABELS[tag] || "Note"
@@ -471,6 +482,8 @@ class JobNote < ApplicationRecord
   # and an arrow that opens to show the same sentence again is a control that
   # does nothing.
   def more_to_read?
+    return true if cleaned?
+
     said = body.to_s.strip
     return false if said.empty?
 
@@ -481,6 +494,33 @@ class JobNote < ApplicationRecord
   # whole test - see CONVERSATIONS.
   def conversation?
     CONVERSATIONS.include?(tag.to_s)
+  end
+
+  def cleaned?
+    clean_body.present?
+  end
+
+  # ONE PLACE DECIDES WHICH WORDS A BEAT SHOWS, the same way `words_of` does it
+  # for a turn of a recording.
+  #
+  # The readable version is held BESIDE what he typed rather than over it, so
+  # every surface - the page, the brief written before an interview, anything
+  # quoting a beat later - has to choose. The readable one is the default
+  # wherever the question is what was said, because that is what it exists for;
+  # what he typed is one tap away and it is the version that survives a
+  # cleaning that went wrong.
+  def reading(clean: true)
+    return body.to_s unless clean
+    return body.to_s unless cleaned?
+
+    clean_body.to_s
+  end
+
+  # Worth offering the press? Only on a beat he was in the room for and typed
+  # himself. A mail is already prose and cleaning one is a call spent making an
+  # ATS receipt read more nicely.
+  def cleanable?
+    conversation? && body.to_s.strip.length >= Notes::Clean::LEAST_WORTH_IT
   end
 
   def rated?
@@ -732,6 +772,10 @@ class JobNote < ApplicationRecord
   # re-reads the application's onsite bookings. See InterviewVenue.
   def place_interview_venue
     ::InterviewVenue.place!(job_application)
+  end
+
+  def clean_up
+    ::NoteCleanWorker.perform_async(id)
   end
 
   def write_follow_up_item

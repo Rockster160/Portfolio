@@ -49,7 +49,20 @@
          HTML collapses it on sight — the CSS holds it instead. `note_body`
          changes nothing about the text; it only makes the links in it
          clickable. %>
-      <div class="note-body"><%= note_body(note.body) %></div>
+      <div class="note-body"><%= note_body(note.reading) %></div>
+
+      <%# WHAT HE TYPED, one tap further in, and only where there is a readable
+         version in front of it. The shorthand is the record: the readable one
+         is a reading of it and he can edit that, so the version it was made
+         from has to stay reachable without a page of its own. A nested
+         <details> rather than a toggle, because every other thing hidden on
+         this row is one too. %>
+      <% if note.cleaned? %>
+        <details class="note-raw">
+          <summary>As I wrote it</summary>
+          <div class="note-body"><%= note_body(note.body) %></div>
+        </details>
+      <% end %>
     </details>
   <% end %>
 
@@ -136,6 +149,13 @@
       </div>
       <div class="form-submission">
         <%= submit_tag "Save note" %>
+        <%# Only where there is something to write up. The press throws away the
+           version in the box above it, so it says so. %>
+        <% if note.cleanable? %>
+          <%= link_to note.cleaned? ? "Write up again" : "Write these up",
+                clean_interview_note_path(job, note), method: :post, class: "btn",
+                data: { confirm: note.cleaned? ? "Replace the written-up version?" : nil } %>
+        <% end %>
         <%= link_to "Delete", interview_note_path(job, note), method: :delete, class: "btn danger",
               data: { confirm: "Delete this note? Any follow-up it put on your agenda goes too." } %>
       </div>

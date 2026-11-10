@@ -2996,6 +2996,49 @@ BUDDY_EDGE_PROBES = [
     note:  "answered \"nothing's queued for Whisper's nap, so there's nothing to skip\" without " \
            "running Whisper Skip Nap",
   },
+  {
+    case:  "prod 10323",
+    say:   "Skip Whisper nap",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /skip nap/i } },
+    avoid: %i[cancel_reminder],
+    needs: :skip_nap_fn,
+    note:  "went looking for a reminder to cancel and said \"I couldn't find a Whisper nap reminder\" - " \
+           "her naps are worked out from her day, not set as reminders",
+  },
+  # A second skip straight after the first, naming the nap the first answer
+  # said was next.
+  {
+    case:  "prod 10321",
+    say:   "Please skip her 1 am nap.",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /skip nap/i } },
+    needs: :skip_nap_fn,
+    note:  "answered \"Skipped that one too\" with no call - nothing was skipped",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Please skip Whispers last nap!")
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy" },
+        body:      "Skipped Whisper's 10:00 PM nap - the next one is 1:00 AM!",
+      )
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        body:      "Called **Whisper Skip Nap**",
+        metadata:  {
+          "kind"      => "buddy_activity",
+          "ok"        => true,
+          "detail"    => "Skipped Whisper's 10:00 PM nap - the next one is 1:00 AM",
+          "tool_name" => "call_jil_function",
+          "payload"   => { "task_name" => "Whisper Skip Nap" },
+        },
+      )
+    },
+  },
   # The same sentence again, over the thread where it was refused three times.
   {
     case:  "prod 8737",

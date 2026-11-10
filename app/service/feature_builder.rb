@@ -179,12 +179,20 @@ module FeatureBuilder
     return :ignored if build.status_finished?
 
     merged = payload.dig("pull_request", "merged") == true
-    return :mini_unreachable unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
+    unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
+      FeatureBuildFinishWorker.perform_in(FeatureBuildFinishWorker::RETRY_IN, build.id, merged)
+      return :mini_unreachable
+    end
 
+    finished!(build, merged: merged)
+    :finished
+  end
+
+  # The Mini has closed the session and removed the worktree and the branch.
+  def finished!(build, merged:)
     build.update!(status: :finished, finished_at: Time.current)
     build.feature_request&.update!(status: :shipped) if merged
     refresh_needs_you!(build.user)
-    :finished
   end
 
   def review!(payload)

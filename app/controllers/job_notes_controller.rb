@@ -4,7 +4,7 @@
 class JobNotesController < ApplicationController
   before_action :authorize_user
   before_action :load_job
-  before_action :load_note, only: [:update, :destroy]
+  before_action :load_note, only: [:update, :destroy, :clean]
 
   def create
     # The row is the one in the URL. Moving a beat is `update`'s business, and
@@ -37,6 +37,15 @@ class JobNotesController < ApplicationController
     end
 
     redirect_to interview_path(@note.job_application)
+  end
+
+  # Another go at the readable version. OVERWRITES one he has edited, which is
+  # what the button says it does - the alternative is a press that silently
+  # does nothing on the beats most likely to have been corrected.
+  def clean
+    NoteCleanWorker.perform_async(@note.id, true)
+
+    redirect_to interview_path(@job), notice: "Writing those notes up again."
   end
 
   def destroy
@@ -82,6 +91,7 @@ class JobNotesController < ApplicationController
     permitted = params.require(:job_note).permit(
       :job_application_id,
       :body,
+      :clean_body,
       :summary,
       :tag,
       :occurred_at,
