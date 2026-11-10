@@ -88,6 +88,19 @@ RSpec.describe Buddy::GPT::History do
       expect(build(upto: later).first[:content]).to include("doggy door")
     end
 
+    # The answer to a check-in only means something next to what it was about,
+    # so that much survives, where a job-mail seed keeps nothing.
+    it "keeps what a check-in was about once it is history" do
+      seed = fired("Something you noted 5 days ago to come back to... #{"x" * 1200}", source: "check_in")
+      seed.update!(metadata: seed.metadata.merge("memory_id" => 1, "about" => "Halloway take-home due Monday"))
+      said("Any word back from Halloway on the take-home?", direction: :inbound, kind: "buddy")
+      later = said("I sent it in this morning")
+
+      standin = build(upto: later).first[:content]
+      expect(standin).to include("checked in", "Halloway take-home due Monday")
+      expect(standin).not_to include("Something you noted")
+    end
+
     it "counts what is actually sent, not what is stored" do
       seed = fired(mail)
 

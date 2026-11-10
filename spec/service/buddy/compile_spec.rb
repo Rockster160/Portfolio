@@ -179,6 +179,36 @@ RSpec.describe Buddy::Compile do
   end
 
   # The source stamp has to be where the content actually came from, or absent.
+  # The follow-up being answered is the one row a fired check-in takes off the
+  # schedule, and the seed naming it is hidden. Both have to reach the pass or
+  # it can't tell which follow-up "sent it this morning" closes.
+  describe "an answer to a check-in" do
+    it "names the follow-up that was asked about, in the list and in the conversation", :aggregate_failures do
+      memory = BuddyMemory.create!(
+        user:          user,
+        kind:          :followup,
+        content:       "Halloway take-home due Monday",
+        severity:      40,
+        check_in_at:   nil,
+        checked_in_at: 1.hour.ago,
+      )
+      seed = { "kind" => "buddy_trigger", "hidden" => true, "source" => "check_in", "memory_id" => memory.id }
+      say("Something you noted... #{"x" * 1200}", meta: seed)
+      say("Any word back from Halloway on the take-home?", direction: :inbound, meta: { "kind" => "buddy" })
+      say("I sent it in this morning")
+
+      client = stub_quiet
+      described_class.run!(convo)
+      brief = client.calls.first.input.first[:content]
+      scheduled = brief[/FOLLOW-UPS ALREADY SCHEDULED.*?\n\n/m]
+      talk = brief[/THE CONVERSATION:.*/m]
+
+      expect(scheduled).to include("##{memory.id} [asked", "Halloway take-home")
+      expect(talk).to include("checks in on follow-up ##{memory.id}")
+      expect(talk).not_to include("Something you noted")
+    end
+  end
+
   describe "where a memory says it came from" do
     it "points at the message the content is actually in" do
       origin = say("The fence gate is sticking again and the latch is bent.")

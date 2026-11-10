@@ -1167,6 +1167,40 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .priority-flag.critical { color: var(--chores-priority-critical); }
   .priority-flag.high     { color: var(--chores-priority-high); }
 
+  // Link button — the first web address in the chore's notes. Grid cards
+  // have the bottom-RIGHT corner free; on a circle all four inner corners
+  // are taken, so it hangs off the bottom-right edge the way the hot and
+  // streak pills hang off the top. Above the edit-mode film (6) so it stays
+  // tappable there too; the input handlers let a tap on it through as a
+  // plain link rather than a completion.
+  .chore-card .chore-link,
+  .chore-circle .chore-link {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1E2E4F;
+    color: var(--chores-text);
+    font-size: 11px;
+    text-decoration: none;
+    box-shadow: 0 1px 3px #0008;
+    z-index: 7;
+  }
+  .chore-card .chore-link {
+    right: 5px;
+    bottom: 5px;
+  }
+  .chore-circle .chore-link {
+    right: -6px;
+    bottom: -6px;
+  }
+  .chore-card .chore-link:hover,
+  .chore-circle .chore-link:hover {
+    background: var(--chores-accent);
+  }
+
   // ============================================================
   // Today: section headings + pin-toggle
   // ============================================================

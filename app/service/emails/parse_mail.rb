@@ -33,8 +33,11 @@ class Emails::ParseMail
     )
   }
   💾(:failed_delivery?) { flat_parts.any? { |part| part.mime_type == "message/delivery-status" } }
+  # `b` is a binary COPY. Forcing the encoding on `text_part` itself would turn
+  # the memoized body binary for every later reader, and joining it with a UTF-8
+  # string that holds anything non-ASCII then raises.
   💾(:condensed_text) {
-    text_part.force_encoding("ASCII-8BIT").encode(
+    text_part.b.encode(
       "UTF-8",
       invalid: :replace,
       undef:   :replace,

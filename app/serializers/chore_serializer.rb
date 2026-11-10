@@ -79,6 +79,7 @@ class ChoreSerializer
       tags:                 chore.tags,
       notes_template:       chore.notes_template.to_s,
       notes:                chore.notes.to_s,
+      link_url:             chore.link_url,
       reward_pebbles:       chore.reward_pebbles,
       reward_label:         chore.reward_label,
       # Urgency. Drives the Today/Scheduled sort, the card's bottom-left

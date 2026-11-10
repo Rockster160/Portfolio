@@ -428,4 +428,22 @@ RSpec.describe Chore, type: :model do
       expect(membership.role.to_sym).to eq(:manager)
     end
   end
+
+  describe "#link_url" do
+    let(:user) { create(:user) }
+
+    def link_for(notes)
+      build(:chore, created_by_user: user, notes: notes).link_url
+    end
+
+    it "is the first web address in the notes, without the sentence around it" do
+      expect(link_for("From Cordelia · https://ardesian.com/emails/42.")).to eq("https://ardesian.com/emails/42")
+      expect(link_for("(see https://example.com/a?b=1) then https://other.com")).to eq("https://example.com/a?b=1")
+    end
+
+    it "is nil when the notes carry no address" do
+      expect(link_for("call the plumber")).to be_nil
+      expect(link_for(nil)).to be_nil
+    end
+  end
 end

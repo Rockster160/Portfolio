@@ -235,6 +235,36 @@ RSpec.describe TravelResolver do
     end
   end
 
+  # A phone out of signal replays its queued edges on reconnecting, each
+  # carrying the time it really happened.
+  describe "a report that arrives late" do
+    let(:away) { [43.6, -116.4] }
+
+    it "drops one that something newer has already overtaken" do
+      fresh = record(action: :arrived, source: :tesla, lat: away.first, lng: away.last)
+
+      late = record(action: :departed, source: :phone, timestamp: 20.minutes.ago)
+
+      expect(late).to be_nil
+      expect(ActionEvent.where(user: user).pluck(:id)).to eq([fresh[:event_id]])
+    end
+
+    it "files one nothing has overtaken at the time it happened, without announcing it" do
+      happened = 30.minutes.ago.change(usec: 0)
+
+      result = record(action: :arrived, source: :phone, timestamp: happened.iso8601)
+
+      expect(result[:announce]).to be(false)
+      expect(ActionEvent.find(result[:event_id]).timestamp).to eq(happened)
+    end
+
+    it "treats a report stamped now as news" do
+      result = record(action: :arrived, source: :phone, timestamp: Time.current)
+
+      expect(result[:announce]).to be(true)
+    end
+  end
+
   # 2026-09-10: the radio connected and dropped five times in three minutes
   # from the same spot in the garage while Rocco was inside the house, and the
   # first of those recorded a departure that stood unmatched all day.

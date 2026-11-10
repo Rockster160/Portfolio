@@ -268,7 +268,11 @@ module Buddy
         conversation: conversation,
         seed:         seed(memory, now),
         metadata:     {
-          kind: "buddy_trigger", hidden: true, source: "check_in", memory_id: memory.id
+          kind:      "buddy_trigger",
+          hidden:    true,
+          source:    "check_in",
+          memory_id: memory.id,
+          about:     memory.summary.presence || memory.content.to_s.squish.truncate(200),
         },
       )
       :fired

@@ -44,6 +44,12 @@ class TravelResolver
 
   ANNOUNCING_SOURCES = %i[phone].freeze
 
+  # How late a report can arrive and still be news. A phone out of signal
+  # queues its edges and replays them, each with the time it really happened,
+  # when it reconnects - sometimes hours on, after the car has already said
+  # where everyone is now.
+  LATE_AFTER = 2.minutes
+
   # How far apart two of the PERSON's reports can be and still be one leg. The
   # car's copy at the home boundary and the geofence inside it land within
   # about 0.0011 of each other. A report further off than this, inside the merge
@@ -88,6 +94,14 @@ class TravelResolver
       via = normalize_via(data)
       return nil if deaf_to?(via, coord)
 
+      # A late report is history, not news. One older than the last leg
+      # anybody recorded has been overtaken - recording it would put them back
+      # somewhere they already left. One that hasn't is filed at the time it
+      # happened, and nothing announces it.
+      at = reported_at(data)
+      late = at < LATE_AFTER.ago
+      return nil if late && overtaken?(user, at)
+
       name = place_name(coord) || data[:location].presence
       name = left_from(user, coord, name) if action == :departed
 
@@ -97,8 +111,8 @@ class TravelResolver
       # opens the row and the phone arrives second. Announcing on creation
       # would hand the leg to the one source that must never announce, and
       # silence the one that must.
-      spoken_for = announced_already?(user, action, source, coord)
-      event = merge_or_create(user, action, source, coord, name)
+      spoken_for = announced_already?(user, action, source, coord, at: at)
+      event = merge_or_create(user, action, source, coord, name, at: at)
 
       {
         event_id: event.id,
@@ -108,12 +122,30 @@ class TravelResolver
         lat:      coord&.first,
         lng:      coord&.last,
         created:  event.previously_new_record?,
-        announce: ANNOUNCING_SOURCES.include?(source) && !spoken_for,
+        announce: ANNOUNCING_SOURCES.include?(source) && !spoken_for && !late,
       }
     end
 
-    def announced_already?(user, action, source=nil, coord=nil)
-      event = recent_event(user, action, source, coord)
+    # The time the reporter says it happened, which only a replayed line ever
+    # sets to anything but now. Unreadable or in the future reads as now.
+    def reported_at(data)
+      at = (
+        case data[:timestamp]
+        when ::Time, ::ActiveSupport::TimeWithZone, ::DateTime then data[:timestamp].to_time
+        when ::String then ::Time.zone.parse(data[:timestamp])
+        end
+      )
+      at.nil? || at.future? ? ::Time.current : at
+    rescue ::ArgumentError
+      ::Time.current
+    end
+
+    def overtaken?(user, at)
+      user.action_events.where(name: %w[arrived departed]).exists?(["timestamp > ?", at])
+    end
+
+    def announced_already?(user, action, source=nil, coord=nil, at: ::Time.current)
+      event = recent_event(user, action, source, coord, at: at)
       return false if event.blank?
 
       event.data.keys.any? { |key| ANNOUNCING_SOURCES.include?(key.to_sym) }
@@ -203,9 +235,9 @@ class TravelResolver
     # The reporters that saw the same leg write into one row rather than one
     # each. `notes` stays the phone's — it is the name a person reads on the
     # event, and the car's reverse-geocode is the coarser of the two.
-    def merge_or_create(user, action, source, coord, name)
+    def merge_or_create(user, action, source, coord, name, at: ::Time.current)
       details = { lat: coord&.first, lng: coord&.last, name: name }.compact
-      existing = recent_event(user, action, source, coord)
+      existing = recent_event(user, action, source, coord, at: at)
 
       if existing
         existing.update!(
@@ -215,14 +247,14 @@ class TravelResolver
         existing
       else
         user.action_events.create!(
-          name: action, notes: name, data: { source.to_s => details },
+          name: action, notes: name, data: { source.to_s => details }, timestamp: at,
         )
       end
     end
 
-    def recent_event(user, action, source=nil, coord=nil)
+    def recent_event(user, action, source=nil, coord=nil, at: ::Time.current)
       scope = user.action_events.where(name: action)
-      scope = scope.where(timestamp: MERGE_WINDOW.ago..)
+      scope = scope.where(timestamp: (at - MERGE_WINDOW)..)
       event = scope.order(timestamp: :desc).first
       return nil if event.nil? || elsewhere?(event, source, coord)
       return nil if reversed_since?(user, action, event)

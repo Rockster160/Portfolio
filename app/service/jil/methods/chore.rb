@@ -6,6 +6,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     :name,
     :short_name,
     :icon,
+    :notes,
     :sharing_mode,
     :one_off,
     :starts_on,
@@ -14,6 +15,9 @@ class Jil::Methods::Chore < Jil::Methods::Base
     :assigned_to,
     :show_on_today_view,
   ].freeze
+
+  # Read straight off the record: `chore.name()::String`.
+  GETTER_ATTRS = [:id, :name].freeze
 
   def cast(value)
     case value
@@ -35,6 +39,9 @@ class Jil::Methods::Chore < Jil::Methods::Base
     end
     if token_class(line.objname) == :ChoreCompletionData && PERMIT_COMPLETION_ATTRS.include?(method_sym)
       return send(method_sym, *evalargs(line.args))
+    end
+    if token_class(line.objname) == :Chore && GETTER_ATTRS.include?(method_sym)
+      return token_val(line.objname)&.public_send(method_sym)
     end
 
     fallback(line)
@@ -148,6 +155,10 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
   def icon(text)
     { icon: text }
+  end
+
+  def notes(text)
+    { notes: text }
   end
 
   def assigned_to(value)

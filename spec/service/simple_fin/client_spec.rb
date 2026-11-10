@@ -116,6 +116,27 @@ RSpec.describe SimpleFin::Client do
       expect { described_class.accounts }.to raise_error(SimpleFin::Client::Error, /500/)
     end
 
+    it "follows a temporary redirect back to the Bridge, credentials and all" do
+      stub_request(:get, endpoint).with(query: hash_including({})).to_return(
+        status: 307, headers: { "Location" => "/simplefin/accounts?version=2&retry=1" },
+      )
+      retried = stub_request(:get, "#{endpoint}?version=2&retry=1").with(
+        basic_auth: ["user1", "pass1"],
+      ).to_return(status: 200, body: payload)
+
+      expect(described_class.accounts["accounts"].size).to eq(1)
+      expect(retried).to have_been_requested
+    end
+
+    it "keeps the credentials off a redirect to another host" do
+      stub_request(:get, endpoint).with(query: hash_including({})).to_return(
+        status: 307, headers: { "Location" => "https://elsewhere.example/accounts" },
+      )
+
+      expect { described_class.accounts }.to raise_error(SimpleFin::Client::Error, /elsewhere/)
+      expect(a_request(:get, /elsewhere/)).not_to have_been_made
+    end
+
     it "raises when the access URL is not configured" do
       allow(ENV).to receive(:[]).with("PORTFOLIO_SIMPLEFIN_ACCESS_URL").and_return(nil)
 

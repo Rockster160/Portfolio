@@ -407,6 +407,7 @@ Rails.application.routes.draw do
   post  "webhooks/byte/say"              => "webhooks#byte_say"
   post  "webhooks/byte/photo"            => "webhooks#byte_photo"
   post  "webhooks/byte/job_mail"         => "webhooks#byte_job_mail"
+  post  "webhooks/byte/mail"             => "webhooks#byte_mail"
   patch "webhooks/byte/:id"              => "webhooks#byte_update"
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"

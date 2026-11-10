@@ -335,10 +335,13 @@
   #withdraw(Numeric:Amount String?:Note)::ChoreWithdrawal
   #transfer(Numeric:Amount String:"Recipient Username" String?:Note)::ChoreTransfer
   #history(String?:Query Numeric?:Limit String?:Order)::Array
+  .id::Numeric
+  .name::String
 *[ChoreData]
   #name(String)
   #short_name(String)
   #icon(String)
+  #notes(String)
   #assigned_to(String:"Username")
   #sharing_mode(["personal" "household"])
   #one_off(Boolean)

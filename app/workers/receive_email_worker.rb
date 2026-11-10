@@ -6,9 +6,9 @@ class ReceiveEmailWorker
     @object_key = object_key
 
     ::ActiveRecord::Base.transaction do
-      @email = user.emails.find_by(mail_id: mail.message_id, timestamp: mail.date)
+      @email = user.emails.find_by(mail_id: mail_id, timestamp: mail.date)
       @email ||= user.emails.create!(
-        mail_id:            mail.message_id.presence || "no-message-id-#{::SecureRandom.hex(4)}",
+        mail_id:            mail_id,
         timestamp:          mail.date,
         direction:          :inbound,
         inbound_mailboxes:  internal_mailboxes,
@@ -82,6 +82,12 @@ class ReceiveEmailWorker
     ::UspsEmailParser.parse(@email)
   end
 
+  # A mail with no Message-ID is named after the stored object it came from, so
+  # a retry of the same delivery finds the row the first attempt wrote instead
+  # of saving another copy.
+  💾(:mail_id) {
+    mail.message_id.presence || "no-message-id-#{::Digest::SHA256.hexdigest(@object_key).first(8)}"
+  }
   💾(:content) { ::FileStorage.download(@object_key, bucket: @bucket) }
   💾(:mail) { ::Mail.new(content) }
   💾(:parser) { ::Emails::ParseMail.call(mail) }

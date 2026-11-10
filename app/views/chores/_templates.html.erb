@@ -86,6 +86,15 @@
   <i class="fa priority-flag" data-priority-flag></i>
 </template>
 
+<%# Link button — present only when the chore's notes carry a web address.
+   The builder sets the href and the Font Awesome glyph that says where it
+   goes; it always opens in a new tab so the chores page stays put. %>
+<template data-template="chore-link">
+  <a class="chore-link" data-chore-link target="_blank" rel="noopener noreferrer">
+    <i class="fa" aria-hidden="true"></i>
+  </a>
+</template>
+
 <template data-template="corner-badge">
   <div></div>
 </template>

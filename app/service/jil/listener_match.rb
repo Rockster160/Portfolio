@@ -44,6 +44,7 @@ class Jil
       item
       jarvis_subscribed
       list
+      mail
       monitor
       prompt
       relay

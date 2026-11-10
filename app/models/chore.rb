@@ -388,6 +388,13 @@ class Chore < ApplicationRecord
     "#{reward_pebbles}p"
   end
 
+  # The first web address in the notes, which the card offers as a button so the
+  # notes themselves never have to be opened to follow it. Trailing punctuation
+  # is the sentence the URL sat in, not part of the address.
+  def link_url
+    notes.to_s[%r{https?://[^\s<>"]+}]&.sub(/[.,;:!?)\]]+\z/, "")
+  end
+
   def recurrence_data
     (recurrence || {}).with_indifferent_access
   end

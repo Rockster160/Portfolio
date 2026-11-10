@@ -449,6 +449,20 @@ RSpec.describe AmazonEmailParser do
       expect(calls).to be_empty
     end
 
+    {
+      "Ordered 4 items: Pet Supplies, Office Supplies" => "Pet Supplies, Office Supplies",
+      "Shipped 1 item: Vitamins"                       => "Vitamins",
+      "Out for delivery 2 items: Lab Supplies"         => "Lab Supplies",
+    }.each { |subject, expected|
+      it "drops the item-count label from #{subject.inspect}" do
+        parse(51_382, subject)
+
+        placeholder = AmazonOrder.find("114-7377615-7161007", "114-7377615-7161007")
+        expect(placeholder.name).not_to match(/items?:/i)
+        expect(placeholder.name).to eq(expected)
+      end
+    }
+
     it "does not create a phantom placeholder when a duplicate redacted delivery notice arrives" do
       # Amazon sometimes sends the same "Delivered: 1 Office item" twice (51049 and 51050).
       # If the first pass already delivered every sibling, the second pass should just

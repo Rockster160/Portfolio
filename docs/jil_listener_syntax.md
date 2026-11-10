@@ -189,6 +189,7 @@ These fire per user, carrying that user's own data.
 | `agenda_schedule` | a recurring schedule changes | `action` |
 | `prompt` | an app prompt is created or answered | `status`, `params:source` |
 | `email` | an email arrives | `from`, `subject`, `body` |
+| `mail` | something is done to a mail in Mail.app on the Mac — so far only flagging it (`mail:action::flagged`) | `action`, `id`, `subject`, `from`, `url` (the mail's Ardesian page) |
 | `sms` | a text arrives | `from`, `body` |
 | `task` | a Jil task runs | `name` |
 | `agenda_sync` | a Google calendar sync completes | `action`, counts |

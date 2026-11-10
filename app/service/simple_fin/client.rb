@@ -25,6 +25,7 @@ module SimpleFin
     # v2 is what `errlist` and `connections` belong to; without it the Bridge
     # answers in the pre-2.0 shape that reports errors as bare strings.
     API_VERSION = 2
+    MAX_REDIRECTS = 3
 
     Error = Class.new(StandardError)
     NotConfigured = Class.new(Error)
@@ -57,12 +58,34 @@ module SimpleFin
         uri.path = "#{uri.path.chomp("/")}/#{resource}"
         uri.query = ::URI.encode_www_form(pairs)
 
-        response = perform(uri)
+        response = follow(uri)
         unless response.is_a?(::Net::HTTPSuccess)
           raise Error, "SimpleFIN #{resource} returned #{response.code}"
         end
 
         ::JSON.parse(response.body)
+      end
+
+      # The Bridge answers some requests with a temporary redirect back to
+      # itself while it is busy. Net::HTTP never follows one, so it read as a
+      # failed sync. Only a redirect to the same host is followed: the
+      # credentials ride along, and they are not handed to anywhere else.
+      def follow(uri)
+        response = perform(uri)
+        MAX_REDIRECTS.times do
+          break unless response.is_a?(::Net::HTTPRedirection)
+
+          target = uri.merge(response["location"].to_s)
+          unless target.host == uri.host
+            raise Error, "SimpleFIN redirected #{response.code} to #{target.host}"
+          end
+
+          target.user = uri.user
+          target.password = uri.password
+          uri = target
+          response = perform(uri)
+        end
+        response
       end
 
       def perform(uri)

@@ -635,6 +635,47 @@
     el.title = spec.title;
     return el;
   }
+  // What a chore's link points at, as a Font Awesome glyph and a word for
+  // the tooltip. First match wins; anything unrecognized is a plain
+  // new-tab link.
+  const LINK_KINDS = [
+    { cls: "fa-envelope",     title: "Open email",    test: u => u.pathname.startsWith("/emails/") && (u.host === location.host || u.hostname.endsWith("ardesian.com")) },
+    { cls: "fa-calendar",     title: "Open calendar", test: u => u.hostname === "calendar.google.com" },
+    { cls: "fa-map-marker",   title: "Open map",      test: u => u.hostname === "maps.apple.com" || u.hostname === "maps.app.goo.gl" || (u.hostname.endsWith("google.com") && u.pathname.startsWith("/maps")) },
+    { cls: "fa-github",       title: "Open GitHub",   test: u => u.hostname === "github.com" },
+    { cls: "fa-youtube-play", title: "Open video",    test: u => u.hostname.endsWith("youtube.com") || u.hostname === "youtu.be" },
+    { cls: "fa-amazon",       title: "Open Amazon",   test: u => u.hostname.endsWith("amazon.com") },
+  ];
+  const LINK_FALLBACK = { cls: "fa-external-link", title: "Open link" };
+  const LINK_CLASSES = [...LINK_KINDS, LINK_FALLBACK].map(k => k.cls);
+
+  function linkKindFor(url) {
+    let parsed;
+    try { parsed = new URL(url); } catch (_e) { return LINK_FALLBACK; }
+    return LINK_KINDS.find(k => k.test(parsed)) || LINK_FALLBACK;
+  }
+  // Add, update or remove the link button on `host` — same shape as
+  // patchPriorityFlag, so the element keeps its identity across repaints.
+  function patchChoreLink(host, c) {
+    if (!host) return;
+    let link = host.querySelector(":scope > [data-chore-link]");
+    if (!c.link_url) {
+      if (link) link.remove();
+      return;
+    }
+    if (!link) {
+      link = cloneTemplate("chore-link");
+      if (!link) return;
+      host.appendChild(link);
+    }
+    const kind = linkKindFor(c.link_url);
+    if (link.getAttribute("href") !== c.link_url) link.setAttribute("href", c.link_url);
+    link.title = kind.title;
+    link.setAttribute("aria-label", kind.title);
+    const glyph = link.querySelector("i");
+    glyph.classList.remove(...LINK_CLASSES);
+    glyph.classList.add(kind.cls);
+  }
   // DOM builder for the state icon (Sun / Clock / Hourglass). Returns
   // a detached <i> ready to append, or null when the chore has no
   // state to communicate. The class is added separately so we never
@@ -1058,6 +1099,7 @@
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchStateIcon(el.querySelector(".circle-inner"), c);
     patchPriorityFlag(el.querySelector(".circle-inner"), c);
+    patchChoreLink(el.querySelector(".circle-inner"), c);
     patchText(el.querySelector(":scope > .title"), c.short_name);
     applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
@@ -1113,6 +1155,7 @@
     patchText(el.querySelector(".card-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchPriorityFlag(el, c);
+    patchChoreLink(el, c);
     patchText(el.querySelector(":scope > .title"), c.name);
     applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
@@ -1559,6 +1602,7 @@
     }
     container.addEventListener("pointerdown", e => {
       if (s.pointerId !== null) return;
+      if (e.target.closest("[data-chore-link]")) return;
       const card = e.target.closest("[data-chore-id]");
       if (!card) return;
       const inEditMode = editModeActive;
@@ -1601,6 +1645,7 @@
     ["pointercancel", "pointerleave"].forEach(evt =>
       container.addEventListener(evt, e => { if (s.pointerId === e.pointerId) reset(); }));
     container.addEventListener("click", e => {
+      if (e.target.closest("[data-chore-link]")) return;
       const card = e.target.closest("[data-chore-id]");
       if (!card) return;
       // A long-press already opened a modal (history in edit mode, undo
@@ -1615,6 +1660,7 @@
       if (selectModeActive) { e.preventDefault(); e.stopPropagation(); return; }
     }, true);
     container.addEventListener("contextmenu", e => {
+      if (e.target.closest("[data-chore-link]")) return;
       const card = e.target.closest("[data-chore-id]");
       if (!card) return;
       e.preventDefault();

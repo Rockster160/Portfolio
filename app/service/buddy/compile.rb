@@ -513,11 +513,19 @@ module Buddy
 
     def skip?(message)
       meta = message.metadata.is_a?(Hash) ? message.metadata : {}
+      return false if check_in_seed?(meta)
       return true if meta["hidden"]
       return true if SKIP_SOURCES.include?(meta["source"].to_s)
       return true if SKIP_KINDS.include?(meta["kind"].to_s)
 
       message.body.to_s.strip.empty?
+    end
+
+    # A check-in seed is hidden and a trigger, so it would be skipped twice
+    # over - and it is the only thing tying the question that went out to the
+    # follow-up it was about. Kept, as one line naming that follow-up by id.
+    def check_in_seed?(meta)
+      meta["source"].to_s == "check_in" && meta["memory_id"].present?
     end
 
     def brief(conversation, user, messages, now)
@@ -586,15 +594,28 @@ module Buddy
     # was shown `- #61 out of a job before the end of the year` and nothing
     # else. It could not have known the row was armed for December, so pulling
     # it in was never a move it was in a position to make.
+    #
+    # A check-in that has just gone out is listed too. Firing one clears its
+    # `check_in_at`, so the row the person is answering would otherwise be the
+    # one row missing from this list.
+    ASKED_WINDOW = 3.days
+
     def pending(user, now: Time.current)
       # Every armed row, whichever kind: a fact held inline can be armed too,
       # and one this pass can't see is one it can never move, answer or close.
       rows = BuddyMemory.where(user: user).check_in_armed.where.not(check_in_at: nil)
       rows = rows.order(:check_in_at).limit(20).to_a
-      return "(none)" if rows.empty?
+      asked = BuddyMemory.where(user: user).live.where(check_in_at: nil)
+      asked = asked.where(checked_in_at: (now - ASKED_WINDOW)..now).order(:checked_in_at).limit(10).to_a
+      return "(none)" if rows.empty? && asked.empty?
 
       zone = Buddy::Day.zone(user)
-      rows.map { |m| "- ##{m.id} #{pending_when(m, zone, now)} #{pending_label(m)}" }.join("\n")
+      lines = rows.map { |m| "- ##{m.id} #{pending_when(m, zone, now)} #{pending_label(m)}" }
+      lines += asked.map { |m|
+        "- ##{m.id} [asked #{m.checked_in_at.in_time_zone(zone).strftime("%a %-d %b")}, " \
+          "nothing armed] #{pending_label(m)}"
+      }
+      lines.join("\n")
     end
 
     # "in 96 days (Thu 11 Dec)" — both halves, because the distance is what
@@ -646,8 +667,12 @@ module Buddy
           marked = true
           line << "--- you have read everything above this line before ---\n"
         end
+        stamp = "[#{message.created_at.in_time_zone(zone).strftime("%a %-d %b, %-l:%M%P")}]"
+        meta  = message.metadata.is_a?(Hash) ? message.metadata : {}
+        next line << "#{stamp} (#{name} checks in on follow-up ##{meta["memory_id"]})" if check_in_seed?(meta)
+
         who = message.direction == "outbound" ? "Them" : name
-        line << "[#{message.created_at.in_time_zone(zone).strftime("%a %-d %b, %-l:%M%P")}] #{who}: #{message.body.to_s.strip}"
+        line << "#{stamp} #{who}: #{message.body.to_s.strip}"
       }.join("\n")
     end
 

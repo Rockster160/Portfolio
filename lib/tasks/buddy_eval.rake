@@ -722,6 +722,39 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  # --- an answer to a check-in moves the thing it was about -------------------
+  # Prod 10316, 7 Nov. A check-in asked whether the take-home had heard back.
+  # A reply saying where it stands is news about the application, and
+  # acknowledging it warmly leaves the board still saying the take-home is owed.
+  {
+    case:  "prod 10316",
+    say:   "I sent it in this morning",
+    tool:  :add_job_note,
+    args:  { add_job_note: { company: /halloway/i } },
+    avoid: %i[remember],
+    needs: :halloway_application,
+    note:  "the answer to a check-in about a take-home - it was submitted, so the application moves",
+    seed:  ->(user, convo) {
+      memory = BuddyMemory.create!(
+        user: user, kind: :followup, severity: 40, check_in_at: nil, checked_in_at: 1.minute.ago,
+        content: "Halloway Systems sent a take-home assessment, due Monday morning",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::CheckIns.seed(memory, Time.current),
+        metadata: {
+          "kind"      => "buddy_trigger",
+          "hidden"    => true,
+          "source"    => "check_in",
+          "memory_id" => memory.id,
+          "about"     => memory.content,
+        },
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "How's the Halloway take-home coming along? It's due Monday morning.",
+      )
+    },
+  },
   # --- a machine's receipt is not a beat anybody is waiting on --------------
   # Prod 6162, 14 Sep. GitLab's "thanks for applying, a real human will review
   # this" was logged as Applied on an application that had already been applied

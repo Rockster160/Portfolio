@@ -25,11 +25,13 @@ return if Rails.const_defined?("Rails::Command::RunnerCommand")
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
-every_4_hours = "0 */4 * * *"
+# :13 for the same reason as the :37 below. On the hour, the Bridge's own
+# refresh answers with 503s and redirects.
+every_4_hours_staggered = "13 */4 * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
 daily_3am = "0 3 * * * MST"
 # :37 rather than :00 — the Bridge asks that requests be staggered off the
-# hour, and the 4-hourly sync already owns that slot.
+# hour, and kept clear of the 4-hourly sync at :13.
 every_3_hours_staggered = "37 */3 * * *"
 daily_4am = "0 4 * * * MST"
 # Keep in step with ByteDailyAudit::BACKSTOP_HOUR — that's the constant the
@@ -133,7 +135,7 @@ cron_jobs = [
     # charge is expected to move the dashboard figure) and a manual run.
     name:  "Sync SimpleFIN Balances And Transactions",
     class: "SimpleFinSyncWorker",
-    cron:  every_4_hours,
+    cron:  every_4_hours_staggered,
   },
   {
     # Eight historical windows a day, walking backwards until the history runs

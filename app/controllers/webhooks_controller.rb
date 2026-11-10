@@ -709,6 +709,33 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :created
   end
 
+  # POST /webhooks/byte/mail — something done to a mail in Mail.app that only
+  # the Mac can see, such as a flag. The mail is kept the way job mail is, so
+  # there is an Email row to link to, and the `mail` Jil trigger fires with
+  # `action:` set to the event. Rails decides nothing further: what a flag
+  # turns into belongs to whichever task listens for `mail:action::flagged`.
+  def byte_mail
+    return head :unauthorized unless byte_authorized?
+
+    user = User.find_by(id: params[:user_id].presence || User.me.id)
+    return head :not_found if user.blank?
+    return head :bad_request if params[:event].blank?
+
+    email = Emails::StoreRaw.call(user: user, raw: decoded_mail(params[:raw_b64]))
+    return render json: { error: :"mail not stored" }, status: :unprocessable_entity if email.nil?
+
+    ::Jil.trigger(user, :mail, {
+      action:  params[:event].to_s.to_sym,
+      id:      email.id,
+      # A task naming something after the subject would otherwise name it "".
+      subject: email.subject.presence || "(no subject)",
+      from:    email.from_display,
+      url:     Rails.application.routes.url_helpers.email_url(id: email.id),
+    })
+
+    render json: { email_id: email.id }, status: :created
+  end
+
   # The raw message, base64 on the wire. A mail body is only ASCII by
   # convention — an 8-bit Latin-1 part is legal and turns up — and JSON.generate
   # raises outright on a string that isn't valid UTF-8, which would lose the

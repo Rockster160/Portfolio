@@ -32,6 +32,46 @@ RSpec.describe ReceiveEmailWorker, type: :worker do
     end
   end
 
+  # Non-ASCII in both the subject and the body, and no Message-ID: the shape
+  # that once raised after the row was written, so every retry saved a copy.
+  describe "a mail with no Message-ID and non-ASCII text" do
+    let(:bucket) { "ardesian-emails" }
+    let(:object_key) { "no-id-#{SecureRandom.hex(4)}" }
+    let(:content) {
+      <<~EML
+        From: Banka <info@example.ba>
+        To: rocco@ardesian.com
+        Subject: =?UTF-8?Q?Zahtjev_za_a=C5=BEuriranje_=E2=80=93_NBR?=
+        Date: Mon, 9 Nov 2026 07:03:00 -0700
+        MIME-Version: 1.0
+        Content-Type: text/plain; charset=UTF-8
+        Content-Transfer-Encoding: 8bit
+
+        Poštovani, molimo ažurirajte podatke – hvala.
+      EML
+    }
+
+    before do
+      allow(FileStorage).to receive(:download).with(object_key, bucket: bucket).and_return(content)
+      allow_any_instance_of(ActiveStorage::Attached::One).to receive(:attach).and_return(true)
+      allow_any_instance_of(ActiveStorage::Attached::One).to receive(:blank?).and_return(true)
+      allow(SlackNotifier).to receive(:notify)
+      allow(JobMailTriageWorker).to receive(:perform_async)
+    end
+
+    it "announces it without raising" do
+      expect { described_class.new.perform(bucket, object_key) }.not_to raise_error
+
+      expect(SlackNotifier).to have_received(:notify).with(include("ažurirajte"), any_args)
+    end
+
+    it "lands a retry on the row the first attempt wrote" do
+      expect {
+        2.times { described_class.new.perform(bucket, object_key, false) }
+      }.to change(Email, :count).by(1)
+    end
+  end
+
   describe "the Venmo trigger" do
     let(:bucket) { "ardesian-emails" }
     let(:object_key) { "venmo-chelsea-test-#{SecureRandom.hex(4)}" }

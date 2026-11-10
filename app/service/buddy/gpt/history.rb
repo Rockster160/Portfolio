@@ -356,9 +356,27 @@ module Buddy
       # words are the whole point of the exchange.
       def fired_seed_standin(metadata, body)
         return nil unless metadata["kind"].to_s == TRIGGER_KIND
+        return check_in_standin(metadata) if metadata["source"].to_s == CHECK_IN_SOURCE
         return nil if body.to_s.length < BULKY_SEED
 
         "[a notification fired on its own - the reply under this is what went out]"
+      end
+
+      # A check-in is the one fired seed whose subject the NEXT turn needs. The
+      # question that went out is "any word back on the take-home?", and the
+      # answer to it is "sent it this morning" - which only means something next
+      # to what was being kept track of. Reduced to the generic line, the reply
+      # reads as small talk and whatever it changed goes unrecorded.
+      CHECK_IN_SOURCE = "check_in".freeze
+
+      def check_in_standin(metadata)
+        about = metadata["about"].to_s.squish.presence
+        return "[you checked in on your own - the reply under this is what went out]" if about.nil?
+
+        "[you checked in on your own about something you were keeping track of: #{about} - " \
+          "the reply under this is what went out, and what they say next answers it. If " \
+          "their answer changes where it stands, record that change rather than only " \
+          "acknowledging it.]"
       end
 
       # What the person's turn is ANSWERING, when it isn't just the last thing

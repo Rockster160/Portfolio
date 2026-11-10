@@ -437,4 +437,40 @@ RSpec.describe Jil::Methods::Chore do
       expect(completion.completed_at.year).to eq(2026)
     end
   end
+
+  describe "ChoreData.notes" do
+    it "writes the notes on Chore.add and replaces them on Chore.update" do
+      code = <<~'JIL'
+        created = Chore.add({
+          c0 = ChoreData.name("Read the contract")::Hash
+          c1 = ChoreData.notes("https://ardesian.com/emails/42")::Hash
+        })::Chore
+        updated = Chore.update("Wordle", {
+          u0 = ChoreData.notes("new words")::Hash
+        })::Chore
+      JIL
+      Jil::Executor.call(user, code)
+
+      expect(user.accessible_chores.find_by(name: "Read the contract").notes).to eq("https://ardesian.com/emails/42")
+      expect(chore.reload.notes).to eq("new words")
+    end
+  end
+
+  describe "reading a found chore" do
+    it "gives its id and full name, and blank when nothing matched" do
+      code = <<~'JIL'
+        found = Chore.find("Word")::Chore
+        foundId = found.id()::Numeric
+        foundName = found.name()::String
+        missing = Chore.find("Nothing called this")::Chore
+        missingName = missing.name()::String
+      JIL
+      Jil::Validator.validate!(code)
+      vars = Jil::Executor.call(user, code).ctx[:vars]
+
+      expect(vars.dig(:foundId, :value)).to eq(chore.id)
+      expect(vars.dig(:foundName, :value)).to eq("Wordle")
+      expect(vars.dig(:missingName, :value)).to eq("")
+    end
+  end
 end

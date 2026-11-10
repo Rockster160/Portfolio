@@ -145,9 +145,14 @@ class AmazonEmailParser
   end
 
   # Turns "Ordered: ⁦1⁩ Pet item" (with unicode directional isolates) into
-  # "Pet item". Also handles "Shipped: 1 Pet item" and similar variants.
+  # "Pet item", and the newer "Ordered 4 items: Pet Supplies, Office Supplies"
+  # into "Pet Supplies, Office Supplies". The "items:" label only comes off when
+  # a colon follows it, so a trailing "Pet item" survives.
   def redacted_name_from_subject
-    normalized_subject[/^\s*(?:#{LIFECYCLE_PREFIX_REGEX})\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
+    normalized_subject[
+      /^\s*(?:#{LIFECYCLE_PREFIX_REGEX})\s*:?\s*\d*\s*(?:x\s*)?(?:items?\s*:\s*)?(.+?)\s*$/i,
+      1,
+    ]&.strip.presence
   end
 
   # True only for the shipment-lifecycle subject shapes we know how to handle
