@@ -182,6 +182,35 @@ $(document).ready(function() {
     el.style.opacity = 1
   }
 
+  // A segment is one category on one side of one bucket, so clicking it lists
+  // exactly the rows that drew it: the rest of the search as typed, plus that
+  // category, that direction and that bucket's dates. Quoted like the server
+  // writes it, because `category:eat out` parses as two terms.
+  function searchTerm(field, value) {
+    return field + ":" + (/\s/.test(value) ? JSON.stringify(value) : value)
+  }
+
+  function openSegment(chart, event) {
+    const hits = chart.getElementsAtEventForMode(event, "nearest", { intersect: true }, true)
+    if (!hits.length) { return }
+
+    const source = (payload.datasets || [])[hits[0].datasetIndex]
+    const range = (payload.ranges || [])[hits[0].index]
+    if (!source || !range) { return }
+
+    const query = [
+      payload.base_query || "",
+      searchTerm("category", source.category),
+      searchTerm("direction", source.stack),
+      "timestamp>=" + range[0],
+      "timestamp<=" + range[1],
+    ].join(" ").trim()
+
+    const params = new URLSearchParams({ q: query })
+    if (payload.bucket) { params.set("bucket", payload.bucket) }
+    window.location.search = params.toString()
+  }
+
   function build() {
     const datasets = (payload.datasets || []).map(function(ds) {
       return {
@@ -235,6 +264,13 @@ $(document).ready(function() {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        onClick: function(event, _elements, chart) { openSegment(chart, event) },
+        // The pointer only over something a click will open.
+        onHover: function(event, _elements, chart) {
+          const hits = chart.getElementsAtEventForMode(event, "nearest", { intersect: true }, true)
+          const onBar = hits.some(function(hit) { return hit.datasetIndex < (payload.datasets || []).length })
+          chart.canvas.style.cursor = onBar ? "pointer" : "default"
+        },
         scales: {
           y: {
             stacked: true,

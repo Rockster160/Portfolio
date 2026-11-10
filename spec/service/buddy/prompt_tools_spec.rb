@@ -216,6 +216,31 @@ RSpec.describe "Buddy prompt tools" do
       expect(form.build_response({ "Caffeine" => "0" })).to eq("Calories" => "850", "Caffeine" => "0")
     end
 
+    # A slider that waits on the last answer until it's touched: never
+    # required, never an answer of its own, and left out when nobody moved it.
+    it "leaves an untouched only-if-moved slider out of the response", :aggregate_failures do
+      prompt = make_prompt(
+        question: "Morning check-in",
+        options:  [
+          { type: :choices, style: :toggles, question: "Something happened", choices: ["🩸 Period"], selected: [] },
+          { type: :scale, question: "Feeling", min: 0, max: 10, default: 6, optional: true },
+          { type: :scale, question: "Sound", min: 0, max: 10, default: 4, optional: true },
+        ],
+      )
+      form = form_for(prompt)
+
+      feeling = form.form_fields.find { |field| field[:key] == "Feeling" }
+      expect(feeling).to include(required: false, placeholder: 6)
+      expect(feeling).not_to have_key(:value)
+      expect(form.form_fields.first).to include(style: :toggles)
+      expect(form.needs_value).to eq(["Something happened"])
+
+      response = form.build_response({ "Something happened" => [], "Feeling" => "6", "Sound" => "" })
+      expect(response).to eq("Something happened" => [], "Feeling" => "6")
+      expect(form.missing(response)).to be_empty
+      expect(form.summary_lines(response)).to eq(["Something happened: ", "Feeling: 6"])
+    end
+
     it "reports a prompt whose options are not a question list as unanswerable" do
       prompt = make_prompt(question: "Legacy", options: { "some" => "hash" })
 

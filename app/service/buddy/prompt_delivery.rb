@@ -55,6 +55,7 @@ module Buddy
       # was showing and only stops being answerable.
       values = status == "complete" ? response_of(payload) : nil
       open_forms(user, id).each { |action| Buddy::FormAction.settle!(action, receipt: receipt, values: values) }
+      Buddy::PromptQueue.advance!(user, Buddy::PromptQueue.name_of(payload))
     rescue StandardError => e
       Rails.logger.warn("[Buddy::PromptDelivery] settle failed: #{e.class}: #{e.message}")
       nil
@@ -108,6 +109,8 @@ module Buddy
     # that doesn't reach the thread is still sitting in the app.
     def post!(user, prompt)
       return nil unless deliverable?(user, prompt)
+      # Its turn comes when the one ahead of it is dealt with (PromptQueue).
+      return nil if Buddy::PromptQueue.waiting?(prompt)
 
       conversation = conversation_for(user)
       return nil if conversation.nil?

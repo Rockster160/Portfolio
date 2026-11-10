@@ -230,6 +230,7 @@ BUDDY_TOOL_PROBES = {
   delete_event:           { say: "I logged a Strawberry Celsius by accident earlier, get rid of it", needs: :celsius_today },
   edit_event:             { say: "that sandwich I logged was actually at 1", needs: :sandwich_today },
   search_events:          "how many celsius did I drink last month?",
+  show_chart:             { say: "graph my coffee by week for the last three months", avoid: %i[search_events] },
   add_list_item:          {
     say:          "add hazelnut creamer to the groceries",
     run:          true,

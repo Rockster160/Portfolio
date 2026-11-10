@@ -299,7 +299,8 @@ function normalized(field, value) {
         .sort()
         .join(",");
     case "scale":
-      return blank ? String(field.min ?? 0) : String(value);
+      if (blank) return field.placeholder != null ? "" : String(field.min ?? 0);
+      return String(value);
     case "select":
       return blank && field.required ? String(field.choices?.[0] ?? "") : blank ? "" : String(value);
     default:
@@ -385,8 +386,11 @@ function writeRow(row, field) {
     const cb = row.querySelector('input[type="checkbox"]');
     if (cb) cb.checked = String(value) === "true";
   } else if (type === "scale") {
+    const wrap = row.querySelector(".byte-msg-form-scale");
     const range = row.querySelector("input");
-    if (range) range.value = blank ? range.min : String(value);
+    const waiting = blank && field.placeholder != null;
+    if (range) range.value = waiting ? String(field.placeholder) : blank ? range.min : String(value);
+    if (wrap) wrap.dataset.untouched = waiting ? "true" : "false";
     const out = row.querySelector(".byte-msg-form-scale-value");
     if (out && range) out.textContent = range.value;
   } else if (type === "select") {
@@ -554,6 +558,8 @@ function buildRow(field, { draft, locked }) {
   const label = document.createElement("span");
   label.className = "byte-msg-form-label";
   fillLabel(label, field);
+  // A row of toggles is its own label: each button says what it reports.
+  label.classList.toggle("hidden", field.style === "toggles");
   row.appendChild(label);
 
   const control = buildControl(field, field.value, locked);
@@ -618,8 +624,11 @@ function buildControl(field, value, locked) {
   const type = field.type;
 
   if (type === "choices") {
+    const toggles = field.style === "toggles";
     const wrap = document.createElement("div");
-    wrap.className = "byte-msg-form-choices";
+    wrap.className = toggles ? "byte-msg-form-toggles" : "byte-msg-form-choices";
+    if (toggles) wrap.setAttribute("aria-label", field.label || field.key);
+    const colors = field.colors || {};
     const picked = new Set(
       (Array.isArray(value) ? value : String(value ?? "").split(","))
         .map((v) => String(v).trim())
@@ -627,7 +636,8 @@ function buildControl(field, value, locked) {
     );
     (field.choices || []).forEach((choice) => {
       const opt = document.createElement("label");
-      opt.className = "byte-msg-form-choice";
+      opt.className = toggles ? "byte-msg-form-toggle" : "byte-msg-form-choice";
+      if (toggles && colors[choice]) opt.style.setProperty("--chip-color", colors[choice]);
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.value = choice;
@@ -720,12 +730,27 @@ function buildControl(field, value, locked) {
     range.type = "range";
     range.min = field.min ?? 0;
     range.max = field.max ?? 100;
-    range.value = value == null || value === "" ? range.min : String(value);
+    const blank = value == null || value === "";
+    // A slider with a placeholder waits there greyed out and answers nothing
+    // until it's touched. A tap that leaves it where it was still counts: that
+    // is someone saying "same as last time".
+    const waiting = blank && field.placeholder != null;
+    range.value = waiting ? String(field.placeholder) : blank ? range.min : String(value);
     range.disabled = locked;
+    wrap.dataset.untouched = waiting ? "true" : "false";
     const out = document.createElement("span");
     out.className = "byte-msg-form-scale-value";
     out.textContent = range.value;
+    const touch = () => {
+      if (wrap.dataset.untouched !== "true") return;
+      wrap.dataset.untouched = "false";
+      // No `input` fires for a tap that doesn't move it, so the draft is told.
+      wrap.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    range.addEventListener("pointerdown", touch);
+    range.addEventListener("keydown", touch);
     range.addEventListener("input", () => {
+      touch();
       out.textContent = range.value;
     });
     wrap.appendChild(range);
@@ -769,6 +794,9 @@ function readRow(row) {
     return row.querySelector('input[type="checkbox"]')?.checked
       ? "true"
       : "false";
+  }
+  if (type === "scale" && row.querySelector(".byte-msg-form-scale")?.dataset.untouched === "true") {
+    return "";
   }
   return row.querySelector("input, select, textarea")?.value ?? "";
 }

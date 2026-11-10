@@ -124,7 +124,7 @@ RSpec.describe Buddy::TodaySchedule do
 
       Buddy::ReminderFirer.fire!(reminder)
 
-      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, convo, scheduled: true)
+      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, convo, scheduled: true, morning: true)
       expect(convo.byte_messages.where("body LIKE '%Today briefing%'")).to be_empty
       expect(reminder.reload.fired_at).to be_nil
       expect(reminder.last_fired_at).to be_present

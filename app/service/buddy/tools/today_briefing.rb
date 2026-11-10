@@ -39,7 +39,8 @@ Buddy::Tools.register(
   },
   label:       ->(_payload, _ctx) { { title: "Today" } },
   execute:     ->(_payload, ctx) {
-    msg = Buddy::TodayBriefing.deliver!(ctx.user, ctx.conversation, scheduled: true)
+    morning = Buddy::TodayBriefing.morning?
+    msg = Buddy::TodayBriefing.deliver!(ctx.user, ctx.conversation, scheduled: true, morning: morning)
     { delivered: msg.present?, message_id: msg&.id }
   },
   # No receipt. The briefing IS the visible result, and a "Called Today ✓" pill

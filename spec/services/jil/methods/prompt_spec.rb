@@ -202,4 +202,32 @@ RSpec.describe Jil::Methods::Prompt do
       expect(Prompt.last.options.last).to eq({ "type" => "hint", "question" => "Two slices white toast - 170" })
     end
   end
+
+  describe "a check-in's questions" do
+    let(:code) {
+      <<~'JIL'
+        flagColors = Hash.new({
+          flagRed = Keyval.new("🩸 Period", "#e5484d")::Keyval
+        })::Hash
+        flags = PromptQuestion.toggles("Something happened", {
+          flagOne = String.new("🩸 Period")::String
+          flagTwo = String.new("💥 Meltdown")::String
+        }, flagColors)::PromptQuestion
+        moved = PromptQuestion.scale("Feeling", 0, 10, 6, true)::PromptQuestion
+      JIL
+    }
+
+    it "asks flags as toggles, answered like choices, and a slider only if moved" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :flags, :value)).to match_hash({
+        type:     :choices,
+        style:    :toggles,
+        question: "Something happened",
+        selected: [],
+        choices:  ["🩸 Period", "💥 Meltdown"],
+        colors:   { "🩸 Period" => "#e5484d" },
+      })
+      expect(ctx.dig(:vars, :moved, :value).symbolize_keys).to include(type: :scale, default: 6, optional: true)
+    end
+  end
 end

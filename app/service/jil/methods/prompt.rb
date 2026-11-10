@@ -23,7 +23,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   #   #choices(String:"Question Text" content(String))
   #   #select(String:"Question Text" content(String) "Default" String?)
   #   #chips(String:"Question Text" content(String) "Default" String? BR "Colors" Hash?)
-  #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default")
+  #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default" BR Boolean?:"Only if moved")
+  #   #toggles(String:"Question Text" content(String) BR "Colors" Hash?)
   #   #date(String:"Question Text" BR "Default" Date?)
   #   #datetime(String:"Question Text" BR "Default" Date?)
   #   #time(String:"Question Text" BR "Default" Date?)
@@ -60,7 +61,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
         auth: :trigger, auth_id: @jil.task&.id
       )
       posted = ::Buddy::PromptDelivery.post!(@jil.user, prompt) if prompt.persisted? && !app_only?(prompt)
-      broadcast_push(prompt) if deliver && posted.nil?
+      # One waiting its turn in a queue is pushed when it's asked.
+      broadcast_push(prompt) if deliver && posted.nil? && !::Buddy::PromptQueue.waiting?(prompt)
     }
   end
 
@@ -129,13 +131,33 @@ class Jil::Methods::Prompt < Jil::Methods::Base
     }
   end
 
-  def scale(text, min, max, default)
-    {
+  # `only_if_moved` makes the slider a question that can go unanswered: it
+  # waits greyed out at `default` - usually the last answer given - and the
+  # response carries it only once it has been touched, even if it's let go
+  # exactly where it started.
+  def scale(text, min, max, default, only_if_moved=false) # rubocop:disable Style/OptionalBooleanParameter -- Jil arguments are positional
+    question = {
       type:     :scale,
       question: text,
       min:      min,
       max:      max,
       default:  default,
+    }
+    question[:optional] = true if only_if_moved
+    question
+  end
+
+  # A row of small buttons that are normally left alone, for reporting that
+  # something happened. Answers the same way `choices` does - a list of the
+  # pressed ones - so everything that reads a response already reads this.
+  def toggles(text, options, colors={})
+    {
+      type:     :choices,
+      style:    :toggles,
+      question: text,
+      selected: [],
+      choices:  options,
+      colors:   ::PromptChips.colors(options, colors),
     }
   end
 

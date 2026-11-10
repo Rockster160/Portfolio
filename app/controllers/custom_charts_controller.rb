@@ -22,6 +22,13 @@ class CustomChartsController < ApplicationController
     render json: chart.build(**build_overrides)
   end
 
+  # Keeps a chart Buddy drew in the thread, exactly as it was drawn.
+  def save_message
+    message = ByteMessage.where(user: current_user).find(params[:message_id])
+    chart   = ::Buddy::Charts.save!(current_user, message)
+    render json: { id: chart.id, url: custom_chart_path(chart) }
+  end
+
   def new
     @chart = current_user.custom_charts.new(config: CustomChart::DEFAULTS)
   end

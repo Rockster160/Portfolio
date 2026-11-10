@@ -748,6 +748,9 @@ module Buddy
 
     # Rules whose subject can be absent from a day.
     WRITING_RULES = {
+      # Their own answers, given minutes ago, so the figures are already known
+      # to them and are only here to be understood.
+      feeling:   "They checked in just before this, and HOW THEY ARE is what they told you. Let it set how you talk to them all the way through: gentle and steady on a hard morning, bright on a good one. Show you heard it in a line of your own, in words, the way a friend who'd read it would; the figures are yours to understand.",
       travel:    "A leave-by is a clock time to walk out of the door, with the drive and the get-there-early buffer already taken off. Say it in the same sentence that names the thing - it's the part they can act on without doing the arithmetic.",
       # No sample sentence here, and there must not be one. The names in this
       # house are real, and every illustration ever written into this prompt has
@@ -805,6 +808,7 @@ module Buddy
 
     def applicable_rules(facts)
       rules = []
+      rules << :feeling   if Array(facts[:checked]).any?
       rules << :travel    if facts[:today].any? { |i| i[:leave_by].present? }
       rules << :partner   if facts[:today].any? { |i| i[:mine] == false }
       rules << :all_day   if facts[:today].any? { |i| i[:all_day] }
@@ -866,9 +870,32 @@ module Buddy
     #
     # A hand-run is exempt: someone asking for one at 2am has already answered
     # the question the guard exists to ask.
-    def deliver!(user, conversation, scheduled: true)
+    #
+    # `morning` is the reminder firing it, and only then can a check-in hold it
+    # back (Buddy::BriefingHold) - asking for one by name gets it now.
+    def deliver!(user, conversation, scheduled: true, morning: false)
       return nil if scheduled && defined?(Buddy::SleepGuard) && Buddy::SleepGuard.sleeping?(user)
+      return nil if morning && Buddy::BriefingHold.hold!(user, conversation)
 
+      post!(user, conversation, source: scheduled ? :today_scheduled : :quick_action)
+    end
+
+    # The Today reminder firing, as opposed to a briefing asked for by name.
+    # Not an argument, because then anything that called the tool could claim
+    # to be the morning; Buddy::ReminderFirer says so around the call instead.
+    def from_morning(morning)
+      was = ::Thread.current[:buddy_today_morning]
+      ::Thread.current[:buddy_today_morning] = morning
+      yield
+    ensure
+      ::Thread.current[:buddy_today_morning] = was
+    end
+
+    def morning?
+      ::Thread.current[:buddy_today_morning] == true
+    end
+
+    def post!(user, conversation, source:)
       facts = Buddy::BriefingFacts.build(user, conversation)
       msg   = conversation.byte_messages.create!(
         user:      user,
@@ -878,7 +905,7 @@ module Buddy
         metadata:  {
           "kind"         => "buddy_trigger",
           "hidden"       => true,
-          "source"       => scheduled ? "today_scheduled" : "quick_action",
+          "source"       => source.to_s,
           "buddy_action" => "today",
           # What the seed handed over, so a pre-send repair can check the reply
           # against exactly that. It used to read whatever the model happened to

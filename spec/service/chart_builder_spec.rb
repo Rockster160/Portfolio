@@ -32,6 +32,43 @@ RSpec.describe ChartBuilder do
     end
   end
 
+  # A check-in reports only the sliders that were touched, so an event
+  # without a key didn't answer it - it isn't a zero.
+  describe "data_keys over events that leave keys out" do
+    it "averages each key over the events that carry it" do
+      event("Check-in", at: tz.local(2026, 1, 10, 9), data: { "Feeling" => "8", "Sound" => "2" })
+      event("Check-in", at: tz.local(2026, 1, 10, 10), data: { "Feeling" => "6" })
+
+      result = described_class.new(
+        chart(query: "name::Check-in", series_by: :data_keys, metric: :avg, bucket: :day),
+        start_at: "2026-01-10", end_at: "2026-01-10",
+      ).call
+
+      sets = result[:datasets].to_h { |set| [set[:label], set[:data]] }
+      expect(sets).to eq("Feeling" => [7], "Sound" => [2])
+    end
+  end
+
+  describe "markers in their own colors" do
+    it "colors each marker by its event name" do
+      event("Period",   at: tz.local(2026, 1, 10, 9))
+      event("Meltdown", at: tz.local(2026, 1, 11, 9))
+
+      result = described_class.new(
+        chart(
+          query:        "name::Check-in",
+          marker_query: "name::Period OR name::Meltdown",
+          colors:       "Period = #e5484d",
+          bucket:       :day,
+        ),
+        start_at: "2026-01-01", end_at: "2026-01-31",
+      ).call
+
+      marks = result[:markers].to_h { |mark| [mark[:name], mark[:color]] }
+      expect(marks).to eq("Period" => "#e5484d", "Meltdown" => nil)
+    end
+  end
+
   describe "data_keys series, point mode (Feelings)" do
     it "emits one dataset per data key with a point per event" do
       event("Feeling", at: tz.local(2026, 1, 10, 12), data: { "Happy" => "80", "Calm" => "40" })

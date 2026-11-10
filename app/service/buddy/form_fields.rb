@@ -13,7 +13,12 @@ module Buddy
   # has to be indistinguishable from a tapped one.
   #
   # Descriptor:
-  #   { key:, label:, type:, value:, choices:, min:, max:, step:, required:, hint: }
+  #   { key:, label:, type:, value:, choices:, min:, max:, step:, required:, hint:,
+  #     style:, placeholder: }
+  #
+  # `style` draws a type differently without changing what it answers: a
+  # `choices` in :toggles is a row of small buttons. `placeholder` is where a
+  # slider with no value waits, greyed out, until it's touched.
   #
   # `key` is separate from `label` because the value lands in a payload under
   # `key` while the person reads `label`. For prompts they happen to be the same
@@ -80,17 +85,19 @@ module Buddy
         type = field[:type].to_s.to_sym
         type = :text unless TYPES.include?(type)
         {
-          key:      key,
-          label:    field[:label].to_s.presence || key,
-          type:     type,
-          value:    field[:value],
-          choices:  Array(field[:choices]).map(&:to_s).presence,
-          colors:   (field[:colors].to_h.transform_keys(&:to_s).presence if field[:colors].respond_to?(:to_h)),
-          min:      field[:min],
-          max:      field[:max],
-          step:     field[:step],
-          required: field.fetch(:required, true) ? true : false,
-          hint:     field[:hint].to_s.presence,
+          key:         key,
+          label:       field[:label].to_s.presence || key,
+          type:        type,
+          style:       field[:style].to_s.presence,
+          value:       field[:value],
+          placeholder: field[:placeholder],
+          choices:     Array(field[:choices]).map(&:to_s).presence,
+          colors:      (field[:colors].to_h.transform_keys(&:to_s).presence if field[:colors].respond_to?(:to_h)),
+          min:         field[:min],
+          max:         field[:max],
+          step:        field[:step],
+          required:    field.fetch(:required, true) ? true : false,
+          hint:        field[:hint].to_s.presence,
         }.compact
       }
     end

@@ -111,6 +111,10 @@ module Buddy
         weather:  weather(user, now),
         alpine:   (alpine?(user) ? alpine_lines(user, now) : {}),
         forecast: forecast(user, now),
+        # What they answered before this was allowed to go out. See
+        # Buddy::BriefingHold, and the `:checked_in` rule that says what to do
+        # with it.
+        checked:  (user ? Buddy::BriefingHold.answers(user) : []),
       }
     end
 
@@ -215,6 +219,7 @@ module Buddy
 
     def block(facts)
       sections = [
+        ["HOW THEY ARE",    Array(facts[:checked]).map { |c| "#{c[:title]}: #{Array(c[:lines]).join("; ")}" }],
         ["ON TODAY",        facts[:today].map { |i| agenda_line(i) }],
         ["ALSO DUE TODAY",  facts[:due].map { |r| "#{due_time(r)} · #{r[:body]}" }],
         ["JOBS TODAY",      job_lines(facts[:jobs])],

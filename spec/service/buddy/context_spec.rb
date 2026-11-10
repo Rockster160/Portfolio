@@ -154,6 +154,18 @@ RSpec.describe Buddy::Context do
       expect(ctx[:chores_pending_today].find { |c| c[:name] == "Pending Shared" }).not_to have_key(:by)
     end
 
+    # Hers to do, so it's on her Today and nobody else's - while still being a
+    # chore Rocco can be credited with by name.
+    it "leaves a household chore assigned to her out of his day", :aggregate_failures do
+      chore!("Feed Spiders", :household).update!(assigned_to_user_id: chelsea.id)
+      chore!("Bring Cans In", :household)
+
+      ctx = described_class.build(rocco, conversation)
+
+      expect(ctx[:chores_pending_today].pluck(:name)).to eq(["Bring Cans In"])
+      expect(ctx[:chores_all]).to include("Feed Spiders")
+    end
+
     # Both of them tapping it is a real thing that happens, and he did do it.
     it "credits a chore to Rocco without a :by when he did it, alone or alongside her" do
       teeth = chore!("Brush Teeth", :personal)

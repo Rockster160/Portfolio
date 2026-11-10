@@ -8418,6 +8418,62 @@ $board-cell-max: 200px;
     font-variant-numeric: tabular-nums;
   }
 
+  // Resting on the last answer, which isn't an answer yet: grey until touched.
+  .byte-msg-form-scale[data-untouched="true"] {
+    input[type="range"] {
+      accent-color: #7d8590;
+      opacity: 0.55;
+    }
+
+    .byte-msg-form-scale-value {
+      opacity: 0.4;
+    }
+  }
+
+  // Small flags, normally left alone, for reporting that something happened.
+  .byte-msg-form-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .byte-msg-form-toggle {
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    span {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: rgba(255, 255, 255, 0.6);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    input:checked + span {
+      background: var(--chip-color, var(--byte-accent, #4488ff));
+      border-color: var(--chip-color, var(--byte-accent, #4488ff));
+      color: #fff;
+    }
+
+    input:focus-visible + span {
+      outline: 2px solid rgba(255, 255, 255, 0.6);
+      outline-offset: 1px;
+    }
+
+    input:disabled + span {
+      cursor: default;
+      opacity: 0.7;
+    }
+  }
+
   .byte-msg-form-errors {
     font-size: 12.5px;
     color: #f26b6b;
@@ -9345,4 +9401,89 @@ $board-cell-max: 200px;
   font-size: 11px;
   font-style: italic;
   color: var(--bs-muted);
+}
+
+// A chart Buddy drew (message_actions/chart.js). Its own container under the
+// message body, beside a form rather than inside one.
+.ctr-byte .byte-app {
+  .byte-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .byte-chart-range {
+    font-size: 12px;
+    opacity: 0.6;
+  }
+
+  .byte-chart-canvas {
+    position: relative;
+    height: 220px;
+    background: #161b22;
+    border-radius: 6px;
+    padding: 8px;
+  }
+
+  .byte-chart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 13px;
+    opacity: 0.6;
+  }
+
+  .byte-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 12px;
+    opacity: 0.85;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .byte-chart-key i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+
+  .byte-chart-key-marker i {
+    width: 0;
+    border-radius: 0;
+    border-left: 2px dashed;
+  }
+
+  .byte-chart-footer {
+    display: flex;
+    justify-content: flex-end;
+    font-size: 13px;
+  }
+
+  .byte-chart-save {
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--byte-accent, #4488ff);
+    background: transparent;
+    color: var(--byte-accent, #4488ff);
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+
+  .byte-chart-open {
+    color: var(--byte-accent, #4488ff);
+    text-decoration: none;
+  }
 }

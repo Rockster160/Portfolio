@@ -242,12 +242,14 @@ module Buddy
         # message is a one-call reminder in practice - the briefing is the only
         # one - and a line above it is the thing that would be wrong.
         speaks = Buddy::Tools.speaks?(Buddy::Tools[calls.first[:tool_name]])
-        Buddy::ProposalBuilder.run_markers!(
-          user:         reminder.user,
-          conversation: conversation,
-          markers:      calls,
-          body:         (reminder.body.to_s.presence || "Running that now." unless speaks),
-        )
+        Buddy::TodayBriefing.from_morning(Buddy::TodaySchedule.briefing?(reminder)) {
+          Buddy::ProposalBuilder.run_markers!(
+            user:         reminder.user,
+            conversation: conversation,
+            markers:      calls,
+            body:         (reminder.body.to_s.presence || "Running that now." unless speaks),
+          )
+        }
       end
 
       # A Jil task leaves nothing behind on its own, so say what ran. A routine

@@ -6,7 +6,7 @@
   <% default = option[:default] %>
 
   <% base_key = "#{field_prefix}[#{question}]" %>
-  <% unless option[:type].to_sym.in?([:hidden, :hint]) %>
+  <% unless option[:type].to_sym.in?([:hidden, :hint]) || option[:style].to_s == "toggles" %>
     <% if question.split(" | ").length == 2 %>
       <p class="centered-options">
         <% left, right = question.split(" | ") %>
@@ -22,16 +22,20 @@
   <% when :text %>
     <%= text_field_tag base_key, response&.dig(question).presence || default, placeholder: default %>
   <% when :scale %>
+    <%# One that is only answered once moved has no name until it's touched, so %>
+    <%# the form leaves it out of the response (see prompt_slider.js). %>
+    <% waiting = option[:optional].present? && response&.dig(question).blank? %>
     <%=
       content_tag(
         :input,
         nil,
         value: response&.dig(question).presence || default || -1,
         type: :range,
-        name: base_key,
+        name: (base_key unless waiting),
         min: 0,
         max: option[:max],
-        class: "list-item-range",
+        class: ["list-item-range", ("prompt-range-untouched" if waiting)].compact.join(" "),
+        data: { name: (base_key if waiting) },
       )
     %>
   <% when :checkbox %>
@@ -55,6 +59,22 @@
       </label>
     </div>
   <% when :choices %>
+    <% if option[:style].to_s == "toggles" %>
+      <%# Small flags in a row, normally left alone. %>
+      <% colors = (option[:colors] || {}).transform_keys(&:to_s) %>
+      <% picked = Array(response&.dig(question) || option[:selected]).map(&:to_s) %>
+      <div class="prompt-toggles">
+        <% option[:choices].each_with_index do |choice, idx| %>
+          <% id = "#{base_key}toggle#{idx}".gsub(/[^\w]/, "") %>
+          <% color = colors[choice.to_s] %>
+          <label class="prompt-toggle" for="<%= id %>" <%= "style=\"--chip-color: #{color}\"".html_safe if color.to_s.match?(PromptChips::HEX) %>>
+            <%= check_box_tag "#{base_key}[]", choice, picked.include?(choice.to_s), id: id %>
+            <span><%= choice %></span>
+          </label>
+        <% end %>
+      </div>
+      <% next %>
+    <% end %>
     <% option[:choices].each_with_index do |option_text, idx| %>
       <% base_params = "#{base_key}[]" %>
       <% id = "#{base_params}#{idx}".gsub(/[^\w]/, "") %>

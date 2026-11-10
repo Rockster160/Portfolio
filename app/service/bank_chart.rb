@@ -22,17 +22,24 @@ class BankChart
   # coarsening the bucket, which would answer a question nobody asked.
   MAX_BUCKETS = 400
 
-  # A category's stack, decided ONCE from its total across the whole window
-  # rather than per bucket — otherwise a month holding a single refund would
-  # move "groceries" to the income side for that column alone, and the series
-  # would appear in both stacks of the same chart.
+  # Each row lands in the stack its own sign says, so a category can have a
+  # series in both: groceries spent on the out side, a groceries refund on the
+  # in side. Deciding one stack per category from its net instead drew every
+  # bucket that went the other way on the wrong side — a month of lease
+  # payments shown as $450 of income because refunds elsewhere in the range
+  # left uncategorized rows net positive. Split this way, each stack's height
+  # is the same gross figure the page's spend and income totals report.
   OUT = "out".freeze
   IN = "in".freeze
 
   NO_CATEGORY = "(none)".freeze
 
-  def initialize(scope, bucket: nil, from: nil, to: nil)
+  # `base_query` is the search with its category, direction and date terms
+  # taken out. Clicking a segment adds those three back for that segment, so it
+  # rides in the payload rather than being rebuilt by a regex in the browser.
+  def initialize(scope, bucket: nil, from: nil, to: nil, base_query: nil)
     @scope = scope
+    @base_query = base_query.to_s
     @bucket = bucket.to_s.presence&.to_sym
     @bucket = DEFAULT_BUCKET unless BUCKETS.include?(@bucket)
     @from = from
@@ -45,11 +52,13 @@ class BankChart
       next too_many_payload if starts.length > MAX_BUCKETS
 
       {
-        labels:   starts.map { |start| label_for(start) },
-        datasets: datasets,
-        balance:  balance,
-        bucket:   @bucket,
-        unit:     "$",
+        labels:     starts.map { |start| label_for(start) },
+        ranges:     starts.map { |start| range_for(start) },
+        datasets:   datasets,
+        balance:    balance,
+        bucket:     @bucket,
+        unit:       "$",
+        base_query: @base_query,
       }
     }
   end
@@ -64,35 +73,46 @@ class BankChart
     @rows ||= @scope.reorder(nil).pluck(:occurred_at, :category, :amount_cents)
   end
 
-  # Summed per (category, bucket) in cents, then converted once at the end.
-  # Rounding dollars per row and adding those up drifts.
+  # Summed per (category, stack, bucket) in cents, then converted once at the
+  # end. Rounding dollars per row and adding those up drifts.
   def totals
     @totals ||= rows.each_with_object(Hash.new(0)) { |(at, category, cents), acc|
-      next if at.blank?
+      next if at.blank? || cents.to_i.zero?
 
-      acc[[category.presence || NO_CATEGORY, bucket_key(at)]] += cents.to_i
+      stack = (cents.to_i.negative? ? OUT : IN)
+      acc[[category.presence || NO_CATEGORY, stack, bucket_key(at)]] += cents.to_i.abs
     }
   end
 
-  def category_totals
-    @category_totals ||= totals.each_with_object(Hash.new(0)) { |((category, _start), cents), acc|
-      acc[category] += cents
+  def series_totals
+    @series_totals ||= totals.each_with_object(Hash.new(0)) { |(key, cents), acc|
+      acc[key.first(2)] += cents
     }
   end
 
   # Biggest first, so the leading position in each stack belongs to the series
   # that dominates it rather than to whichever category sorted first.
+  #
+  # `category` is what the search calls this series, and `stack` doubles as
+  # its `direction:`, for the click that lists its rows.
   def datasets
-    ordered = category_totals.sort_by { |_category, cents| -cents.abs }
+    ordered = series_totals.sort_by { |_series, cents| -cents }
 
-    ordered.map { |category, total|
+    ordered.map { |(category, stack), _total|
       {
-        label: label_for_category(category),
-        color: ::TransactionCategory.color(category),
-        stack: (total.negative? ? OUT : IN),
-        data:  starts.map { |start| ((totals[[category, start]] || 0).abs / 100.0).round(2) },
+        label:    label_for_category(category),
+        color:    ::TransactionCategory.color(category),
+        stack:    stack,
+        category: (category == NO_CATEGORY ? "none" : category),
+        data:     starts.map { |start| ((totals[[category, stack, start]] || 0) / 100.0).round(2) },
       }
     }
+  end
+
+  # First and last day of a bucket, as the search's `timestamp>=` and
+  # `timestamp<=` take them — both inclusive.
+  def range_for(start)
+    [start.to_date.iso8601, (advance(start) - 1.day).to_date.iso8601]
   end
 
   # The dashboard figure as each bucket opened. Not the search's rows: it is

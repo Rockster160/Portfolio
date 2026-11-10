@@ -44,16 +44,28 @@ RSpec.describe BankChart do
     end
   end
 
-  # A month holding a single refund would otherwise move the category to the
-  # income side for that column alone, and it would appear in both stacks.
-  it "decides a category's stack from its whole-window total, not one bucket" do
+  # A category's net across the range must not decide where a month's money
+  # is drawn: a refund in July is money in, whatever June spent.
+  it "draws each row on the side its own sign says" do
     charge(on: "2026-06-10", cents: -40_000, category: "home")
     charge(on: "2026-07-10", cents: 3_000, category: "home")
+    charge(on: "2026-07-12", cents: -1_000, category: "home")
 
-    home = series(payload, "Home")
+    home = payload[:datasets].select { |ds| ds[:label] == "Home" }
 
-    expect(home[:stack]).to eq("out")
-    expect(home[:data]).to eq([400.0, 30.0])
+    expect(home.detect { |ds| ds[:stack] == "out" }[:data]).to eq([400.0, 10.0])
+    expect(home.detect { |ds| ds[:stack] == "in" }[:data]).to eq([0.0, 30.0])
+  end
+
+  # Clicking a segment lists the rows that drew it, so the payload names each
+  # series the way the search does and each bucket by its inclusive dates.
+  it "carries what a click needs to search for one segment" do
+    charge(on: "2026-07-04", cents: -45_000, category: nil)
+
+    result = payload(scope: BankTransaction.all)
+
+    expect(series(result, "(none)")).to include(category: "none", stack: "out")
+    expect(result[:ranges]).to eq([["2026-07-01", "2026-07-31"]])
   end
 
   # A month with no spending is a fact about the month. Dropping it would put

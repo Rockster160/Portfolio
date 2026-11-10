@@ -137,6 +137,9 @@ class Jil::Executor
       end
       ran&.tap { stopped = true if ran.stop_propagation? }
     }.tap { |_tasks|
+      # After the tasks, so whatever they asked in answer to a prompt is
+      # already holding the morning briefing by the time this looks.
+      ::Buddy::BriefingHold.dispatch(user, trigger, raw_trigger_data)
       next if stopped
 
       case trigger.to_sym

@@ -96,7 +96,7 @@ module Buddy
     # knows from what the person said or has to ASK about — never guess, because
     # submitting a mood survey's defaults logs a terrible day.
     def needs_value
-      fields.reject { |f| f[:value].present? }.pluck(:question)
+      fields.reject { |f| f[:value].present? || f[:optional] }.pluck(:question)
     end
 
     # The question texts holding a value the FORM supplied rather than one the
@@ -130,7 +130,10 @@ module Buddy
       }
 
       # A blank answer is an answer: it clears whatever the field opened with.
+      # Except on a slider nobody moved, where blank means it wasn't reported.
       resolve_keys(answers).each { |option, answer|
+        next response.delete(question_of(option)) if blank_answer?(answer) && optional?(option)
+
         response[question_of(option)] = blank_answer?(answer) ? empty_for(option) : coerce(option, answer)
       }
       response
@@ -151,17 +154,19 @@ module Buddy
     def form_fields
       fields.map { |field|
         {
-          key:      field[:question],
-          label:    field[:question],
-          type:     field[:type],
-          value:    field[:value],
-          choices:  field[:choices],
-          colors:   field[:colors],
-          min:      field[:min],
-          max:      field[:max],
-          step:     field[:step],
-          hint:     field[:hint],
-          required: REQUIRED_TYPES.include?(field[:type]),
+          key:         field[:question],
+          label:       field[:question],
+          type:        field[:type],
+          style:       field[:style],
+          value:       field[:value],
+          placeholder: field[:placeholder],
+          choices:     field[:choices],
+          colors:      field[:colors],
+          min:         field[:min],
+          max:         field[:max],
+          step:        field[:step],
+          hint:        field[:hint],
+          required:    REQUIRED_TYPES.include?(field[:type]) && !field[:optional],
         }.compact
       }
     end
@@ -170,8 +175,10 @@ module Buddy
     # sublabel — the person is confirming a whole form on one tap, so the row
     # has to show everything it's about to submit.
     def summary_lines(response)
-      visible.map { |option|
+      visible.filter_map { |option|
         q = question_of(option)
+        next if optional?(option) && !response.key?(q)
+
         "#{q}: #{Array.wrap(response[q]).join(", ")}"
       }
     end
@@ -206,7 +213,13 @@ module Buddy
     end
 
     def required?(option)
-      REQUIRED_TYPES.include?(type_of(option))
+      REQUIRED_TYPES.include?(type_of(option)) && !optional?(option)
+    end
+
+    # A slider that only answers once it's been touched. Its default is where
+    # it waits, greyed out, and never an answer.
+    def optional?(option)
+      type_of(option) == :scale && option[:optional].present?
     end
 
     def type_of(option)
@@ -220,19 +233,22 @@ module Buddy
     def describe(option)
       value, from = loaded(option)
       {
-        question: question_of(option),
-        type:     type_of(option),
-        value:    value,
+        question:    question_of(option),
+        type:        type_of(option),
+        value:       value,
         # Where the value came from, which is the whole basis for judging it.
         # Without this a computed shower Duration and a duration the person
         # actually stated look identical, and the first one gets trusted.
-        from:     from,
-        choices:  Array(option[:choices]).presence,
-        colors:   option[:colors].presence,
-        min:      option[:min],
-        max:      option[:max],
-        step:     option[:step],
-        hint:     hint_for(option),
+        from:        from,
+        choices:     Array(option[:choices]).presence,
+        colors:      option[:colors].presence,
+        style:       option[:style].presence&.to_sym,
+        optional:    (true if optional?(option)),
+        placeholder: (option[:default] if optional?(option)),
+        min:         option[:min],
+        max:         option[:max],
+        step:        option[:step],
+        hint:        hint_for(option),
       }.compact
     end
 
@@ -268,6 +284,8 @@ module Buddy
     # defaults as answers would quietly log the worst possible night. The tell is
     # a default sitting exactly on the field's floor.
     def placeholder?(option)
+      return true if optional?(option)
+
       type = type_of(option)
       return false unless FLOOR_TYPES.key?(type)
 

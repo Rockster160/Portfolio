@@ -43,8 +43,12 @@ class Prompt < ApplicationRecord
 
   private
 
+  # Gone is as much an ending as answered: the next one in its queue is asked,
+  # and a briefing it was holding goes out.
   def settle_buddy_forms
     ::Buddy::PromptDelivery.discard!(user, id)
+    ::Buddy::PromptQueue.advance!(user, ::Buddy::PromptQueue.name_of(self))
+    ::Buddy::BriefingHold.release!(user)
   end
 
   def push_to_buddy_forms

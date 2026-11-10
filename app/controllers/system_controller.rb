@@ -119,7 +119,13 @@ class SystemController < ApplicationController
     @bucket = ::BankChart::BUCKETS.detect { |unit| unit.to_s == params[:bucket].to_s }
     @bucket ||= ::BankChart::DEFAULT_BUCKET
     @date_from, @date_to = query_dates
-    @chart_data = ::BankChart.new(real, bucket: @bucket, from: @date_from, to: @date_to).call
+    @chart_data = ::BankChart.new(
+      real,
+      bucket:     @bucket,
+      from:       @date_from,
+      to:         @date_to,
+      base_query: chart_base_query,
+    ).call
     @legend = legend_entries(real)
 
     listing = scope.includes(:bank_account, :action_event, transfer_counterpart: :bank_account)
@@ -554,11 +560,19 @@ class SystemController < ApplicationController
   # writes: a lone `field:value`, or `(field:a OR field:b)` once several are
   # picked. Taken out WHOLE — removing the terms and leaving the parentheses and
   # the ORs behind would not parse.
-  def without_clause(field)
+  def without_clause(field, query=@query)
     term = field_term(field)
 
-    stripped = @query.gsub(/\(\s*#{term}(?:\s+OR\s+#{term})*\s*\)/i, " ")
+    stripped = query.gsub(/\(\s*#{term}(?:\s+OR\s+#{term})*\s*\)/i, " ")
     stripped.gsub(/(?:\A|\s)#{term}/i, " ").squish
+  end
+
+  # The search minus the three things a click on a chart segment sets for
+  # itself — which category, which side, which bucket — so the click narrows
+  # whatever else was typed rather than replacing it.
+  def chart_base_query
+    query = without_clause(:direction, without_clause(:category))
+    query.gsub(TIMESTAMP_TERM, " ").squish
   end
 
   # What is currently picked for this field. Reads through an opening paren so

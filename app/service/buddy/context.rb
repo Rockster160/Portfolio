@@ -837,6 +837,18 @@ module Buddy
         }
         due_today_ids = due_today_ids.uniq
 
+        # A household chore assigned to somebody else is theirs to do: it's on
+        # the grid for everyone and on nobody else's Today
+        # (ChoreSerializer#today_visible?), so it's in nobody else's day here
+        # either. It stays in `all_names`, which is what crediting them with
+        # it matches against.
+        others = chores.select { |c| c.assigned? && c.assigned_to_user_id != user.id }.to_set(&:id)
+        due_today_ids -= others.to_a
+        pending_ids   -= others.to_a
+        hot_ids       -= others.to_a
+        scheduled_ids -= others.to_a
+        overdue       -= others.to_a
+
         {
           due_today:       tag_groups(due_today_ids.filter_map { |id|
             slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])

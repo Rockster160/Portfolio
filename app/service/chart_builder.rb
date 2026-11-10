@@ -116,7 +116,11 @@ class ChartBuilder
       grouped.map { |note, evts| { label: note.presence || "(no notes)", events: evts } }
     when :data_keys
       keys = all_events.flat_map { |evt| evt.data.is_a?(Hash) ? evt.data.keys : [] }.uniq
-      keys.map { |key| { label: key, events: all_events, data_key: key } }
+      # Only the events that carry the key: one that left it out didn't
+      # answer it, and reading that as a zero would drag every average down.
+      keys.map { |key|
+        { label: key, events: all_events.select { |evt| evt.data.is_a?(Hash) && evt.data.key?(key) }, data_key: key }
+      }
     when :data_value
       series_by_data_value
     when :sign
@@ -328,7 +332,9 @@ class ChartBuilder
         name:  evt.name,
         notes: evt.notes.to_s,
         date:  evt.timestamp.strftime("%b %-d, %Y %-l:%M %p"),
-      }
+        # By event name, so periods and meltdowns on one chart are told apart.
+        color: @chart.color_for(evt.name),
+      }.compact
     }
   end
 

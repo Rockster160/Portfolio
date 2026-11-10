@@ -59,6 +59,7 @@ import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
 import { renderCycleButton } from "./message_actions/cycle_button";
 import { renderMessageButtons } from "./message_actions/message_buttons";
+import { renderChart } from "./message_actions/chart";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import {
   renderReactions,
@@ -853,6 +854,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         bodyEl.parentNode.insertBefore(buttonsEl, bodyEl.nextSibling);
       }
       renderMessageButtons(buttonsEl, message);
+    }
+
+    // A chart Buddy drew (Buddy::Charts). Not an action - nothing waits on it -
+    // but the same mount pattern, under the body.
+    if (message?.metadata?.chart) {
+      let chartEl = node.querySelector("[data-buddy-chart]");
+      if (!chartEl) {
+        chartEl = document.createElement("div");
+        chartEl.setAttribute("data-buddy-chart", "");
+        bodyEl.parentNode.insertBefore(chartEl, bodyEl.nextSibling);
+      }
+      // Wide like a form: a chart squeezed to sentence width is unreadable.
+      node.classList.add("byte-msg-has-form");
+      renderChart(chartEl, message);
     }
 
     // `[hicon Fae]` anywhere in the bubble — the body it just wrote AND the

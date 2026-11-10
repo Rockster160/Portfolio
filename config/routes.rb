@@ -459,6 +459,7 @@ Rails.application.routes.draw do
   resources :custom_charts do
     get :data, on: :member
     post :preview, on: :collection
+    post :save_message, on: :collection
   end
 
   resources :action_events do
