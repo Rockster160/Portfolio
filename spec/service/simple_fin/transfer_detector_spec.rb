@@ -32,8 +32,8 @@ RSpec.describe SimpleFin::TransferDetector do
 
   # A card payoff must not read as a second purchase.
   it "pairs a payment with its arrival in another account, marking both transfers out of the totals", :aggregate_failures do
-    out = row(checking, -139_325, payee: "JPMORGAN CHASE ACH")
-    into = row(mortgage, 139_325)
+    out = row(checking, -139_325, payee: "CHASE CREDIT CRD AUTOPAY")
+    into = row(card, 139_325)
     groceries = row(checking, -8_210, payee: "Costco")
 
     result = described_class.call

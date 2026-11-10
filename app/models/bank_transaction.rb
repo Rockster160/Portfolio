@@ -132,13 +132,28 @@ class BankTransaction < ApplicationRecord
   # "Checking → Mortgage" says everything the arriving row would have.
   scope :without_transfer_mirror, -> { unpaired.or(spending) }
 
+  # Every row on a loan account. This is the lender's bookkeeping, not money
+  # moving: each payment arrives as its own row, the servicer later re-applies
+  # the ones it held as a "Payment" + "Principal Payment" pair summing to them,
+  # and escrow pays the county out of money that was already counted when it
+  # left checking. Counting any of it reads as income, or as spending twice.
+  scope :loan_ledger, -> { where(bank_account_id: ::BankAccount.loan.select(:id)) }
+
+  # The leaving half of a payment into a loan. Paired like any transfer, so the
+  # listing reads "Checking → Mortgage", but unlike a card payoff nothing on
+  # the arriving side ever counted it — this row IS the spending.
+  scope :loan_payments, -> {
+    spending.where(transfer_counterpart_id: loan_ledger.select(:id))
+  }
+
   # Both halves of a self-transfer, plus anything hand-flagged `transfer: true`
   # on its alert — 92 events already carry that flag and it is the user's own
-  # judgement, which beats any inference here.
+  # judgement, which beats any inference here. Every row on a loan counts as
+  # one, and the payment into it does not.
   scope :transfers, -> {
     where(id: paired.select(:id)).or(
       where(action_event_id: ::ActionEvent.where("data->>'transfer' = 'true'").select(:id)),
-    )
+    ).or(loan_ledger).where.not(id: loan_payments.select(:id))
   }
   # What totals and the category chart run on: a transfer is not spending and
   # not income, it is the same money seen twice.
@@ -331,7 +346,18 @@ class BankTransaction < ApplicationRecord
   end
 
   def transfer?
-    transfer_counterpart_id.present? || action_event&.data&.dig("transfer") == true
+    return false if loan_payment?
+
+    loan_ledger? || transfer_counterpart_id.present? ||
+      action_event&.data&.dig("transfer") == true
+  end
+
+  def loan_ledger?
+    bank_account&.loan? || false
+  end
+
+  def loan_payment?
+    transfer_source? && transfer_counterpart.loan_ledger?
   end
 
   # The half the money left from — the one the listing keeps.

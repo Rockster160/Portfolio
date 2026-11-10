@@ -28,6 +28,17 @@ module SimpleFin
     # `duplicate_alert_row`.
     TWIN_WINDOW = 1.minute
 
+    # How far a charge can grow between the authorization an alert reports and
+    # what the bank posts. A restaurant authorizes the bill and posts it with
+    # the tip, so the two never agree to the cent; across thirty real pairs the
+    # posted figure ran 1.04x to 1.43x the alert.
+    TIP_CEILING = BigDecimal("1.5")
+
+    # An alert names the merchant by the bank's own description cut to twenty
+    # characters. Shorter than this and a shared prefix stops meaning the same
+    # merchant.
+    MERCHANT_KEY_MIN = 6
+
     class << self
       # The one entry point, called from ActionEventNotifier for every add and
       # change. Idempotent, and a no-op for anything that is not a Transaction
@@ -95,17 +106,52 @@ module SimpleFin
       # in time takes it — refusing would leave the bank's copy to be inserted
       # alongside the alert's, which is a phantom transaction in every total.
       # See EventMatcher.nearest for why proximity is trustworthy here.
-      def claim(bank_account:, amount_cents:, occurred_at:)
+      #
+      # Failing an exact amount, a tipped one: see `tipped`.
+      def claim(bank_account:, amount_cents:, occurred_at:, description: nil)
         return nil if amount_cents.nil? || occurred_at.blank?
 
-        window = ::SimpleFin::EventMatcher::WINDOW
         scope = ::BankTransaction.event_sourced.where(
           amount_cents: amount_cents,
-          occurred_at:  (occurred_at - window)..(occurred_at + window),
+          occurred_at:  merge_window(occurred_at),
         )
 
         exact = closest(scope.where(bank_account_id: bank_account&.id), occurred_at)
-        exact || closest(scope.where(bank_account_id: nil), occurred_at)
+        exact ||= closest(scope.where(bank_account_id: nil), occurred_at)
+        exact || tipped(bank_account, amount_cents, occurred_at, description)
+      end
+
+      # The alert row for a charge that posted larger than it was authorized.
+      # Without this, every restaurant visit is two rows: the alert's pre-tip
+      # amount, categorized, and the bank's tipped amount beside it,
+      # uncategorized — the meal counted twice.
+      #
+      # Narrower than an exact match on every other axis, because the amount no
+      # longer identifies anything by itself: the account must be named and
+      # the same, it must be spending, the alert must be smaller by no more
+      # than TIP_CEILING, and the alert's merchant must be the start of the
+      # bank's description.
+      def tipped(bank_account, amount_cents, occurred_at, description)
+        key = merchant_key(description)
+        return nil if bank_account.nil? || !amount_cents.negative?
+        return nil if key.length < MERCHANT_KEY_MIN
+
+        smallest = (BigDecimal(amount_cents) / TIP_CEILING).floor
+        scope = ::BankTransaction.event_sourced.where(
+          bank_account_id: bank_account.id,
+          amount_cents:    (amount_cents + 1)..smallest,
+          occurred_at:     merge_window(occurred_at),
+        )
+        same_merchant = scope.select { |row|
+          alert_key = merchant_key(row.payee)
+          alert_key.length >= MERCHANT_KEY_MIN && key.start_with?(alert_key)
+        }
+        closest(same_merchant, occurred_at)
+      end
+
+      # "TORO RAMEN &amp; SUSHI" and "Toro Ramen & Sushi" are one merchant.
+      def merchant_key(text)
+        ::CGI.unescapeHTML(text.to_s).downcase.gsub(/[^a-z0-9]/, "")
       end
 
       # An event that goes away takes its row with it — but only if the row is
@@ -152,6 +198,11 @@ module SimpleFin
       end
 
       private
+
+      def merge_window(occurred_at)
+        window = ::SimpleFin::EventMatcher::WINDOW
+        (occurred_at - window)..(occurred_at + window)
+      end
 
       # `id` breaks an exact tie so the choice cannot vary between runs.
       def closest(scope, occurred_at)

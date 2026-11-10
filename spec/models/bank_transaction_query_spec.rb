@@ -428,4 +428,80 @@ RSpec.describe BankTransaction, ".query" do
       expect(described_class.query("account:2363")).to contain_exactly(attributed)
     end
   end
+
+  # The mortgage account reports the servicer's bookkeeping: every payment
+  # arrives, is later re-applied as a Payment + Principal Payment pair, and
+  # escrow pays the county out of it. Only the payment leaving checking is
+  # money that moved.
+  describe "a loan" do
+    let!(:checking) {
+      BankAccount.create!(
+        simplefin_id: "A1", name: "PREMIER PLUS CKG (2363)", last4: "2363", kind: :checking,
+      )
+    }
+    let!(:card) {
+      BankAccount.create!(
+        simplefin_id: "A3", name: "Chase Sapphire Preferred (8257)", last4: "8257", kind: :credit,
+      )
+    }
+    let!(:mortgage) {
+      BankAccount.create!(
+        simplefin_id: "A4", name: "MORTGAGE LOAN (7153)", last4: "7153", kind: :loan,
+      )
+    }
+
+    let!(:payment) { row(checking, -139_325, "JP Morgan Chase", "mortgage") }
+    let!(:arrival) { row(mortgage, 139_325, "Payment") }
+    let!(:reapplied) { row(mortgage, 210_576, "Payment") }
+    let!(:principal) { row(mortgage, 68_074, "Principal Payment") }
+    let!(:escrow) { row(mortgage, -390_269, "County Tax") }
+    let!(:payoff) { row(checking, -310_242, "Chase Credit Card", "card payment") }
+    let!(:payoff_arrival) { row(card, 310_242, "Automatic Payment") }
+
+    def row(account, cents, payee, category=nil)
+      BankTransaction.create!(
+        bank_account: account,
+        posted_at:    2.days.ago,
+        amount_cents: cents,
+        payee:        payee,
+        category:     category,
+      )
+    end
+
+    def pair(leaving, arriving)
+      leaving.update!(transfer_counterpart: arriving)
+      arriving.update!(transfer_counterpart: leaving)
+    end
+
+    before {
+      pair(payment, arrival)
+      pair(payoff, payoff_arrival)
+    }
+
+    it "counts the payment as spending on the account it left, and nothing on the loan" do
+      expect(BankTransaction.countable).to contain_exactly(payment)
+      expect(BankTransaction.countable.income).to be_empty
+    end
+
+    it "lists the loan's rows as transfers and the payment as money that moved" do
+      expect(described_class.query("transfer:true")).to contain_exactly(
+        arrival,
+        reapplied,
+        principal,
+        escrow,
+        payoff,
+        payoff_arrival,
+      )
+      expect(described_class.query("transfer:false")).to contain_exactly(payment)
+    end
+
+    it "labels each row the way it is counted" do
+      expect(payment.reload).to be_loan_payment
+      expect(payment).not_to be_transfer
+      expect(reapplied.reload).to be_loan_ledger
+      expect(reapplied).to be_transfer
+      expect(payoff.reload).to be_transfer
+      expect(payoff).not_to be_loan_payment
+    end
+  end
 end

@@ -670,8 +670,10 @@
                 <span class="name"><%= transaction.display_payee %></span>
                 <span class="sub">
                   <% if transaction.transfer_destination.present? %>
+                    <%# A payment into a loan is the one move that IS spending: nothing
+                        on the lender's side ever counts it. %>
                     <span class="acct route"
-                          title="Moved between your own accounts — listed once, and not counted as spending or income">
+                          title="<%= transaction.loan_payment? ? "Paid toward a loan — counted as spending here, and only here" : "Moved between your own accounts — listed once, and not counted as spending or income" %>">
                       <%= transaction.display_account %><span class="arrow">→</span><%= transaction.transfer_destination %>
                     </span>
                   <% else %>
@@ -688,8 +690,13 @@
                   <%# The arrow already says "transfer", and says where to. The chip is
                       for the hand-flagged ones, which have no counterpart to point at. %>
                   <% if transaction.transfer? && transaction.transfer_destination.blank? %>
-                    <em class="tag xfer"
-                        title="Between your own accounts — not counted as spending or income">transfer</em>
+                    <% if transaction.loan_ledger? %>
+                      <em class="tag xfer"
+                          title="The lender's own bookkeeping — the payment counts on the account it left">loan</em>
+                    <% else %>
+                      <em class="tag xfer"
+                          title="Between your own accounts — not counted as spending or income">transfer</em>
+                    <% end %>
                   <% end %>
                   <%# Only where there is something to show. A button that opens
                       an empty drawer is worse than no button. %>

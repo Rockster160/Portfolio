@@ -218,4 +218,69 @@ RSpec.describe SimpleFin::Sync do
       expect(BankTransaction.count).to eq(2)
     end
   end
+
+  # A restaurant authorizes the bill and posts it with the tip, so the alert
+  # and the bank never agree to the cent.
+  describe "merging a charge that posted with a tip" do
+    let(:transacted) { 1_785_931_200 }
+
+    def alert!(amount, merchant: "SLACKWATER HERRIMAN")
+      event = ActionEvent.create!(
+        user: User.me, name: "Transaction", timestamp: Time.at(transacted).utc,
+        data: { amount: amount, account: "(...2363)", category: "eat out", merchant: merchant }
+      )
+      SimpleFin::EventTransaction.sync(event)
+    end
+
+    def post!(amount, description: "SLACKWATER HERRIMAN")
+      row = transaction_data("amount" => amount, "description" => description, "payee" => "")
+      described_class.call(payload([account_data("transactions" => [row])]))
+    end
+
+    before { described_class.call(payload([account_data])) }
+
+    it "folds the tipped amount into the alert's row and keeps its category", :aggregate_failures do
+      row = alert!(46.23)
+
+      post!("-66.23")
+
+      expect(BankTransaction.count).to eq(1)
+      expect(row.reload.amount_cents).to eq(-6_623)
+      expect(row.category).to eq("eat out")
+    end
+
+    it "matches the merchant the alert cut short" do
+      alert!(49.09, merchant: "Thai House Cuisine 2")
+
+      post!("-65.00", description: "THAI HOUSE CUISINE 2")
+
+      expect(BankTransaction.count).to eq(1)
+    end
+
+    it "keeps both when the merchant differs" do
+      alert!(46.23)
+
+      post!("-66.23", description: "GOLD FISH ASIAN BISTRO")
+
+      expect(BankTransaction.count).to eq(2)
+    end
+
+    it "keeps both when the charge grew by more than half" do
+      alert!(20.00)
+
+      post!("-40.00")
+
+      expect(BankTransaction.count).to eq(2)
+    end
+
+    # A tip only ever adds. A smaller posting is a partial refund or a
+    # different purchase, and neither is this alert.
+    it "keeps both when the charge shrank" do
+      alert!(30.00)
+
+      post!("-25.00")
+
+      expect(BankTransaction.count).to eq(2)
+    end
+  end
 end

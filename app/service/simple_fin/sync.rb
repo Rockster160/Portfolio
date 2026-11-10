@@ -125,6 +125,7 @@ module SimpleFin
         bank_account: account,
         amount_cents: cents(row["amount"]),
         occurred_at:  timestamp(row["transacted_at"]) || timestamp(row["posted"]),
+        description:  row["description"],
       )
     end
 
