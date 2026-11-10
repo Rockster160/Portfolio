@@ -24,7 +24,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   #   #select(String:"Question Text" content(String) "Default" String?)
   #   #chips(String:"Question Text" content(String) "Default" String? BR "Colors" Hash?)
   #   #scale(String:"Question Text" BR Numeric?:"Min" Numeric?:"Max" Numeric?:"Default" BR Boolean?:"Only if moved")
-  #   #toggles(String:"Question Text" content(String) BR "Colors" Hash?)
+  #   #toggles(String:"Question Text" content(String) BR "Colors" Hash? BR "Labels" Hash?)
   #   #date(String:"Question Text" BR "Default" Date?)
   #   #datetime(String:"Question Text" BR "Default" Date?)
   #   #time(String:"Question Text" BR "Default" Date?)
@@ -150,7 +150,12 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   # A row of small buttons that are normally left alone, for reporting that
   # something happened. Answers the same way `choices` does - a list of the
   # pressed ones - so everything that reads a response already reads this.
-  def toggles(text, options, colors={})
+  #
+  # `labels` is what a button shows in place of its choice (choice => label).
+  # The choice is still what's answered and logged, so a button can read as
+  # anything without changing what it reports.
+  def toggles(text, options, colors={}, labels={})
+    named = labels.respond_to?(:to_h) ? labels.to_h.transform_keys(&:to_s) : {}
     {
       type:     :choices,
       style:    :toggles,
@@ -158,7 +163,8 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       selected: [],
       choices:  options,
       colors:   ::PromptChips.colors(options, colors),
-    }
+      labels:   named.slice(*Array(options).map(&:to_s)).compact_blank.presence,
+    }.compact
   end
 
   def date(text, default)

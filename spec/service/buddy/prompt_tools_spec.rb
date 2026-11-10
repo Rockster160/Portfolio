@@ -222,7 +222,14 @@ RSpec.describe "Buddy prompt tools" do
       prompt = make_prompt(
         question: "Morning check-in",
         options:  [
-          { type: :choices, style: :toggles, question: "Something happened", choices: ["🩸 Period"], selected: [] },
+          {
+            type:     :choices,
+            style:    :toggles,
+            labels:   { "🩸 Period" => "🩸" },
+            question: "Something happened",
+            choices:  ["🩸 Period"],
+            selected: [],
+          },
           { type: :scale, question: "Feeling", min: 0, max: 10, default: 6, optional: true },
           { type: :scale, question: "Sound", min: 0, max: 10, default: 4, optional: true },
         ],
@@ -232,7 +239,7 @@ RSpec.describe "Buddy prompt tools" do
       feeling = form.form_fields.find { |field| field[:key] == "Feeling" }
       expect(feeling).to include(required: false, placeholder: 6)
       expect(feeling).not_to have_key(:value)
-      expect(form.form_fields.first).to include(style: :toggles)
+      expect(form.form_fields.first).to include(style: :toggles, labels: { "🩸 Period" => "🩸" })
       expect(form.needs_value).to eq(["Something happened"])
 
       response = form.build_response({ "Something happened" => [], "Feeling" => "6", "Sound" => "" })

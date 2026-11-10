@@ -14,11 +14,12 @@ module Buddy
   #
   # Descriptor:
   #   { key:, label:, type:, value:, choices:, min:, max:, step:, required:, hint:,
-  #     style:, placeholder: }
+  #     style:, labels:, placeholder: }
   #
   # `style` draws a type differently without changing what it answers: a
-  # `choices` in :toggles is a row of small buttons. `placeholder` is where a
-  # slider with no value waits, greyed out, until it's touched.
+  # `choices` in :toggles is a row of small buttons. `labels` is what a choice
+  # shows in place of itself. `placeholder` is where a slider with no value
+  # waits, greyed out, until it's touched.
   #
   # `key` is separate from `label` because the value lands in a payload under
   # `key` while the person reads `label`. For prompts they happen to be the same
@@ -93,6 +94,7 @@ module Buddy
           placeholder: field[:placeholder],
           choices:     Array(field[:choices]).map(&:to_s).presence,
           colors:      (field[:colors].to_h.transform_keys(&:to_s).presence if field[:colors].respond_to?(:to_h)),
+          labels:      (field[:labels].to_h.transform_keys(&:to_s).presence if field[:labels].respond_to?(:to_h)),
           min:         field[:min],
           max:         field[:max],
           step:        field[:step],

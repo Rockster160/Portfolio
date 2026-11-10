@@ -313,16 +313,17 @@ module FeatureBuilder
   end
 
   # Two to four words on the chip, saying what is working right now. A builder
-  # waiting on an answer is in the list on the page but not on the chip.
+  # waiting on an answer is in the list on the page but not on the chip, and
+  # the standing questions session never is: it's always open, so it would
+  # read as work going on when nothing is.
   def chip_name(kinds)
     return nil if kinds.empty?
 
     if kinds.one?
       {
-        audit:     "Auditing…",
-        builder:   "Building…",
-        claude:    "Claude working…",
-        questions: "Claude answering…",
+        audit:   "Auditing…",
+        builder: "Building…",
+        claude:  "Claude working…",
       }.fetch(kinds.first)
     elsif kinds.all?(:builder)
       "#{kinds.length}x Builders running"
@@ -334,7 +335,8 @@ module FeatureBuilder
   def refresh_chip!(user)
     working = sessions.select { |session| session["working"] }
     conversations = ByteConversation.where(id: working.pluck("conversation_id").compact).index_by(&:id)
-    name = chip_name(working.map { |session| kind_of(session, conversations) })
+    kinds = working.map { |session| kind_of(session, conversations) }
+    name = chip_name(kinds - [:questions])
     return BackgroundProcess.clear(user: user, key: CHIP_KEY) if name.nil?
 
     BackgroundProcess.note(

@@ -466,7 +466,7 @@
   #select(String:"Question Text" content(String) "Default" String?)
   #chips(String:"Question Text" content(String) "Default" String? BR "Colors" Hash?) // One of a few short options, as tappable chips. Colors maps a choice to its color; household names get their own.
   #scale(String:"Question Text" BR Numeric(0):"Min" Numeric(100):"Max" Numeric?(50):"Default" BR Boolean?(false):"Only if moved") // Only if moved: the slider waits greyed out at Default and the answer leaves it out until it is touched.
-  #toggles(String:"Question Text" content(String) BR "Colors" Hash?) // A row of small buttons, normally left unpressed, for reporting that something happened. Answers like choices, with the pressed ones.
+  #toggles(String:"Question Text" content(String) BR "Colors" Hash? BR "Labels" Hash?) // A row of small buttons, normally left unpressed, for reporting that something happened. Answers like choices, with the pressed ones. Labels: what each button shows in place of its choice, keyed by the choice.
   #date(String:"Question Text" BR "Default" Date?)
   #datetime(String:"Question Text" BR "Default" Date?)
   #time(String:"Question Text" BR "Default" Date?)

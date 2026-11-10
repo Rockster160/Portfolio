@@ -62,14 +62,15 @@
     <% if option[:style].to_s == "toggles" %>
       <%# Small flags in a row, normally left alone. %>
       <% colors = (option[:colors] || {}).transform_keys(&:to_s) %>
+      <% labels = (option[:labels] || {}).transform_keys(&:to_s) %>
       <% picked = Array(response&.dig(question) || option[:selected]).map(&:to_s) %>
       <div class="prompt-toggles">
         <% option[:choices].each_with_index do |choice, idx| %>
           <% id = "#{base_key}toggle#{idx}".gsub(/[^\w]/, "") %>
           <% color = colors[choice.to_s] %>
-          <label class="prompt-toggle" for="<%= id %>" <%= "style=\"--chip-color: #{color}\"".html_safe if color.to_s.match?(PromptChips::HEX) %>>
-            <%= check_box_tag "#{base_key}[]", choice, picked.include?(choice.to_s), id: id %>
-            <span><%= choice %></span>
+          <label class="prompt-toggle" for="<%= id %>" title="<%= choice %>" <%= "style=\"--chip-color: #{color}\"".html_safe if color.to_s.match?(PromptChips::HEX) %>>
+            <%= check_box_tag "#{base_key}[]", choice, picked.include?(choice.to_s), id: id, "aria-label": choice %>
+            <span><%= labels[choice.to_s].presence || choice %></span>
           </label>
         <% end %>
       </div>

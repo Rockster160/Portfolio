@@ -422,10 +422,15 @@ RSpec.describe FeatureBuilder do
       expect(chip.name).to eq("2x Claude running")
     end
 
-    it "names the questions session" do
+    it "never puts the questions session on the chip" do
       report({ "kind" => "questions", "working" => true })
+      expect(chip).to be_nil
 
-      expect(chip.name).to eq("Claude answering…")
+      report(
+        { "kind" => "questions", "working" => true },
+        { "build_id" => 1, "kind" => "builder", "working" => true },
+      )
+      expect(chip.name).to eq("Building…")
     end
 
     it "leaves a build that's waiting on an answer off the chip" do

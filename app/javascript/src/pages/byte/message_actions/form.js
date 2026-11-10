@@ -629,6 +629,7 @@ function buildControl(field, value, locked) {
     wrap.className = toggles ? "byte-msg-form-toggles" : "byte-msg-form-choices";
     if (toggles) wrap.setAttribute("aria-label", field.label || field.key);
     const colors = field.colors || {};
+    const labels = field.labels || {};
     const picked = new Set(
       (Array.isArray(value) ? value : String(value ?? "").split(","))
         .map((v) => String(v).trim())
@@ -644,8 +645,12 @@ function buildControl(field, value, locked) {
       cb.checked = picked.has(choice);
       cb.disabled = locked;
       opt.appendChild(cb);
+      if (toggles) {
+        opt.title = choice;
+        cb.setAttribute("aria-label", choice);
+      }
       const text = document.createElement("span");
-      text.textContent = choice;
+      text.textContent = (toggles && labels[choice]) || choice;
       opt.appendChild(text);
       wrap.appendChild(opt);
     });

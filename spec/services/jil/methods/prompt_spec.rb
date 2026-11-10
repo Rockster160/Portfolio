@@ -213,9 +213,25 @@ RSpec.describe Jil::Methods::Prompt do
           flagOne = String.new("🩸 Period")::String
           flagTwo = String.new("💥 Meltdown")::String
         }, flagColors)::PromptQuestion
+        flagLabels = Hash.new({
+          labelRabbit = Keyval.new("🩸 Period", "🐇")::Keyval
+        })::Hash
+        labeled = PromptQuestion.toggles("Something happened", {
+          labelOne = String.new("🩸 Period")::String
+          labelTwo = String.new("💥 Meltdown")::String
+        }, flagColors, flagLabels)::PromptQuestion
         moved = PromptQuestion.scale("Feeling", 0, 10, 6, true)::PromptQuestion
       JIL
     }
+
+    it "shows a toggle as its label while answering with its choice" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :flags, :value).symbolize_keys).not_to have_key(:labels)
+      expect(ctx.dig(:vars, :labeled, :value).symbolize_keys).to include(
+        choices: ["🩸 Period", "💥 Meltdown"],
+        labels:  { "🩸 Period" => "🐇" },
+      )
+    end
 
     it "asks flags as toggles, answered like choices, and a slider only if moved" do
       expect_successful_jil
