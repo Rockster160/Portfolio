@@ -1801,6 +1801,69 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Buddy::Claims: a reply naming one thing as done, on a turn where
+    # something else ran. The arms above all stand down the moment anything
+    # runs, which is exactly the turn a second nap skip answered off the first
+    # one's receipt looks like.
+    describe "a claim about one thing in particular" do
+      let(:claimed) { "Logged your coffee. Skipped that one too, so Whisper's next nap is the one after this!" }
+
+      before { allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true) }
+
+      it "gets a corrective round that names the call it's missing" do
+        client = run([
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          { text: claimed },
+          { tool_calls: [{ name: :run_jil_task, arguments: { "name" => "Whisper Skip Nap" } }] },
+          { text: "Logged your coffee and skipped that nap too." },
+        ])
+
+        nudge = client.calls[2].input.last[:content]
+        expect(nudge).to include("Whisper Skip Nap", "Skipped that one too")
+        expect(reply.body).to eq("Logged your coffee and skipped that nap too.")
+      end
+
+      it "corrects the claim under the part that was true when the round doesn't fix it" do
+        run([
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          { text: claimed },
+          { text: claimed },
+        ])
+
+        expect(reply.body).to start_with(claimed)
+        expect(reply.body).to end_with("I didn't actually skip Whisper's nap - that part didn't happen.")
+        expect(reply.metadata["unbacked_claims"]).to eq(["Whisper Skip Nap"])
+      end
+
+      it "retracts it outright when nothing ran at all" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false)
+
+        run([{ text: "Skipped Whisper's next nap." }, { text: "Skipped Whisper's next nap." }])
+
+        expect(reply.metadata).to include("retracted_claim" => true, "unbacked_claims" => ["Whisper Skip Nap"])
+      end
+
+      it "still asks when the turn read the action log and found the earlier one" do
+        rounds = [
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["recent_actions"] } }] },
+          { text: "Skipped Whisper's next nap." },
+          { text: "I haven't skipped it - want me to?" },
+        ]
+        client = run(rounds, text: "Please skip her 1 am nap.")
+
+        expect(client.calls[2].input.last[:content]).to include("Whisper Skip Nap")
+      end
+
+      it "leaves it alone when the automation it names ran" do
+        run([
+          { tool_calls: [{ name: :run_jil_task, arguments: { "name" => "Whisper Skip Nap" } }] },
+          { text: "Skipped Whisper's next nap." },
+        ])
+
+        expect(reply.body).to eq("Skipped Whisper's next nap.")
+      end
+    end
+
     # Everything above is a thing being added, set, logged, run or taken away.
     # None of it covers a thing being CHANGED, which is what a correction always
     # is — and a correction is the one place a claim is most likely to be

@@ -1085,6 +1085,8 @@ module Buddy
         @failed   = Set.new
         @seen     = Set.new
         @acted    = false
+        # What each call this turn could back, by call id. See claim_ran.
+        @claim_calls = {}
         # Whether a resolve found several records and put the choice up as
         # buttons. Nothing ran and nothing is proposed on such a turn, which
         # looks exactly like a lost one - but the question IS on screen and
@@ -1150,7 +1152,9 @@ module Buddy
             # honest but useless - the person asked for a thing and got a shrug.
             # It is far likelier the model skipped the call than that it meant
             # the claim, so it gets exactly one corrective round to make it.
-            nudge = (EMPTY_WAIT_NUDGE if empty_wait?(proposals, nudged, rounds)) || nudge_for(proposals, spoken, nudged, rounds)
+            nudge = (EMPTY_WAIT_NUDGE if empty_wait?(proposals, nudged, rounds))
+            nudge ||= claim_nudge(spoken, nudged, rounds)
+            nudge ||= nudge_for(proposals, spoken, nudged, rounds)
             break if nudge.nil?
 
             nudged = true
@@ -1188,6 +1192,7 @@ module Buddy
           @queued    ||= acting.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
           note_holder(acting)
           note_round_wait(acting)
+          acting.each { |c| @claim_calls[c[:call_id]] = claim_keys(c) }
 
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
@@ -1593,6 +1598,67 @@ module Buddy
 
         Do not repeat the claim.
       TXT
+
+      # RETRY_NUDGE with the claim named. It holds on a turn where something
+      # else DID run, which is why it can't say "you called no tool".
+      CLAIM_NUDGE = <<~TXT.freeze
+        STOP. Your reply says something happened that no call this turn did:
+
+        %<claims>s
+
+        Make that call now if it's doable - it is what they asked for, and an
+        earlier call in the thread doesn't count for this one. If it genuinely
+        isn't doable, say plainly that it didn't happen.
+
+        Do not repeat the claim.
+      TXT
+
+      # Added under a reply that is otherwise true, because something else in
+      # it really did run. Wiping the whole reply would take that with it.
+      CLAIM_CORRECTION = "One correction: I didn't actually %<did>s - that part didn't happen.".freeze
+
+      # One corrective round naming the claim, ahead of the arms in nudge_for:
+      # those only fire when nothing was proposed, and they can't say which
+      # call is missing.
+      def claim_nudge(spoken, nudged, rounds)
+        return nil if nudged || rounds >= MAX_ROUNDS || Time.current > @deadline
+
+        hits = unbacked_claims(spoken)
+        return nil if hits.empty?
+
+        format(CLAIM_NUDGE, claims: hits.map { |hit| "- \"#{hit.sentence}\" - #{claim_call(hit.claim)}" }.join("\n"))
+      end
+
+      def claim_call(claim)
+        return "nothing that would #{claim.did} ran (that's `#{claim.target}`)" if claim.target.is_a?(Symbol)
+
+        "the `#{claim.target}` automation never ran (run it with `run_jil_task`)"
+      end
+
+      # Stood down where the claim can be true without a call this turn: a
+      # briefing makes none, an answer about how things stand is describing
+      # them, and a disputed action answered from the action log is about an
+      # earlier turn. Reading the log on its own is no excuse - the second nap
+      # skip read it, found the first, and reported that as the new one.
+      def unbacked_claims(body)
+        return [] if body.blank? || today_briefing? || asked_about_state?
+        return [] if @read_actions && (disputed_action? || undo_regret?)
+
+        Buddy::Claims.unbacked(body, ran: claim_ran)
+      end
+
+      # What this turn's calls back: every tool it called without failing, and
+      # every automation one of them named. A held or later call counts - it is
+      # on its way.
+      def claim_ran
+        calls = (@claim_calls || {}).reject { |id, _| @failed&.include?(id) }
+        calls.values.reduce(Set.new, :merge)
+      end
+
+      def claim_keys(call)
+        task = call.dig(:arguments, "name").presence || call.dig(:arguments, :name).presence
+        [call[:name].to_sym, task&.to_s&.downcase].compact.to_set
+      end
 
       # A wait that holds nothing. "Turn the TV off in 30" came back as one
       # `set_timer` labelled "TV off" with `then_continue`, and no TV call at all:
@@ -4598,11 +4664,20 @@ module Buddy
         # that did not exist.
         kind = :empty_wait if result[:empty_wait] && !pending
 
+        # A claim about one thing in particular, still standing after its
+        # corrective round. On a turn where something else ran, the rest of the
+        # reply is true, so the claim is corrected underneath rather than the
+        # whole reply going.
+        hits = unbacked_claims(body)
+        return correct_claims!(body, hits) if hits.any? && executed_anything?(result)
+
         # The gate FIRST, so the broad arm below only ever sees a turn that
         # touched nothing. Everything under here already assumed that; it was
         # just being asked after the phrasing rather than before it, which meant
         # the phrasing was doing work the machinery had already done.
         return if executed_anything?(result)
+
+        kind ||= (:named if hits.any?)
 
         # A briefing executes nothing BY CONSTRUCTION, so that gate is open on
         # every one of them, every morning - and it ate two of Eve's whole,
@@ -4637,15 +4712,29 @@ module Buddy
         # that is not in them.
         # `:empty_wait` joins `:call` in not getting it, and for the same reason:
         # the wait is THIS turn's, so the action log has nothing to say about it.
-        return if @read_actions && [:call, :empty_wait].exclude?(kind)
+        # `:named` has already made this call for itself, in unbacked_claims.
+        return if @read_actions && [:call, :empty_wait, :named].exclude?(kind)
 
         Rails.logger.warn(
           "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \
           "on message=#{@reply.id} user=#{@user.id}: #{body.truncate(160).inspect}",
         )
+        metadata = (@reply.metadata || {}).merge("retracted_claim" => true)
+        metadata["unbacked_claims"] = hits.map { |hit| hit.claim.target } if hits.any?
+        @reply.update!(body: retraction_body(kind, pending, result), metadata: metadata)
+      end
+
+      # The targets go on the reply so the audit can find each one and say
+      # whether its entry needs widening or narrowing.
+      def correct_claims!(body, hits)
+        Rails.logger.warn(
+          "[Buddy::GPT::Turn] corrected unbacked #{hits.map { |hit| hit.claim.target }.join(", ")} " \
+          "on message=#{@reply.id} user=#{@user.id}: #{body.truncate(160).inspect}",
+        )
+        corrections = hits.map { |hit| format(CLAIM_CORRECTION, did: hit.claim.did) }
         @reply.update!(
-          body:     retraction_body(kind, pending, result),
-          metadata: (@reply.metadata || {}).merge("retracted_claim" => true),
+          body:     [body.rstrip, *corrections].join("\n\n"),
+          metadata: (@reply.metadata || {}).merge("unbacked_claims" => hits.map { |hit| hit.claim.target }),
         )
       end
 

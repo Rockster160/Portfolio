@@ -4407,6 +4407,13 @@ namespace :buddy do
     if calls.empty? && Buddy::GPT::Turn.unbacked_claim(reply)
       out << "claims it did something, with no tool call behind it"
     end
+    # The same, about one thing in particular, whatever else ran. The eval
+    # never sees the corrective round and the correction the turn adds, so a
+    # hit here is what a person would have been sent back a second time for.
+    ran = calls.flat_map { |c| [c[:name].to_sym, c.dig(:arguments, "name").to_s.downcase.presence] }
+    Buddy::Claims.unbacked(reply, ran: ran.compact.to_set).each { |hit|
+      out << "says it did #{hit.claim.target} and didn't: #{hit.sentence.truncate(80).inspect}"
+    }
 
     # No em-dash check: Buddy::GPT::Turn.normalize_dashes takes them out on the
     # way to the person now, and `displayed` applies the same thing here. A flag
