@@ -84,7 +84,7 @@ html.html-ctr-games body {
 
   // forms.scss's input[type="..."]:not(.basic, .invisi-field) selector
   // out-specifies a plain scoped rule, hence !important throughout.
-  input[type="text"], input[type="number"], input[type="datetime-local"], input[type="search"] {
+  input[type="text"], input[type="number"], input[type="datetime-local"], input[type="search"], textarea {
     width: 100% !important;
     background: var(--g-surface-2) !important;
     border: 1px solid var(--g-line) !important;
@@ -99,6 +99,8 @@ html.html-ctr-games body {
     &:focus { border-color: var(--g-accent) !important; }
     &::placeholder { color: var(--g-text-3); }
   }
+
+  textarea { line-height: 1.45; resize: vertical; font-size: 15px !important; }
 
   // Doubled attribute: outranks any `.games-app .x { display: flex !important }`.
   [hidden][hidden] { display: none !important; }
@@ -224,6 +226,12 @@ html.html-ctr-games body {
   .games-hint { font-size: 13px; color: var(--g-text-3); margin-top: 6px; }
   .games-win-counts { padding: 6px 14px; }
   .games-danger-zone { margin-top: 26px; }
+  .games-advanced {
+    border-top: 1px solid var(--g-line); padding-top: 14px;
+    summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--g-text-2); }
+    &[open] summary { margin-bottom: 14px; }
+    > div + div { margin-top: 18px; }
+  }
 
   .games-switch {
     position: relative; width: 50px; height: 30px; border-radius: 999px; background: var(--g-surface-3); flex: none;
@@ -429,6 +437,43 @@ html.html-ctr-games body {
     font-size: 26px; --btn-fg: var(--g-text);
     small { font-size: 11px; font-weight: 650; color: var(--g-text-3); text-transform: uppercase; letter-spacing: 0.05em; }
     &:active { background: var(--g-surface-3); }
+  }
+
+  // Phases: every phase across the top, the current one's steps below with
+  // Next beside them. Only drawn for a game that has phases.
+  .games-phase { flex: none; display: flex; flex-direction: column; gap: 6px; }
+  .games-phase-pills {
+    display: flex; gap: 5px; align-items: center; overflow-x: auto; scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+  .games-phase-round { flex: none; font-size: 13px; font-weight: 750; color: var(--g-text-3); padding: 0 4px; }
+  .games-phase-pill {
+    flex: 1 0 auto; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--g-surface);
+    border-bottom: 3px solid var(--pill); font-size: 14px; font-weight: 650; --btn-fg: var(--g-text-2); white-space: nowrap;
+    &.is-current { background: var(--pill); --btn-fg: var(--phase-fg); }
+  }
+  .games-phase-now { display: flex; gap: 8px; min-height: 64px; }
+  .games-phase-steps {
+    flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-content: center; gap: 5px;
+    padding: 6px; border-radius: 16px; background: var(--g-surface); border: 1px solid var(--g-line);
+  }
+  .games-phase-step {
+    min-height: 34px; padding: 0 12px; border-radius: 10px; font-size: 15px; font-weight: 600;
+    background: var(--g-surface-2); --btn-fg: var(--g-text-2);
+    &.is-done { opacity: 0.5; text-decoration: line-through; }
+    &.is-current { background: var(--phase); --btn-fg: var(--phase-fg); font-weight: 750; }
+  }
+  .games-phase-who {
+    flex-basis: 100%; padding: 2px 6px 0; font-size: 15px; font-weight: 750; color: var(--g-text);
+    border-left: 4px solid var(--who); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .games-phase-solo { padding: 0 8px; font-size: 16px; font-weight: 700; }
+  .games-phase-next {
+    flex: none; min-width: 96px; max-width: 40%; padding: 0 14px; border-radius: 16px; font-size: 18px; font-weight: 750;
+    background: var(--g-text); --btn-fg: var(--g-bg);
+    display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    small { font-size: 12px; font-weight: 600; opacity: 0.7; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &:active { transform: scale(0.97); }
   }
 
   // Every player, in order. Tap one to make them the roller.

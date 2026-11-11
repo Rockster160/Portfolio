@@ -6,7 +6,9 @@
 #  aliases       :jsonb            not null
 #  auto_advance  :boolean          default(TRUE), not null
 #  dice          :text
+#  first_player  :integer          default("keep"), not null
 #  name          :text             not null
+#  phases        :jsonb            not null
 #  score_presets :jsonb            not null
 #  scoring       :integer          default("individual"), not null
 #  win           :integer          default("high"), not null
@@ -17,9 +19,15 @@
 class GameTemplate < ApplicationRecord
   SCORINGS = { individual: 0, teams: 1, table: 2 }.freeze
   WINS = { high: 0, low: 1, none: 2 }.freeze
+  FIRST_PLAYERS = { keep: 0, rotate: 1, lowest_score: 2, highest_score: 3 }.freeze
+  # "Swarm (each player x2)" - every player takes a turn through the steps,
+  # twice around the table, before the next phase.
+  EACH_PLAYER = /\((?:each|every)\s+player(?:\s*[x×]\s*(\d+))?\)/i
+  COLOR = /#(\h{3,8})\b/
 
   enum :scoring, SCORINGS, scopes: false
   enum :win, WINS, scopes: false
+  enum :first_player, FIRST_PLAYERS, prefix: true, scopes: false
 
   belongs_to :user
   has_many :game_plays, dependent: :nullify
@@ -44,6 +52,35 @@ class GameTemplate < ApplicationRecord
 
     user.game_templates.find_by(name: name) ||
       user.game_templates.detect { |t| Array(t.aliases).any? { |a| a.to_s.strip == name } }
+  end
+
+  # One phase per line, the same shape as a Timers dial:
+  #   Emerge #E8A83E: Nodes Pulse, Springs Yield
+  #   Swarm #D4644E (each player x2): 2, 1, 0
+  # A color on a step is dropped - steps take their phase's color.
+  def self.parse_phases(text)
+    text.to_s.lines.map(&:strip).compact_blank.filter_map { |line|
+      head, tail = line.split(":", 2)
+      laps = [::Regexp.last_match(1).to_i, 1].max if head.match(EACH_PLAYER)
+      head = head.sub(EACH_PLAYER, " ")
+      color = "##{::Regexp.last_match(1).downcase}" if head.match(COLOR)
+      head = head.sub(COLOR, " ")
+      name = head.squish
+      next if name.blank?
+
+      steps = tail.to_s.split(",").map { |step| step.gsub(COLOR, " ").squish }.compact_blank
+      { name: name, color: color, laps: laps, steps: steps }.compact
+    }
+  end
+
+  def phases_text
+    Array(phases).map { |phase|
+      laps = phase["laps"].to_i
+      each_player = "(each player#{" x#{laps}" if laps > 1})" if laps.positive?
+      head = [phase["name"], phase["color"], each_player].compact.join(" ")
+      steps = Array(phase["steps"])
+      steps.any? ? "#{head}: #{steps.join(", ")}" : head
+    }.join("\n")
   end
 
   private

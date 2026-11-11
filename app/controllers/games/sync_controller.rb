@@ -48,6 +48,7 @@ class Games::SyncController < ApplicationController
     play.started_at = moved_start(data[:started_at]) || play.started_at unless creating
     play.players = data[:players].map(&:deep_stringify_keys) if data[:players].present?
     play.settings = play.settings.merge(data[:settings].deep_stringify_keys) if data[:settings].present?
+    play.phase_state = data[:phase_state].deep_stringify_keys if data.key?(:phase_state)
   end
 
   def upsert_rolls!(play)
@@ -94,7 +95,7 @@ class Games::SyncController < ApplicationController
   def play_params
     params.require(:play).permit(
       :game_template_id, :name, :dice_mode, :started_at, :current_player_index,
-      players: [:name, :color, :team], settings: {}
+      players: [:name, :color, :team], settings: {}, phase_state: {}
     ).to_h.deep_symbolize_keys
   rescue ActionController::ParameterMissing
     {}

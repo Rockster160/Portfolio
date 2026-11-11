@@ -10,6 +10,7 @@
 #  ended_at             :datetime
 #  final_scores         :jsonb            not null
 #  name                 :text             not null
+#  phase_state          :jsonb            not null
 #  players              :jsonb            not null
 #  settings             :jsonb            not null
 #  started_at           :datetime
@@ -53,6 +54,16 @@ class GamePlay < ApplicationRecord
 
   def auto_advance?
     settings.key?("auto_advance") ? !!settings["auto_advance"] : true
+  end
+
+  def phases
+    Array(settings["phases"])
+  end
+
+  # The round the table was on when the game ended - phases count one round
+  # each time they wrap back to the first.
+  def rounds
+    phase_state["round"].to_i if phases.any? && phase_state["round"].present?
   end
 
   def current_player
@@ -139,6 +150,7 @@ class GamePlay < ApplicationRecord
       data[:players] = final_scores
     end
     data[:duration] = duration.to_s if duration.present?
+    data[:rounds] = rounds if rounds.present?
     data[:abandoned] = true if abandoned?
 
     action_event.update!(notes: name, timestamp: started_at || action_event.timestamp, data: data)

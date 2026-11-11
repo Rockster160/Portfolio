@@ -7178,10 +7178,19 @@ $board-cell-max: 200px;
   color: var(--board-face-color, var(--bs-text));
   text-align: center;
 
+  // Kept inside the square inscribed in the disc (70% of its side), so no line
+  // pokes past the curve, and cut to four lines with an ellipsis. Four lines at
+  // this size fill that square on the narrowest disc a column allows, and the
+  // size follows the board's circle scale so a shrunk board still fits them.
   &[data-words="true"] {
-    width: 86%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    width: 70%;
+    max-height: 70%;
+    overflow: hidden;
     aspect-ratio: auto;
-    font-size: 15px;
+    font-size: calc(15px * var(--board-circle-scale, 1));
     font-weight: 700;
     line-height: 1.1;
     overflow-wrap: anywhere;

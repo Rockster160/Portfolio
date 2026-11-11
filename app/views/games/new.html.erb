@@ -15,7 +15,16 @@
 
     <script type="application/json" data-games-templates-json>
       <%== @templates.map { |t|
-        { id: t.id, name: t.name, dice: t.dice, scoring: t.scoring, win: t.win, auto_advance: t.auto_advance }
+        {
+          id:           t.id,
+          name:         t.name,
+          dice:         t.dice,
+          scoring:      t.scoring,
+          win:          t.win,
+          auto_advance: t.auto_advance,
+          phases:       t.phases,
+          first_player: t.first_player,
+        }
       }.to_json %>
     </script>
 

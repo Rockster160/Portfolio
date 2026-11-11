@@ -80,6 +80,18 @@ RSpec.describe GamePlay do
       expect(event.data["score"]).to eq(96)
       expect(event.data["players"]).to eq({ "Rocco" => nil, "Chelsea" => nil })
     end
+
+    it "logs the round a phased game ended on, and no rounds for a game without phases" do
+      phased = build_play(settings: { "phases" => [{ "name" => "Emerge" }] }, phase_state: { "round" => 3 })
+      plain = build_play(phase_state: { "round" => 3 })
+      [phased, plain].each do |play|
+        play.ensure_action_event!
+        play.finish!(final_scores: { "Rocco" => 1 }, started_at: play.started_at, ended_at: Time.current)
+      end
+
+      expect(phased.action_event.reload.data["rounds"]).to eq(3)
+      expect(plain.action_event.reload.data).not_to have_key("rounds")
+    end
   end
 
   describe "#compute_winner_names" do

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_10_190521) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_11_040805) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1288,6 +1288,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_190521) do
     t.uuid "client_uuid", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "phase_state", default: {}, null: false
     t.index ["action_event_id"], name: "index_game_plays_on_action_event_id"
     t.index ["client_uuid"], name: "index_game_plays_on_client_uuid", unique: true
     t.index ["game_template_id"], name: "index_game_plays_on_game_template_id"
@@ -1338,6 +1339,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_190521) do
     t.jsonb "aliases", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "phases", default: [], null: false
+    t.integer "first_player", default: 0, null: false
     t.index ["user_id", "name"], name: "index_game_templates_on_user_id_and_name", unique: true
     t.index ["user_id"], name: "index_game_templates_on_user_id"
   end

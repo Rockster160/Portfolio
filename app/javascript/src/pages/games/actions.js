@@ -83,6 +83,17 @@ export function makeActions({ store }) {
     scheduleFlush();
   }
 
+  // Next step, a jump to another phase, or a new round - the position and
+  // the player it lands on move together, and undo puts both back.
+  function movePhase(phaseState, playerIndex) {
+    const play = store.activePlay;
+    play.action_log.push({ type: "phase", prev_state: play.phase_state || {}, prev_index: play.current_player_index });
+    store.patchActivePlay({ phase_state: phaseState, current_player_index: playerIndex });
+    pushPlayPatch({ phase_state: phaseState, current_player_index: playerIndex });
+    save();
+    scheduleFlush();
+  }
+
   // Fixing a past roll: rolls are append-only on the server (upserted by
   // client_uuid), so an edit voids the old row and records a replacement
   // carrying the ORIGINAL rolled_at, then repoints the undo log at it - undo
@@ -158,7 +169,7 @@ export function makeActions({ store }) {
   }
 
   // Always the same button, always undoes the LAST thing - a roll (and the
-  // advance it caused, if any), a score, or a bare Next.
+  // advance it caused, if any), a score, a bare Next, or a phase step.
   function undoLast() {
     const play = store.activePlay;
     const entry = play.action_log?.pop() || reconstructLastRoll();
@@ -177,6 +188,9 @@ export function makeActions({ store }) {
     } else if (entry.type === "advance") {
       store.patchActivePlay({ current_player_index: entry.prev_index });
       pushPlayPatch({ current_player_index: entry.prev_index });
+    } else if (entry.type === "phase") {
+      store.patchActivePlay({ phase_state: entry.prev_state, current_player_index: entry.prev_index });
+      pushPlayPatch({ phase_state: entry.prev_state, current_player_index: entry.prev_index });
     }
     save();
     scheduleFlush();
@@ -214,7 +228,7 @@ export function makeActions({ store }) {
   }
 
   return {
-    recordRoll, advanceTurn, setTurn, addScore, undoLast, setPlayers, editRoll, deleteRoll,
+    recordRoll, advanceTurn, setTurn, movePhase, addScore, undoLast, setPlayers, editRoll, deleteRoll,
     updateSettings, setDiceMode, setStartedAt, flushNow,
   };
 }

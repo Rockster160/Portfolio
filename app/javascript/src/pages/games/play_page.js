@@ -13,6 +13,7 @@ import { textColorFor } from "./colors";
 import { openSheet, closeSheet } from "./sheet";
 import { keypadHtml, wireKeypad } from "./keypad";
 import { mountPlayerEditor } from "./player_editor";
+import { parsePhases, phasesText, positionOf, playerIndexAt, advance, pickLead } from "./phases";
 import { esc, clock, ago, buzz, localInputValue } from "./util";
 
 const ONE_OFF_DICE = ["d4", "d6", "d8", "d10", "d12", "d20", "2d6", "d100"];
@@ -77,6 +78,10 @@ function boot() {
   const current = () => players()[play().current_player_index] || players()[0];
   const nextPlayer = () => players()[(play().current_player_index + 1) % (players().length || 1)];
   const liveScores = () => (play().scores || []).filter((s) => !s.voided_at);
+  const phases = () => settings().phases || [];
+  const hasPhases = () => phases().length > 0;
+  const phasePos = () => positionOf(play(), phases());
+  const inEachPlayerPhase = () => hasPhases() && !!phases()[phasePos().phase]?.laps;
 
   function totals() {
     const out = {};
@@ -119,7 +124,10 @@ function boot() {
     // The scoreboard already shows each total large; the strip only picks the turn there.
     const showStripScores = hasDice() && tracksScore() && scoring() === "individual";
     const unsynced = stuckCount();
-    const needsNext = !autoAdvance();
+    // With phases, Next steps the phase and the phase decides whose turn it is.
+    const needsNext = !autoAdvance() && !hasPhases();
+    const showThen = !needsNext && players().length > 1 && !hasPhases();
+    const kicker = hasDice() ? "Rolling" : (hasPhases() ? (inEachPlayerPhase() ? lapName(phasePos()) : "First player") : "Turn");
 
     root.innerHTML = `
       <header class="games-play-head">
@@ -138,14 +146,16 @@ function boot() {
       <div class="games-turn">
         <div class="games-turn-card" style="background:${esc(color)};color:${fg}">
           <span class="games-turn-text">
-            <span class="games-turn-kicker">${hasDice() ? "Rolling" : "Turn"}</span>
+            <span class="games-turn-kicker">${kicker}</span>
             <span class="games-turn-name">${esc(p?.name || "-")}</span>
           </span>
-          ${!needsNext && players().length > 1 ? `<span class="games-turn-next">then ${esc(nextPlayer()?.name)}</span>` : ""}
+          ${showThen ? `<span class="games-turn-next">then ${esc(nextPlayer()?.name)}</span>` : ""}
         </div>
         ${needsNext && players().length > 1 ? '<button type="button" class="games-turn-next-btn" data-next>Next ›</button>' : ""}
         <button type="button" class="games-undo" data-undo aria-label="Undo">↶<small>Undo</small></button>
       </div>
+
+      ${phaseHtml()}
 
       ${players().length > 1 ? `
         <div class="games-strip ${players().length > 5 ? "is-crowded" : ""}" role="group" aria-label="Who is rolling">
@@ -164,6 +174,83 @@ function boot() {
       ${footHtml()}
     `;
     wire();
+  }
+
+  // Every phase across the top (tap one to jump to it), the current phase's
+  // steps below, and Next naming where it goes - a step, a player, a phase,
+  // or the next round.
+  function phaseHtml() {
+    if (!hasPhases()) return "";
+    const pos = phasePos();
+    const phase = phases()[pos.phase];
+    const color = phase.color || "#3987e5";
+    return `
+      <section class="games-phase" style="--phase:${esc(color)};--phase-fg:${textColorFor(color)}">
+        <div class="games-phase-pills" role="group" aria-label="Phases">
+          <span class="games-phase-round games-num">R${pos.round}</span>
+          ${phases().map((ph, i) => `
+            <button type="button" class="games-phase-pill ${i === pos.phase ? "is-current" : ""}" data-phase="${i}"
+              style="--pill:${esc(ph.color || "#3987e5")}">
+              ${esc(ph.name)}${i === pos.phase && ph.laps > 1 ? ` <span class="games-num">${pos.lap + 1}/${ph.laps}</span>` : ""}
+            </button>
+          `).join("")}
+        </div>
+        <div class="games-phase-now">
+          <div class="games-phase-steps">
+            ${phase.laps ? `<span class="games-phase-who" style="--who:${esc(players()[playerIndexAt(phases(), pos, players().length)]?.color || color)}">${esc(turnLabel(pos))}</span>` : ""}
+            ${(phase.steps || []).map((step, i) => `
+              <button type="button" class="games-phase-step ${i === pos.step ? "is-current" : ""} ${i < pos.step ? "is-done" : ""}"
+                data-step="${i}">${esc(step)}</button>
+            `).join("") || `<span class="games-phase-solo">${esc(phase.name)}</span>`}
+          </div>
+          <button type="button" class="games-phase-next" data-phase-next>
+            Next ›<small>${esc(nextPhaseLabel(pos))}</small>
+          </button>
+        </div>
+      </section>
+    `;
+  }
+
+  function scoreOfPlayer(index) {
+    const pl = players()[index];
+    const key = scoring() === "teams" ? (pl?.team || pl?.name) : pl?.name;
+    return totals()[key] || 0;
+  }
+
+  function stepPhase(pos) {
+    const n = players().length;
+    return advance(phases(), pos, n, (lead) => pickLead(settings().first_player, lead, n, scoreOfPlayer));
+  }
+
+  // "Swarm 2" on the second time round the table; just "Swarm" when the
+  // phase only goes round once.
+  function lapName(pos) {
+    const phase = phases()[pos.phase];
+    return phase.laps > 1 ? `${phase.name} ${pos.lap + 1}` : phase.name;
+  }
+
+  function turnLabel(pos) {
+    const who = players()[playerIndexAt(phases(), pos, players().length)];
+    return [who?.name, lapName(pos)].filter(Boolean).join(" · ");
+  }
+
+  function nextPhaseLabel(pos) {
+    const next = stepPhase(pos);
+    if (next.round !== pos.round) return `Round ${next.round}`;
+    const n = players().length;
+    const newTurn = next.phase !== pos.phase || next.lap !== pos.lap || playerIndexAt(phases(), next, n) !== playerIndexAt(phases(), pos, n);
+    if (newTurn && phases()[next.phase].laps) return turnLabel(next);
+    if (next.phase !== pos.phase) return phases()[next.phase].name;
+    return phases()[next.phase].steps?.[next.step] || "";
+  }
+
+  function goToPhase(pos) {
+    const n = players().length;
+    const roundTurned = pos.round !== phasePos().round;
+    actions.movePhase(pos, playerIndexAt(phases(), pos, n));
+    buzz();
+    render();
+    if (roundTurned && n > 1) toast(`Round ${pos.round} · ${players()[pos.lead]?.name} first`);
   }
 
   function recentHtml(rolls) {
@@ -280,6 +367,17 @@ function boot() {
     root.querySelector("[data-score]")?.addEventListener("click", () => openScoreSheet());
     root.querySelector("[data-menu]").addEventListener("click", openMenuSheet);
     root.querySelector("[data-sync]")?.addEventListener("click", async () => { await actions.flushNow(); render(); });
+    root.querySelector("[data-phase-next]")?.addEventListener("click", () => goToPhase(stepPhase(phasePos())));
+    root.querySelectorAll("[data-phase]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const index = parseInt(btn.dataset.phase, 10);
+        if (index === phasePos().phase) return;
+        goToPhase({ ...phasePos(), phase: index, step: 0, lap: 0, turn: 0 });
+      });
+    });
+    root.querySelectorAll("[data-step]").forEach((btn) => {
+      btn.addEventListener("click", () => goToPhase({ ...phasePos(), step: parseInt(btn.dataset.step, 10) }));
+    });
   }
 
   function recordValue(value, source, extra = {}) {
@@ -313,6 +411,10 @@ function boot() {
     } else if (entry.type === "score") {
       const score = play().scores.find((s) => s.client_uuid === entry.client_uuid);
       if (score) toast(`Removed ${score.delta > 0 ? "+" : ""}${score.delta} for ${score.player_name}`);
+    } else if (entry.type === "phase") {
+      const pos = phasePos();
+      const phase = phases()[pos.phase];
+      toast(`Back to ${[phase?.name, phase?.steps?.[pos.step]].filter(Boolean).join(" · ")}`);
     } else {
       toast(`Back to ${current()?.name}`);
     }
@@ -514,6 +616,10 @@ function boot() {
             <span class="games-row-label">Players</span>
             <span class="games-row-hint">${players().length} · reorder, add, colours ›</span>
           </button>
+          <button type="button" class="games-row" data-phases>
+            <span class="games-row-label">Phases</span>
+            <span class="games-row-hint">${hasPhases() ? `${phases().length} · round ${phasePos().round}` : "Add"} ›</span>
+          </button>
         </div>
         <div class="games-sheet-actions">
           <button type="button" class="games-btn games-btn-primary games-btn-block games-btn-lg" data-end>End game &amp; enter scores</button>
@@ -536,6 +642,7 @@ function boot() {
         });
         panel.querySelector("[data-started]").addEventListener("click", openStartedSheet);
         panel.querySelector("[data-players]").addEventListener("click", openPlayersSheet);
+        panel.querySelector("[data-phases]").addEventListener("click", openPhasesSheet);
         panel.querySelector("[data-end]").addEventListener("click", async (e) => {
           e.currentTarget.disabled = true;
           await actions.flushNow();
@@ -581,6 +688,45 @@ function boot() {
           actions.setStartedAt(picked.toISOString());
           closeSheet();
           toast(`Started at ${startedLabel()}`);
+        });
+      },
+    });
+  }
+
+  // This play's phases only - the game's own setup is changed on its
+  // settings page. Where the table stands is kept wherever it still fits.
+  function openPhasesSheet() {
+    const rules = [["keep", "Same"], ["rotate", "Next along"], ["lowest_score", "Lowest"], ["highest_score", "Highest"]];
+    let rule = settings().first_player || "keep";
+    openSheet({
+      title: "Phases",
+      body: `
+        <div class="games-sheet-section">
+          <textarea data-phases-input rows="6" autocapitalize="words" spellcheck="false"
+            placeholder="Emerge: Nodes Pulse, Springs Yield&#10;Swarm (each player x2): 2, 1, 0">${esc(phasesText(phases()))}</textarea>
+          <p class="games-hint">One phase per line, steps after the colon. <code>(each player x2)</code> gives everyone a turn, twice around.</p>
+        </div>
+        <div class="games-sheet-section">
+          <div class="games-sheet-label">First player each round</div>
+          <div class="games-segmented">
+            ${rules.map(([v, label]) => `<button type="button" data-rule="${v}" aria-pressed="${v === rule}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="games-sheet-actions">
+          <button type="button" class="games-btn games-btn-primary games-btn-block" data-save>Save</button>
+        </div>
+      `,
+      onClose: render,
+      onMount(panel) {
+        panel.querySelectorAll("[data-rule]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            rule = btn.dataset.rule;
+            panel.querySelectorAll("[data-rule]").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+          });
+        });
+        panel.querySelector("[data-save]").addEventListener("click", () => {
+          actions.updateSettings({ phases: parsePhases(panel.querySelector("[data-phases-input]").value), first_player: rule });
+          closeSheet();
         });
       },
     });

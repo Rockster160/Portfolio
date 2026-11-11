@@ -257,6 +257,25 @@ RSpec.describe GamesController do
       expect(template.aliases).to eq(["Settlers", "Catan"])
     end
 
+    it "saves phases typed as lines, and the first player rule" do
+      update!(phases: "Emerge #E8A83E: Nodes Pulse, Springs Yield\nSwarm (each player x2): 2, 1, 0", first_player: "lowest_score")
+
+      template.reload
+      expect(template.phases).to eq([
+        { "name" => "Emerge", "color" => "#e8a83e", "steps" => ["Nodes Pulse", "Springs Yield"] },
+        { "name" => "Swarm", "laps" => 2, "steps" => ["2", "1", "0"] },
+      ])
+      expect(template.first_player).to eq("lowest_score")
+    end
+
+    it "clears the phases when the box is emptied" do
+      template.update!(phases: [{ name: "Emerge" }])
+
+      update!(phases: "")
+
+      expect(template.reload.phases).to eq([])
+    end
+
     it "clears the dice and turns auto-advance off" do
       update!(dice_choice: "", auto_advance: "0")
 

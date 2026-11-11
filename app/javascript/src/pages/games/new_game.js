@@ -38,7 +38,21 @@ function summarize(s, diceMode) {
   if (s.win === "low") parts.push("lowest wins");
   if (s.win === "high" && s.scoring !== "table") parts.push("highest wins");
   if (s.win === "none" && s.scoring !== "table") parts.push("no score");
+  if (s.phases?.length) parts.push(`${s.phases.length} phase${s.phases.length === 1 ? "" : "s"}`);
   return parts.join(" · ");
+}
+
+// Phases ride along from the game untouched - they're edited on the game's
+// settings page, never here.
+function settingsFrom(t) {
+  return {
+    dice: t.dice || "",
+    scoring: t.scoring || "individual",
+    win: t.win || "high",
+    auto_advance: t.auto_advance !== false,
+    phases: t.phases || [],
+    first_player: t.first_player || "keep",
+  };
 }
 
 function boot() {
@@ -111,12 +125,7 @@ function boot() {
   function selectTemplate(t) {
     state.templateId = t.id;
     nameInput.value = t.name;
-    state.settings = {
-      dice: t.dice || "",
-      scoring: t.scoring || "individual",
-      win: t.win || "high",
-      auto_advance: t.auto_advance !== false,
-    };
+    state.settings = settingsFrom(t);
     state.settingsOpen = false;
     state.diceOther = !!t.dice && !DICE_CHOICES.some((d) => d.value === t.dice);
     nameInput.blur();
@@ -134,7 +143,7 @@ function boot() {
     const exact = exactTemplate(nameInput.value);
     if (exact) {
       state.templateId = exact.id;
-      state.settings = { dice: exact.dice || "", scoring: exact.scoring, win: exact.win, auto_advance: exact.auto_advance !== false };
+      state.settings = settingsFrom(exact);
       state.settingsOpen = false;
     } else {
       if (state.templateId) state.settingsOpen = true;

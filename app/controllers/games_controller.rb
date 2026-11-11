@@ -160,7 +160,7 @@ class GamesController < ApplicationController
   # fields as typed text ("1, 2, 5"; one alias per line or comma).
   def template_form_params
     raw = params.require(:game_template).permit(
-      :name, :dice_choice, :dice_other, :scoring, :win, :auto_advance, :score_presets, :aliases
+      :name, :dice_choice, :dice_other, :scoring, :win, :auto_advance, :score_presets, :aliases, :phases, :first_player
     )
     dice = raw[:dice_choice] == "other" ? raw[:dice_other] : raw[:dice_choice]
     name = raw[:name].to_s.strip
@@ -172,6 +172,8 @@ class GamesController < ApplicationController
       auto_advance:  raw[:auto_advance] == "1",
       score_presets: raw[:score_presets].to_s.scan(/\d+/).map(&:to_i).select(&:positive?).uniq.first(4),
       aliases:       raw[:aliases].to_s.split(/[,\n]/).map(&:strip).compact_blank.uniq.reject { |a| a.casecmp?(name) },
+      phases:        GameTemplate.parse_phases(raw[:phases]),
+      first_player:  raw[:first_player].presence || :keep,
     }
   end
 
@@ -264,6 +266,8 @@ class GamesController < ApplicationController
       auto_advance:   t.auto_advance,
       score_presets:  t.score_presets,
       aliases:        t.aliases,
+      phases:         t.phases,
+      first_player:   t.first_player,
       last_played_at: t.game_plays.maximum(:started_at)&.iso8601(3),
     }
   end
@@ -282,6 +286,7 @@ class GamesController < ApplicationController
       dice_mode:            play.dice_mode,
       status:               play.status,
       current_player_index: play.current_player_index,
+      phase_state:          play.phase_state,
       final_scores:         play.final_scores,
       winner_names:         play.winner_names,
       action_event_id:      play.action_event_id,

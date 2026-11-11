@@ -37,6 +37,19 @@ RSpec.describe "Games::Sync" do
       expect(play.current_player_index).to eq(1)
     end
 
+    it "starts a play with its game's phases and keeps where the table is in them", :aggregate_failures do
+      uuid = SecureRandom.uuid
+      phases = [{ name: "Emerge", steps: ["Nodes Pulse"] }, { name: "Swarm", laps: 2, steps: ["2", "1", "0"] }]
+      sync!(uuid, play: { name: "Slime Colony", settings: { phases: phases }, players: [{ name: "Rocco" }] })
+
+      sync!(uuid, play: { phase_state: { round: 2, phase: 1, step: 2, lap: 1, turn: 0, lead: 0 } })
+      sync!(uuid, play: { current_player_index: 0 })
+
+      play = user.game_plays.find_by!(client_uuid: uuid)
+      expect(play.phases).to eq(phases.map(&:deep_stringify_keys))
+      expect(play.phase_state).to eq({ "round" => 2, "phase" => 1, "step" => 2, "lap" => 1, "turn" => 0, "lead" => 0 })
+    end
+
     it "moves the start, and the Game event's time with it", :aggregate_failures do
       uuid = SecureRandom.uuid
       sync!(uuid, play: { name: "Catan", players: [{ name: "Rocco" }], started_at: 5.minutes.ago.iso8601 })

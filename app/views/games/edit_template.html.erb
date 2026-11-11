@@ -86,6 +86,29 @@
             placeholder="Other names, separated by commas" autocomplete="off" spellcheck="false">
           <p class="games-hint">Games logged by hand under these exact names count as <%= title %>.</p>
         </div>
+
+        <details class="games-advanced" <%= "open" if t.phases.any? %>>
+          <summary>Advanced: phases &amp; rounds</summary>
+          <div>
+            <div class="games-setting-label">Phases</div>
+            <textarea name="game_template[phases]" rows="5" autocomplete="off" autocapitalize="words" spellcheck="false"
+              placeholder="Emerge #E8A83E: Nodes Pulse, Springs Yield&#10;Swarm (each player x2): 2, 1, 0&#10;Settle: Ripple, Pass Token"><%= t.phases_text %></textarea>
+            <p class="games-hint">
+              One phase per line, its steps after the colon. <code>(each player)</code> gives every player a turn
+              through the steps; <code>x2</code> goes around twice. Blank for no phases.
+            </p>
+          </div>
+
+          <div>
+            <div class="games-setting-label">First player each round</div>
+            <div class="games-segmented">
+              <% [["keep", "Same"], ["rotate", "Next along"], ["lowest_score", "Lowest score"], ["highest_score", "Highest score"]].each do |value, label| %>
+                <label><input type="radio" name="game_template[first_player]" value="<%= value %>" <%= "checked" if t.first_player.to_s == value %>><span><%= label %></span></label>
+              <% end %>
+            </div>
+            <p class="games-hint">Picked each time the phases come back round. A tie passes clockwise from the last first player, in the order players were entered, so tied players take turns at it.</p>
+          </div>
+        </details>
       </div>
     </section>
 
