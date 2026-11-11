@@ -1268,7 +1268,7 @@ class WebhooksController < ApplicationController
   def json_params
     return @json_params if defined?(@json_params)
 
-    json = params.to_unsafe_h.except(:controller, :action).reverse_merge(unlabeled_json_body)
+    json = params.to_unsafe_h.except(:controller, :action, :json).reverse_merge(unlabeled_json_body)
     return (@json_params = json) unless json.keys.length == 2 # uuid and broken json
 
     json_key = json.except(:uuid).keys.first
@@ -1280,12 +1280,14 @@ class WebhooksController < ApplicationController
   end
 
   # Rails only parses a body labeled as JSON. A Shortcut sending its body as a
-  # File labels it text/plain, and a chunked JSON body is refused by nginx, so
-  # the File form is the only one every iOS version gets through.
+  # File labels it text/plain. Newer iOS sends any body in a form nginx refuses
+  # outright, so the same JSON can instead ride a GET as the `json` query param.
   def unlabeled_json_body
-    return {} unless request.media_type.blank? || request.media_type == "text/plain"
+    raw = params[:json].presence
+    raw ||= request.raw_post if request.media_type.blank? || request.media_type == "text/plain"
+    return {} if raw.blank?
 
-    body = JSON.parse(request.raw_post.to_s)
+    body = JSON.parse(raw.to_s)
     body.is_a?(::Hash) ? body : {}
   rescue JSON::ParserError
     {}

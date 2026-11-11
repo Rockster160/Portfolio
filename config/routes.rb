@@ -396,6 +396,10 @@ Rails.application.routes.draw do
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"
   post "jil/trigger" => "webhooks#jil"
+  # The trigger in the query and no body at all: newer iOS Shortcuts send any
+  # POST body in a form nginx refuses before it reaches the app.
+  get "jil/trigger/:trigger" => "webhooks#jil"
+  get "jil/trigger" => "webhooks#jil"
   post "webhooks/jil(/:uuid)" => "webhooks#execute_task"
   get "webhooks/jil(/:uuid)" => "webhooks#execute_task"
   post "webhooks/battery" => "webhooks#battery"

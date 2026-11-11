@@ -52,6 +52,37 @@ RSpec.describe "POST /jil/trigger with a listener-shaped string", type: :request
     expect(seen).to eq([["tv-mute", { "source" => "watch" }]])
   end
 
+  it "takes the trigger from a GET query, with no body" do
+    seen = []
+    allow(Jil).to receive(:trigger) { |_u, scope, data, **| seen << [scope, data] }
+    get("/jil/trigger", params: { trigger: "garage:direction:open" }, headers: {
+      "HTTP_AUTHORIZATION" => "Bearer #{key.key}",
+    })
+
+    expect(response).to have_http_status(:ok)
+    expect(seen).to eq([["garage", { "direction" => "open" }]])
+  end
+
+  it "takes a whole JSON payload from a GET's json param" do
+    seen = []
+    allow(Jil).to receive(:trigger) { |_u, scope, data, **| seen << [scope, data] }
+    get(
+      "/jil/trigger",
+      params:  { json: '{"trigger":"tv-mute","source":{"device":"watch"}}' },
+      headers: { "HTTP_AUTHORIZATION" => "Bearer #{key.key}" },
+    )
+
+    expect(seen).to eq([["tv-mute", { "source" => { "device" => "watch" } }]])
+  end
+
+  it "refuses a GET carrying no credentials" do
+    allow(Jil).to receive(:trigger)
+    get("/jil/trigger", params: { trigger: "tv-mute" })
+
+    expect(response).to have_http_status(:no_content)
+    expect(Jil).not_to have_received(:trigger)
+  end
+
   it "leaves the path form alone, body and all" do
     seen = []
     allow(Jil).to receive(:trigger) { |_u, scope, data, **| seen << [scope, data] }

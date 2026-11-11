@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Portfolio's half of `waitForDeploy`: blocks until the deploy now under way
+# reports in, and on a failure prints what broke. `deploy` runs this straight
+# after bin/deploy-trigger; `waitForDeploy` runs it for a push made without it.
+#
+# Called as: bin/wait-for-deploy <branch> <env>   ($DEPLOY_BRANCH / $DEPLOY_ENV)
+set -euo pipefail
+
+here="$(dirname "$0")"
+branch="${1:-${DEPLOY_BRANCH:-master}}"
+
+if "$here/wait_for_deploy" deploy; then
+  exit 0
+fi
+
+"$here/deploy_failure" "$(git rev-parse "origin/$branch")" || true
+exit 1
