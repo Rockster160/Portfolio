@@ -63,6 +63,9 @@ module ByteLocal
                    "'kill the screens'. The machine keeps running; only the displays go dark.",
     mac_ping:      "Check the Mac is awake and can actually run something. Use when they ask " \
                    "whether it's up, or when they want to test that this tool works. Changes nothing.",
+    spotify_play_pause: "Play or pause Spotify on the Mac - 'pause the music', 'play Spotify', " \
+                        "'resume my music'. One toggle, so it answers with whether it ended up " \
+                        "playing or paused; pass that on.",
   }.freeze
 
   # Hard ceiling on a Mac command, wall clock, including connect. Five seconds

@@ -600,7 +600,7 @@
   #body(String)
   #silent(Boolean)
 [Mac]@me
-  #run(["dark_monitors" "mac_ping"])::Hash # Keep in sync with ByteLocal::MAC_COMMANDS
+  #run(["dark_monitors" "mac_ping" "spotify_play_pause"])::Hash # Keep in sync with ByteLocal::MAC_COMMANDS
 [Trip]
   #start(AgendaItem)::Boolean
   #advance::Boolean

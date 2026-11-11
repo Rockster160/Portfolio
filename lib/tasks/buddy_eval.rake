@@ -1958,6 +1958,13 @@ BUDDY_EDGE_PROBES = [
           "row at all; the retry a minute later, after he said so, took three calls " \
           "and produced the chip",
   },
+  {
+    case: "music on the desk Mac",
+    say:  "pause spotify",
+    tool: :mac_command,
+    args: { mac_command: { command: "spotify_play_pause" } },
+    note: "Spotify is driven through the laptop, so the desk Mac tool is the only one that reaches it",
+  },
 
   # --- a blind that is on its way, and the one blind they named -------------
   {
