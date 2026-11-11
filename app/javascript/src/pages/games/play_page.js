@@ -7,12 +7,13 @@
 import { GameStore } from "./store";
 import { makeActions } from "./actions";
 import { api } from "./api";
-import { flushQueue, loadStoreSnapshot, stuckCount } from "./offline_queue";
+import { flushQueue, loadStoreSnapshot, saveStoreSnapshot, stuckCount } from "./offline_queue";
 import { valuesFor, rollDice, parseDice, MAX_GRID_VALUES } from "./dice";
 import { textColorFor } from "./colors";
 import { openSheet, closeSheet } from "./sheet";
 import { keypadHtml, wireKeypad } from "./keypad";
 import { mountPlayerEditor } from "./player_editor";
+import { pickAndInsertPhoto, wirePhotoPasteAndDrop } from "./setup_photos";
 import { parsePhases, phasesText, positionOf, playerIndexAt, advance, pickLead } from "./phases";
 import { esc, clock, ago, buzz, localInputValue } from "./util";
 
@@ -78,6 +79,8 @@ function boot() {
   const current = () => players()[play().current_player_index] || players()[0];
   const nextPlayer = () => players()[(play().current_player_index + 1) % (players().length || 1)];
   const liveScores = () => (play().scores || []).filter((s) => !s.voided_at);
+  const inSetup = () => !play().started_at && !!play().setup_started_at;
+  const clockStart = () => (inSetup() ? play().setup_started_at : play().started_at);
   const phases = () => settings().phases || [];
   const hasPhases = () => phases().length > 0;
   const phasePos = () => positionOf(play(), phases());
@@ -116,6 +119,7 @@ function boot() {
   // ---------- render ----------
 
   function render() {
+    if (inSetup()) { renderSetup(); return; }
     const p = current();
     const color = p?.color || "#3987e5";
     const fg = textColorFor(color);
@@ -174,6 +178,85 @@ function boot() {
       ${footHtml()}
     `;
     wire();
+  }
+
+  // Before the first turn: the game's setup notes, timed on their own. The
+  // game clock starts from "Start first turn", so setting out the table never
+  // counts as playing.
+  function renderSetup() {
+    const unsynced = stuckCount();
+    root.innerHTML = `
+      <header class="games-play-head">
+        <a class="games-icon-btn" href="${indexUrl}" aria-label="All games">‹</a>
+        <div class="games-play-title">
+          <span class="games-play-name">${esc(play().name)}</span>
+          <span class="games-play-meta games-num"><span>Setting up</span><span data-clock>${clock(clockStart())}</span></span>
+        </div>
+        <button type="button" class="games-sync" data-sync ${unsynced ? "" : "hidden"}>${unsynced} to sync</button>
+        <button type="button" class="games-icon-btn" data-menu aria-label="Game menu">⋯</button>
+      </header>
+      <div class="games-setup-doc">
+        ${play().setup_html || '<p class="games-setup-empty">No setup notes yet - tap Edit to write some.</p>'}
+      </div>
+      <div class="games-play-foot">
+        ${play().game_template_id ? '<button type="button" class="games-btn" data-setup-edit>Edit</button>' : ""}
+        <button type="button" class="games-btn games-btn-primary games-setup-go" data-setup-done>Start first turn ›</button>
+      </div>
+    `;
+    root.querySelector("[data-menu]").addEventListener("click", openMenuSheet);
+    root.querySelector("[data-sync]")?.addEventListener("click", async () => { await actions.flushNow(); render(); });
+    root.querySelector("[data-setup-edit]")?.addEventListener("click", openSetupEditSheet);
+    root.querySelector("[data-setup-done]").addEventListener("click", () => {
+      const startedAt = new Date();
+      const minutes = Math.round((startedAt - new Date(play().setup_started_at)) / 60000);
+      actions.setStartedAt(startedAt.toISOString());
+      buzz();
+      render();
+      toast(`Setup took ${minutes} min - game on`);
+    });
+  }
+
+  // The notes belong to the game, so a fix made here is there next time too.
+  // Saving needs the connection; the notes on screen only change once saved.
+  function openSetupEditSheet() {
+    openSheet({
+      title: "Setup notes",
+      body: `
+        <div class="games-sheet-section">
+          <textarea data-setup-notes rows="12" spellcheck="true">${esc(play().setup_notes || "")}</textarea>
+        </div>
+        <div class="games-sheet-actions games-setup-tools">
+          <button type="button" class="games-btn" data-setup-photo>Add photo</button>
+          <button type="button" class="games-btn games-btn-primary" data-save>Save</button>
+        </div>
+      `,
+      onClose: render,
+      onMount(panel) {
+        const textarea = panel.querySelector("[data-setup-notes]");
+        const photo = panel.querySelector("[data-setup-photo]");
+        photo.addEventListener("click", () => pickAndInsertPhoto(play().game_template_id, textarea, photo));
+        wirePhotoPasteAndDrop(play().game_template_id, textarea, photo);
+        panel.querySelector("[data-save]").addEventListener("click", async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            const saved = await api.saveSetup(play().game_template_id, textarea.value);
+            store.patchActivePlay({ setup_notes: saved.setup_notes, setup_html: saved.setup_html });
+            saveStoreSnapshot(store);
+            closeSheet();
+          } catch (err) {
+            e.currentTarget.disabled = false;
+            toast("Couldn't save - check the connection");
+          }
+        });
+      },
+    });
+  }
+
+  function openSetupNotesSheet() {
+    openSheet({
+      title: "Setup notes",
+      body: `<div class="games-sheet-section games-setup-doc">${play().setup_html}</div>`,
+    });
   }
 
   // Every phase across the top (tap one to jump to it), the current phase's
@@ -456,7 +539,9 @@ function boot() {
 
   function openScoreSheet(preselect) {
     let target = preselect || defaultScoreTarget();
-    const presets = (settings().score_presets && settings().score_presets.length) ? settings().score_presets : [1, 2, 3, 5];
+    // Older games stored bare amounts; a named one is { amount, label }.
+    const presets = (settings().score_presets?.length ? settings().score_presets : [1, 2, 3, 5])
+      .map((preset) => (typeof preset === "object" ? preset : { amount: preset }));
     const targets = scoreTargets();
 
     function body(mode) {
@@ -481,7 +566,11 @@ function boot() {
       return `
         ${picker}
         <div class="games-sheet-section games-amounts">
-          ${presets.slice(0, 4).map((n) => `<button type="button" class="games-amount games-num" data-amount="${n}">+${n}</button>`).join("")}
+          ${presets.slice(0, 6).map((p) => `
+            <button type="button" class="games-amount games-num ${p.label ? "has-label" : ""}" data-amount="${p.amount}">
+              ${p.label ? `<span class="games-amount-label">${esc(p.label)}</span><small>+${p.amount}</small>` : `+${p.amount}`}
+            </button>
+          `).join("")}
           <button type="button" class="games-amount games-num is-neg" data-amount="-1">−1</button>
           <button type="button" class="games-amount games-num is-neg" data-amount="-5">−5</button>
           <button type="button" class="games-amount" data-keypad style="grid-column: span 2; font-size:17px">Other amount</button>
@@ -616,6 +705,12 @@ function boot() {
             <span class="games-row-label">Players</span>
             <span class="games-row-hint">${players().length} · reorder, add, colours ›</span>
           </button>
+          ${play().setup_html && !inSetup() ? `
+            <button type="button" class="games-row" data-setup-notes>
+              <span class="games-row-label">Setup notes</span>
+              <span class="games-row-hint">${play().started_at && play().setup_started_at ? `${Math.round((new Date(play().started_at) - new Date(play().setup_started_at)) / 60000)} min ` : ""}›</span>
+            </button>
+          ` : ""}
           <button type="button" class="games-row" data-phases>
             <span class="games-row-label">Phases</span>
             <span class="games-row-hint">${hasPhases() ? `${phases().length} · round ${phasePos().round}` : "Add"} ›</span>
@@ -643,6 +738,7 @@ function boot() {
         panel.querySelector("[data-started]").addEventListener("click", openStartedSheet);
         panel.querySelector("[data-players]").addEventListener("click", openPlayersSheet);
         panel.querySelector("[data-phases]").addEventListener("click", openPhasesSheet);
+        panel.querySelector("[data-setup-notes]")?.addEventListener("click", openSetupNotesSheet);
         panel.querySelector("[data-end]").addEventListener("click", async (e) => {
           e.currentTarget.disabled = true;
           await actions.flushNow();
@@ -785,7 +881,7 @@ function boot() {
 
   setInterval(() => {
     const clockEl = root.querySelector("[data-clock]");
-    if (clockEl) clockEl.textContent = clock(play().started_at);
+    if (clockEl) clockEl.textContent = clock(clockStart());
     root.querySelectorAll("[data-ago]").forEach((el) => { el.textContent = ago(el.dataset.ago); });
     const sync = root.querySelector("[data-sync]");
     if (sync) {

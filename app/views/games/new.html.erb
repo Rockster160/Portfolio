@@ -24,6 +24,9 @@
           auto_advance: t.auto_advance,
           phases:       t.phases,
           first_player: t.first_player,
+          setup:        t.setup?,
+          score_presets: t.score_presets,
+          last_players: Array(@last_players[t.id]).map { |p| p.slice("name", "color", "team") },
         }
       }.to_json %>
     </script>

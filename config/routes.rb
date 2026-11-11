@@ -388,6 +388,9 @@ Rails.application.routes.draw do
   get    "/games/templates/:id"            => "games#edit_template",    as: :game_template
   patch  "/games/templates/:id"            => "games#update_template"
   delete "/games/templates/:id"            => "games#destroy_template"
+  patch  "/games/templates/:id/setup"        => "games#update_setup",       as: :game_template_setup
+  post   "/games/templates/:id/setup_images" => "games#upload_setup_image", as: :game_template_setup_images
+  get    "/games/setup_images/:id"           => "games#setup_image",        as: :game_setup_image
 
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"

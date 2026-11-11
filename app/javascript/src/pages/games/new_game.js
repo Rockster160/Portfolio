@@ -6,7 +6,7 @@
 import { api } from "./api";
 import { mountPlayerEditor } from "./player_editor";
 import { parseDice } from "./dice";
-import { esc, uuid } from "./util";
+import { esc, uuid, keepAboveKeyboard } from "./util";
 
 const DICE_CHOICES = [
   { value: "", label: "None" },
@@ -42,8 +42,8 @@ function summarize(s, diceMode) {
   return parts.join(" · ");
 }
 
-// Phases ride along from the game untouched - they're edited on the game's
-// settings page, never here.
+// Phases and quick point buttons ride along from the game untouched - they're
+// edited on the game's settings page, never here.
 function settingsFrom(t) {
   return {
     dice: t.dice || "",
@@ -52,6 +52,7 @@ function settingsFrom(t) {
     auto_advance: t.auto_advance !== false,
     phases: t.phases || [],
     first_player: t.first_player || "keep",
+    score_presets: t.score_presets || [],
   };
 }
 
@@ -76,6 +77,7 @@ function boot() {
   const newHint = root.querySelector("[data-games-new-hint]");
   const settingsEl = root.querySelector("[data-games-settings]");
   const startBtn = root.querySelector("[data-games-start]");
+  keepAboveKeyboard(root.querySelector(".games-actionbar"));
   const countEl = root.querySelector("[data-games-player-count]");
 
   // ---------- game picker ----------
@@ -122,10 +124,25 @@ function boot() {
     newHint.textContent = `New game: “${typed}” - set it up once below and it's saved for next time.`;
   }
 
+  // A game played before starts with the same people, in the same order and
+  // colors. Only an untouched list is replaced - names typed by hand stay put
+  // when the game is changed.
+  let filledIn = null;
+  function fillPlayersFrom(t) {
+    const names = (list) => list.map((p) => p.name).join("\n");
+    const untouched = state.players.length === 0 || (filledIn && names(state.players) === names(filledIn));
+    if (!untouched) return;
+    const last = (t?.last_players || []).map((p) => ({ ...p }));
+    state.players.splice(0, state.players.length, ...last);
+    filledIn = last.length ? last.map((p) => ({ ...p })) : null;
+    editor.redraw();
+  }
+
   function selectTemplate(t) {
     state.templateId = t.id;
     nameInput.value = t.name;
     state.settings = settingsFrom(t);
+    fillPlayersFrom(t);
     state.settingsOpen = false;
     state.diceOther = !!t.dice && !DICE_CHOICES.some((d) => d.value === t.dice);
     nameInput.blur();
@@ -135,6 +152,7 @@ function boot() {
   function clearTemplate() {
     state.templateId = null;
     nameInput.value = "";
+    fillPlayersFrom(null);
     refresh();
     nameInput.focus();
   }
@@ -144,6 +162,7 @@ function boot() {
     if (exact) {
       state.templateId = exact.id;
       state.settings = settingsFrom(exact);
+      fillPlayersFrom(exact);
       state.settingsOpen = false;
     } else {
       if (state.templateId) state.settingsOpen = true;
@@ -263,6 +282,11 @@ function boot() {
 
   // ---------- start ----------
 
+  // A game with setup notes opens on them; the game clock waits for the first turn.
+  function hasSetup() {
+    return !!templates.find((t) => t.id === state.templateId)?.setup;
+  }
+
   function validate() {
     const name = nameInput.value.trim();
     const diceOk = !state.settings.dice || !!parseDice(state.settings.dice);
@@ -271,7 +295,7 @@ function boot() {
     if (!name) startBtn.textContent = "Pick a game";
     else if (!diceOk) startBtn.textContent = "Dice must look like 2d6";
     else if (state.players.length === 0) startBtn.textContent = "Add a player";
-    else startBtn.textContent = `Start ${name}`;
+    else startBtn.textContent = hasSetup() ? `Set up ${name}` : `Start ${name}`;
   }
 
   function refresh() {
@@ -297,7 +321,8 @@ function boot() {
         body: JSON.stringify({
           play: {
             game_template_id: template.id, name, settings, dice_mode: settings.dice ? state.diceMode : "manual",
-            players: state.players, started_at: new Date().toISOString(),
+            players: state.players,
+            ...(hasSetup() ? { setup_started_at: new Date().toISOString() } : { started_at: new Date().toISOString() }),
           },
         }),
       });
@@ -314,7 +339,7 @@ function boot() {
   const preselected = templates.find((t) => String(t.id) === root.dataset.preselectedId);
   if (preselected) selectTemplate(preselected);
   else refresh();
-  if (preselected) editor.focus();
+  if (preselected && state.players.length === 0) editor.focus();
 }
 
 if (document.readyState === "loading") {

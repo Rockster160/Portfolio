@@ -13,6 +13,7 @@
 #  phase_state          :jsonb            not null
 #  players              :jsonb            not null
 #  settings             :jsonb            not null
+#  setup_started_at     :datetime
 #  started_at           :datetime
 #  status               :integer          default("active"), not null
 #  winner_names         :jsonb            not null
@@ -66,6 +67,18 @@ class GamePlay < ApplicationRecord
     phase_state["round"].to_i if phases.any? && phase_state["round"].present?
   end
 
+  # Setting the table out, before the first turn. Its time is kept apart
+  # from the game's own, which only starts counting at `started_at`.
+  def in_setup?
+    setup_started_at.present? && started_at.nil?
+  end
+
+  def setup_minutes
+    return nil unless setup_started_at && started_at
+
+    ((started_at - setup_started_at) / 60).round
+  end
+
   def current_player
     players[current_player_index]
   end
@@ -79,7 +92,7 @@ class GamePlay < ApplicationRecord
     return action_event if action_event_id.present?
 
     evt = user.action_events.create!(
-      name: "Game", notes: name, timestamp: started_at || Time.current,
+      name: "Game", notes: name, timestamp: started_at || setup_started_at || Time.current,
       data: { players: blank_players_data, play_id: id }
     )
     update!(action_event_id: evt.id)
@@ -151,6 +164,7 @@ class GamePlay < ApplicationRecord
     end
     data[:duration] = duration.to_s if duration.present?
     data[:rounds] = rounds if rounds.present?
+    data[:setup_duration] = setup_minutes.to_s if setup_minutes.present?
     data[:abandoned] = true if abandoned?
 
     action_event.update!(notes: name, timestamp: started_at || action_event.timestamp, data: data)

@@ -65,6 +65,69 @@ RSpec.describe GamesController do
       expect(new_play.settings).to eq(play.settings)
       expect(response).to redirect_to(game_play_path(new_play.id))
     end
+
+    it "opens on the setup notes again when the game has them, with the game clock not yet started" do
+      template = user.game_templates.create!(name: "Slime Colony", setup_notes: "Each player takes 3 slimes")
+      play = build_play(status: :finished, game_template_id: template.id)
+
+      post replay_game_play_path(play.id)
+
+      new_play = user.game_plays.active.last
+      expect(new_play).to be_in_setup
+      expect(new_play.started_at).to be_nil
+    end
+  end
+
+  describe "setup notes" do
+    let(:template) { user.game_templates.create!(name: "Slime Colony") }
+
+    it "renders the notes onto a play still being set up" do
+      template.update!(setup_notes: "## Each player\n- 3 slimes")
+      play = build_play(game_template_id: template.id, started_at: nil, setup_started_at: 2.minutes.ago)
+
+      get game_play_path(play.id)
+
+      bootstrap = JSON.parse(Nokogiri::HTML(response.body).at_css("#play-bootstrap").text)
+      expect(bootstrap["setup_html"]).to include("<h2>Each player</h2>")
+    end
+
+    it "saves notes edited mid-game and hands back the rendered page" do
+      patch game_template_setup_path(template), params: { setup_notes: "**Ten** slimes" }, as: :json
+
+      expect(template.reload.setup_notes).to eq("**Ten** slimes")
+      expect(response.parsed_body["setup_html"]).to include("<strong>Ten</strong>")
+    end
+
+    it "stores a photo on the game and answers with a short markdown link that shows it" do
+      file = Rack::Test::UploadedFile.new(StringIO.new("fake png"), "image/png", original_filename: "IMG (1).PNG")
+
+      post game_template_setup_images_path(template), params: { file: file }
+
+      attachment = template.reload.setup_images.sole
+      expect(response.parsed_body["markdown"]).to eq("![Photo](#{game_setup_image_path(attachment.id)})")
+
+      get game_setup_image_path(attachment.id)
+      expect(response).to redirect_to(rails_blob_path(attachment.blob, only_path: true))
+    end
+
+    it "never shows another user's setup photo" do
+      other = create(:user).game_templates.create!(name: "Theirs")
+      other.setup_images.attach(io: StringIO.new("png"), filename: "theirs.png", content_type: "image/png")
+
+      attachment = other.setup_images.sole
+      get game_setup_image_path(attachment.id)
+
+      expect(response).not_to redirect_to(rails_blob_path(attachment.blob, only_path: true))
+    end
+
+    it "refuses a file that isn't an image" do
+      file = Rack::Test::UploadedFile.new(StringIO.new("%PDF"), "application/pdf", original_filename: "rules.pdf")
+
+      post game_template_setup_images_path(template), params: { file: file }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(template.reload.setup_images.count).to eq(0)
+    end
   end
 
   describe "GET /games/plays/:id/finish" do
@@ -246,8 +309,46 @@ RSpec.describe GamesController do
       template.reload
       expect(response).to redirect_to(game_template_path(template, saved: 1))
       expect(template.dice).to eq("3d6")
-      expect(template.score_presets).to eq([1, 2, 10])
+      expect(template.score_presets).to eq([{ "amount" => 1 }, { "amount" => 2 }, { "amount" => 10 }])
       expect(template.aliases).to eq(["Settlers", "Settlers of Catan"])
+    end
+
+    it "saves quick point buttons with names, written either way round, and shows them back" do
+      update!(score_presets: "1, 3 Assimilate, Bloom 5, +2 Split Up")
+
+      expect(template.reload.score_presets).to eq([
+        { "amount" => 1 },
+        { "amount" => 3, "label" => "Assimilate" },
+        { "amount" => 5, "label" => "Bloom" },
+        { "amount" => 2, "label" => "Split Up" },
+      ])
+      get game_template_path(template)
+      expect(response.body).to include('value="1, 3 Assimilate, 5 Bloom, 2 Split Up"')
+    end
+
+    it "offers a new game the players from its most recent play, in their order and colors" do
+      build_play(game_template_id: template.id, players: [{ "name" => "Saya", "color" => "#7fb87f" }])
+      build_play(
+        game_template_id: template.id,
+        players:          [{ "name" => "Chelsea", "color" => "#a688bf" }, { "name" => "Rocco", "color" => "#7ba7cc" }],
+      )
+
+      get new_game_path
+
+      templates = JSON.parse(Nokogiri::HTML(response.body).at_css("[data-games-templates-json]").text)
+      expect(templates.first["last_players"]).to eq([
+        { "name" => "Chelsea", "color" => "#a688bf" },
+        { "name" => "Rocco", "color" => "#7ba7cc" },
+      ])
+    end
+
+    it "offers the quick point buttons to a new game" do
+      template.update!(score_presets: [{ amount: 3, label: "Assimilate" }])
+
+      get new_game_path
+
+      templates = JSON.parse(Nokogiri::HTML(response.body).at_css("[data-games-templates-json]").text)
+      expect(templates.first["score_presets"]).to eq([{ "amount" => 3, "label" => "Assimilate" }])
     end
 
     it "keeps the old name as an alias on rename, so hand-logged games still count" do
@@ -266,6 +367,14 @@ RSpec.describe GamesController do
         { "name" => "Swarm", "laps" => 2, "steps" => ["2", "1", "0"] },
       ])
       expect(template.first_player).to eq("lowest_score")
+    end
+
+    it "saves setup notes from the settings form, and clears them when emptied" do
+      update!(setup_notes: "Each player takes 3 slimes")
+      expect(template.reload.setup_notes).to eq("Each player takes 3 slimes")
+
+      update!(setup_notes: "  ")
+      expect(template.reload.setup_notes).to be_nil
     end
 
     it "clears the phases when the box is emptied" do

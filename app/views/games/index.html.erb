@@ -20,8 +20,12 @@
           <span class="games-resume-kicker">In progress</span>
           <span class="games-resume-name" style="display:block"><%= @active_play.name %></span>
           <span class="games-resume-meta">
-            Started <%= @active_play.started_at&.strftime("%-l:%M%P, %b %-d") %>
-            <% if (turn = @active_play.current_player) %> · <%= turn["name"] %>'s turn<% end %>
+            <% if @active_play.in_setup? %>
+              Setting up since <%= @active_play.setup_started_at.strftime("%-l:%M%P, %b %-d") %>
+            <% else %>
+              Started <%= @active_play.started_at&.strftime("%-l:%M%P, %b %-d") %>
+              <% if (turn = @active_play.current_player) %> · <%= turn["name"] %>'s turn<% end %>
+            <% end %>
           </span>
         </span>
         <span class="games-resume-go">›</span>

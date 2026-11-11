@@ -92,6 +92,15 @@ RSpec.describe GamePlay do
       expect(phased.action_event.reload.data["rounds"]).to eq(3)
       expect(plain.action_event.reload.data).not_to have_key("rounds")
     end
+
+    it "logs setup time apart from the game's own duration" do
+      play = build_play(setup_started_at: 70.minutes.ago, started_at: 60.minutes.ago)
+      play.ensure_action_event!
+
+      play.finish!(final_scores: { "Rocco" => 1 }, started_at: play.started_at, ended_at: Time.current, duration_minutes: 60)
+
+      expect(play.action_event.reload.data).to include("setup_duration" => "10", "duration" => "60")
+    end
   end
 
   describe "#compute_winner_names" do

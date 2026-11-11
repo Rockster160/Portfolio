@@ -50,6 +50,23 @@ RSpec.describe "Games::Sync" do
       expect(play.phase_state).to eq({ "round" => 2, "phase" => 1, "step" => 2, "lap" => 1, "turn" => 0, "lead" => 0 })
     end
 
+    it "starts on setup with the game clock stopped, then times setup apart from the game", :aggregate_failures do
+      uuid = SecureRandom.uuid
+      setup_at = 20.minutes.ago.change(usec: 0)
+      sync!(uuid, play: { name: "Slime Colony", players: [{ name: "Rocco" }], setup_started_at: setup_at.iso8601 })
+
+      play = user.game_plays.find_by!(client_uuid: uuid)
+      expect(play).to be_in_setup
+      expect(play.started_at).to be_nil
+
+      first_turn = 5.minutes.ago.change(usec: 0)
+      sync!(uuid, play: { started_at: first_turn.iso8601 })
+
+      expect(play.reload.started_at).to eq(first_turn)
+      expect(play.setup_minutes).to eq(15)
+      expect(play.action_event.reload.timestamp).to eq(first_turn)
+    end
+
     it "moves the start, and the Game event's time with it", :aggregate_failures do
       uuid = SecureRandom.uuid
       sync!(uuid, play: { name: "Catan", players: [{ name: "Rocco" }], started_at: 5.minutes.ago.iso8601 })

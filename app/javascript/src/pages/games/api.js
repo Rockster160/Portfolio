@@ -16,4 +16,5 @@ export const api = {
   csrfToken,
   playerColors: () => json("/games/player_colors"),
   upsertTemplate: (data) => json("/games/templates", { method: "POST", body: JSON.stringify(data) }),
+  saveSetup: (templateId, notes) => json(`/games/templates/${templateId}/setup`, { method: "PATCH", body: JSON.stringify({ setup_notes: notes }) }),
 };

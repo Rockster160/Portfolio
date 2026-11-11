@@ -439,6 +439,27 @@ html.html-ctr-games body {
     &:active { background: var(--g-surface-3); }
   }
 
+  // Setup notes: the one part of the play screen that scrolls, since a
+  // setup page is as long as the game needs.
+  .games-setup-doc {
+    flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 14px 16px; border-radius: 18px; background: var(--g-surface); border: 1px solid var(--g-line);
+    font-size: 17px; line-height: 1.5;
+    .markdown-container { font-family: inherit; }
+    h1, h2, h3, h4 { margin: 14px 0 6px; line-height: 1.2; &:first-child { margin-top: 0; } }
+    h1 { font-size: 24px; } h2 { font-size: 20px; } h3, h4 { font-size: 17px; }
+    p { margin: 0 0 10px; }
+    ul, ol { margin: 0 0 10px; padding-left: 22px; }
+    img { display: block; max-width: 100%; height: auto; border-radius: 12px; margin: 8px 0; }
+    code { font-size: 15px; background: var(--g-surface-2); padding: 1px 5px; border-radius: 5px; }
+    a { color: var(--g-accent); }
+  }
+  .games-sheet-section.games-setup-doc { max-height: 70vh; }
+  .games-setup-empty { color: var(--g-text-3); }
+  .games-setup-go { flex: 2 !important; }
+  .games-sheet-actions.games-setup-tools .games-btn { flex: 1; }
+  .games-setup-tools { display: flex; gap: 8px; align-items: center; margin-top: 8px; .games-btn { min-height: 44px; } .games-hint { margin: 0; } }
+
   // Phases: every phase across the top, the current one's steps below with
   // Next beside them. Only drawn for a game that has phases.
   .games-phase { flex: none; display: flex; flex-direction: column; gap: 6px; }
@@ -568,6 +589,13 @@ html.html-ctr-games body {
   .games-amount { min-height: 60px; border-radius: 14px; background: var(--g-surface-2); font-size: 22px; font-weight: 750; --btn-fg: var(--g-text);
     &:active { background: var(--g-surface-3); }
     &.is-neg { --btn-fg: var(--g-danger); }
+    // A named button takes two columns: the name, with its amount under it.
+    &.has-label {
+      grid-column: span 2; display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      padding: 4px 8px;
+      .games-amount-label { font-size: 17px; font-weight: 750; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      small { font-size: 13px; font-weight: 650; color: var(--g-text-2); }
+    }
   }
 
   // Number keypad (custom value, custom score).

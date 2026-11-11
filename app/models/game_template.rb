@@ -11,6 +11,7 @@
 #  phases        :jsonb            not null
 #  score_presets :jsonb            not null
 #  scoring       :integer          default("individual"), not null
+#  setup_notes   :text
 #  win           :integer          default("high"), not null
 #  created_at    :datetime         not null
 #  updated_at    :datetime         not null
@@ -24,6 +25,10 @@ class GameTemplate < ApplicationRecord
   # twice around the table, before the next phase.
   EACH_PLAYER = /\((?:each|every)\s+player(?:\s*[x×]\s*(\d+))?\)/i
   COLOR = /#(\h{3,8})\b/
+  MAX_SCORE_PRESETS = 6
+  # "3 Assimilate" or "Assimilate 3" - an amount, and the name on its button.
+  PRESET_AMOUNT_FIRST = /\A\+?(\d+)\s*(.*)\z/
+  PRESET_AMOUNT_LAST = /\A(.*?)\s*\+?(\d+)\z/
 
   enum :scoring, SCORINGS, scopes: false
   enum :win, WINS, scopes: false
@@ -31,6 +36,8 @@ class GameTemplate < ApplicationRecord
 
   belongs_to :user
   has_many :game_plays, dependent: :nullify
+  # Photos for the setup notes, linked from the markdown by their blob path.
+  has_many_attached :setup_images
 
   validates :name, presence: true, uniqueness: { scope: :user_id, case_sensitive: false }
   validates :dice, format: { with: /\A\d*d\d+\z/i, message: "should look like 2d6 or d20" }, allow_blank: true
@@ -71,6 +78,38 @@ class GameTemplate < ApplicationRecord
       steps = tail.to_s.split(",").map { |step| step.gsub(COLOR, " ").squish }.compact_blank
       { name: name, color: color, laps: laps, steps: steps }.compact
     }
+  end
+
+  def setup?
+    setup_notes.present?
+  end
+
+  def setup_html
+    Markdown.new(setup_notes.to_s, user: user).to_html if setup?
+  end
+
+  # "3 Assimilate, 5 Bloom, 1" - the + Score sheet's buttons, each an amount
+  # with an optional name. Older games stored bare numbers; both read back.
+  def self.parse_score_presets(text)
+    text.to_s.split(/[,\n]/).filter_map { |part|
+      part = part.squish
+      amount, label = (
+        if (match = part.match(PRESET_AMOUNT_FIRST))
+          [match[1], match[2]]
+        elsif (match = part.match(PRESET_AMOUNT_LAST))
+          [match[2], match[1]]
+        end
+      )
+      next unless amount.to_i.positive?
+
+      { amount: amount.to_i, label: label.presence }.compact
+    }.uniq.first(MAX_SCORE_PRESETS)
+  end
+
+  def score_presets_text
+    Array(score_presets).map { |preset|
+      preset.is_a?(Hash) ? [preset["amount"], preset["label"]].compact.join(" ") : preset.to_s
+    }.join(", ")
   end
 
   def phases_text

@@ -5,7 +5,13 @@ class GamesController < ApplicationController
   # outranks every games button rule and leaves a tapped key painted blue.
   before_action { @skip_dark_mode = true }
   before_action :set_play, only: [:show, :edit_finish, :finish, :abandon, :replay]
-  before_action :set_template, only: [:edit_template, :update_template, :destroy_template]
+  before_action :set_template, only: [
+    :edit_template,
+    :update_template,
+    :destroy_template,
+    :update_setup,
+    :upload_setup_image,
+  ]
 
   # GET /games
   def index
@@ -31,8 +37,10 @@ class GamesController < ApplicationController
   # POST /games/plays/:id/replay - same template, settings and players as
   # @play, first player rotated by one. Starts immediately, no form: asking
   # for players again is Setup's job (a template picked fresh), not a
-  # specific past play's.
+  # specific past play's. A game with setup notes opens on them again, since
+  # the table has to be set out again too.
   def replay
+    setup = !!@play.game_template&.setup?
     new_play = current_user.game_plays.create!(
       game_template_id: @play.game_template_id,
       client_uuid:      SecureRandom.uuid,
@@ -40,7 +48,8 @@ class GamesController < ApplicationController
       settings:         @play.settings,
       players:          @play.players.rotate,
       dice_mode:        @play.dice_mode,
-      started_at:       Time.current,
+      setup_started_at: (Time.current if setup),
+      started_at:       (Time.current unless setup),
       status:           :active,
     )
     new_play.ensure_action_event!
@@ -50,6 +59,9 @@ class GamesController < ApplicationController
   # GET /games/new
   def new
     @templates = current_user.game_templates.by_last_played.to_a
+    # Who sat down for each game last time, oldest first so the latest wins.
+    plays = current_user.game_plays.where.not(game_template_id: nil).order(:created_at)
+    @last_players = plays.pluck(:game_template_id, :players).to_h
     render :new
   end
 
@@ -139,6 +151,41 @@ class GamesController < ApplicationController
     redirect_to games_path
   end
 
+  # PATCH /games/templates/:id/setup - the setup notes, edited from the
+  # setup screen mid-game. Hands back the rendered page to draw in place.
+  def update_setup
+    @template.update!(setup_notes: params[:setup_notes].to_s.strip.presence)
+    render json: { setup_notes: @template.setup_notes, setup_html: @template.setup_html }
+  end
+
+  # POST /games/templates/:id/setup_images - one photo, answered with the
+  # markdown that shows it. The link is the short path below rather than the
+  # blob's own signed URL, so the line stays readable while editing around it.
+  def upload_setup_image
+    file = params.require(:file)
+    return head(:unprocessable_entity) unless file.content_type.to_s.start_with?("image/")
+
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io:           file,
+      filename:     file.original_filename.to_s,
+      content_type: file.content_type,
+    )
+    @template.setup_images.attach(blob)
+    attachment = @template.setup_images_attachments.find_by!(blob: blob)
+    render json: { markdown: "![Photo](#{game_setup_image_path(attachment.id)})" }
+  end
+
+  # GET /games/setup_images/:id - a setup photo, wherever the notes link it.
+  def setup_image
+    attachment = ActiveStorage::Attachment.find_by!(
+      id:          params[:id],
+      name:        :setup_images,
+      record_type: GameTemplate.name,
+      record_id:   current_user.game_templates.select(:id),
+    )
+    redirect_to rails_blob_path(attachment.blob, only_path: true)
+  end
+
   private
 
   def set_template
@@ -160,7 +207,17 @@ class GamesController < ApplicationController
   # fields as typed text ("1, 2, 5"; one alias per line or comma).
   def template_form_params
     raw = params.require(:game_template).permit(
-      :name, :dice_choice, :dice_other, :scoring, :win, :auto_advance, :score_presets, :aliases, :phases, :first_player
+      :name,
+      :dice_choice,
+      :dice_other,
+      :scoring,
+      :win,
+      :auto_advance,
+      :score_presets,
+      :aliases,
+      :phases,
+      :first_player,
+      :setup_notes,
     )
     dice = raw[:dice_choice] == "other" ? raw[:dice_other] : raw[:dice_choice]
     name = raw[:name].to_s.strip
@@ -170,10 +227,11 @@ class GamesController < ApplicationController
       scoring:       raw[:scoring],
       win:           raw[:win],
       auto_advance:  raw[:auto_advance] == "1",
-      score_presets: raw[:score_presets].to_s.scan(/\d+/).map(&:to_i).select(&:positive?).uniq.first(4),
+      score_presets: GameTemplate.parse_score_presets(raw[:score_presets]),
       aliases:       raw[:aliases].to_s.split(/[,\n]/).map(&:strip).compact_blank.uniq.reject { |a| a.casecmp?(name) },
       phases:        GameTemplate.parse_phases(raw[:phases]),
       first_player:  raw[:first_player].presence || :keep,
+      setup_notes:   raw[:setup_notes].to_s.strip.presence,
     }
   end
 
@@ -287,6 +345,9 @@ class GamesController < ApplicationController
       status:               play.status,
       current_player_index: play.current_player_index,
       phase_state:          play.phase_state,
+      setup_started_at:     play.setup_started_at&.iso8601(3),
+      setup_notes:          play.game_template&.setup_notes,
+      setup_html:           play.game_template&.setup_html,
       final_scores:         play.final_scores,
       winner_names:         play.winner_names,
       action_event_id:      play.action_event_id,

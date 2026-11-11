@@ -75,9 +75,12 @@
 
         <div>
           <div class="games-setting-label">Quick point buttons</div>
-          <input type="text" name="game_template[score_presets]" value="<%= Array(t.score_presets).join(", ") %>"
-            placeholder="1, 2, 3, 5" inputmode="numeric" autocomplete="off">
-          <p class="games-hint">Up to four amounts on the + Score sheet. Blank uses 1, 2, 3, 5.</p>
+          <input type="text" name="game_template[score_presets]" value="<%= t.score_presets_text %>"
+            placeholder="1, 2, 3 Assimilate, 5 Bloom" autocomplete="off">
+          <p class="games-hint">
+            Up to six amounts on the + Score sheet, each with an optional name: <code>3 Assimilate, 5 Bloom</code>.
+            Blank uses 1, 2, 3, 5.
+          </p>
         </div>
 
         <div>
@@ -86,6 +89,18 @@
             placeholder="Other names, separated by commas" autocomplete="off" spellcheck="false">
           <p class="games-hint">Games logged by hand under these exact names count as <%= title %>.</p>
         </div>
+
+        <details class="games-advanced" <%= "open" if t.setup? %>>
+          <summary>Setup instructions</summary>
+          <div>
+            <textarea name="game_template[setup_notes]" rows="8" spellcheck="true" data-games-setup-notes
+              placeholder="## Each player&#10;- 3 slimes in their color&#10;- 2 AP tokens"><%= t.setup_notes %></textarea>
+            <div class="games-setup-tools">
+              <button type="button" class="games-btn" data-games-setup-photo data-template-id="<%= t.id %>">Add photo</button>
+              <span class="games-hint">Markdown. Paste or drop a photo in to place it at the cursor. With notes, Start opens them first and times setup on its own.</span>
+            </div>
+          </div>
+        </details>
 
         <details class="games-advanced" <%= "open" if t.phases.any? %>>
           <summary>Advanced: phases &amp; rounds</summary>

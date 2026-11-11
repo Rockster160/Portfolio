@@ -47,3 +47,18 @@ export function minutesLabel(mins) {
 export function buzz(ms = 12) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
+
+// A bar fixed to the bottom of the screen sits under the iPhone keyboard
+// while a box is focused. The visual viewport shrinks by the keyboard's
+// height, so lifting the bar by that difference keeps it reachable.
+export function keepAboveKeyboard(el) {
+  const viewport = window.visualViewport;
+  if (!el || !viewport) return;
+  const place = () => {
+    const covered = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    el.style.transform = covered ? `translateY(-${covered}px)` : "";
+  };
+  viewport.addEventListener("resize", place);
+  viewport.addEventListener("scroll", place);
+  place();
+}

@@ -40,7 +40,10 @@ class Games::SyncController < ApplicationController
       play.settings = (data[:settings] || {}).deep_stringify_keys
       play.players = (data[:players] || []).map(&:deep_stringify_keys)
       play.dice_mode = data[:dice_mode].presence || :manual
-      play.started_at = parse_iso(data[:started_at]) || Time.current
+      # Opening on the setup notes leaves the game clock unstarted until the
+      # first turn; otherwise the game starts now.
+      play.setup_started_at = parse_iso(data[:setup_started_at])
+      play.started_at = parse_iso(data[:started_at]) || (Time.current unless play.setup_started_at)
       play.status = :active
     end
     play.current_player_index = data[:current_player_index] if data[:current_player_index].present?
@@ -94,7 +97,7 @@ class Games::SyncController < ApplicationController
 
   def play_params
     params.require(:play).permit(
-      :game_template_id, :name, :dice_mode, :started_at, :current_player_index,
+      :game_template_id, :name, :dice_mode, :started_at, :setup_started_at, :current_player_index,
       players: [:name, :color, :team], settings: {}, phase_state: {}
     ).to_h.deep_symbolize_keys
   rescue ActionController::ParameterMissing

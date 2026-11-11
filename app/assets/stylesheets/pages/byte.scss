@@ -7171,6 +7171,13 @@ $board-cell-max: 200px;
   border-color: var(--actor-color);
 }
 
+// Words wrap where they naturally would, and whatever runs past the curve is
+// cut off by the disc's own rounded edge. The ring sits inside that edge, so
+// the clip leaves it whole.
+.ctr-byte .byte-app .byte-board-circle:has(.byte-board-face-text[data-words="true"]) {
+  overflow: hidden;
+}
+
 // What a task's tile says on its disc (`text`, see chore_board.js#followTiles),
 // at the size and colour the tile asks for (`fontSize`, `textColor`), as on the
 // list pages' task buttons. A glyph keeps the icon's own size.
@@ -7178,19 +7185,10 @@ $board-cell-max: 200px;
   color: var(--board-face-color, var(--bs-text));
   text-align: center;
 
-  // Kept inside the square inscribed in the disc (70% of its side), so no line
-  // pokes past the curve, and cut to four lines with an ellipsis. Four lines at
-  // this size fill that square on the narrowest disc a column allows, and the
-  // size follows the board's circle scale so a shrunk board still fits them.
   &[data-words="true"] {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-    width: 70%;
-    max-height: 70%;
-    overflow: hidden;
+    width: 86%;
     aspect-ratio: auto;
-    font-size: calc(15px * var(--board-circle-scale, 1));
+    font-size: 15px;
     font-weight: 700;
     line-height: 1.1;
     overflow-wrap: anywhere;
