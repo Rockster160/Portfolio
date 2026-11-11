@@ -361,7 +361,7 @@ class ByteMessageIntake
 
     # Sidekiq owns the Mac round-trip: inline it held a web-sized AR connection
     # for the whole 5-30s and starved the pool.
-    BuddyDeliverWorker.perform_async(message.id)
+    BuddyDeliverWorker.deliver_after_commit(message.id)
   end
 
   def broadcast(message)

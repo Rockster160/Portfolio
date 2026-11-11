@@ -255,7 +255,7 @@ module Buddy
         )
         MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
         Buddy::ExpressionState.thinking!(conversation)
-        BuddyDeliverWorker.perform_async(msg.id)
+        BuddyDeliverWorker.deliver_after_commit(msg.id)
       end
 
       def response_seed(user, idea, cat)

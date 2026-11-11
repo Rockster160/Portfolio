@@ -74,7 +74,7 @@ module Buddy
       # The seed is hidden, so without this the thread sits blank until the
       # round trip finishes and there is nothing on screen saying it is coming.
       ::Buddy::ExpressionState.transition!(conversation, :turn_started)
-      ::BuddyDeliverWorker.perform_async(seed_message.id)
+      ::BuddyDeliverWorker.deliver_after_commit(seed_message.id)
       seed_message
     end
   end

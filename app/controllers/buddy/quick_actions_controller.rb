@@ -309,7 +309,7 @@ module Buddy
       # BuddyDeliverWorker routes it through TurnDispatcher.deliver!
       # (delivery + state + broadcast) — no web-pool AR connection held
       # across the Mac round-trip.
-      BuddyDeliverWorker.perform_async(message.id)
+      BuddyDeliverWorker.deliver_after_commit(message.id)
 
       render json: message.as_wire, status: :created
     end

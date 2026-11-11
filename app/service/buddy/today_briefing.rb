@@ -919,7 +919,7 @@ module Buddy
       # written if it has the gesture, and falls back to the thinking overlay if
       # it doesn't.
       Buddy::ExpressionState.greet!(conversation)
-      BuddyDeliverWorker.perform_async(msg.id)
+      BuddyDeliverWorker.deliver_after_commit(msg.id)
       msg
     end
   end

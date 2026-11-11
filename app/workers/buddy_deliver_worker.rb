@@ -20,6 +20,14 @@ class BuddyDeliverWorker
   # The Mac didn't take the turn, as opposed to something breaking in here.
   HandoffFailed = Class.new(StandardError)
 
+  # The way to enqueue one. A message created inside a transaction (a form
+  # submit runs its tool under a row lock) isn't visible to Sidekiq until that
+  # commits, and a job that starts first finds nothing and returns, leaving the
+  # turn undelivered with no error. Held until the commit, it always finds it.
+  def self.deliver_after_commit(message_id)
+    ::AfterCommit.run { perform_async(message_id) }
+  end
+
   def perform(message_id)
     message = ByteMessage.find_by(id: message_id)
     return if message.nil?

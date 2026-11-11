@@ -5,7 +5,8 @@ Buddy::Tools.register(
   always:      true,
   description: <<~TXT,
     Mark a chore as done. Use this whenever the user says they finished a
-    household task. `chore` is a fuzzy name and will match against the
+    household task. It records the work as already finished: a chore they say
+    is due, or still needs doing, has not been done. `chore` is a fuzzy name and will match against the
     user's accessible chores. Supports `count=N` when the same chore
     should be marked done multiple times (e.g. drank water 5x).
 

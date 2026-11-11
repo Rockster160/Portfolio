@@ -65,7 +65,7 @@ module Buddy
         # web-pool AR connection for the whole model call. Firing paths
         # (WatchMatcher / ReminderFirer) ride web requests and cron jobs;
         # neither should block on a streaming turn.
-        BuddyDeliverWorker.perform_async(outbound.id)
+        BuddyDeliverWorker.deliver_after_commit(outbound.id)
         outbound
       end
 

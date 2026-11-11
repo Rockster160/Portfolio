@@ -1238,6 +1238,15 @@ BUDDY_EDGE_PROBES = [
     note:  "said it had no way to mark a chore due, with edit_chore's `due` sitting on the index",
   },
   {
+    case:  "prod 10538",
+    say:   "Mark taking out cans as due",
+    tool:  :edit_chore,
+    args:  { edit_chore: { due: /\Atoday\z/i } },
+    avoid: %i[complete_chore],
+    needs: :trash_cans_chore,
+    note:  "completed Take trash cans out; \"taking out\" pulled toward the done verb",
+  },
+  {
     case:  "prod 10062",
     say:   "Can you chart out who's taken the recycling out over the last 10 days?",
     tool:  :chore_history,
@@ -3013,6 +3022,28 @@ BUDDY_EDGE_PROBES = [
     needs: :skip_nap_fn,
     note:  "went looking for a reminder to cancel and said \"I couldn't find a Whisper nap reminder\" - " \
            "her naps are worked out from her day, not set as reminders",
+  },
+  # The same miss again, with that earlier wrong answer still in the history.
+  # The cold probe above can't see a failure the thread itself is teaching.
+  {
+    case:  "prod 10555",
+    say:   "Skip whispers nap",
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /skip nap/i } },
+    avoid: %i[cancel_reminder],
+    needs: :skip_nap_fn,
+    note:  "cancelled the strawberry lemonade arrival watch, then said it couldn't find a nap " \
+           "reminder, nearly word for word the old reply still in the thread",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Skip Whisper nap")
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy" },
+        body:      "I couldn't find a Whisper nap reminder to cancel. It may already be gone.",
+      )
+    },
   },
   # A second skip straight after the first, naming the nap the first answer
   # said was next.

@@ -40,6 +40,32 @@ RSpec.describe BuddyDeliverWorker do
 
   # A `:failed` state alone is invisible for a hidden message, so the handoff
   # failure is reported too.
+  describe ".deliver_after_commit" do
+    it "waits for the transaction that created the message to commit" do
+      allow(described_class).to receive(:perform_async)
+      message = nil
+
+      ActiveRecord::Base.transaction do
+        message = build_message(:buddy)
+        described_class.deliver_after_commit(message.id)
+        expect(described_class).not_to have_received(:perform_async)
+      end
+
+      expect(described_class).to have_received(:perform_async).with(message.id).once
+    end
+
+    it "never enqueues a message that was rolled back" do
+      allow(described_class).to receive(:perform_async)
+
+      ActiveRecord::Base.transaction do
+        described_class.deliver_after_commit(build_message(:buddy).id)
+        raise ActiveRecord::Rollback
+      end
+
+      expect(described_class).not_to have_received(:perform_async)
+    end
+  end
+
   describe "when the Mac doesn't take it" do
     before {
       allow(MonitorChannel).to receive(:broadcast_to)
