@@ -91,8 +91,8 @@ class WebhooksController < ApplicationController
 
   # /jil/trigger/:trigger?
   def jil
-    if params.key?(:trigger)
-      scope, from_scope = parse_trigger_string(params[:trigger])
+    if json_params.key?(:trigger)
+      scope, from_scope = parse_trigger_string(json_params[:trigger])
       data = json_params[:data].presence || json_params.except(:trigger).deep_merge(from_scope)
       jil_trigger(scope, data) unless replayed_trigger?(scope, data)
     else
@@ -1268,7 +1268,7 @@ class WebhooksController < ApplicationController
   def json_params
     return @json_params if defined?(@json_params)
 
-    json = params.to_unsafe_h.except(:controller, :action)
+    json = params.to_unsafe_h.except(:controller, :action).reverse_merge(unlabeled_json_body)
     return (@json_params = json) unless json.keys.length == 2 # uuid and broken json
 
     json_key = json.except(:uuid).keys.first
@@ -1277,6 +1277,18 @@ class WebhooksController < ApplicationController
     @json_params = json.except(json_key).merge(JSON.parse(json_key, symbolize_names: true))
   rescue JSON::ParserError
     @json_params = json
+  end
+
+  # Rails only parses a body labeled as JSON. A Shortcut sending its body as a
+  # File labels it text/plain, and a chunked JSON body is refused by nginx, so
+  # the File form is the only one every iOS version gets through.
+  def unlabeled_json_body
+    return {} unless request.media_type.blank? || request.media_type == "text/plain"
+
+    body = JSON.parse(request.raw_post.to_s)
+    body.is_a?(::Hash) ? body : {}
+  rescue JSON::ParserError
+    {}
   end
 
   # What a webhook task reads. `body` is the request exactly as sent, because a

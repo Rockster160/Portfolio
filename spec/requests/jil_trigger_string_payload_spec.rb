@@ -41,6 +41,17 @@ RSpec.describe "POST /jil/trigger with a listener-shaped string", type: :request
     end
   end
 
+  it "reads a JSON body sent as a text/plain File" do
+    seen = []
+    allow(Jil).to receive(:trigger) { |_u, scope, data, **| seen << [scope, data] }
+    post("/jil/trigger", params: '{"trigger":"tv-mute","source":"watch"}', headers: {
+      "HTTP_AUTHORIZATION" => "Bearer #{key.key}",
+      "CONTENT_TYPE"       => "text/plain",
+    })
+
+    expect(seen).to eq([["tv-mute", { "source" => "watch" }]])
+  end
+
   it "leaves the path form alone, body and all" do
     seen = []
     allow(Jil).to receive(:trigger) { |_u, scope, data, **| seen << [scope, data] }
