@@ -8,6 +8,14 @@
 // buttons need a per-component override. We scope this reset to the
 // chores wrapper AND the modal backdrop (which is rendered outside the
 // page wrapper as a fixed overlay).
+// A quick second tap is a second press, never a double-tap: iOS would
+// otherwise scroll or zoom the page under a button being tapped fast. On the
+// document, so sheets and modals mounted outside the page get it too.
+// Pinching still zooms.
+html.html-ctr-chores {
+  touch-action: manipulation;
+}
+
 .chores-page,
 .chores-modal-backdrop {
   button,

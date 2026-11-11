@@ -13,6 +13,11 @@ const RING_R = 45;
 const RING_CIRC = 2 * Math.PI * RING_R;
 const COUNTER_R = 42;
 const COUNTER_CIRC = 2 * Math.PI * COUNTER_R;
+// How long a burst's running total stays up after the last tap.
+const TALLY_MS = 6000;
+// One running total per counter, outside the card so a card the board
+// remounts mid-burst carries on with the same total.
+const tallies = new Map();
 
 function makeCardFrame(timer, actions) {
   const card = document.createElement("article");
@@ -330,6 +335,7 @@ export function renderCounterCard(timer, actions, hooks = {}) {
                 transform="rotate(-90 50 50)"></circle>
       </svg>
       <div class="timer-counter-value">0</div>
+      <div class="timer-counter-tally" aria-hidden="true"></div>
     </div>
     <div class="timer-counter-controls">
       <button type="button" class="timer-counter-btn" data-counter-op="dec" aria-label="Decrement">&minus;</button>
@@ -344,6 +350,7 @@ export function renderCounterCard(timer, actions, hooks = {}) {
   card.appendChild(name);
 
   const valueEl  = body.querySelector(".timer-counter-value");
+  const tallyEl  = body.querySelector(".timer-counter-tally");
   const boundsEl = body.querySelector(".timer-counter-bounds");
   const decBtn   = body.querySelector('[data-counter-op="dec"]');
   const incBtn   = body.querySelector('[data-counter-op="inc"]');
@@ -357,6 +364,25 @@ export function renderCounterCard(timer, actions, hooks = {}) {
     if (timer.disabled) return;
     stopTimerSound(timer.id);
     actions.increment(timer.id, steps);
+    addToTally(steps * (timer.step || 1));
+  }
+
+  // Counted from the taps rather than the value, so it moves on the tap
+  // instead of waiting for each answer from the server.
+  function addToTally(amount) {
+    const tally = tallies.get(timer.id) || { sum: 0 };
+    tally.sum += amount;
+    clearTimeout(tally.timeout);
+    tally.timeout = setTimeout(() => { tallies.delete(timer.id); drawTally(); }, TALLY_MS);
+    tallies.set(timer.id, tally);
+    drawTally();
+  }
+
+  function drawTally() {
+    const tally = tallies.get(timer.id);
+    if (!tally) { tallyEl.classList.remove("is-on"); return; }
+    tallyEl.textContent = tally.sum < 0 ? `−${-tally.sum}` : `+${tally.sum}`;
+    tallyEl.classList.add("is-on");
   }
 
   // Hold either button to open the bulk sheet — one entry instead of one
@@ -415,6 +441,7 @@ export function renderCounterCard(timer, actions, hooks = {}) {
   }
 
   update(timer);
+  drawTally();
   return { node: card, update, timer: () => timer, dispose: () => stopTimerSound(timer.id) };
 }
 

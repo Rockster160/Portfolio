@@ -33,6 +33,17 @@ RSpec.describe GamePlay do
     end
   end
 
+  describe "deleting its ActionEvent" do
+    it "detaches the play instead of failing, and the play can still be abandoned" do
+      play = build_play
+      play.ensure_action_event!.destroy!
+
+      expect(play.reload.action_event_id).to be_nil
+      expect { play.abandon! }.not_to raise_error
+      expect(play.reload).to be_abandoned
+    end
+  end
+
   describe "#finish!" do
     it "writes final scores onto the linked ActionEvent and computes the winner from them" do
       play = build_play(settings: { "scoring" => "individual", "win" => "high" })

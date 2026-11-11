@@ -53,16 +53,19 @@ RSpec.describe "Games::Sync" do
     it "starts on setup with the game clock stopped, then times setup apart from the game", :aggregate_failures do
       uuid = SecureRandom.uuid
       setup_at = 20.minutes.ago.change(usec: 0)
-      sync!(uuid, play: { name: "Slime Colony", players: [{ name: "Rocco" }], setup_started_at: setup_at.iso8601 })
+      sync!(uuid, play: { name: "Slime Colony", players: [], setup_started_at: setup_at.iso8601 })
 
       play = user.game_plays.find_by!(client_uuid: uuid)
       expect(play).to be_in_setup
       expect(play.started_at).to be_nil
+      expect(play.players).to eq([])
 
+      sync!(uuid, play: { players: [{ name: "Saya" }, { name: "Rocco" }] })
       first_turn = 5.minutes.ago.change(usec: 0)
       sync!(uuid, play: { started_at: first_turn.iso8601 })
 
       expect(play.reload.started_at).to eq(first_turn)
+      expect(play.players.pluck("name")).to eq(["Saya", "Rocco"])
       expect(play.setup_minutes).to eq(15)
       expect(play.action_event.reload.timestamp).to eq(first_turn)
     end

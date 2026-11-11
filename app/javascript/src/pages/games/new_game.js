@@ -79,6 +79,7 @@ function boot() {
   const startBtn = root.querySelector("[data-games-start]");
   keepAboveKeyboard(root.querySelector(".games-actionbar"));
   const countEl = root.querySelector("[data-games-player-count]");
+  const playersBlock = root.querySelector("[data-games-players-block]");
 
   // ---------- game picker ----------
 
@@ -282,7 +283,9 @@ function boot() {
 
   // ---------- start ----------
 
-  // A game with setup notes opens on them; the game clock waits for the first turn.
+  // A game with setup notes opens on them, and players are entered after
+  // them since setting out the table often decides who goes first. The
+  // last game's players still ride along, so that step starts filled in.
   function hasSetup() {
     return !!templates.find((t) => t.id === state.templateId)?.setup;
   }
@@ -290,11 +293,13 @@ function boot() {
   function validate() {
     const name = nameInput.value.trim();
     const diceOk = !state.settings.dice || !!parseDice(state.settings.dice);
+    const needsPlayers = !hasSetup() && state.players.length === 0;
+    playersBlock.hidden = hasSetup();
     countEl.textContent = state.players.length ? `${state.players.length}` : "";
-    startBtn.disabled = !name || state.players.length === 0 || !diceOk;
+    startBtn.disabled = !name || needsPlayers || !diceOk;
     if (!name) startBtn.textContent = "Pick a game";
     else if (!diceOk) startBtn.textContent = "Dice must look like 2d6";
-    else if (state.players.length === 0) startBtn.textContent = "Add a player";
+    else if (needsPlayers) startBtn.textContent = "Add a player";
     else startBtn.textContent = hasSetup() ? `Set up ${name}` : `Start ${name}`;
   }
 
@@ -339,7 +344,7 @@ function boot() {
   const preselected = templates.find((t) => String(t.id) === root.dataset.preselectedId);
   if (preselected) selectTemplate(preselected);
   else refresh();
-  if (preselected && state.players.length === 0) editor.focus();
+  if (preselected && state.players.length === 0 && !hasSetup()) editor.focus();
 }
 
 if (document.readyState === "loading") {

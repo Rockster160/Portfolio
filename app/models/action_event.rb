@@ -15,6 +15,9 @@
 
 class ActionEvent < ApplicationRecord
   belongs_to :user
+  # The play outlives its event: it keeps its rolls and scores, and only stops
+  # syncing onto an event that is no longer there.
+  has_one :game_play, dependent: :nullify
 
   validates :name, presence: true
 

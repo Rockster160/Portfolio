@@ -180,11 +180,13 @@ function boot() {
     wire();
   }
 
-  // Before the first turn: the game's setup notes, timed on their own. The
-  // game clock starts from "Start first turn", so setting out the table never
-  // counts as playing.
+  // Before the first turn: the game's setup notes, then who's playing in
+  // which order, both timed on their own. Setting out the table often
+  // decides the order, so players come second. The game clock starts from
+  // "Start first turn", so neither step counts as playing.
   function renderSetup() {
     const unsynced = stuckCount();
+    const onPlayers = ui.setupStep === "players";
     root.innerHTML = `
       <header class="games-play-head">
         <a class="games-icon-btn" href="${indexUrl}" aria-label="All games">‹</a>
@@ -195,18 +197,44 @@ function boot() {
         <button type="button" class="games-sync" data-sync ${unsynced ? "" : "hidden"}>${unsynced} to sync</button>
         <button type="button" class="games-icon-btn" data-menu aria-label="Game menu">⋯</button>
       </header>
-      <div class="games-setup-doc">
-        ${play().setup_html || '<p class="games-setup-empty">No setup notes yet - tap Edit to write some.</p>'}
-      </div>
-      <div class="games-play-foot">
-        ${play().game_template_id ? '<button type="button" class="games-btn" data-setup-edit>Edit</button>' : ""}
-        <button type="button" class="games-btn games-btn-primary games-setup-go" data-setup-done>Start first turn ›</button>
-      </div>
+      ${onPlayers ? `
+        <div class="games-setup-doc">
+          <div class="games-field-label">Players in turn order</div>
+          <div data-setup-editor></div>
+        </div>
+        <div class="games-play-foot">
+          <button type="button" class="games-btn" data-setup-back>‹ Notes</button>
+          <button type="button" class="games-btn games-btn-primary games-setup-go" data-setup-done ${players().length ? "" : "disabled"}>Start first turn ›</button>
+        </div>
+      ` : `
+        <div class="games-setup-doc">
+          ${play().setup_html || '<p class="games-setup-empty">No setup notes yet - tap Edit to write some.</p>'}
+        </div>
+        <div class="games-play-foot">
+          ${play().game_template_id ? '<button type="button" class="games-btn" data-setup-edit>Edit</button>' : ""}
+          <button type="button" class="games-btn games-btn-primary games-setup-go" data-setup-players>Players ›</button>
+        </div>
+      `}
     `;
     root.querySelector("[data-menu]").addEventListener("click", openMenuSheet);
     root.querySelector("[data-sync]")?.addEventListener("click", async () => { await actions.flushNow(); render(); });
     root.querySelector("[data-setup-edit]")?.addEventListener("click", openSetupEditSheet);
-    root.querySelector("[data-setup-done]").addEventListener("click", () => {
+    root.querySelector("[data-setup-players]")?.addEventListener("click", () => { ui.setupStep = "players"; render(); });
+    root.querySelector("[data-setup-back]")?.addEventListener("click", () => { ui.setupStep = null; render(); });
+    if (!onPlayers) return;
+
+    const done = root.querySelector("[data-setup-done]");
+    const editor = mountPlayerEditor(root.querySelector("[data-setup-editor]"), {
+      players: players().map((p) => ({ ...p })),
+      teams: () => scoring() === "teams",
+      getPlayerColors: () => playerColors,
+      onChange: (list) => {
+        if (list.length) actions.setPlayers(list);
+        done.disabled = list.length === 0;
+      },
+    });
+    if (players().length === 0) editor.focus();
+    done.addEventListener("click", () => {
       const startedAt = new Date();
       const minutes = Math.round((startedAt - new Date(play().setup_started_at)) / 60000);
       actions.setStartedAt(startedAt.toISOString());

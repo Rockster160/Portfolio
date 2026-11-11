@@ -9,6 +9,14 @@
 // SassC, which reads max() as its own function and fails the precompile
 // on env(). Interpolating it only gets through the first pass.
 
+// A quick second tap is a second press, never a double-tap: iOS would
+// otherwise scroll or zoom the page under a button being tapped fast. On the
+// document, so sheets and modals mounted outside the page get it too.
+// Pinching still zooms.
+html.html-ctr-games {
+  touch-action: manipulation;
+}
+
 html.html-ctr-games,
 html.html-ctr-games body {
   margin: 0;

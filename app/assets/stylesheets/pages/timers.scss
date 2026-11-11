@@ -16,6 +16,14 @@ $t-primary-hi:#58a6ff;
 $t-success:   #3fb950;
 $t-danger:    #f85149;
 
+// A quick second tap is a second press, never a double-tap: iOS would
+// otherwise scroll or zoom the page under a button being tapped fast. On the
+// document, so sheets and modals mounted outside the page get it too.
+// Pinching still zooms.
+html.html-ctr-timers {
+  touch-action: manipulation;
+}
+
 .timers-app {
   background: $t-bg;
   color: $t-text;
@@ -845,6 +853,23 @@ $t-danger:    #f85149;
     font-variant-numeric: tabular-nums;
     text-align: center;
     color: var(--ring-color, #{$t-text});
+  }
+
+  // A burst's running total, off to the side of the value so it never
+  // moves the number. Fades in place once the burst is over.
+  .timer-counter-tally {
+    position: absolute;
+    top: 14%;
+    right: 4%;
+    font-size: calc(clamp(13px, 8cqi, 24px));
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ring-color, #{$t-text});
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+
+    &.is-on { opacity: 0.85; transition: opacity 0.1s ease; }
   }
 
   .timer-counter-controls {

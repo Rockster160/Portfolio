@@ -5731,9 +5731,12 @@ dialog.byte-modal {
 // that opens something else.
 
 // Two quick taps on a chore are two presses, so the page never takes them as a
-// zoom. On the whole surface rather than each disc: a second tap that lands on
-// the label or the gap beside a circle zoomed the board. Pinching still works.
-.byte-app[data-kiosk="true"] {
+// zoom. On the whole document rather than each disc: a second tap that lands on
+// the label or the gap beside a circle zoomed the board, and a sheet opened
+// over the board sits outside it. Pinching still works.
+.byte-app[data-kiosk="true"],
+html.html-ctr-byte.html-act-kiosk,
+html.html-ctr-byte.html-act-board {
   touch-action: manipulation;
 }
 

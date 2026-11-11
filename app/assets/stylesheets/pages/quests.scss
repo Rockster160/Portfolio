@@ -2,6 +2,14 @@
 // .chore-circle, .chores-modal, .pill-group …) for the look and the ring
 // animation. Only what the quest board adds lives here.
 
+// A quick second tap is a second press, never a double-tap: iOS would
+// otherwise scroll or zoom the page under a button being tapped fast. On the
+// document, so sheets and modals mounted outside the page get it too.
+// Pinching still zooms.
+html.html-ctr-quests {
+  touch-action: manipulation;
+}
+
 .quests-page {
   .quests-board {
     min-height: 120px;
