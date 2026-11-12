@@ -51,6 +51,10 @@ cases.by_name = { name: raymond.n, value: raymond.c, personality: raymond.a.pers
 const smugCats = names(await IconPool.search("smug cat", { characters: true, limit: 40 }));
 cases.smug_cats = smugCats.slice(0, 5);
 cases.named_among_descriptions = (await IconPool.search("acnh doc male bear blue", { characters: true, limit: 1 }))[0].n;
-cases.cookie_first = (await IconPool.search("cookie", { characters: true, limit: 1 }))[0]._kind;
+const first = async (q) => (await IconPool.search(q, { characters: true, limit: 1 }))[0];
+cases.cece = (({ n, c }) => ({ n, c }))(await first("cece"));
+cases.viche_unaccented = (await first("viche")).n;
+cases.pave_accented = (await first("Pavé")).n;
+cases.cookie_first =(await IconPool.search("cookie", { characters: true, limit: 1 }))[0]._kind;
 
 process.stdout.write(JSON.stringify({ cases }));
