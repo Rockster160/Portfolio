@@ -15,6 +15,7 @@
 // ✓ status. A row the user never checks simply expires with the action.
 
 import { renderInline } from "../markdown.js";
+import { openOutside } from "../external_links.js";
 
 // Small inline fetch — the shared apiCall lives inside conversations.js
 // as a private helper and there's no v1 reason to lift it. Duplication
@@ -292,7 +293,7 @@ function linkifyWithoutTicking(el) {
     a.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      window.open(a.href, "_blank", "noopener");
+      openOutside(a.href);
     });
   });
 }

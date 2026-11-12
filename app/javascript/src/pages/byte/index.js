@@ -99,10 +99,13 @@ import {
   previewOf,
 } from "./unread";
 import { ownAppBadge, repaintAppBadge } from "../../support/app_badge";
+import { initExternalLinks } from "./external_links";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
   if (!app) return;
+
+  initExternalLinks(document);
 
   // Per-node timers that expire the "byte-msg-live" class after a
   // period of no updates. Declared at the very top of the handler
