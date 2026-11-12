@@ -1353,6 +1353,27 @@ BUDDY_EDGE_PROBES = [
     needs: :oat_milk_listed,
     note:  "doing it now is the opposite of what was asked",
   },
+  # The wait already exists: a second countdown beside it would ring twice and
+  # drift from the one they're watching, and the item must not go on now.
+  {
+    case:       "a step chained onto a timer already running",
+    say:        "when the pasta timer's done, add parmesan to my grocery list",
+    tool:       :set_timer,
+    with:       %i[add_list_item],
+    args:       { set_timer: { after_timer: /pasta|\A\d+\z/i, then_continue: true } },
+    never_args: { set_timer: { seconds: /./, minutes: /./ } },
+    avoid:      %i[remind_when schedule_reminder],
+    needs:      :pasta_timer_running,
+    # A bare row rather than Buddy::Timers.create!, so no fire job is queued
+    # for a timer the rollback is about to take away.
+    seed:       ->(user, _convo) {
+      user.timers.create!(
+        kind: :countdown, name: "pasta", duration_ms: 600_000, timer_page: Buddy::Timers.page_for(user),
+        started_at: 2.minutes.ago, end_at: 8.minutes.from_now
+      )
+    },
+    note:       "chaining onto a running countdown is `after_timer`; a fresh countdown or the add on its own both miss",
+  },
   {
     case:  "prod 4081, 6603",
     say:   "play the Whisper nap sound in 2 minutes",
