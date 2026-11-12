@@ -269,6 +269,20 @@ export class Timer {
     return timer
   }
 
+  // Only the latest deploy is ever re-sent on reconnect, so an earlier one whose
+  // result arrived while this page was reloading would count up forever. A later
+  // deploy going live ships its code too, so it's settled where its own estimate
+  // ended, keeping its place in the list.
+  function supersedeOlderDeploys(latest) {
+    cell.data.timers.forEach((t) => {
+      if (t.kind !== "deploy" || t.completed || t === latest) { return }
+      if (t.end_time >= latest.end_time) { return }
+
+      t.note = "superseded"
+      t.complete(true, t.end_time)
+    })
+  }
+
   function subscribeToDeploys() {
     Monitor.subscribe(cell.config.deploy_uuid || "deploy", {
       connected: function() {
@@ -286,6 +300,7 @@ export class Timer {
         if (json.status === "success") {
           timer.note = json.duration || timer.note
           timer.complete(true, finished)
+          supersedeOlderDeploys(timer)
           if (!wasCompleted) { victoryBeep() }
         } else if (json.status === "failed") {
           timer.note = "failed"
