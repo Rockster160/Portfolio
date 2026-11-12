@@ -283,6 +283,38 @@ RSpec.describe FeatureBuilder do
         "[PR #42](https://github.com/x/pull/42)",
       )
     end
+
+    it "waits for a merge to be deployed and answering before handing out the next turn" do
+      following = FeatureBuild.create!(
+        user:      user,
+        title:     "Next",
+        request:   "next",
+        status:    :running,
+        pr_number: 43,
+        pr_url:    "https://github.com/x/pull/43",
+      )
+      MergeQueue.enqueue!(following)
+      approve_on_github
+      MergeQueue.approve!(following)
+      live = false
+      allow(ProductionScripts).to receive(:deployed?).with("abc1234") { live }
+      allow(MergeQueue).to receive(:site_up?).and_return(true)
+
+      described_class.github!(:pull_request, {
+        "action"       => "closed",
+        "pull_request" => pull_request.merge("merged" => true, "merge_commit_sha" => "abc1234"),
+      })
+      expect(MergeQueue.deployed!).to be(true)
+
+      expect(build.reload).to have_attributes(status: "finished", merge_sha: "abc1234")
+      expect(landed).to eq([build.id])
+
+      live = true
+      expect(MergeQueue.deployed!).to be(false)
+
+      expect(build.reload.deployed_at).to be_present
+      expect(landed).to eq([build.id, following.id])
+    end
   end
 
   describe "master moving" do

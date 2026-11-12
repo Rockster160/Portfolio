@@ -7,11 +7,13 @@
 #  asked_at             :datetime
 #  branch               :string
 #  closed_reason        :text
+#  deployed_at          :datetime
 #  error                :text
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
 #  held                 :boolean          default(FALSE), not null
 #  landing_at           :datetime
+#  merge_sha            :string
 #  planned_at           :datetime
 #  pr_number            :integer
 #  pr_url               :string

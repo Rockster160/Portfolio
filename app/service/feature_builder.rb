@@ -302,6 +302,9 @@ module FeatureBuilder
     return :ignored if build.status_finished?
 
     merged = payload.dig("pull_request", "merged") == true
+    # Saved before anything else so the merge queue holds for its deploy, even
+    # while the Mini is still to be told.
+    build.update!(merge_sha: payload.dig("pull_request", "merge_commit_sha")) if merged
     unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
       FeatureBuildFinishWorker.perform_in(FeatureBuildFinishWorker::RETRY_IN, build.id, merged)
       return :mini_unreachable
