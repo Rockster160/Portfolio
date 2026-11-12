@@ -119,6 +119,13 @@ Text.bold = function (text) {
 
   return "[bold]" + text + "[/bold]";
 };
+Text.strike = function (text) {
+  if (!text || text.length < 1) {
+    return text;
+  }
+
+  return "[strike]" + text + "[/strike]";
+};
 Text.color = function (color, text) {
   if (!text || text.length < 1) {
     return text;
@@ -330,6 +337,7 @@ Text.markup = function (text) {
   } while (text !== prev);
   text = text.replaceAll(/\[e\](.*?)\[\/e\]/gi, "<e>$1</e>");
   text = text.replaceAll(/\[bold\](.*?)\[\/bold\]/gi, "<b>$1</b>");
+  text = text.replaceAll(/\[strike\](.*?)\[\/strike\]/gi, "<s>$1</s>");
   text = text.replaceAll(
     /\[ani \"(.*?)\"\]/gi,
     '<textanimate steps="$1"> </textanimate>',
