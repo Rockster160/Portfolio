@@ -30,8 +30,12 @@ module Jil::Schedule
   end
 
   def broadcast(schedule, action)
-    # Do not broadcast creation of immediate triggers since they're just function calls
-    return schedule if immediate?(schedule) && action.to_sym == :created
+    # An immediate trigger is a function call that runs as soon as the runner reaches
+    # it, so neither its creation nor its completion changes the list of what's
+    # coming up. Broadcasting either one recomputes every `schedule` listener (the
+    # Upcoming agenda, several seconds) once per async `Global.trigger`, serially, on
+    # the same per-user runner every later trigger is queued behind.
+    return schedule if immediate?(schedule) && action.to_sym.in?([:created, :completed])
 
     ::Jil.trigger(
       schedule.user, :schedule, { schedule_id: schedule.id, action: action },
