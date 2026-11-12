@@ -32,7 +32,7 @@ gem "twilio-ruby", "~> 5.77.0"
 gem "underscore-rails", "1.8.3"
 
 gem "aws-sdk-s3", "1.114.0"
-gem "bcrypt", "3.1.18"
+gem "bcrypt", "3.1.22"
 gem "capybara", "3.37.1"
 gem "chroma", "0.2.0"
 gem "chronic", "0.10.2"
