@@ -646,6 +646,22 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  # A Feature Builder's request and the replies typed at its messages went to
+  # that build's session, which answers somewhere else.
+  describe "a message sent to a Feature Builder" do
+    it "replays bracketed as the builder's, not as a turn waiting on Buddy" do
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :outbound,
+        state:     :sent,
+        body:      "dark mode",
+        metadata:  { "kind" => "feature_request", "source" => "feature_builder", "feature_build_id" => 7 },
+      )
+
+      expect(build).to eq([{ role: :user, content: "[sent to a Feature Builder, not to you] dark mode" }])
+    end
+  end
+
   # A "." aside — said straight to Jarvis from inside a Buddy thread. Both halves
   # replay, bracketed: without the answer, the person's turn sits there with
   # nothing under it and the next vague message gets read as being about the last

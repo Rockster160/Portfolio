@@ -24,7 +24,7 @@ RSpec.describe FeatureBuilder do
         "rc_url" => "https://claude.ai/code/session_abc",
       })
 
-      expect(thread.byte_messages.count).to eq(1)
+      expect(thread.byte_messages.count).to eq(2)
       expect(thread.byte_messages.last.body).to include(
         "Building **dark mode**",
         "(https://claude.ai/code/session_abc)",
@@ -71,7 +71,7 @@ RSpec.describe FeatureBuilder do
 
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_plain)
       expect(build.reload.planned_at).to eq(first)
-      expect(thread.byte_messages.count).to eq(1)
+      expect(thread.byte_messages.count).to eq(2)
     end
 
     it "moves a working build's chip from planning to building" do
@@ -174,6 +174,56 @@ RSpec.describe FeatureBuilder do
       expect(sent).to have_been_requested
       expect(reply.metadata["reply_to"]["id"]).to eq(asked.id)
       expect(build.reload.question).to be_nil
+      expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
+    end
+
+    it "takes a reply to the request itself, with no question open, as more to go on" do
+      request = build.byte_conversation.byte_messages.find_by(direction: :outbound)
+      sent = deliver("make it follow the system setting")
+
+      reply = ByteMessageIntake.call(
+        user:         user,
+        conversation: thread,
+        body:         "make it follow the system setting",
+        metadata:     { source: "web" },
+        reply_to:     request.id,
+      )
+
+      expect(sent).to have_been_requested
+      expect(reply.metadata["feature_build_id"]).to eq(build.id)
+    end
+
+    it "takes a reply to an earlier reply, and to the PR's message, the same way" do
+      build.update!(pr_number: 42, pr_url: "https://github.com/x/pull/42")
+      described_class.announce_pr!(build)
+      ready = thread.byte_messages.last
+      first = deliver("and a toggle")
+      second = deliver("on the settings page")
+
+      earlier = ByteMessageIntake.call(
+        user: user, conversation: thread, body: "and a toggle", metadata: {}, reply_to: ready.id,
+      )
+      ByteMessageIntake.call(
+        user: user, conversation: thread, body: "on the settings page", metadata: {}, reply_to: earlier.id,
+      )
+
+      expect(first).to have_been_requested
+      expect(second).to have_been_requested
+    end
+
+    it "says there's nothing to send it to once the build is finished, and Buddy isn't asked" do
+      build.update!(status: :finished)
+      allow(BuddyDeliverWorker).to receive(:deliver_after_commit)
+
+      ByteMessageIntake.call(
+        user:         user,
+        conversation: thread,
+        body:         "one more thing",
+        metadata:     {},
+        reply_to:     build.byte_message_id,
+      )
+
+      expect(thread.byte_messages.last.body).to include("**dark mode** is finished", "no session left")
       expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
     end
 

@@ -186,8 +186,10 @@ class ByteMessageIntake
       end
 
       # A reply to a Feature Builder's message is that build's to answer, so it
-      # goes into the build's session and Buddy is never asked.
+      # goes into the build's session and Buddy is never asked. It carries the
+      # build too, so a reply to the reply reaches the same session.
       if (build = ::FeatureBuilder.replied_to(@user, target))
+        @metadata = @metadata.to_h.merge(feature_build_id: build.id)
         message = post!(state: :sent)
         ::FeatureBuilder.answer_from_thread!(build, message)
         return message
