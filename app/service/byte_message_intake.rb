@@ -86,6 +86,20 @@ class ByteMessageIntake
     split_command(text).first
   end
 
+  # "Idea: ..." and "Note: ..." say where a message goes before anything has
+  # to read it. A word with a colon rather than a "/" because these are typed
+  # the way a person writes a note to themselves, and the word has to be the
+  # whole first thing: "my idea: ..." is a sentence about an idea, not a filing.
+  FILING_RX = /\A\s*(idea|note)\s*:\s*(\S.*)\z/im
+
+  # [:idea, "the rest"], [:note, "the rest"], or nil.
+  def self.filing(body)
+    match = body.to_s.match(FILING_RX)
+    return nil if match.nil?
+
+    [match[1].downcase.to_sym, match[2].strip]
+  end
+
   # Returns the persisted outbound message, or nil for a blank body.
   def self.call(**)
     new(**).call
@@ -178,6 +192,13 @@ class ByteMessageIntake
         ::FeatureBuilder.answer_from_thread!(build, message)
         return message
       end
+    end
+
+    # Filed by its first word. Above the armed latch so an "Idea:" typed after
+    # tapping a bucket still lands in that bucket, without its prefix.
+    if buddy? && (filing = self.class.filing(@body))
+      kind, words = filing
+      return kind == :idea ? file_idea!(words) : file_note!
     end
 
     # Brain-dump capture: if they armed a "Stash" bucket, THIS message is the
@@ -277,6 +298,26 @@ class ByteMessageIntake
   # The row this send already produced, if it produced one. Scoped to the
   # conversation because a local_id is only ever unique within the client that
   # minted it, and matched on the jsonb key the controller writes it under.
+  # The same capture the Stash chip arms, so the sorting turn after it is the
+  # same one too - including moving a job onto a list or a clock time into a
+  # reminder. A bucket armed beforehand still decides where it goes.
+  def file_idea!(words)
+    category = ::Buddy::Stash.armed_category(@conversation)
+    message  = post!(state: :sent)
+    return message if ::Buddy::Stash.capture!(@user, @conversation, message, category, body: words)
+
+    dispatch!(message)
+    message
+  end
+
+  # Written for the nightly audit, not for the companion, so no turn runs.
+  def file_note!
+    @metadata = @metadata.to_h.merge(kind: ::Buddy::AuditNotes::KIND)
+    message = post!(state: :sent)
+    ::Buddy::AuditNotes.receipt!(@user, @conversation)
+    message
+  end
+
   def existing_for_local_id
     local_id = @metadata.to_h.symbolize_keys[:local_id].to_s
     return nil if local_id.blank?

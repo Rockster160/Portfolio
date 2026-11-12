@@ -284,4 +284,66 @@ RSpec.describe ByteMessageIntake do
       end
     end
   end
+
+  # "Idea:" and "Note:" say where a message goes, so no model decides it.
+  describe "a filing prefix" do
+    let(:user)  { User.me }
+    let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(BuddyDeliverWorker).to receive(:perform_async)
+      allow(ByteJarvisWorker).to receive(:perform_async)
+    end
+
+    def send!(body, conversation: convo)
+      ByteMessageIntake.call(user: user, conversation: conversation, body: body)
+    end
+
+    def held
+      user.buddy_memories.kind_stash.pluck(:content)
+    end
+
+    it "holds an idea without its prefix, and runs the sorting turn" do
+      send!("Idea: a rain gauge on the greenhouse")
+
+      expect(held).to eq(["a rain gauge on the greenhouse"])
+      seed = convo.byte_messages.where("metadata->>'source' = 'stash_response'").sole
+      expect(seed.body).to include("a rain gauge on the greenhouse")
+    end
+
+    it "files into the bucket armed beforehand" do
+      ::Buddy::Stash.arm!(convo, :work)
+      send!("idea:  standup bot")
+
+      expect(user.buddy_memories.kind_stash.sole.category).to eq("work")
+    end
+
+    it "answers a note with a receipt and no turn" do
+      message = send!("Note: that timer should have been 15 minutes")
+
+      expect(message.metadata["kind"]).to eq("audit_note")
+      expect(BuddyDeliverWorker).not_to have_received(:perform_async)
+      expect(convo.byte_messages.inbound.pluck(:body)).to eq(["📝 Noted for the audit"])
+      expect(held).to be_empty
+    end
+
+    it "is only the first word" do
+      send!("my idea: a rain gauge")
+      send!("Ideas are cheap")
+      send!("Note:")
+
+      expect(held).to be_empty
+      expect(convo.byte_messages.where("metadata->>'kind' = 'audit_note'")).to be_empty
+      expect(BuddyDeliverWorker).to have_received(:perform_async).exactly(3).times
+    end
+
+    it "means nothing outside a Buddy thread" do
+      shell = user.byte_conversations.create!(mode: :claude, name: "Claude")
+      allow(ByteLocal).to receive(:deliver)
+      send!("Note: check the logs", conversation: shell)
+
+      expect(shell.byte_messages.sole.metadata["kind"]).not_to eq("audit_note")
+    end
+  end
 end

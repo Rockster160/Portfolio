@@ -149,6 +149,42 @@ RSpec.describe ByteDailyAudit do
       end
     end
 
+    # "Note: ..." typed in a Buddy thread is somebody pointing straight at a
+    # problem, so the audit is handed each one rather than left to spot it.
+    describe "the notes it carries" do
+      let(:now)   { Time.zone.parse("2026-08-12 14:32:00") }
+      let(:buddy) { user.byte_conversations.create!(mode: :buddy, name: "Byte") }
+
+      def say(body, direction:, at:, metadata: {})
+        buddy.byte_messages.create!(
+          user:       user,
+          direction:  direction,
+          state:      :delivered,
+          body:       body,
+          metadata:   metadata,
+          created_at: at,
+        )
+      end
+
+      it "names each note and the companion message it was written under" do
+        reply = say("Set for 5 minutes", direction: :inbound, at: now - 2.hours, metadata: { kind: :buddy })
+        say("Set ✓", direction: :inbound, at: now - 2.hours + 1.second, metadata: { kind: :buddy_activity })
+        note = say("Note: I said 15", direction: :outbound, at: now - 1.hour, metadata: { kind: :audit_note })
+
+        body = described_class.prompt(user, now: now)
+
+        expect(body).to include("message #{note.id}", "\"Note: I said 15\"", "under message #{reply.id}")
+        expect(body).not_to include("None were left in this window.")
+      end
+
+      it "leaves out an ordinary message and a note from outside the window" do
+        say("Note: ancient", direction: :outbound, at: now - 3.days, metadata: { kind: :audit_note })
+        say("just chatting", direction: :outbound, at: now - 1.hour)
+
+        expect(described_class.prompt(user, now: now)).to include("None were left in this window.")
+      end
+    end
+
     describe ".span_length" do
       let(:tz) { ActiveSupport::TimeZone["America/Denver"] }
 

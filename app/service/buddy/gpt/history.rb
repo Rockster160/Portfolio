@@ -398,6 +398,9 @@ module Buddy
         if jarvis_aside?(message)
           return "[asked Jarvis directly] #{ByteMessageIntake.jarvis_words(body)}"
         end
+        # Nothing answered it, so without the bracket it reads as a message
+        # left hanging.
+        return "[a note for the app's nightly review, not for you] #{body}" if Buddy::AuditNotes.note?(message)
 
         prefix = reply_prefix(message)
         prefix ? "#{prefix} #{body}".strip : body

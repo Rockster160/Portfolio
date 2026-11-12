@@ -1,4 +1,4 @@
-import { beeps } from "./dashboard/vars";
+import { audioState, beeps } from "./dashboard/vars";
 import { Monitor } from "./dashboard/cells/monitor";
 import { soundOnce } from "./byte/buddy/ring_claim";
 import { Time } from "./dashboard/cells/_time";
@@ -587,7 +587,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
 
       soundOnce(
-        { ownerId: feedOwnerId, key, next: timerData.next, once: timerData.once, nowSec },
+        {
+          ownerId: feedOwnerId,
+          key,
+          next:    timerData.next,
+          once:    timerData.once,
+          nowSec,
+          audible: !isMuted && audioState() === "running",
+        },
         () => playAlertForKey(key),
       );
     });

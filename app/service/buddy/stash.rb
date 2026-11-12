@@ -146,9 +146,11 @@ module Buddy
 
     # Capture the just-sent message as an idea. Clears the latch first (one-shot)
     # so a failure can't leave the person permanently stuck in capture mode.
-    def capture!(user, conversation, message, category)
+    # `body` is what gets held when it isn't the whole message - an "Idea:"
+    # prefix is how the thing was addressed, not part of the thought.
+    def capture!(user, conversation, message, category, body: message.body)
       disarm!(conversation)
-      body = message.body.to_s.strip
+      body = body.to_s.strip
       return nil if body.empty?
       # Nothing filed, no chip, and the latch is already cleared - so it falls
       # through to an ordinary turn and gets an ordinary reply.
