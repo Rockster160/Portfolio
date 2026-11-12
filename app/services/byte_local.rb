@@ -61,6 +61,8 @@ module ByteLocal
   MAC_COMMANDS = {
     dark_monitors: "Put the Mac's displays to sleep - 'dark monitors', 'turn the monitors off', " \
                    "'kill the screens'. The machine keeps running; only the displays go dark.",
+    wake_monitors: "Turn the Mac's displays back on - 'monitors on', 'turn the monitors on', " \
+                   "'wake the laptop', 'screens back on'. The undo of dark_monitors.",
     mac_ping:      "Check the Mac is awake and can actually run something. Use when they ask " \
                    "whether it's up, or when they want to test that this tool works. Changes nothing.",
     spotify_play_pause: "Play or pause Spotify on the Mac - 'pause the music', 'play Spotify', " \

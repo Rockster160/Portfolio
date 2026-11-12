@@ -42,6 +42,7 @@ module Buddy
       time
       color
       hidden
+      search
     ].freeze
 
     # The one type whose value is a list rather than a scalar.
@@ -49,6 +50,11 @@ module Buddy
 
     # Carried through untouched: the form posts them, the person never sees them.
     HIDDEN = :hidden
+
+    # A box that searches records as it's typed in (PromptSearch). `search:` on
+    # the descriptor is the question's settings; the value is `{ id, title }`,
+    # or a list of them.
+    SEARCH = :search
 
     # The footer, in render order: every alternate first, the submit last, so
     # the primary action is the rightmost thing on the row and the one closest
@@ -100,6 +106,7 @@ module Buddy
           step:        field[:step],
           required:    field.fetch(:required, true) ? true : false,
           hint:        field[:hint].to_s.presence,
+          search:      (PromptSearch.config(field[:search]) if type == SEARCH && field[:search].respond_to?(:to_h)),
         }.compact
       }
     end
@@ -145,10 +152,17 @@ module Buddy
 
     # Fold submitted values back onto the descriptors so a submitted form can be
     # re-rendered showing what was actually sent.
-    def apply_values(fields, values)
+    #
+    # With `user`, a search pick is drawn again the way its dropdown drew it,
+    # so the sent form still shows the swatch or icon that was picked.
+    def apply_values(fields, values, user: nil)
       posted = (values || {}).transform_keys(&:to_s)
       normalize(fields).map { |field|
-        posted.key?(field[:key]) ? field.merge(value: posted[field[:key]]) : field
+        next field unless posted.key?(field[:key])
+
+        value = posted[field[:key]]
+        value = PromptSearch.new(user, field[:search]).present(value) if user && field[:type] == SEARCH && field[:search]
+        field.merge(value: value)
       }
     end
 
@@ -168,6 +182,9 @@ module Buddy
       when :date              then time(field, raw, "%Y-%m-%d")
       when :time              then time(field, raw, "%H:%M")
       when :color             then color(field, raw)
+      # Passed on as picked: the tool reading it checks the picks against the
+      # search itself (PromptForm), since only it knows whose records they are.
+      when SEARCH             then [search_value(raw), nil]
       # A duration posts as typed ("1h 32"), the way the page's box does; the
       # Jil task reading the answer is what turns it into minutes.
       else [raw.to_s.strip, nil]
@@ -197,6 +214,19 @@ module Buddy
       return [found, nil] if found
 
       [nil, "#{field[:label]}: #{wanted.inspect} isn't one of the options"]
+    end
+
+    def search_value(raw)
+      picks = Array.wrap(raw.is_a?(Hash) ? [raw] : raw).filter_map { |pick|
+        next unless pick.respond_to?(:to_h)
+
+        pick = pick.to_h.stringify_keys
+        title = pick["title"].to_s.strip
+        next if pick["id"].blank? && title.empty?
+
+        { "id" => pick["id"].presence, "title" => title }
+      }
+      raw.is_a?(Array) ? picks : picks.first
     end
 
     TRUTHY = %w[true yes y on 1].freeze

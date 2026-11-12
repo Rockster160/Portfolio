@@ -59,14 +59,21 @@ module FeatureBuilder
   # person's own message, which the slash command hands back as the echo of
   # what they typed: `typed`, word for word, defaulting to the command it
   # stands for. `local_id` is the client's optimistic bubble, which that
-  # message takes over.
-  def start!(user:, conversation:, text:, typed: nil, local_id: nil)
+  # message takes over. `attachment_signed_ids` are images sent along with the
+  # command, already uploaded to /byte/uploads: the build is given them, and
+  # the request shows them.
+  def start!(user:, conversation:, text:, typed: nil, local_id: nil, attachment_signed_ids: [])
     request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
     return say(conversation, USAGE) if request.empty?
 
     said = typed.presence || "/feature add #{request}"
     posted = nil
-    launch!(user: user, conversation: conversation, request: request) { |build|
+    launch!(
+      user:                  user,
+      conversation:          conversation,
+      request:               request,
+      attachment_signed_ids: attachment_signed_ids,
+    ) { |build|
       posted = post_request!(build, conversation, said, { local_id: local_id }.compact)
     }
     posted
@@ -74,7 +81,7 @@ module FeatureBuilder
 
   # The Build button on a feature request. Returns the build, or nil when the
   # request isn't one that can be built (FeatureRequest#buildable?).
-  def start_from_request!(feature_request, user:, notes: nil)
+  def start_from_request!(feature_request, user:, notes: nil, attachment_signed_ids: [])
     return nil unless feature_request.buildable?
 
     request = [
@@ -85,23 +92,33 @@ module FeatureBuilder
 
     feature_request.update!(status: :planned)
     launch!(
-      user:            user,
-      conversation:    ByteConversation.for_self_initiated(user),
-      request:         request,
-      feature_request: feature_request,
+      user:                  user,
+      conversation:          ByteConversation.for_self_initiated(user),
+      request:               request,
+      feature_request:       feature_request,
+      attachment_signed_ids: attachment_signed_ids,
     )
   end
 
+  # `title` is for a request written as a brief, whose first line isn't a name.
   # A block is given the build before its status line is posted, so what's
   # posted there reads above it.
-  def launch!(user:, conversation:, request:, feature_request: nil)
+  def launch!(
+    user:,
+    conversation:,
+    request:,
+    feature_request: nil,
+    title: nil,
+    attachment_signed_ids: [])
     build = FeatureBuild.create!(
       user:              user,
       byte_conversation: conversation,
       feature_request:   feature_request,
-      title:             FeatureBuild.title_for(request),
+      title:             FeatureBuild.title_for(title.presence || request),
       request:           request,
     )
+    blobs = blobs_for(attachment_signed_ids)
+    build.images.attach(blobs) if blobs.any?
     if conversation
       yield build if block_given?
       message = say(conversation, build.status_line, feature_build_id: build.id)
@@ -125,6 +142,8 @@ module FeatureBuilder
     planned_at
     waiting_at
     question
+    closed_reason
+    rereview
   ].freeze
 
   def post_request!(build, conversation, body, metadata)
@@ -136,6 +155,7 @@ module FeatureBuilder
       metadata:     { kind: REQUEST_KIND, source: :feature_builder, feature_build_id: build.id }.merge(metadata),
       delivered_at: Time.current,
     )
+    message.files.attach(build.images.blobs) if build.images.attached?
     broadcast(message)
     message
   end
@@ -147,6 +167,9 @@ module FeatureBuilder
   # building.
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
+    return closed!(build, attributes) if attributes["closed_reason"].present?
+    return rereview!(build, attributes["rereview"]) if attributes["rereview"].present?
+
     waiting = attributes.delete("waiting_at").present?
     question = attributes.delete("question")
     if question
@@ -160,8 +183,43 @@ module FeatureBuilder
     repaint!(build)
     announce_pr!(build) if announce_pr
     announce_waiting!(build) if waiting && !announce_pr
+    MergeQueue.enqueue!(build) if announce_pr
+    # Handed the merge, it stopped without merging, closing or asking for a
+    # review: whatever it said is for the owner, and it needs approving again.
+    MergeQueue.released!(build) if waiting && build.reload.landing_at
     refresh_chip!(build.user) if planned
     refresh_needs_you!(build.user)
+    MergeQueue.advance!(build.user)
+    build
+  end
+
+  # Handed the merge, the session changed something the owner should see
+  # again (`builder-pr rereview`): it has commented and asked for a review on
+  # the PR, and gives up its approval and its turn.
+  def rereview!(build, comment)
+    pr = "[PR ##{build.pr_number}](#{build.pr_url})"
+    announce!(build, "**#{build.title}** needs another review: #{comment}\n\n#{pr}", "Review again: #{build.title}")
+    MergeQueue.released!(build)
+    refresh_needs_you!(build.user)
+    build
+  end
+
+  # The session closed itself (`builder-pr close`): what it was asked for is
+  # already in master, or needed no code. The Mini closes the PR and removes the
+  # worktree on its own; this records why, and says so in the thread.
+  def closed!(build, attributes)
+    build.update!(
+      **attributes.slice("closed_reason", "pr_number", "pr_url"),
+      status:      :finished,
+      finished_at: Time.current,
+      question:    nil,
+      asked_at:    nil,
+    )
+    repaint!(build)
+    announce!(build, "**#{build.title}** closed itself: #{build.closed_reason}", "Closed: #{build.title}")
+    refresh_chip!(build.user)
+    refresh_needs_you!(build.user)
+    MergeQueue.released!(build)
     build
   end
 
@@ -208,6 +266,31 @@ module FeatureBuilder
     )
   end
 
+  # Loose blobs from /byte/uploads. A tampered or expired id is dropped, the
+  # same as on a message.
+  def blobs_for(signed_ids)
+    Array(signed_ids).compact_blank.filter_map { |signed_id| ActiveStorage::Blob.find_signed(signed_id) }
+  end
+
+  # Images as {filename, content_type, url}, the shape the Mini downloads from.
+  # Only formats Claude reads, and a URL that can't be built is left out rather
+  # than taking the rest down with it.
+  def image_sources(files)
+    files.filter_map { |file|
+      next unless ByteImageNormalizer::PASSTHROUGH_TYPES.include?(file.content_type.to_s)
+
+      url = image_url(file)
+      url && { filename: file.filename.to_s, content_type: file.content_type.to_s, url: url }
+    }
+  end
+
+  def image_url(file)
+    file.url(expires_in: ByteMessage::SOURCE_URL_TTL)
+  rescue StandardError => e
+    Rails.logger.warn("[FeatureBuilder] image url failed for blob #{file.blob_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
   # ---- answering from Byte ----
 
   # The build a reply in the thread is aimed at: any message posted about it,
@@ -228,15 +311,27 @@ module FeatureBuilder
     FeatureBuild.unfinished.where(user: user).where.not(question: nil).order(:asked_at)
   end
 
-  # Types `text` into the build's session as its owner's next message. False
-  # when the Mini didn't take it, and the question stays open.
+  # Types `text` into the build's session as its owner's next message, with
+  # `images` ({filename, content_type, url}) downloaded on the Mini and listed
+  # under it. False when the Mini didn't take it, and the question stays open.
   # rubocop:disable Naming/PredicateMethod -- these send; the boolean is whether it got there
-  def answer!(build, text)
-    return false unless ByteLocal.builder(:message, build_id: build.id, text: text.to_s)
+  def answer!(build, text, images: [])
+    fields = { build_id: build.id, text: text.to_s }
+    fields[:attachments] = images if images.any?
+    return false unless ByteLocal.builder(:message, **fields)
 
     build.update!(question: nil, asked_at: nil)
     refresh_needs_you!(build.user)
     true
+  end
+
+  # The message being answered when its images go along with an answer told to
+  # Buddy: the last thing the person said, and only when it carries images.
+  def latest_images_message(conversation)
+    return nil if conversation.nil?
+
+    latest = conversation.byte_messages.spoken.recent.first
+    latest if latest&.model_image_sources.present?
   end
 
   # A reply typed at one of the build's messages: an answer when it's asking,
@@ -252,7 +347,7 @@ module FeatureBuilder
       )
       return false
     end
-    return true if answer!(build, message.body)
+    return true if answer!(build, message.body, images: message.model_image_sources)
 
     say(
       message.byte_conversation,
@@ -317,19 +412,24 @@ module FeatureBuilder
     build.update!(status: :finished, finished_at: Time.current)
     build.feature_request&.update!(status: :shipped) if merged
     refresh_needs_you!(build.user)
+    MergeQueue.released!(build)
   end
 
   def review!(payload)
     review = payload["review"].to_h
     return :ignored unless payload["action"] == "submitted" && owner?(review["user"])
 
+    # An approval puts it in line to merge, and changes asked for take it out.
     # Line comments arrive as their own events. The review itself only adds
     # something when it has words of its own or asks for changes.
+    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    approved = review["state"] == "approved"
+    MergeQueue.approve!(build) if approved && build && !build.status_finished?
+    MergeQueue.unapprove!(build) if review["state"] == "changes_requested" && build
     body = review["body"].to_s.strip
-    return :ignored if body.empty? && review["state"] != "changes_requested"
+    return (approved ? :approved : :ignored) if body.empty? && review["state"] != "changes_requested"
 
     heading = review["state"] == "changes_requested" ? "Changes requested" : "Review"
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
     feedback!(build, "#{heading}: #{body.presence || "see the comments"}")
   end
 

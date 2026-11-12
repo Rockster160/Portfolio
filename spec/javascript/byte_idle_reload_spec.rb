@@ -77,5 +77,12 @@ RSpec.describe "Byte idle reload" do
       expect(result["reloads_while_unsettled"]).to eq(0)
       expect(result["decision_while_unsettled"]).to eq("unsettled")
     end
+
+    # The reload declines while the server can't hand out the page yet, and the
+    # page it left in place is still behind.
+    it "tries again later when the reload refuses" do
+      expect(result["armed_after_refused_reload"]).to be(true)
+      expect(result["reloads_after_refusal_and_retry"]).to eq(2)
+    end
   end
 end

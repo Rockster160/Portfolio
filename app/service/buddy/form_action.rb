@@ -197,7 +197,7 @@ module Buddy
         action.reload
         next unless action.pending?
 
-        fields            = Buddy::FormFields.apply_values(action.buttons, values) if values
+        fields            = Buddy::FormFields.apply_values(action.buttons, values, user: action.user) if values
         action.state      = :decided
         action.decided_at = Time.current
         action.decision   = { "value" => values || {}, "source" => "app", "action" => key.to_s.presence }
@@ -383,7 +383,7 @@ module Buddy
           # `captured:` from its execute; everything else returns nothing here
           # and the run's variables are untouched.
           captured:  (result[:data].is_a?(Hash) ? result[:data][:captured] : nil) || {},
-          fields:    Buddy::FormFields.apply_values(fields, collected),
+          fields:    Buddy::FormFields.apply_values(fields, collected, user: user),
           receipt:   safely { tool[:receipt].call(result[:data], exec_ctx) }.to_s.presence || "Sent ✓",
         }
       rescue StandardError => e

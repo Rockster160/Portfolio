@@ -32,6 +32,24 @@ RSpec.describe ByteController, type: :controller do
       expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
     end
 
+    it "starts the build with the images sent alongside the command, and shows them on the request" do
+      sign_in rocco
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: StringIO.new("png"), filename: "mock.png", content_type: "image/png",
+      )
+
+      post :create_message, params: {
+        conversation_id:       convo.id,
+        body:                  "/feature add match this layout",
+        attachment_signed_ids: [blob.signed_id],
+      }
+
+      build = FeatureBuild.last
+      expect(build.images.map(&:blob)).to eq([blob])
+      expect(build.byte_message.body).to include("with 1 image")
+      expect(convo.byte_messages.find_by(direction: :outbound).files.map(&:blob)).to eq([blob])
+    end
+
     it "takes the request without the `add`, and explains itself when there isn't one" do
       sign_in rocco
 

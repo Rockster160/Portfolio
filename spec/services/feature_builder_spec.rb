@@ -10,10 +10,26 @@ RSpec.describe FeatureBuilder do
   }
   let(:branch) { "byte/#{build.id}-dark-mode" }
 
-  before { allow(FeatureBuilderFeedbackWorker).to receive(:perform_in) }
+  before {
+    allow(FeatureBuilderFeedbackWorker).to receive(:perform_in)
+    ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" }
+  }
+  after { ActiveStorage::Current.url_options = nil }
 
   def pull_request(ref: branch, number: 42, merged: false)
     { "number" => number, "head" => { "ref" => ref }, "merged" => merged }
+  end
+
+  describe "a build handed a brief" do
+    it "is named by its title rather than the brief's first line" do
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+      brief = "**What and why**: the Questions session can start builds.\n\nPlan: ..."
+      handed = described_class.launch!(user: user, conversation: thread, request: brief, title: "Feature from questions")
+
+      expect(handed.title).to eq("Feature from questions")
+      expect(handed.request).to eq(brief)
+      expect(handed.byte_message.body).to include("**Feature from questions**")
+    end
   end
 
   describe "the thread it was asked from" do
@@ -227,6 +243,31 @@ RSpec.describe FeatureBuilder do
       expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
     end
 
+    it "carries the images on a reply, even one with no words" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Which layout?" })
+      asked = thread.byte_messages.last
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: StringIO.new("png"), filename: "layout.png", content_type: "image/png",
+      )
+      allow(DescribeImageWorker).to receive(:enqueue_for)
+      sent = stub_request(:post, %r{/byte/builder\z}).with { |request|
+        payload = JSON.parse(request.body)
+        payload["text"] == "" && payload["attachments"].to_a.map { |image| image["filename"] } == ["layout.png"]
+      }.to_return(status: 200, body: "{}")
+
+      ByteMessageIntake.call(
+        user:                  user,
+        conversation:          thread,
+        body:                  "",
+        metadata:              {},
+        reply_to:              asked.id,
+        attachment_signed_ids: [blob.signed_id],
+      )
+
+      expect(sent).to have_been_requested
+      expect(build.reload.question).to be_nil
+    end
+
     it "says so in the thread when the Mini can't take the answer" do
       described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Dark by default?" })
       asked = thread.byte_messages.last
@@ -252,6 +293,86 @@ RSpec.describe FeatureBuilder do
       build.update!(question: "Dark by default?", asked_at: Time.current, status: :finished)
 
       expect(described_class.asking(user)).to be_empty
+    end
+  end
+
+  describe "a build that closes itself" do
+    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+
+    it "finishes it and tells the thread why, and a later report from the Mini doesn't say it again" do
+      build.update!(status: :running, question: "Dark by default?", asked_at: Time.current)
+
+      described_class.update_from_mini!(build, { "closed_reason" => "Master already has dark mode." })
+      described_class.update_from_mini!(build, { "status" => "finished" })
+
+      expect(build.reload).to be_status_finished
+      expect(build.question).to be_nil
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once.with(
+        hash_including(text: "**dark mode** closed itself: Master already has dark mode."),
+      )
+      expect(build.byte_message.reload.body).to eq("Closed **dark mode**: Master already has dark mode.")
+      expect(described_class.pending(user).values.flatten).not_to include(build)
+    end
+  end
+
+  describe "the merge queue" do
+    let(:landed) { [] }
+
+    before {
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+      allow(ByteLocal).to receive(:builder) { |action, build_id:, **|
+        landed << build_id if action == :land
+        true
+      }
+      build.update!(status: :running)
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+    }
+
+    def approve_on_github(state="approved")
+      described_class.github!(:pull_request_review, {
+        "action"       => "submitted",
+        "pull_request" => pull_request,
+        "review"       => { "user" => { "login" => "Rockster160" }, "state" => state, "body" => "" },
+      })
+    end
+
+    it "puts a PR in line when it opens, and hands it the merge when it's approved on GitHub" do
+      expect(MergeQueue.builds(user)).to eq([build])
+
+      expect(approve_on_github).to eq(:approved)
+
+      expect(landed).to eq([build.id])
+      expect(build.reload.landing_at).to be_present
+    end
+
+    it "takes it out of line when changes are asked for" do
+      build.update!(approved_at: Time.current)
+
+      approve_on_github("changes_requested")
+
+      expect(build.reload.approved_at).to be_nil
+    end
+
+    it "gives the turn back, and wants approving again, when the merge stops on a question" do
+      approve_on_github
+
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Keep both?" })
+
+      expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
+      expect(thread.byte_messages.last.body).to include("is asking", "Keep both?")
+    end
+
+    it "tells the owner when landing needs another review, and moves the line on" do
+      approve_on_github
+
+      described_class.update_from_mini!(build, { "rereview" => "Reworked the cache key to fit master's." })
+
+      expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
+      expect(thread.byte_messages.last.body).to include(
+        "needs another review",
+        "Reworked the cache key",
+        "[PR #42](https://github.com/x/pull/42)",
+      )
     end
   end
 

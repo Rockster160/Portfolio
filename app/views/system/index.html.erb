@@ -40,6 +40,13 @@
       icon:  :terminal,
       blip:  FeatureBuilder.pending_count(current_user),
     },
+    {
+      title: "Production Scripts",
+      path:  system_production_scripts_path,
+      desc:  "Scripts the Mini wrote to run against production, to approve, edit or skip, and what each one printed",
+      icon:  :"play-circle",
+      blip:  current_user.production_scripts.outstanding.count,
+    },
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },
     { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", svg: "buddy/byte/silhouette" },

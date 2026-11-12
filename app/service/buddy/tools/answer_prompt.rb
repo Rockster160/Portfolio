@@ -14,7 +14,8 @@ Buddy::Tools.register(
     `id` is the prompt's id. `answers` is keyed by the exact question texts
     read_prompt returned, with the person's answers as values - a number for a
     scale, one of the listed `choices` for a select or chips, an array (or a
-    comma-separated string) for a multi-select, yes/no for a checkbox.
+    comma-separated string) for a multi-select, yes/no for a checkbox, and the
+    words to look for on a search (the best match is picked).
 
     A field you leave out keeps whatever the form loaded it with, so leave one
     out only after you've read that value and decided it's right for what they
@@ -50,7 +51,7 @@ Buddy::Tools.register(
       # Buddy's answers ride in as the starting values, so the form opens already
       # filled rather than blank.
       prefilled = form.build_response(payload[:answers] || {})
-      form.form_fields.map { |field| field.merge(value: prefilled[field[:key]] || field[:value]) }
+      form.form_fields(prefilled)
     },
     title:       ->(payload, ctx) { ctx.user.prompts.find_by(id: payload[:id])&.question.to_s },
     # Some prompts fill their choices in when they're opened, so a form posted
