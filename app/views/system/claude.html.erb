@@ -11,7 +11,6 @@
   build_state = ->(build) { FeatureBuilder.stage(build, @live[build.id]) }
   waiting = [
     *@pending[:questions].map { |build| [build, "waiting on you"] },
-    *@pending[:plans].map { |build| [build, "plan ready"] },
     *@pending[:prs].map { |build| [build, "PR open"] },
   ]
 %>
@@ -133,9 +132,8 @@
       background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
     }
-    .cs-row.cs-working, .cs-row.cs-build-working { border-color: rgba(88, 214, 141, 0.45); }
-    .cs-row.cs-waiting, .cs-row.cs-build-waiting-on-you { border-color: rgba(245, 176, 65, 0.45); }
-    .cs-row.cs-build-plan-ready, .cs-row.cs-build-pr-open { border-color: rgba(245, 176, 65, 0.45); }
+    .cs-row.cs-working, .cs-row.cs-build-working, .cs-row.cs-build-planning, .cs-row.cs-build-building { border-color: rgba(88, 214, 141, 0.45); }
+    .cs-row.cs-waiting, .cs-row.cs-build-waiting-on-you, .cs-row.cs-build-pr-open { border-color: rgba(245, 176, 65, 0.45); }
     .cs-row.cs-build-failed { border-color: rgba(236, 112, 99, 0.45); }
     .cs-row.cs-build-finished { opacity: 0.55; }
 
