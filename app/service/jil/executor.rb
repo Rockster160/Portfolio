@@ -182,6 +182,7 @@ class Jil::Executor
     @user = user
     @task = task
     @broadcast_task = broadcast_task || task
+    @watched = true
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
     # External entrypoints (controller + Sidekiq JSON roundtrip) deliver
     # string keys; internal Custom.X calls deliver symbol keys. Normalize so
@@ -221,6 +222,15 @@ class Jil::Executor
     ::TasksChannel.send_to(@user, @execution&.task&.uuid || :new, data)
   end
 
+  # The per-line broadcast only lights up the running line in an open editor, and a
+  # long task runs thousands of lines — one Redis publish each. The opening broadcast
+  # returns how many subscribers received it, so a run nobody is watching skips the
+  # rest. The final broadcast always goes out, so an editor opened mid-run still
+  # gets the result. Adapters that don't report a count (test, async) stay watched.
+  def watched?(delivered)
+    !delivered.is_a?(::Integer) || delivered.positive?
+  end
+
   # Every execution is one coalescing unit (RefreshCoalescer): the OUTERMOST call
   # owns the buffer, so a view-refresh raised anywhere in the chain this execution
   # spawns is deduped and flushed once when it finishes, rather than recomputed on
@@ -229,7 +239,7 @@ class Jil::Executor
     ::Jil::RefreshCoalescer.coalesce {
       Time.use_zone(@user.timezone) {
         @execution.task&.update(last_trigger_at: Time.current)
-        broadcast!
+        @watched = watched?(broadcast!)
         @ctx[:time_start] = Time.current
         state = :started
         begin
@@ -277,7 +287,7 @@ class Jil::Executor
 
   def execute_line(line, current_ctx={})
     @ctx[:line] = line.varname
-    broadcast!
+    broadcast! if @watched
     klass = (
       if line.objname.match?(/^[A-Z]/) # upcase for class or downcase for instance
         klass_from_obj(line.objname)

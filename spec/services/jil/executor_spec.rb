@@ -428,4 +428,37 @@ RSpec.describe Jil::Executor do
       event&.destroy
     end
   end
+
+  describe "editor progress broadcasts" do
+    let(:user) { User.me }
+    let(:code) {
+      <<~JIL
+        a = String.new("one")::String
+        b = String.new("two")::String
+        c = String.new("three")::String
+      JIL
+    }
+    let(:lines_sent) { [] }
+
+    def run_with(subscribers)
+      allow(::TasksChannel).to receive(:send_to) { |_, _, data|
+        lines_sent << data[:line]
+        subscribers
+      }
+      described_class.call(user, code, {})
+    end
+
+    it "follows every line while the task is open somewhere" do
+      run_with(1)
+
+      expect(lines_sent).to include(:a, :b, :c)
+    end
+
+    it "sends only the opening and the result when nobody is watching" do
+      execution = run_with(0)
+
+      expect(lines_sent.size).to eq(2)
+      expect(execution.ctx[:vars].keys).to eq([:a, :b, :c])
+    end
+  end
 end

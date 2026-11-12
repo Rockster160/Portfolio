@@ -117,6 +117,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     # Apply user scoping AFTER the query — mirrors the Email Jil method.
     scope = ::AgendaItem.query(query_for_db).not_cancelled.where(agenda_id: user_agenda_ids)
     scope = apply_hidden_scope_sql(scope, hidden_filter)
+    scope = scope.includes(agenda: :user, agenda_schedule: :agenda)
     real_items = scope.order(start_at: order_sym).limit(capped).to_a
 
     phantoms = phantom_results(query_for_db, capped: capped)
@@ -267,7 +268,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     schedules = ::AgendaSchedule
       .where(agenda_id: agenda_ids)
       .active_between(from_date, to_date)
-      .includes(:agenda)
+      .includes(agenda: :user)
       .to_a
     return [] if schedules.empty?
 
