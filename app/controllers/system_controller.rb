@@ -420,7 +420,7 @@ class SystemController < ApplicationController
       notes:                 params[:notes],
       attachment_signed_ids: Array(params[:attachment_signed_ids]).map(&:to_s),
     )
-    notice = build ? "Starting a Feature Builder for #{build.title}." : "That one can't be built right now."
+    notice = build ? "Starting a Feature Builder for #{build.full_title}." : "That one can't be built right now."
     redirect_to system_feature_requests_path(anchor: "fr-#{feature_request.id}"), notice: notice
   end
 
@@ -548,9 +548,9 @@ class SystemController < ApplicationController
     notice = (
       if ByteLocal.builder(:stop, build_id: build.id)
         build.update!(status: :stopped)
-        "Stopped #{build.title}."
+        "Stopped #{build.full_title}."
       else
-        "The Mini didn't answer, so #{build.title} is still running."
+        "The Mini didn't answer, so #{build.full_title} is still running."
       end
     )
     redirect_to system_claude_path, notice: notice

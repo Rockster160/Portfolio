@@ -27,7 +27,7 @@
         <div class="ps-meta"><span class="ps-badge"><%= script.status_label %></span><%= stamp[script.updated_at] %></div>
       </div>
       <div class="ps-meta">
-        <%= script.feature_build&.title || "Written by hand" %> · commit <%= script.short_sha %>
+        <%= script.feature_build&.full_title || "Written by hand" %> · commit <%= script.short_sha %>
       </div>
     </a>
   <% end %>

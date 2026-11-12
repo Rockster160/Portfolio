@@ -358,6 +358,21 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "a PR's title" do
+    it "names the build once the PR opens, and again when it's edited" do
+      build.update!(title: "Clicking ANY link in Byte should ALWAYS open in a new tab…")
+
+      opened = pull_request.merge("title" => "Open every Byte link outside the app")
+      said = described_class.github!(:pull_request, { "action" => "opened", "pull_request" => opened })
+      expect(said).to eq(:retitled)
+      expect(build.reload.title).to eq("Open every Byte link outside the app")
+
+      edited = pull_request.merge("title" => "Open Byte links in a new tab")
+      described_class.github!(:pull_request, { "action" => "edited", "pull_request" => edited })
+      expect(build.reload.title).to eq("Open Byte links in a new tab")
+    end
+  end
+
   describe "master moving" do
     before { allow(FeatureBuildSyncWorker).to receive(:perform_async) }
 

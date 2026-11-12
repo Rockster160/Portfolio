@@ -169,7 +169,11 @@ module FeatureBuilder
   # the PR, and gives up its approval and its turn.
   def rereview!(build, comment)
     pr = "[PR ##{build.pr_number}](#{build.pr_url})"
-    announce!(build, "**#{build.title}** needs another review: #{comment}\n\n#{pr}", "Review again: #{build.title}")
+    announce!(
+      build,
+      "**#{build.full_title}** needs another review: #{comment}\n\n#{pr}",
+      "Review again: #{build.full_title}",
+    )
     MergeQueue.released!(build)
     refresh_needs_you!(build.user)
     build
@@ -187,7 +191,11 @@ module FeatureBuilder
       asked_at:    nil,
     )
     repaint!(build)
-    announce!(build, "**#{build.title}** closed itself: #{build.closed_reason}", "Closed: #{build.title}")
+    announce!(
+      build,
+      "**#{build.full_title}** closed itself: #{build.closed_reason}",
+      "Closed: #{build.full_title}",
+    )
     refresh_chip!(build.user)
     refresh_needs_you!(build.user)
     MergeQueue.released!(build)
@@ -205,8 +213,8 @@ module FeatureBuilder
 
   def announce_pr!(build)
     pr = "[PR ##{build.pr_number}](#{build.pr_url})"
-    text = "**#{build.title}** is ready for review: #{pr}. #{build.link_markdown}"
-    announce!(build, text, "PR ready: #{build.title}")
+    text = "**#{build.full_title}** is ready for review: #{pr}. #{build.link_markdown}"
+    announce!(build, text, "PR ready: #{build.full_title}")
   end
 
   def announce_waiting!(build)
@@ -214,13 +222,13 @@ module FeatureBuilder
 
     text = (
       if build.question.present?
-        "**#{build.title}** is asking:\n\n#{build.question}\n\n" \
+        "**#{build.full_title}** is asking:\n\n#{build.question}\n\n" \
           "Reply to this to answer. #{build.link_markdown}"
       else
-        "**#{build.title}** is waiting on you. #{build.link_markdown}"
+        "**#{build.full_title}** is waiting on you. #{build.link_markdown}"
       end
     )
-    announce!(build, text, "Waiting on you: #{build.title}")
+    announce!(build, text, "Waiting on you: #{build.full_title}")
   end
 
   def announce!(build, text, push_title)
@@ -309,7 +317,7 @@ module FeatureBuilder
 
     say(
       message.byte_conversation,
-      "Couldn't reach the Mini, so that didn't get to **#{build.title}**. #{build.link_markdown}",
+      "Couldn't reach the Mini, so that didn't get to **#{build.full_title}**. #{build.link_markdown}",
       feature_build_id: build.id,
     )
     false
@@ -348,7 +356,10 @@ module FeatureBuilder
     :syncing
   end
 
+  RETITLE_ACTIONS = %i[opened edited reopened].freeze
+
   def pull_request!(payload)
+    return retitle!(payload) if RETITLE_ACTIONS.include?(payload["action"]&.to_sym)
     return :ignored unless payload["action"] == "closed"
 
     build = FeatureBuild.for_pull_request(payload["pull_request"])
@@ -366,6 +377,17 @@ module FeatureBuilder
 
     finished!(build, merged: merged)
     :finished
+  end
+
+  # A build is named after its request's first line, cut short; its PR's title
+  # is the session's own summary of what it built, so that takes over.
+  def retitle!(payload)
+    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    title = payload.dig("pull_request", "title").to_s.strip
+    return :ignored if build.nil? || title.empty? || build.title == title
+
+    build.update!(title: title)
+    :retitled
   end
 
   # The Mini has closed the session and removed the worktree and the branch.

@@ -47,7 +47,7 @@
     <% @deploying.each do |build| %>
       <div class="cs-row cs-queue cs-queue-deploying">
         <div class="cs-head">
-          <div class="cs-title"><%= build.title %></div>
+          <div class="cs-title"><%= build.full_title %></div>
           <div class="cs-meta"><span class="cs-badge">merged, waiting on its deploy since <%= stamp.call(build.finished_at) %></span></div>
         </div>
         <div class="cs-links">
@@ -59,7 +59,7 @@
       <% state = MergeQueue.state(build) %>
       <div class="cs-row cs-queue cs-queue-<%= state %>">
         <div class="cs-head">
-          <div class="cs-title"><span class="cs-queue-number"><%= index + 1 %></span><%= build.title %></div>
+          <div class="cs-title"><span class="cs-queue-number"><%= index + 1 %></span><%= build.full_title %></div>
           <div class="cs-meta">
             <span class="cs-badge"><%= queue_label[state] %></span>
             <% if @live.dig(build.id, "working") %><span class="cs-badge">working</span><% end %>
@@ -99,7 +99,7 @@
     <% waiting.each do |build, reason| %>
       <div class="cs-row cs-waiting">
         <div class="cs-head">
-          <div class="cs-title"><%= build.title %></div>
+          <div class="cs-title"><%= build.full_title %></div>
           <div class="cs-meta"><span class="cs-badge"><%= reason %></span></div>
         </div>
         <div class="cs-links">
@@ -131,7 +131,7 @@
         <div class="cs-title">
           <%= kind_label.fetch(kind) %>
           <% if build %>
-            · <%= build.title %>
+            · <%= build.full_title %>
           <% elsif conversation %>
             · <%= link_to conversation.display_name, thread_url.call(conversation) %>
           <% end %>
@@ -163,7 +163,7 @@
     <% state = build_state.call(build) %>
     <div class="cs-row cs-build-<%= state.parameterize %>">
       <div class="cs-head">
-        <div class="cs-title"><%= build.title %></div>
+        <div class="cs-title"><%= build.full_title %></div>
         <div class="cs-meta">
           <span class="cs-badge"><%= state %></span>
           <%= stamp.call(build.created_at) %>

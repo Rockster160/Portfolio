@@ -85,13 +85,15 @@ class FeatureBuild < ApplicationRecord
   # What the thread's system message says at each point. Every one carries a
   # link: the session once there is one, and the builds page until then.
   def status_line
-    return "Closed **#{title}**: #{closed_reason}" if closed_reason.present?
+    return "Closed **#{full_title}**: #{closed_reason}" if closed_reason.present?
 
     case status.to_sym
     when :starting
-      "Starting a Feature Builder on the Mini for **#{title}**#{images_note}… #{link_markdown}"
-    when :failed   then "Couldn't start the Feature Builder for **#{title}**: #{error} #{link_markdown}"
-    else "Building **#{title}** on the Mini. #{link_markdown}"
+      "Starting a Feature Builder on the Mini for **#{full_title}**#{images_note}… " \
+        "#{link_markdown}"
+    when :failed
+      "Couldn't start the Feature Builder for **#{full_title}**: #{error} #{link_markdown}"
+    else "Building **#{full_title}** on the Mini. #{link_markdown}"
     end
   end
 
@@ -116,8 +118,16 @@ class FeatureBuild < ApplicationRecord
 
   # The phrase a person typed, cut to something that reads as a name in the
   # Claude app's session list and on a branch.
-  def self.title_for(request)
+  # Titles were once cut at 60 characters; this is the whole line one was cut
+  # from.
+  def full_title
+    return title unless title.end_with?("…")
+
     line = request.to_s.lines.first.to_s.strip
-    line.length > 60 ? "#{line[0, 57].rstrip}…" : line
+    line.start_with?(title.delete_suffix("…").rstrip) ? line : title
+  end
+
+  def self.title_for(request)
+    request.to_s.lines.first.to_s.strip
   end
 end

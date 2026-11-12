@@ -175,6 +175,17 @@ RSpec.describe "Claude on the Mini page", type: :request do
       expect(ByteLocal).not_to have_received(:builder).with(:land, anything)
     end
 
+    it "shows the whole title, not the shortened one" do
+      request = "Clicking ANY link in Byte should ALWAYS open in a new tab, never inside the app itself"
+      build.update!(request: request, title: "Clicking ANY link in Byte should ALWAYS open in a new tab…")
+      MergeQueue.enqueue!(build)
+
+      get system_claude_path
+
+      expect(response.body).to include(request)
+      expect(response.body).not_to include(build.title)
+    end
+
     it "shows a merge still waiting on its deploy at the top of the line" do
       build.update!(status: :finished, finished_at: Time.current, merge_sha: "abc1234")
 
