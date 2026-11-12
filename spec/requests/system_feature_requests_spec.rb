@@ -39,9 +39,12 @@ RSpec.describe "Feature Requests page", type: :request do
     expect(response).to redirect_to(system_feature_requests_path(anchor: "fr-#{feature_request.id}"))
 
     build.update!(status: :running, rc_url: "https://claude.ai/code/session_abc", planned_at: Time.current)
+    FeatureBuilder.report_sessions!(machine: :mini, sessions: [
+      { "build_id" => build.id, "kind" => "builder", "working" => true },
+    ])
     get system_feature_requests_path
 
-    expect(response.body).to include("plan ready", "https://claude.ai/code/session_abc")
+    expect(response.body).to include("building", "https://claude.ai/code/session_abc")
     expect(response.body).not_to include("fr-btn fr-btn-build")
   end
 

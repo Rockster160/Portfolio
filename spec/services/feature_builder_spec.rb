@@ -56,18 +56,10 @@ RSpec.describe FeatureBuilder do
       described_class.update_from_mini!(build, { "status" => "failed", "error" => "git fetch failed" })
       expect(thread.byte_messages.last.body).to include("/system/claude)")
     end
-
-    it "links the Mini page from a plan that came before the session's link" do
-      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
-
-      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
-
-      expect(thread.byte_messages.last.body).to include("has a plan ready", "/system/claude)")
-    end
   end
 
-  describe "a plan ready for the owner" do
-    it "is said once in the thread, with the session's link, however often it's posted" do
+  describe "a plan" do
+    it "is recorded once, without a word in the thread" do
       allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
       build.update!(rc_url: "https://claude.ai/code/session_abc")
 
@@ -75,12 +67,21 @@ RSpec.describe FeatureBuilder do
       first = build.reload.planned_at
       travel(5.minutes) { described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 }) }
 
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_plain)
       expect(build.reload.planned_at).to eq(first)
-      expect(thread.byte_messages.last.body).to include(
-        "**dark mode** has a plan ready for you.",
-        "[Open it in Claude](https://claude.ai/code/session_abc)",
-      )
+      expect(thread.byte_messages.count).to eq(1)
+    end
+
+    it "moves a working build's chip from planning to building" do
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", "working" => true },
+      ])
+      chip = -> { BackgroundProcess.live_find(user, described_class::CHIP_KEY) }
+      expect(chip.call.name).to eq("Planning…")
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+
+      expect(chip.call.name).to eq("Building…")
     end
   end
 
@@ -102,12 +103,24 @@ RSpec.describe FeatureBuilder do
       )
     end
 
-    it "says nothing more when the same report brought its plan" do
+    it "still pings when the turn that ended had posted a plan" do
       now = Time.current.iso8601
       described_class.update_from_mini!(build, { "planned_at" => now, "waiting_at" => now })
 
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
-      expect(thread.byte_messages.last.body).to include("has a plan ready")
+      expect(thread.byte_messages.last.body).to include("is waiting on you")
+    end
+
+    it "says only the PR when the turn that ended opened it" do
+      now = Time.current.iso8601
+      described_class.update_from_mini!(build, {
+        "pr_number"  => 42,
+        "pr_url"     => "https://github.com/x/pull/42",
+        "waiting_at" => now,
+      })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
+      expect(thread.byte_messages.last.body).to include("is ready for review")
     end
 
     it "says nothing for a build that's over" do
@@ -190,8 +203,8 @@ RSpec.describe FeatureBuilder do
       FeatureBuild.create!(user: user, title: "Thing", request: "thing", status: :running, **attributes)
     end
 
-    it "counts plans nobody has said go to, and PRs still open" do
-      plan    = make(planned_at: 1.hour.ago)
+    it "counts PRs still open, and not a plan it's building from" do
+      make(planned_at: 1.hour.ago)
       going   = make(planned_at: 1.hour.ago)
       pr      = make(planned_at: 1.hour.ago, pr_url: "https://github.com/x/pull/1", pr_number: 1)
       make
@@ -202,33 +215,37 @@ RSpec.describe FeatureBuilder do
       ])
 
       pending = described_class.pending(user)
-      expect(pending[:plans]).to eq([plan])
+      expect(pending.keys).to contain_exactly(:prs, :questions)
       expect(pending[:prs]).to eq([pr])
-      expect(chip.name).to eq("2 builds need you")
+      expect(pending[:questions]).to be_empty
+      expect(chip.name).to eq("1 build needs you")
       expect(chip).to be_waiting
       expect(chip.links.first["url"]).to end_with("/system/claude")
     end
 
-    it "counts a build with no plan yet whose session is waiting on an answer" do
+    it "counts a build whose session is waiting on an answer, before its plan or after" do
       asking  = make
+      stuck   = make(planned_at: 1.hour.ago)
       working = make
       make
 
       described_class.report_sessions!(machine: :mini, sessions: [
         { "build_id" => asking.id, "kind" => "builder", "working" => false },
+        { "build_id" => stuck.id, "kind" => "builder", "working" => false },
         { "build_id" => working.id, "kind" => "builder", "working" => true },
       ])
 
-      expect(described_class.pending(user)[:questions]).to eq([asking])
-      expect(chip.name).to eq("1 build needs you")
+      expect(described_class.pending(user)[:questions]).to contain_exactly(asking, stuck)
+      expect(chip.name).to eq("2 builds need you")
     end
 
-    it "is raised when a plan comes in and cleared when the last PR closes" do
+    it "is not raised by a plan, and is raised by the PR until it closes" do
       allow(Buddy::CompanionDelivery).to receive(:deliver_plain)
       described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
-      expect(chip.name).to eq("1 build needs you")
+      expect(chip).to be_nil
 
       described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+      expect(chip.name).to eq("1 build needs you")
       stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
       described_class.github!(:pull_request, { "action" => "closed", "pull_request" => pull_request })
 
@@ -242,11 +259,13 @@ RSpec.describe FeatureBuilder do
     it "says where a build has got to" do
       expect(described_class.stage(build, nil)).to eq("running")
       expect(described_class.stage(build, { "working" => false })).to eq("waiting on you")
+      expect(described_class.stage(build, { "working" => true })).to eq("planning")
       build.planned_at = Time.current
-      expect(described_class.stage(build, { "working" => false })).to eq("plan ready")
-      expect(described_class.stage(build, { "working" => true })).to eq("working")
+      expect(described_class.stage(build, { "working" => true })).to eq("building")
+      expect(described_class.stage(build, { "working" => false })).to eq("waiting on you")
       build.pr_url = "https://github.com/x/pull/1"
       expect(described_class.stage(build, nil)).to eq("PR open")
+      expect(described_class.stage(build, { "working" => true })).to eq("working")
       build.status = :finished
       expect(described_class.stage(build, nil)).to eq("finished")
     end
@@ -406,6 +425,23 @@ RSpec.describe FeatureBuilder do
 
       report({ "build_id" => 1, "kind" => "builder", "working" => true })
       expect(chip.name).to eq("Building…")
+    end
+
+    it "says a builder is planning until its plan is posted" do
+      planning = FeatureBuild.create!(user: user, title: "A", request: "a", status: :running)
+      building = FeatureBuild.create!(user: user, title: "B", request: "b", status: :running, planned_at: Time.current)
+
+      report({ "build_id" => planning.id, "kind" => "builder", "working" => true })
+      expect(chip.name).to eq("Planning…")
+
+      report({ "build_id" => building.id, "kind" => "builder", "working" => true })
+      expect(chip.name).to eq("Building…")
+
+      report(
+        { "build_id" => planning.id, "kind" => "builder", "working" => true },
+        { "build_id" => building.id, "kind" => "builder", "working" => true },
+      )
+      expect(chip.name).to eq("2x Builders running")
     end
 
     it "counts several, and names them when they're all builders" do
