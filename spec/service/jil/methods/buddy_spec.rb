@@ -999,6 +999,58 @@ RSpec.describe Jil::Methods::Buddy do
       expect(typo.faces).to eq({})
     end
 
+    describe "#yell" do
+      let!(:kitchen) {
+        owner.byte_conversations.create!(
+          mode: :buddy, name: "Kitchen", metadata: { "board" => true, "chore_tags" => ["Chores"] },
+        )
+      }
+
+      # Sidekiq runs inline in specs, which would stop a timed yell at once.
+      before { allow(BuddyBoardYellExpireWorker).to receive(:perform_at) }
+
+      it "yells on the board it names until resolve stops it" do
+        code = <<~JIL
+          a = Buddy.yell("dinner", "🍕 Dinner's ready", {
+            aBoard = Keyword.board("Kitchen")::String
+            aSound = Keyword.sound("chime")::String
+            aMinutes = Keyword.minutes(10)::Numeric
+          })::Boolean
+        JIL
+        Jil::Validator.validate!(code)
+        ran = run(code)
+
+        expect(ran.ctx[:error]).to be_blank
+        expect(ran.ctx[:vars][:a][:value]).to be(true)
+        yell = Buddy::BoardYell.yells(kitchen.reload)["dinner"]
+        expect(yell).to include("body" => "Dinner's ready", "icon" => "🍕", "sound" => "chime")
+        expect(yell["expires_at"]).to be_present
+        expect(BuddyBoardYellExpireWorker).to have_received(:perform_at).with(anything, kitchen.id, "dinner", yell["raised_at"])
+        expect(BuddyAlert.open_for(owner, "dinner")).to be_nil
+
+        ran = run(<<~JIL)
+          b = Buddy.resolve("dinner", "", "")::Boolean
+        JIL
+        expect(ran.ctx[:vars][:b][:value]).to be(true)
+        expect(Buddy::BoardYell.yells(kitchen.reload)).to be_empty
+      end
+
+      it "yells nowhere without a board it knows, and says which ones it does" do
+        ran = run(<<~JIL)
+          a = Buddy.yell("dinner", "Dinner's ready", {})::Boolean
+          b = Buddy.yell("dinner", "Dinner's ready", {
+            bBoard = Keyword.board("Garage")::String
+          })::Boolean
+        JIL
+
+        expect(ran.ctx[:vars][:a][:value]).to be(false)
+        expect(ran.ctx[:vars][:b][:value]).to be(false)
+        expect(ran.ctx[:output]).to include("No board named to yell on - boards: Kitchen")
+        expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen))
+        expect(Buddy::BoardYell.yells(kitchen.reload)).to be_empty
+      end
+    end
+
     it "wears the face where a pet has it, and the mood where it doesn't" do
       run(<<~JIL)
         a = Buddy.mood("busy", {
