@@ -86,6 +86,13 @@ RSpec.describe Jil::Schema do
       expect(alert_line(other)).to include(%(face:["sleeping" "thinking" "wave" *]), "warmth:Slider")
       expect(alert_line(other)).not_to include("%")
     end
+
+    it "offers a yell their boards by name, then all, or any name typed" do
+      other.byte_conversations.create!(mode: :buddy, name: "Kitchen", metadata: { "board" => true })
+      yell = described_class.for(other).lines.find { |line| line.include?("#yell(") }
+
+      expect(yell).to include(%(board:["Kitchen" "all" *]))
+    end
   end
   end
 end

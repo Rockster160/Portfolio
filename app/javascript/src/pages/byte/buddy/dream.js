@@ -4,6 +4,9 @@
 //   0. the newest very high item on the board's list (Buddy::BoardList). The
 //      pet shouts about it - flipping between playful and surprised, silent -
 //      until it's checked off, and a tap on the pet doesn't put it away.
+//      Next to it, the newest yell set on this board by name (Jil `Buddy.yell`,
+//      see Buddy::BoardYell): the same shouting, until it's resolved, its time
+//      runs out, or the pet is tapped.
 //   1. a dream sent from Jil (`Buddy.dream` — Whisper wanting food), aimed at a
 //      group the board watches. The newest one sent is the one shown.
 //   2. otherwise, now and then, one of the board's hot chores, at the board's
@@ -153,6 +156,13 @@ function localOffset(ms) {
   return -new Date(ms).getTimezoneOffset();
 }
 
+// The newest of this board's yells whose time hasn't run out at `now` (ms).
+export function standingYell(yells, now) {
+  return (yells || [])
+    .filter((y) => y && y.body && !(y.expires_at && Date.parse(y.expires_at) <= now))
+    .sort((a, b) => String(b.raised_at || "").localeCompare(String(a.raised_at || "")))[0] || null;
+}
+
 // The newest Jil dream aimed at a group this board watches, raised since the
 // pet was last tapped.
 export function newestDream(alerts, tags, dismissedAt = 0) {
@@ -167,7 +177,8 @@ export function initBoardDream({
 }) {
   if (!bubble) {
     return {
-      setAlerts: () => {}, setItems: () => {}, setTags: () => {}, setChoreDreams: () => {}, setPace: () => {},
+      setAlerts: () => {}, setItems: () => {}, setYells: () => {}, setTags: () => {}, setChoreDreams: () => {},
+      setPace: () => {},
       dismiss: () => {},
     };
   }
@@ -175,8 +186,10 @@ export function initBoardDream({
   let watched = Array.isArray(tags) ? tags : [];
   let alerts = [];
   let items = [];
+  let yells = [];
   let shown = null;
   let slotTimer = 0;
+  let yellTimer = 0;
 
   function clear() {
     stopAlertFlip({ hero, owner: SHOUT });
@@ -202,6 +215,18 @@ export function initBoardDream({
     else hero?.holdExpression?.(DREAM_HOLD, face || DREAM_FACE, strength);
   }
 
+  // Repaints when the next standing yell's time runs out, so the shouting stops
+  // on the minute even if the server's word is slow to arrive.
+  function armYellTimer() {
+    clearTimeout(yellTimer);
+    const now = Date.now();
+    const next = yells
+      .map((y) => Date.parse(y?.expires_at || ""))
+      .filter((ms) => Number.isFinite(ms) && ms > now)
+      .sort((a, b) => a - b)[0];
+    if (next) yellTimer = window.setTimeout(render, next - now + 50);
+  }
+
   function line(text) {
     const span = document.createElement("span");
     span.className = "byte-board-dream-text";
@@ -219,6 +244,20 @@ export function initBoardDream({
           bubble.appendChild(icon);
         }
         bubble.appendChild(line(urgent.short_name || urgent.name || ""));
+      }, null, FACE_STRENGTH.dream, { shout: true });
+    }
+
+    const yell = standingYell(yells, Date.now());
+    armYellTimer();
+    if (yell) {
+      return show(`yell:${yell.key}:${yell.raised_at}:${yell.body}:${yell.icon || ""}`, () => {
+        if (yell.icon) {
+          const icon = document.createElement("span");
+          icon.className = "byte-board-dream-icon";
+          icon.textContent = yell.icon;
+          bubble.appendChild(icon);
+        }
+        bubble.appendChild(line(yell.body));
       }, null, FACE_STRENGTH.dream, { shout: true });
     }
 
@@ -273,6 +312,10 @@ export function initBoardDream({
       if (Array.isArray(next)) items = next;
       render();
     },
+    setYells(next) {
+      yells = Array.isArray(next) ? next : [];
+      render();
+    },
     setTags(next) {
       watched = Array.isArray(next) ? next.map((t) => String(t).toLowerCase()) : [];
       render();
@@ -288,10 +331,14 @@ export function initBoardDream({
     },
     // The pet was tapped: put away whatever shows until the next draw or a
     // dream raised after `at` (ms, or an ISO time from the server).
+    // A yell raised before the tap stops with it; the server clears it too.
     dismiss(at) {
       const ms = typeof at === "number" ? at : Date.parse(at || "");
-      if (!Number.isFinite(ms) || ms <= dismissedAt) return;
-      dismissedAt = ms;
+      if (!Number.isFinite(ms)) return;
+      const heard = yells.filter((y) => !(Date.parse(y?.raised_at || "") > ms));
+      if (heard.length) yells = yells.filter((y) => !heard.includes(y));
+      if (ms <= dismissedAt && !heard.length) return;
+      dismissedAt = Math.max(dismissedAt, ms);
       render();
     },
   };
