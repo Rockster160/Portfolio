@@ -360,6 +360,7 @@ BUDDY_TOOL_PROBES = {
   # `avoid: search_agenda` because an evening at their place is on the calendar
   # with the location as typed - just the name - which reads as "no address".
   contact_address:        { say: "what's Carlos' address?", avoid: %i[search_agenda], needs: :carlos_address },
+  add_contact:            { say: "add Marisol as a contact, her address is 4410 S 900 E, Millcreek", avoid: %i[contact_address add_list_item] },
 
   # --- deliveries ---
   track_delivery:         "I ordered a bookshelf, should be here Friday",
@@ -550,6 +551,15 @@ BUDDY_EVAL_READERS = %i[
 #               paths. The same fields as the probe (tool, with, order, args,
 #               avoid...), laid over it; the turn passes if it meets either.
 BUDDY_EDGE_PROBES = [
+  # --- contacts --------------------------------------------------------------
+  {
+    case:  "add a contact with an address",
+    say:   "Add Whit as a contact and save the address too, it's 1388 E Fort Union Blvd, Cottonwood Heights",
+    tool:  :add_contact,
+    avoid: :contact_address,
+    args:  { add_contact: { name: /whit/i, address: /fort union/i } },
+    note:  "answered that there was no tool for creating a contact or saving an address",
+  },
   # --- one request, several things, later -----------------------------------
   # Asked for directly: three things on one condition and a time-and-device
   # rule, all with nothing run now. The pieces existed as a `steps` JSON field
