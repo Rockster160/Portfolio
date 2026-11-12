@@ -41,9 +41,20 @@
     <span class="cs-ask-note">One Claude session on the Mini for questions. It opens the running one, or starts it.</span>
   </div>
 
-  <% if @queue.any? %>
+  <% if @queue.any? || @deploying.any? %>
     <h3 class="cs-heading" id="merge-queue">Merge queue</h3>
-    <p class="cs-empty">Approved PRs merge one at a time, top first. Each one's session catches up with master and makes it fit before it merges, closes, or asks you for another review.</p>
+    <p class="cs-empty">Approved PRs merge one at a time, top first. Each one's session catches up with master and makes it fit before it merges, closes, or asks you for another review. After a merge the line waits until production is running it and answering.</p>
+    <% @deploying.each do |build| %>
+      <div class="cs-row cs-queue cs-queue-deploying">
+        <div class="cs-head">
+          <div class="cs-title"><%= build.title %></div>
+          <div class="cs-meta"><span class="cs-badge">merged, waiting on its deploy since <%= stamp.call(build.finished_at) %></span></div>
+        </div>
+        <div class="cs-links">
+          <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
+        </div>
+      </div>
+    <% end %>
     <% @queue.each_with_index do |build, index| %>
       <% state = MergeQueue.state(build) %>
       <div class="cs-row cs-queue cs-queue-<%= state %>">
@@ -222,6 +233,7 @@
     .cs-row.cs-queue-approved { border-color: rgba(88, 214, 141, 0.45); }
     .cs-row.cs-queue-answer, .cs-row.cs-queue-review { border-color: rgba(245, 176, 65, 0.45); }
     .cs-row.cs-queue-held { opacity: 0.6; }
+    .cs-row.cs-queue-deploying { border-color: rgba(93, 173, 226, 0.6); }
     .cs-queue-number { display: inline-block; min-width: 22px; color: #8B949E; }
     .cs-queue-moves { display: inline-flex; gap: 4px; }
     .cs-queue-move { padding: 4px 8px; }

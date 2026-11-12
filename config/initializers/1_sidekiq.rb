@@ -33,6 +33,7 @@ Sidekiq.configure_server { |config|
 
     ByteSyncWorker.perform_in(1.minute)
     ProductionScriptsDeployedWorker.perform_in(1.minute)
+    MergeQueueDeployedWorker.perform_in(1.minute)
   }
 }
 Sidekiq.configure_client { |config|

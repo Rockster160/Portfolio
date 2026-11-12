@@ -434,6 +434,7 @@ class SystemController < ApplicationController
     @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     @pending = FeatureBuilder.pending(current_user)
     @queue = MergeQueue.builds(current_user).to_a
+    @deploying = MergeQueue.deploying(current_user).order(:finished_at).to_a
   end
 
   # Approving, holding and reordering the merge queue.
