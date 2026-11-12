@@ -227,7 +227,10 @@ Rails.application.routes.draw do
     get :sync_badge
     get :render_widget
   end
-  resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts
+  resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts do
+    # What a Search question's box reads as it is typed into, on the page and in Byte.
+    get :search, on: :collection
+  end
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new

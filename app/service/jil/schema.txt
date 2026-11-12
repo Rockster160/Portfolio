@@ -460,6 +460,7 @@
   #text(String:"Question Text" BR "Default" String)
   #duration(String:"Question Text" BR "Default" String BR Boolean?(false):"Live") // Live: a duration still running. Its form re-runs the prompt's load step every minute while it waits, for up to a day.
   #textarea(String:"Question Text" BR "Default" String)
+  #search(String:"Question Text" BR String:"Search" BR String?:"Title" BR String?:"Detail" BR Boolean?(false):"Several" Boolean?(false):"Free text") // Searches their records as they type. Search is source:filter, like action_events:print, and what is typed is added to the filter. Sources: action_events contacts emails agenda_items boxes chores bank_transactions memories list_items. Title (one line) and Detail are markdown with {field} or {data.color} filled per result; |swatch |icon |date shape a value. Answers id and title.
   #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #checkbox(String:"Question Text" BR "Default" Boolean)
   #choices(String:"Question Text" content(String))
