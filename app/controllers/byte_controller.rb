@@ -637,14 +637,20 @@ class ByteController < ApplicationController
     # Accept either "/" or "." as the slash-command prefix. Both feel
     # natural on mobile (period is closer to the space bar than slash);
     # the dispatcher strips whichever one was used. A command has no bubble to
-    # hang an image on, so any attachment sent alongside one is deliberately
-    # dropped; the blob it left behind is ActiveStorageSweepWorker's problem.
+    # hang an image on, so an attachment sent alongside one is dropped, except
+    # by `/feature`, which hands it to the build. A blob left behind is
+    # ActiveStorageSweepWorker's problem.
     #
     # A "." only counts as a slash command for a verb we know — in a Buddy
     # thread everything else after one is for Jarvis, and ByteMessageIntake owns
     # that split so the Mac CLI reaches the same answer without coming through
     # here. Elsewhere Jarvis is reached by name, with `/j`.
-    if ByteMessageIntake.slash_command?(body) && (handled = handle_rails_slash_command(conversation, body))
+    handled = (
+      if ByteMessageIntake.slash_command?(body)
+        handle_rails_slash_command(conversation, body, attachment_signed_ids: attachment_signed_ids)
+      end
+    )
+    if handled
       return render(json: handled.as_wire, status: :ok)
     end
 
@@ -1947,7 +1953,7 @@ class ByteController < ApplicationController
   # Returns a persisted acknowledgement message (system kind, inbound) or
   # nil if the command isn't ours to handle — caller falls through to the
   # normal Mac pipeline.
-  def handle_rails_slash_command(conversation, body)
+  def handle_rails_slash_command(conversation, body, attachment_signed_ids: [])
     verb, arg = body[1..].to_s.strip.split(/\s+/, 2)
     verb = verb.to_s.downcase
     arg  = arg.to_s.strip
@@ -1994,7 +2000,12 @@ class ByteController < ApplicationController
       # in the owner's checkout, so it's the owner's.
       return ack(conversation, "Feature builds are the owner's.") if buddy_only?
 
-      FeatureBuilder.start!(user: current_user, conversation: conversation, text: arg)
+      FeatureBuilder.start!(
+        user:                  current_user,
+        conversation:          conversation,
+        text:                  arg,
+        attachment_signed_ids: attachment_signed_ids,
+      )
     when "today"
       send_today_briefing(conversation)
     when "buddy"

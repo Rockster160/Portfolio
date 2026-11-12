@@ -10,7 +10,11 @@ RSpec.describe FeatureBuilder do
   }
   let(:branch) { "byte/#{build.id}-dark-mode" }
 
-  before { allow(FeatureBuilderFeedbackWorker).to receive(:perform_in) }
+  before {
+    allow(FeatureBuilderFeedbackWorker).to receive(:perform_in)
+    ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" }
+  }
+  after { ActiveStorage::Current.url_options = nil }
 
   def pull_request(ref: branch, number: 42, merged: false)
     { "number" => number, "head" => { "ref" => ref }, "merged" => merged }
@@ -175,6 +179,31 @@ RSpec.describe FeatureBuilder do
       expect(reply.metadata["reply_to"]["id"]).to eq(asked.id)
       expect(build.reload.question).to be_nil
       expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
+    end
+
+    it "carries the images on a reply, even one with no words" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Which layout?" })
+      asked = thread.byte_messages.last
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: StringIO.new("png"), filename: "layout.png", content_type: "image/png",
+      )
+      allow(DescribeImageWorker).to receive(:enqueue_for)
+      sent = stub_request(:post, %r{/byte/builder\z}).with { |request|
+        payload = JSON.parse(request.body)
+        payload["text"] == "" && payload["attachments"].to_a.map { |image| image["filename"] } == ["layout.png"]
+      }.to_return(status: 200, body: "{}")
+
+      ByteMessageIntake.call(
+        user:                  user,
+        conversation:          thread,
+        body:                  "",
+        metadata:              {},
+        reply_to:              asked.id,
+        attachment_signed_ids: [blob.signed_id],
+      )
+
+      expect(sent).to have_been_requested
+      expect(build.reload.question).to be_nil
     end
 
     it "says so in the thread when the Mini can't take the answer" do

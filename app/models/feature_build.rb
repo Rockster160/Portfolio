@@ -40,6 +40,10 @@ class FeatureBuild < ApplicationRecord
   # Set when it was started from a row on /system/feature_requests.
   belongs_to :feature_request, optional: true
 
+  # Screenshots and photos it was started with. The Mini downloads them into
+  # the build's worktree and points the session at them.
+  has_many_attached :images
+
   # starting   asked for; the Mini hasn't said it's up yet
   # running    the session is open (working or waiting on an answer)
   # stopped    the session was closed from the system page; the work is kept
@@ -73,10 +77,23 @@ class FeatureBuild < ApplicationRecord
   # link: the session once there is one, and the builds page until then.
   def status_line
     case status.to_sym
-    when :starting then "Starting a Feature Builder on the Mini for **#{title}**… #{link_markdown}"
+    when :starting
+      "Starting a Feature Builder on the Mini for **#{title}**#{images_note}… #{link_markdown}"
     when :failed   then "Couldn't start the Feature Builder for **#{title}**: #{error} #{link_markdown}"
     else "Building **#{title}** on the Mini. #{link_markdown}"
     end
+  end
+
+  def images_note
+    count = images.attachments.length
+    return "" if count.zero?
+
+    count == 1 ? " with 1 image" : " with #{count} images"
+  end
+
+  # The images as {filename, content_type, url}, signed for the Mini to fetch.
+  def image_sources
+    FeatureBuilder.image_sources(images)
   end
 
   # The most useful place to go for this build from a message about it.

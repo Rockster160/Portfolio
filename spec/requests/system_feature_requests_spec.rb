@@ -48,6 +48,19 @@ RSpec.describe "Feature Requests page", type: :request do
     expect(response.body).not_to include("fr-btn fr-btn-build")
   end
 
+  it "starts a build with the images attached to the notes" do
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new("png"), filename: "mock.png", content_type: "image/png",
+    )
+
+    post system_feature_request_build_path(feature_request), params: {
+      notes:                 "Like this",
+      attachment_signed_ids: [blob.signed_id],
+    }
+
+    expect(feature_request.reload.latest_build.images.map(&:blob)).to eq([blob])
+  end
+
   it "doesn't start a second build" do
     post system_feature_request_build_path(feature_request)
     post system_feature_request_build_path(feature_request)

@@ -53,16 +53,23 @@ module FeatureBuilder
 
   # `/feature add ...` (or just `/feature ...`). Returns the system message it
   # posted, which the slash command hands back as its answer.
-  def start!(user:, conversation:, text:)
+  # `attachment_signed_ids` are images sent along with the command, already
+  # uploaded to /byte/uploads.
+  def start!(user:, conversation:, text:, attachment_signed_ids: [])
     request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
     return say(conversation, USAGE) if request.empty?
 
-    launch!(user: user, conversation: conversation, request: request).byte_message
+    launch!(
+      user:                  user,
+      conversation:          conversation,
+      request:               request,
+      attachment_signed_ids: attachment_signed_ids,
+    ).byte_message
   end
 
   # The Build button on a feature request. Returns the build, or nil when the
   # request isn't one that can be built (FeatureRequest#buildable?).
-  def start_from_request!(feature_request, user:, notes: nil)
+  def start_from_request!(feature_request, user:, notes: nil, attachment_signed_ids: [])
     return nil unless feature_request.buildable?
 
     request = [
@@ -75,12 +82,13 @@ module FeatureBuilder
     launch!(
       user:            user,
       conversation:    ByteConversation.for_self_initiated(user),
-      request:         request,
-      feature_request: feature_request,
+      request:               request,
+      feature_request:       feature_request,
+      attachment_signed_ids: attachment_signed_ids,
     )
   end
 
-  def launch!(user:, conversation:, request:, feature_request: nil)
+  def launch!(user:, conversation:, request:, feature_request: nil, attachment_signed_ids: [])
     build = FeatureBuild.create!(
       user:              user,
       byte_conversation: conversation,
@@ -88,6 +96,8 @@ module FeatureBuilder
       title:             FeatureBuild.title_for(request),
       request:           request,
     )
+    blobs = blobs_for(attachment_signed_ids)
+    build.images.attach(blobs) if blobs.any?
     if conversation
       message = say(conversation, build.status_line, feature_build_id: build.id)
       build.update!(byte_message: message)
@@ -180,6 +190,31 @@ module FeatureBuilder
     )
   end
 
+  # Loose blobs from /byte/uploads. A tampered or expired id is dropped, the
+  # same as on a message.
+  def blobs_for(signed_ids)
+    Array(signed_ids).compact_blank.filter_map { |signed_id| ActiveStorage::Blob.find_signed(signed_id) }
+  end
+
+  # Images as {filename, content_type, url}, the shape the Mini downloads from.
+  # Only formats Claude reads, and a URL that can't be built is left out rather
+  # than taking the rest down with it.
+  def image_sources(files)
+    files.filter_map { |file|
+      next unless ByteImageNormalizer::PASSTHROUGH_TYPES.include?(file.content_type.to_s)
+
+      url = image_url(file)
+      url && { filename: file.filename.to_s, content_type: file.content_type.to_s, url: url }
+    }
+  end
+
+  def image_url(file)
+    file.url(expires_in: ByteMessage::SOURCE_URL_TTL)
+  rescue StandardError => e
+    Rails.logger.warn("[FeatureBuilder] image url failed for blob #{file.blob_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
   # ---- answering from Byte ----
 
   # The build a reply in the thread is answering: any message posted about it,
@@ -197,21 +232,33 @@ module FeatureBuilder
     FeatureBuild.unfinished.where(user: user).where.not(question: nil).order(:asked_at)
   end
 
-  # Types `text` into the build's session as its owner's next message. False
-  # when the Mini didn't take it, and the question stays open.
+  # Types `text` into the build's session as its owner's next message, with
+  # `images` ({filename, content_type, url}) downloaded on the Mini and listed
+  # under it. False when the Mini didn't take it, and the question stays open.
   # rubocop:disable Naming/PredicateMethod -- these send; the boolean is whether it got there
-  def answer!(build, text)
-    return false unless ByteLocal.builder(:message, build_id: build.id, text: text.to_s)
+  def answer!(build, text, images: [])
+    fields = { build_id: build.id, text: text.to_s }
+    fields[:attachments] = images if images.any?
+    return false unless ByteLocal.builder(:message, **fields)
 
     build.update!(question: nil, asked_at: nil)
     refresh_needs_you!(build.user)
     true
   end
 
+  # The message being answered when its images go along with an answer told to
+  # Buddy: the last thing the person said, and only when it carries images.
+  def latest_images_message(conversation)
+    return nil if conversation.nil?
+
+    latest = conversation.byte_messages.spoken.recent.first
+    latest if latest&.model_image_sources.present?
+  end
+
   # A reply typed at one of the build's messages. Said in the thread when it
   # didn't get there, since nothing else would show it.
   def answer_from_thread!(build, message)
-    return true if answer!(build, message.body)
+    return true if answer!(build, message.body, images: message.model_image_sources)
 
     say(
       message.byte_conversation,
