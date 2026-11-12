@@ -101,8 +101,14 @@ const IconPool = (function () {
     await refreshCustom();
   }
 
+  // Accents fold away on both sides, so "viche" finds Viché and "Pavé" still
+  // finds itself.
+  function fold(q) {
+    return (q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
   function normalize(q) {
-    return (q || "").toLowerCase().replace(/[\s\-_:]+/g, "");
+    return fold(q).replace(/[\s\-_:]+/g, "");
   }
 
   const IRREGULARS = {
@@ -187,7 +193,7 @@ const IconPool = (function () {
   ]);
 
   function queryPasses(query) {
-    const raw = (query || "").toLowerCase().trim();
+    const raw = fold(query).trim();
     if (!raw) return [];
     const full = normalize(raw);
     const tokens = raw.split(/[^a-z0-9]+/).filter((t) => t && !STOPWORDS.has(t));
