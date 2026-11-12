@@ -85,9 +85,8 @@ module AgendaTravelChain
         # Now write metadata. The fingerprint short-circuit is evaluated PER
         # event during write — events whose effective inputs match their stored
         # fingerprint just skip the write entirely.
-        candidates.each_with_index do |evt, idx|
-          prev = idx.positive? ? candidates[idx - 1] : nil
-          persist_event(evt, prev, links, head_for, candidates)
+        candidates.each do |evt|
+          persist_event(evt, links, head_for, candidates)
         end
       end
 
@@ -224,13 +223,30 @@ module AgendaTravelChain
 
     # ----- chain linking ------------------------------------------------------
 
+    # Each event rolls forward from the nearest earlier event on the same
+    # person's day, skipping anyone else's in between. A partner's own
+    # calendar is visible here but isn't a trip this person takes, so it
+    # neither starts nor interrupts their chain; a joint calendar belongs to
+    # both and links either way. A predecessor already handed to an earlier
+    # successor stays with it, since an event can only roll into one trip.
     def link_pairs(events)
-      events.each_cons(2).each_with_object({}) { |(a, b), links|
+      events.each_with_index.with_object({}) { |(b, idx), links|
+        a = events.first(idx).reverse.find { |earlier| shares_person?(earlier, b) }
+        next if a.nil? || links.dig(a.id, :successor_id)
         next unless chain?(a, b)
 
         (links[a.id] ||= {})[:successor_id] = b.id
         (links[b.id] ||= {})[:predecessor_id] = a.id
       }
+    end
+
+    def shares_person?(a, b)
+      subject_ids_for(a).intersect?(subject_ids_for(b))
+    end
+
+    def subject_ids_for(evt)
+      @subject_ids ||= {}
+      @subject_ids[evt.agenda_id] ||= evt.agenda.subject_users.pluck(:id).to_set
     end
 
     # Overlap rule: A chains to B when "go home, then leave for B from home"
@@ -354,13 +370,13 @@ module AgendaTravelChain
 
     # ----- persistence --------------------------------------------------------
 
-    def persist_event(evt, prev, links, head_for, all_events)
+    def persist_event(evt, links, head_for, all_events)
       pred_id = links.dig(evt.id, :predecessor_id)
       succ_id = links.dig(evt.id, :successor_id)
       prev_pred_id = evt.metadata.dig("travel", "chain_predecessor_id")
       prev_succ_id = evt.metadata.dig("travel", "chain_successor_id")
 
-      pred = pred_id ? prev : nil # candidates are ordered; pred is always prev when linked
+      pred = pred_id && all_events.find { |candidate| candidate.id == pred_id }
       override_from = overrides_for(evt)[:from].presence
       from_text, from_kind = (
         if override_from

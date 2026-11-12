@@ -275,6 +275,100 @@ RSpec.describe AgendaTravelChain::Service do
       expect(c.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
     end
 
+    describe "whose day an event is on" do
+      let(:partner) { create(:user) }
+      let(:partner_agenda) {
+        create(:agenda, user: partner).tap { |cal|
+          cal.agenda_shares.create!(user: user, permission: :editor)
+        }
+      }
+      let(:joint_agenda) {
+        create(:agenda, user: user).tap { |cal|
+          cal.agenda_shares.create!(user: partner, permission: :owner)
+        }
+      }
+
+      def make_on(cal, name:, start_at:, end_at:, location:)
+        cal.agenda_items.create!(
+          name:     name,
+          kind:     :event,
+          start_at: Time.zone.parse(start_at),
+          end_at:   Time.zone.parse(end_at),
+          location: location,
+        )
+      end
+
+      it "never chains an event behind a partner's own overlapping one" do
+        outing = make_on(
+          partner_agenda,
+          name:     "Outing",
+          start_at: "2026-06-18 12:00",
+          end_at:   "2026-06-18 14:30",
+          location: "Office",
+        )
+        talk = make_on(
+          agenda,
+          name:     "Talk",
+          start_at: "2026-06-18 13:00",
+          end_at:   "2026-06-18 15:30",
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        expect(outing.reload.metadata.dig("travel", "chain_successor_id")).to be_nil
+        expect(talk.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
+        expect(talk.metadata.dig("travel", "travel_from_kind")).to eq("home")
+      end
+
+      it "chains a joint-calendar event into a personal one" do
+        lunch = make_on(
+          joint_agenda,
+          name:     "Lunch",
+          start_at: "2026-06-18 14:00",
+          end_at:   "2026-06-18 15:00",
+          location: "Office",
+        )
+        workout = make_on(
+          agenda,
+          name:     "Workout",
+          start_at: "2026-06-18 15:15",
+          end_at:   "2026-06-18 16:15",
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        expect(workout.reload.metadata.dig("travel", "chain_predecessor_id")).to eq(lunch.id)
+        expect(workout.metadata.dig("travel", "travel_from")).to eq("Office")
+      end
+
+      it "chains past a partner's event sitting between two of their own" do
+        meeting = make_event(
+          name:     "Meeting",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+        )
+        yoga = make_on(
+          partner_agenda,
+          name:     "Yoga",
+          start_at: "2026-06-18 15:05",
+          end_at:   "2026-06-18 16:00",
+          location: "Far",
+        )
+        workout = make_event(
+          name:     "Workout",
+          start_at: Time.zone.parse("2026-06-18 15:15"),
+          end_at:   Time.zone.parse("2026-06-18 16:15"),
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        expect(workout.reload.metadata.dig("travel", "chain_predecessor_id")).to eq(meeting.id)
+        expect(workout.metadata.dig("travel", "chain_prev_end_at")).to eq(meeting.end_at.to_i)
+        expect(yoga.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
+      end
+    end
+
     it "echoes bike into the stored overrides so the Jil travel tasks can read it" do
       ride = make_event(
         name: "Ride",
