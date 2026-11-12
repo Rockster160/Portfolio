@@ -573,6 +573,31 @@ class WebhooksController < ApplicationController
     render json: { ok: true, count: listed.length }
   end
 
+  # A build handed over by a Claude session on the Mini (`bin/feature-build`),
+  # with the brief that session wrote. It speaks in the owner's primary Buddy
+  # thread, the same as one started from a feature request.
+  def byte_create_build
+    return head :unauthorized unless byte_authorized?
+
+    request_text = params[:request].to_s.strip
+    return render json: { error: :"request is empty" }, status: :bad_request if request_text.empty?
+
+    user = User.me
+    build = FeatureBuilder.launch!(
+      user:         user,
+      conversation: ByteConversation.for_self_initiated(user),
+      request:      request_text,
+      title:        params[:title],
+    )
+    render json: {
+      ok:     true,
+      id:     build.id,
+      title:  build.title,
+      status: build.status,
+      page:   system_claude_url,
+    }
+  end
+
   # The Mini on a `/feature` build: up and running with its link, its PR, or
   # why it couldn't start (~/code/Byte/builder.rb).
   def byte_update_build
