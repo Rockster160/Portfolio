@@ -161,8 +161,12 @@
       font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;
       border: 1px solid rgba(255, 255, 255, 0.12); background-color: #21262D; color: #C9D1D9; cursor: pointer;
     }
-    .cs-stop { color: #EC7063; border-color: rgba(236, 112, 99, 0.4); }
-    .cs-stop-form { display: inline; margin: 0; }
+    .cs-stop {
+      margin: 0; font-family: inherit; font-weight: normal; line-height: normal;
+      box-shadow: none; text-shadow: none; color: #EC7063 !important; border-color: rgba(236, 112, 99, 0.4);
+    }
+    .cs-stop:hover, .cs-stop:active { background-color: #2D333B; box-shadow: none; }
+    .cs-stop-form { display: flex; margin: 0; }
 
     .cs-ask { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .cs-ask-form { margin: 0; }
