@@ -295,6 +295,51 @@ RSpec.describe "Buddy prompt tools" do
     end
   end
 
+  describe "a search question" do
+    let!(:dragon) { user.action_events.create!(name: "Print", notes: "Dragon", timestamp: 1.day.ago) }
+    let!(:benchy) { user.action_events.create!(name: "Print", notes: "Benchy", timestamp: 1.hour.ago) }
+
+    def search_prompt(**extra)
+      make_prompt(question: "Printed", options: [
+        { "type" => "search", "question" => "Which?", "query" => "action_events:print", "title" => "{notes}" }.merge(extra),
+      ])
+    end
+
+    it "goes out as a search box holding its pick drawn as the dropdown draws it" do
+      prompt = search_prompt
+      prompt.update!(response: nil)
+      form  = form_for(prompt)
+      field = Buddy::FormFields.normalize(form.form_fields("Which?" => { "id" => dragon.id, "title" => "Dragon" })).first
+
+      expect(field).to include(type: :search, search: include(query: "action_events:print", title: "{notes}"))
+      expect(field[:value]).to include("id" => dragon.id, "title" => "Dragon", "html" => "Dragon")
+    end
+
+    it "submits what was picked in the thread, checked against the search" do
+      form = form_for(search_prompt)
+      collected, errors = Buddy::FormFields.collect(form.form_fields, { "Which?" => { "id" => dragon.id.to_s, "title" => "x" } })
+
+      expect(errors).to eq([])
+      expect(form.build_response(collected)).to eq("Which?" => { "id" => dragon.id, "title" => "Dragon" })
+    end
+
+    it "takes the words Buddy heard and picks the best match" do
+      prompt = search_prompt
+      run(:answer_prompt, { id: prompt.id, answers: { "Which?" => "benchy" } })
+
+      expect(prompt.reload.response).to eq("Which?" => { "id" => benchy.id, "title" => "Benchy" })
+    end
+
+    it "shows the titles of what it is about to submit on the row" do
+      prompt  = search_prompt("multiple" => true)
+      tool    = Buddy::Tools[:answer_prompt]
+      ctx     = Buddy::ToolContext.new(user)
+      confirm = tool[:confirm].call({ id: prompt.id, answers: { "Which?" => %w[benchy dragon] } }, ctx)
+
+      expect(confirm[:resolved][:lines]).to eq(["Which?: Benchy, Dragon"])
+    end
+  end
+
   describe "answer_prompt" do
     it "submits every field at once and fires the completion trigger" do
       prompt = chore_prompt
