@@ -794,6 +794,7 @@ Rails.application.routes.draw do
     get "/system/claude" => "system#claude", as: :system_claude
     post "/system/claude/:id/stop" => "system#stop_claude", as: :system_claude_stop
     post "/system/claude/questions" => "system#claude_questions", as: :system_claude_questions
+    post "/system/claude/:id/queue/:act" => "system#update_queue", as: :system_claude_queue
     get "/system/production_scripts" => "system#production_scripts", as: :system_production_scripts
     get "/system/production_scripts/new" => "system#new_production_script", as: :system_new_production_script
     post "/system/production_scripts" => "system#create_production_script"

@@ -72,6 +72,14 @@ RSpec.describe RubyHighlight do
     expect(html).to end_with(%(<span class="rh-comment"># why</span>))
   end
 
+  it "draws local variables and bare calls like puts apart from Ruby's special methods" do
+    html = described_class.segments(%(task = User.me\nputs task.id\n)).first.html
+
+    expect(html).to include(%(<span class="rh-variable">task</span>))
+    expect(html).to include(%(<span class="rh-variable">puts</span>))
+    expect(html).to include(%(<span class="rh-call">me</span>))
+  end
+
   it "escapes what it draws" do
     expect(described_class.segments(%(x = "<b>"\n)).first.html).not_to include("<b>")
   end

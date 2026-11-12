@@ -111,6 +111,7 @@ module FeatureBuilder
     waiting_at
     question
     closed_reason
+    rereview
   ].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
@@ -121,6 +122,7 @@ module FeatureBuilder
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
     return closed!(build, attributes) if attributes["closed_reason"].present?
+    return rereview!(build, attributes["rereview"]) if attributes["rereview"].present?
 
     waiting = attributes.delete("waiting_at").present?
     question = attributes.delete("question")
@@ -135,7 +137,23 @@ module FeatureBuilder
     repaint!(build)
     announce_pr!(build) if announce_pr
     announce_waiting!(build) if waiting && !announce_pr
+    MergeQueue.enqueue!(build) if announce_pr
+    # Handed the merge, it stopped without merging, closing or asking for a
+    # review: whatever it said is for the owner, and it needs approving again.
+    MergeQueue.released!(build) if waiting && build.reload.landing_at
     refresh_chip!(build.user) if planned
+    refresh_needs_you!(build.user)
+    MergeQueue.advance!(build.user)
+    build
+  end
+
+  # Handed the merge, the session changed something the owner should see
+  # again (`builder-pr rereview`): it has commented and asked for a review on
+  # the PR, and gives up its approval and its turn.
+  def rereview!(build, comment)
+    pr = "[PR ##{build.pr_number}](#{build.pr_url})"
+    announce!(build, "**#{build.title}** needs another review: #{comment}\n\n#{pr}", "Review again: #{build.title}")
+    MergeQueue.released!(build)
     refresh_needs_you!(build.user)
     build
   end
@@ -155,6 +173,7 @@ module FeatureBuilder
     announce!(build, "**#{build.title}** closed itself: #{build.closed_reason}", "Closed: #{build.title}")
     refresh_chip!(build.user)
     refresh_needs_you!(build.user)
+    MergeQueue.released!(build)
     build
   end
 
@@ -297,19 +316,24 @@ module FeatureBuilder
     build.update!(status: :finished, finished_at: Time.current)
     build.feature_request&.update!(status: :shipped) if merged
     refresh_needs_you!(build.user)
+    MergeQueue.released!(build)
   end
 
   def review!(payload)
     review = payload["review"].to_h
     return :ignored unless payload["action"] == "submitted" && owner?(review["user"])
 
+    # An approval puts it in line to merge, and changes asked for take it out.
     # Line comments arrive as their own events. The review itself only adds
     # something when it has words of its own or asks for changes.
+    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    approved = review["state"] == "approved"
+    MergeQueue.approve!(build) if approved && build && !build.status_finished?
+    MergeQueue.unapprove!(build) if review["state"] == "changes_requested" && build
     body = review["body"].to_s.strip
-    return :ignored if body.empty? && review["state"] != "changes_requested"
+    return (approved ? :approved : :ignored) if body.empty? && review["state"] != "changes_requested"
 
     heading = review["state"] == "changes_requested" ? "Changes requested" : "Review"
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
     feedback!(build, "#{heading}: #{body.presence || "see the comments"}")
   end
 

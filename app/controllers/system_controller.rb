@@ -428,6 +428,22 @@ class SystemController < ApplicationController
     @conversations = ByteConversation.where(id: ids).index_by(&:id)
     @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     @pending = FeatureBuilder.pending(current_user)
+    @queue = MergeQueue.builds(current_user).to_a
+  end
+
+  # Approving, holding and reordering the merge queue.
+  def update_queue
+    build = FeatureBuild.where(user: current_user).find(params[:id])
+    act = params[:act].to_s.to_sym
+    case act
+    when *MergeQueue::MOVES then MergeQueue.move!(build, act)
+    when :approve then MergeQueue.approve!(build)
+    when :unapprove then MergeQueue.unapprove!(build)
+    when :hold then MergeQueue.hold!(build, true)
+    when :release then MergeQueue.hold!(build, false)
+    else return head(:bad_request)
+    end
+    redirect_to system_claude_path(anchor: "merge-queue")
   end
 
   # Opens the standing questions session on the Mini in the Claude app,

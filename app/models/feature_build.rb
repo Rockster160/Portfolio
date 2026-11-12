@@ -3,16 +3,20 @@
 # Table name: feature_builds
 #
 #  id                   :bigint           not null, primary key
+#  approved_at          :datetime
 #  asked_at             :datetime
 #  branch               :string
 #  closed_reason        :text
 #  error                :text
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
+#  held                 :boolean          default(FALSE), not null
+#  landing_at           :datetime
 #  planned_at           :datetime
 #  pr_number            :integer
 #  pr_url               :string
 #  question             :text
+#  queue_position       :integer
 #  rc_url               :string
 #  request              :text             not null
 #  status               :integer          default("starting"), not null

@@ -224,6 +224,67 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "the merge queue" do
+    let(:landed) { [] }
+
+    before {
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+      allow(ByteLocal).to receive(:builder) { |action, build_id:, **|
+        landed << build_id if action == :land
+        true
+      }
+      build.update!(status: :running)
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+    }
+
+    def approve_on_github(state="approved")
+      described_class.github!(:pull_request_review, {
+        "action"       => "submitted",
+        "pull_request" => pull_request,
+        "review"       => { "user" => { "login" => "Rockster160" }, "state" => state, "body" => "" },
+      })
+    end
+
+    it "puts a PR in line when it opens, and hands it the merge when it's approved on GitHub" do
+      expect(MergeQueue.builds(user)).to eq([build])
+
+      expect(approve_on_github).to eq(:approved)
+
+      expect(landed).to eq([build.id])
+      expect(build.reload.landing_at).to be_present
+    end
+
+    it "takes it out of line when changes are asked for" do
+      build.update!(approved_at: Time.current)
+
+      approve_on_github("changes_requested")
+
+      expect(build.reload.approved_at).to be_nil
+    end
+
+    it "gives the turn back, and wants approving again, when the merge stops on a question" do
+      approve_on_github
+
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Keep both?" })
+
+      expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
+      expect(thread.byte_messages.last.body).to include("is asking", "Keep both?")
+    end
+
+    it "tells the owner when landing needs another review, and moves the line on" do
+      approve_on_github
+
+      described_class.update_from_mini!(build, { "rereview" => "Reworked the cache key to fit master's." })
+
+      expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
+      expect(thread.byte_messages.last.body).to include(
+        "needs another review",
+        "Reworked the cache key",
+        "[PR #42](https://github.com/x/pull/42)",
+      )
+    end
+  end
+
   describe "master moving" do
     before { allow(FeatureBuildSyncWorker).to receive(:perform_async) }
 

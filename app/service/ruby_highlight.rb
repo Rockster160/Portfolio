@@ -18,25 +18,31 @@ module RubyHighlight
     def valid? = error.nil?
   }
 
-  # Called by name rather than on a receiver, so they read as Ruby's own verbs.
+  # What the editor's Ruby grammar calls special methods (keyword.other.special-method).
   SPECIAL = %w[
     require
     require_relative
+    load
     raise
-    puts
-    p
-    pp
-    print
+    fail
+    catch
+    throw
     include
     extend
+    prepend
     attr_reader
     attr_writer
     attr_accessor
+    alias_method
+    define_method
     private
     protected
     public
+    private_constant
     module_function
     loop
+    lambda
+    proc
   ].freeze
   BRACES = %i[on_lparen on_rparen on_lbrace on_rbrace on_lbracket on_rbracket on_tlambeg].freeze
   NUMBERS = %i[on_int on_float on_rational on_imaginary].freeze
@@ -200,7 +206,7 @@ module RubyHighlight
       return :special if SPECIAL.include?(text)
       return :call if next_type(index) == :on_lparen
 
-      nil
+      :variable
     end
 
     def previous_type(index) = neighbor(index, -1)&.at(1)
