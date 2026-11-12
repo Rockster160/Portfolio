@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_11_042300) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_12_012135) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1204,6 +1204,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_11_042300) do
     t.datetime "updated_at", null: false
     t.bigint "feature_request_id"
     t.datetime "planned_at"
+    t.text "question"
+    t.datetime "asked_at"
     t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
     t.index ["feature_request_id"], name: "index_feature_builds_on_feature_request_id"

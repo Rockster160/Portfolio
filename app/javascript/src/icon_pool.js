@@ -9,6 +9,13 @@ import { Monitor } from "./pages/dashboard/cells/monitor";
 // commit. Both consume `public/emoji_index.json`, `public/icons_index.json`,
 // and `/chores/icons.json`.
 //
+// `public/acnh_index.json` (Animal Crossing faces, stored as their own path
+// under /acnh/faces) is client-only and opt-in: a person picking an icon by
+// hand can choose a face, but nothing that GUESSES an icon from a name — the
+// server, `bestMatch`, inline autocomplete — ever lands on one. Its keywords
+// are each character's species, personality, hobby, styles, colors and
+// birthday month; the full set rides along on the row as `a`.
+//
 // Consumers today:
 //   * chores modal picker (`app/views/chores/_page_script.html.erb`)
 //   * inline emoji autocomplete (`app/javascript/src/emoji_autocomplete.js`)
@@ -17,6 +24,8 @@ import { Monitor } from "./pages/dashboard/cells/monitor";
 const IconPool = (function () {
   let GLOBAL_POOL = null;     // emoji + ti, fetched once per page
   let CUSTOM_POOL = [];       // per-household, refreshable on upload/delete
+  let CHARACTER_POOL = [];    // game character faces, only when asked for
+  let characterPromise = null;
   let loadPromise = null;
   let customSignature = null; // {updated_at, count} — reconnect check
   const customListeners = [];
@@ -37,10 +46,10 @@ const IconPool = (function () {
   }
 
   function tag(arr, kind) {
-    return arr.map((r) => ({ c: r.c, n: r.n, k: r.k, _kind: kind, _id: r.id }));
+    return arr.map((r) => ({ c: r.c, n: r.n, k: r.k, a: r.a, _kind: kind, _id: r.id }));
   }
 
-  async function load() {
+  async function load({ characters = false } = {}) {
     if (!loadPromise) {
       loadPromise = (async () => {
         const [emoji, icons, custom, sig] = await Promise.all([
@@ -54,14 +63,21 @@ const IconPool = (function () {
         GLOBAL_POOL = tag(emoji, "emoji").concat(tag(icons, "ti"));
       })();
     }
-    await loadPromise;
-    return composite();
+    // Fetched the first time a picker asks for faces, never by a page that
+    // only guesses.
+    if (characters && !characterPromise) {
+      characterPromise = fetchJson("/acnh_index.json").then((rows) => { CHARACTER_POOL = tag(rows, "character"); });
+    }
+    await Promise.all([loadPromise, characters && characterPromise]);
+    return composite({ characters });
   }
 
-  // Custom icons first (user's uploads win ties), then emoji, then ti.
-  // Recomputed each call so refreshCustom() reflects immediately.
-  function composite() {
-    return CUSTOM_POOL.concat(GLOBAL_POOL || []);
+  // Custom icons first (user's uploads win ties), then emoji, then ti, then
+  // character faces last, so a name shared with an emoji ("Cookie") shows the
+  // emoji first. Recomputed each call so refreshCustom() reflects immediately.
+  function composite({ characters = false } = {}) {
+    const pool = CUSTOM_POOL.concat(GLOBAL_POOL || []);
+    return characters ? pool.concat(CHARACTER_POOL) : pool;
   }
 
   async function refreshCustom() {
@@ -189,19 +205,29 @@ const IconPool = (function () {
     return passes.map(([p, w]) => [variants(p), w]);
   }
 
+  // A character's name is who they are, where an emoji's name only describes
+  // it ("brush teeth" must not land on the tooth). So a word that IS a
+  // character's name is weighted by every pass at once, which no mix of
+  // keyword hits (4.49 at best) can reach: "doc male bear blue" reaches Doc
+  // ahead of every blue bear even though Doc is a rabbit. Characters never
+  // reach the Ruby pool, so this has nothing there to mirror.
   function sumScore(row, variantSetsWithWeights) {
+    let nameWeight = 0;
+    for (let j = 0; j < variantSetsWithWeights.length; j++) nameWeight += variantSetsWithWeights[j][1];
     let total = 0;
     for (let j = 0; j < variantSetsWithWeights.length; j++) {
       const [vs, w] = variantSetsWithWeights[j];
-      total += w * scoreRow(row, vs);
+      const score = scoreRow(row, vs);
+      const named = row._kind === "character" && score >= 5.5;
+      total += (named ? nameWeight : w) * score;
     }
     return total;
   }
 
   // Score-sorted search. Empty query returns pool in native (emoji-first)
   // order — caller can .slice(0, N) for a "show everything" view.
-  async function search(query, { limit = Infinity } = {}) {
-    const pool = await load();
+  async function search(query, { limit = Infinity, characters = false } = {}) {
+    const pool = await load({ characters });
     const passes = queryPasses(query);
     if (passes.length === 0) {
       return limit === Infinity ? pool.slice() : pool.slice(0, limit);

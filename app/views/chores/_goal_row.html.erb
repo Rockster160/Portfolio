@@ -24,7 +24,7 @@
        raw_icon = hicon&.image_data.to_s
      end %>
   <div class="goal-image">
-    <% if raw_icon.start_with?("http://", "https://", "data:image/") %>
+    <% if raw_icon.start_with?("http://", "https://", "data:image/", "/acnh/") %>
       <img src="<%= raw_icon %>" alt="" loading="lazy" referrerpolicy="no-referrer">
     <% elsif raw_icon.start_with?("<svg") %>
       <%= raw_icon.html_safe %>

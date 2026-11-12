@@ -143,6 +143,232 @@ html.html-ctr-quests {
     font-size: 13px !important;
     border-radius: 999px;
   }
+  // A rotation card, under its section's circles: its name, the week across
+  // the top, every option below.
+  .quests-rotations {
+    display: grid;
+    gap: 12px;
+  }
+  .quests-rotations:not(:empty) {
+    margin-top: 16px;
+  }
+  .quests-rotation {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 560px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--chores-card-bg);
+    border: 1px solid var(--chores-card-border);
+  }
+  .qr-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--chores-text) !important;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .qr-head-icon {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    font-size: 20px;
+  }
+  .qr-head-icon:empty {
+    display: none;
+  }
+  .qr-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .qr-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 0 !important;
+    border: 0 !important;
+    border-radius: 12px;
+    background: transparent !important;
+    color: var(--chores-text) !important;
+    cursor: pointer;
+  }
+  .qr-day.selected {
+    background: var(--chores-card-border) !important;
+  }
+  .qr-letter {
+    font-weight: 600;
+    color: var(--chores-muted);
+  }
+  .qr-day.today .qr-letter {
+    color: var(--chores-text);
+  }
+  .qr-day.future .qr-letter {
+    opacity: 0.6;
+  }
+  .qr-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 44px;
+  }
+  .qr-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--chores-card-border);
+  }
+  .qr-waiting {
+    color: var(--chores-muted);
+    letter-spacing: 2px;
+  }
+  .qr-extras {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  // An option's mark: whatever icon it has, or its initials.
+  .qr-mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    font-size: 32px;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .qr-mark.small {
+    width: 24px;
+    height: 24px;
+    font-size: 18px;
+  }
+  .qr-mark img,
+  .qr-mark > svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .qr-initials {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--chores-card-border);
+    color: var(--chores-text);
+    font-size: 40%;
+    font-weight: 700;
+  }
+  .qr-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #0F1B33;
+  }
+  .qr-option {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    padding: 4px !important;
+    border: 2px solid transparent !important;
+    border-radius: 12px;
+    background: transparent !important;
+    cursor: pointer;
+  }
+  .qr-option .qr-mark {
+    width: 48px;
+    height: 48px;
+  }
+  .qr-option.picked .qr-mark {
+    filter: grayscale(0.6) brightness(0.6);
+  }
+  .qr-option.chosen {
+    border-color: var(--chores-done) !important;
+  }
+  .qr-option.chosen .qr-mark {
+    filter: none;
+  }
+  .qr-badge {
+    position: absolute;
+    right: 2px;
+    bottom: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--chores-text);
+  }
+  .qr-badge.due {
+    color: #FACC15;
+  }
+  .qr-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--chores-muted);
+    font-size: 13px;
+  }
+  .qr-legend {
+    display: grid;
+    gap: 4px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--chores-muted);
+  }
+  .qr-legend:empty {
+    display: none;
+  }
+
+  // The rotation form's option rows: a small icon square, then name and
+  // settings.
+  .quests-option-rows {
+    display: grid;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .quests-option-row {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 8px;
+    align-items: start;
+    padding: 8px;
+    border-radius: 8px;
+    background: #0F1B33;
+  }
+  .chore-form .quests-option-row .icon-cell .icon-preview {
+    font-size: 30px;
+  }
+  .chore-form .quests-option-row .icon-cell .icon-upload-btn,
+  .chore-form .quests-option-row .icon-cell .icon-pick-btn,
+  .chore-form .quests-option-row .icon-cell .icon-clear-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  .quests-option-fields {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .quests-option-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chore-form .quests-option-settings select {
+    width: auto;
+  }
 }
 
 @keyframes quests-glow {

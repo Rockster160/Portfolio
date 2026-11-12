@@ -206,7 +206,7 @@ class ChoreSerializer
     return household_icon ? :image : :empty if hicon_id
 
     v = chore.icon.to_s.strip
-    return :image   if v.start_with?("data:image/", "http://", "https://")
+    return :image   if v.start_with?("data:image/", "http://", "https://", "/acnh/")
     return :svg     if v.start_with?("<svg")
     return :ti_icon if v.start_with?("ti-")
 

@@ -14,6 +14,12 @@
     *@pending[:plans].map { |build| [build, "plan ready"] },
     *@pending[:prs].map { |build| [build, "PR open"] },
   ]
+  # Each build is listed once, in the first section that has it: waiting on
+  # you, then running, then the rest of the history.
+  shown = waiting.map { |build, _| build.id }
+  running = @sessions.reject { |session| shown.include?(session["build_id"].to_i) }
+  shown += running.filter_map { |session| session["build_id"]&.to_i }
+  history = @builds.reject { |build| shown.include?(build.id) }
 %>
 
 <div class="system-page">
@@ -43,17 +49,18 @@
           <% if build.pr_url.present? %>
             <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
           <% end %>
+          <%= render "system/claude_stop", build: build %>
         </div>
       </div>
     <% end %>
   <% end %>
 
   <h3 class="cs-heading">Running now</h3>
-  <% if @sessions.none? %>
+  <% if running.none? %>
     <p class="cs-empty">Nothing is running on Portfolio on the Mini.</p>
   <% end %>
 
-  <% @sessions.each do |session| %>
+  <% running.each do |session| %>
     <%
       kind = FeatureBuilder.kind_of(session, @conversations)
       build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
@@ -74,20 +81,25 @@
           since <%= stamp.call(parse.call(session["started_at"])) %>
         </div>
       </div>
-      <% if build&.rc_url.present? %>
+      <% if build %>
         <div class="cs-links">
-          <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% if build.rc_url.present? %>
+            <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% end %>
+          <%= render "system/claude_stop", build: build %>
         </div>
       <% end %>
     </div>
   <% end %>
 
-  <h3 class="cs-heading">Feature builds</h3>
+  <% if history.any? || @builds.none? %>
+    <h3 class="cs-heading">Feature builds</h3>
+  <% end %>
   <% if @builds.none? %>
     <p class="cs-empty">No builds yet. Start one in any thread with <code>/feature add ...</code>.</p>
   <% end %>
 
-  <% @builds.each do |build| %>
+  <% history.each do |build| %>
     <% state = build_state.call(build) %>
     <div class="cs-row cs-build-<%= state.parameterize %>">
       <div class="cs-head">
@@ -110,11 +122,7 @@
         <% if build.pr_url.present? %>
           <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
         <% end %>
-        <% if build.status_running? %>
-          <%= button_to "Stop", system_claude_stop_path(id: build.id),
-                class: "cs-stop", form_class: "cs-stop-form",
-                data: { confirm: "Close this build's session? Its work is kept, and PR feedback picks it back up." } %>
-        <% end %>
+        <%= render "system/claude_stop", build: build %>
       </div>
     </div>
   <% end %>

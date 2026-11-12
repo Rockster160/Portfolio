@@ -241,7 +241,7 @@ function setVar(el, name, value) {
 function iconKindFor(icon) {
   const v = String(icon || "").trim();
   if (!v) return "empty";
-  if (/^(data:image\/|https?:\/\/)/.test(v)) return "image";
+  if (/^(data:image\/|https?:\/\/|\/acnh\/)/.test(v)) return "image";
   if (v.startsWith("<svg")) return "svg";
   if (v.startsWith("ti-")) return "ti_icon";
   return "emoji";

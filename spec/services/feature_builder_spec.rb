@@ -119,6 +119,105 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "a question a build stops on" do
+    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+
+    def deliver(text)
+      stub_request(:post, %r{/byte/builder\z}).with(
+        body: hash_including("action" => "message", "build_id" => build.id, "text" => text),
+      ).to_return(status: 200, body: "{}")
+    end
+
+    it "is posted in full, saying a reply answers it" do
+      described_class.update_from_mini!(build, {
+        "waiting_at" => Time.current.iso8601,
+        "question"   => "1. Dark by default?\n2. Follow the system setting?",
+      })
+
+      expect(thread.byte_messages.last.body).to include(
+        "**dark mode** is asking:",
+        "1. Dark by default?\n2. Follow the system setting?",
+        "Reply to this to answer.",
+      )
+      expect(described_class.asking(user)).to eq([build])
+    end
+
+    it "is kept from a turn that announced its plan, without a second message" do
+      now = Time.current.iso8601
+      described_class.update_from_mini!(build, { "planned_at" => now, "question" => "Say go and I'll build it." })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
+      expect(build.reload.question).to eq("Say go and I'll build it.")
+    end
+
+    it "goes to the session when a message about the build is replied to" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Dark by default?" })
+      asked = thread.byte_messages.last
+      sent = deliver("yes, dark by default")
+      allow(BuddyDeliverWorker).to receive(:deliver_after_commit)
+
+      reply = ByteMessageIntake.call(
+        user:         user,
+        conversation: thread,
+        body:         "yes, dark by default",
+        metadata:     { source: "web" },
+        reply_to:     asked.id,
+      )
+
+      expect(sent).to have_been_requested
+      expect(reply.metadata["reply_to"]["id"]).to eq(asked.id)
+      expect(build.reload.question).to be_nil
+      expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
+    end
+
+    it "says so in the thread when the Mini can't take the answer" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Dark by default?" })
+      asked = thread.byte_messages.last
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 502)
+
+      ByteMessageIntake.call(user: user, conversation: thread, body: "yes", metadata: {}, reply_to: asked.id)
+
+      expect(thread.byte_messages.last.body).to include("Couldn't reach the Mini", "**dark mode**")
+      expect(build.reload.question).to eq("Dark by default?")
+    end
+
+    it "is no longer open once the build is working again" do
+      build.update!(question: "Dark by default?", asked_at: Time.current)
+
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", "working" => true },
+      ])
+
+      expect(described_class.asking(user)).to be_empty
+    end
+
+    it "isn't open on a build that's over" do
+      build.update!(question: "Dark by default?", asked_at: Time.current, status: :finished)
+
+      expect(described_class.asking(user)).to be_empty
+    end
+  end
+
+  describe "master moving" do
+    before { allow(FeatureBuildSyncWorker).to receive(:perform_async) }
+
+    it "has the Mini check open PRs against it" do
+      build.update!(pr_url: "https://github.com/x/pull/42", pr_number: 42)
+
+      expect(described_class.github!(:push, { "ref" => "refs/heads/master" })).to eq(:syncing)
+      expect(FeatureBuildSyncWorker).to have_received(:perform_async)
+    end
+
+    it "is left alone for other branches, and when no build has a PR open" do
+      build
+
+      expect(described_class.github!(:push, { "ref" => "refs/heads/master" })).to eq(:ignored)
+      build.update!(pr_url: "https://github.com/x/pull/42", pr_number: 42)
+      expect(described_class.github!(:push, { "ref" => "refs/heads/byte/9-other" })).to eq(:ignored)
+      expect(FeatureBuildSyncWorker).not_to have_received(:perform_async)
+    end
+  end
+
   describe ".start_from_request!" do
     let(:primary) { user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current) }
     let(:feature_request) {

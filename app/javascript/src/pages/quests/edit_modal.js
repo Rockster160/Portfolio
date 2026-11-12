@@ -46,7 +46,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   function itemOptions() {
     const board = getBoard();
     const date = QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board));
-    return board.items.filter(i => i.id !== editing?.id).map(i => {
+    return board.items.filter(i => i.id !== editing?.id && i.kind !== "rotation").map(i => {
       const label = QuestRules.displayName(i, QuestRules.resolveTarget(board, i, date)) || "(unnamed)";
       return [i.id, `${i.icon ? `${i.icon} ` : ""}${label}`];
     });

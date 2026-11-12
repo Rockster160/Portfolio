@@ -3217,7 +3217,26 @@ module Buddy
           user:                        @user.first_name,
           open_questions_from_partner: open_relay_count,
           answering_reminder:          answering_reminder,
+          builds_asking:               builds_asking,
         }.compact
+      end
+
+      # Feature Builders on the Mini stopped on a question for this person.
+      # Here for the reason open_questions_from_partner is: "yes, go with your
+      # defaults" answers one of these when it's open and nothing at all when
+      # none is. Only the end of what it said: that's where a session puts its
+      # questions, and it only has to tell one build from another.
+      def builds_asking
+        return nil unless Buddy::Features.enabled?(@user, :mac)
+
+        builds = FeatureBuilder.asking(@user).map { |build|
+          asked = build.question.to_s.squish
+          asked = "…#{asked.last(300)}" if asked.length > 300
+          { id: build.id, title: build.title, asked: asked }
+        }
+        builds.presence
+      rescue StandardError
+        nil
       end
 
       # The reminder they are replying to, when the last thing said in the

@@ -9,6 +9,7 @@
 // a board adopted on another device never replays them.
 
 import QuestRules from "./rules";
+import QuestRotation from "./rotation";
 
 const PUSH_DELAY_MS = 1500;
 const RETRY_MS = 15000;
@@ -68,6 +69,7 @@ export function createStore({ boardId, onChange, onError }) {
   function commit() {
     board.updatedAt = Date.now();
     QuestRules.prune(board, new Date());
+    QuestRotation.prune(board, QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board)));
     saveLocal();
     notify();
     schedulePush();

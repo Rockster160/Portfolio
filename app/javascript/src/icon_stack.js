@@ -166,7 +166,7 @@ export function bindIconStack(stack, { onImage = null } = {}) {
 
   if (pickBtn) {
     pickBtn.addEventListener("click", () => {
-      openIconPicker({ onPick: (value) => setValue(value) });
+      openIconPicker({ onPick: (value) => setValue(value), characters: true });
     });
   }
 

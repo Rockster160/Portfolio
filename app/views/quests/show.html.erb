@@ -67,6 +67,7 @@
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
         <span class="field-hint">A number in the name is how many times it's done. Enter adds it and clears for the next one.</span>
         <div class="form-actions">
+          <button type="button" class="ghost" data-quick-rotation title="Track which of a set turns up each day">Rotation…</button>
           <button type="button" class="ghost" data-quick-advanced>Advanced…</button>
           <button type="submit" class="primary">Add</button>
         </div>
@@ -215,6 +216,58 @@
         </div>
       </form>
     </div>
+  </div>
+
+  <%# ---------- Rotation: which of a set turns up each day ---------- %>
+  <div class="chores-modal-backdrop hidden" data-rotation-modal>
+    <div class="chores-modal chore-edit-modal">
+      <div class="modal-head">
+        <h3 data-rotation-title>Add Rotation</h3>
+        <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+      </div>
+      <form class="chore-form basic" data-rotation-form autocomplete="off" novalidate data-form-type="other">
+        <div class="form-section identity-row" data-rotation-icon>
+          <%= render "shared/icon_stack", name: "rotation_icon", value: nil, label: "Rotation icon" %>
+          <div class="identity-names">
+            <label class="field-label">Name</label>
+            <input type="text" data-rotation-field="name" placeholder="Visitors" required
+                   autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"
+                   data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+            <input type="text" data-rotation-field="section" list="quests-rotation-sections" placeholder="Section (none)"
+                   autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+            <datalist id="quests-rotation-sections" data-rotation-sections></datalist>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <label class="field-label">Options</label>
+          <span class="field-hint">
+            One daily pick a day, each at most once a week; one missed all last week is marked due.
+            An extra can turn up on any day alongside it. A fixed day fills itself in.
+          </span>
+          <div class="quests-option-rows" data-rotation-options></div>
+          <button type="button" class="quests-add-row" data-rotation-add>+ Option</button>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="danger" data-rotation-delete>Delete</button>
+          <button type="button" class="ghost" data-action="cancel">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+    <template data-template="rotation-option">
+      <div class="quests-option-row">
+        <%= render "shared/icon_stack", name: "rotation_option_icon", value: nil, label: "Option icon" %>
+        <div class="quests-option-fields">
+          <input type="text" data-k="name" placeholder="Name"
+                 autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+          <div class="quests-option-settings" data-option-settings></div>
+        </div>
+        <button type="button" class="quests-row-remove" data-remove-option aria-label="Remove">×</button>
+      </div>
+    </template>
   </div>
 
   <%# ---------- ×N: how many at once ---------- %>

@@ -313,7 +313,7 @@ function newItem(attrs = {}) {
 const QuestRules = {
   dayKey, addDays, gameDate, periodKey, resetHourOf, findItem, countOf,
   resolveTarget, isDone, scheduleMatches, conditionPasses, isVisible,
-  countsDown, shownCount, displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem,
+  countsDown, shownCount, displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem, newId,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = QuestRules;

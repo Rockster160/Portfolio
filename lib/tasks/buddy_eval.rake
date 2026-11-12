@@ -336,6 +336,26 @@ BUDDY_TOOL_PROBES = {
       )
     },
   },
+  # Seeds its own asking build, and the message production posts with it: a
+  # real build is only asking until somebody answers it.
+  answer_build:           {
+    say:   "dashboard one: retry quietly, and yes go with your defaults for the rest",
+    avoid: %i[relay_answer],
+    needs: :build_asking,
+    seed:  ->(user, convo) {
+      build = FeatureBuild.create!(
+        user:              user,
+        byte_conversation: convo,
+        status:            :running,
+        title:             "Dashboard connection errors",
+        request:           "On the Dashboard, sometimes there is a connection error or slowness.",
+        question:          "1. When the socket drops, retry quietly or show a banner? " \
+          "2. Keep the last data on screen while it reconnects? Otherwise I'll go with my defaults.",
+        asked_at:          1.minute.ago,
+      )
+      FeatureBuilder.say(convo, "**#{build.title}** is asking:\n\n#{build.question}", feature_build_id: build.id)
+    },
+  },
   ask_me:                 "add whatever I say next to my grocery list - ask me what it is first",
   # `avoid: search_agenda` because an evening at their place is on the calendar
   # with the location as typed - just the name - which reads as "no address".

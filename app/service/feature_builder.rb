@@ -10,6 +10,11 @@
 # speaks in the owner's primary Buddy thread and moves the request along with
 # it: planned when it starts, shipped when its PR is merged.
 #
+# A question a build stops on is posted in full, and answered from Byte either
+# by replying to it or by telling Buddy (`answer_build`); both type the answer
+# into the session. When master moves, the Mini brings each open PR that no
+# longer merges back in line, one build at a time (`sync`).
+#
 # This side also carries GitHub's comments back to the session, and keeps the
 # chip and the system page that say which Claude sessions are working on
 # Portfolio on the Mini.
@@ -38,6 +43,10 @@ module FeatureBuilder
   NEEDS_YOU_KEY = :"mini:needs_you"
 
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
+
+  # A build's last message before it stopped, kept as the question it's asking.
+  # A plan can run long; past this it's cut and the session has the rest.
+  QUESTION_LIMIT = 4000
 
   # ---- starting one ----
 
@@ -88,7 +97,19 @@ module FeatureBuilder
 
   # `waiting_at` isn't kept: it's the Mini saying a turn just ended with
   # nothing announced in it, so the session is waiting on an answer.
-  MINI_FIELDS = %w[status branch session_id rc_url pr_number pr_url error planned_at waiting_at].freeze
+  # `question` is the last thing that turn said, sent whenever a turn ends.
+  MINI_FIELDS = %w[
+    status
+    branch
+    session_id
+    rc_url
+    pr_number
+    pr_url
+    error
+    planned_at
+    waiting_at
+    question
+  ].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
   # The thread hears about four things only: the session's link, folded into
@@ -97,6 +118,10 @@ module FeatureBuilder
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
     waiting = attributes.delete("waiting_at").present?
+    question = attributes.delete("question")
+    if question
+      attributes.merge!("question" => question.first(QUESTION_LIMIT), "asked_at" => Time.current)
+    end
     # A ticket posted again after a change is the same plan, already announced.
     attributes.delete("planned_at") if build.planned_at.present?
     announce_plan = attributes["planned_at"].present?
@@ -132,7 +157,14 @@ module FeatureBuilder
   def announce_waiting!(build)
     return if build.status_finished? || build.status_failed?
 
-    text = "**#{build.title}** is waiting on you. #{build.link_markdown}"
+    text = (
+      if build.question.present?
+        "**#{build.title}** is asking:\n\n#{build.question}\n\n" \
+          "Reply to this to answer. #{build.link_markdown}"
+      else
+        "**#{build.title}** is waiting on you. #{build.link_markdown}"
+      end
+    )
     announce!(build, text, "Waiting on you: #{build.title}")
   end
 
@@ -149,6 +181,48 @@ module FeatureBuilder
       push_title:   push_title,
     )
   end
+
+  # ---- answering from Byte ----
+
+  # The build a reply in the thread is answering: any message posted about it,
+  # while it's still open.
+  def replied_to(user, message)
+    meta = message.metadata.to_h
+    return nil unless meta["source"].to_s == "feature_builder"
+
+    FeatureBuild.unfinished.find_by(user: user, id: meta["feature_build_id"])
+  end
+
+  # Builds with a question out to their owner, oldest first. What Buddy matches
+  # an answer typed without a reply against.
+  def asking(user)
+    FeatureBuild.unfinished.where(user: user).where.not(question: nil).order(:asked_at)
+  end
+
+  # Types `text` into the build's session as its owner's next message. False
+  # when the Mini didn't take it, and the question stays open.
+  # rubocop:disable Naming/PredicateMethod -- these send; the boolean is whether it got there
+  def answer!(build, text)
+    return false unless ByteLocal.builder(:message, build_id: build.id, text: text.to_s)
+
+    build.update!(question: nil, asked_at: nil)
+    refresh_needs_you!(build.user)
+    true
+  end
+
+  # A reply typed at one of the build's messages. Said in the thread when it
+  # didn't get there, since nothing else would show it.
+  def answer_from_thread!(build, message)
+    return true if answer!(build, message.body)
+
+    say(
+      message.byte_conversation,
+      "Couldn't reach the Mini, so that didn't get to **#{build.title}**. #{build.link_markdown}",
+      feature_build_id: build.id,
+    )
+    false
+  end
+  # rubocop:enable Naming/PredicateMethod
 
   # ---- GitHub ----
 
@@ -167,8 +241,19 @@ module FeatureBuilder
     when "pull_request_review"         then review!(payload)
     when "pull_request_review_comment" then line_comment!(payload)
     when "issue_comment"               then pr_comment!(payload)
+    when "push"                        then push!(payload)
     else :ignored
     end
+  end
+
+  # Master moved: the Mini checks every open PR against it and brings the
+  # ones that no longer merge back in line (FeatureBuildSyncWorker).
+  def push!(payload)
+    return :ignored unless payload["ref"] == "refs/heads/master"
+    return :ignored unless FeatureBuild.unfinished.where.not(pr_url: nil).exists?
+
+    FeatureBuildSyncWorker.perform_async
+    :syncing
   end
 
   def pull_request!(payload)
@@ -290,6 +375,7 @@ module FeatureBuilder
     listed = Array(sessions).map { |session| session.to_h.stringify_keys.slice(*SESSION_FIELDS) }
     DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601, sessions: listed }
     if machine.to_s == "mini"
+      answered_elsewhere!(listed)
       refresh_chip!(User.me)
       refresh_needs_you!(User.me)
     end
@@ -303,6 +389,18 @@ module FeatureBuilder
     return [] if at.nil? || at < REPORT_STALE_AFTER.ago
 
     Array(stored[:sessions]).map { |session| session.to_h.stringify_keys }
+  end
+
+  # A build working again was answered some other way (the Claude app, the
+  # pane), so its question is no longer open.
+  def answered_elsewhere!(listed)
+    working = listed.select { |session| session["working"] && session["build_id"] }
+    return if working.empty?
+
+    ids = working.map { |session| session["build_id"].to_i }
+    FeatureBuild.where(id: ids).where.not(question: nil).find_each { |build|
+      build.update!(question: nil, asked_at: nil)
+    }
   end
 
   def kind_of(session, conversations)

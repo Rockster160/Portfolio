@@ -527,7 +527,7 @@
       if (el) el.textContent = c.one_off ? "📝" : "🧹";
       return el;
     }
-    if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+    if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/acnh/")) {
       const el = cloneTemplate("icon-img");
       if (el) el.src = v;
       return el;
@@ -3593,7 +3593,7 @@
           const node = cloneTemplate("icon-img");
           if (node) { node.src = src; preview.appendChild(node); }
         }
-      } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+      } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/acnh/")) {
         const node = cloneTemplate("icon-img");
         if (node) { node.src = v; preview.appendChild(node); }
       } else if (v.startsWith("<svg")) {
@@ -3747,6 +3747,15 @@
         if (iconEl) iconEl.classList.add(v);
         return node;
       }
+      if (row._kind === "character") {
+        const node = cloneTemplate("icon-picker-tile-custom");
+        if (!node) return null;
+        node.dataset.pickValue = v;
+        node.title = row.n || "";
+        const imgEl = node.querySelector("[data-tile-img]");
+        if (imgEl) { imgEl.src = v; imgEl.alt = row.n || ""; }
+        return node;
+      }
       if (row._kind === "custom") {
         // Custom icons resolve to household-scoped `hicon:<id>` refs so
         // the chore stores a short pointer instead of duplicating the
@@ -3770,7 +3779,7 @@
     }
 
     async function render() {
-      const rows = await IconPool.search(searchEl.value, { limit: MAX_TILES });
+      const rows = await IconPool.search(searchEl.value, { limit: MAX_TILES, characters: true });
       // An empty query is a "show everything" view, not "no matches" —
       // the empty-state copy is reserved for queries that score zero.
       const hasQuery = (searchEl.value || "").trim().length > 0;

@@ -1,0 +1,5 @@
+<% if build.status_running? %>
+  <%= button_to "Stop", system_claude_stop_path(id: build.id),
+        class: "cs-stop", form_class: "cs-stop-form",
+        data: { confirm: "Close this build's session? Its work is kept, and PR feedback picks it back up." } %>
+<% end %>

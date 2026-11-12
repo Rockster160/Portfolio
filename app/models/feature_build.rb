@@ -3,6 +3,7 @@
 # Table name: feature_builds
 #
 #  id                   :bigint           not null, primary key
+#  asked_at             :datetime
 #  branch               :string
 #  error                :text
 #  feedback             :jsonb            not null
@@ -10,6 +11,7 @@
 #  planned_at           :datetime
 #  pr_number            :integer
 #  pr_url               :string
+#  question             :text
 #  rc_url               :string
 #  request              :text             not null
 #  status               :integer          default("starting"), not null

@@ -24,7 +24,7 @@ module Buddy
     def kind_for(icon)
       v = icon.to_s.strip
       return :empty if v.empty?
-      return :image if v.start_with?("data:image/", "http://", "https://")
+      return :image if v.start_with?("data:image/", "http://", "https://", "/acnh/")
       return :svg   if v.start_with?("<svg")
       return :ti_icon if v.start_with?("ti-")
 

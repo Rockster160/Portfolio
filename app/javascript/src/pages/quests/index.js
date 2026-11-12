@@ -3,11 +3,15 @@
 //
 // Tap a circle to count it, hold to undo the last thing done to it, ×N to
 // count several at once. Edit mode shows every quest, on the board right now
-// or not, to tap into the editor or drag into a new order or section.
+// or not, to tap into the editor or drag into a new order or section. A
+// rotation is drawn as a card below its section's circles instead of as one.
 
 import QuestRules from "./rules";
 import { createStore } from "./store";
 import { setupEditModal } from "./edit_modal";
+import QuestRotation from "./rotation";
+import { createRotationCard } from "./rotation_card";
+import { setupRotationModal } from "./rotation_modal";
 import { renderIconValue, loadIconPool, onIconPoolChanged } from "../../icon_picker";
 
 const LONG_MS = 550;
@@ -26,6 +30,7 @@ function bootQuests(root) {
   const cardTemplate = root.querySelector('[data-template="quest-circle"]');
 
   const cards = new Map();
+  const rotationCards = new Map();
   let editMode = false;
   let multiMode = false;
   let dragging = false;
@@ -161,8 +166,10 @@ function bootQuests(root) {
     grid.className = "chores-circles";
     grid.dataset.section = name;
     wrap.appendChild(grid);
-    section.appendChild(wrap);
-    entry = { section, grid };
+    const rotations = document.createElement("div");
+    rotations.className = "quests-rotations";
+    section.append(wrap, rotations);
+    entry = { section, grid, rotations };
     sectionEls.set(name, entry);
     return entry;
   }
@@ -185,18 +192,29 @@ function bootQuests(root) {
     const now = new Date();
     const sections = new Map();
     b.items.forEach(item => {
-      const visible = QuestRules.isVisible(b, item, now);
+      const rotation = QuestRotation.isRotation(item);
+      const visible = rotation || QuestRules.isVisible(b, item, now);
       if (!visible && !editMode) return;
       const key = item.section || "";
       if (!sections.has(key)) sections.set(key, []);
-      sections.get(key).push({ item, visible });
+      sections.get(key).push({ item, visible, rotation });
     });
 
     const seen = new Set();
     const sectionNodes = [];
     sections.forEach((entries, name) => {
-      const { section, grid } = sectionFor(name);
-      const nodes = entries.map(({ item, visible }) => {
+      const { section, grid, rotations } = sectionFor(name);
+      placeInOrder(rotations, entries.filter(e => e.rotation).map(({ item }) => {
+        let card = rotationCards.get(item.id);
+        if (!card) {
+          card = createRotationCard({ item, getBoard: board, getToday: today, onToggle: pickOption, onEdit: rotationEditor.open });
+          rotationCards.set(item.id, card);
+        }
+        card.render(item);
+        seen.add(item.id);
+        return card.node;
+      }));
+      const nodes = entries.filter(e => !e.rotation).map(({ item, visible }) => {
         let node = cards.get(item.id);
         const firstPaint = !node;
         if (!node) { node = buildCard(item); cards.set(item.id, node); }
@@ -215,6 +233,7 @@ function bootQuests(root) {
       sectionEls.delete(name);
     });
     [...cards.keys()].forEach(id => { if (!seen.has(id)) cards.delete(id); });
+    [...rotationCards.keys()].forEach(id => { if (!seen.has(id)) rotationCards.delete(id); });
     emptyEl.classList.toggle("hidden", sections.size > 0);
 
     const day = today().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -241,6 +260,12 @@ function bootQuests(root) {
     navigator.vibrate?.(10);
     store.commit();
     if (entry.hooks.length) store.fireHooks(entry);
+  }
+
+  function pickOption(item, date, optionId) {
+    if (!QuestRotation.toggle(board(), item, date, optionId)) return;
+    navigator.vibrate?.(10);
+    store.commit();
   }
 
   function undoLast(item) {
@@ -353,16 +378,27 @@ function bootQuests(root) {
   }
   editBtn.addEventListener("click", () => setEditMode(!editMode));
 
+  function saveItem(item, { isNew }) {
+    const b = board();
+    const index = b.items.findIndex(i => i.id === item.id);
+    if (index >= 0) b.items[index] = item;
+    else b.items.push(item);
+    store.commit();
+    if (isNew) flash("Added");
+  }
+
+  const rotationEditor = setupRotationModal({
+    getBoard: board,
+    onSave:   saveItem,
+    onDelete(item) {
+      board().items = board().items.filter(i => i.id !== item.id);
+      store.commit();
+    },
+  });
+
   const editor = setupEditModal({
     getBoard: board,
-    onSave(item, { isNew }) {
-      const b = board();
-      const index = b.items.findIndex(i => i.id === item.id);
-      if (index >= 0) b.items[index] = item;
-      else b.items.push(item);
-      store.commit();
-      if (isNew) flash("Added");
-    },
+    onSave:   saveItem,
     onDelete(item) {
       const b = board();
       b.items = b.items.filter(i => i.id !== item.id);
@@ -419,6 +455,11 @@ function bootQuests(root) {
     const draft = quickDraft();
     closeQuick();
     editor.open(draft, { isNew: true });
+  });
+  quickModal.querySelector("[data-quick-rotation]").addEventListener("click", () => {
+    const name = quickName.value.trim();
+    closeQuick();
+    rotationEditor.open(QuestRotation.newRotation({ name }), { isNew: true });
   });
 
   // ×N: the next tap asks how many.

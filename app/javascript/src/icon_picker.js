@@ -9,10 +9,12 @@
 // page can open it. Byte's reactions are the first caller; the chores picker
 // can move onto this later without either of them changing what a pick MEANS.
 //
-// A pick is one of three shapes, the same three IconPool produces:
+// A pick is one of the shapes IconPool produces:
 //   * an emoji character     — "👍"
 //   * a Tabler icon class    — "ti-flame"
 //   * a household icon ref   — "hicon:12"
+//   * a character face       — "/acnh/faces/brd09.png", only for a caller
+//                              that stores icons rather than writing prose
 
 import { IconPool } from "./icon_pool";
 
@@ -20,6 +22,7 @@ const MAX_TILES = 240;
 
 let modal = null;
 let onPick = null;
+let withCharacters = false;
 
 // Render an icon reference into a container, whichever of the three shapes it
 // is. Shared so a reference always LOOKS the same wherever it's shown.
@@ -50,8 +53,9 @@ export function renderIconValue(container, value) {
   }
   // An uploaded or linked picture. A pick from the grid is never one of these
   // — they arrive by paste, drop or crop — but a field that STORES one has to
-  // be able to show it back, and there should be one renderer, not two.
-  if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+  // be able to show it back, and there should be one renderer, not two. A
+  // character face is a picture this app serves itself.
+  if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/acnh/")) {
     const img = document.createElement("img");
     img.className = "icon-img";
     img.src = v;
@@ -146,7 +150,7 @@ function buildModal() {
   const emptyEl = el.querySelector("[data-pick-empty]");
 
   async function render() {
-    const rows = await IconPool.search(searchEl.value, { limit: MAX_TILES });
+    const rows = await IconPool.search(searchEl.value, { limit: MAX_TILES, characters: withCharacters });
     // An empty query is a "show everything" view, not "no matches" — the empty
     // state is reserved for a query that scored zero.
     const hasQuery = (searchEl.value || "").trim().length > 0;
@@ -203,9 +207,10 @@ export function close() {
   modal.close();
 }
 
-export function openIconPicker({ onPick: cb, query = "" } = {}) {
+export function openIconPicker({ onPick: cb, query = "", characters = false } = {}) {
   if (!modal) modal = buildModal();
   onPick = cb || null;
+  withCharacters = characters;
   modal.__search.value = query;
   if (!modal.open) modal.showModal();
   modal.__render();

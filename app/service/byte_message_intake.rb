@@ -170,6 +170,14 @@ class ByteMessageIntake
         ::Buddy::ThreadReply.send_back!(user: @user, message: message, route: route)
         return message
       end
+
+      # A reply to a Feature Builder's message is that build's to answer, so it
+      # goes into the build's session and Buddy is never asked.
+      if (build = ::FeatureBuilder.replied_to(@user, target))
+        message = post!(state: :sent)
+        ::FeatureBuilder.answer_from_thread!(build, message)
+        return message
+      end
     end
 
     # Brain-dump capture: if they armed a "Stash" bucket, THIS message is the

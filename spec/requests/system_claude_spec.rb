@@ -22,16 +22,37 @@ RSpec.describe "Claude on the Mini page", type: :request do
 
   before { sign_in }
 
-  it "lists what's running and every build with its links" do
+  it "lists past builds with their branch and PR" do
+    build.update!(status: :finished)
+
+    get system_claude_path
+
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include("Feature builds", "Dark mode", "byte/1-dark-mode", "PR #42")
+  end
+
+  it "lists a build once, in the first section that has it" do
     FeatureBuilder.report_sessions!(machine: :mini, sessions: [
       { "build_id" => build.id, "kind" => "builder", "working" => false },
     ])
 
     get system_claude_path
 
-    expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Dark mode", "waiting on you", "byte/1-dark-mode")
-    expect(response.body).to include("https://claude.ai/code/session_abc", "PR #42")
+    expect(response.body).to include("Waiting on you", "PR open")
+    expect(response.body.scan("Dark mode").length).to eq(1)
+    expect(response.body).to include("Nothing is running on Portfolio on the Mini.")
+  end
+
+  it "lists a working build under running, not again in the history" do
+    build.update!(pr_url: nil, pr_number: nil)
+    FeatureBuilder.report_sessions!(machine: :mini, sessions: [
+      { "build_id" => build.id, "kind" => "builder", "working" => true },
+    ])
+
+    get system_claude_path
+
+    expect(response.body).to include("Running now", "working", "Stop")
+    expect(response.body.scan("Dark mode").length).to eq(1)
   end
 
   it "says so when nothing is running" do

@@ -100,7 +100,7 @@ module ApplicationHelper
   #   * a Tabler icon class            — "ti-flame"
   #   * a household upload             — "hicon:12"
   #   * inline SVG markup              — "<svg …>"
-  #   * an image                       — a data: URL or an https: one
+  #   * an image                       — a data: URL, an https: one, or a character face
   #
   # This was `ChoresHelper#rendered_icon` and moved here the moment a second
   # feature needed it. Blank gives back nil so the caller decides what an
@@ -114,7 +114,7 @@ module ApplicationHelper
       icon.html_safe
     elsif icon.start_with?("hicon:")
       household_icon_tag(icon)
-    elsif icon.start_with?("data:image/", "http://", "https://")
+    elsif icon.start_with?("data:image/", "http://", "https://", "/acnh/")
       image_tag(icon, class: "icon-img", alt: "", loading: :lazy)
     elsif icon.start_with?("ti-")
       content_tag(:i, "", class: "ti #{icon} icon-ti", "aria-hidden": "true")
