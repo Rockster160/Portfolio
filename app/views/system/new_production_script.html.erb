@@ -1,0 +1,25 @@
+<%= meta_title "New Production Script", include_name: false %>
+<%= meta_description "Write a script to run against production once it's approved." %>
+<%= render "system/production_script_styles" %>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small>
+      <%= link_to "System", system_path %> /
+      <%= link_to "Production scripts", system_production_scripts_path %> /
+      New
+    </small>
+  </div>
+
+  <div class="ps-edit">
+    <%= form_with url: system_production_scripts_path, method: :post, class: "basic", local: true do %>
+      <label for="ps-title">Title</label>
+      <input type="text" id="ps-title" name="title" value="<%= @script.title %>" required>
+      <label for="ps-commit">Needs commit (it runs once this is deployed; the running one by default)</label>
+      <input type="text" id="ps-commit" name="commit_sha" value="<%= @script.commit_sha %>">
+      <label for="ps-code">Code</label>
+      <textarea id="ps-code" name="code" spellcheck="false" required><%= @script.code %></textarea>
+      <%= button_tag "Save" %>
+    <% end %>
+  </div>
+</div>

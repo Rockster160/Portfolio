@@ -2006,6 +2006,21 @@ BUDDY_EDGE_PROBES = [
           "and produced the chip",
   },
   {
+    case:       "the screens back on",
+    say:        "turn the monitors back on",
+    tool:       :mac_command,
+    args:       { mac_command: { command: "wake_monitors" } },
+    never_args: { mac_command: { command: "dark_monitors" } },
+    note:       "the undo of monitors off; dark_monitors is the name that sits beside it",
+  },
+  {
+    case: "waking the laptop",
+    say:  "wake laptop",
+    tool: :mac_command,
+    args: { mac_command: { command: "wake_monitors" } },
+    note: "the laptop is already awake; only its displays are off",
+  },
+  {
     case: "music on the desk Mac",
     say:  "pause spotify",
     tool: :mac_command,

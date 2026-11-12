@@ -203,6 +203,9 @@ class Markdown
   def color_wrapper
     ->(match) {
       color = match[1]
+      # `[[#f80]]()` with nothing in the parens is a swatch: the color alone.
+      next wrap(nil, :color, class: "md-swatch", style: "background-color: #{color};") if match[2] == ""
+
       content = match[2].presence || match[1]
       contrast = ColorGenerator.contrast_text_color_on_background(color) # Must be hex
 

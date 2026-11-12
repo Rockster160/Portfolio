@@ -21,7 +21,7 @@ class Jil::Methods::Mac < Jil::Methods::Base
   end
 
   # [Mac]
-  #   #run(["dark_monitors" "mac_ping" "spotify_play_pause"])::Hash
+  #   #run(["dark_monitors" "wake_monitors" "mac_ping" "spotify_play_pause"])::Hash
 
   # Hands back the Mac's own answer — `{ ok:, name:, output:, exit_status: }` —
   # so a task can branch on `ok` and read `output` (which is the entire point of

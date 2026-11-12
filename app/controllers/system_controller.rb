@@ -428,6 +428,22 @@ class SystemController < ApplicationController
     @conversations = ByteConversation.where(id: ids).index_by(&:id)
     @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     @pending = FeatureBuilder.pending(current_user)
+    @queue = MergeQueue.builds(current_user).to_a
+  end
+
+  # Approving, holding and reordering the merge queue.
+  def update_queue
+    build = FeatureBuild.where(user: current_user).find(params[:id])
+    act = params[:act].to_s.to_sym
+    case act
+    when *MergeQueue::MOVES then MergeQueue.move!(build, act)
+    when :approve then MergeQueue.approve!(build)
+    when :unapprove then MergeQueue.unapprove!(build)
+    when :hold then MergeQueue.hold!(build, true)
+    when :release then MergeQueue.hold!(build, false)
+    else return head(:bad_request)
+    end
+    redirect_to system_claude_path(anchor: "merge-queue")
   end
 
   # Opens the standing questions session on the Mini in the Claude app,
@@ -448,6 +464,75 @@ class SystemController < ApplicationController
       end
     )
     redirect_to system_claude_path, notice: notice
+  end
+
+  def production_scripts
+    @scripts = current_user.production_scripts.newest.includes(:feature_build).limit(100)
+  end
+
+  def production_script
+    @script = current_user.production_scripts.find(params[:id])
+    @segments = RubyHighlight.segments(@script.code)
+  end
+
+  # Written by hand. It needs the commit that's running now unless another is
+  # given, so approving it runs it straight away.
+  def new_production_script
+    @script = current_user.production_scripts.new(commit_sha: ProductionScripts.deployed_revision)
+  end
+
+  def create_production_script
+    @script = ProductionScripts.create!(
+      user:       current_user,
+      title:      params[:title].to_s,
+      code:       params[:code].to_s.gsub("\r\n", "\n"),
+      commit_sha: params[:commit_sha].to_s.strip.presence || ProductionScripts.deployed_revision,
+      edited_by:  :owner,
+    )
+    redirect_to system_production_script_path(@script), notice: "Saved. It runs once you approve it."
+  rescue ActiveRecord::RecordInvalid => e
+    @script = e.record
+    flash.now[:alert] = e.record.errors.full_messages.to_sentence
+    render :new_production_script, status: :unprocessable_entity
+  end
+
+  # Any edit, the owner's included, takes the approval away: what runs is only
+  # ever what was approved after the last change.
+  def update_production_script
+    script = current_user.production_scripts.find(params[:id])
+    code = params[:code].to_s.gsub("\r\n", "\n")
+    ProductionScripts.edit!(script, code: code, title: params[:title].presence, edited_by: :owner)
+    redirect_to system_production_script_path(script), notice: "Saved. It needs approving again."
+  rescue ActiveRecord::RecordInvalid => e
+    redirect_to system_production_script_path(script), alert: e.record.errors.full_messages.to_sentence
+  end
+
+  def approve_production_script
+    script = ProductionScripts.approve!(current_user.production_scripts.find(params[:id]), by: current_user)
+    notice = (
+      if ProductionScripts.deployed?(script.commit_sha)
+        "Approved. It's running now."
+      else
+        "Approved. It runs once #{script.short_sha} is deployed."
+      end
+    )
+    redirect_to system_production_script_path(script), notice: notice
+  rescue ArgumentError => e
+    redirect_to system_production_script_path(params[:id]), alert: e.message
+  end
+
+  def skip_production_script
+    script = current_user.production_scripts.find(params[:id])
+    ProductionScripts.skip!(script)
+    redirect_to system_production_script_path(script), notice: "Skipped. It won't run."
+  rescue ArgumentError => e
+    redirect_to system_production_script_path(params[:id]), alert: e.message
+  end
+
+  def restore_production_script
+    script = current_user.production_scripts.find(params[:id])
+    ProductionScripts.restore!(script)
+    redirect_to system_production_script_path(script), notice: "Back to waiting on approval."
   end
 
   # Closes a build's session on the Mini. Its worktree, branch and Claude

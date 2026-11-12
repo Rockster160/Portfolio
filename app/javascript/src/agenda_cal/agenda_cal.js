@@ -1726,17 +1726,15 @@
       if (beforeLegs && beforeLegs.length > 1 && travelMinRaw > 0) {
         appendLegBars(travelBand, beforeLegs, travelMinRaw * 60, bandPx);
       }
-      // Always the condensed `[clock] Nm + [car] Mm` form. Hide the label
-      // entirely on tiny bands (<6px) — stripes only, no text.
-      // A second, summed `[clock] (N+M)m` label rides along — hidden by
-      // default, swapped in via CSS when the event tile is narrow (lane
-      // layout adds .is-narrow). Keeps the label legible when the column
-      // shrinks under overlap.
+      // `→leave [clock]Nm [car]Mm`, leave time first. Each duration is its
+      // own unbreakable segment in a one-line wrapping row, so a narrow
+      // tile drops durations off the end and keeps the leave time.
+      // Hide the label entirely on tiny bands (<6px) — stripes only.
       if (bandPx >= 6) {
         const drivePart = travelMinRaw > 0 ? travelMinRaw : 0;
         const earlyPart = arriveEarlyMinRaw > 0 ? arriveEarlyMinRaw : 0;
         const label = document.createElement("span");
-        label.className = "cal-week-event-travel-label is-compact";
+        label.className = "cal-week-event-travel-label is-compact is-leave-first";
         const startEpochRaw = parseInt(d.startAt, 10) || 0;
         if (startEpochRaw > 0 && (earlyPart > 0 || drivePart > 0)) {
           const leaveEpoch = startEpochRaw - (earlyPart + drivePart) * 60;
@@ -1748,24 +1746,16 @@
           label.appendChild(leave);
         }
         const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
-        if (earlyPart > 0) {
-          label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
-          label.appendChild(document.createTextNode(fmtMin(earlyPart)));
-        }
-        if (drivePart > 0) {
-          label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
-          label.appendChild(document.createTextNode(fmtMin(drivePart)));
-        }
+        const appendSegment = (icon, minutes) => {
+          const segment = document.createElement("span");
+          segment.className = "cal-week-event-travel-seg";
+          segment.appendChild(Object.assign(document.createElement("i"), { className: `fa ${icon}` }));
+          segment.appendChild(document.createTextNode(fmtMin(minutes)));
+          label.appendChild(segment);
+        };
+        if (earlyPart > 0) appendSegment("fa-clock-o", earlyPart);
+        if (drivePart > 0) appendSegment("fa-car", drivePart);
         travelBand.appendChild(label);
-
-        const sumPart = earlyPart + drivePart;
-        if (sumPart > 0) {
-          const narrowLabel = document.createElement("span");
-          narrowLabel.className = "cal-week-event-travel-label is-narrow-fallback";
-          narrowLabel.appendChild(document.createTextNode(fmtMin(sumPart)));
-          narrowLabel.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
-          travelBand.appendChild(narrowLabel);
-        }
       }
       node.appendChild(travelBand);
     }

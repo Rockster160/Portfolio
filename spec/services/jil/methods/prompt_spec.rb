@@ -187,6 +187,34 @@ RSpec.describe Jil::Methods::Prompt do
     end
   end
 
+  describe "#search" do
+    let(:code) {
+      <<-JIL
+        q = PromptQuestion.search("Which print?", "action_events:print", "{notes}", "{timestamp}", true, false)::PromptQuestion
+        b = PromptQuestion.search("Which?", "contacts:")::PromptQuestion
+      JIL
+    }
+
+    it "carries its search, its templates, and how many it answers with" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :q, :value).to_h.symbolize_keys).to eq(
+        type:     :search,
+        question: "Which print?",
+        query:    "action_events:print",
+        title:    "{notes}",
+        detail:   "{timestamp}",
+        multiple: true,
+      )
+      expect(ctx.dig(:vars, :b, :value).to_h.symbolize_keys).to eq(
+        type: :search, question: "Which?", query: "contacts:",
+      )
+    end
+
+    it "passes validation" do
+      expect { Jil::Validator.validate!(code) }.not_to raise_error
+    end
+  end
+
   describe "#hint" do
     let(:code) {
       <<-JIL
