@@ -1307,6 +1307,14 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[alarm],
     note:  "worked out as 121 minutes at 3:14 - ten short",
   },
+  {
+    case:  "prod 10090",
+    say:   "At 12:30, start a 2 hour timer.",
+    tool:  :set_timer,
+    args:  { set_timer: { starts_at: /T12:30/ } },
+    avoid: %i[request_feature alarm schedule_reminder],
+    note:  "filed as a feature request - a timer could only start now",
+  },
   # "MST" written in October means Mountain time, which is -06:00 then.
   {
     case:  "prod 8876",
