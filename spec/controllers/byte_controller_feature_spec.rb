@@ -10,16 +10,25 @@ RSpec.describe ByteController, type: :controller do
   }
 
   describe "/feature" do
-    it "starts a build and answers with the one message that will follow it" do
+    it "keeps the request as their message, above the one that follows the build" do
       sign_in rocco
 
-      post :create_message, params: { conversation_id: convo.id, body: "/feature add build buttons on the requests page" }
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "/feature add build buttons on the requests page",
+        local_id:        "local-1",
+      }
 
       build = FeatureBuild.last
+      request, status = convo.byte_messages.order(:id).to_a
       expect(build.request).to eq("build buttons on the requests page")
       expect(build.byte_conversation).to eq(convo)
-      expect(convo.byte_messages.count).to eq(1)
-      expect(build.byte_message.body).to include("Starting a Feature Builder", "build buttons on the requests page")
+      expect(request).to be_outbound
+      expect(request.body).to eq("build buttons on the requests page")
+      expect(request.metadata).to include("feature_build_id" => build.id, "local_id" => "local-1")
+      expect(status).to eq(build.byte_message)
+      expect(status.body).to include("Starting a Feature Builder", "build buttons on the requests page")
+      expect(response.parsed_body["id"]).to eq(request.id)
       expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
     end
 

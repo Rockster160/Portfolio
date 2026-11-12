@@ -1994,7 +1994,12 @@ class ByteController < ApplicationController
       # in the owner's checkout, so it's the owner's.
       return ack(conversation, "Feature builds are the owner's.") if buddy_only?
 
-      FeatureBuilder.start!(user: current_user, conversation: conversation, text: arg)
+      FeatureBuilder.start!(
+        user:         current_user,
+        conversation: conversation,
+        text:         arg,
+        local_id:     params[:local_id].to_s.presence,
+      )
     when "today"
       send_today_briefing(conversation)
     when "buddy"

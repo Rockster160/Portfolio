@@ -1,10 +1,10 @@
 # The Rails half of `/feature`. Typed in a Buddy thread, it starts a Feature
 # Builder on the Mini (~/code/Byte/builder.rb): a Claude session in its own
 # worktree and branch, reached from the Claude app, that asks, builds and opens
-# a ByteSlime PR. The thread gets one system message, rewritten as the build
-# starts and given the session's link, then one when its PR is open, and one
-# each time it stops to ask its owner something, carrying the question in
-# full. Its plan is recorded but not announced: the session builds straight on
+# a ByteSlime PR. The request stays in the thread as the person's own message,
+# and the thread gets one system message, rewritten as the build starts and
+# given the session's link, then one when its PR is open, and one each time it
+# stops to ask its owner something, carrying the question in full. Its plan is recorded but not announced: the session builds straight on
 # from it without waiting for a go. Nothing else is said there.
 #
 # A build can also be started from a row on /system/feature_requests, and then
@@ -12,9 +12,10 @@
 # it: planned when it starts, shipped when its PR is merged.
 #
 # A question is answered from Byte either by replying to any message about the
-# build or by telling Buddy (`answer_build`); both type the answer into the
-# session. When master moves, the Mini has each open PR that no longer merges
-# catch up with it, one build at a time (`sync`).
+# build (the request itself included) or by telling Buddy (`answer_build`);
+# both type the answer into the session. A reply with no question open goes in
+# the same way, as more to go on. When master moves, the Mini has each open PR
+# that no longer merges catch up with it, one build at a time (`sync`).
 #
 # This side also carries GitHub's comments back to the session, and keeps the
 # chip and the system page that say which Claude sessions are working on
@@ -43,6 +44,9 @@ module FeatureBuilder
   # Raised while any build has a question or a PR waiting on its owner.
   NEEDS_YOU_KEY = :"mini:needs_you"
 
+  # The request, posted as the person's own message.
+  REQUEST_KIND = :feature_request
+
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
   # A build's last message before it stopped, kept as the question it's asking.
@@ -51,13 +55,19 @@ module FeatureBuilder
 
   # ---- starting one ----
 
-  # `/feature add ...` (or just `/feature ...`). Returns the system message it
-  # posted, which the slash command hands back as its answer.
-  def start!(user:, conversation:, text:)
+  # `/feature add ...` (or just `/feature ...`). Returns the request as the
+  # person's own message, which the slash command hands back as the echo of
+  # what they typed. `local_id` is the client's optimistic bubble, which that
+  # message takes over.
+  def start!(user:, conversation:, text:, local_id: nil)
     request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
     return say(conversation, USAGE) if request.empty?
 
-    launch!(user: user, conversation: conversation, request: request).byte_message
+    typed = nil
+    launch!(user: user, conversation: conversation, request: request) { |build|
+      typed = post_request!(build, conversation, { local_id: local_id }.compact)
+    }
+    typed
   end
 
   # The Build button on a feature request. Returns the build, or nil when the
@@ -80,6 +90,8 @@ module FeatureBuilder
     )
   end
 
+  # A block is given the build before its status line is posted, so what's
+  # posted there reads above it.
   def launch!(user:, conversation:, request:, feature_request: nil)
     build = FeatureBuild.create!(
       user:              user,
@@ -89,6 +101,7 @@ module FeatureBuilder
       request:           request,
     )
     if conversation
+      yield build if block_given?
       message = say(conversation, build.status_line, feature_build_id: build.id)
       build.update!(byte_message: message)
     end
@@ -111,6 +124,19 @@ module FeatureBuilder
     waiting_at
     question
   ].freeze
+
+  def post_request!(build, conversation, metadata)
+    message = conversation.byte_messages.create!(
+      user:         build.user,
+      direction:    :outbound,
+      state:        :sent,
+      body:         build.request,
+      metadata:     { kind: REQUEST_KIND, source: :feature_builder, feature_build_id: build.id }.merge(metadata),
+      delivered_at: Time.current,
+    )
+    broadcast(message)
+    message
+  end
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
   # The thread hears about three things only: the session's link, folded into
@@ -182,13 +208,16 @@ module FeatureBuilder
 
   # ---- answering from Byte ----
 
-  # The build a reply in the thread is answering: any message posted about it,
-  # while it's still open.
+  # The build a reply in the thread is aimed at: any message posted about it,
+  # the request and the replies to it included, finished or not.
   def replied_to(user, message)
-    meta = message.metadata.to_h
-    return nil unless meta["source"].to_s == "feature_builder"
+    id = message.metadata.to_h["feature_build_id"]
+    id.present? ? FeatureBuild.find_by(user: user, id: id) : nil
+  end
 
-    FeatureBuild.unfinished.find_by(user: user, id: meta["feature_build_id"])
+  # Whether a person's message went to a build instead of to Buddy.
+  def sent_to_build?(message)
+    message.outbound? && message.metadata.to_h["feature_build_id"].present?
   end
 
   # Builds with a question out to their owner, oldest first. What Buddy matches
@@ -208,9 +237,19 @@ module FeatureBuilder
     true
   end
 
-  # A reply typed at one of the build's messages. Said in the thread when it
-  # didn't get there, since nothing else would show it.
+  # A reply typed at one of the build's messages: an answer when it's asking,
+  # more to go on when it isn't. Said in the thread when it didn't get there,
+  # since nothing else would show it.
   def answer_from_thread!(build, message)
+    if build.status_finished? || build.status_failed?
+      over = build.status_failed? ? "never started" : "is finished"
+      say(
+        message.byte_conversation,
+        "**#{build.title}** #{over}, so there's no session left to send that to.",
+        feature_build_id: build.id,
+      )
+      return false
+    end
     return true if answer!(build, message.body)
 
     say(
