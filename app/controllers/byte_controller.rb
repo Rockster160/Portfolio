@@ -1998,6 +1998,7 @@ class ByteController < ApplicationController
         user:         current_user,
         conversation: conversation,
         text:         arg,
+        typed:        body,
         local_id:     params[:local_id].to_s.presence,
       )
     when "today"

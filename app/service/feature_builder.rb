@@ -55,19 +55,21 @@ module FeatureBuilder
 
   # ---- starting one ----
 
-  # `/feature add ...` (or just `/feature ...`). Returns the request as the
+  # `/feature add ...` (or just `/feature ...`). Returns the command as the
   # person's own message, which the slash command hands back as the echo of
-  # what they typed. `local_id` is the client's optimistic bubble, which that
+  # what they typed: `typed`, word for word, defaulting to the command it
+  # stands for. `local_id` is the client's optimistic bubble, which that
   # message takes over.
-  def start!(user:, conversation:, text:, local_id: nil)
+  def start!(user:, conversation:, text:, typed: nil, local_id: nil)
     request = text.to_s.strip.sub(/\Aadd\b\s*/i, "")
     return say(conversation, USAGE) if request.empty?
 
-    typed = nil
+    said = typed.presence || "/feature add #{request}"
+    posted = nil
     launch!(user: user, conversation: conversation, request: request) { |build|
-      typed = post_request!(build, conversation, { local_id: local_id }.compact)
+      posted = post_request!(build, conversation, said, { local_id: local_id }.compact)
     }
-    typed
+    posted
   end
 
   # The Build button on a feature request. Returns the build, or nil when the
@@ -125,12 +127,12 @@ module FeatureBuilder
     question
   ].freeze
 
-  def post_request!(build, conversation, metadata)
+  def post_request!(build, conversation, body, metadata)
     message = conversation.byte_messages.create!(
       user:         build.user,
       direction:    :outbound,
       state:        :sent,
-      body:         build.request,
+      body:         body,
       metadata:     { kind: REQUEST_KIND, source: :feature_builder, feature_build_id: build.id }.merge(metadata),
       delivered_at: Time.current,
     )

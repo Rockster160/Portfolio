@@ -24,7 +24,7 @@ RSpec.describe ByteController, type: :controller do
       expect(build.request).to eq("build buttons on the requests page")
       expect(build.byte_conversation).to eq(convo)
       expect(request).to be_outbound
-      expect(request.body).to eq("build buttons on the requests page")
+      expect(request.body).to eq("/feature add build buttons on the requests page")
       expect(request.metadata).to include("feature_build_id" => build.id, "local_id" => "local-1")
       expect(status).to eq(build.byte_message)
       expect(status.body).to include("Starting a Feature Builder", "build buttons on the requests page")
