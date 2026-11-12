@@ -2768,6 +2768,11 @@ html.html-ctr-byte.html-act-board_index body {
   .byte-attach-tray {
     flex: 0 0 100%;
     padding: 2px 0 4px;
+
+    // The ✕'s backing again, over the chat's own flat button look.
+    .image-attach-remove {
+      background: rgba(9, 16, 33, 0.72);
+    }
   }
 }
 
