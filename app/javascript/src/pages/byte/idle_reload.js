@@ -109,7 +109,9 @@ export function initIdleReload({
     // Once. The navigation is in flight from here and the timer would otherwise
     // fire again behind it, nuking the caches a second time.
     disarm();
-    reload();
+    // A reload that refuses (the server isn't answering with the page yet)
+    // leaves this page in place, still behind, so the wait starts again.
+    Promise.resolve(reload()).catch(() => arm());
   }
 
   function arm() {

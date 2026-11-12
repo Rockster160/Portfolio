@@ -360,6 +360,7 @@ BUDDY_TOOL_PROBES = {
   # `avoid: search_agenda` because an evening at their place is on the calendar
   # with the location as typed - just the name - which reads as "no address".
   contact_address:        { say: "what's Carlos' address?", avoid: %i[search_agenda], needs: :carlos_address },
+  add_contact:            { say: "add Marisol as a contact, her address is 4410 S 900 E, Millcreek", avoid: %i[contact_address add_list_item] },
 
   # --- deliveries ---
   track_delivery:         "I ordered a bookshelf, should be here Friday",
@@ -550,6 +551,15 @@ BUDDY_EVAL_READERS = %i[
 #               paths. The same fields as the probe (tool, with, order, args,
 #               avoid...), laid over it; the turn passes if it meets either.
 BUDDY_EDGE_PROBES = [
+  # --- contacts --------------------------------------------------------------
+  {
+    case:  "add a contact with an address",
+    say:   "Add Whit as a contact and save the address too, it's 1388 E Fort Union Blvd, Cottonwood Heights",
+    tool:  :add_contact,
+    avoid: :contact_address,
+    args:  { add_contact: { name: /whit/i, address: /fort union/i } },
+    note:  "answered that there was no tool for creating a contact or saving an address",
+  },
   # --- one request, several things, later -----------------------------------
   # Asked for directly: three things on one condition and a time-and-device
   # rule, all with nothing run now. The pieces existed as a `steps` JSON field
@@ -1297,6 +1307,14 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[alarm],
     note:  "worked out as 121 minutes at 3:14 - ten short",
   },
+  {
+    case:  "prod 10090",
+    say:   "At 12:30, start a 2 hour timer.",
+    tool:  :set_timer,
+    args:  { set_timer: { starts_at: /T12:30/ } },
+    avoid: %i[request_feature alarm schedule_reminder],
+    note:  "filed as a feature request - a timer could only start now",
+  },
   # "MST" written in October means Mountain time, which is -06:00 then.
   {
     case:  "prod 8876",
@@ -1986,6 +2004,21 @@ BUDDY_EDGE_PROBES = [
     note: "answered \"Monitors are dark\" off a single API call with no byte_actions " \
           "row at all; the retry a minute later, after he said so, took three calls " \
           "and produced the chip",
+  },
+  {
+    case:       "the screens back on",
+    say:        "turn the monitors back on",
+    tool:       :mac_command,
+    args:       { mac_command: { command: "wake_monitors" } },
+    never_args: { mac_command: { command: "dark_monitors" } },
+    note:       "the undo of monitors off; dark_monitors is the name that sits beside it",
+  },
+  {
+    case: "waking the laptop",
+    say:  "wake laptop",
+    tool: :mac_command,
+    args: { mac_command: { command: "wake_monitors" } },
+    note: "the laptop is already awake; only its displays are off",
   },
   {
     case: "music on the desk Mac",
