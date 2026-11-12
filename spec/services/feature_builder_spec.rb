@@ -16,6 +16,18 @@ RSpec.describe FeatureBuilder do
     { "number" => number, "head" => { "ref" => ref }, "merged" => merged }
   end
 
+  describe "a build handed a brief" do
+    it "is named by its title rather than the brief's first line" do
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+      brief = "**What and why**: the Questions session can start builds.\n\nPlan: ..."
+      handed = described_class.launch!(user: user, conversation: thread, request: brief, title: "Feature from questions")
+
+      expect(handed.title).to eq("Feature from questions")
+      expect(handed.request).to eq(brief)
+      expect(handed.byte_message.body).to include("**Feature from questions**")
+    end
+  end
+
   describe "the thread it was asked from" do
     it "hears one message, rewritten with the session's link once the Mini has it" do
       described_class.update_from_mini!(build, {

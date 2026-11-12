@@ -80,12 +80,13 @@ module FeatureBuilder
     )
   end
 
-  def launch!(user:, conversation:, request:, feature_request: nil)
+  # `title` is for a request written as a brief, whose first line isn't a name.
+  def launch!(user:, conversation:, request:, feature_request: nil, title: nil)
     build = FeatureBuild.create!(
       user:              user,
       byte_conversation: conversation,
       feature_request:   feature_request,
-      title:             FeatureBuild.title_for(request),
+      title:             FeatureBuild.title_for(title.presence || request),
       request:           request,
     )
     if conversation

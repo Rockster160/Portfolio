@@ -40,6 +40,51 @@ RSpec.describe "Feature Builder webhooks", type: :request do
     end
   end
 
+  describe "POST /webhooks/byte/builds" do
+    let!(:primary) { user.byte_conversations.create!(mode: :buddy, last_message_at: Time.current) }
+
+    before {
+      allow(ByteLocal).to receive(:valid_secret?).and_return(false)
+      allow(ByteLocal).to receive(:valid_secret?).with("shh").and_return(true)
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+    }
+
+    def hand_over(params, secret: "shh")
+      post "/webhooks/byte/builds", params: params, as: :json, headers: { "X-Byte-Secret" => secret }
+    end
+
+    it "starts a build with the brief, speaking in the primary Buddy thread" do
+      hand_over({ title: "Questions can build", request: "Add /feature to the Questions session." })
+
+      expect(response).to have_http_status(:ok)
+      build = FeatureBuild.find(response.parsed_body["id"])
+      expect(build.title).to eq("Questions can build")
+      expect(build.request).to eq("Add /feature to the Questions session.")
+      expect(build.user).to eq(user)
+      expect(build.byte_conversation).to eq(primary)
+      expect(build.byte_message.body).to include("Starting a Feature Builder")
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+    end
+
+    it "names it from the brief when no title is given" do
+      hand_over({ request: "Dark mode for lists\n\nMore detail." })
+
+      expect(FeatureBuild.last.title).to eq("Dark mode for lists")
+    end
+
+    it "turns away an empty brief" do
+      expect { hand_over({ title: "Nothing", request: "  " }) }.not_to change(FeatureBuild, :count)
+
+      expect(response).to have_http_status(:bad_request)
+    end
+
+    it "is turned away without the Mac's secret" do
+      expect { hand_over({ request: "Dark mode" }, secret: "guess") }.not_to change(FeatureBuild, :count)
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
   describe "PATCH /webhooks/byte/builds/:id" do
     let(:build) { FeatureBuild.create!(user: user, title: "Dark mode", request: "dark mode") }
 
