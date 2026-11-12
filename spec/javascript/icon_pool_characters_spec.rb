@@ -28,6 +28,22 @@ RSpec.describe "character faces in the icon pool (JS-side)" do
     expect(cases[:named_among_descriptions]).to eq("Doc")
   end
 
+  it "finds villagers added in later game versions, by their face" do
+    expect(cases[:cece]).to eq(n: "Cece", c: "/acnh/faces/squ19.png")
+  end
+
+  it "finds a name with an accent whether or not the search types it" do
+    expect(cases[:viche_unaccented]).to eq("Viché")
+    expect(cases[:pave_accented]).to eq("Pavé")
+  end
+
+  it "has an image on disk for every face in the index" do
+    index = JSON.parse(Rails.public_path.join("acnh_index.json").read)
+    missing = index.reject { |row| Rails.public_path.join(row["c"].delete_prefix("/")).exist? }
+
+    expect(missing.pluck("n")).to eq([])
+  end
+
   it "puts an emoji ahead of a character who shares its name" do
     expect(cases[:cookie_first]).to eq("emoji")
   end
