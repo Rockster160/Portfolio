@@ -32,6 +32,7 @@ import {
   parseDurationMinutes,
   formatDurationHint,
 } from "../../../support/parse_duration.js";
+import { createSearchPicker } from "../../../prompt_search.js";
 
 // requestId -> { key: value }. Module-level so it survives any number of
 // repaints, and deliberately not localStorage: a draft is only interesting
@@ -301,6 +302,11 @@ function normalized(field, value) {
     case "scale":
       if (blank) return field.placeholder != null ? "" : String(field.min ?? 0);
       return String(value);
+    // The picks themselves, never how they were drawn.
+    case "search":
+      return JSON.stringify(
+        (Array.isArray(value) ? value : value ? [value] : []).map((p) => [p.id ?? null, p.title ?? ""]),
+      );
     case "select":
       return blank && field.required ? String(field.choices?.[0] ?? "") : blank ? "" : String(value);
     default:
@@ -393,6 +399,8 @@ function writeRow(row, field) {
     if (wrap) wrap.dataset.untouched = waiting ? "true" : "false";
     const out = row.querySelector(".byte-msg-form-scale-value");
     if (out && range) out.textContent = range.value;
+  } else if (type === "search") {
+    row.querySelector(".psearch")?.searchPicker?.setValue(value);
   } else if (type === "select") {
     const sel = row.querySelector("select");
     if (sel && !blank) sel.value = String(value);
@@ -684,6 +692,10 @@ function buildControl(field, value, locked) {
     return wrap;
   }
 
+  if (type === "search") {
+    return createSearchPicker({ config: field.search || {}, value, disabled: locked });
+  }
+
   if (type === "select") {
     const sel = document.createElement("select");
     sel.className = "byte-msg-form-input";
@@ -794,6 +806,9 @@ function readRow(row) {
   }
   if (type === "chips") {
     return row.querySelector('input[type="radio"]:checked')?.value ?? "";
+  }
+  if (type === "search") {
+    return row.querySelector(".psearch")?.searchPicker?.value() ?? null;
   }
   if (type === "checkbox") {
     return row.querySelector('input[type="checkbox"]')?.checked

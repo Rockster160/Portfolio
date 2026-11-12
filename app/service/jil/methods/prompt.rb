@@ -18,6 +18,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
   #   #text(String:"Question Text" BR "Default" String)
   #   #duration(String:"Question Text" BR "Default" String)
   #   #textarea(String:"Question Text" BR "Default" String)
+  #   #search(String:"Question Text" BR String:"Search" BR String?:"Title" BR String?:"Detail" BR Boolean?:"Several" Boolean?:"Free text")
   #   #number(String:"Question Text" BR "Default" Numeric? "Min" Numeric? "Max" Numeric? "Step" Numeric?)
   #   #checkbox(String:"Question Text" BR "Default" Boolean)
   #   #choices(String:"Question Text" content(String))
@@ -240,6 +241,23 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       question: text,
       default:  format_duration(default),
       live:     @jil.cast(live, :Boolean) || nil,
+    }.compact
+  end
+
+  # A box that searches the person's records as they type, pre-filtered:
+  # "action_events:print" searches action events, always for "print", plus
+  # whatever is typed. Title and Detail are markdown drawn per result with
+  # {field} filled from the record; the title is also what stays in the box.
+  # Answers { id, title }, or a list of them with `several`. See PromptSearch.
+  def search(text, query, title=nil, detail=nil, several=false, free_text=false) # rubocop:disable Style/OptionalBooleanParameter -- Jil arguments are positional
+    {
+      type:      :search,
+      question:  text,
+      query:     query.to_s,
+      title:     title.presence,
+      detail:    detail.presence,
+      multiple:  (true if @jil.cast(several, :Boolean)),
+      free_text: (true if @jil.cast(free_text, :Boolean)),
     }.compact
   end
 
