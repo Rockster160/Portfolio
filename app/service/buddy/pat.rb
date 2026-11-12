@@ -33,6 +33,8 @@ module Buddy
         dream_dismissed_at: conversation.dream_dismissed_at&.iso8601(3),
       }
       broadcast(conversation, result)
+      # A yelling pet is told it was heard.
+      ::Buddy::BoardYell.clear!(conversation) if conversation.board?
       result
     end
 

@@ -2552,6 +2552,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     dismissedAt: Date.parse(app.dataset.boardDreamDismissedAt || "") || 0,
   });
   boardDream.setAlerts(bootstrap.alerts || []);
+  // Yells already standing when the page opens show at once, and stay quiet:
+  // a yell's sound is for when it starts, not for every screen that loads.
+  let startingYells = [];
+  try { startingYells = JSON.parse(app.dataset.boardYells || "[]") || []; } catch (e) {}
+  const heardYells = new Set(startingYells.map((y) => `${y.key}:${y.raised_at}`));
+  boardDream.setYells(startingYells);
+  const applyYells = (yells) => {
+    const list = Array.isArray(yells) ? yells : [];
+    list.forEach((y) => {
+      const id = `${y.key}:${y.raised_at}`;
+      if (heardYells.has(id)) return;
+      heardYells.add(id);
+      if (y.sound) playBoardSound(y.sound);
+    });
+    boardDream?.setYells(list);
+  };
 
   // A tap on the pet (Buddy::Pat): it flashes something fun, its mood eases a
   // little lighter, and a board's dream is put away until the next one. Shown
@@ -3683,6 +3699,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       // A list connected to a board changed (Buddy::BoardList.broadcast!).
       if (data.kind === "board_list") {
         choreBoard?.onListChanged(data.list_id);
+        return;
+      }
+      // A board's yells changed (Buddy::BoardYell.broadcast!): this board's
+      // pet starts or stops shouting.
+      if (data.kind === "board_yells") {
+        if (app.dataset.board === "true" && data.conversation_id === currentConversationId) applyYells(data.yells);
         return;
       }
       if (data.kind === "conversation_read") {

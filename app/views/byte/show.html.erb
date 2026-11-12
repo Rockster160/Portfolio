@@ -122,6 +122,7 @@
      data-board-dream-dismissed-at="<%= @conversation.dream_dismissed_at&.iso8601(3) %>"
      data-board-pins="<%= @conversation.pinned_chore_ids.to_json %>"
      data-board-list="<%= Buddy::BoardList.wire(@conversation).to_json if @board %>"
+     data-board-yells="<%= Buddy::BoardYell.wire(@conversation).to_json if @board %>"
      data-chore-day="<%= @board_day&.iso8601 %>"
      <%# The board's own set — chores AND triggers of its groups, each tagged %>
      <%# with its `kind` — serialized for the first paint so a cold boot off %>

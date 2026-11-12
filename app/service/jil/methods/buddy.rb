@@ -5,7 +5,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # Methods whose last argument is a block of named settings - `who`, `face` -
   # one line each, written as `Keyword.who("me")` and shown as just "who".
-  NAMED_SETTINGS = %i[alert boardAlert dream mood timer message button miniAlert notice].freeze
+  NAMED_SETTINGS = %i[alert boardAlert dream mood yell timer message button miniAlert notice].freeze
   # Settings a block may give more than once, each line adding to the list.
   LISTED_SETTINGS = %i[who groups].freeze
   # Calls a block may hold besides its named lines, each collected under its
@@ -207,6 +207,33 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     held.positive?
   end
 
+  # The pet on the board named `board` yells `message`: the thought bubble and
+  # the playful/surprised shouting a very high list item gets, with no list
+  # behind it. A leading emoji (or `icon`) shows big. `board` is a board's name,
+  # or "all" for every board this task's owner can open - a blank or unknown
+  # name yells nowhere, returns false, and lists the names it knows in the
+  # output. `sound` plays once as it starts; `minutes` stops it on its own.
+  # It also stops on `resolve` with the same key, or a tap on the pet.
+  def yell(key, message, options=nil)
+    opts = options.to_h
+    boards = ::Buddy::BoardYell.yell!(
+      user:    @jil.user,
+      board:   opts[:board],
+      key:     key,
+      body:    message,
+      icon:    opts[:icon],
+      sound:   opts[:sound],
+      minutes: opts[:minutes],
+    )
+    if boards.empty? && ::Buddy::BoardYell.boards_for(@jil.user, opts[:board]).empty?
+      names = ::Buddy::BoardYell.board_names(@jil.user).join(", ").presence || "none"
+      said = opts[:board].to_s.strip
+      missing = said.empty? ? "No board named to yell on" : "No board called \"#{said}\""
+      @jil.ctx[:output] << "#{missing} - boards: #{names}"
+    end
+    boards.any?
+  end
+
   # A message with buttons under it - a question for the people it concerns,
   # each in their own thread, answered by a press. Not an alert: nothing pins
   # and nothing stands open, so leaving it unanswered is fine.
@@ -251,6 +278,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   # `who` has to match whoever the alert was raised for, and the easy way to get
   # that right is to pass the same thing both times.
   #
+  # A `yell` under the key stops too, on every board this task's owner can open.
+  #
   # Returns false when nothing was open under that key for anybody, which is how
   # a check that runs on a schedule tells "I just cleared something" from "it was
   # already fine" without keeping track itself.
@@ -258,7 +287,8 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     cleared = recipients_for(who).count { |user|
       ::Buddy::Alerts.resolve!(user: user, key: key, body: message).present?
     }
-    cleared.positive?
+    yells = ::Buddy::BoardYell.resolve!(user: @jil.user, key: key)
+    cleared.positive? || yells.any?
   end
 
   # The hero's other notice: a chip pinned top-right, not the alert bar along
