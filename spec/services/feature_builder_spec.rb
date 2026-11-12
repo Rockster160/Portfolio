@@ -205,6 +205,25 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "a build that closes itself" do
+    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+
+    it "finishes it and tells the thread why, and a later report from the Mini doesn't say it again" do
+      build.update!(status: :running, question: "Dark by default?", asked_at: Time.current)
+
+      described_class.update_from_mini!(build, { "closed_reason" => "Master already has dark mode." })
+      described_class.update_from_mini!(build, { "status" => "finished" })
+
+      expect(build.reload).to be_status_finished
+      expect(build.question).to be_nil
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once.with(
+        hash_including(text: "**dark mode** closed itself: Master already has dark mode."),
+      )
+      expect(build.byte_message.reload.body).to eq("Closed **dark mode**: Master already has dark mode.")
+      expect(described_class.pending(user).values.flatten).not_to include(build)
+    end
+  end
+
   describe "master moving" do
     before { allow(FeatureBuildSyncWorker).to receive(:perform_async) }
 

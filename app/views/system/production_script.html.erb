@@ -1,0 +1,96 @@
+<%= meta_title @script.title, include_name: false %>
+<%= meta_description "A production script and its approval." %>
+<%= render "system/production_script_styles" %>
+
+<%
+  zone = current_user.timezone
+  stamp = ->(time) { time ? time.in_time_zone(zone).strftime("%b %-d, %-I:%M %p") : "—" }
+  build = @script.feature_build
+  editor = @script.edited_by == "mini" ? "the Mini" : "you"
+  deployed = ProductionScripts.deployed?(@script.commit_sha)
+  environment = Rails.env.production? ? "production" : Rails.env
+  approve_question = (
+    if deployed
+      "Run this in #{environment} now?"
+    else
+      "Run this in #{environment} once #{@script.short_sha} is deployed?"
+    end
+  )
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small>
+      <%= link_to "System", system_path %> /
+      <%= link_to "Production scripts", system_production_scripts_path %> /
+      <%= @script.title %>
+    </small>
+  </div>
+
+  <div class="ps-head">
+    <div class="ps-title"><%= @script.title %></div>
+    <div class="ps-meta"><span class="ps-badge"><%= @script.status_label %></span></div>
+  </div>
+  <div class="ps-meta">
+    Needs commit
+    <%= link_to @script.short_sha, @script.commit_url, target: :_blank, rel: :noopener %>
+    <% if build %>
+      · from <%= build.title %>
+      <% if build.pr_url.present? %>
+        (<%= link_to "PR ##{build.pr_number}", build.pr_url, target: :_blank, rel: :noopener %>)
+      <% end %>
+    <% end %>
+    · last edited by <%= editor %>, <%= stamp[@script.updated_at] %>
+    <% if @script.approved_at %>· approved <%= stamp[@script.approved_at] %><% end %>
+  </div>
+
+  <div class="ps-actions">
+    <% if @script.approvable? %>
+      <%= button_to (@script.status_failed? ? "Approve and run again" : "Approve"),
+            system_production_script_approve_path(@script), class: "ps-approve", form_class: "basic",
+            data: { confirm: approve_question } %>
+    <% end %>
+    <% if @script.status_skipped? %>
+      <%= button_to "Restore", system_production_script_restore_path(@script), form_class: "basic" %>
+    <% elsif !@script.status_running? && !@script.status_succeeded? %>
+      <%= button_to "Skip", system_production_script_skip_path(@script), class: "ps-skip", form_class: "basic" %>
+    <% end %>
+  </div>
+
+  <div class="ps-code">
+    <% @segments.each do |segment| %>
+      <% if segment.heredoc? %>
+        <div class="ps-heredoc<%= " ps-jil" if segment.jil? %>">
+          <% if segment.jil? %>
+            <details class="ps-check <%= segment.valid? ? "ps-valid" : "ps-invalid" %>" title="<%= segment.valid? ? "Valid Jil" : "Jil validation failed" %>">
+              <summary><%= segment.valid? ? "✓" : "✗" %></summary>
+              <% unless segment.valid? %><div class="ps-check-error"><%= segment.error %></div><% end %>
+            </details>
+          <% end %>
+          <pre><%= segment.html.html_safe %></pre>
+        </div>
+      <% else %>
+        <pre><%= segment.html.html_safe %></pre>
+      <% end %>
+    <% end %>
+  </div>
+
+  <details class="ps-edit">
+    <summary>Edit</summary>
+    <%= form_with url: system_production_script_path(@script), method: :patch, class: "basic", local: true do %>
+      <input type="text" name="title" value="<%= @script.title %>">
+      <textarea name="code" spellcheck="false"><%= @script.code %></textarea>
+      <%= button_tag "Save", data: { confirm: (@script.status_approved? ? "Saving takes the approval away. Save anyway?" : nil) } %>
+    <% end %>
+  </details>
+
+  <% if @script.ran_at %>
+    <h3 class="ps-output-heading">
+      <%= @script.status_failed? ? "Failed" : "Ran" %> <%= stamp[@script.ran_at] %>
+      <span class="ps-meta">exit <%= @script.exit_status.nil? ? "—" : @script.exit_status %></span>
+    </h3>
+    <pre class="ps-output<%= " ps-output-failed" if @script.status_failed? %>"><%= @script.output.presence || "(it printed nothing)" %></pre>
+  <% elsif @script.status_running? %>
+    <h3 class="ps-output-heading">Running since <%= stamp[@script.started_at] %></h3>
+  <% end %>
+</div>

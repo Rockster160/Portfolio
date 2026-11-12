@@ -5,6 +5,7 @@
 #  id                   :bigint           not null, primary key
 #  asked_at             :datetime
 #  branch               :string
+#  closed_reason        :text
 #  error                :text
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
@@ -39,11 +40,13 @@ class FeatureBuild < ApplicationRecord
   belongs_to :byte_message, optional: true
   # Set when it was started from a row on /system/feature_requests.
   belongs_to :feature_request, optional: true
+  has_many :production_scripts, dependent: :nullify
 
   # starting   asked for; the Mini hasn't said it's up yet
   # running    the session is open (working or waiting on an answer)
   # stopped    the session was closed from the system page; the work is kept
-  # finished   its PR was merged or closed, and the worktree is gone
+  # finished   its PR was merged or closed, or the session closed itself
+  #            (`closed_reason` says why), and the worktree is gone
   # failed     the Mini couldn't start it (`error` says why)
   #
   # `planned_at` is when the session first posted its ticket (`builder-pr plan`).
@@ -72,6 +75,8 @@ class FeatureBuild < ApplicationRecord
   # What the thread's system message says at each point. Every one carries a
   # link: the session once there is one, and the builds page until then.
   def status_line
+    return "Closed **#{title}**: #{closed_reason}" if closed_reason.present?
+
     case status.to_sym
     when :starting then "Starting a Feature Builder on the Mini for **#{title}**… #{link_markdown}"
     when :failed   then "Couldn't start the Feature Builder for **#{title}**: #{error} #{link_markdown}"

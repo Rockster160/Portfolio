@@ -110,6 +110,7 @@ module FeatureBuilder
     planned_at
     waiting_at
     question
+    closed_reason
   ].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
@@ -119,6 +120,8 @@ module FeatureBuilder
   # building.
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
+    return closed!(build, attributes) if attributes["closed_reason"].present?
+
     waiting = attributes.delete("waiting_at").present?
     question = attributes.delete("question")
     if question
@@ -133,6 +136,24 @@ module FeatureBuilder
     announce_pr!(build) if announce_pr
     announce_waiting!(build) if waiting && !announce_pr
     refresh_chip!(build.user) if planned
+    refresh_needs_you!(build.user)
+    build
+  end
+
+  # The session closed itself (`builder-pr close`): what it was asked for is
+  # already in master, or needed no code. The Mini closes the PR and removes the
+  # worktree on its own; this records why, and says so in the thread.
+  def closed!(build, attributes)
+    build.update!(
+      **attributes.slice("closed_reason", "pr_number", "pr_url"),
+      status:      :finished,
+      finished_at: Time.current,
+      question:    nil,
+      asked_at:    nil,
+    )
+    repaint!(build)
+    announce!(build, "**#{build.title}** closed itself: #{build.closed_reason}", "Closed: #{build.title}")
+    refresh_chip!(build.user)
     refresh_needs_you!(build.user)
     build
   end
