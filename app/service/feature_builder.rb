@@ -2,18 +2,19 @@
 # Builder on the Mini (~/code/Byte/builder.rb): a Claude session in its own
 # worktree and branch, reached from the Claude app, that asks, builds and opens
 # a ByteSlime PR. The thread gets one system message, rewritten as the build
-# starts and given the session's link, then one when its plan is ready, one
-# when its PR is open, and one each time it stops to wait on its owner some
-# other way (a question). Nothing else is said there.
+# starts and given the session's link, then one when its PR is open, and one
+# each time it stops to ask its owner something, carrying the question in
+# full. Its plan is recorded but not announced: the session builds straight on
+# from it without waiting for a go. Nothing else is said there.
 #
 # A build can also be started from a row on /system/feature_requests, and then
 # speaks in the owner's primary Buddy thread and moves the request along with
 # it: planned when it starts, shipped when its PR is merged.
 #
-# A question a build stops on is posted in full, and answered from Byte either
-# by replying to it or by telling Buddy (`answer_build`); both type the answer
-# into the session. When master moves, the Mini brings each open PR that no
-# longer merges back in line, one build at a time (`sync`).
+# A question is answered from Byte either by replying to any message about the
+# build or by telling Buddy (`answer_build`); both type the answer into the
+# session. When master moves, the Mini has each open PR that no longer merges
+# catch up with it, one build at a time (`sync`).
 #
 # This side also carries GitHub's comments back to the session, and keeps the
 # chip and the system page that say which Claude sessions are working on
@@ -39,13 +40,13 @@ module FeatureBuilder
 
   CHIP_KEY = :"mini:claude"
 
-  # Raised while any build has a plan or a PR waiting on its owner.
+  # Raised while any build has a question or a PR waiting on its owner.
   NEEDS_YOU_KEY = :"mini:needs_you"
 
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
   # A build's last message before it stopped, kept as the question it's asking.
-  # A plan can run long; past this it's cut and the session has the rest.
+  # One can run long; past this it's cut and the session has the rest.
   QUESTION_LIMIT = 4000
 
   # ---- starting one ----
@@ -97,7 +98,7 @@ module FeatureBuilder
 
   # `waiting_at` isn't kept: it's the Mini saying a turn just ended with
   # nothing announced in it, so the session is waiting on an answer.
-  # `question` is the last thing that turn said, sent whenever a turn ends.
+  # `question` comes with it: the last thing that turn said.
   MINI_FIELDS = %w[
     status
     branch
@@ -112,9 +113,10 @@ module FeatureBuilder
   ].freeze
 
   # The Mini telling us how a build is going (PATCH /webhooks/byte/builds/:id).
-  # The thread hears about four things only: the session's link, folded into
-  # the message it already has, the plan the first time it's posted, the PR,
-  # once, and each turn that ends waiting on the owner without either.
+  # The thread hears about three things only: the session's link, folded into
+  # the message it already has, the PR, once, and each turn that ends waiting
+  # on the owner without it. A plan only moves the chip from planning to
+  # building.
   def update_from_mini!(build, attributes)
     attributes = attributes.to_h.stringify_keys.slice(*MINI_FIELDS).compact_blank
     waiting = attributes.delete("waiting_at").present?
@@ -122,15 +124,15 @@ module FeatureBuilder
     if question
       attributes.merge!("question" => question.first(QUESTION_LIMIT), "asked_at" => Time.current)
     end
-    # A ticket posted again after a change is the same plan, already announced.
+    # A ticket posted again after a change keeps the time it was first posted.
     attributes.delete("planned_at") if build.planned_at.present?
-    announce_plan = attributes["planned_at"].present?
+    planned = attributes["planned_at"].present?
     announce_pr = attributes["pr_url"].present? && build.pr_url.blank?
     build.update!(attributes)
     repaint!(build)
-    announce_plan!(build) if announce_plan
     announce_pr!(build) if announce_pr
-    announce_waiting!(build) if waiting && !announce_plan && !announce_pr
+    announce_waiting!(build) if waiting && !announce_pr
+    refresh_chip!(build.user) if planned
     refresh_needs_you!(build.user)
     build
   end
@@ -144,13 +146,9 @@ module FeatureBuilder
     broadcast(message, update: true)
   end
 
-  def announce_plan!(build)
-    text = "**#{build.title}** has a plan ready for you. #{build.link_markdown}"
-    announce!(build, text, "Plan ready: #{build.title}")
-  end
-
   def announce_pr!(build)
-    text = "**#{build.title}** is ready for review: [PR ##{build.pr_number}](#{build.pr_url})"
+    pr = "[PR ##{build.pr_number}](#{build.pr_url})"
+    text = "**#{build.title}** is ready for review: #{pr}. #{build.link_markdown}"
     announce!(build, text, "PR ready: #{build.title}")
   end
 
@@ -403,8 +401,12 @@ module FeatureBuilder
     }
   end
 
-  def kind_of(session, conversations)
-    return :builder if session["kind"].to_s == "builder"
+  # A builder is planning until it has posted its ticket, and building after.
+  def kind_of(session, conversations, builds={})
+    if session["kind"].to_s == "builder"
+      build = builds[session["build_id"].to_i]
+      return build && build.planned_at.nil? ? :planning : :builder
+    end
     return :questions if session["kind"].to_s == "questions"
 
     conversations[session["conversation_id"].to_i]&.name == ByteDailyAudit::NAME ? :audit : :claude
@@ -419,11 +421,12 @@ module FeatureBuilder
 
     if kinds.one?
       {
-        audit:   "Auditing…",
-        builder: "Building…",
-        claude:  "Claude working…",
+        audit:    "Auditing…",
+        planning: "Planning…",
+        builder:  "Building…",
+        claude:   "Claude working…",
       }.fetch(kinds.first)
-    elsif kinds.all?(:builder)
+    elsif kinds.all? { |kind| kind.in?([:planning, :builder]) }
       "#{kinds.length}x Builders running"
     else
       "#{kinds.length}x Claude running"
@@ -433,7 +436,8 @@ module FeatureBuilder
   def refresh_chip!(user)
     working = sessions.select { |session| session["working"] }
     conversations = ByteConversation.where(id: working.pluck("conversation_id").compact).index_by(&:id)
-    kinds = working.map { |session| kind_of(session, conversations) }
+    builds = FeatureBuild.where(id: working.pluck("build_id").compact).index_by(&:id)
+    kinds = working.map { |session| kind_of(session, conversations, builds) }
     name = chip_name(kinds - [:questions])
     return BackgroundProcess.clear(user: user, key: CHIP_KEY) if name.nil?
 
@@ -449,19 +453,16 @@ module FeatureBuilder
 
   # ---- waiting on the owner ----
 
-  # Builds with a plan posted and no PR yet, whose session isn't working (it
-  # is once it's told to go), builds whose PR is open, and builds with neither
-  # whose open session is waiting on an answer.
+  # Builds whose PR is open, and builds with no PR yet whose open session has
+  # ended its turn: it's asking something, before its plan or partway through
+  # the build.
   def pending(user)
-    listed = sessions.select { |session| session["build_id"] }
-    working = listed.select { |session| session["working"] }.map { |session| session["build_id"].to_i }
-    idle = listed.reject { |session| session["working"] }.map { |session| session["build_id"].to_i }
+    idle = sessions.select { |session| session["build_id"] && !session["working"] }
+    idle = idle.map { |session| session["build_id"].to_i }
     live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).newest.to_a
-    unplanned = live.select { |build| build.pr_url.blank? && build.planned_at.nil? }
     {
-      plans:     live.select { |build| build.pr_url.blank? && build.planned_at && working.exclude?(build.id) },
       prs:       live.select { |build| build.pr_url.present? },
-      questions: unplanned.select { |build| idle.include?(build.id) },
+      questions: live.select { |build| build.pr_url.blank? && idle.include?(build.id) },
     }
   end
 
@@ -473,9 +474,9 @@ module FeatureBuilder
   # Mini's report for it, when it's listed.
   def stage(build, live)
     return build.status.humanize.downcase if build.status_failed? || build.status_finished?
-    return "working" if live&.dig("working")
+    return "working" if live&.dig("working") && build.pr_url.present?
+    return (build.planned_at ? "building" : "planning") if live&.dig("working")
     return "PR open" if build.pr_url.present?
-    return "plan ready" if build.planned_at
 
     live ? "waiting on you" : build.status.humanize.downcase
   end

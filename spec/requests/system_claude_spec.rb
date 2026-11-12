@@ -73,8 +73,8 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Waiting on you", "Bigger icons")
   end
 
-  it "lists the plans and PRs waiting on the owner" do
-    FeatureBuild.create!(
+  it "lists the PRs waiting on the owner, and not a plan it's building from" do
+    planned = FeatureBuild.create!(
       user:       user,
       title:      "Repeating timers",
       request:    "repeating timers",
@@ -82,11 +82,14 @@ RSpec.describe "Claude on the Mini page", type: :request do
       planned_at: 1.hour.ago,
       rc_url:     "https://claude.ai/code/session_plan",
     )
+    FeatureBuilder.report_sessions!(machine: :mini, sessions: [
+      { "build_id" => planned.id, "kind" => "builder", "working" => true },
+    ])
 
     get system_claude_path
 
-    expect(response.body).to include("Waiting on you", "Repeating timers", "plan ready", "PR open")
-    expect(response.body).to include("https://claude.ai/code/session_plan")
+    expect(response.body).to include("Waiting on you", "PR open", "building", "Repeating timers")
+    expect(response.body).not_to include("plan ready")
   end
 
   it "opens the questions session in Claude" do
