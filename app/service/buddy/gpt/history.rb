@@ -401,6 +401,10 @@ module Buddy
         # Nothing answered it, so without the bracket it reads as a message
         # left hanging.
         return "[a note for the app's nightly review, not for you] #{body}" if Buddy::AuditNotes.note?(message)
+        # It went into a Feature Builder's session (the `/feature` command, or a
+        # reply to one of its messages), which answers in its own time, so it
+        # isn't a turn waiting on a reply here.
+        return "[sent to a Feature Builder, not to you] #{body}" if FeatureBuilder.sent_to_build?(message)
 
         prefix = reply_prefix(message)
         prefix ? "#{prefix} #{body}".strip : body

@@ -531,9 +531,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // just sent, so it inherits the entry's local_id and takes over the
   // optimistic bubble.
   //
-  // A Rails slash command is the exception. It deliberately stores no outbound
-  // record, and what it returns is a different message entirely: an inbound
-  // system acknowledgement. Stamping the local_id onto that told the client
+  // A Rails slash command is usually the exception (`/feature` is not: its
+  // request is kept as the person's message, and comes back as the echo). It
+  // stores no outbound record, and what it returns is a different message
+  // entirely: an inbound system acknowledgement. Stamping the local_id onto that told the client
   // the ack WAS the echo, so it repainted the optimistic "/reset" bubble into
   // an ack — and the broadcast of the same ack, which carries no local_id,
   // mounted a second one beside it - two identical bubbles for one row.

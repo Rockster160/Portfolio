@@ -10,20 +10,29 @@ RSpec.describe ByteController, type: :controller do
   }
 
   describe "/feature" do
-    it "starts a build and answers with the one message that will follow it" do
+    it "keeps the request as their message, above the one that follows the build" do
       sign_in rocco
 
-      post :create_message, params: { conversation_id: convo.id, body: "/feature add build buttons on the requests page" }
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "/feature add build buttons on the requests page",
+        local_id:        "local-1",
+      }
 
       build = FeatureBuild.last
+      request, status = convo.byte_messages.order(:id).to_a
       expect(build.request).to eq("build buttons on the requests page")
       expect(build.byte_conversation).to eq(convo)
-      expect(convo.byte_messages.count).to eq(1)
-      expect(build.byte_message.body).to include("Starting a Feature Builder", "build buttons on the requests page")
+      expect(request).to be_outbound
+      expect(request.body).to eq("/feature add build buttons on the requests page")
+      expect(request.metadata).to include("feature_build_id" => build.id, "local_id" => "local-1")
+      expect(status).to eq(build.byte_message)
+      expect(status.body).to include("Starting a Feature Builder", "build buttons on the requests page")
+      expect(response.parsed_body["id"]).to eq(request.id)
       expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
     end
 
-    it "starts the build with the images sent alongside the command" do
+    it "starts the build with the images sent alongside the command, and shows them on the request" do
       sign_in rocco
       blob = ActiveStorage::Blob.create_and_upload!(
         io: StringIO.new("png"), filename: "mock.png", content_type: "image/png",
@@ -38,6 +47,7 @@ RSpec.describe ByteController, type: :controller do
       build = FeatureBuild.last
       expect(build.images.map(&:blob)).to eq([blob])
       expect(build.byte_message.body).to include("with 1 image")
+      expect(convo.byte_messages.find_by(direction: :outbound).files.map(&:blob)).to eq([blob])
     end
 
     it "takes the request without the `add`, and explains itself when there isn't one" do
