@@ -2763,97 +2763,11 @@ html.html-ctr-byte.html-act-board_index body {
     outline-offset: -4px;
   }
 
-  // Pending-image tray — full-width row above the controls, scrolls sideways.
+  // Pending-image tray — full-width row above the controls. The chips in it
+  // are the shared ones (components/image_attach.scss).
   .byte-attach-tray {
     flex: 0 0 100%;
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
     padding: 2px 0 4px;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-    &[hidden] {
-      display: none;
-    }
-  }
-
-  .byte-attach-chip {
-    position: relative;
-    flex: 0 0 auto;
-    width: 56px;
-    height: 56px;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid var(--bs-border);
-    background: var(--bs-panel-soft);
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    &.is-uploading::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: rgba(9, 16, 33, 0.55);
-      z-index: 1;
-    }
-    &.is-uploading .byte-attach-spin {
-      display: block;
-    }
-    &.is-failed {
-      border-color: rgba(255, 99, 99, 0.7);
-
-      &::before {
-        content: "!";
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        color: #ffb4b4;
-        font-weight: 700;
-        background: rgba(9, 16, 33, 0.55);
-        z-index: 1;
-      }
-    }
-
-    .byte-attach-remove {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      line-height: 1;
-      color: #fff;
-      background: rgba(9, 16, 33, 0.72);
-      z-index: 3;
-    }
-  }
-
-  .byte-attach-spin {
-    display: none;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 18px;
-    height: 18px;
-    margin: -9px 0 0 -9px;
-    border: 2px solid rgba(255, 255, 255, 0.35);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: byte-attach-spin 0.7s linear infinite;
-    z-index: 2;
   }
 }
 
