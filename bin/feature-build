@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+# Starts a Feature Builder on the Mini with a brief written by another Claude
+# session (the `/feature` skill in the Questions session), the same build
+# `/feature add` starts from Byte.
+#
+#   bin/feature-build --title "Short name" --file tmp/feature_brief.md
+#   bin/feature-build --title "Short name" < brief.md
+#
+# Runs on the Mini, where the session's pane has BYTE_LOCAL_SECRET. Rails
+# answers once the build is recorded; the Mini then starts the session and its
+# link arrives in the primary Buddy thread.
+
+require "json"
+require "net/http"
+require "optparse"
+require "uri"
+
+RAILS_URL = ENV.fetch("BYTE_RAILS_URL", "https://ardesian.com")
+
+def fail!(message)
+  warn("feature-build: #{message}")
+  exit(1)
+end
+
+title = nil
+file  = nil
+OptionParser.new { |opts|
+  opts.banner = "usage: bin/feature-build --title TITLE [--file BRIEF]"
+  opts.on("--title TITLE", "What the build is called in Byte and the Claude app") { |value| title = value }
+  opts.on("--file PATH", "The brief; read from stdin when left out") { |value| file = value }
+}.parse!
+
+# A builder hands its work to its own PR, never to another builder.
+fail!("this is a Feature Builder session; it can't start another one") if ENV["BYTE_BUILD_ID"].to_s != ""
+
+secret = ENV["BYTE_LOCAL_SECRET"].to_s
+fail!("BYTE_LOCAL_SECRET isn't set, so Rails would turn this away") if secret.empty?
+
+brief = file ? File.read(file) : $stdin.read
+fail!("the brief is empty") if brief.strip.empty?
+
+uri = URI.join(RAILS_URL, "/webhooks/byte/builds")
+http = Net::HTTP.new(uri.host, uri.port)
+http.use_ssl = uri.scheme == "https"
+http.open_timeout = 5
+http.read_timeout = 30
+
+post = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+post.body = JSON.generate({ title: title, request: brief })
+response = (
+  begin
+    http.request(post)
+  rescue SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError, SocketError => e
+    fail!("couldn't reach #{RAILS_URL}: #{e.class}: #{e.message}")
+  end
+)
+fail!("Rails answered #{response.code}: #{response.body.to_s[0, 300]}") unless response.is_a?(Net::HTTPSuccess)
+
+build = JSON.parse(response.body)
+puts("Started build ##{build["id"]}: #{build["title"]}")
+puts("Its link arrives in the primary Buddy thread. All builds: #{build["page"]}")

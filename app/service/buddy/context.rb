@@ -1339,6 +1339,12 @@ module Buddy
       def timer_remaining(timer)
         return "already up, still ringing" if timer.fired?
 
+        start = Buddy::Timers.scheduled(timer)
+        if start
+          at = Buddy::Clock.at(Time.zone.parse(start["at"].to_s), zone: timer.user.timezone)
+          return "not started - a #{Buddy::Timers.humanize_seconds(start["seconds"])} timer starting at #{at}"
+        end
+
         left = timer.remaining_ms.to_i / 1000
         state = timer.paused? ? " (paused)" : ""
         "#{Buddy::Timers.humanize_seconds(left)} left#{state}"

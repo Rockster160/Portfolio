@@ -28,7 +28,13 @@ Sidekiq.configure_server { |config|
 
   # Every deploy restarts Sidekiq, so this is "after every deploy". The delay
   # lets the web process finish booting first.
-  config.on(:startup) { ByteSyncWorker.perform_in(1.minute) if Rails.env.production? }
+  config.on(:startup) {
+    next unless Rails.env.production?
+
+    ByteSyncWorker.perform_in(1.minute)
+    ProductionScriptsDeployedWorker.perform_in(1.minute)
+    MergeQueueDeployedWorker.perform_in(1.minute)
+  }
 }
 Sidekiq.configure_client { |config|
   config.redis = config_opts

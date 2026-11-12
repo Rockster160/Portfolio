@@ -32,6 +32,12 @@ module Buddy
     # can never be on a timer with nothing behind it.
     WAIT = "wait".freeze
 
+    # A timer that starts LATER - "at 12:30, start a 2 hour timer". What runs
+    # until then is a wait chip counting down to the start, so the window shows
+    # it's coming and it can be swiped away, and it never rings. This key holds
+    # the timer it becomes: `seconds`, `label`, and `at`, the moment it starts.
+    STARTS = "starts".freeze
+
     # Where a timer shows besides the chat, which shows all of them: the board it
     # was named for or started from (a board button runs in that board's thread),
     # and any board watching one of its groups. A board shows its owner's timers
@@ -78,6 +84,11 @@ module Buddy
     # timer this way; a real one is "5m pasta". Same gate as REPORT_RX: only
     # consulted when they didn't say "timer" outright.
     ASK_RX = /\b(?:please|remind|remember|nudge|wake|tell|let me know)\b/i
+
+    # A clock time after the duration says WHEN it starts - "2h at 12:30" - and
+    # read as a label it would start a two-hour timer called "at 12:30" now.
+    # Checked whether or not they said "timer".
+    WHEN_RX = /\b(?:at|from|starting|tomorrow|tonight)\b|\d:\d\d|\b\d{1,2}\s*(?:am|pm)\b/i
 
     # Buddy having just asked something. Not only "?" - Suki's persona makes her
     # terminate almost everything in "!", so a question from her frequently
@@ -129,6 +140,7 @@ module Buddy
       label = text.strip.sub(/\Afor\b/i, "").strip.sub(/\A(?:the|an?)\b/i, "").strip
 
       return nil if label.split.length > FAST_PATH_MAX_LABEL_WORDS
+      return nil if label.match?(WHEN_RX)
       # A bare "5m walk done" reads as a report; "5m timer walk" does not.
       return nil if !explicit && label.present? && label.match?(REPORT_RX)
       return nil if !explicit && label.present? && label.match?(ASK_RX)
@@ -261,6 +273,48 @@ module Buddy
       timer.broadcast(reason: :created)
       archive_finished!(page)
       timer
+    end
+
+    # Put a timer on the clock to START at `starts_at`. Returns the wait chip
+    # holding it; `start_scheduled!` swaps it for the real timer when it fires.
+    def schedule!(user:, starts_at:, seconds:, label: nil, conversation: nil, place: nil)
+      clean = label.to_s.strip.first(60).presence
+      start = { "seconds" => seconds.to_i, "label" => clean, "at" => starts_at.iso8601 }.compact
+      create!(
+        user:         user,
+        seconds:      (starts_at - Time.current).ceil,
+        label:        "#{clean || "#{humanize_seconds(seconds)} timer"} starts",
+        conversation: conversation,
+        metadata:     { WAIT => true, STARTS => start },
+        place:        place,
+      )
+    end
+
+    def scheduled(timer)
+      start = timer&.metadata.to_h[STARTS]
+      start.is_a?(Hash) ? start : nil
+    end
+
+    # The wait is up: it goes, and the timer it was holding starts counting
+    # from the moment it was set for rather than from when the fire landed,
+    # which is a few seconds later.
+    #
+    # Anything chained onto it was waiting for the timer to END, not to start,
+    # so it moves across to the real one rather than being dropped with the
+    # chip.
+    def start_scheduled!(timer)
+      start = scheduled(timer)
+      stop!(timer, released: true)
+      at = Time.zone.parse(start["at"].to_s)
+      fresh = create!(
+        user:    timer.user,
+        seconds: start["seconds"],
+        label:   start["label"],
+        anchor:  at && at <= Time.current ? at : :now,
+        place:   timer.metadata.to_h.slice(BOARD, GROUPS),
+      )
+      Buddy::ProposalBuilder.move_gates!(timer, fresh)
+      fresh
     end
 
     # Buddy timers that ended and were acknowledged keep their row, since
@@ -427,6 +481,9 @@ module Buddy
     # that isn't a Buddy timer, so the generic worker can call it unconditionally.
     def on_fired(timer)
       return unless timer&.countdown? && buddy_timer?(timer.user, timer)
+      # Nothing to announce: the timer it was holding starts now, and its own
+      # chip appearing is the whole news.
+      return start_scheduled!(timer) if scheduled(timer)
 
       conversation = Buddy::CompanionRelay.conversation_for(timer.user)
       return if conversation.nil?
@@ -522,6 +579,7 @@ module Buddy
     # second left is correct; the fix for it feeling instant is not spending
     # seconds in a model round trip (see ByteController's timer fast path).
     def anchor_time(conversation, anchor)
+      return anchor if anchor.is_a?(Time)
       return Time.current unless anchor == :message
       return Time.current if conversation.nil?
 
@@ -539,14 +597,18 @@ module Buddy
       })
     end
 
-    # "5 min", "90 sec", "1 min 30 sec" - for receipts.
+    # "5 min", "90 sec", "1 min 30 sec", "2 hr 15 min" - for receipts.
     def humanize_seconds(seconds)
       secs = seconds.to_i
       mins, rem = secs.divmod(60)
-      return "#{secs} sec" if mins.zero?
-      return "#{mins} min" if rem.zero?
+      hours, mins = mins.divmod(60)
+      return "#{secs} sec" if hours.zero? && mins.zero?
 
-      "#{mins} min #{rem} sec"
+      [
+        ("#{hours} hr" if hours.positive?),
+        ("#{mins} min" if mins.positive?),
+        ("#{rem} sec" if rem.positive?),
+      ].compact.join(" ")
     end
   end
 end

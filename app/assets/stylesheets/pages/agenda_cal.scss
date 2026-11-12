@@ -1251,6 +1251,26 @@ $cal-week-px-per-hour: 20px;
       display: none;
       i { margin-left: 2px; margin-right: 0; }
     }
+
+    // Leave time first, then whole duration segments while they fit:
+    // the row wraps, but only its first line is visible, so a segment
+    // that doesn't fit drops out entirely instead of clipping mid-number.
+    &.is-leave-first {
+      flex-wrap: wrap;
+      min-width: 0;
+      max-width: 100%;
+      max-height: 1lh;
+      .cal-week-event-travel-leave {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+    .cal-week-event-travel-seg {
+      display: inline-flex;
+      align-items: baseline;
+      white-space: nowrap;
+    }
   }
 
   // Multi-lane overlap: tile is narrower than a full column, so the
@@ -1258,7 +1278,7 @@ $cal-week-px-per-hour: 20px;
   // and tighten band padding so the digits actually fit.
   &.is-narrow {
     .cal-week-event-travel { padding: 0 2px; }
-    .cal-week-event-travel-label.is-compact { display: none; }
+    .cal-week-event-travel-label.is-compact:not(.is-leave-first) { display: none; }
     .cal-week-event-travel-label.is-narrow-fallback { display: inline-flex; }
   }
 

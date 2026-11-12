@@ -30,7 +30,7 @@ function legendRows(payload) {
 }
 
 function savedLink(id) {
-  return `<a class="byte-chart-open" href="/custom_charts/${encodeURIComponent(id)}">Saved · Open in Charts</a>`;
+  return `<a class="byte-chart-open" href="/custom_charts/${encodeURIComponent(id)}" target="_blank" rel="noopener">Saved · Open in Charts</a>`;
 }
 
 async function save(message, footer, button) {

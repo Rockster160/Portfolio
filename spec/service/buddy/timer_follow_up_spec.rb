@@ -126,6 +126,22 @@ RSpec.describe "Buddy follow-ups on a running timer" do
     expect(items).to be_empty
   end
 
+  it "carries a step on a timer that starts later over to the real one, and runs it when that ends", :aggregate_failures do
+    pasta.update!(archived_at: Time.current)
+    later = Buddy::Timers.schedule!(user: user, starts_at: 10.minutes.from_now, seconds: 600, label: "bread", conversation: convo)
+    ask("When the bread timer's done, add butter to groceries", [after_timer("bread"), add_item("butter")])
+
+    real = Buddy::Timers.start_scheduled!(later)
+
+    expect(gates.pending.sole.tool_input["timer_id"]).to eq(real.id)
+    expect(bodies.last).not_to match(/was stopped/)
+    expect(items).to be_empty
+
+    fire!(real)
+
+    expect(items).to eq(["butter"])
+  end
+
   it "refuses a cycle, which has no end to wait for" do
     cycle = Buddy::TimerCycle.start!(user: user, conversation: convo, seconds: 1800, label: "focus")
     expect {

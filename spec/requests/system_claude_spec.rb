@@ -38,7 +38,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
 
     get system_claude_path
 
-    expect(response.body).to include("Waiting on you", "PR open")
+    expect(response.body).to include("Merge queue", "waiting on your review")
     expect(response.body.scan("Dark mode").length).to eq(1)
     expect(response.body).to include("Nothing is running on Portfolio on the Mini.")
   end
@@ -73,7 +73,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Waiting on you", "Bigger icons")
   end
 
-  it "lists the PRs waiting on the owner, and not a plan it's building from" do
+  it "lists the PRs in the merge queue, and not a plan it's building from" do
     planned = FeatureBuild.create!(
       user:       user,
       title:      "Repeating timers",
@@ -88,7 +88,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
 
     get system_claude_path
 
-    expect(response.body).to include("Waiting on you", "PR open", "building", "Repeating timers")
+    expect(response.body).to include("Merge queue", "waiting on your review", "building", "Repeating timers")
     expect(response.body).not_to include("plan ready")
   end
 
@@ -145,5 +145,42 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(stop).to have_been_requested
     expect(build.reload).to be_status_stopped
     expect(response).to redirect_to(system_claude_path)
+  end
+
+  describe "the merge queue" do
+    before { allow(ByteLocal).to receive(:builder).and_return(true) }
+
+    it "lists builds with an open PR in queue order, with what each is waiting on" do
+      MergeQueue.enqueue!(build)
+
+      get system_claude_path
+
+      expect(response.body).to include("Merge queue", "waiting on your review", "Approve to merge")
+    end
+
+    it "approves, holds and reorders from the page" do
+      other = FeatureBuild.create!(
+        user: user, title: "Other", request: "other", status: :running, pr_number: 43, pr_url: "https://github.com/x/pull/43",
+      )
+      [build, other].each { |queued| MergeQueue.enqueue!(queued) }
+
+      post system_claude_queue_path(id: other.id, act: :top)
+      post system_claude_queue_path(id: build.id, act: :hold)
+      post system_claude_queue_path(id: build.id, act: :approve)
+
+      expect(response).to redirect_to(system_claude_path(anchor: "merge-queue"))
+      expect(MergeQueue.builds(user)).to eq([other, build])
+      expect(MergeQueue.state(build.reload)).to eq(:held)
+      expect(build.approved_at).to be_present
+      expect(ByteLocal).not_to have_received(:builder).with(:land, anything)
+    end
+
+    it "shows a merge still waiting on its deploy at the top of the line" do
+      build.update!(status: :finished, finished_at: Time.current, merge_sha: "abc1234")
+
+      get system_claude_path
+
+      expect(response.body).to include("Merge queue", "merged, waiting on its deploy since")
+    end
   end
 end

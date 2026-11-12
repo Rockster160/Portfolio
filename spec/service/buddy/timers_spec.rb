@@ -73,6 +73,11 @@ RSpec.describe Buddy::Timers do
           "2 hours please",
           "10 min remind me",
           "5 min let me know",
+          # A time to start it at, not a name for it.
+          "2h at 12:30",
+          "timer for 2h at 12:30",
+          "2h from 12:30",
+          "30m at 3pm",
         ].each { |text| expect(parse(text)).to be_nil, text.inspect }
       end
     end
@@ -363,6 +368,88 @@ RSpec.describe Buddy::Timers do
         expect(described_class.humanize_seconds(45)).to eq("45 sec")
         expect(described_class.humanize_seconds(300)).to eq("5 min")
         expect(described_class.humanize_seconds(90)).to eq("1 min 30 sec")
+        expect(described_class.humanize_seconds(7200)).to eq("2 hr")
+        expect(described_class.humanize_seconds(7364)).to eq("2 hr 2 min 44 sec")
+      end
+    end
+
+    describe "a timer that starts later" do
+      let(:zone)  { Time.find_zone(user.timezone) }
+      let(:tool)  { Buddy::Tools[:set_timer] }
+      let(:convo) { user.byte_conversations.create!(mode: :buddy) }
+      let(:ctx)   { Buddy::ToolContext.new(user, conversation: convo) }
+
+      before { allow(WebPushNotifications).to receive(:send_to_byte) }
+
+      def set(payload)
+        payload = payload.merge(tool[:confirm].call(payload, ctx)[:resolved])
+        Buddy::Tools.dispatch(tool, JSON.parse(payload.to_json).symbolize_keys, ctx)
+      end
+
+      it "shows a silent chip until 12:30, then starts the full two hours" do
+        travel_to(zone.local(2026, 11, 5, 11, 56, 0)) {
+          result = set({ starts_at: "2026-11-05T12:30:00", minutes: 120 })
+          held   = Timer.find(result[:data][:timer_id])
+
+          expect(held.end_at).to eq(zone.local(2026, 11, 5, 12, 30, 0))
+          expect(held.name).to eq("2 hr timer starts")
+          expect(described_class.wait?(held)).to be(true)
+          expect(result[:data][:starts_at]).to eq("12:30pm")
+          expect(described_class.live_for(user)).to contain_exactly(held)
+        }
+
+        travel_to(zone.local(2026, 11, 5, 12, 30, 3)) {
+          held = described_class.live_for(user).first
+          expect { described_class.on_fired(held) }.not_to(change(ByteMessage, :count))
+
+          running = described_class.live_for(user).to_a
+          expect(running.size).to eq(1)
+          expect(running.first.duration_ms).to eq(7_200_000)
+          expect(running.first.end_at).to eq(zone.local(2026, 11, 5, 14, 30, 0))
+          expect(described_class.wait?(running.first)).to be(false)
+          expect(held.reload.archived_at).to be_present
+        }
+      end
+
+      it "keeps the label and runs from the start time to an end time" do
+        travel_to(zone.local(2026, 11, 5, 11, 56, 0)) {
+          result = set({ starts_at: "2026-11-05T12:30:00", ends_at: "2026-11-05T14:15:00", label: "Take-home" })
+
+          expect(result[:data][:seconds]).to eq(105 * 60)
+          expect(Timer.find(result[:data][:timer_id]).name).to eq("Take-home starts")
+          expect(tool[:receipt].call(result[:data], ctx)).to eq(
+            "#{ctx.buddy_name} will start a 1 hr 45 min timer for Take-home at 12:30pm ⏲",
+          )
+        }
+
+        travel_to(zone.local(2026, 11, 5, 12, 30, 2)) {
+          described_class.on_fired(described_class.live_for(user).first)
+          timer = described_class.live_for(user).first
+          expect(timer.name).to eq("Take-home")
+          expect(timer.end_at).to eq(zone.local(2026, 11, 5, 14, 15, 0))
+        }
+      end
+
+      it "tells Buddy it hasn't started yet" do
+        travel_to(zone.local(2026, 11, 5, 11, 56, 0)) {
+          set({ starts_at: "2026-11-05T12:30:00", minutes: 120 })
+          remaining = Buddy::Context.send(:running_timers, user).first[:remaining]
+          expect(remaining).to eq("not started - a 2 hr timer starting at 12:30pm")
+        }
+      end
+
+      it "refuses a start that has gone, is a day off, ends first, or repeats", :aggregate_failures do
+        travel_to(zone.local(2026, 11, 5, 13, 0, 0)) {
+          confirm = ->(payload) { tool[:confirm].call(payload, ctx) }
+          expect { confirm.call({ starts_at: "2026-11-05T12:30:00", minutes: 120 }) }.to raise_error(/already passed/)
+          expect { confirm.call({ starts_at: "2026-11-06T14:00:00", minutes: 120 }) }.to raise_error(/24 hours/)
+          expect {
+            confirm.call({ starts_at: "2026-11-05T15:00:00", ends_at: "2026-11-05T14:00:00" })
+          }.to raise_error(/before it starts/)
+          expect {
+            confirm.call({ starts_at: "2026-11-05T15:00:00", minutes: 30, repeat: true })
+          }.to raise_error(/can't repeat/)
+        }
       end
     end
 

@@ -11,15 +11,19 @@ class FeatureBuildStartWorker
     build = FeatureBuild.find_by(id: build_id)
     return unless build&.status_starting?
 
-    started = ByteLocal.builder(
-      :start,
+    fields = {
       build_id:        build.id,
       title:           build.title,
       branch_name:     FeatureBuilder::BranchName.for(build),
       request:         build.request,
       user_id:         build.user_id,
       conversation_id: build.byte_conversation_id,
-    )
+    }
+    # Signed here rather than when it was asked for, so the links are fresh
+    # when the Mini fetches them.
+    images = build.image_sources
+    fields[:attachments] = images if images.any?
+    started = ByteLocal.builder(:start, **fields)
     return if started
 
     build.update!(status: :failed, error: "the Mini didn't answer, so nothing was started.")

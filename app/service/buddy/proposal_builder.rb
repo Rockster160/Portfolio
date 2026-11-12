@@ -364,6 +364,14 @@ module Buddy
       }
     end
 
+    # One timer standing in for another - a timer that starts later becoming
+    # the real countdown - takes over everything that was riding the first.
+    def move_gates!(from, to)
+      timer_gates(from).each { |action|
+        action.update!(tool_input: action.tool_input.to_h.merge("timer_id" => to.id))
+      }
+    end
+
     # What's riding this timer, in words, for the timers Buddy can see.
     def queued_after(timer)
       gates = timer_gates(timer)

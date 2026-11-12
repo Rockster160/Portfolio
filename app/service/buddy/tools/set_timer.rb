@@ -15,6 +15,10 @@ Buddy::Tools.register(
     is `ends_at`, the time itself. Never work out the minutes yourself. When
     it corrects a timer you just set, cancel that one in the same reply.
 
+    A timer that STARTS at a clock time - "at 12:30, start a 2 hour timer",
+    "from 12:30 until 2:15" - is `starts_at` with its length (or `ends_at`).
+    Nothing counts down until then; a quiet chip shows when it starts.
+
     When they say ALARM, use `alarm`. It reaches a clock time as well as a
     duration, and what goes off says what it was set for rather than that a
     timer is up. Follow the
@@ -100,6 +104,7 @@ Buddy::Tools.register(
     minutes:       { type: :integer, required: false, description: "Countdown length in whole minutes, when that's how they said it (\"30 minutes\"). Give this OR seconds, not both" },
     label:         { type: :string,  required: false, description: "Short name for what the timer is for" },
     ends_at:       { type: :iso_time, required: false, description: "The clock time it runs UNTIL (\"timer until 5:25\"), instead of seconds/minutes" },
+    starts_at:     { type: :iso_time, required: false, description: "The clock time it STARTS (\"at 12:30, start a 2 hour timer\"), when that isn't now" },
     repeat:        {
       type:        :boolean,
       required:    false,
@@ -170,11 +175,19 @@ Buddy::Tools.register(
       next { summary: "Wait for a timer", resolved: { existing_timer_id: running.id } }
     end
 
+    zone = ctx.user.timezone
     ends_at = ctx.resolve_time(payload[:ends_at]) if payload[:ends_at].present?
     raise "couldn't read #{payload[:ends_at].inspect} as a time" if payload[:ends_at].present? && ends_at.nil?
-    raise "#{Buddy::Clock.at(ends_at, zone: ctx.user.timezone)} has already passed" if ends_at&.past?
+    raise "#{Buddy::Clock.at(ends_at, zone: zone)} has already passed" if ends_at&.past?
 
-    resolved = { ends_at_iso: ends_at&.iso8601 }.compact
+    starts_at = ctx.resolve_time(payload[:starts_at]) if payload[:starts_at].present?
+    raise "couldn't read #{payload[:starts_at].inspect} as a time" if payload[:starts_at].present? && starts_at.nil?
+    raise "#{Buddy::Clock.at(starts_at, zone: zone)} has already passed - start it now instead" if starts_at&.past?
+    raise "a timer can only start up to 24 hours ahead - that wants schedule_reminder" if starts_at && starts_at > Buddy::Timers::MAX_SECONDS.seconds.from_now
+    raise "a timer that starts later can't repeat yet - start it at that time without repeat" if starts_at && ActiveModel::Type::Boolean.new.cast(payload[:repeat])
+    raise "#{Buddy::Clock.at(ends_at, zone: zone)} is before it starts" if starts_at && ends_at && ends_at <= starts_at
+
+    resolved = { ends_at_iso: ends_at&.iso8601, starts_at_iso: starts_at&.iso8601 }.compact
     raise "a timer needs a length - give seconds, minutes or ends_at" if Buddy::Tools::SetTimer.seconds(payload.merge(resolved)).zero?
 
     board = (Buddy::Timers.find_board!(ctx.user, payload[:board]) if payload[:board].present?)
@@ -210,6 +223,24 @@ Buddy::Tools.register(
     # allowed to take the timer down with it — the countdown they asked for is
     # good whether or not its ending could be wired.
     stop, stop_error = Buddy::Tools::SetTimer.stop_condition(payload, ctx) if cycle
+
+    starts_at = Buddy::Tools::SetTimer.starts_at(payload)
+    if starts_at
+      held = Buddy::Timers.schedule!(
+        user:         ctx.user,
+        starts_at:    starts_at,
+        seconds:      seconds,
+        label:        payload[:label],
+        conversation: ctx.conversation,
+        place:        Buddy::Tools::SetTimer.place(payload, ctx),
+      )
+      next {
+        timer_id:  held.id,
+        seconds:   seconds,
+        label:     payload[:label].to_s,
+        starts_at: Buddy::Clock.at(starts_at, zone: ctx.user.timezone),
+      }
+    end
 
     unless cycle
       plain = Buddy::Timers.create!(
@@ -268,6 +299,7 @@ Buddy::Tools.register(
     # A wait isn't a countdown they're watching, it's Buddy holding the rest of
     # the sequence, so the chip says that rather than announcing a timer.
     next "#{ctx.buddy_name} is waiting #{dur} before the next step ⏲" if result[:waiting]
+    next "#{ctx.buddy_name} will start a #{dur} timer#{" for #{label}" if label.present?} at #{result[:starts_at]} ⏲" if result[:starts_at]
 
     if result[:cycle]
       on   = label.present? ? " on #{label}" : ""
@@ -295,12 +327,13 @@ module Buddy
       module_function
 
       # One length, whichever way they said it. A clock time (resolved by
-      # confirm) is counted down to from now; otherwise seconds wins if both
-      # arrive, because it's the more specific of the two.
+      # confirm) is counted down to from when it starts - now, or `starts_at`;
+      # otherwise seconds wins if both arrive, because it's the more specific of
+      # the two.
       def seconds(payload)
         if payload[:ends_at_iso].present?
           ends_at = ::Time.zone.parse(payload[:ends_at_iso].to_s)
-          return [(ends_at - ::Time.current).round, 0].max if ends_at
+          return [(ends_at - (starts_at(payload) || ::Time.current)).round, 0].max if ends_at
         end
         return payload[:seconds].to_i if payload[:seconds].present?
 
@@ -342,10 +375,20 @@ module Buddy
         Buddy::Timers.live_for(user).find_by(id: id) if id
       end
 
-      # How a receipt names a countdown, labelled or not.
+      # How a receipt names a countdown, labelled or not. One that hasn't
+      # started yet is named for the timer it becomes, not its "starts" chip.
       def called(timer)
-        label = timer.name.to_s.strip
+        start = Buddy::Timers.scheduled(timer)
+        label = (start ? start["label"] : timer.name).to_s.strip
         label.present? ? "the #{label} timer" : "the timer"
+      end
+
+      # When it starts, resolved by confirm. Nil for one that starts now.
+      def starts_at(payload)
+        return nil if payload[:starts_at_iso].blank?
+
+        at = ::Time.zone.parse(payload[:starts_at_iso].to_s)
+        at if at&.future?
       end
 
       # The board it was named for (resolved by confirm) and any groups, else
