@@ -1,0 +1,18 @@
+<%# A textarea that takes images (image_field.js): a paperclip in its corner, %>
+<%# dropping onto it, or pasting. Rendered as a layout around the textarea, %>
+<%# `render layout: "shared/image_field" do ... end`, and each image posts as %>
+<%# `attachment_signed_ids[]` unless `name:` says otherwise. %>
+<% name = local_assigns.fetch(:name, "attachment_signed_ids[]") %>
+<div class="image-field" data-image-field="<%= name %>">
+  <%= yield %>
+  <div class="image-attach-tray image-field-tray" data-image-field-tray hidden></div>
+  <div data-image-field-ids hidden></div>
+  <input type="file" accept="image/*" multiple hidden aria-hidden="true" data-image-field-file>
+  <button type="button" class="image-field-clip" data-image-field-pick aria-label="Attach images" title="Attach images">
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            d="m20.5 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>
+    </svg>
+  </button>
+  <div class="image-field-notice" data-image-field-notice hidden></div>
+</div>

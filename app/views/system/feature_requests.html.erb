@@ -42,7 +42,7 @@
           ><%= status %></button>
         <% end %>
         <% if request.buildable? %>
-          <button type="button" class="fr-btn fr-btn-build" data-fr-build-toggle>Build</button>
+          <button type="button" class="fr-btn fr-btn-build" data-fr-build-open>Build</button>
         <% end %>
       </div>
 
@@ -61,16 +61,33 @@
       <% end %>
 
       <% if request.buildable? %>
-        <%= form_with url: system_feature_request_build_path(request), method: :post, local: true,
-              class: "fr-build-form", data: { fr_build_form: true } do |form| %>
-          <div class="fr-build-request"><strong><%= request.title %></strong><%= simple_format(request.body) %></div>
-          <%= form.text_area :notes, rows: 3, class: "fr-notes",
-                placeholder: "Notes for the builder (optional)" %>
-          <div class="fr-actions">
-            <%= form.submit "Start build", class: "fr-btn fr-btn-start", data: { disable_with: "Starting…" } %>
-            <button type="button" class="fr-btn" data-fr-build-toggle>Cancel</button>
-          </div>
-        <% end %>
+        <dialog class="fr-modal" data-fr-build-modal aria-labelledby="fr-modal-title-<%= request.id %>">
+          <%= form_with url: system_feature_request_build_path(request), method: :post, local: true,
+                class: "fr-modal-form basic" do |form| %>
+            <div class="fr-modal-head">
+              <div>
+                <div class="fr-modal-kicker">Start a Feature Builder</div>
+                <h2 class="fr-modal-title" id="fr-modal-title-<%= request.id %>"><%= request.title %></h2>
+              </div>
+              <button type="button" class="fr-modal-close" data-fr-build-close aria-label="Close">×</button>
+            </div>
+
+            <div class="fr-modal-request"><%= simple_format(request.body) %></div>
+
+            <label class="fr-modal-label" for="fr-notes-<%= request.id %>">
+              Notes for the builder <span>optional</span>
+            </label>
+            <%= render layout: "shared/image_field" do %>
+              <%= form.text_area :notes, rows: 4, id: "fr-notes-#{request.id}",
+                    placeholder: "Anything it should know. Paste or drop screenshots here too." %>
+            <% end %>
+
+            <div class="fr-modal-foot">
+              <button type="button" class="fr-btn fr-btn-ghost" data-fr-build-close>Cancel</button>
+              <%= form.submit "Start build", class: "fr-btn fr-btn-start", data: { disable_with: "Starting…" } %>
+            </div>
+          <% end %>
+        </dialog>
       <% end %>
     </div>
   <% end %>
@@ -132,18 +149,63 @@
       border: 1px solid rgba(255, 255, 255, 0.12); background-color: #21262D; color: #C9D1D9;
     }
 
-    .fr-build-form { display: none; margin-top: 14px; }
-    .fr-row.fr-building .fr-build-form { display: block; }
-    .fr-build-request {
-      font-size: 13px; color: #8B949E; background-color: #0D1117; border-radius: 6px;
-      padding: 10px 12px; margin-bottom: 8px; white-space: pre-wrap;
+    .fr-modal {
+      width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+      padding: 0; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px;
+      background-color: #161B22; color: #C9D1D9;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
     }
-    .fr-build-request strong { color: #C9D1D9; display: block; margin-bottom: 4px; }
-    .fr-build-request p { margin: 0 0 6px; }
-    .fr-notes {
-      width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; font-size: 14px;
-      background-color: #0D1117; border: 1px solid rgba(255, 255, 255, 0.12); color: #C9D1D9;
-      margin-bottom: 8px; font-family: inherit;
+    .fr-modal[open] { animation: fr-modal-in 0.16s ease-out; }
+    .fr-modal::backdrop { background-color: rgba(1, 4, 9, 0.66); backdrop-filter: blur(2px); }
+    @keyframes fr-modal-in {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .fr-modal-form { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+    .fr-modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .fr-modal-kicker {
+      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #58D68D; margin-bottom: 4px;
+    }
+    .fr-modal-title { margin: 0; font-size: 18px; line-height: 1.3; color: #E6EDF3; }
+    .fr-modal .fr-modal-close {
+      flex: 0 0 auto; width: 30px; height: 30px; margin: 0; padding: 0; border: 0; border-radius: 8px;
+      box-shadow: none; background: transparent; color: #8B949E !important;
+      font-size: 22px; font-weight: normal; line-height: 1; cursor: pointer;
+    }
+    .fr-modal .fr-modal-close:hover { background: rgba(255, 255, 255, 0.06); color: #E6EDF3 !important; }
+
+    .fr-modal-request {
+      font-size: 13px; line-height: 1.5; color: #8B949E; background-color: #0D1117;
+      border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px;
+      padding: 10px 12px; max-height: 30vh; overflow-y: auto; white-space: pre-wrap;
+    }
+    .fr-modal-request p { margin: 0 0 6px; }
+    .fr-modal-request p:last-child { margin-bottom: 0; }
+
+    .fr-modal-label { font-size: 13px; font-weight: bold; color: #C9D1D9; margin-bottom: -6px; }
+    .fr-modal-label span { font-weight: normal; color: #8B949E; margin-left: 4px; }
+    .fr-modal .image-field textarea { color: #C9D1D9; }
+
+    .fr-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+    /* Two classes deep, to beat the app-wide button and submit look. */
+    .fr-modal .fr-btn {
+      margin: 0; padding: 9px 18px; font-family: inherit; font-size: 13px; border-radius: 8px;
+      box-shadow: none; text-shadow: none;
+    }
+    .fr-modal .fr-btn-ghost {
+      background: transparent; border: 1px solid rgba(255, 255, 255, 0.12); color: #C9D1D9 !important;
+      font-weight: normal;
+    }
+    .fr-modal .fr-btn-ghost:hover { background: rgba(255, 255, 255, 0.05); }
+    .fr-modal .fr-btn-start {
+      background: #58D68D; border: 1px solid #58D68D; color: #0D1117 !important; font-weight: bold;
+    }
+    .fr-modal .fr-btn-start:hover { background: #6EE3A0; border-color: #6EE3A0; }
+
+    @media (max-width: 520px) {
+      .fr-modal-form { padding: 16px; }
+      .fr-modal-foot .fr-btn { flex: 1; }
     }
   </style>
 <% end %>
@@ -154,12 +216,24 @@
       const token = document.querySelector('meta[name="csrf-token"]');
 
       document.querySelectorAll("[data-fr-row]").forEach(function (row) {
-        row.querySelectorAll("[data-fr-build-toggle]").forEach(function (btn) {
-          btn.addEventListener("click", function () {
-            const open = row.classList.toggle("fr-building");
-            if (open) row.querySelector(".fr-notes")?.focus();
+        const modal = row.querySelector("[data-fr-build-modal]");
+        if (modal) {
+          row.querySelector("[data-fr-build-open]")?.addEventListener("click", function () {
+            modal.showModal();
+            modal.querySelector("textarea")?.focus();
           });
-        });
+          modal.querySelectorAll("[data-fr-build-close]").forEach(function (btn) {
+            btn.addEventListener("click", function () { modal.close(); });
+          });
+          // A click on the backdrop lands on the dialog itself, outside the form.
+          // Only one that also STARTED there closes it, so selecting text in
+          // the notes and letting go past the edge doesn't throw them away.
+          let pressedOutside = false;
+          modal.addEventListener("pointerdown", function (e) { pressedOutside = e.target === modal; });
+          modal.addEventListener("click", function (e) {
+            if (pressedOutside && e.target === modal) modal.close();
+          });
+        }
 
         row.querySelectorAll("[data-fr-set]").forEach(function (btn) {
           btn.addEventListener("click", async function () {
