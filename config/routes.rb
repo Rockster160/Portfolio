@@ -508,6 +508,14 @@ Rails.application.routes.draw do
   end
 
   # is the thing you open during a search, not the record it stores.
+  # A picture pasted into a note's body, and the short path the markdown in it
+  # points at. Not nested under a note: the add form uploads while the beat is
+  # still being typed, so the application is the only thing that exists yet.
+  post "/interviews/:id/note_images" => "job_applications#upload_note_image",
+    as: :interview_note_images
+  get "/interviews/note_images/:id" => "job_applications#note_image",
+    as: :interview_note_image
+
   resources :interviews, controller: :job_applications, except: [:new, :edit] do
     post :merge, on: :member
     # The steps of this one's process, ticked or rewritten.

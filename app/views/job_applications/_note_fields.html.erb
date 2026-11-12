@@ -5,7 +5,20 @@
 <div class="note-fields" data-note-fields>
   <div class="form-field">
     <%= f.label :body, "What happened" %>
-    <%= f.text_area :body, rows: 3, placeholder: "Applied through their careers page. Job looks like mostly Rails." %>
+    <%# `data-note-body` is what the paste and drop handlers attach to, and the
+       button beside it uploads to the application the form is on. Not offered
+       on the capture form at the top of the index: that one is making a new
+       application, so there is nothing to attach a picture to yet. %>
+    <%= f.text_area :body, rows: 3, data: { note_body: local_assigns[:photo_job]&.id },
+          placeholder: "Applied through their careers page. Job looks like mostly Rails." %>
+    <% if local_assigns[:photo_job].present? %>
+      <div class="note-photo-row">
+        <%# No id of its own: the press is found from the box beside it, which
+           is what already carries which application to upload to. %>
+        <button type="button" class="btn" data-note-photo>Add photo</button>
+        <span class="field-hint">Or paste or drop one straight into the box.</span>
+      </div>
+    <% end %>
   </div>
 
   <%# THE READABLE VERSION, HIS TO CHANGE. Only on a beat that already has one:

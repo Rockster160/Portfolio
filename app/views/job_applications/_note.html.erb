@@ -133,7 +133,7 @@
        label on the page points at whichever one the browser found first. %>
     <%= form_with model: note, url: interview_note_path(job, note), method: :patch, local: true,
           namespace: "note#{note.id}" do |f| %>
-      <%= render "note_fields", f: f, note_extras_open: true %>
+      <%= render "note_fields", f: f, note_extras_open: true, photo_job: job %>
       <%# WHOSE application this is. On a mail that arrived for a company the
          board holds more than once the row was a guess, and the beat has to be
          movable without being retyped - the alternative is a second copy on

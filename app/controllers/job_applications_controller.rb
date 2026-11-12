@@ -8,7 +8,8 @@
 # done.
 class JobApplicationsController < ApplicationController
   before_action :authorize_user
-  before_action :load_job, only: [:show, :update, :destroy, :merge, :rubric]
+  before_action :load_job,
+    only: [:show, :update, :destroy, :merge, :rubric, :upload_note_image]
 
   # `status` filters the wall. Nothing means live — active and offers — which
   # is the "hide the rejected by default" the tracker is supposed to do.
@@ -160,6 +161,37 @@ class JobApplicationsController < ApplicationController
     @job.rubric_ticks = steps[:done] if steps.key?(:ticking)
     @job.save!
     redirect_to interview_path(@job)
+  end
+
+  # POST /interviews/:id/note_images - one picture, answered with the markdown
+  # that shows it. The link is the short path below rather than the blob's own
+  # signed URL, so the line stays readable while typing around it and does not
+  # expire out of a note kept for months.
+  def upload_note_image
+    file = params.require(:file)
+    return head(:unprocessable_entity) unless file.content_type.to_s.start_with?("image/")
+
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io:           file,
+      filename:     file.original_filename.to_s,
+      content_type: file.content_type,
+    )
+    @job.note_images.attach(blob)
+    attachment = @job.note_images_attachments.find_by!(blob: blob)
+    render json: { markdown: "![Photo](#{interview_note_image_path(attachment.id)})" }
+  end
+
+  # GET /interviews/note_images/:id - a pasted picture, wherever a note links it.
+  # Scoped to his own applications, so the path in a body can only ever reach a
+  # picture he uploaded himself.
+  def note_image
+    attachment = ActiveStorage::Attachment.find_by!(
+      id:          params[:id],
+      name:        :note_images,
+      record_type: JobApplication.name,
+      record_id:   current_user.job_applications.select(:id),
+    )
+    redirect_to rails_blob_path(attachment.blob, only_path: true)
   end
 
   def merge

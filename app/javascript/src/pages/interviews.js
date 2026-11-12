@@ -339,4 +339,99 @@ $(document).ready(function () {
   // Looking something up in a recording, wherever one is being read — the
   // beats in the timeline here, and the transcript's own page.
   bindTranscriptSearch(page)
+
+  // ---- Pictures in a note ------------------------------------------------
+  // "Add photo", a picture pasted onto the cursor, or one dropped on the box:
+  // all three upload to the application and write the markdown that shows it
+  // in where the cursor was. Same shape as a game's setup notes.
+  //
+  // There is no no-JS path for this one, which is why the button sits beside
+  // the box rather than replacing anything — a note typed without a picture is
+  // still a note, and the box is the only thing that has to work.
+
+  // On a line of its own, so it renders as a picture rather than mid-sentence.
+  const insertAtCursor = function (textarea, text) {
+    const at = textarea.selectionStart ?? textarea.value.length
+    const before = textarea.value.slice(0, at)
+    const after = textarea.value.slice(at)
+    const lead = before && !before.endsWith("\n") ? "\n" : ""
+    const trail = after.startsWith("\n") ? "" : "\n"
+
+    textarea.value = `${before}${lead}${text}${trail}${after}`
+    const cursor = (before + lead + text + trail).length
+    textarea.setSelectionRange(cursor, cursor)
+    textarea.focus()
+  }
+
+  const uploadPhoto = function (jobId, textarea, file, button) {
+    const label = button?.textContent
+    if (button) { button.disabled = true; button.textContent = "Uploading…" }
+
+    const form = new FormData()
+    form.append("file", file)
+
+    return fetch(`/interviews/${jobId}/note_images`, {
+      method:      "POST",
+      credentials: "same-origin",
+      body:        form,
+      headers:     { "Accept": "application/json", "X-CSRF-Token": csrfToken() },
+    }).then(function (response) {
+      if (!response.ok) { throw new Error(`upload -> ${response.status}`) }
+
+      return response.json()
+    }).then(function (data) {
+      insertAtCursor(textarea, data.markdown)
+    }).catch(function () {
+      window.alert("Couldn't upload that picture - check the connection and try again.")
+    }).finally(function () {
+      if (button) { button.disabled = false; button.textContent = label }
+    })
+  }
+
+  // One at a time rather than all at once: several pasted together each need
+  // their own line, and a parallel upload would race over the cursor.
+  const uploadAll = function (jobId, textarea, files, button) {
+    const images = [...(files || [])].filter(function (file) {
+      return file.type.startsWith("image/")
+    })
+    if (!images.length) { return false }
+
+    images.reduce(function (chain, file) {
+      return chain.then(function () { return uploadPhoto(jobId, textarea, file, button) })
+    }, Promise.resolve())
+
+    return true
+  }
+
+  page.querySelectorAll("[data-note-body]").forEach(function (textarea) {
+    const jobId = textarea.dataset.noteBody
+    if (!jobId) { return }
+
+    const button = textarea.closest(".form-field")?.querySelector("[data-note-photo]")
+
+    textarea.addEventListener("paste", function (e) {
+      if (uploadAll(jobId, textarea, e.clipboardData?.files, button)) { e.preventDefault() }
+    })
+
+    textarea.addEventListener("dragover", function (e) {
+      if (e.dataTransfer?.types?.includes("Files")) { e.preventDefault() }
+    })
+
+    textarea.addEventListener("drop", function (e) {
+      if (uploadAll(jobId, textarea, e.dataTransfer?.files, button)) { e.preventDefault() }
+    })
+
+    if (!button) { return }
+
+    button.addEventListener("click", function () {
+      const input = document.createElement("input")
+      input.type = "file"
+      input.accept = "image/*"
+      input.multiple = true
+      input.addEventListener("change", function () {
+        uploadAll(jobId, textarea, input.files, button)
+      })
+      input.click()
+    })
+  })
 })

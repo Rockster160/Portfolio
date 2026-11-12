@@ -1100,6 +1100,25 @@
       white-space: pre-wrap;
     }
 
+    // A picture pasted into the body. Capped rather than full width: a
+    // screenshot of a job posting is taller than the card it sits in, and a
+    // beat is read for the words around the picture. The tap opens it full
+    // size. `block` so the markdown's own newline is the only spacing.
+    .note-image {
+      display: block;
+      max-width: 100%;
+      margin: 4px 0;
+
+      img {
+        display: block;
+        max-width: 100%;
+        max-height: 320px;
+        border: 1px solid var(--iv-line);
+        border-radius: 6px;
+        object-fit: contain;
+      }
+    }
+
     // Sits above the body now, so it needs its own line in its own right — as
     // an inline element it used to get one only by virtue of the block that
     // happened to precede it.
@@ -1996,6 +2015,30 @@
     line-height: 1.55;
     white-space: pre-wrap;
   }
+
+  .note-image {
+    display: block;
+    max-width: 100%;
+    margin: 4px 0;
+
+    img {
+      display: block;
+      max-width: 100%;
+      max-height: 320px;
+      border: 1px solid var(--iv-line);
+      border-radius: 6px;
+      object-fit: contain;
+    }
+  }
+}
+
+// The "Add photo" press and its hint, under the body box of any note form.
+.note-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
 }
 
 // THE BRIEF WRITTEN BEFORE AN INTERVIEW.

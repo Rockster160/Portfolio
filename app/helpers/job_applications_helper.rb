@@ -47,13 +47,24 @@ module JobApplicationsHelper
   #   [what was sent](https://…)   a markdown link, the same shape Byte accepts
   #   https://…                    a bare URL, because every note written
   #                                before this one has them
+  #   ![Photo](/interviews/…)      a picture pasted into the body
   #
   # A URL that is not plainly http(s) is left exactly as it was written. The
   # local job hunter puts `http://localhost:8790/...` in these, which is the
   # link most worth having and the kind a stricter check would throw away.
-  MD_LINK  = /\[([^\]\n]+)\]\(([^)\s]+)\)/
+  #
+  # The leading `!` is captured rather than matched on its own so a picture and
+  # a link are found in one pass: scanning for links first would eat the
+  # `[Photo](…)` out of an embed and leave the `!` behind as text.
+  MD_EMBED = /(!?)\[([^\]\n]+)\]\(([^)\s]+)\)/
   BARE_URL = %r{\bhttps?://[^\s<>"'\]]+}
   SAFE_URL = %r{\Ahttps?://[^\s<>"']+\z}i
+
+  # Only a path this app serves renders as a picture, and only one of HIS - see
+  # `JobApplicationsController#note_image`. An embed pointing anywhere else
+  # stays the text that was typed, so a note cannot pull an image off another
+  # site and nothing in a body can quietly fetch a tracking pixel.
+  NOTE_IMAGE = %r{\A/interviews/note_images/\d+\z}
 
   # Sentence punctuation that a URL at the end of a sentence collects and does
   # not own. "at https://x.test/a, then" links `…/a`, not `…/a,`.
@@ -63,9 +74,15 @@ module JobApplicationsHelper
     rest = text.to_s
     out = +""
 
-    while (hit = MD_LINK.match(rest))
+    while (hit = MD_EMBED.match(rest))
       out << autolink(hit.pre_match)
-      out << note_link(hit[2], hit[1], instead: hit[0])
+      out << (
+        if hit[1] == "!"
+          note_image(hit[3], hit[2], instead: hit[0])
+        else
+          note_link(hit[3], hit[2], instead: hit[0])
+        end
+      )
       rest = hit.post_match
     end
     out << autolink(rest)
@@ -101,5 +118,16 @@ module JobApplicationsHelper
     return ERB::Util.html_escape(instead || label).to_s unless url.to_s.match?(SAFE_URL)
 
     %(<a href="#{ERB::Util.html_escape(url)}" target="_blank" rel="noopener">#{ERB::Util.html_escape(label)}</a>)
+  end
+
+  # Wrapped in a link to itself, so a picture in a note opens full size the way
+  # the one in the message it came from would.
+  def note_image(url, label, instead: nil)
+    return ERB::Util.html_escape(instead || label).to_s unless url.to_s.match?(NOTE_IMAGE)
+
+    src = ERB::Util.html_escape(url)
+    alt = ERB::Util.html_escape(label)
+    %(<a href="#{src}" target="_blank" rel="noopener" class="note-image">) +
+      %(<img src="#{src}" alt="#{alt}" loading="lazy"></a>)
   end
 end

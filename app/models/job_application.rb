@@ -32,6 +32,13 @@ class JobApplication < ApplicationRecord
   has_many :preps, -> { ordered }, class_name: "InterviewPrep", inverse_of: :job_application,
     dependent: :destroy
 
+  # Pictures pasted into a note's body. They hang off the APPLICATION rather
+  # than the beat because the add form uploads one before the note it belongs
+  # to exists - the body is still being typed. A note refers to it by the path
+  # the markdown carries, so moving a beat between applications keeps its
+  # pictures working.
+  has_many_attached :note_images
+
   # active   → still in play, still worth chasing.
   # offer    → they said yes. Still open, because it isn't decided yet.
   # rejected → they said no.

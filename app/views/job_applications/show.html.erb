@@ -190,7 +190,7 @@
           <%= form_with model: @note, url: interview_notes_path(@job), method: :post, local: true,
                 multipart: true do |f| %>
             <div class="form-fields">
-              <%= render "note_fields", f: f, note_extras_open: false %>
+              <%= render "note_fields", f: f, note_extras_open: false, photo_job: @job %>
 
               <%# ONE SUBMIT FOR THE CONVERSATION AND THE BEAT SAYING IT
                  HAPPENED. They are one thing that happened, and logging them
