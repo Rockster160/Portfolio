@@ -22,8 +22,9 @@ class Jil
     #
     # This is HALF the picture - see `wired_scopes` for the other half.
     #
-    # `travel` and the car's `tesla_travel` are announced by a Jil task rather
-    # than app code, and `deploy` is the monitor broadcast Buddy::WatchMatcher
+    # `travel`, the car's `tesla_travel` and the hourly outside/inside
+    # `temperature` comparison are announced by a Jil task rather than app
+    # code, and `deploy` is the monitor broadcast Buddy::WatchMatcher
     # reads as a finished deploy; a watch listens on them whoever's account
     # it's on.
     KNOWN_SCOPES = %w[
@@ -54,6 +55,7 @@ class Jil
       startup
       task
       tell
+      temperature
       tesla
       tesla_charge
       tesla_drive_start

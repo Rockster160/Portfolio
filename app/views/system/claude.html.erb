@@ -9,13 +9,21 @@
   builds_by_id = @builds.index_by(&:id)
   kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread", questions: "Questions" }
   build_state = ->(build) { FeatureBuilder.stage(build, @live[build.id]) }
+  queue_label = {
+    landing:  "merging now",
+    held:     "held",
+    approved: "approved, in line",
+    answer:   "waiting on your answer",
+    review:   "waiting on your review",
+  }
+  # Each build is listed once, in the first section that has it: the merge
+  # queue, waiting on you, then running, then the rest of the history.
+  shown = @queue.map(&:id)
   waiting = [
     *@pending[:questions].map { |build| [build, "waiting on you"] },
     *@pending[:prs].map { |build| [build, "PR open"] },
-  ]
-  # Each build is listed once, in the first section that has it: waiting on
-  # you, then running, then the rest of the history.
-  shown = waiting.map { |build, _| build.id }
+  ].reject { |build, _| shown.include?(build.id) }
+  shown += waiting.map { |build, _| build.id }
   running = @sessions.reject { |session| shown.include?(session["build_id"].to_i) }
   shown += running.filter_map { |session| session["build_id"]&.to_i }
   history = @builds.reject { |build| shown.include?(build.id) }
@@ -32,6 +40,48 @@
           data: { disable_with: "Opening Claude…" } %>
     <span class="cs-ask-note">One Claude session on the Mini for questions. It opens the running one, or starts it.</span>
   </div>
+
+  <% if @queue.any? %>
+    <h3 class="cs-heading" id="merge-queue">Merge queue</h3>
+    <p class="cs-empty">Approved PRs merge one at a time, top first. Each one's session catches up with master and makes it fit before it merges, closes, or asks you for another review.</p>
+    <% @queue.each_with_index do |build, index| %>
+      <% state = MergeQueue.state(build) %>
+      <div class="cs-row cs-queue cs-queue-<%= state %>">
+        <div class="cs-head">
+          <div class="cs-title"><span class="cs-queue-number"><%= index + 1 %></span><%= build.title %></div>
+          <div class="cs-meta">
+            <span class="cs-badge"><%= queue_label[state] %></span>
+            <% if @live.dig(build.id, "working") %><span class="cs-badge">working</span><% end %>
+          </div>
+        </div>
+        <div class="cs-links">
+          <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% if build.rc_url.present? %>
+            <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <% end %>
+          <span class="cs-queue-moves">
+            <% { top: "⤒", up: "↑", down: "↓", bottom: "⤓" }.each do |move, arrow| %>
+              <%= button_to arrow, system_claude_queue_path(id: build.id, act: move),
+                    class: "cs-link cs-queue-move", form_class: "cs-stop-form basic", title: "Move #{move}" %>
+            <% end %>
+          </span>
+          <% unless state == :landing %>
+            <% if build.approved_at %>
+              <%= button_to "Unapprove", system_claude_queue_path(id: build.id, act: :unapprove), class: "cs-link", form_class: "cs-stop-form basic" %>
+            <% else %>
+              <%= button_to "Approve to merge", system_claude_queue_path(id: build.id, act: :approve), class: "cs-link cs-queue-approve", form_class: "cs-stop-form basic",
+                    data: { confirm: "Merge this when its turn comes? Its session catches up with master first." } %>
+            <% end %>
+            <% if build.held? %>
+              <%= button_to "Release", system_claude_queue_path(id: build.id, act: :release), class: "cs-link", form_class: "cs-stop-form basic" %>
+            <% else %>
+              <%= button_to "Hold", system_claude_queue_path(id: build.id, act: :hold), class: "cs-link", form_class: "cs-stop-form basic" %>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
 
   <% if waiting.any? %>
     <h3 class="cs-heading">Waiting on you</h3>
@@ -161,8 +211,21 @@
       font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none;
       border: 1px solid rgba(255, 255, 255, 0.12); background-color: #21262D; color: #C9D1D9; cursor: pointer;
     }
-    .cs-stop { color: #EC7063; border-color: rgba(236, 112, 99, 0.4); }
-    .cs-stop-form { display: inline; margin: 0; }
+    .cs-stop {
+      margin: 0; font-family: inherit; font-weight: normal; line-height: normal;
+      box-shadow: none; text-shadow: none; color: #EC7063 !important; border-color: rgba(236, 112, 99, 0.4);
+    }
+    .cs-stop:hover, .cs-stop:active { background-color: #2D333B; box-shadow: none; }
+    .cs-stop-form { display: flex; margin: 0; }
+
+    .cs-row.cs-queue-landing { border-color: rgba(88, 214, 141, 0.7); }
+    .cs-row.cs-queue-approved { border-color: rgba(88, 214, 141, 0.45); }
+    .cs-row.cs-queue-answer, .cs-row.cs-queue-review { border-color: rgba(245, 176, 65, 0.45); }
+    .cs-row.cs-queue-held { opacity: 0.6; }
+    .cs-queue-number { display: inline-block; min-width: 22px; color: #8B949E; }
+    .cs-queue-moves { display: inline-flex; gap: 4px; }
+    .cs-queue-move { padding: 4px 8px; }
+    .cs-queue-approve { color: #58D68D; border-color: rgba(88, 214, 141, 0.45); }
 
     .cs-ask { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .cs-ask-form { margin: 0; }

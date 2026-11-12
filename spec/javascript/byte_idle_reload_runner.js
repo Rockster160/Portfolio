@@ -141,7 +141,28 @@ idle4.tick();
 out.reloads_while_unsettled = reloads.length;
 out.decision_while_unsettled = idle4.decide();
 
+// ---- the reload refuses (server not serving the page yet) -----------------
+clock = 5_000_000;
+reloads.length = 0;
+quiet = true;
+const idle5 = initIdleReload({
+  quiet: () => quiet,
+  reload: () => {
+    reloads.push(clock);
+    return Promise.reject(new Error("server not ready"));
+  },
+  now: () => clock,
+});
+idle5.arm();
+clock += IDLE_MS + 1;
+idle5.tick();
+await new Promise((resolve) => setImmediate(resolve));
+out.armed_after_refused_reload = idle5.armed();
+idle5.tick();
+await new Promise((resolve) => setImmediate(resolve));
+out.reloads_after_refusal_and_retry = reloads.length;
+
 // Every armed interval holds node open, and this file has to exit.
-[idle, idle2, idle3, idle4].forEach((i) => i.disarm());
+[idle, idle2, idle3, idle4, idle5].forEach((i) => i.disarm());
 
 process.stdout.write(JSON.stringify(out, null, 2));

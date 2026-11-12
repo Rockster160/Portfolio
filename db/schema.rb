@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_12_012135) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_12_192719) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1206,6 +1206,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_12_012135) do
     t.datetime "planned_at"
     t.text "question"
     t.datetime "asked_at"
+    t.text "closed_reason"
+    t.integer "queue_position"
+    t.datetime "approved_at"
+    t.datetime "landing_at"
+    t.boolean "held", default: false, null: false
     t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
     t.index ["feature_request_id"], name: "index_feature_builds_on_feature_request_id"
@@ -1725,6 +1730,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_12_012135) do
     t.float "total_time"
     t.bigint "calls"
     t.datetime "captured_at", precision: nil
+  end
+
+  create_table "production_scripts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "feature_build_id"
+    t.string "title", null: false
+    t.text "code", null: false
+    t.string "commit_sha", null: false
+    t.integer "status", default: 0, null: false
+    t.string "edited_by", null: false
+    t.datetime "approved_at"
+    t.datetime "started_at"
+    t.datetime "ran_at"
+    t.integer "exit_status"
+    t.text "output"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["feature_build_id"], name: "index_production_scripts_on_feature_build_id"
+    t.index ["status"], name: "index_production_scripts_on_status"
+    t.index ["user_id"], name: "index_production_scripts_on_user_id"
   end
 
   create_table "prompts", force: :cascade do |t|
@@ -2318,6 +2343,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_12_012135) do
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "production_scripts", "feature_builds"
+  add_foreign_key "production_scripts", "users"
   add_foreign_key "quest_boards", "users"
   add_foreign_key "recording_skips", "users"
   add_foreign_key "scheduled_triggers", "agenda_items", column: "source_item_id", on_delete: :cascade

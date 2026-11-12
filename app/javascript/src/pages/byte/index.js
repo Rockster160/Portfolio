@@ -89,6 +89,7 @@ import { drawnFace, faceUrlFor } from "./buddy/face_url";
 import { toggleBuddyMuted, isBuddyMuted, alarmStoppedAt } from "./buddy/alarm";
 import { initSoundToggle } from "./buddy/sound_toggle";
 import { initReloadCountdown, updateWanted } from "./reload_countdown";
+import { pageReady } from "./reload_preflight";
 import { playBoardSound } from "./buddy/sound";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
 import {
@@ -4132,7 +4133,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (updateWanted(version, mine)) reloadCountdown.start();
   }
 
+  // Rejects, leaving the page and its caches untouched, unless the server is
+  // already handing out the real shell. Emptying the caches first is what let
+  // a booting server's error page through: with no offline copy left, the
+  // worker passes on whatever the network says. Every caller retries a
+  // rejection on its own clock.
   async function hardReload() {
+    // (c) Cache-buster forces the navigation itself past any HTTP cache, and
+    // past the worker's cached shell, which is what lets the check below see
+    // the server rather than the copy. Uses `replace` so the buster URL
+    // doesn't clutter back-history, and the page strips it again once it's
+    // up (see the top of this file).
+    const url = new URL(location.href);
+    url.searchParams.set("_bust", Date.now().toString(36));
+    if (!(await pageReady(url.toString()))) throw new Error("server not ready");
+
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");
 
@@ -4169,11 +4184,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     } catch (_) {}
 
-    // (c) Cache-buster forces the navigation itself past any HTTP cache.
-    // Uses `replace` so the buster URL doesn't clutter back-history, and the
-    // page strips it again once it's up (see the top of this file).
-    const url = new URL(location.href);
-    url.searchParams.set("_bust", Date.now().toString(36));
     location.replace(url.toString());
   }
 

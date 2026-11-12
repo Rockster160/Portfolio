@@ -1,0 +1,34 @@
+<%= meta_title "Production Scripts", include_name: false %>
+<%= meta_description "Scripts waiting to run against production, and what the ones that ran printed." %>
+<%= render "system/production_script_styles" %>
+
+<%
+  zone = current_user.timezone
+  stamp = ->(time) { time ? time.in_time_zone(zone).strftime("%b %-d, %-I:%M %p") : "—" }
+%>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small><%= link_to "System", system_path %> / Production scripts</small>
+  </div>
+
+  <div class="ps-actions">
+    <%= link_to "New script", system_new_production_script_path, class: "ps-new" %>
+  </div>
+
+  <% if @scripts.empty? %>
+    <p class="ps-empty">No production scripts yet. Write one with New script, or a feature build on the Mini sends one with <code>builder-pr script</code>.</p>
+  <% end %>
+
+  <% @scripts.each do |script| %>
+    <a class="ps-row ps-<%= script.status %>" href="<%= system_production_script_path(script) %>">
+      <div class="ps-head">
+        <div class="ps-title"><%= script.title %></div>
+        <div class="ps-meta"><span class="ps-badge"><%= script.status_label %></span><%= stamp[script.updated_at] %></div>
+      </div>
+      <div class="ps-meta">
+        <%= script.feature_build&.title || "Written by hand" %> · commit <%= script.short_sha %>
+      </div>
+    </a>
+  <% end %>
+</div>

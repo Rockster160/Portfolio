@@ -425,6 +425,8 @@ Rails.application.routes.draw do
   post  "webhooks/byte/workspaces"       => "webhooks#byte_workspaces"
   post  "webhooks/byte/claude_sessions"  => "webhooks#byte_claude_sessions"
   patch "webhooks/byte/builds/:id"       => "webhooks#byte_update_build"
+  post  "webhooks/byte/production_scripts"     => "webhooks#byte_create_production_script"
+  patch "webhooks/byte/production_scripts/:id" => "webhooks#byte_update_production_script"
   get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
   get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 
@@ -792,6 +794,18 @@ Rails.application.routes.draw do
     get "/system/claude" => "system#claude", as: :system_claude
     post "/system/claude/:id/stop" => "system#stop_claude", as: :system_claude_stop
     post "/system/claude/questions" => "system#claude_questions", as: :system_claude_questions
+    post "/system/claude/:id/queue/:act" => "system#update_queue", as: :system_claude_queue
+    get "/system/production_scripts" => "system#production_scripts", as: :system_production_scripts
+    get "/system/production_scripts/new" => "system#new_production_script", as: :system_new_production_script
+    post "/system/production_scripts" => "system#create_production_script"
+    get "/system/production_scripts/:id" => "system#production_script", as: :system_production_script
+    patch "/system/production_scripts/:id" => "system#update_production_script"
+    post "/system/production_scripts/:id/approve" => "system#approve_production_script",
+      as: :system_production_script_approve
+    post "/system/production_scripts/:id/skip" => "system#skip_production_script",
+      as: :system_production_script_skip
+    post "/system/production_scripts/:id/restore" => "system#restore_production_script",
+      as: :system_production_script_restore
     # What an alert links to, so a Slack line ends at the whole row rather than
     # at as much of it as fitted in a message.
     get "/system/errors/:id" => "system#error", as: :system_error
