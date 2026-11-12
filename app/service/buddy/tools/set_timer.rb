@@ -49,6 +49,14 @@ Buddy::Tools.register(
     off: when it's up the held steps simply run. So don't tell them it will
     alarm, ring or need dismissing - there's nothing for them to do.
 
+    ONTO A TIMER ALREADY RUNNING: "when the pasta timer's done, add parmesan
+    to groceries", "after my timer goes off, turn the stove off". The wait is
+    a countdown that already exists, so pass `after_timer` - its label, its id
+    from `running_timers`, or "mine" when only one is running - with
+    `then_continue: true` and no length, then the steps in the SAME reply. No
+    second countdown starts; that timer still rings as it always would, and
+    the held steps run the moment it does.
+
     ROUND AND ROUND: `repeat: true` is for a rhythm rather than one countdown -
     "half an hour at a time", "30 on, 10 off until 6:30", "check the printer
     every 30 minutes until the print finishes", "keep nudging me back to it".
@@ -142,6 +150,13 @@ Buddy::Tools.register(
                    "is held back and runs when the timer's up. Leave it null only for a bare " \
                    "countdown with nothing named to follow",
     },
+    after_timer:   {
+      type:        :string,
+      required:    false,
+      description: "A timer ALREADY running to wait on instead of starting one - its label, its " \
+                   "id from running_timers, or \"mine\" when one is running. With then_continue " \
+                   "and no length",
+    },
   },
   # Level 1 (auto): setting a timer is safe + reversible (swipe it away), so it
   # fires immediately with an activity receipt rather than a confirm checkbox.
@@ -150,6 +165,11 @@ Buddy::Tools.register(
   # without. Raising here drops the proposal, which is better than a one-second
   # countdown standing in for a thirty-minute one.
   confirm:     ->(payload, ctx) {
+    if payload[:after_timer].present?
+      running = Buddy::Tools::SetTimer.running_timer!(ctx.user, payload[:after_timer])
+      next { summary: "Wait for a timer", resolved: { existing_timer_id: running.id } }
+    end
+
     ends_at = ctx.resolve_time(payload[:ends_at]) if payload[:ends_at].present?
     raise "couldn't read #{payload[:ends_at].inspect} as a time" if payload[:ends_at].present? && ends_at.nil?
     raise "#{Buddy::Clock.at(ends_at, zone: ctx.user.timezone)} has already passed" if ends_at&.past?
@@ -160,8 +180,27 @@ Buddy::Tools.register(
     board = (Buddy::Timers.find_board!(ctx.user, payload[:board]) if payload[:board].present?)
     { summary: "Set a timer", resolved: resolved.merge(board_id: board&.id).compact }
   },
-  label:       ->(payload, _ctx) { "Timer · #{Buddy::Timers.humanize_seconds(Buddy::Tools::SetTimer.seconds(payload))}" },
+  label:       ->(payload, ctx) {
+    existing = Buddy::Tools::SetTimer.existing(ctx.user, payload)
+    next "After #{Buddy::Tools::SetTimer.called(existing)}" if existing
+
+    "Timer · #{Buddy::Timers.humanize_seconds(Buddy::Tools::SetTimer.seconds(payload))}"
+  },
   execute:     ->(payload, ctx) {
+    # Riding a countdown that already exists: nothing to start, only the id
+    # for the wait to hold the rest of the reply on.
+    if payload[:existing_timer_id].present?
+      existing = Buddy::Tools::SetTimer.existing(ctx.user, payload)
+      raise "that timer isn't running any more" if existing.nil?
+
+      next {
+        timer_id: existing.id,
+        attached: true,
+        label:    Buddy::Tools::SetTimer.called(existing),
+        waiting:  payload[Buddy::Tools::WAIT_ARG].present?,
+      }
+    end
+
     seconds = Buddy::Tools::SetTimer.seconds(payload)
     cycle   = ActiveModel::Type::Boolean.new.cast(payload[:repeat]).present?
     rest    = payload[:break_minutes].to_i * 60
@@ -222,6 +261,8 @@ Buddy::Tools.register(
     }.compact
   },
   receipt:     ->(result, ctx) {
+    next "#{ctx.buddy_name} will do the next step when #{result[:label]} is up ⏲" if result[:attached]
+
     dur   = Buddy::Timers.humanize_seconds(result[:seconds])
     label = result[:label].to_s.strip
     # A wait isn't a countdown they're watching, it's Buddy holding the rest of
@@ -264,6 +305,47 @@ module Buddy
         return payload[:seconds].to_i if payload[:seconds].present?
 
         payload[:minutes].to_i * 60
+      end
+
+      # The countdown already running that a wait rides instead of starting
+      # its own, chosen the way cancel_timer chooses: label, id, or the only
+      # one there is. A cycle or a rotation ends on a tap rather than a finish,
+      # so there is no moment for anything to ride.
+      def running_timer!(user, needle)
+        wanted = needle.to_s.strip
+        # A timer already ringing has had its moment; nothing could ride it.
+        live   = Buddy::Timers.live_for(user).to_a.reject(&:fired?)
+        raise "no timer is running right now" if live.empty?
+
+        matched = (
+          if wanted.match?(/\A\d+\z/)
+            live.select { |t| t.id == wanted.to_i }
+          else
+            live.select { |t| t.name.to_s.downcase.include?(wanted.downcase) }
+          end
+        )
+        matched = live if matched.empty? && live.one?
+        raise "no running timer matching #{wanted.inspect}" if matched.empty?
+
+        raise "#{matched.map { |t| called(t) }.to_sentence} are all running - which one?" if matched.length > 1
+
+        timer = matched.first
+        if Buddy::TimerCycle.cycle?(timer) || Buddy::RotationTimer.rotation?(timer)
+          raise "#{called(timer)} goes round until it's tapped, so it has no end to wait for"
+        end
+
+        timer
+      end
+
+      def existing(user, payload)
+        id = payload[:existing_timer_id].presence
+        Buddy::Timers.live_for(user).find_by(id: id) if id
+      end
+
+      # How a receipt names a countdown, labelled or not.
+      def called(timer)
+        label = timer.name.to_s.strip
+        label.present? ? "the #{label} timer" : "the timer"
       end
 
       # The board it was named for (resolved by confirm) and any groups, else

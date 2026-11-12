@@ -1326,6 +1326,9 @@ module Buddy
             id:        t.id,
             label:     t.name.to_s.presence,
             remaining: timer_remaining(t),
+            # What runs when it ends, so "what's after the pasta timer?" has an
+            # answer and the same step isn't chained on twice.
+            then:      Buddy::ProposalBuilder.queued_after(t),
           }.compact
         }
       rescue StandardError => e

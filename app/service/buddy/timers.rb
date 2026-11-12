@@ -380,12 +380,17 @@ module Buddy
     # they switched off, still offering to go round again. Every path that ends
     # a countdown for good goes through here, so it is the only place that
     # closes both - the swipe, `cancel_timer`, and the tool alike.
-    def stop!(timer)
+    #
+    # Anything still riding it never will, and that gets said too. `released`
+    # is the one path that stops a timer AFTER it has gone off - a wait clearing
+    # its own chip - where the queue is about to run rather than be dropped.
+    def stop!(timer, released: false)
       timer.cancel_fire!
       timer.cancel_countdown_callbacks!
       timer.update!(archived_at: Time.current)
       timer.broadcast(reason: :archived)
       Buddy::RotationTimer.abandoned!(timer)
+      Buddy::ProposalBuilder.abandon_after_stop!(timer) unless released
       timer
     end
 
@@ -431,13 +436,19 @@ module Buddy
       # was set for; announcing the mechanism is what "your Washer's done
       # timer's done" was.
       alarm = Buddy::Alarms.alarm?(timer)
+      # Steps riding this timer's end, whether it's a wait Buddy started for
+      # them or a countdown of theirs something was chained onto later.
+      gated = Buddy::ProposalBuilder.waiting_on?(timer)
 
       # A bare "alarm" already said so, and pushed, at the moment it was asked
       # for (Buddy::Alarms.quick_ring!). The countdown under it exists only to
       # put a timer into the fired state so the client rings; it has nothing of
       # its own to announce, and announcing it anyway is a second line reading
       # "⏰ Alarm" under one reading "Byte sounded the alarm ⏰".
-      return if alarm && Buddy::Alarms.quick?(timer)
+      if alarm && Buddy::Alarms.quick?(timer)
+        Buddy::ProposalBuilder.resume_after!(timer) if gated
+        return
+      end
 
       # A block in a work/break cycle ends with a button rather than a full
       # stop, because the next block starts when they come back rather than on
@@ -460,8 +471,11 @@ module Buddy
       # they're watching. When what it releases runs by itself, its chips are the
       # whole record and the wait says nothing. When it releases a checklist or
       # a form, nothing happens until they tap, so that one says so and pushes.
+      #
+      # A countdown of theirs with steps chained on is NOT a wait: it rings and
+      # announces like it always would, and the steps run behind it.
       label   = timer.name.to_s.strip
-      waiting = !alarm && Buddy::ProposalBuilder.waiting_on?(timer)
+      waiting = !alarm && gated && wait?(timer)
       if !waiting || Buddy::ProposalBuilder.waiting_on_them?(timer)
         Buddy::CompanionDelivery.deliver_plain(
           user:         timer.user,
@@ -471,12 +485,12 @@ module Buddy
           push_title:   alarm ? Buddy::Alarms.fired_title(timer) : fired_title(label, waiting: waiting),
         )
       end
-      return unless waiting
+      return unless gated
 
       # There is nothing left to acknowledge, so the chip goes on its own rather
       # than parking at 0:00 waiting for a tap. Archiving first means a resume
       # that blows up can't strand it in the corner either.
-      stop!(timer)
+      stop!(timer, released: true) if waiting
       Buddy::ProposalBuilder.resume_after!(timer)
     rescue StandardError => e
       Buddy::Errors.report(section: "timers.on_fired", exception: e, user: timer&.user)
