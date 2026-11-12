@@ -98,6 +98,26 @@ await settle();
 globalThis.document.visibilityState = "visible";
 out.hidden = { played: [...played], claims: claims - before };
 
+// The wall can't make a sound (reloaded and never tapped) and ticks first: it
+// stays out of the claim, and the phone plays. Once it's tapped it can claim.
+played = [];
+const silentBefore = claims;
+const blockedWall = await screen();
+const listeningPhone = await screen();
+const silentRing = (mod, nowSec, audible) =>
+  mod.soundOnce(
+    { ownerId: 1, key: "nap", next: now + 2000, nowSec, audible },
+    () => played.push(mod === blockedWall ? "wall" : "phone"),
+  );
+silentRing(blockedWall, now + 2000, false);
+await settle();
+const wallClaims = claims - silentBefore;
+silentRing(listeningPhone, now + 2000, true);
+await settle();
+silentRing(blockedWall, now + 2300, true);
+await settle();
+out.silent = { played: [...played], wall_claims_while_silent: wallClaims };
+
 // The server is down: it keeps asking, then plays anyway, once.
 played = [];
 serverUp = false;

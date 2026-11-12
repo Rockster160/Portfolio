@@ -20,7 +20,7 @@
 
 import { Monitor } from "../../dashboard/cells/monitor";
 import { Time } from "../../dashboard/cells/_time";
-import { playBoardSound } from "./sound";
+import { playBoardSound, canPlayBoardSound } from "./sound";
 import { soundOnce } from "./ring_claim";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./board_scope";
 
@@ -172,6 +172,7 @@ export function initBoardRings({ container, app }) {
           key: timerData.key,
           next: timerData.next,
           once: timerData.once,
+          audible: canPlayBoardSound(),
           nowSec,
         },
         () => playBoardSound(timerData.sound),

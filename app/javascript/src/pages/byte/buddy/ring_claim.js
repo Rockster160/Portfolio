@@ -10,6 +10,8 @@
 // minutes while it stays overdue. A ring marked `once` only ever has slot 0.
 //
 // A hidden page never claims - it would win the sound and nobody would hear it.
+// Nor does a screen that can't make a sound (muted, or blocked by the browser
+// since a reload nobody has tapped), so the claim goes to one that can.
 // If the server can't be reached, the claim is retried; after FALLBACK_MS of
 // that the screen plays anyway, at most once per device, because a silent alarm
 // is worse than a doubled one.
@@ -56,7 +58,11 @@ function claim({ ownerId, key, next, slot }) {
 
 // Called every tick for each overdue ring. Plays `play` at most once per
 // sounding across every screen.
-export function soundOnce({ ownerId, key, next, nowSec, once }, play, nowMs = Date.now()) {
+export function soundOnce(
+  { ownerId, key, next, nowSec, once, audible = true },
+  play,
+  nowMs = Date.now(),
+) {
   if (next === undefined || next === null) return;
 
   const slot = soundingSlot(next, nowSec);
@@ -67,6 +73,7 @@ export function soundOnce({ ownerId, key, next, nowSec, once }, play, nowMs = Da
   if (settled.has(id) || inflight.has(id)) return;
   if ((retryAt.get(id) || 0) > nowMs) return;
   if (document.visibilityState !== "visible") return;
+  if (!audible) return;
 
   const sound = () => {
     if (playedHere(id)) return;

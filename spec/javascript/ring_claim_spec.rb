@@ -24,6 +24,10 @@ RSpec.describe "Ring sound claims" do
     expect(result["hidden"]).to eq("played" => [], "claims" => 0)
   end
 
+  it "leaves the sound to a screen that can be heard, until the silent one is tapped" do
+    expect(result["silent"]).to eq("played" => ["phone", "wall"], "wall_claims_while_silent" => 0)
+  end
+
   it "plays once anyway when the server can't be reached" do
     expect(result["offline"]).to eq(["nap@31"])
   end

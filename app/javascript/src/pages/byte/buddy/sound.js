@@ -9,7 +9,7 @@
 // Honours the pet's own mute (buddy:muted) so the wall tablet's "shush" quiets
 // a Jil sound the same way it quiets the timer alarm; the two share the key.
 
-import { beeps } from "../../dashboard/vars";
+import { beeps, audioState } from "../../dashboard/vars";
 import { isBuddyMuted } from "./alarm";
 
 const volume = 0.9;
@@ -107,6 +107,12 @@ function playHappyBirthdayBeeps() {
     [dur, D5, volume, "sine"],
     [dur * 2, C5, volume, "sine"],
   ]);
+}
+
+// Whether a sound played here would be heard: not shushed, and not held back by
+// the browser waiting for a first tap.
+export function canPlayBoardSound() {
+  return !isBuddyMuted() && audioState() === "running";
 }
 
 export function playBoardSound(key) {

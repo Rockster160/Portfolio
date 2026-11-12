@@ -16,7 +16,9 @@ const stubs = {
       namespace: "stub",
     }));
     build.onLoad({ filter: /^sound$/, namespace: "stub" }, () => ({
-      contents: "export const playBoardSound = (key) => globalThis.__played.push(key);",
+      contents:
+        "export const playBoardSound = (key) => globalThis.__played.push(key);\n" +
+        "export const canPlayBoardSound = () => true;",
       loader: "js",
     }));
     build.onLoad({ filter: /^monitor$/, namespace: "stub" }, () => ({
