@@ -174,5 +174,13 @@ RSpec.describe "Claude on the Mini page", type: :request do
       expect(build.approved_at).to be_present
       expect(ByteLocal).not_to have_received(:builder).with(:land, anything)
     end
+
+    it "shows a merge still waiting on its deploy at the top of the line" do
+      build.update!(status: :finished, finished_at: Time.current, merge_sha: "abc1234")
+
+      get system_claude_path
+
+      expect(response.body).to include("Merge queue", "merged, waiting on its deploy since")
+    end
   end
 end

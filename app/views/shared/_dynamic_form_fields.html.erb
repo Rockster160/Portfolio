@@ -197,6 +197,16 @@
       placeholder: default,
       class: "prompt-textarea-input"
     %>
+  <% when :search %>
+    <%# Drawn by prompt_search.js, which posts the pick through hidden inputs. %>
+    <% finder = PromptSearch.new(current_user, option) %>
+    <%=
+      content_tag :div, "", class: "prompt-search-field", data: {
+        name:   base_key,
+        config: PromptSearch.config(option).merge(placeholder: option[:placeholder]).to_json,
+        value:  finder.present(response&.dig(question).presence || default).to_json,
+      }
+    %>
   <% when :hidden %>
     <%= hidden_field_tag base_key, default %>
   <% when :hint %>

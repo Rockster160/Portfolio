@@ -17,6 +17,10 @@ module Buddy
     # speaks strings; `choices` is the one multi-value type and submits an array.
     MULTI_TYPE = :choices
 
+    # Answers `{ "id", "title" }` (or a list of them) from a search of the
+    # person's records. See PromptSearch.
+    SEARCH_TYPE = :search
+
     # Types that carry a numeric floor, where a default sitting ON that floor is
     # the widget's resting position rather than an answer. See placeholder?.
     FLOOR_TYPES = { scale: 0, number: nil }.freeze
@@ -151,14 +155,20 @@ module Buddy
     # The visible fields as Buddy::FormFields descriptors, so the prompt renders
     # in the thread as the same widgets the page would show. The question text
     # doubles as the key, since that's what `response` is keyed by.
-    def form_fields
+    #
+    # `values` are answers to open the form holding in place of what it loads
+    # with. A search pick goes out drawn the way its dropdown draws it.
+    def form_fields(values={})
       fields.map { |field|
+        value = values[field[:question]] || field[:value]
+        option = visible.find { |o| question_of(o) == field[:question] }
         {
           key:         field[:question],
           label:       field[:question],
           type:        field[:type],
           style:       field[:style],
-          value:       field[:value],
+          value:       field[:type] == SEARCH_TYPE ? searcher(option).present(value) : value,
+          search:      (PromptSearch.config(option) if field[:type] == SEARCH_TYPE),
           placeholder: field[:placeholder],
           choices:     field[:choices],
           colors:      field[:colors],
@@ -180,8 +190,14 @@ module Buddy
         q = question_of(option)
         next if optional?(option) && !response.key?(q)
 
-        "#{q}: #{Array.wrap(response[q]).join(", ")}"
+        answer = response[q]
+        answer = titles_of(answer) if type_of(option) == SEARCH_TYPE
+        "#{q}: #{Array.wrap(answer).join(", ")}"
       }
+    end
+
+    def titles_of(answer)
+      Array.wrap(answer.is_a?(Hash) ? [answer] : answer).grep(Hash).map { |pick| pick["title"] || pick[:title] }
     end
 
     private
@@ -210,6 +226,8 @@ module Buddy
     end
 
     def empty_for(option)
+      return [] if type_of(option) == SEARCH_TYPE && PromptSearch.truthy?(option[:multiple])
+
       type_of(option) == MULTI_TYPE ? [] : ""
     end
 
@@ -325,6 +343,9 @@ module Buddy
       when :datetime then time(answer, "%Y-%m-%dT%H:%M")
       when :date     then time(answer, "%Y-%m-%d")
       when :time     then time(answer, "%H:%M")
+      # A pick from the form is checked against the search; words Buddy heard
+      # are searched for and the best match taken.
+      when SEARCH_TYPE then search(option, answer)
       else answer.to_s.strip
       end
     end
@@ -343,6 +364,16 @@ module Buddy
       return found if found
 
       raise "#{question_of(option).inspect} only takes #{choices.inspect}, not #{wanted.inspect}"
+    end
+
+    def search(option, answer)
+      searcher(option).answer(answer)
+    rescue PromptSearch::Invalid => e
+      raise "#{question_of(option).inspect}: #{e.message}"
+    end
+
+    def searcher(option)
+      PromptSearch.new(@prompt.user, option)
     end
 
     def truthy?(answer)

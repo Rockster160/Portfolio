@@ -3,11 +3,13 @@
 # reorders, and holds. The first approved build that isn't held is handed the
 # merge (`land` on the Mini): its own session catches up with master, makes
 # its changes fit what master is now, and then merges, closes itself, or asks
-# for another review. Only then is the next one handed it.
+# for another review. A merge holds the line until production is running it
+# and answering, so each deploy ships and is checked before the next merge.
 #
 # Nothing polls. The line moves whenever something that could free it
-# happens: an approval, a reorder, a build finishing or asking again, and any
-# report from the Mini, which also retries a hand-off the Mini missed.
+# happens: an approval, a reorder, a build finishing or asking again, a deploy
+# booting, and any report from the Mini, which also retries a hand-off the
+# Mini missed.
 module MergeQueue
   module_function
 
@@ -83,6 +85,32 @@ module MergeQueue
     advance!(build.user)
   end
 
+  # Merged builds whose deploy hasn't been seen live yet. A deploy that fails
+  # never boots, so the line stays held until someone looks.
+  def deploying(user)
+    FeatureBuild.where(user: user).where.not(merge_sha: nil).where(deployed_at: nil)
+  end
+
+  # Called after each deploy boots, from the new code: anything it brought in
+  # is live once the site answers, and the line moves on. Returns whether
+  # anything was left waiting.
+  def deployed!
+    waiting = FeatureBuild.where.not(merge_sha: nil).where(deployed_at: nil).to_a
+    live = waiting.select { |build| ProductionScripts.deployed?(build.merge_sha) }
+    return waiting.any? if live.empty? || !site_up?
+
+    live.each { |build| build.update!(deployed_at: Time.current) }
+    live.map(&:user).uniq.each { |user| advance!(user) }
+    waiting.length > live.length
+  end
+
+  def site_up?
+    url = Rails.application.routes.url_helpers.root_url
+    Net::HTTP.get_response(URI(url)).code.to_i < 500
+  rescue StandardError
+    false
+  end
+
   # The build is out of the line: merged, closed, or back to the owner.
   def released!(build, approved: false)
     build.reload
@@ -98,6 +126,7 @@ module MergeQueue
       User.lock.find(user.id)
       queue = builds(user).to_a
       next if queue.any? { |build| landing?(build) }
+      next if deploying(user).exists?
 
       queue.select(&:landing_at).each { |stale| stale.update!(landing_at: nil, approved_at: nil) }
       nxt = queue.find { |build| build.approved_at && !build.held? }

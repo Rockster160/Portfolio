@@ -227,7 +227,10 @@ Rails.application.routes.draw do
     get :sync_badge
     get :render_widget
   end
-  resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts
+  resources :prompts, only: [:index, :show, :update, :destroy], path: :prompts do
+    # What a Search question's box reads as it is typed into, on the page and in Byte.
+    get :search, on: :collection
+  end
 
   scope module: :users do
     get :login,         controller: :sessions,      action: :new
@@ -424,6 +427,7 @@ Rails.application.routes.draw do
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"
   post  "webhooks/byte/workspaces"       => "webhooks#byte_workspaces"
   post  "webhooks/byte/claude_sessions"  => "webhooks#byte_claude_sessions"
+  post  "webhooks/byte/builds"           => "webhooks#byte_create_build"
   patch "webhooks/byte/builds/:id"       => "webhooks#byte_update_build"
   post  "webhooks/byte/production_scripts"     => "webhooks#byte_create_production_script"
   patch "webhooks/byte/production_scripts/:id" => "webhooks#byte_update_production_script"

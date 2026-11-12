@@ -414,7 +414,12 @@ class SystemController < ApplicationController
   # Hands a request to a Feature Builder, with whatever notes were added to it.
   def build_feature_request
     feature_request = FeatureRequest.find(params[:id])
-    build = FeatureBuilder.start_from_request!(feature_request, user: current_user, notes: params[:notes])
+    build = FeatureBuilder.start_from_request!(
+      feature_request,
+      user:                  current_user,
+      notes:                 params[:notes],
+      attachment_signed_ids: Array(params[:attachment_signed_ids]).map(&:to_s),
+    )
     notice = build ? "Starting a Feature Builder for #{build.title}." : "That one can't be built right now."
     redirect_to system_feature_requests_path(anchor: "fr-#{feature_request.id}"), notice: notice
   end
@@ -429,6 +434,7 @@ class SystemController < ApplicationController
     @live = @sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     @pending = FeatureBuilder.pending(current_user)
     @queue = MergeQueue.builds(current_user).to_a
+    @deploying = MergeQueue.deploying(current_user).order(:finished_at).to_a
   end
 
   # Approving, holding and reordering the merge queue.
