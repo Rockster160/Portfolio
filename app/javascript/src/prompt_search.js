@@ -11,9 +11,18 @@
 // kept as `{ id: null, title }`. With `multiple`, the picks sit as chips ahead
 // of the box and the value is a list.
 //
+// With `options`, the list to pick from is handed over instead of searched for
+// on the server: each `{ id, title, icon, section }`, filtered as it's typed by
+// the same scoring the chore pickers use. An `icon` is drawn ahead of the title
+// the way it is everywhere else, and options sharing a `section` sit under it
+// as a heading, which the search also matches.
+//
 // The list is in the flow, not floating: inside a message bubble a floating
 // one is clipped by the bubble, and on a phone pushing the form down reads as
 // the list opening rather than covering what is underneath.
+
+import { score } from "./chore_search";
+import { renderIconValue } from "./icon_picker";
 
 const DEBOUNCE_MS = 140;
 
@@ -21,6 +30,25 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text == null ? "" : String(text);
   return div.innerHTML;
+}
+
+// A handed-over option as a result row: its icon drawn into the title.
+function localHit(option) {
+  const icon = document.createElement("span");
+  icon.className = "psearch-icon";
+  renderIconValue(icon, option.icon || "");
+  const title = String(option.title || "");
+  return {
+    id: option.id,
+    title,
+    title_html: `${icon.childNodes.length ? icon.outerHTML : ""}${escapeHtml(title)}`,
+    section: option.section || "",
+  };
+}
+
+function filterLocal(hits, term) {
+  if (!term) return hits;
+  return hits.filter((hit) => score(term, hit.title, hit.section ? [hit.section] : []) > 0);
 }
 
 function picksOf(value) {
@@ -60,7 +88,17 @@ function samePick(a, b) {
 export function createSearchPicker({ config, value, disabled = false, onChange }) {
   const multiple = !!config.multiple;
   const freeText = !!config.free_text;
-  let picks = picksOf(value);
+  const local = Array.isArray(config.options) ? config.options.map(localHit) : null;
+  // A handed-over pick is known by its id alone; its title and icon come from
+  // the option it names.
+  const localPicks = (list) => {
+    if (!local) return list;
+    return list.map((pick) => {
+      const hit = local.find((h) => String(h.id) === String(pick.id));
+      return hit ? { id: hit.id, title: hit.title, html: hit.title_html } : pick;
+    });
+  };
+  let picks = localPicks(picksOf(value));
   if (!multiple) picks = picks.slice(0, 1);
 
   let results = [];
@@ -180,7 +218,16 @@ export function createSearchPicker({ config, value, disabled = false, onChange }
       return;
     }
 
+    let section = "";
     options.forEach((option, idx) => {
+      const heading = option.hit?.section || "";
+      if (heading && heading !== section) {
+        const head = document.createElement("div");
+        head.className = "psearch-section";
+        head.textContent = heading;
+        menu.appendChild(head);
+      }
+      section = heading;
       const row = document.createElement("div");
       row.className = "psearch-option";
       row.setAttribute("role", "option");
@@ -231,6 +278,13 @@ export function createSearchPicker({ config, value, disabled = false, onChange }
 
   async function search() {
     const mine = ++sequence;
+    if (local) {
+      results = filterLocal(local, input.value.trim());
+      root.classList.remove("is-loading");
+      active = results.length ? 0 : -1;
+      if (open) renderMenu();
+      return;
+    }
     root.classList.add("is-loading");
     const params = new URLSearchParams({ query: config.query || "", term: input.value.trim() });
     if (config.title) params.set("title", config.title);
@@ -254,6 +308,10 @@ export function createSearchPicker({ config, value, disabled = false, onChange }
 
   function queue() {
     clearTimeout(timer);
+    if (local) {
+      search();
+      return;
+    }
     root.classList.add("is-loading");
     timer = setTimeout(search, DEBOUNCE_MS);
   }
@@ -353,7 +411,7 @@ export function createSearchPicker({ config, value, disabled = false, onChange }
   root.searchPicker = {
     value: read,
     setValue(next) {
-      picks = picksOf(next);
+      picks = localPicks(picksOf(next));
       if (!multiple) picks = picks.slice(0, 1);
       paint();
     },

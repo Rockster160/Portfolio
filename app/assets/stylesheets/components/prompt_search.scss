@@ -178,6 +178,36 @@
     }
   }
 
+  // A heading over the options that share a section.
+  .psearch-section {
+    padding: 10px 12px 4px;
+    color: var(--ps-muted);
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .psearch-section + .psearch-option { border-top: 0; }
+
+  // A handed-over option's icon, ahead of its title.
+  .psearch-icon {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    width: 1.4em;
+    height: 1.4em;
+    font-size: 1.15em;
+    line-height: 1;
+
+    img, > svg {
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+
   .psearch-option-free .psearch-title {
     color: var(--ps-muted);
     font-style: italic;
