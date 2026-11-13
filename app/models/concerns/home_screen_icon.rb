@@ -9,17 +9,26 @@ module HomeScreenIcon
   extend ActiveSupport::Concern
 
   DEFAULT_COLOR = "#000712".freeze
-  DEFAULT_ICONS = [
-    { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-    { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-  ].freeze
+  DEFAULT_FAVICON_DIR = "/favicon".freeze
   # An emoji or glyph on a flat colour is a few KB; a household photo icon a
   # little more.
   MAX_ICON_BYTES = 256.kilobytes
   PNG_SIGNATURE = "\x89PNG\r\n\x1A\n".b
   ICON_COLOR = /\A#\h{6}\z/
 
+  # The icon set under `public/` a page wears, as an install manifest lists it.
+  def self.icons_in(dir)
+    [192, 512].map { |size|
+      { src: "#{dir}/android-chrome-#{size}x#{size}.png", sizes: "#{size}x#{size}", type: "image/png" }
+    }
+  end
+
   included do
+    # Where the icon set a page wears until its own is picked lives, and the
+    # colour that goes with it.
+    class_attribute :favicon_dir, default: DEFAULT_FAVICON_DIR
+    class_attribute :favicon_color, default: DEFAULT_COLOR
+
     normalizes :icon, :icon_color, with: ->(value) { value.presence }
 
     validates :icon, length: { maximum: 200 }
@@ -45,8 +54,12 @@ module HomeScreenIcon
     icon_png.present?
   end
 
-  def home_screen_color(default=DEFAULT_COLOR)
+  def home_screen_color(default=favicon_color)
     icon_color.presence || default
+  end
+
+  def favicon(file)
+    "#{favicon_dir}/#{file}"
   end
 
   # Takes the PNG as the data URL the canvas hands over, or blank to clear it.
@@ -69,10 +82,11 @@ module HomeScreenIcon
 
   # The install manifest: opens on `path` (with `query` on the way in),
   # named `label`, wearing the icon at `icon_src`, or `default_icons` and
-  # `default_color` until one is picked.
+  # `default_color` (the class's own favicon set unless given) until one is
+  # picked.
   def install_manifest(id:, path:, icon_src:, description:, **opts)
     label = opts[:label].presence || name
-    color = home_screen_color(opts[:default_color] || DEFAULT_COLOR)
+    color = home_screen_color(opts[:default_color] || favicon_color)
     query = opts.fetch(:query, {}).merge(source: :pwa).to_query
     icons = (
       if icon_src
@@ -80,7 +94,7 @@ module HomeScreenIcon
           { src: icon_src, sizes: "#{size}x#{size}", type: "image/png", purpose: :any }
         }
       else
-        opts[:default_icons] || DEFAULT_ICONS
+        opts[:default_icons] || HomeScreenIcon.icons_in(favicon_dir)
       end
     )
 

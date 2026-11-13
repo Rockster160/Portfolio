@@ -17,6 +17,9 @@
 class ListBuilder < ApplicationRecord
   include HomeScreenIcon
 
+  self.favicon_dir = "/list_builder_favicon"
+  self.favicon_color = "#0059FD"
+
   belongs_to :user
   belongs_to :list
 

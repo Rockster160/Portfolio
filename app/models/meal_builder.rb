@@ -16,6 +16,9 @@
 class MealBuilder < ApplicationRecord
   include HomeScreenIcon
 
+  self.favicon_dir = "/meal_builder_favicon"
+  self.favicon_color = "#0059FD"
+
   belongs_to :user
 
   validates :name, :parameterized_name, presence: true
