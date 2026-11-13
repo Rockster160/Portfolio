@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "Builder home screen icons", type: :request do
+RSpec.describe "Home screen icons", type: :request do
   let(:user) { User.me }
   let(:password) { "password123" }
   let(:png) { "\x89PNG\r\n\x1A\n".b + ("pixels" * 10) }
@@ -11,12 +11,13 @@ RSpec.describe "Builder home screen icons", type: :request do
     post "/login", params: { user: { username: user.username, password: password } }
   end
 
-  shared_examples "an installable builder" do |key, path, description|
-    let(:base) { "/jarvis/#{path}/#{builder.to_param}" }
+  shared_examples "an installable page" do |key, path, description|
+    let(:base) { "#{path}/#{builder.to_param}" }
     let(:param_key) { key }
+    let(:token_param) { :t }
 
     def install_path(name, token: builder.install_token)
-      "#{base}/#{name}?t=#{token}"
+      "#{base}/#{name}?#{token_param}=#{token}"
     end
 
     def submit(fields)
@@ -33,8 +34,8 @@ RSpec.describe "Builder home screen icons", type: :request do
       get base
       icon_url = response.body[%r{rel="apple-touch-icon" sizes="180x180" href="([^"]+)"}, 1]
       icon_url = CGI.unescapeHTML(icon_url)
-      expect(icon_url).to start_with("#{base}/icon.png?t=")
-      expect(response.body).to include("#{base}/manifest?t=", "content=\"#224466\"")
+      expect(icon_url).to start_with("#{base}/icon.png?#{token_param}=")
+      expect(response.body).to include("#{base}/manifest?", "#{token_param}=", "content=\"#224466\"")
 
       get "/logout"
       get icon_url
@@ -95,19 +96,33 @@ RSpec.describe "Builder home screen icons", type: :request do
     end
   end
 
+  describe "a list" do
+    let(:builder) { create(:list, user: user, name: "Pantry", description: nil) }
+    let(:other) { create(:list, user: user, name: "Garage") }
+
+    it_behaves_like "an installable page", :list, "/lists", "List" do
+      let(:token_param) { :key }
+    end
+
+    it "keeps the view it was installed from" do
+      get "/lists/#{builder.id}/manifest?key=#{builder.install_token}&mode=compact"
+      expect(ActiveSupport::JSON.decode(response.body)["start_url"]).to eq("/lists/#{builder.id}?mode=compact&source=pwa")
+    end
+  end
+
   describe "a list builder" do
     let(:list) { create(:list, user: user) }
     let(:builder) { user.list_builders.create!(name: "Pantry", list: list, items: []) }
     let(:other) { user.list_builders.create!(name: "Garage", list: list, items: []) }
 
-    it_behaves_like "an installable builder", :list_builder, :list_builders, "List Builder"
+    it_behaves_like "an installable page", :list_builder, "/jarvis/list_builders", "List Builder"
   end
 
   describe "a meal builder" do
     let(:builder) { user.meal_builders.create!(name: "Breakfast", items: []) }
     let(:other) { user.meal_builders.create!(name: "Dinner", items: []) }
 
-    it_behaves_like "an installable builder", :meal_builder, :meal_builders, "Meal Builder"
+    it_behaves_like "an installable page", :meal_builder, "/jarvis/meal_builders", "Meal Builder"
 
     it "keeps the PNG out of the builder's JSON" do
       builder.update!(icon: "🥚", icon_data_url: data_url)
