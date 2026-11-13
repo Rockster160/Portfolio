@@ -1,13 +1,13 @@
 // The board's status rings (buddy/rings.js) doing what each ring's broadcast
-// says and nothing keyed to what it's for: a ring's `sound` when it runs out,
-// a `hush` greying the others and holding their sounds, a `color` kept through
-// it. Printed as JSON for board_rings_spec.rb.
+// says and nothing keyed to what it's for: a `hush` greying the others, a
+// `color` kept through it, and no sound of its own when it runs out. Printed as
+// JSON for board_rings_spec.rb.
 
 import esbuild from "esbuild";
 import { fileURLToPath } from "url";
 
 // The feed and the speaker are stubbed: the runner plays the broadcasts itself
-// and records the tunes.
+// and records any tune, so one a ring set off would show.
 const stubs = {
   name: "stubs",
   setup(build) {
@@ -17,8 +17,7 @@ const stubs = {
     }));
     build.onLoad({ filter: /^sound$/, namespace: "stub" }, () => ({
       contents:
-        "export const playBoardSound = (key) => globalThis.__played.push(key);\n" +
-        "export const canPlayBoardSound = () => true;",
+        "export const playBoardSound = (notes) => globalThis.__played.push(notes);",
       loader: "js",
     }));
     build.onLoad({ filter: /^monitor$/, namespace: "stub" }, () => ({
@@ -83,14 +82,11 @@ function fakeEl() {
 }
 globalThis.document = { createElement: () => fakeEl(), visibilityState: "visible" };
 
-// The claim server (see ring_claim.js): the first claim of a sounding wins.
-const claimed = new Set();
-globalThis.fetch = async (_url, opts) => {
-  const b = JSON.parse(opts.body);
-  const id = `${b.owner_id}:${b.key}:${b.at}:${b.slot}`;
-  const play = !claimed.has(id);
-  claimed.add(id);
-  return { ok: true, json: async () => ({ play }) };
+// Anything a ring asks the server, such as a claim on a sound.
+const requests = [];
+globalThis.fetch = async (url) => {
+  requests.push(url);
+  return { ok: true, json: async () => ({}) };
 };
 const store = {};
 globalThis.window = {
@@ -111,20 +107,19 @@ const send = (timers, groups = ["Whisper"]) => globalThis.__feed.received({ owne
 const ring = (key) => container.children.find((c) => c.dataset.durationKey === key);
 const out = { channel: globalThis.__channel };
 
-// Two rings run out: only the one that names a sound plays it.
+// Two rings run out, one still carrying the sound field rings used to have.
 send([
   { key: "a", last: now - 600, next: now - 5, sound: "nap" },
   { key: "b", last: now - 600, next: now - 5 },
 ]);
 await settle();
-out.overdue_played = [...globalThis.__played];
+out.overdue = { played: [...globalThis.__played], requests: [...requests] };
 
 // A hush starts: the others grey (but not one with its own colour, nor the
-// hush itself), and a newly overdue sound waits.
-globalThis.__played = [];
+// hush itself).
 send([
-  { key: "a", last: now - 600, next: now - 5, sound: "nap" },
-  { key: "c", last: now - 600, next: now - 5, sound: "wake" },
+  { key: "a", last: now - 600, next: now - 5 },
+  { key: "c", last: now - 600, next: now - 5 },
   { key: "hush", last: now, next: now + 600, hush: true },
   { key: "own", last: now, next: now + 300, color: "#800000" },
 ]);
@@ -135,11 +130,10 @@ out.hushed = {
   own: ring("own").classList.has("quieted"),
   own_color: ring("own").style.values["--ring-color"],
   own_flag: ring("own").dataset.ringColor,
-  played: [...globalThis.__played],
 };
 
 // The hush ends: the feed is asked again, the colour goes with the ring.
-send([{ key: "a", last: now - 600, next: now - 5, sound: "nap" }, { key: "own", last: now, next: now + 300 }]);
+send([{ key: "a", last: now - 600, next: now - 5 }, { key: "own", last: now, next: now + 300 }]);
 out.after_hush = {
   refreshes: globalThis.__refreshes,
   a: ring("a").classList.has("quieted"),

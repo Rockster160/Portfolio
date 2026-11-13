@@ -202,6 +202,38 @@ module FeatureBuilder
     build
   end
 
+  CANCELED_REASON = "canceled from the Claude page".freeze
+
+  # The Cancel button: the Mini closes the session and the PR and removes the
+  # worktree and the branch on its own once it has said yes. False when it
+  # didn't answer, and the build is left as it was.
+  # rubocop:disable Naming/PredicateMethod -- this sends; the boolean is whether it got there
+  def cancel!(build)
+    return true if build.status_finished?
+
+    told = ByteLocal.builder(
+      :cancel,
+      build_id:  build.id,
+      pr_number: build.pr_number,
+      branch:    build.branch,
+    )
+    return false unless told
+
+    build.update!(
+      status:        :finished,
+      finished_at:   Time.current,
+      closed_reason: CANCELED_REASON,
+      question:      nil,
+      asked_at:      nil,
+    )
+    repaint!(build)
+    refresh_chip!(build.user)
+    refresh_needs_you!(build.user)
+    MergeQueue.released!(build)
+    true
+  end
+  # rubocop:enable Naming/PredicateMethod
+
   # Rewrites the build's one message in place, the way an alert's bubble is.
   def repaint!(build)
     message = build.byte_message

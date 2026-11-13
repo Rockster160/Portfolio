@@ -358,6 +358,7 @@ module ByteLocal
   #   :message  type `text:` into its session, resuming it if it was closed
   #   :stop     close the session and keep the work
   #   :finish   its PR was merged or closed (`merged:`); the worktree goes too
+  #   :cancel   close its PR and clean up like :finish (`pr_number:`, `branch:`)
   # Builders only run on the Mini.
   def builder(action, build_id:, **fields)
     uri = URI.join(base_url(:mini), "/byte/builder")

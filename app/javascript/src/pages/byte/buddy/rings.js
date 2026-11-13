@@ -1,16 +1,15 @@
 // Status rings on the board: countdowns a Jil task keeps up to date, each a
 // ring that fills as its time runs. Server-authoritative: a task broadcasts
-// { timers: [{ key, label, last, next, sound?, once?, hush?, color? }], groups } on the
-// "board-rings" channel and this is pure presentation off that stream.
+// { timers: [{ key, label, last, next, hush?, color? }], groups } on the
+// "board-rings" channel and this is pure presentation off that stream. A ring
+// makes no sound: a task that wants one when a ring runs out sends it to the
+// board itself (Buddy.sound).
 //
 // Geometry is r=45 in a 100 viewBox. The readout is whole minutes, then :Ns in
 // the final minute, negative once overdue. Everything a ring DOES comes with it,
 // so nothing here knows what any ring is for:
-//   sound - the tune it plays when it runs out (see buddy/sound.js), and again
-//           every five minutes while it stays overdue. None means it's silent.
-//   once  - the sound plays when it runs out and never repeats.
-//   hush  - while it is counting, the board is hushed: every other ring greys
-//           and their sounds are held. When it ends the feed is asked again.
+//   hush  - while it is counting, the board is hushed: every other ring greys.
+//           When it ends the feed is asked again.
 //   color - its own colour, kept through a hush and never pulsing when overdue.
 // The row hides itself when there are no timers, so an idle board shows the
 // pet alone.
@@ -20,8 +19,6 @@
 
 import { Monitor } from "../../dashboard/cells/monitor";
 import { Time } from "../../dashboard/cells/_time";
-import { playBoardSound, canPlayBoardSound } from "./sound";
-import { soundOnce } from "./ring_claim";
 import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./board_scope";
 
 const CHANNEL = "board-rings";
@@ -152,32 +149,6 @@ export function initBoardRings({ container, app }) {
       timerEl.textContent = formatRemaining(remaining);
       timerEl.classList.toggle("overdue", remaining <= 0);
     }
-
-    return remaining;
-  }
-
-  // A ring that runs out plays its own sound, then again every five minutes
-  // until it's reset - once across every screen showing it (see ring_claim.js).
-  // A hush holds them all.
-  function soundOverdue(overdue, hushed) {
-    if (hushed) return;
-
-    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
-    overdue.forEach((timerData) => {
-      if (!timerData.sound) return;
-
-      soundOnce(
-        {
-          ownerId: lastOwnerId,
-          key: timerData.key,
-          next: timerData.next,
-          once: timerData.once,
-          audible: canPlayBoardSound(),
-          nowSec,
-        },
-        () => playBoardSound(timerData.sound),
-      );
-    });
   }
 
   // The rings hushing the board right now: ones that say so and are still
@@ -192,12 +163,7 @@ export function initBoardRings({ container, app }) {
   function updateAllRings() {
     const hushing = hushingKeys();
     const hushed = hushing.size > 0;
-    const overdue = [];
-    timers.forEach((timerData) => {
-      const remaining = updateRing(timerData);
-      if (remaining !== undefined && remaining <= 0) overdue.push(timerData);
-    });
-    soundOverdue(overdue, hushed);
+    timers.forEach(updateRing);
     // A hush greys everything but the hushing rings themselves and any ring
     // with its own colour, so the other countdowns recede.
     container.querySelectorAll(".duration-ring").forEach((ring) => {

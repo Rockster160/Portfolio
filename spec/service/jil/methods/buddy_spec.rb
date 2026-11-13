@@ -1011,9 +1011,13 @@ RSpec.describe Jil::Methods::Buddy do
 
       it "yells on the board it names until resolve stops it" do
         code = <<~JIL
+          chime = Sound.new({
+            chimeHigh = SoundNote.beep(320, 523, 0.55, "sine")::SoundNote
+            chimeLow = SoundNote.beep(220, 392, 0.6, "sine")::SoundNote
+          })::Sound
           a = Buddy.yell("dinner", "🍕 Dinner's ready", {
             aBoard = Keyword.board("Kitchen")::String
-            aSound = Keyword.sound("chime")::String
+            aSound = Keyword.sound(chime)::Sound
             aMinutes = Keyword.minutes(10)::Numeric
           })::Boolean
         JIL
@@ -1023,7 +1027,11 @@ RSpec.describe Jil::Methods::Buddy do
         expect(ran.ctx[:error]).to be_blank
         expect(ran.ctx[:vars][:a][:value]).to be(true)
         yell = Buddy::BoardYell.yells(kitchen.reload)["dinner"]
-        expect(yell).to include("body" => "Dinner's ready", "icon" => "🍕", "sound" => "chime")
+        expect(yell).to include(
+          "body"  => "Dinner's ready",
+          "icon"  => "🍕",
+          "sound" => [[320, 523.0, 0.55, "sine"], [220, 392.0, 0.6, "sine"]],
+        )
         expect(yell["expires_at"]).to be_present
         expect(BuddyBoardYellExpireWorker).to have_received(:perform_at).with(anything, kitchen.id, "dinner", yell["raised_at"])
         expect(BuddyAlert.open_for(owner, "dinner")).to be_nil
@@ -1048,6 +1056,67 @@ RSpec.describe Jil::Methods::Buddy do
         expect(ran.ctx[:output]).to include("No board named to yell on - boards: Kitchen")
         expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen))
         expect(Buddy::BoardYell.yells(kitchen.reload)).to be_empty
+      end
+    end
+
+    describe "#sound" do
+      let!(:kitchen) {
+        owner.byte_conversations.create!(
+          mode: :buddy, name: "Kitchen", metadata: { "board" => true, "chore_tags" => ["All"] },
+        )
+      }
+      let!(:office) {
+        owner.byte_conversations.create!(
+          mode: :buddy, name: "Office", metadata: { "board" => true, "chore_tags" => ["All"] },
+        )
+      }
+      let(:sent) { [] }
+
+      before {
+        allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| sent << payload[:data] }
+      }
+
+      it "sends the notes it was built from to the board it names, and to no other board" do
+        code = <<~JIL
+          nap = Sound.new({
+            napHigh = SoundNote.beep(400, 392, 0.9, "sine")::SoundNote
+            napGap = SoundNote.rest(200)::SoundNote
+            napLow = SoundNote.beep(600, 262, 0.87, "triangle")::SoundNote
+          })::Sound
+          long = nap.duration()::Numeric
+          played = Buddy.sound("Kitchen", nap)::Boolean
+        JIL
+        Jil::Validator.validate!(code)
+        ran = run(code)
+
+        expect(ran.ctx[:error]).to be_blank
+        expect(ran.ctx[:vars][:played][:value]).to be(true)
+        expect(ran.ctx[:vars][:long][:value]).to eq(1200)
+        expect(sent).to eq([
+          {
+            kind:            :board_sound,
+            conversation_id: kitchen.id,
+            notes:           [[400, 392.0, 0.9, "sine"], [200, 0, 0, nil], [600, 262.0, 0.87, "triangle"]],
+          },
+        ])
+      end
+
+      it "plays nowhere for a board it doesn't know, or a sound with nothing to hear" do
+        ran = run(<<~JIL)
+          beepOnce = Sound.new({
+            beepNote = SoundNote.beep(300, 440, 0.5, "sine")::SoundNote
+          })::Sound
+          silence = Sound.new({
+            pause = SoundNote.rest(500)::SoundNote
+          })::Sound
+          a = Buddy.sound("Garage", beepOnce)::Boolean
+          b = Buddy.sound("Kitchen", silence)::Boolean
+        JIL
+
+        expect(ran.ctx[:vars][:a][:value]).to be(false)
+        expect(ran.ctx[:vars][:b][:value]).to be(false)
+        expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen, Office))
+        expect(sent).to be_empty
       end
     end
 

@@ -91,7 +91,7 @@ import { initSoundToggle } from "./buddy/sound_toggle";
 import { initReloadCountdown, updateWanted } from "./reload_countdown";
 import { pageReady } from "./reload_preflight";
 import { playBoardSound } from "./buddy/sound";
-import { boardTags, groupsOverlap, boardOwnerId, feedOwnerMatches } from "./buddy/board_scope";
+import { boardTags } from "./buddy/board_scope";
 import {
   UnreadTracker,
   countsAsUnread,
@@ -3637,21 +3637,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     received(payload) {
       const data = payload?.data;
       if (!data) return;
-      // A Jil task can play a sound on the wall with
-      //   Monitor.broadcast("byte", { ...sound: "wake", groups: [...] })
-      // — the board's own channel, alongside the board-rings one the rings
-      // ride. Board only, and only when the sound's groups overlap what
-      // this board watches AND the feed is this board's owner's, so one board's
-      // sound doesn't play on all of them, nor a housemate's on the owner's.
-      // owner_id rides the envelope (payload), beside id/channel.
-      if (
-        data.sound &&
-        app.dataset.board === "true" &&
-        groupsOverlap(data.groups, boardTags(app)) &&
-        feedOwnerMatches(payload?.owner_id, boardOwnerId(app))
-      ) {
-        playBoardSound(data.sound);
-      }
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
         updateSleepChip(); // mode may have changed under the active thread
@@ -3706,6 +3691,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       // pet starts or stops shouting.
       if (data.kind === "board_yells") {
         if (app.dataset.board === "true" && data.conversation_id === currentConversationId) applyYells(data.yells);
+        return;
+      }
+      // A sound a task sent to this board by name (Buddy::BoardSound). Every
+      // screen hears the broadcast; only the board it names plays it.
+      if (data.kind === "board_sound") {
+        if (app.dataset.board === "true" && data.conversation_id === currentConversationId) playBoardSound(data.notes);
         return;
       }
       if (data.kind === "conversation_read") {

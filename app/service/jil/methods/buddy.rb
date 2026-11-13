@@ -234,6 +234,18 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     boards.any?
   end
 
+  # Plays `sound` on the board named `board` (or "all"), and nowhere else. A
+  # name no board has plays nothing, returns false, and lists the names it
+  # knows in the output, as `yell` does.
+  def sound(board, sound)
+    played = ::Buddy::BoardSound.play!(user: @jil.user, board: board, sound: sound)
+    if ::Buddy::BoardYell.boards_for(@jil.user, board).empty?
+      names = ::Buddy::BoardYell.board_names(@jil.user).join(", ").presence || "none"
+      @jil.ctx[:output] << "No board called \"#{board.to_s.strip}\" - boards: #{names}"
+    end
+    played.any?
+  end
+
   # A message with buttons under it - a question for the people it concerns,
   # each in their own thread, answered by a press. Not an alert: nothing pins
   # and nothing stands open, so leaving it unanswered is fine.

@@ -1,7 +1,8 @@
 require "rails_helper"
 
-# The board's status rings do what each ring's broadcast says - its sound, a
-# hush, its own colour - with nothing keyed to what any ring is for.
+# The board's status rings do what each ring's broadcast says - a hush, its
+# own colour - with nothing keyed to what any ring is for. A ring running out is
+# silent: a sound comes from the task that sends it to the board.
 RSpec.describe "Board status rings" do
   let(:result) { JsRunner.output("spec/javascript/board_rings_runner.js") }
 
@@ -9,14 +10,14 @@ RSpec.describe "Board status rings" do
     expect(result["channel"]).to eq("board-rings")
   end
 
-  it "plays a ring's own sound when it runs out, and nothing for a ring without one" do
-    expect(result["overdue_played"]).to eq(["nap"])
+  it "plays nothing and claims nothing when a ring runs out, even one naming a sound" do
+    expect(result["overdue"]).to eq("played" => [], "requests" => [])
   end
 
-  it "greys the other rings under a hush, keeps a ring's own colour, and holds sounds" do
+  it "greys the other rings under a hush and keeps a ring's own colour" do
     expect(result["hushed"]).to eq(
       "a" => true, "hush" => false, "own" => false,
-      "own_color" => "#800000", "own_flag" => "true", "played" => []
+      "own_color" => "#800000", "own_flag" => "true"
     )
   end
 

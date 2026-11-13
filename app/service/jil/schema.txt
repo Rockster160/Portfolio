@@ -560,7 +560,8 @@
   #boardAlert("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String warmth:Slider play:Slider weight:Slider strain:Slider reach:Slider face:[%SYSTEM_FACES% *] strength:Numeric]))::Boolean
   #dream("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String warmth:Slider play:Slider weight:Slider strain:Slider reach:Slider face:[%SYSTEM_FACES% *] strength:Numeric]))::Boolean
   #mood("Key" String BR content([who:[%WHO%] groups:String warmth:Slider play:Slider weight:Slider strain:Slider reach:Slider face:[%SYSTEM_FACES% *] strength:Numeric]))::Boolean // Holds a look on the boards its groups aim at, with no words: a face by name, or each axis 0-1 (only the ones given count). Cleared with Buddy.resolve.
-  #yell("Key" String BR "Message" Text BR content([board:[%BOARDS% *] icon:String sound:["chime" "alarm" "nap" "wake" "birthday"] minutes:Numeric]))::Boolean // The named board's pet yells it in its thought bubble until Buddy.resolve, the minutes run out, or a tap on the pet. board is a board's name, or all for every board; no board or an unknown one yells nowhere. A leading emoji shows big. sound plays once as it starts.
+  #yell("Key" String BR "Message" Text BR content([board:[%BOARDS% *] icon:String sound:Sound minutes:Numeric]))::Boolean // The named board's pet yells it in its thought bubble until Buddy.resolve, the minutes run out, or a tap on the pet. board is a board's name, or all for every board; no board or an unknown one yells nowhere. A leading emoji shows big. sound plays once as it starts.
+  #sound("Board" [%BOARDS% *] BR Sound)::Boolean // Plays the sound on the board with that name (or all for every board), and only there: any other board or page stays quiet. False when no board has that name or the sound has nothing in it.
   #resolve("Key" String BR "Message" Text BR "Who" String)::Boolean
   #message("Key" String BR "Message" Text BR content([who:[%WHO%] Buddy.button]))::Numeric
   #button("Label" String BR content([trigger:String data:Hash resolve:Boolean resolved:String color:String]))::Hash
@@ -569,6 +570,12 @@
   #clearMiniAlert("Key" String BR "Who" String)::Boolean
   #rotate("Key" String BR "Label" String BR Numeric ["seconds" "minutes" "hours"] BR "Again" String BR "Done adds" String " to " String)::Boolean
   #timer(Numeric ["seconds" "minutes" "hours"] BR content([label:String board:String groups:String]))::Boolean
+[Sound]
+  #new(content(SoundNote [SoundNote.beep SoundNote.rest]))
+  .duration::Numeric // milliseconds, start to finish
+*[SoundNote]
+  #beep(Numeric(400):"Milliseconds" Numeric(440):"Hertz" Slider(0.9):"Volume" ["sine" "square" "sawtooth" "triangle"])
+  #rest(Numeric(200):"Milliseconds")
 [Interview]@me
   #prep(Numeric:"Agenda Item")::Hash // Starts the pre-interview brief for the interview on that agenda row. Returns at once; the brief arrives on its own.
   #headsUp(Numeric:"Agenda Item")::Hash // Sends the join link for the interview on that agenda row, or a heads-up to watch the phone when it is a call.

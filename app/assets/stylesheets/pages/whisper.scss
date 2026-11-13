@@ -20,8 +20,7 @@ html.html-ctr-whisper {
   gap: 30px;
 }
 
-.whisper-notify-toggle,
-.whisper-mute-toggle {
+.whisper-notify-toggle {
   position: absolute;
   top: 20px;
   color: rgba(255, 255, 255, 0.25);
@@ -215,23 +214,6 @@ html.html-ctr-whisper {
       }
 
       &:disabled { opacity: 0.5; cursor: wait; }
-    }
-  }
-}
-
-.whisper-mute-toggle {
-  left: 20px;
-
-  .mute-icon-off {
-    display: none;
-  }
-
-  &.muted {
-    .mute-icon-on {
-      display: none;
-    }
-    .mute-icon-off {
-      display: inline;
     }
   }
 }

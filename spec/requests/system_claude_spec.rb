@@ -147,6 +147,44 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response).to redirect_to(system_claude_path)
   end
 
+  describe "canceling a build" do
+    it "asks the Mini to close its PR and clean up, and finishes it" do
+      cancel = stub_request(:post, %r{/byte/builder\z}).with(
+        body: hash_including(
+          "action"    => "cancel",
+          "build_id"  => build.id,
+          "pr_number" => 42,
+          "branch"    => "byte/1-dark-mode",
+        ),
+      ).to_return(status: 200, body: "{}")
+
+      post system_claude_cancel_path(id: build.id)
+
+      expect(cancel).to have_been_requested
+      expect(build.reload).to be_status_finished
+      expect(build.closed_reason).to eq(FeatureBuilder::CANCELED_REASON)
+      expect(flash[:notice]).to eq("Canceled Dark mode.")
+    end
+
+    it "leaves the build running when the Mini doesn't answer" do
+      stub_request(:post, %r{/byte/builder\z}).to_raise(Errno::ECONNREFUSED)
+
+      post system_claude_cancel_path(id: build.id)
+
+      expect(build.reload).to be_status_running
+      expect(flash[:notice]).to include("wasn't canceled")
+    end
+
+    it "offers Cancel on an unfinished build and not on a finished one" do
+      get system_claude_path
+      expect(response.body).to include(system_claude_cancel_path(id: build.id))
+
+      build.update!(status: :finished)
+      get system_claude_path
+      expect(response.body).not_to include(system_claude_cancel_path(id: build.id))
+    end
+  end
+
   describe "the merge queue" do
     before { allow(ByteLocal).to receive(:builder).and_return(true) }
 

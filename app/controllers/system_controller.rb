@@ -556,6 +556,19 @@ class SystemController < ApplicationController
     redirect_to system_claude_path, notice: notice
   end
 
+  # Gives up on a build: its session, PR, worktree and branch all go.
+  def cancel_claude
+    build = FeatureBuild.where(user: current_user).find(params[:id])
+    notice = (
+      if FeatureBuilder.cancel!(build)
+        "Canceled #{build.full_title}."
+      else
+        "The Mini didn't answer, so #{build.full_title} wasn't canceled."
+      end
+    )
+    redirect_to system_claude_path, notice: notice
+  end
+
   # Every failure the app reported, grouped so a loop reads as one line, with
   # the occurrences one tap away.
   #

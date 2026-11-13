@@ -1,0 +1,5 @@
+<% unless build.status_finished? %>
+  <%= button_to "Cancel", system_claude_cancel_path(id: build.id),
+        class: "cs-stop", form_class: "cs-stop-form basic",
+        data: { confirm: "Cancel this build? Its session closes, its PR is closed, and its branch and worktree are deleted." } %>
+<% end %>

@@ -89,6 +89,7 @@
               <%= button_to "Hold", system_claude_queue_path(id: build.id, act: :hold), class: "cs-link", form_class: "cs-stop-form basic" %>
             <% end %>
           <% end %>
+          <%= render "system/claude_cancel", build: build %>
         </div>
       </div>
     <% end %>

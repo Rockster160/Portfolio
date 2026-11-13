@@ -13,7 +13,6 @@ module Buddy
 
     KEY = "yells".freeze
     ALL = "all".freeze
-    SOUNDS = %i[chime alarm nap wake birthday].freeze
 
     # The boards `name` points at among the ones `user` may open: the one so
     # named (case aside), or every one of them for "all". Blank names none.
@@ -46,7 +45,7 @@ module Buddy
       entry = {
         "body"       => text,
         "icon"       => icon,
-        "sound"      => sound_key(sound),
+        "sound"      => ::Buddy::BoardSound.notes(sound).presence,
         "raised_at"  => now.iso8601(3),
         "expires_at" => expires_at&.iso8601(3),
       }.compact
@@ -95,11 +94,6 @@ module Buddy
       yells(board).map { |key, yell| yell.merge("key" => key) }.sort_by { |yell| yell["raised_at"].to_s }.reverse
     end
 
-    def sound_key(sound)
-      sound = sound.to_s.strip.downcase.to_sym
-      SOUNDS.include?(sound) ? sound.to_s : nil
-    end
-
     # Rewrites the board's yells under a row lock and tells its screens, only
     # when something changed.
     def write!(board)
@@ -119,11 +113,14 @@ module Buddy
 
     # Everyone who can see the board: a shared board's whole household, else
     # its owner.
-    def broadcast!(board)
+    def viewer_ids(board)
       owner = board.user
-      viewers = board.shared? ? owner.chore_household_user_ids : [owner.id]
+      board.shared? ? owner.chore_household_user_ids : [owner.id]
+    end
+
+    def broadcast!(board)
       data = { kind: :board_yells, conversation_id: board.id, yells: wire(board) }
-      ::User.where(id: viewers).find_each do |viewer|
+      ::User.where(id: viewer_ids(board)).find_each do |viewer|
         ::MonitorChannel.broadcast_to(viewer, { id: :byte, channel: :byte, data: data })
       end
     end

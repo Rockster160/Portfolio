@@ -67,7 +67,6 @@ Rails.application.routes.draw do
   get "/whisper", to: redirect(subdomain: "whisper", path: "/")
   post "/whisper/log_vomit" => "whisper#log_vomit"
 
-  post "/ring_claims" => "ring_claims#create", as: :ring_claims
   post "/client_errors" => "client_errors#create", as: :client_errors
 
   get "/fae", to: redirect(subdomain: "fae", path: "/")
@@ -797,6 +796,7 @@ Rails.application.routes.draw do
     get "/system/errors" => "system#errors", as: :system_errors
     get "/system/claude" => "system#claude", as: :system_claude
     post "/system/claude/:id/stop" => "system#stop_claude", as: :system_claude_stop
+    post "/system/claude/:id/cancel" => "system#cancel_claude", as: :system_claude_cancel
     post "/system/claude/questions" => "system#claude_questions", as: :system_claude_questions
     post "/system/claude/:id/queue/:act" => "system#update_queue", as: :system_claude_queue
     get "/system/production_scripts" => "system#production_scripts", as: :system_production_scripts

@@ -3,3 +3,4 @@
         class: "cs-stop", form_class: "cs-stop-form basic",
         data: { confirm: "Close this build's session? Its work is kept, and PR feedback picks it back up." } %>
 <% end %>
+<%= render "system/claude_cancel", build: build %>

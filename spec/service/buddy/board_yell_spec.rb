@@ -53,12 +53,12 @@ RSpec.describe Buddy::BoardYell do
       expect(MonitorChannel).to have_received(:broadcast_to).with(user, sent)
     end
 
-    it "keeps a sound it knows and drops one it doesn't" do
-      yell!(sound: "Alarm")
-      yell!(key: "other", sound: "kazoo")
+    it "keeps a sound as the notes it plays, and drops a bare name" do
+      yell!(sound: [[400, 392, 0.9, "sine"], [200, 0, 0, nil]])
+      yell!(key: "other", sound: "alarm")
 
       sounds = described_class.yells(kitchen.reload).transform_values { |y| y["sound"] }
-      expect(sounds).to eq("dinner" => "alarm", "other" => nil)
+      expect(sounds).to eq("dinner" => [[400, 392.0, 0.9, "sine"], [200, 0, 0, nil]], "other" => nil)
     end
 
     it "replaces the words under a standing key rather than adding a second" do

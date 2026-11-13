@@ -1,6 +1,4 @@
-import { audioState, beeps } from "./dashboard/vars";
 import { Monitor } from "./dashboard/cells/monitor";
-import { soundOnce } from "./byte/buddy/ring_claim";
 import { Time } from "./dashboard/cells/_time";
 import {
   checkWhisperNotificationStatus,
@@ -24,37 +22,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const timerMode = params.timer || "ring"; // "ring" (default) or "clock"
 
   let timers = [];
-  let feedOwnerId; // Whose feed the timers are, for claiming their sounds
   let wasQuietActive = false;
 
   const CIRCUMFERENCE = 2 * Math.PI * 45;
-
-  const volume = 0.9;
-
-  let shouldPlayHappyBirthday = false;
-  let lastMonths = null;
-  let lastStatus = null;
-
-  // Mute functionality
-  const muteBtn = container.querySelector(".whisper-mute-toggle");
-  let isMuted = localStorage.getItem("whisper-muted") === "true";
-
-  function updateMuteButton() {
-    if (muteBtn) {
-      muteBtn.classList.toggle("muted", isMuted);
-    }
-  }
-
-  function toggleMute() {
-    isMuted = !isMuted;
-    localStorage.setItem("whisper-muted", isMuted);
-    updateMuteButton();
-  }
-
-  if (muteBtn) {
-    muteBtn.addEventListener("click", toggleMute);
-    updateMuteButton();
-  }
 
   // Notification toggle functionality
   const notifyBtn = container.querySelector(".whisper-notify-toggle");
@@ -163,15 +133,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         openVomitModal();
       });
     }
-
-    const napLocalBtn = menu.querySelector('[data-action="play-nap-local"]');
-    if (napLocalBtn) {
-      napLocalBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        menuItems.classList.add("hidden");
-        playNapBeeps();
-      });
-    }
   }
 
   const vomitModal = container.querySelector("[data-whisper-vomit-modal]");
@@ -237,120 +198,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  function playDefaultBeeps() {
-    if (isMuted) return;
-
-    beeps([
-      [250, 262, volume - 0.2, "sine"],
-      [300, 330, volume - 0.1, "sine"],
-      [300, 392, volume - 0.15, "sine"],
-      [300, 330, volume - 0.1, "sine"],
-      [350, 262, volume - 0.2, "sine"],
-    ]);
-  }
-
-  function playNapBeeps() {
-    if (isMuted) return;
-    beeps([
-      [400, 392, volume, "sine"],
-      [400, 349, volume, "sine"],
-      [400, 330, volume - 0.01, "sine"],
-      [400, 294, volume - 0.02, "sine"],
-      [600, 262, volume - 0.03, "sine"],
-    ]);
-  }
-
-  function playWakeBeeps() {
-    if (isMuted) return;
-    beeps([
-      [400, 262, volume - 0.03, "sine"],
-      [400, 294, volume - 0.02, "sine"],
-      [400, 330, volume - 0.01, "sine"],
-      [400, 349, volume, "sine"],
-      [600, 392, volume, "sine"],
-    ]);
-  }
-
-  function playAlarmBeeps() {
-    if (isMuted) return;
-    let pulse = [
-      [300, 440, volume - 0.3, "sine"],
-      [250, 392, volume - 0.4, "sine"],
-      [300, 440, volume - 0.3, "sine"],
-    ];
-    beeps([
-      // Pulse
-      ...pulse,
-      [400, 0, 0, null],
-      ...pulse,
-    ]);
-  }
-
-  function playHappyBirthdayBeeps() {
-    if (isMuted) return;
-    // Happy Birthday melody
-    // Notes: G4=392, A4=440, B4=494, C5=523, D5=587, E5=659, F5=698, G5=784
-    const G4 = 392,
-      A4 = 440,
-      B4 = 494,
-      C5 = 523,
-      D5 = 587,
-      E5 = 659,
-      F5 = 698,
-      G5 = 784;
-    const dur = 300;
-    const shortDur = 200;
-
-    beeps([
-      // Happy birthday to you
-      [shortDur, G4, volume, "sine"],
-      [shortDur, G4, volume, "sine"],
-      [dur, A4, volume, "sine"],
-      [dur, G4, volume, "sine"],
-      [dur, C5, volume, "sine"],
-      [dur * 2, B4, volume, "sine"],
-      [200, 0, 0, null],
-      // Happy birthday to you
-      [shortDur, G4, volume, "sine"],
-      [shortDur, G4, volume, "sine"],
-      [dur, A4, volume, "sine"],
-      [dur, G4, volume, "sine"],
-      [dur, D5, volume, "sine"],
-      [dur * 2, C5, volume, "sine"],
-      [200, 0, 0, null],
-      // Happy birthday dear Whisper
-      [shortDur, G4, volume, "sine"],
-      [shortDur, G4, volume, "sine"],
-      [dur, G5, volume, "sine"],
-      [dur, E5, volume, "sine"],
-      [dur, C5, volume, "sine"],
-      [dur, B4, volume, "sine"],
-      [dur * 2, A4, volume, "sine"],
-      [200, 0, 0, null],
-      // Happy birthday to you
-      [shortDur, F5, volume, "sine"],
-      [shortDur, F5, volume, "sine"],
-      [dur, E5, volume, "sine"],
-      [dur, C5, volume, "sine"],
-      [dur, D5, volume, "sine"],
-      [dur * 2, C5, volume, "sine"],
-    ]);
-  }
-
-  function playAlertForKey(key) {
-    if (key === "nap") {
-      playNapBeeps();
-    } else if (key === "wake") {
-      playWakeBeeps();
-    } else if (key === "birthday") {
-      playHappyBirthdayBeeps();
-    } else if (key === "alarm") {
-      playAlarmBeeps();
-    } else {
-      playDefaultBeeps();
-    }
-  }
-
   function updateAge() {
     const nowMs = Time.msSinceEpoch();
     const now = new Date(nowMs);
@@ -371,12 +218,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
-
-    // Set birthday flag when totalMonths changes (fires on birth day-of-month)
-    if (lastMonths !== null && totalMonths > lastMonths) {
-      shouldPlayHappyBirthday = true;
-    }
-    lastMonths = totalMonths;
 
     let ageStr;
     if (years < 1) {
@@ -566,37 +407,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   function updateAllDurations() {
     const quietActive = isQuietModeActive();
 
-    const overdue = [];
-
+    // Display only: a timer running out makes no sound here. The sounds go to
+    // the Whisper board, sent there by the tasks that own them.
     timers.forEach((timerData) => {
-      const remaining =
-        timerMode === "clock"
-          ? updateClockDisplay(timerData)
-          : updateDurationRing(timerData);
-      if (remaining !== undefined && remaining <= 0) {
-        overdue.push(timerData);
-      }
-    });
-
-    // An overdue timer sounds when it runs out and every five minutes after
-    // (only the first, for a timer marked `once`), once across every screen
-    // showing it (suppressed during quiet mode).
-    const nowSec = Math.floor(Time.msSinceEpoch() / 1000);
-    overdue.forEach((timerData) => {
-      const key = timerData.key;
-      if (key === "quiet" || key === "out" || key === "kennel" || quietActive) return;
-
-      soundOnce(
-        {
-          ownerId: feedOwnerId,
-          key,
-          next:    timerData.next,
-          once:    timerData.once,
-          nowSec,
-          audible: !isMuted && audioState() === "running",
-        },
-        () => playAlertForKey(key),
-      );
+      if (timerMode === "clock") updateClockDisplay(timerData);
+      else updateDurationRing(timerData);
     });
 
     // Grey out non-quiet rings during quiet mode
@@ -615,15 +430,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (statusContainer) {
       statusContainer.textContent = status || "";
     }
-
-    // Play happy birthday when status changes to awake on her birthday
-    const statusChanged = status !== lastStatus;
-    const isAwake = /awake/i.test(status);
-    if (statusChanged && isAwake && shouldPlayHappyBirthday) {
-      shouldPlayHappyBirthday = false;
-      playHappyBirthdayBeeps();
-    }
-    lastStatus = status;
   }
 
   const durationMonitor = Monitor.subscribe(monitorChannel, {
@@ -633,14 +439,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     received: function (data) {
       const monitorData = data?.data;
       if (!monitorData) return;
-      if (data.owner_id !== undefined) feedOwnerId = data.owner_id;
 
       if (monitorData.status !== undefined) {
         updateStatus(monitorData.status);
-      }
-
-      if (monitorData.sound) {
-        playAlertForKey(monitorData.sound);
       }
 
       if (Array.isArray(monitorData.timers)) {
