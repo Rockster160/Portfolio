@@ -15,6 +15,7 @@ import QuestRotation from "./rotation";
 import { createRotationCard } from "./rotation_card";
 import { setupRotationModal } from "./rotation_modal";
 import { renderIconValue, loadIconPool, onIconPoolChanged } from "../../icon_picker";
+import { setupAppIcon } from "./app_icon";
 
 const LONG_MS = 550;
 const MOVE_THRESHOLD = 8;
@@ -576,6 +577,7 @@ function bootQuests(root) {
   const boardPath = `/quests/${root.dataset.boardId}`;
   const closeSettings = () => settingsModal.classList.add("hidden");
   wireDismiss(settingsModal, closeSettings);
+  const appIcon = setupAppIcon(settingsModal.querySelector("[data-settings-app-icon]"));
   // Sections: rename in place, × to remove, drag the handle to reorder.
   const sectionRows = settingsModal.querySelector("[data-settings-sections]");
   const newSectionInput = settingsModal.querySelector("[data-settings-new-section]");
@@ -614,6 +616,7 @@ function bootQuests(root) {
     QuestRules.syncSections(board());
     sectionRows.replaceChildren(...board().sections.map(sectionRow));
     newSectionInput.value = "";
+    appIcon.reset();
     if (!sectionSortable && typeof window.Sortable !== "undefined") {
       sectionSortable = window.Sortable.create(sectionRows, {
         handle: "[data-section-handle]", animation: 150, forceFallback: true, fallbackOnBody: true,
@@ -634,7 +637,17 @@ function bootQuests(root) {
     commit();
     closeSettings();
     if (name !== nameEl.textContent.trim()) rename(name);
+    if (appIcon.changed()) saveAppIcon();
   });
+
+  async function saveAppIcon() {
+    const payload = await appIcon.payload();
+    if (!payload) { flash("Couldn't draw that icon", "error"); return; }
+
+    const res = await boardRequest("PATCH", payload);
+    if (!res?.ok) { flash("Couldn't save the icon", "error"); return; }
+    appIcon.saved(await res.json());
+  }
 
   async function rename(name) {
     const res = await boardRequest("PATCH", { name });
